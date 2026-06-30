@@ -1,0 +1,32 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# turbo
+.turbo/
+
+# build
+dist/
+*.tsbuildinfo
+
+# prisma / sqlite
+data/*.sqlite
+data/*.sqlite-journal
+*.db
+
+# uploaded files (local dev storage)
+apps/*/public/uploads/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# os/editor
+.DS_Store
+*.log

@@ -1,0 +1,80 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { ShieldCheck } from "lucide-react";
+import { Field, SelectField, FileDrop, StepActions } from "@/components/forms";
+import { saveIdentity, type StepState } from "../actions";
+
+export function IdentityStep({
+  fullName,
+  gender,
+  showGender,
+}: {
+  fullName: string | null;
+  gender: string | null;
+  showGender: boolean;
+}) {
+  const [state, action] = useActionState<StepState, FormData>(saveIdentity, {});
+  const [note, setNote] = useState(false);
+
+  return (
+    <form action={action} className="space-y-5">
+      <Field
+        label="Full Name"
+        name="fullName"
+        required
+        defaultValue={fullName ?? ""}
+        placeholder="Enter your full name as per ID"
+        hint="Must match your official documents."
+      />
+
+      {showGender ? (
+        <SelectField
+          label="Gender"
+          name="gender"
+          required
+          defaultValue={gender ?? ""}
+          options={[
+            { value: "FEMALE", label: "Female" },
+            { value: "MALE", label: "Male" },
+            { value: "OTHER", label: "Other" },
+          ]}
+        />
+      ) : null}
+
+      <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-surface-muted p-4 sm:flex-row sm:items-center">
+        <div>
+          <p className="font-semibold text-ink-900">Instant Verification</p>
+          <p className="text-sm text-gray-500">Speed up onboarding securely via DigiLocker.</p>
+          {note ? (
+            <p className="mt-1 text-xs text-amber-700">DigiLocker integration is coming soon — continue manually below.</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setNote(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-accent-500 px-4 py-2.5 text-sm font-semibold text-ink-900 hover:bg-accent-600"
+        >
+          <ShieldCheck className="h-4 w-4" /> Verify with DigiLocker
+        </button>
+      </div>
+
+      <Field
+        label="Aadhaar Number"
+        name="aadhaar"
+        inputMode="numeric"
+        placeholder="1234 5678 9012"
+        hint="Encrypted at rest. Only the last 4 digits are ever shown."
+      />
+
+      <div className="flex items-center gap-3 text-xs text-gray-400">
+        <span className="h-px flex-1 bg-border" /> OR <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <FileDrop name="profilePhoto" label="Profile Photo" hint="JPG, PNG up to 5MB" />
+
+      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
+      <StepActions />
+    </form>
+  );
+}

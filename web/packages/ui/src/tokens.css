@@ -1,0 +1,30 @@
+/* VSolveHub design tokens — extracted from the Figma partner portal.
+   Imported by each app's globals.css; Tailwind v4 @theme exposes them as utilities. */
+@theme {
+  /* Brand — indigo/violet primary, amber accent */
+  --color-brand-50: #eef0ff;
+  --color-brand-100: #e0e3ff;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #5b50e6;
+  --color-brand-700: #4f46e5;
+  --color-brand-900: #1e1b4b;
+
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+
+  /* Sidebar / footer dark navy */
+  --color-ink-900: #14122e;
+  --color-ink-800: #1e1b4b;
+
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8f7fc;
+  --color-border: #e8e6f0;
+
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+
+  --radius-card: 0.875rem;
+  /* --font-app is injected by next/font (Plus Jakarta Sans) in the root layout. */
+  --font-sans: var(--font-app), "Inter", system-ui, -apple-system, sans-serif;
+}

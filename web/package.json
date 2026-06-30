@@ -1,0 +1,21 @@
+{
+  "name": "vsolve-web",
+  "private": true,
+  "packageManager": "pnpm@11.2.2",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:partner": "turbo run dev --filter=partner",
+    "dev:customer": "turbo run dev --filter=customer",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:migrate": "pnpm --filter @vsolve/db migrate",
+    "db:seed": "pnpm --filter @vsolve/db seed",
+    "db:studio": "pnpm --filter @vsolve/db studio",
+    "db:generate": "pnpm --filter @vsolve/db generate"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

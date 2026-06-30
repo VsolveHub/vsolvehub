@@ -1,0 +1,208 @@
+import Link from "next/link";
+import {
+  Wallet,
+  Clock,
+  LineChart,
+  Headset,
+  IndianRupee,
+  Star,
+  Zap,
+  ArrowRight,
+  Quote,
+} from "lucide-react";
+import { PARTNER_ROLES } from "@vsolve/config";
+import { Button } from "@vsolve/ui";
+import { Medallion, EarningsHeroArt, type Tone } from "@/components/graphics";
+import { roleVisual } from "@/components/role-visuals";
+
+export const dynamic = "force-static";
+
+const FEATURES = [
+  { icon: Wallet, tone: "brand" as Tone, title: "Weekly Payouts", body: "Get your hard-earned money deposited directly into your bank account every single week." },
+  { icon: Clock, tone: "amber" as Tone, title: "Flexible Hours", body: "You are your own boss. Choose when and where you want to work based on your schedule." },
+  { icon: LineChart, tone: "green" as Tone, title: "Transparent Earnings", body: "Real-time tracking of your income, bonuses, and customer tips with zero hidden fees." },
+  { icon: Headset, tone: "sky" as Tone, title: "Dedicated Support", body: "Access 24/7 priority support to resolve any issues and keep your business running smoothly." },
+];
+
+const TESTIMONIALS = [
+  {
+    quote:
+      "V Solve Hub changed how I manage my rental fleet. The payout system is incredibly reliable and the local customer base is growing every single day.",
+    name: "Rajesh Kumar",
+    role: "Rental Vendor, Hyderabad",
+    tone: "violet" as Tone,
+  },
+  {
+    quote:
+      "Finding customers was my biggest challenge. V Solve Hub brings the business to me, and I can focus on doing the work I love.",
+    name: "Ananya Reddy",
+    role: "Interior Professional, Warangal",
+    tone: "sky" as Tone,
+  },
+  {
+    quote:
+      "I've doubled my monthly earnings while spending more time with my family. Best decision I've made for my career.",
+    name: "Suresh V.",
+    role: "Captain, Nizamabad",
+    tone: "green" as Tone,
+  },
+];
+
+export default function LandingPage() {
+  return (
+    <main>
+      {/* Hero */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-700 to-brand-900 text-white">
+        <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-accent-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-10 bottom-0 h-72 w-72 rounded-full bg-brand-500/30 blur-3xl" />
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-20 md:grid-cols-2">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-white/90">
+              <Zap className="h-4 w-4 text-accent-400" /> Join 5,000+ partners across Telangana
+            </span>
+            <h1 className="mt-5 text-4xl font-bold leading-tight sm:text-5xl">
+              Grow your business with V Solve Hub
+            </h1>
+            <p className="mt-4 max-w-md text-lg text-white/80">
+              Join India&rsquo;s fastest-growing marketplace for local services. Onboard today and
+              reach thousands of customers in Telangana.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href="/solutions">
+                <Button variant="accent" size="lg">
+                  Become a Partner <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link href="#testimonials">
+                <Button size="lg" className="bg-white/10 text-white hover:bg-white/20">
+                  Partner Stories
+                </Button>
+              </Link>
+            </div>
+          </div>
+          <EarningsHeroArt icons={{ primary: Wallet, rupee: IndianRupee, star: Star, bolt: Zap }} />
+        </div>
+      </section>
+
+      {/* Designed for your success */}
+      <section className="px-5 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-bold text-ink-900">Designed for your success</h2>
+            <p className="mt-2 text-gray-500">
+              We provide the tools and support you need to scale your services and manage your
+              earnings with ease.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="flex flex-col rounded-2xl border border-border bg-white p-6 shadow-sm"
+              >
+                <Medallion icon={f.icon} tone={f.tone} size={56} />
+                <h3 className="mt-4 font-semibold text-ink-900">{f.title}</h3>
+                <p className="mt-1 text-sm text-gray-500">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Choose your path */}
+      <section className="bg-surface-muted px-5 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-ink-900">Choose your path</h2>
+            <p className="mt-2 text-gray-500">
+              Pick the partnership role that fits your business or skills.
+            </p>
+          </div>
+          <div className="mt-10 flex flex-wrap justify-center gap-4">
+            {PARTNER_ROLES.map((role) => {
+              const v = roleVisual(role.slug);
+              return (
+                <Link
+                  key={role.slug}
+                  href={`/become/${role.slug}`}
+                  className="group relative flex min-w-[160px] flex-col items-center gap-3 rounded-2xl border border-border bg-white px-6 py-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg"
+                >
+                  {role.status === "coming-soon" && (
+                    <span className="absolute right-3 top-3 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                      Soon
+                    </span>
+                  )}
+                  <Medallion icon={v.icon} tone={v.tone} size={52} />
+                  <span className="text-sm font-semibold text-ink-900">{role.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+          <div className="mt-10 text-center">
+            <Link href="/solutions" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700">
+              Explore all partnership roles
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section id="testimonials" className="px-5 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-ink-900">Trusted by thousands of professionals</h2>
+          </div>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {TESTIMONIALS.map((t) => (
+              <figure
+                key={t.name}
+                className="flex flex-col rounded-2xl border border-border bg-white p-6 shadow-sm"
+              >
+                <Quote className="h-7 w-7 text-brand-200" />
+                <blockquote className="mt-3 flex-1 text-sm leading-relaxed text-gray-600">
+                  {t.quote}
+                </blockquote>
+                <figcaption className="mt-5 flex items-center gap-3">
+                  <span
+                    className="grid h-10 w-10 place-items-center rounded-full text-sm font-bold text-white"
+                    style={{ background: "linear-gradient(135deg,#8b7dff,#4f46e5)" }}
+                  >
+                    {t.name.charAt(0)}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-ink-900">{t.name}</span>
+                    <span className="block text-xs text-gray-500">{t.role}</span>
+                  </span>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA band */}
+      <section className="px-5 pb-20">
+        <div className="mx-auto max-w-5xl overflow-hidden rounded-3xl bg-gradient-to-r from-brand-600 to-brand-800 px-8 py-14 text-center text-white">
+          <h2 className="text-3xl font-bold">Ready to take off?</h2>
+          <p className="mx-auto mt-3 max-w-md text-white/80">
+            Start your onboarding journey today and see your business flourish on Telangana&rsquo;s
+            best marketplace.
+          </p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <Link href="/solutions">
+              <Button variant="accent" size="lg">
+                Become a Partner <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/contact">
+              <Button size="lg" className="bg-white/10 text-white hover:bg-white/20">
+                Contact Sales
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
