@@ -8,12 +8,13 @@ export type QuickService = {
   href: string;
 };
 
-/** Top-level categories — single home row (6 tiles). */
+/** Top-level categories — single home row (M1 single-provider services only).
+ *  Vehicle (ride) & Accommodation (stay) entry points are intentionally
+ *  disconnected for M1; their routes/UI remain for M3/M4. */
 export const QUICK_SERVICES: QuickService[] = [
   { id: "cleaning", label: "Cleaning", icon: "broom", color: "#059669", href: "/services?q=cleaning" },
-  { id: "plumbing", label: "Plumbing", icon: "faucet", color: "#2563eb", href: "/services/home-services/plumbing-services" },
-  { id: "electrician", label: "Electrician", icon: "bolt", color: "#d97706", href: "/services/home-services/electrician" },
-  { id: "ride", label: "Book a Ride", icon: "scooter", color: "#ea580c", href: "/vehicle/ride" },
+  { id: "plumbing", label: "Plumbing", icon: "faucet", color: "#2563eb", href: "/services/technician/plumber" },
+  { id: "electrician", label: "Electrician", icon: "bolt", color: "#d97706", href: "/services/technician/electrician" },
   { id: "beauty", label: "Salon/Beauty", icon: "beauty", color: "#db2777", href: "/services/beauty-wellness" },
   { id: "all", label: "More", icon: "grid-menu", color: "#7c3aed", href: "/services" },
 ];
@@ -23,20 +24,19 @@ export type TrendingSearch = {
   href: string;
 };
 
-/** Specific high-intent searches + categories not in the quick row. */
+/** High-intent searches within the M1 single-provider services. */
 export const TRENDING_SEARCHES: TrendingSearch[] = [
   { label: "AC repair", href: "/services?q=ac" },
   { label: "House cleaning", href: "/services?q=cleaning" },
   { label: "Electrician", href: "/services?q=electrical" },
   { label: "Plumber", href: "/services?q=plumbing" },
-  { label: "Car repair", href: "/vehicle/repair" },
-  { label: "Event decor", href: "/services?q=decor" },
-  { label: "Rentals", href: "/services?category=rental-services" },
-  { label: "Stay", href: "/services?category=accommodation-services" },
-  { label: "Jobs", href: "/services?category=job-opportunities" },
-  { label: "Manpower", href: "/services?category=manpower-support-staff" },
+  { label: "Facial", href: "/services?q=facial" },
+  { label: "Pet grooming", href: "/services?q=pet" },
+  { label: "Pest control", href: "/services?q=pest" },
+  { label: "Salon at home", href: "/services?category=beauty-wellness" },
 ];
 
+// M1 single-provider promos only (Technician, Home, Beauty, Pet).
 export const PROMO_CARDS = [
   {
     id: "home",
@@ -46,24 +46,6 @@ export const PROMO_CARDS = [
     btnColor: "#6d28d9",
     icon: "house" as IconName,
     href: "/services?category=home-services",
-  },
-  {
-    id: "construction",
-    title: "Skilled Construction Crew",
-    cta: "Hire Labour",
-    bg: "#fef9c3",
-    btnColor: "#ca8a04",
-    icon: "hard-hat" as IconName,
-    href: "/services?category=construction-services",
-  },
-  {
-    id: "events",
-    title: "Plan Your Perfect Event",
-    cta: "Explore",
-    bg: "#dcfce7",
-    btnColor: "#16a34a",
-    icon: "calendar-star" as IconName,
-    href: "/services?category=event-media-services",
   },
   {
     id: "beauty",
@@ -180,25 +162,16 @@ export const HOME_SPOTLIGHTS: {
   color: string;
   bg: string;
 }[] = [
+  // Vehicle (ride) & Accommodation (stay) spotlights disconnected for M1.
   {
-    id: "ride",
-    title: "Book a ride",
-    subtitle: "Bike, auto, taxi & premium cabs",
+    id: "home",
+    title: "Home services on demand",
+    subtitle: "Electrician, plumber, AC, cleaning & more",
     cta: "Book now",
-    href: "/vehicle/ride",
-    icon: "scooter",
-    color: "#ea580c",
-    bg: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)",
-  },
-  {
-    id: "stay",
-    title: "Find a stay",
-    subtitle: "PG, hostel & rental rooms",
-    cta: "Browse stays",
-    href: "/accommodation",
-    icon: "buildings",
-    color: "#0891b2",
-    bg: "linear-gradient(135deg, #ecfeff 0%, #cffafe 100%)",
+    href: "/services?category=home-services",
+    icon: "house",
+    color: "#6d28d9",
+    bg: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
   },
   {
     id: "beauty",

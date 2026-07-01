@@ -8,11 +8,9 @@ import { saveIdentity, type StepState } from "../actions";
 export function IdentityStep({
   fullName,
   gender,
-  showGender,
 }: {
   fullName: string | null;
   gender: string | null;
-  showGender: boolean;
 }) {
   const [state, action] = useActionState<StepState, FormData>(saveIdentity, {});
   const [note, setNote] = useState(false);
@@ -28,19 +26,17 @@ export function IdentityStep({
         hint="Must match your official documents."
       />
 
-      {showGender ? (
-        <SelectField
-          label="Gender"
-          name="gender"
-          required
-          defaultValue={gender ?? ""}
-          options={[
-            { value: "FEMALE", label: "Female" },
-            { value: "MALE", label: "Male" },
-            { value: "OTHER", label: "Other" },
-          ]}
-        />
-      ) : null}
+      <SelectField
+        label="Gender"
+        name="gender"
+        required
+        defaultValue={gender ?? ""}
+        options={[
+          { value: "FEMALE", label: "Female" },
+          { value: "MALE", label: "Male" },
+          { value: "OTHER", label: "Other" },
+        ]}
+      />
 
       <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-border bg-surface-muted p-4 sm:flex-row sm:items-center">
         <div>
@@ -63,15 +59,19 @@ export function IdentityStep({
         label="Aadhaar Number"
         name="aadhaar"
         inputMode="numeric"
+        required
+        maxLength={14}
         placeholder="1234 5678 9012"
-        hint="Encrypted at rest. Only the last 4 digits are ever shown."
+        hint="12 digits. Encrypted at rest — only the last 4 are ever shown."
       />
 
-      <div className="flex items-center gap-3 text-xs text-gray-400">
-        <span className="h-px flex-1 bg-border" /> OR <span className="h-px flex-1 bg-border" />
-      </div>
-
-      <FileDrop name="profilePhoto" label="Profile Photo" hint="JPG, PNG up to 5MB" />
+      <FileDrop
+        name="profilePhoto"
+        label="Profile Photo"
+        required
+        accept="image/png,image/jpeg"
+        hint="A clear face photo — JPG or PNG up to 5MB."
+      />
 
       {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       <StepActions />

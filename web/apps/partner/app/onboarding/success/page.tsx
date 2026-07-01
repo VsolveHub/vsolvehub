@@ -79,9 +79,9 @@ export default async function SuccessPage() {
         </div>
 
         <div className="vsh-rise mt-8" style={{ animationDelay: "1000ms" }}>
-          <Link href="/live">
+          <Link href="/dashboard">
             <Button size="lg" className="w-full sm:w-auto">
-              Open Captain App <ArrowRight className="h-4 w-4" />
+              Go to Dashboard <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
           <p className="mt-3 text-xs text-gray-400">

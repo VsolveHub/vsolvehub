@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: "%s — V Solve Hub Partners",
   },
   description:
-    "Join 10,000+ Captains earning daily across Telangana. Become a verified electrician, plumber, driver, or cleaner on V Solve Hub.",
+    "Join 10,000+ partners earning daily across Telangana. Become a verified technician, beauty, home, or pet service partner on V Solve Hub.",
   openGraph: {
     type: "website",
     siteName: "V Solve Hub Partners",

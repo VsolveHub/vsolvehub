@@ -10,10 +10,9 @@ import {
   ArrowRight,
   Quote,
 } from "lucide-react";
-import { PARTNER_ROLES } from "@vsolve/config";
+import { PARTNER_CATEGORIES } from "@vsolve/config";
 import { Button } from "@vsolve/ui";
 import { Medallion, EarningsHeroArt, type Tone } from "@/components/graphics";
-import { roleVisual } from "@/components/role-visuals";
 
 export const dynamic = "force-static";
 
@@ -43,7 +42,7 @@ const TESTIMONIALS = [
     quote:
       "I've doubled my monthly earnings while spending more time with my family. Best decision I've made for my career.",
     name: "Suresh V.",
-    role: "Captain, Nizamabad",
+    role: "Electrician, Nizamabad",
     tone: "green" as Tone,
   },
 ];
@@ -109,38 +108,48 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Choose your path */}
+      {/* What service do you offer */}
       <section className="bg-surface-muted px-5 py-20">
         <div className="mx-auto max-w-6xl">
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-ink-900">Choose your path</h2>
+            <h2 className="text-2xl font-bold text-ink-900">What service do you offer?</h2>
             <p className="mt-2 text-gray-500">
-              Pick the partnership role that fits your business or skills.
+              Join in the category that fits your work — more coming soon.
             </p>
           </div>
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            {PARTNER_ROLES.map((role) => {
-              const v = roleVisual(role.slug);
-              return (
-                <Link
-                  key={role.slug}
-                  href={`/become/${role.slug}`}
-                  className="group relative flex min-w-[160px] flex-col items-center gap-3 rounded-2xl border border-border bg-white px-6 py-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg"
-                >
-                  {role.status === "coming-soon" && (
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {PARTNER_CATEGORIES.map((cat) => {
+              const soon = cat.status === "coming-soon";
+              const inner = (
+                <>
+                  {soon && (
                     <span className="absolute right-3 top-3 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                       Soon
                     </span>
                   )}
-                  <Medallion icon={v.icon} tone={v.tone} size={52} />
-                  <span className="text-sm font-semibold text-ink-900">{role.name}</span>
+                  <span className="grid h-12 w-12 place-items-center rounded-xl bg-surface-muted text-2xl">
+                    {cat.icon}
+                  </span>
+                  <span className="text-base font-bold text-ink-900">{cat.name}</span>
+                  <span className="text-xs text-gray-500">{cat.description}</span>
+                </>
+              );
+              const cls =
+                "group relative flex flex-col gap-2 rounded-2xl border border-border bg-white p-5 shadow-sm transition-all";
+              return soon ? (
+                <div key={cat.id} className={`${cls} opacity-70`}>
+                  {inner}
+                </div>
+              ) : (
+                <Link key={cat.id} href={`/login?category=${cat.id}`} className={`${cls} hover:-translate-y-1 hover:shadow-lg`}>
+                  {inner}
                 </Link>
               );
             })}
           </div>
           <div className="mt-10 text-center">
             <Link href="/solutions" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700">
-              Explore all partnership roles
+              See all categories
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

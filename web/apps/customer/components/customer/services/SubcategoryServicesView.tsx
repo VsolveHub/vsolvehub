@@ -23,6 +23,7 @@ export function SubcategoryServicesView({
     <ElectricianBookingFlow
       initialStep="select-service"
       services={services}
+      categorySlug={categorySlug}
       categoryName={categoryName}
       subCategoryName={subCategoryName}
     />

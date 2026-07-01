@@ -55,38 +55,39 @@ function slotMatchesAvailability(slot: string, availability: AvailabilityRow[]):
 }
 
 function withinServiceArea(
-  provider: { worker: { lat: number; lng: number } | null },
+  partner: { lat: number | null; lng: number | null },
   addrLat: number,
   addrLng: number
 ): boolean {
-  if (!provider.worker) return true;
-  return haversineKm(provider.worker.lat, provider.worker.lng, addrLat, addrLng) <= SERVICE_RADIUS_KM;
+  if (partner.lat == null || partner.lng == null) return true;
+  return haversineKm(partner.lat, partner.lng, addrLat, addrLng) <= SERVICE_RADIUS_KM;
 }
 
-async function findEligibleProviders(bookingId: string, excludeProviderIds: string[]) {
+async function findEligiblePartners(bookingId: string, excludePartnerIds: string[]) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: { address: true },
   });
   if (!booking) return [];
 
-  const providerType = providerTypeForArchetype(booking.archetype);
+  // Partner.providerType is the enum (CAPTAIN | DRIVER | CLEANER). Only CAPTAIN
+  // is dispatched in M1; archetypes B/D/E/F (PROFESSIONAL etc.) land in M2+.
+  const providerType = providerTypeForArchetype(booking.archetype) as "CAPTAIN" | "DRIVER" | "CLEANER";
   const addrLat = booking.address.lat ?? 17.385;
   const addrLng = booking.address.lng ?? 78.4867;
 
-  const providers = await prisma.provider.findMany({
+  const partners = await prisma.partner.findMany({
     where: {
       providerType,
       status: "ACTIVE",
-      onboardingCompleted: true,
-      id: { notIn: excludeProviderIds },
-      ...(providerType === "CAPTAIN" ? { worker: { isOnline: true } } : {}),
+      id: { notIn: excludePartnerIds },
+      ...(providerType === "CAPTAIN" ? { isOnline: true } : {}),
     },
-    include: { worker: true, availability: true },
+    include: { availability: true },
     take: 50,
   });
 
-  return providers
+  return partners
     .filter(
       (p) =>
         slotMatchesAvailability(booking.slot, p.availability) &&
@@ -97,7 +98,7 @@ async function findEligibleProviders(bookingId: string, excludeProviderIds: stri
 
 async function markNoWorkerFound(bookingId: string) {
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking || booking.assignedProviderId || booking.status === "NO_WORKER_FOUND") return;
+  if (!booking || booking.assignedPartnerId || booking.status === "NO_WORKER_FOUND") return;
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -112,29 +113,29 @@ export async function dispatchBookingOffers(bookingId: string) {
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("Booking not found");
   if (!usesPushDispatch(booking.archetype)) return { offersCreated: 0 };
-  if (booking.assignedProviderId) return { offersCreated: 0 };
+  if (booking.assignedPartnerId) return { offersCreated: 0 };
   if (["COMPLETED", "CANCELLED", "NO_WORKER_FOUND"].includes(booking.status)) {
     return { offersCreated: 0 };
   }
 
   const existingOffers = await prisma.jobAssignment.findMany({
     where: { bookingId },
-    select: { providerId: true, status: true },
+    select: { partnerId: true, status: true },
   });
 
   const pendingCount = existingOffers.filter((o) => o.status === "PENDING").length;
   if (pendingCount > 0) return { offersCreated: 0, pending: pendingCount };
 
-  const offeredProviderIds = existingOffers.map((o) => o.providerId);
-  const waveCount = offeredProviderIds.length > 0 ? Math.ceil(offeredProviderIds.length / WAVE_SIZE) : 0;
+  const offeredPartnerIds = existingOffers.map((o) => o.partnerId);
+  const waveCount = offeredPartnerIds.length > 0 ? Math.ceil(offeredPartnerIds.length / WAVE_SIZE) : 0;
   if (waveCount >= MAX_WAVES) {
     await markNoWorkerFound(bookingId);
     return { offersCreated: 0, exhausted: true };
   }
 
-  const eligible = await findEligibleProviders(bookingId, offeredProviderIds);
+  const eligible = await findEligiblePartners(bookingId, offeredPartnerIds);
   if (eligible.length === 0) {
-    if (offeredProviderIds.length > 0 || waveCount > 0) {
+    if (offeredPartnerIds.length > 0 || waveCount > 0) {
       await markNoWorkerFound(bookingId);
       return { offersCreated: 0, exhausted: true };
     }
@@ -146,7 +147,7 @@ export async function dispatchBookingOffers(bookingId: string) {
   await prisma.jobAssignment.createMany({
     data: eligible.map((p) => ({
       bookingId,
-      providerId: p.id,
+      partnerId: p.id,
       status: "PENDING",
       expiresAt,
     })),
@@ -173,7 +174,7 @@ export async function processExpiredOffersAndRedispatch(bookingId: string) {
   });
 
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking || booking.assignedProviderId || !usesPushDispatch(booking.archetype)) return;
+  if (!booking || booking.assignedPartnerId || !usesPushDispatch(booking.archetype)) return;
   if (!["PENDING", "SEARCHING_PROVIDER"].includes(booking.status)) return;
 
   const pending = await prisma.jobAssignment.count({
@@ -186,7 +187,7 @@ export async function processExpiredOffersAndRedispatch(bookingId: string) {
 
 export async function retryBookingDispatch(bookingId: string) {
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking || booking.assignedProviderId) return { ok: false as const, error: "Already assigned" };
+  if (!booking || booking.assignedPartnerId) return { ok: false as const, error: "Already assigned" };
   if (booking.status !== "NO_WORKER_FOUND") {
     return { ok: false as const, error: "Cannot retry this booking" };
   }
@@ -207,72 +208,6 @@ export async function retryBookingDispatch(bookingId: string) {
   return { ok: true as const, ...result };
 }
 
-export async function acceptOffer(assignmentId: string, providerId: string) {
-  const assignment = await prisma.jobAssignment.findFirst({
-    where: { id: assignmentId, providerId, status: "PENDING" },
-    include: { booking: true },
-  });
-  if (!assignment) return { ok: false as const, error: "Offer not found or expired" };
-
-  if (assignment.expiresAt < new Date()) {
-    await prisma.jobAssignment.update({
-      where: { id: assignmentId },
-      data: { status: "EXPIRED", respondedAt: new Date() },
-    });
-    await processExpiredOffersAndRedispatch(assignment.bookingId);
-    return { ok: false as const, error: "Offer expired" };
-  }
-
-  const alreadyAssigned = await prisma.booking.findFirst({
-    where: { id: assignment.bookingId, assignedProviderId: { not: null } },
-  });
-  if (alreadyAssigned?.assignedProviderId) {
-    await prisma.jobAssignment.update({
-      where: { id: assignmentId },
-      data: { status: "EXPIRED", respondedAt: new Date() },
-    });
-    return { ok: false as const, error: "Job already taken" };
-  }
-
-  const now = new Date();
-  const bookingRef = assignment.booking.bookingRef;
-
-  await prisma.$transaction([
-    prisma.jobAssignment.update({
-      where: { id: assignmentId },
-      data: { status: "ACCEPTED", respondedAt: now },
-    }),
-    prisma.jobAssignment.updateMany({
-      where: {
-        bookingId: assignment.bookingId,
-        id: { not: assignmentId },
-        status: "PENDING",
-      },
-      data: { status: "EXPIRED", respondedAt: now },
-    }),
-    prisma.booking.update({
-      where: { id: assignment.bookingId },
-      data: { assignedProviderId: providerId, status: "ASSIGNED" },
-    }),
-    prisma.bookingStatusLog.create({
-      data: { bookingId: assignment.bookingId, status: "ASSIGNED" },
-    }),
-  ]);
-
-  return { ok: true as const, bookingId: assignment.bookingId, bookingRef };
-}
-
-export async function declineOffer(assignmentId: string, providerId: string) {
-  const assignment = await prisma.jobAssignment.findFirst({
-    where: { id: assignmentId, providerId, status: "PENDING" },
-  });
-  if (!assignment) return false;
-
-  await prisma.jobAssignment.update({
-    where: { id: assignmentId },
-    data: { status: "DECLINED", respondedAt: new Date() },
-  });
-
-  await processExpiredOffersAndRedispatch(assignment.bookingId);
-  return true;
-}
+// Offer accept/decline now live in the shared @vsolve/db fulfillment engine
+// (acceptJobOffer / declineJobOffer). Re-dispatch on decline/expiry happens via
+// processExpiredOffersAndRedispatch, triggered on the next customer status poll.

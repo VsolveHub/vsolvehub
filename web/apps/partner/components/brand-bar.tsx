@@ -12,7 +12,9 @@ export function BrandBar({ backHref }: { backHref?: string }) {
           </Link>
         ) : null}
         <Link href="/" className="flex items-center gap-2 font-bold">
-          <span className="inline-block h-6 w-6 rounded-md bg-gradient-to-br from-brand-500 to-accent-500" />
+          <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white">
+            <img src="/logo-mark.png" alt="V Solve Hub" className="h-full w-full object-contain" />
+          </span>
           <span className="text-lg">
             <span className="text-accent-500">V Solve</span>{" "}
             <span className="text-white">Hub</span>

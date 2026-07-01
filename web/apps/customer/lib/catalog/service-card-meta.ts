@@ -8,7 +8,9 @@ export type ServiceCardMeta = {
 };
 
 const CATEGORY_DEFAULTS: Record<string, { icon: IconName; color: string }> = {
-  "home-services": { icon: "house", color: "#2563eb" },
+  technician: { icon: "toolbox", color: "#2563eb" },
+  "home-services": { icon: "broom", color: "#16a34a" },
+  "pet-services": { icon: "house", color: "#0891b2" },
   "construction-services": { icon: "hard-hat", color: "#ca8a04" },
   "beauty-wellness": { icon: "beauty", color: "#db2777" },
   "event-media-services": { icon: "calendar", color: "#7c3aed" },

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, LogOut, BadgeCheck } from "lucide-react";
-import { logout } from "@/app/live/actions";
+import { logout } from "@/app/dashboard/_live/actions";
 
 /**
  * Mobile-first chrome for the captain's secondary pages (documents, skills,
@@ -21,7 +21,7 @@ export function DashboardChrome({
       <header className="sticky top-0 z-30 border-b border-border bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-3">
           <Link
-            href="/live"
+            href="/dashboard"
             className="flex items-center gap-2 text-sm font-semibold text-ink-900 hover:text-brand-700"
           >
             <ArrowLeft className="h-5 w-5" /> Back to app

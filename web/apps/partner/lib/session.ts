@@ -2,11 +2,19 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-const COOKIE = "vsh_session";
+// Distinct from the customer app's cookie — on localhost both apps share the
+// same host, so a shared name would clobber each other's session on reload.
+const COOKIE = "vsh_partner_session";
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 function secret(): string {
-  return process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me";
+  const s = process.env.AUTH_SECRET;
+  if (s) return s;
+  // Never run production auth on the insecure fallback.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET must be set in production");
+  }
+  return "dev-insecure-secret-change-me";
 }
 
 function sign(value: string): string {

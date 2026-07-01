@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -24,19 +24,15 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
 
   const status = normalizeBookingStatus(booking.status);
   const professional = booking.provider ?? booking.vendor;
+  const partnerName = professional?.name ?? "Assigned Partner";
 
-  async function updateStatus(nextStatus: string) {
-    setLoading(true);
-    const res = await fetch(`/api/bookings/${booking.bookingRef}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    setLoading(false);
-    if (res.ok) {
-      onRefresh();
+  // Status is driven by the partner (in the partner app). The customer tracker
+  // only reflects the real status it polls — it never advances the booking.
+  useEffect(() => {
+    if (booking.status === "COMPLETED" && step === "track") {
+      setStep("completed");
     }
-  }
+  }, [booking.status, step]);
 
   async function submitFeedback() {
     setLoading(true);
@@ -53,17 +49,6 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
       return;
     }
     setStep("invoice");
-  }
-
-  // Simulated status progression for demo
-  async function simulateNextStatus() {
-    setLoading(true);
-    const res = await fetch(`/api/bookings/${booking.bookingRef}/status`);
-    const data = await res.json();
-    if (data.nextStatus) {
-      await updateStatus(data.nextStatus);
-    }
-    setLoading(false);
   }
 
   // Resolve step badge and title
@@ -128,9 +113,6 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
                 {STATUS_MESSAGES[status]}
               </p>
               
-              <Button size="sm" variant="secondary" onClick={simulateNextStatus} loading={loading} style={{ alignSelf: "flex-start", fontSize: "0.7rem", padding: "0.25rem 0.5rem", borderRadius: "8px" }}>
-                Simulate Next Step →
-              </Button>
             </div>
 
             {/* Map View */}
@@ -144,7 +126,7 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
                 </svg>
                 <div style={{ position: "absolute", bottom: "0.75rem", left: "0.75rem", right: "0.75rem", background: "white", padding: "0.75rem", borderRadius: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
                   <div>
-                    <p style={{ fontWeight: 700, margin: 0, fontSize: "0.85rem" }}>{professional?.name ?? "Priya Beauty Expert"}</p>
+                    <p style={{ fontWeight: 700, margin: 0, fontSize: "0.85rem" }}>{partnerName}</p>
                     <p style={{ fontSize: "0.7rem", color: "#666", margin: 0 }}>Beautician is arriving</p>
                   </div>
                   <span style={{ fontWeight: 800, color: "var(--color-brand)", fontSize: "1rem" }}>12 mins</span>
@@ -156,16 +138,19 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
             {status === "PROVIDER_ARRIVING" && (
               <div className="vsh-card stack text-center" style={{ padding: "1.5rem 1.25rem", border: "2px solid var(--color-brand)", borderRadius: "18px", display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <div style={{ width: "56px", height: "56px", borderRadius: "50%", overflow: "hidden", border: "2px solid var(--color-brand)" }}>
-                  <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100" alt="Priya" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100" alt={partnerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
-                <h4 style={{ fontWeight: 700, marginTop: "0.75rem", marginBottom: "0.125rem", fontSize: "0.95rem" }}>{professional?.name ?? "Priya Beauty Expert"}</h4>
+                <h4 style={{ fontWeight: 700, marginTop: "0.75rem", marginBottom: "0.125rem", fontSize: "0.95rem" }}>{partnerName}</h4>
                 <p style={{ color: "#059669", fontWeight: 700, fontSize: "0.8rem", margin: "0 0 0.5rem 0" }}>Beautician Arrived!</p>
-                <p style={{ color: "#555", fontSize: "0.75rem", margin: "0 0 1.25rem 0", lineHeight: 1.4 }}>
-                  Priya has arrived at your address. Meet and tap the button below to start the session.
+                <p style={{ color: "#555", fontSize: "0.75rem", margin: "0 0 1rem 0", lineHeight: 1.4 }}>
+                  Your beautician has arrived. Share the start code below to begin the session.
                 </p>
-                <Button onClick={() => updateStatus("STARTED")} loading={loading} block style={{ height: "40px", borderRadius: "12px" }}>
-                  Start Service
-                </Button>
+                <div style={{ background: "#faf5ff", border: "1px dashed var(--color-brand)", borderRadius: "12px", padding: "0.75rem 1rem", width: "100%" }}>
+                  <p style={{ fontSize: "0.7rem", color: "#71717a", margin: 0 }}>Start code</p>
+                  <p style={{ fontWeight: 800, fontSize: "1.6rem", letterSpacing: "0.3rem", margin: 0, color: "var(--color-brand)" }}>
+                    {booking.startOtp ?? "----"}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -177,12 +162,9 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
                   <div style={{ width: "18px", height: "18px", background: "var(--color-brand)", borderRadius: "50%", position: "relative" }} />
                 </div>
                 <h4 style={{ fontWeight: 800, margin: 0, fontSize: "1rem" }}>Service in progress</h4>
-                <p style={{ color: "#666", fontSize: "0.75rem", marginTop: "0.375rem", marginBottom: "1.25rem", lineHeight: 1.4 }}>
-                  Your facial service session is currently active.
+                <p style={{ color: "#666", fontSize: "0.75rem", marginTop: "0.375rem", marginBottom: "1rem", lineHeight: 1.4 }}>
+                  Your facial service session is currently active. Your beautician will mark it complete when finished.
                 </p>
-                <Button variant="secondary" onClick={() => { updateStatus("COMPLETED").then(() => setStep("completed")); }} loading={loading} block style={{ height: "40px", borderRadius: "12px" }}>
-                  Complete Service
-                </Button>
                 <style jsx>{`
                   @keyframes ping {
                     75%, 100% { transform: scale(2.5); opacity: 0; }
@@ -214,7 +196,7 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
             <span style={{ fontSize: "2.5rem" }}>🌸</span>
             <h3 style={{ fontWeight: 800, marginTop: "0.5rem", marginBottom: "0.25rem", fontSize: "1.15rem" }}>Service Completed!</h3>
             <p style={{ color: "#666", fontSize: "0.75rem", marginBottom: "1.25rem" }}>
-              How was your facial session with {professional?.name ?? "Priya"}?
+              How was your facial session with {partnerName}?
             </p>
 
             <div style={{ textAlign: "left", width: "100%", display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -236,7 +218,7 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
 
               {/* Tip */}
               <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: "0.875rem" }}>
-                <p style={{ fontWeight: 700, fontSize: "0.8rem", color: "#3f3f46", margin: "0 0 0.5rem 0", textAlign: "center" }}>Add tip for Priya</p>
+                <p style={{ fontWeight: 700, fontSize: "0.8rem", color: "#3f3f46", margin: "0 0 0.5rem 0", textAlign: "center" }}>Add tip for {partnerName}</p>
                 <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem" }}>
                   {[30, 50, 100].map((val) => (
                     <button
@@ -287,7 +269,7 @@ export function BeauticianTracker({ booking, onRefresh }: Props) {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "#71717a" }}>Beautician</span>
-                <span>{professional?.name ?? "Priya Beauty Expert"}</span>
+                <span>{partnerName}</span>
               </div>
               
               <div className="vsh-receipt-perforated" />

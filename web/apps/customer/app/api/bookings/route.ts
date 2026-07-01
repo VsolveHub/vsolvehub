@@ -70,11 +70,15 @@ export async function POST(req: NextRequest) {
   }
   const quotedAmount = baseChargePaise;
 
-  if (paymentMethod === "wallet" && quotedAmount > WALLET_BALANCE_PAISE) {
+  if (!isAutoDispatch && !paymentMethod) {
+    return NextResponse.json({ error: "Payment method is required" }, { status: 400 });
+  }
+
+  if (!isAutoDispatch && paymentMethod === "wallet" && quotedAmount > WALLET_BALANCE_PAISE) {
     return NextResponse.json({ error: "Insufficient wallet balance" }, { status: 400 });
   }
 
-  const paymentStatus = paymentMethod === "cod" ? "COD" : "PAID";
+  const paymentStatus = isAutoDispatch ? "PENDING" : paymentMethod === "cod" ? "COD" : "PAID";
 
   const booking = await createBooking({
     userId: session.id,
@@ -88,7 +92,7 @@ export async function POST(req: NextRequest) {
     issueDescription,
     mediaUrls,
     paymentStatus,
-    paymentMethod,
+    paymentMethod: isAutoDispatch ? null : paymentMethod,
     scheduleType,
     vendorAssignmentMode: assignmentMode,
     archetypeDetails: {

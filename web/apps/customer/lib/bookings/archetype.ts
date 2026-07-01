@@ -30,12 +30,12 @@ export function providerTypeForArchetype(archetype: string): ProviderType {
 }
 
 export function isMarketplaceBooking(booking: {
-  assignedProviderId?: string | null;
+  assignedPartnerId?: string | null;
   vendorAssignmentMode?: string | null;
   archetype?: string;
   vendorId?: string | null;
 }): boolean {
-  if (booking.assignedProviderId) return true;
+  if (booking.assignedPartnerId) return true;
   const archetype = booking.archetype ?? "A";
   if (!usesPushDispatch(archetype)) return false;
   if (booking.vendorAssignmentMode === "auto" || !booking.vendorId) return true;

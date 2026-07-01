@@ -1,14 +1,30 @@
 import { PrismaClient, ProviderType, PartnerStatus, DocStatus } from "@prisma/client";
 import { seedCustomerMarketplace } from "./seed-customer";
 import { seedCrews } from "./seed-crew";
+import { SERVICE_CATALOG as CUSTOMER_SERVICE_CATALOG } from "./seed-lib/service-catalog";
 
 const prisma = new PrismaClient();
 
 const services = [
   { slug: "electrician", name: "Electrician", archetype: ProviderType.CAPTAIN, tagline: "Fix wiring, install appliances, and more" },
   { slug: "plumber", name: "Plumber", archetype: ProviderType.CAPTAIN, tagline: "Resolve leaks, install fixtures, and pipe repairs" },
+  { slug: "carpenter", name: "Carpenter", archetype: ProviderType.CAPTAIN, tagline: "Repair doors, locks, hinges and assemble furniture" },
+  { slug: "ac-technician", name: "AC Technician", archetype: ProviderType.CAPTAIN, tagline: "Service, deep-clean, install and refill AC units" },
+  { slug: "ro-technician", name: "RO Technician", archetype: ProviderType.CAPTAIN, tagline: "Service, install and replace RO purifier filters" },
+  { slug: "facial-and-cleanup", name: "Facial & Cleanup", archetype: ProviderType.CAPTAIN, tagline: "At-home facial, cleanup and skin-care services" },
+  { slug: "waxing-and-threading", name: "Waxing & Threading", archetype: ProviderType.CAPTAIN, tagline: "Waxing, threading and grooming appointments at home" },
+  { slug: "hair-services", name: "Hair Services", archetype: ProviderType.CAPTAIN, tagline: "Hair cut, styling, spa and colour services" },
+  { slug: "manicure-and-pedicure", name: "Manicure & Pedicure", archetype: ProviderType.CAPTAIN, tagline: "Hand, foot and nail-care services at home" },
+  { slug: "makeup", name: "Makeup", archetype: ProviderType.CAPTAIN, tagline: "Party, bridal and occasion makeup services" },
+  { slug: "home-cleaning", name: "Home Cleaning", archetype: ProviderType.CAPTAIN, tagline: "Basic, deep, kitchen and bathroom cleaning jobs" },
+  { slug: "sofa-carpet-cleaning", name: "Sofa & Carpet Cleaning", archetype: ProviderType.CAPTAIN, tagline: "Deep cleaning for sofas, carpets and mattresses" },
+  { slug: "pest-control", name: "Pest Control", archetype: ProviderType.CAPTAIN, tagline: "Pest, cockroach, termite and bed-bug treatments" },
+  { slug: "laundry", name: "Laundry", archetype: ProviderType.CAPTAIN, tagline: "Wash, fold, dry-cleaning and ironing services" },
+  { slug: "gardening", name: "Gardening", archetype: ProviderType.CAPTAIN, tagline: "Garden cleaning, lawn mowing and plant care" },
+  { slug: "pet-grooming", name: "Pet Grooming", archetype: ProviderType.CAPTAIN, tagline: "Dog, cat, bath, spa and nail-care services" },
+  { slug: "veterinary", name: "Veterinary", archetype: ProviderType.CAPTAIN, tagline: "At-home check-ups, vaccination and deworming" },
+  { slug: "pet-walking-boarding", name: "Pet Walking & Boarding", archetype: ProviderType.CAPTAIN, tagline: "Dog walking, pet daycare and boarding services" },
   { slug: "driver", name: "Driver", archetype: ProviderType.DRIVER, tagline: "Provide reliable transportation" },
-  { slug: "cleaning", name: "Home Cleaner", archetype: ProviderType.CLEANER, tagline: "Offer deep cleaning and regular maintenance" },
 ];
 
 const cities = [
@@ -17,12 +33,11 @@ const cities = [
   { slug: "hyderabad", name: "Hyderabad" },
 ];
 
-const skills = [
-  { slug: "wiring", name: "Wiring & Fitting" },
-  { slug: "appliance-install", name: "Appliance Installation" },
-  { slug: "leak-repair", name: "Leak Repair" },
-  { slug: "deep-cleaning", name: "Deep Cleaning" },
-];
+const skills = CUSTOMER_SERVICE_CATALOG.flatMap((category) =>
+  category.subCategories.flatMap((subCategory) =>
+    subCategory.services.map((service) => ({ slug: service.slug, name: service.name })),
+  ),
+);
 
 function hoursAgo(h: number): Date {
   return new Date(Date.now() - h * 3600 * 1000);
@@ -38,8 +53,8 @@ async function main() {
   const driverSvc = await prisma.trade.findUnique({ where: { slug: "driver" } });
   const warangal = await prisma.city.findUnique({ where: { slug: "warangal" } });
   const hyderabad = await prisma.city.findUnique({ where: { slug: "hyderabad" } });
-  const wiring = await prisma.skill.findUnique({ where: { slug: "wiring" } });
-  const appliance = await prisma.skill.findUnique({ where: { slug: "appliance-install" } });
+  const switchRepair = await prisma.skill.findUnique({ where: { slug: "switch-socket-repair" } });
+  const fanInstall = await prisma.skill.findUnique({ where: { slug: "fan-installation" } });
 
   // Demo partners covering every dashboard state. Re-seedable (relations reset).
   const demos = [
@@ -55,6 +70,12 @@ async function main() {
       onlineHours: 312,
       aadhaarLast4: "1234",
       onboardingStep: 99,
+      // Dispatch-ready: online and geo-located near the demo customer address
+      // (Gachibowli) so push-dispatch can find and offer jobs to this partner.
+      isOnline: true,
+      lat: 17.4401,
+      lng: 78.3489,
+      acceptanceRate: 94,
     },
     {
       phone: "+919000000002",
@@ -102,10 +123,15 @@ async function main() {
     await prisma.trip.deleteMany({ where: { partnerId: partner.id } });
     await prisma.partnerSkill.deleteMany({ where: { partnerId: partner.id } });
     await prisma.vehicle.deleteMany({ where: { partnerId: partner.id } });
+    await prisma.payoutDetail.deleteMany({ where: { partnerId: partner.id } });
 
     if (partner.status === PartnerStatus.ACTIVE && partner.providerType === ProviderType.CAPTAIN) {
-      if (wiring) await prisma.partnerSkill.create({ data: { partnerId: partner.id, skillId: wiring.id } });
-      if (appliance) await prisma.partnerSkill.create({ data: { partnerId: partner.id, skillId: appliance.id } });
+      if (switchRepair) await prisma.partnerSkill.create({ data: { partnerId: partner.id, skillId: switchRepair.id } });
+      if (fanInstall) await prisma.partnerSkill.create({ data: { partnerId: partner.id, skillId: fanInstall.id } });
+      // A saved payout method so the withdraw flow is testable for the demo captain.
+      await prisma.payoutDetail.create({
+        data: { partnerId: partner.id, upiId: "raju@upi", accountLast4: "4321" },
+      });
       await prisma.earningRecord.createMany({
         data: [
           { partnerId: partner.id, ref: "VSH-1234", amount: 450, createdAt: hoursAgo(2) },
@@ -181,6 +207,15 @@ async function main() {
   console.log("Seeded trades, cities, skills, and demo partners (active/pending/action-required/driver).");
   await seedCustomerMarketplace(prisma);
   await seedCrews(prisma);
+
+  // First admin portal login — allowlisted so magic-link sign-in is testable immediately.
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "dasari.soumith3088@gmail.com";
+  await prisma.adminUser.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: { email: adminEmail, role: "ADMIN" },
+  });
+  console.log(`Seeded admin user (${adminEmail}, role ADMIN).`);
 }
 
 main()

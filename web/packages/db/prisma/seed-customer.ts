@@ -3,7 +3,6 @@ import { buildCatalogServices, SERVICE_CATALOG, slugify } from "./seed-lib/servi
 import { VENDOR_SEED_DATA } from "./seed-lib/vendor-seed-data";
 import { seedAccommodation } from "./seed-accommodation";
 import { seedVehicle } from "./seed-vehicle";
-import { seedProvider } from "./seed-provider";
 
 export async function seedCustomerMarketplace(prisma: PrismaClient) {
   console.log("Seeding customer marketplace...");
@@ -11,10 +10,6 @@ export async function seedCustomerMarketplace(prisma: PrismaClient) {
   await prisma.bookingStatusLog.deleteMany();
   await prisma.jobAssignment.deleteMany();
   await prisma.jobEarning.deleteMany();
-  await prisma.providerKycDocument.deleteMany();
-  await prisma.providerAvailability.deleteMany();
-  await prisma.worker.deleteMany();
-  await prisma.provider.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.savedService.deleteMany();
   await prisma.vendor.deleteMany();
@@ -103,7 +98,7 @@ export async function seedCustomerMarketplace(prisma: PrismaClient) {
   }
 
   const sampleService = await prisma.service.findFirst({
-    where: { slug: "switch-repair" },
+    where: { slug: "switch-socket-repair" },
   });
 
   const sampleVendor = await prisma.vendor.findFirst({
@@ -162,7 +157,6 @@ export async function seedCustomerMarketplace(prisma: PrismaClient) {
   const subCount = SERVICE_CATALOG.reduce((n, c) => n + c.subCategories.length, 0);
   await seedAccommodation(prisma);
   await seedVehicle(prisma);
-  await seedProvider(prisma);
   console.log(
     `Customer seed complete — ${count} services across ${SERVICE_CATALOG.length} categories (${subCount} sub-services)`,
   );

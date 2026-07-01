@@ -12,7 +12,7 @@ const FOOTER_COLS = [
   {
     title: "Quick links",
     links: [
-      { href: "/live", label: "Partner App" },
+      { href: "/dashboard", label: "Partner App" },
       { href: "/resources", label: "Success Stories" },
       { href: "/resources", label: "Safety Guidelines" },
       { href: "/pricing", label: "Payout Policy" },

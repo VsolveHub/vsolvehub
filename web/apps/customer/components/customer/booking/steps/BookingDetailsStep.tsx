@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import type { BookingServiceInfo } from "@/lib/bookings/types";
 import { formatPrice } from "@/lib/format";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { uploadBookingMedia } from "@/lib/upload-media";
 
 type Props = {
   service: BookingServiceInfo;
@@ -32,20 +33,13 @@ export function BookingDetailsStep({
     setUploading(true);
     setError("");
 
-    const formData = new FormData();
-    Array.from(files).forEach((file) => formData.append("files", file));
-
-    const res = await fetch("/api/bookings/media", { method: "POST", body: formData });
-    const data = await res.json();
-
-    if (!res.ok) {
-      setError(data.error ?? "Upload failed");
-      setUploading(false);
+    const result = await uploadBookingMedia(files);
+    setUploading(false);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
-
-    onChange({ mediaUrls: [...mediaUrls, ...data.urls].slice(0, 5) });
-    setUploading(false);
+    onChange({ mediaUrls: [...mediaUrls, ...result.urls].slice(0, 5) });
   }
 
   return (

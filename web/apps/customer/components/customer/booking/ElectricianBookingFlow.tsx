@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { formatPrice } from "@/lib/format";
 import { roleRatePaise } from "@/lib/crew/constants";
-import type { BookingServiceInfo, PaymentMethodType } from "@/lib/bookings/types";
+import type { BookingServiceInfo } from "@/lib/bookings/types";
 
 type Address = {
   id: string;
@@ -25,32 +25,24 @@ type CrewQuoteVM = {
   totalPaise: number;
 };
 
-type ProviderOption = {
-  id: string;
-  name: string;
-  rating: number;
-  yearsExp: number;
-  eta: string;
-  price: number;
-  image: string;
-};
-
 type Props = {
   initialStep?: Step;
   service?: BookingServiceInfo; // Pre-selected service if entering from a direct book link
   services?: any[]; // List of services if entering from the subcategory list
+  categorySlug?: string;
   categoryName?: string;
   subCategoryName?: string;
   addresses?: Address[];
   onAddressSaved?: (addr: Address) => void;
 };
 
-type Step = "select-service" | "booking-type" | "details" | "address" | "schedule" | "provider" | "summary" | "payment" | "team-crew" | "team-details" | "team-budget" | "team-searching" | "team-choose";
+type Step = "select-service" | "booking-type" | "details" | "address" | "schedule" | "summary" | "team-crew" | "team-details" | "team-budget" | "team-searching" | "team-choose";
 
 export function ElectricianBookingFlow({
   initialStep,
   service: propService,
   services: propServices = [],
+  categorySlug: propCategorySlug,
   categoryName = "Home Services",
   subCategoryName = "Electrician",
   addresses: initialAddresses,
@@ -62,6 +54,20 @@ export function ElectricianBookingFlow({
   const servicesList = propServices.length > 0 ? propServices : propService ? [propService] : [];
   
   const isElectrician = subCategoryName.toLowerCase().includes("electrician");
+  const categorySlug = propCategorySlug ?? propService?.category.slug ?? "";
+  const isBeauty = categorySlug === "beauty-wellness";
+  const serviceIcon = categorySlug === "beauty-wellness" ? "✨" : categorySlug === "pet-care" ? "🐾" : categorySlug === "home-services" ? "🏠" : isElectrician ? "🔌" : "🛠️";
+  const installIcon = isElectrician ? "🛠️" : serviceIcon;
+  const primaryGroupLabel = isElectrician ? "Repairs" : "Services";
+  const secondaryGroupLabel = isElectrician ? "Installations" : "More Services";
+  const guaranteeCopy = `Verified professionals with background checks for every ${categoryName.toLowerCase()} booking.`;
+  const detailsLabel = isElectrician ? "Describe the problem" : "Service notes";
+  const detailsPlaceholder = isElectrician
+    ? "Type here to describe what needs repair (e.g. 2 faulty switches in the master bedroom)..."
+    : isBeauty
+      ? "Add any skin concerns, product preferences, or setup notes for your at-home service..."
+      : "Add any preferences, access notes, or special instructions for the partner...";
+  const issueSummary = isElectrician ? "Need to repair 2 switches..." : "No special instructions added";
 
   const option1Title = isElectrician ? "Individual Electrician" : "Professional Partner";
   const option1Desc = isElectrician 
@@ -100,8 +106,6 @@ export function ElectricianBookingFlow({
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [selectedDate, setSelectedDate] = useState("Today, 20 May");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("12 PM - 2 PM");
-  const [selectedProviderId, setSelectedProviderId] = useState("auto-assign");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -201,14 +205,6 @@ export function ElectricianBookingFlow({
   const repairs = servicesList.filter((s) => !s.name.toLowerCase().includes("install"));
   const installations = servicesList.filter((s) => s.name.toLowerCase().includes("install"));
 
-  // Simulated professionals matching the mockup
-  const providers: ProviderOption[] = [
-    { id: "ramesh-kumar", name: "Ramesh Kumar", rating: 4.9, yearsExp: 12, eta: "30 mins away", price: 149, image: "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120" },
-    { id: "suresh-electrician", name: "Suresh Electrician", rating: 4.7, yearsExp: 8, eta: "45 mins away", price: 129, image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120" },
-    { id: "mahesh-electricals", name: "Mahesh Electrician", rating: 4.8, yearsExp: 10, eta: "25 mins away", price: 159, image: "https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=120" },
-    { id: "sai-power-solutions", name: "Sai Power Solutions", rating: 4.6, yearsExp: 6, eta: "50 mins away", price: 119, image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120" },
-  ];
-
   const isTeam = bookingType === "team";
   const isAutoTeam = isTeam && teamProceedMode === "Auto";
   const selectedCrew = crewQuotes.find((c) => c.crewId === selectedCrewId) ?? crewQuotes[0];
@@ -226,22 +222,8 @@ export function ElectricianBookingFlow({
     teamRoles.reduce((s, r) => s + r.count * Math.round(roleRatePaise(r.roleId) / 100), 0) * teamDuration;
   const teamTotalRupees = isAutoTeam ? teamEstimateRupees : selectedCrew ? Math.round(selectedCrew.totalPaise / 100) : teamEstimateRupees;
 
-  const selectedProvider = isTeam
-    ? selectedCrew && !isAutoTeam
-      ? {
-          id: selectedCrew.crewId,
-          name: selectedCrew.name,
-          rating: selectedCrew.rating,
-          yearsExp: 15,
-          eta: "Scheduled Crew",
-          price: teamTotalRupees,
-          image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=120",
-        }
-      : undefined
-    : providers.find((p) => p.id === selectedProviderId);
-
   // Calculate pricing
-  const serviceCharge = isTeam ? teamTotalRupees : selectedProvider ? selectedProvider.price : 149;
+  const serviceCharge = isTeam ? teamTotalRupees : Math.round((activeService?.pricePaise ?? 0) / 100);
   const platformFee = isTeam ? 0 : 20;
   const gst = isTeam ? 0 : Math.round(serviceCharge * 0.18);
   const totalAmount = serviceCharge + platformFee + gst;
@@ -321,12 +303,6 @@ export function ElectricianBookingFlow({
         return;
       }
 
-      if (!paymentMethod) {
-        setError("Please select a payment method");
-        setLoading(false);
-        return;
-      }
-
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -337,9 +313,7 @@ export function ElectricianBookingFlow({
           issueDescription: issue || "No description provided",
           mediaUrls: photos,
           scheduleType: "scheduled",
-          paymentMethod: paymentMethod,
-          vendorAssignmentMode: selectedProviderId === "auto-assign" ? "auto" : "manual",
-          vendorId: selectedProviderId === "auto-assign" ? undefined : selectedProviderId,
+          vendorAssignmentMode: "auto",
           bookingType: bookingType,
         }),
       });
@@ -352,7 +326,7 @@ export function ElectricianBookingFlow({
         return;
       }
 
-      router.push(`/booking/confirm?ref=${data.bookingRef}`);
+      router.push(`/booking/track/${data.bookingRef}`);
     } catch (err) {
       setError("Failed to create booking");
       setLoading(false);
@@ -375,16 +349,12 @@ export function ElectricianBookingFlow({
       setStep("details");
     } else if (step === "schedule") {
       setStep("address");
-    } else if (step === "provider") {
-      setStep("schedule");
     } else if (step === "summary") {
       if (bookingType === "team") {
         setStep("team-choose");
       } else {
-        setStep("provider");
+        setStep("schedule");
       }
-    } else if (step === "payment") {
-      setStep("summary");
     } else if (step === "team-crew") {
       setStep("booking-type");
     } else if (step === "team-details") {
@@ -418,16 +388,10 @@ export function ElectricianBookingFlow({
     } else if (step === "address") {
       setStep("schedule");
     } else if (step === "schedule") {
-      setStep("provider");
-    } else if (step === "provider") {
       setStep("summary");
     } else if (step === "summary") {
-      // Team books with no upfront payment ("Book Now"); individual goes to payment.
-      if (isTeam) {
-        handleSubmit();
-      } else {
-        setStep("payment");
-      }
+      // Single-provider bookings collect payment after a partner accepts.
+      handleSubmit();
     } else if (step === "team-crew") {
       setStep("team-details");
     } else if (step === "team-details") {
@@ -462,12 +426,8 @@ export function ElectricianBookingFlow({
         return { badge: 6, title: "Select Address" };
       case "schedule":
         return { badge: 7, title: "Select Date & Time" };
-      case "provider":
-        return { badge: 8, title: "Choose Provider" };
       case "summary":
-        return { badge: 9, title: "Booking Summary" };
-      case "payment":
-        return { badge: 10, title: "Payment" };
+        return { badge: 8, title: "Booking Summary" };
       case "team-crew":
         return { badge: 3, title: "Crew Requirement" };
       case "team-details":
@@ -505,10 +465,10 @@ export function ElectricianBookingFlow({
       <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
         {step === "select-service" && (
           <div className="flex flex-col gap-4 select-none pb-4">
-            {/* Repairs Section */}
+            {/* Primary services section */}
             {repairs.length > 0 && (
               <div className="flex flex-col gap-2">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Repairs</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">{primaryGroupLabel}</p>
                 <div className="flex flex-col gap-2">
                   {repairs.map((s) => {
                     const isSelected = selectedServiceId === s.id;
@@ -522,7 +482,7 @@ export function ElectricianBookingFlow({
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-xl">🔌</span>
+                          <span className="text-xl">{serviceIcon}</span>
                           <div>
                             <p className="font-bold text-xs text-gray-800">{s.name}</p>
                             <p className="text-[10px] text-gray-500 mt-0.5">Starting from ₹{Math.round(s.pricePaise / 100)}</p>
@@ -538,10 +498,10 @@ export function ElectricianBookingFlow({
               </div>
             )}
 
-            {/* Installations Section */}
+            {/* Secondary services section */}
             {installations.length > 0 && (
               <div className="flex flex-col gap-2 mt-1">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">Installations</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">{secondaryGroupLabel}</p>
                 <div className="flex flex-col gap-2">
                   {installations.map((s) => {
                     const isSelected = selectedServiceId === s.id;
@@ -555,7 +515,7 @@ export function ElectricianBookingFlow({
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-xl">🛠️</span>
+                          <span className="text-xl">{installIcon}</span>
                           <div>
                             <p className="font-bold text-xs text-gray-800">{s.name}</p>
                             <p className="text-[10px] text-gray-500 mt-0.5">Starting from ₹{Math.round(s.pricePaise / 100)}</p>
@@ -576,7 +536,7 @@ export function ElectricianBookingFlow({
               <div className="z-10">
                 <p className="font-bold text-xs m-0">Safety First Guarantee</p>
                 <p className="text-[10px] text-purple-100/90 mt-1 leading-relaxed max-w-[240px] m-0">
-                  Verified professionals with background checks for every electrical service.
+                  {guaranteeCopy}
                 </p>
               </div>
               <span className="text-4xl opacity-15 absolute -right-2 top-2 select-none z-0">🛡️</span>
@@ -1092,9 +1052,9 @@ export function ElectricianBookingFlow({
         {step === "details" && (
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Describe the problem</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{detailsLabel}</label>
               <textarea
-                placeholder="Type here to describe what needs repair (e.g. 2 faulty switches in the master bedroom)..."
+                placeholder={detailsPlaceholder}
                 value={issue}
                 onChange={(e) => setIssue(e.target.value)}
                 className="w-full min-h-[100px] p-3 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-purple-600 text-gray-800"
@@ -1272,52 +1232,6 @@ export function ElectricianBookingFlow({
           </div>
         )}
 
-        {step === "provider" && (
-          <div className="flex flex-col gap-3">
-            {/* Auto Assign Card */}
-            <button
-              type="button"
-              className={`w-full p-4 bg-white border rounded-2xl text-left flex items-center gap-3 cursor-pointer transition-all ${
-                selectedProviderId === "auto-assign" ? "border-purple-600 bg-purple-50/20" : "border-gray-100 hover:border-purple-200"
-              }`}
-              onClick={() => setSelectedProviderId("auto-assign")}
-            >
-              <input type="radio" checked={selectedProviderId === "auto-assign"} readOnly />
-              <div className="flex-grow">
-                <p className="font-bold text-xs text-gray-800">Auto Assign Best Professional</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">We will assign the highest-rated partner near you</p>
-              </div>
-            </button>
-
-            {/* List */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Available Professionals</p>
-              {providers.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`w-full p-3.5 bg-white border rounded-2xl text-left flex items-center gap-3 cursor-pointer transition-all ${
-                    selectedProviderId === p.id ? "border-purple-600 bg-purple-50/20" : "border-gray-100 hover:border-purple-200"
-                  }`}
-                  onClick={() => setSelectedProviderId(p.id)}
-                >
-                  <input type="radio" checked={selectedProviderId === p.id} readOnly />
-                  <img src={p.image} alt={p.name} className="w-10 h-10 rounded-full object-cover border border-gray-100" />
-                  <div className="flex-grow min-w-0">
-                    <div className="flex justify-between items-center">
-                      <p className="font-bold text-xs text-gray-800 truncate">{p.name}</p>
-                      <p className="font-extrabold text-xs text-purple-700">₹{p.price}</p>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      ★ {p.rating.toFixed(1)} · {p.yearsExp} Yrs Exp · {p.eta}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {step === "summary" && (
           <div className="flex flex-col gap-4 pb-2">
             {/* Summary card wrapper */}
@@ -1328,8 +1242,8 @@ export function ElectricianBookingFlow({
                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Service Type</span>
                   <p className="font-extrabold text-sm text-purple-950 mt-0.5">{activeService?.name || "Switch Repair"}</p>
                 </div>
-                <div className="bg-amber-400 text-purple-950 font-black text-[10px] px-2 py-0.5 rounded-lg flex items-center gap-0.5">
-                  ★ {selectedProvider?.rating.toFixed(1) || "4.9"}
+                <div className="bg-purple-100 text-purple-900 font-black text-[10px] px-2 py-0.5 rounded-lg flex items-center gap-0.5">
+                  AUTO
                 </div>
               </div>
 
@@ -1341,8 +1255,8 @@ export function ElectricianBookingFlow({
                     📄
                   </div>
                   <div className="min-w-0 flex-grow">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Problem Description</span>
-                    <p className="text-xs font-medium text-gray-700 mt-0.5 truncate">{issue || "Need to repair 2 switches..."}</p>
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">{isElectrician ? "Problem Description" : "Service Notes"}</span>
+                    <p className="text-xs font-medium text-gray-700 mt-0.5 truncate">{issue || issueSummary}</p>
                   </div>
                 </div>
 
@@ -1402,14 +1316,14 @@ export function ElectricianBookingFlow({
                   </div>
                   <div>
                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">
-                      {isTeam ? "Crew" : "Assigned Professional"}
+                      {isTeam ? "Crew" : "Partner Assignment"}
                     </span>
                     <p className="text-xs font-bold text-purple-950 mt-0.5">
                       {isTeam
                         ? isAutoTeam
                           ? "Auto-assign · first crew to accept"
                           : selectedCrew?.name ?? "Selected crew"
-                        : selectedProvider?.name || "Ramesh Kumar"}
+                        : "Auto-assign · first partner to accept"}
                     </p>
                   </div>
                 </div>
@@ -1483,42 +1397,6 @@ export function ElectricianBookingFlow({
           </div>
         )}
 
-        {step === "payment" && (
-          <div className="flex flex-col gap-3">
-            <div className="bg-gradient-to-r from-purple-700 to-indigo-900 text-white p-4 rounded-2xl shadow-sm flex justify-between items-center">
-              <div>
-                <p className="text-[10px] opacity-80 uppercase font-bold tracking-wider">Total Amount to Pay</p>
-                <p className="text-xl font-black mt-1">₹{totalAmount}</p>
-              </div>
-              <span className="text-3xl">💳</span>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Select Payment Method</p>
-              {(["upi", "card", "wallet", "cod"] as const).map((methodType) => {
-                const label = methodType === "upi" ? "UPI (GPay, PhonePe, Paytm)" : methodType === "card" ? "Credit / Debit Card" : methodType === "wallet" ? "Wallets" : "Cash on Service";
-                const detail = methodType === "upi" ? "Pay using any UPI app" : methodType === "card" ? "Visa, MasterCard, Rupay" : methodType === "wallet" ? "Pay from wallet" : "Pay after service completion";
-                return (
-                  <button
-                    key={methodType}
-                    type="button"
-                    className={`w-full p-3.5 bg-white border rounded-xl text-left flex items-start gap-3 cursor-pointer transition-all ${
-                      paymentMethod === methodType ? "border-purple-600 bg-purple-50/20" : "border-gray-100 hover:border-purple-200"
-                    }`}
-                    onClick={() => setPaymentMethod(methodType)}
-                  >
-                    <input type="radio" checked={paymentMethod === methodType} readOnly className="mt-1" />
-                    <div>
-                      <p className="font-bold text-xs text-gray-800">{label}</p>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{detail}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {error && <div className="text-[11px] text-red-600 font-semibold bg-red-50 p-2 rounded-lg">{error}</div>}
-          </div>
-        )}
       </div>
 
       {/* Sticky Bottom Actions inside Simulator */}
@@ -1544,11 +1422,6 @@ export function ElectricianBookingFlow({
           </button>
         )}
         {step === "schedule" && (
-          <button type="button" onClick={handleNext} className="w-full py-3 bg-purple-800 hover:bg-purple-900 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center">
-            Next
-          </button>
-        )}
-        {step === "provider" && (
           <button type="button" onClick={handleNext} className="w-full py-3 bg-purple-800 hover:bg-purple-900 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center">
             Next
           </button>
@@ -1580,12 +1453,7 @@ export function ElectricianBookingFlow({
         )}
         {step === "summary" && (
           <button type="button" onClick={handleNext} disabled={loading} className="w-full py-3 bg-purple-800 hover:bg-purple-900 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all flex items-center justify-center gap-1">
-            {isTeam ? (loading ? "Booking…" : "Book Now") : "Proceed to Payment →"}
-          </button>
-        )}
-        {step === "payment" && (
-          <button type="button" onClick={handleSubmit} disabled={!paymentMethod || loading} className="w-full py-3 bg-purple-800 hover:bg-purple-900 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center">
-            {loading ? "Processing..." : `Pay ₹${totalAmount}`}
+            {loading ? "Sending request…" : isTeam ? "Book Now" : "Request Partner →"}
           </button>
         )}
       </div>

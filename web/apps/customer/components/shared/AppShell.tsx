@@ -71,9 +71,9 @@ export function AppHeader() {
       <header className={`app-header ${hideSearchLocation ? "app-header--compact" : ""}`}>
         <div className="app-header-top">
           <Link href="/" className="brand-logo">
-            <span className="brand-v">V</span>
+            <img src="/logo-mark.png" alt="V Solve Hub" className="brand-mark" />
             <span className="brand-text">
-              <span className="brand-name">SOLVE HUB</span>
+              <span className="brand-name">V SOLVE HUB</span>
               <span className="brand-tagline">ONE APP, ALL SOLUTIONS</span>
             </span>
           </Link>

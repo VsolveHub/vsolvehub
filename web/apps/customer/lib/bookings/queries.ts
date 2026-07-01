@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { recomputePartnerRating } from "@vsolve/db";
 import { generateBookingRef } from "@/lib/format";
 import { isMarketplaceBooking } from "@/lib/bookings/archetype";
 import {
@@ -24,7 +25,7 @@ export async function createBooking(input: {
   issueDescription?: string;
   mediaUrls?: string[];
   paymentStatus: string;
-  paymentMethod: string;
+  paymentMethod?: string | null;
   scheduleType: string;
   vendorAssignmentMode?: string;
 }) {
@@ -75,7 +76,7 @@ export async function getBookingByRef(ref: string, userId?: string) {
       service: { include: { category: true, subCategory: true } },
       address: true,
       vendor: true,
-      assignedProvider: { include: { worker: true, user: true } },
+      assignedPartner: true,
       statusLogs: { orderBy: { createdAt: "asc" } },
       crew: { include: { lead: { select: { fullName: true, phone: true } }, roleRates: true } },
       crewJobDays: {
@@ -95,7 +96,7 @@ export async function getUserBookings(userId: string) {
       service: { include: { category: true, subCategory: true } },
       address: true,
       vendor: true,
-      assignedProvider: { include: { worker: true, user: true } },
+      assignedPartner: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -238,6 +239,11 @@ export async function submitBookingReview(
     where: { id: booking.id },
     data: { rating, review },
   });
+
+  // Refresh the assigned partner's aggregate rating from real reviews.
+  if (booking.assignedPartnerId) {
+    await recomputePartnerRating(booking.assignedPartnerId);
+  }
 
   return { success: true as const };
 }

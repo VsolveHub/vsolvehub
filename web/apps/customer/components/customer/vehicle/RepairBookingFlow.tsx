@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { formatPrice } from "@/lib/format";
 import { WALLET_BALANCE_PAISE } from "@/lib/profile/section-data";
 import { REPAIR_ISSUES } from "@/lib/vehicle/constants";
+import { uploadBookingMedia } from "@/lib/upload-media";
 import { VehicleFlowHeader } from "./VehicleFlowHeader";
 
 const STEPS = ["issue", "vehicle", "pickup", "schedule", "mechanic", "payment"] as const;
@@ -48,6 +49,7 @@ export function RepairBookingFlow() {
   const [paymentMethod, setPaymentMethod] = useState<(typeof PAYMENT_OPTIONS)[number]["id"] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     if (step === "mechanic") {
@@ -59,11 +61,13 @@ export function RepairBookingFlow() {
 
   async function uploadImages(files: FileList | null) {
     if (!files?.length) return;
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("files", f));
-    const res = await fetch("/api/bookings/media", { method: "POST", body: formData });
-    const data = await res.json();
-    if (res.ok) setMediaUrls((u) => [...u, ...data.urls].slice(0, 5));
+    setUploadError("");
+    const result = await uploadBookingMedia(files);
+    if (!result.ok) {
+      setUploadError(result.error);
+      return;
+    }
+    setMediaUrls((u) => [...u, ...result.urls].slice(0, 5));
   }
 
   async function confirm() {
@@ -118,6 +122,7 @@ export function RepairBookingFlow() {
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => uploadImages(e.target.files)} />
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>Upload vehicle photos</Button>
+          {uploadError && <p className="alert alert-error">{uploadError}</p>}
           {mediaUrls.length > 0 && <p className="text-sm text-muted">{mediaUrls.length} photo(s)</p>}
           <Button onClick={() => issue && setStep("vehicle")} disabled={!issue}>Continue</Button>
         </div>

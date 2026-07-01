@@ -88,25 +88,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (body.status) {
       status = body.status;
       
-      const updateData: any = { status };
-      if (status === "ASSIGNED" && !booking.assignedProviderId) {
-        // Find an active professional provider to assign
-        const demoProvider = await prisma.provider.findFirst({
-          where: { providerType: "PROFESSIONAL", status: "ACTIVE" },
-        });
-        if (demoProvider) {
-          updateData.assignedProviderId = demoProvider.id;
-        }
-      }
-      // On-site, the provider may find extra work and raise a revised quote (~30% more).
-      if (status === "STARTED" && booking.revisedAmountPaise == null) {
-        updateData.revisedAmountPaise = Math.round(booking.quotedAmount * 0.3);
-        updateData.revisedReason = "Extra parts and labour found on site";
-      }
-
+      // Real status is driven by the partner via the shared fulfillment engine;
+      // no demo-provider assignment or fabricated revised quotes here.
       await prisma.booking.update({
         where: { id: booking.id },
-        data: updateData,
+        data: { status },
       });
       await prisma.bookingStatusLog.create({
         data: { bookingId: booking.id, status },

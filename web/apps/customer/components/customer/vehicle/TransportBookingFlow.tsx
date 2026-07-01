@@ -9,6 +9,7 @@ import { formatPrice } from "@/lib/format";
 import { WALLET_BALANCE_PAISE } from "@/lib/profile/section-data";
 import { TRANSPORT_VEHICLE_TYPES } from "@/lib/vehicle/constants";
 import { estimateDistanceKm, estimateTransportFare } from "@/lib/vehicle/pricing";
+import { uploadBookingMedia } from "@/lib/upload-media";
 import { VehicleFlowHeader } from "./VehicleFlowHeader";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 
@@ -48,6 +49,7 @@ export function TransportBookingFlow() {
   const [paymentMethod, setPaymentMethod] = useState<(typeof PAYMENT_OPTIONS)[number]["id"] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadError, setUploadError] = useState("");
 
   const distanceKm = pickup && drop ? estimateDistanceKm(pickup, drop) : 0;
   const fare = estimateTransportFare(vehicleType, distanceKm);
@@ -62,11 +64,13 @@ export function TransportBookingFlow() {
 
   async function uploadImages(files: FileList | null) {
     if (!files?.length) return;
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("files", f));
-    const res = await fetch("/api/bookings/media", { method: "POST", body: formData });
-    const data = await res.json();
-    if (res.ok) setMediaUrls((u) => [...u, ...data.urls].slice(0, 5));
+    setUploadError("");
+    const result = await uploadBookingMedia(files);
+    if (!result.ok) {
+      setUploadError(result.error);
+      return;
+    }
+    setMediaUrls((u) => [...u, ...result.urls].slice(0, 5));
   }
 
   async function confirm() {
@@ -133,6 +137,7 @@ export function TransportBookingFlow() {
           <Textarea label="Size / dimensions" value={sizeDescription} onChange={(e) => setSizeDescription(e.target.value)} placeholder="Optional size details" />
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => uploadImages(e.target.files)} />
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>Upload photos</Button>
+          {uploadError && <p className="alert alert-error">{uploadError}</p>}
           <div className="booking-action-row">
             <Button variant="secondary" onClick={() => setStep("drop")}>Back</Button>
             <Button onClick={() => goodsType.trim().length >= 2 && setStep("vehicle")} disabled={goodsType.trim().length < 2}>Continue</Button>

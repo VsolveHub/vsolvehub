@@ -33,6 +33,7 @@ async function issueOtp(phone: string): Promise<string> {
 export async function requestOtp(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const phone = normalizePhone(String(formData.get("phone") ?? ""));
   const service = String(formData.get("service") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
   if (!phone) return { error: "Enter a valid 10-digit mobile number." };
 
   const code = await issueOtp(phone);
@@ -40,6 +41,7 @@ export async function requestOtp(_prev: AuthState, formData: FormData): Promise<
   const opts = { httpOnly: true, sameSite: "lax" as const, path: "/", maxAge: OTP_TTL_SECONDS };
   store.set("otp_phone", phone, opts);
   if (service) store.set("otp_service", service, opts);
+  if (category) store.set("otp_category", category, opts);
   if (process.env.NODE_ENV !== "production") {
     store.set("otp_dev_code", code, { ...opts, httpOnly: false });
   }
@@ -66,6 +68,7 @@ export async function verifyOtp(_prev: AuthState, formData: FormData): Promise<A
   const store = await cookies();
   const phone = store.get("otp_phone")?.value;
   const serviceSlug = store.get("otp_service")?.value;
+  const categoryId = store.get("otp_category")?.value;
   const code = String(formData.get("code") ?? "").replace(/\D/g, "");
 
   if (!phone) return { error: "Session expired. Please re-enter your number." };
@@ -90,31 +93,39 @@ export async function verifyOtp(_prev: AuthState, formData: FormData): Promise<A
   await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { consumed: true } });
 
   const svc = serviceSlug ? serviceBySlug(serviceSlug) : undefined;
-  const serviceRow = serviceSlug
-    ? await prisma.trade.findUnique({ where: { slug: serviceSlug } })
-    : null;
 
   let partner = await prisma.partner.findUnique({ where: { phone } });
   if (!partner) {
     partner = await prisma.partner.create({
-      data: {
-        phone,
-        phoneVerified: true,
-        providerType: svc?.archetype ?? "CAPTAIN",
-        tradeId: serviceRow?.id ?? null,
-      },
+      data: { phone, phoneVerified: true, providerType: svc?.archetype ?? "CAPTAIN" },
     });
   } else if (!partner.phoneVerified) {
+    partner = await prisma.partner.update({ where: { id: partner.id }, data: { phoneVerified: true } });
+  }
+
+  // A specific service was pre-picked → set the partner's trade now so onboarding
+  // skips the "what service?" step. The Trade self-seeds if it doesn't exist yet.
+  if (svc && !partner.tradeId && partner.status === "DRAFT") {
+    const trade = await prisma.trade.upsert({
+      where: { slug: svc.slug },
+      update: { name: svc.name, archetype: svc.archetype, tagline: svc.tagline },
+      create: { slug: svc.slug, name: svc.name, archetype: svc.archetype, tagline: svc.tagline },
+    });
     partner = await prisma.partner.update({
       where: { id: partner.id },
-      data: { phoneVerified: true },
+      data: { tradeId: trade.id, providerType: svc.archetype },
     });
   }
 
   await createSession(partner.id);
   store.delete("otp_phone");
   store.delete("otp_service");
+  store.delete("otp_category");
   store.delete("otp_dev_code");
 
-  redirect(partner.status === "DRAFT" ? "/onboarding" : "/live");
+  if (partner.status !== "DRAFT") redirect("/dashboard");
+  if (partner.tradeId) redirect("/onboarding");
+  // Only a category was chosen → onboarding shows just that category's services.
+  if (categoryId) redirect(`/onboarding?category=${encodeURIComponent(categoryId)}`);
+  redirect("/onboarding");
 }

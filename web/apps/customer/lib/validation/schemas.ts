@@ -61,7 +61,7 @@ export const bookingSchema = z.object({
   issueDescription: z.string().trim().max(1000).optional(),
   mediaUrls: z.array(z.string().min(1)).max(5).optional(),
   scheduleType: z.enum(["instant", "scheduled"]),
-  paymentMethod: z.enum(["upi", "card", "wallet", "cod"]),
+  paymentMethod: z.enum(["upi", "card", "wallet", "cod"]).optional(),
   vendorAssignmentMode: z.enum(["auto", "manual"]).optional(),
   bookingType: z.string().optional(),
   archetypeDetails: z.record(z.any()).optional(),

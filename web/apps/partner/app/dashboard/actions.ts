@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@vsolve/db";
 import { requirePartner } from "@/lib/auth";
-import { saveUpload } from "@/lib/upload";
+import { uploadKycFile } from "@/lib/kyc-storage";
+import { validateUploadFile, DOC_ACCEPT } from "@/lib/upload-rules";
+import { filterSkillIdsForTrade } from "@/lib/service-skills";
 
 /** Dev-only: simulate an admin verifying the partner so the active state is viewable. */
 export async function devApprove(): Promise<void> {
@@ -22,8 +24,15 @@ export type FormResult = { ok?: boolean; error?: string };
 export async function uploadDocument(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const partner = await requirePartner();
   const type = String(formData.get("type") ?? "").trim() || "OTHER";
-  const url = await saveUpload(formData.get("file") as File | null);
-  if (!url) return { error: "Choose a file to upload." };
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { error: "Choose a file to upload." };
+
+  const invalid = validateUploadFile(file, { label: "document", accept: DOC_ACCEPT });
+  if (invalid) return { error: invalid };
+
+  const result = await uploadKycFile(partner.id, type, file);
+  if (!result.ok) return { error: result.error };
+  const url = result.path;
 
   const existing = await prisma.document.findFirst({ where: { partnerId: partner.id, type } });
   if (existing) {
@@ -40,7 +49,8 @@ export async function uploadDocument(_prev: FormResult, formData: FormData): Pro
 
 export async function updateSkills(_prev: FormResult, formData: FormData): Promise<FormResult> {
   const partner = await requirePartner();
-  const skillIds = formData.getAll("skills").map(String).filter(Boolean);
+  const requestedSkillIds = formData.getAll("skills").map(String).filter(Boolean);
+  const skillIds = await filterSkillIdsForTrade(requestedSkillIds, partner.trade?.slug);
   const cityId = String(formData.get("cityId") ?? "") || null;
 
   await prisma.partnerSkill.deleteMany({ where: { partnerId: partner.id } });

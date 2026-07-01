@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Clock, IdCard, Camera, Landmark, Car, ArrowRight } from "lucide-react";
 import { Button, Card } from "@vsolve/ui";
-import { ONBOARDING_REQUIREMENTS, SERVICE_CATALOG } from "@vsolve/config";
+import { ONBOARDING_REQUIREMENTS, PARTNER_CATEGORIES, servicesForCategory } from "@vsolve/config";
 import { requirePartner } from "@/lib/auth";
 import { formSteps } from "@/lib/onboarding";
 import { Medallion, type Tone } from "@/components/graphics";
@@ -12,32 +12,65 @@ import { chooseService } from "./actions";
 const REQ_ICONS = [IdCard, Camera, Landmark];
 const REQ_ICONS_DRIVER = [IdCard, Car, Landmark];
 
-export default async function OnboardingIntro() {
+export default async function OnboardingIntro({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string }>;
+}) {
   const partner = await requirePartner();
-  if (partner.status !== "DRAFT") redirect("/live");
+  if (partner.status !== "DRAFT") redirect("/dashboard");
 
-  // No service chosen yet → pick a role.
+  const { category } = await searchParams;
+
+  // No service chosen yet → pick your service, grouped by plain-language category.
   if (!partner.tradeId) {
+    const allLive = PARTNER_CATEGORIES.filter((c) => c.status === "live");
+    // If the partner already chose a category before login, show only that one.
+    const preselected = category ? allLive.find((c) => c.id === category) : undefined;
+    const liveCategories = preselected ? [preselected] : allLive;
     return (
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-ink-900">How do you want to earn?</h1>
-        <p className="mt-2 text-gray-500">Choose the kind of work you want to take on.</p>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          {SERVICE_CATALOG.map((svc) => {
-            const v = serviceVisual(svc.slug);
+      <div>
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-ink-900">
+            {preselected ? `Pick your ${preselected.name} service` : "What service do you offer?"}
+          </h1>
+          <p className="mt-2 text-gray-500">Pick the work you do — this is what customers will book you for.</p>
+          {preselected ? (
+            <Link href="/onboarding" className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700">
+              ← See all services
+            </Link>
+          ) : null}
+        </div>
+        <div className="mt-8 space-y-8">
+          {liveCategories.map((cat) => {
+            const services = servicesForCategory(cat.id);
+            if (!services.length) return null;
             return (
-              <form key={svc.slug} action={chooseService}>
-                <input type="hidden" name="service" value={svc.slug} />
-                <button type="submit" className="w-full text-left">
-                  <Card className="flex items-center gap-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
-                    <Medallion icon={v.icon} tone={v.tone} size={52} />
-                    <div>
-                      <h3 className="font-semibold text-ink-900">{svc.name}</h3>
-                      <p className="mt-0.5 text-sm text-gray-500">{svc.tagline}</p>
-                    </div>
-                  </Card>
-                </button>
-              </form>
+              <div key={cat.id}>
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-xl">{cat.icon}</span>
+                  <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{cat.name}</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {services.map((svc) => {
+                    const v = serviceVisual(svc.slug);
+                    return (
+                      <form key={svc.slug} action={chooseService}>
+                        <input type="hidden" name="service" value={svc.slug} />
+                        <button type="submit" className="w-full text-left">
+                          <Card className="flex items-center gap-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+                            <Medallion icon={v.icon} tone={v.tone} size={48} />
+                            <div>
+                              <h3 className="font-semibold text-ink-900">{svc.name}</h3>
+                              <p className="mt-0.5 text-xs text-gray-500">{svc.tagline}</p>
+                            </div>
+                          </Card>
+                        </button>
+                      </form>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>

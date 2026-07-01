@@ -10,6 +10,7 @@ import { WALLET_BALANCE_PAISE } from "@/lib/profile/section-data";
 import { computeAccommodationPayment } from "@/lib/accommodation/pricing";
 import type { AccommodationBookingDraft } from "@/lib/accommodation/types";
 import type { PropertyDetail } from "@/lib/accommodation/types";
+import { uploadBookingMedia } from "@/lib/upload-media";
 
 const PAYMENT_OPTIONS = [
   { id: "upi" as const, label: "UPI", detail: "Google Pay, PhonePe, Paytm" },
@@ -29,6 +30,7 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
   const [step, setStep] = useState<"type" | "requirements" | "payment">("type");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [draft, setDraft] = useState<AccommodationBookingDraft>({
     propertyId: property.id,
     bookingType: initialMode,
@@ -47,13 +49,13 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
 
   async function uploadIdProof(files: FileList | null) {
     if (!files?.length) return;
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("files", f));
-    const res = await fetch("/api/bookings/media", { method: "POST", body: formData });
-    const data = await res.json();
-    if (res.ok) {
-      setDraft((d) => ({ ...d, idProofUrls: [...d.idProofUrls, ...data.urls].slice(0, 3) }));
+    setUploadError("");
+    const result = await uploadBookingMedia(files);
+    if (!result.ok) {
+      setUploadError(result.error);
+      return;
     }
+    setDraft((d) => ({ ...d, idProofUrls: [...d.idProofUrls, ...result.urls].slice(0, 3) }));
   }
 
   async function confirmBooking() {
@@ -187,6 +189,7 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
               <Button type="button" variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>
                 Upload ID proof
               </Button>
+              {uploadError && <p className="alert alert-error">{uploadError}</p>}
               {draft.idProofUrls.length > 0 && (
                 <p className="text-sm text-muted">{draft.idProofUrls.length} file(s) uploaded</p>
               )}

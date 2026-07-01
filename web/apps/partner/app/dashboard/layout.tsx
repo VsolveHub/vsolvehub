@@ -1,13 +1,10 @@
 import { requirePartner } from "@/lib/auth";
-import { DashboardChrome } from "@/components/dashboard/chrome";
 
 export const metadata = { robots: { index: false } };
 
+// Bare gate — the partner app (page.tsx) renders full-screen. The chromed
+// deep-pages live under the (secondary) route group with their own layout.
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const partner = await requirePartner();
-  return (
-    <DashboardChrome name={partner.fullName ?? "Partner"} verified={partner.status === "ACTIVE"}>
-      {children}
-    </DashboardChrome>
-  );
+  await requirePartner();
+  return <>{children}</>;
 }

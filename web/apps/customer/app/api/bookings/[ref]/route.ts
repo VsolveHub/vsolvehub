@@ -6,7 +6,6 @@ import {
   isMarketplaceBooking,
   parseMediaUrls,
   previewIndividualCancelFee,
-  syncBookingStatus,
 } from "@/lib/bookings/queries";
 import {
   BOOKING_STATUSES,
@@ -140,20 +139,19 @@ function serializeCrewBooking(booking: NonNullable<Awaited<ReturnType<typeof get
 }
 
 function serializeProvider(booking: NonNullable<Awaited<ReturnType<typeof getBookingByRef>>>) {
-  const provider = booking.assignedProvider;
-  if (!provider) return null;
+  const partner = booking.assignedPartner;
+  if (!partner) return null;
 
-  const worker = provider.worker;
-  const name = worker?.displayName ?? provider.user.name ?? "Provider";
-  const phone = worker?.phone ?? provider.user.phone;
-  const rating = worker?.rating ?? 4.8;
+  const name = partner.fullName ?? "Partner";
+  const phone = partner.phone;
+  const rating = partner.rating;
 
   const assignedLog = booking.statusLogs.find((l) => l.status === "ASSIGNED");
   const etaMinutes = assignedLog
     ? Math.max(5, 20 - Math.floor((Date.now() - assignedLog.createdAt.getTime()) / 60_000))
     : 15;
 
-  return { id: provider.id, name, phone, rating, etaMinutes };
+  return { id: partner.id, name, phone, rating, etaMinutes };
 }
 
 export async function GET(_req: NextRequest, context: RouteContext) {
@@ -181,12 +179,11 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     booking = (await getBookingByRef(ref, session?.id)) ?? booking;
   }
 
-  const status = marketplace
-    ? booking.status
-    : await syncBookingStatus(booking.id, booking.createdAt, booking.status);
-
-  const normalized = normalizeBookingStatus(status);
+  // Status is authoritative from the DB (driven by the partner / dispatch) —
+  // never time-simulated.
+  const normalized = normalizeBookingStatus(booking.status);
   const provider = serializeProvider(booking);
+  const paidForMobilization = ["PAID", "COD"].includes(booking.paymentStatus);
 
   return NextResponse.json({
     bookingRef: booking.bookingRef,
@@ -213,6 +210,8 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         }
       : null,
     provider,
+    // Shown to the customer once a partner is assigned; read aloud to start the job.
+    startOtp: paidForMobilization && ["ASSIGNED", "PROVIDER_ARRIVING"].includes(normalized) ? booking.startOtp : null,
     baseChargePaise: booking.baseChargePaise,
     quotedAmount: booking.quotedAmount,
     finalAmountPaise: booking.finalAmountPaise ?? booking.quotedAmount,

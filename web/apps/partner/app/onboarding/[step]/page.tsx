@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@vsolve/db";
 import { Card, Stepper } from "@vsolve/ui";
+import { skillsForService } from "@vsolve/config";
 import { requirePartner } from "@/lib/auth";
 import { formSteps, isValidStep, stepIndex } from "@/lib/onboarding";
 import { IdentityStep } from "../steps/identity-step";
@@ -14,7 +15,7 @@ export default async function WizardStepPage({
   params: Promise<{ step: string }>;
 }) {
   const partner = await requirePartner();
-  if (partner.status !== "DRAFT") redirect("/live");
+  if (partner.status !== "DRAFT") redirect("/dashboard");
   if (!partner.tradeId) redirect("/onboarding");
 
   const { step } = await params;
@@ -29,24 +30,27 @@ export default async function WizardStepPage({
   let body: React.ReactNode = null;
   if (step === "identity") {
     body = (
-      <IdentityStep
-        fullName={partner.fullName}
-        gender={partner.gender}
-        showGender={type === "CLEANER"}
-      />
+      <IdentityStep fullName={partner.fullName} gender={partner.gender} />
     );
   } else if (step === "skills") {
-    const [skills, cities, mine] = await Promise.all([
-      prisma.skill.findMany({ orderBy: { name: "asc" } }),
-      prisma.city.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-      prisma.partnerSkill.findMany({ where: { partnerId: partner.id } }),
-    ]);
+    const tradeSkills = skillsForService(partner.trade?.slug ?? "");
+    let selectedSkills: string[] = [];
+    try {
+      const parsed = JSON.parse(partner.servicesOffered);
+      if (Array.isArray(parsed)) selectedSkills = parsed.map(String);
+    } catch {
+      /* default to none */
+    }
     body = (
       <SkillsStep
-        skills={skills}
-        cities={cities}
-        selectedSkillIds={mine.map((m) => m.skillId)}
-        cityId={partner.cityId}
+        tradeName={partner.trade?.name ?? "Partner"}
+        skills={tradeSkills}
+        selectedSkills={selectedSkills}
+        area={partner.area}
+        cityName={partner.cityName}
+        pincode={partner.pincode}
+        lat={partner.lat}
+        lng={partner.lng}
       />
     );
   } else if (step === "vehicle") {

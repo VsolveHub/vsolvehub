@@ -1,24 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ShieldCheck, Zap, LineChart, ArrowRight, Check } from "lucide-react";
-import { PARTNER_ROLES } from "@vsolve/config";
+import { PARTNER_CATEGORIES } from "@vsolve/config";
 import { Button } from "@vsolve/ui";
 import { Medallion } from "@/components/graphics";
-import { roleVisual } from "@/components/role-visuals";
 
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Choose Your Partnership Role",
+  title: "Start earning as a V Solve Hub partner",
   description:
-    "Become a V Solve Hub partner. Join as a Captain, Professional, Rental Vendor, Property Host, Event Vendor, or Employer.",
+    "Join V Solve Hub as a Technician, Beauty & Wellness, Home Services or Pet Services professional. More categories coming soon.",
   alternates: { canonical: "/solutions" },
 };
 
 const HIGHLIGHTS = [
-  { icon: ShieldCheck, label: "Secure Verification" },
-  { icon: Zap, label: "Instant Payments" },
-  { icon: LineChart, label: "Growth Analytics" },
+  { icon: ShieldCheck, label: "Verified & trusted" },
+  { icon: Zap, label: "Fast payouts" },
+  { icon: LineChart, label: "Grow your income" },
 ];
 
 export default function SolutionsPage() {
@@ -27,41 +26,41 @@ export default function SolutionsPage() {
       <section className="px-5 pt-16 pb-20">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-3xl font-bold text-ink-900 sm:text-4xl">
-              Choose Your Partnership Role
-            </h1>
+            <h1 className="text-3xl font-bold text-ink-900 sm:text-4xl">What service do you offer?</h1>
             <p className="mt-3 text-gray-500">
-              Select the role that best fits your business or skills.
+              Pick your line of work and start getting job requests near you. It only takes ~5 minutes to apply.
             </p>
           </div>
 
           <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {PARTNER_ROLES.map((role) => {
-              const v = roleVisual(role.slug);
-              const soon = role.status === "coming-soon";
+            {PARTNER_CATEGORIES.map((cat) => {
+              const soon = cat.status === "coming-soon";
               return (
                 <div
-                  key={role.slug}
+                  key={cat.id}
                   className="flex flex-col rounded-2xl border border-border bg-white p-6 shadow-sm"
                 >
                   <div className="flex items-center gap-3">
-                    <Medallion icon={v.icon} tone={v.tone} size={48} />
-                    <h2 className="text-lg font-bold text-ink-900">{role.name}</h2>
+                    <span className="grid h-12 w-12 place-items-center rounded-xl bg-surface-muted text-2xl">
+                      {cat.icon}
+                    </span>
+                    <h2 className="text-lg font-bold text-ink-900">{cat.name}</h2>
                     {soon && (
                       <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                         Soon
                       </span>
                     )}
                   </div>
-                  <p className="mt-4 flex-1 text-sm text-gray-500">{role.description}</p>
-                  <p className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-gray-400">
-                    <ShieldCheck className="h-3.5 w-3.5" /> {role.requirement}
-                  </p>
-                  <Link href={`/become/${role.slug}`} className="mt-5">
-                    <Button className="w-full" variant={soon ? "outline" : "primary"}>
-                      {soon ? "Learn more" : "Get Started"}
+                  <p className="mt-4 flex-1 text-sm text-gray-500">{cat.description}</p>
+                  {soon ? (
+                    <Button className="mt-5 w-full" variant="outline" disabled>
+                      Coming soon
                     </Button>
-                  </Link>
+                  ) : (
+                    <Link href={`/login?category=${cat.id}`} className="mt-5">
+                      <Button className="w-full">Get started</Button>
+                    </Link>
+                  )}
                 </div>
               );
             })}
@@ -74,12 +73,11 @@ export default function SolutionsPage() {
         <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2">
           <div>
             <h2 className="text-2xl font-bold text-ink-900 sm:text-3xl">
-              Empowering the Next Generation of Service Partners
+              Grow your business with V Solve Hub
             </h2>
             <p className="mt-4 text-gray-500">
-              Whether you&rsquo;re an individual artisan or a growing enterprise, V Solve Hub
-              provides the digital infrastructure to manage your workforce, rentals, and operations
-              seamlessly.
+              Whether you work solo or run a team, V Solve Hub brings you customers, handles payments,
+              and lets you manage your jobs from one simple app.
             </p>
             <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
               {HIGHLIGHTS.map((h) => (
@@ -91,7 +89,7 @@ export default function SolutionsPage() {
                 </li>
               ))}
             </ul>
-            <Link href="/become/captain" className="mt-8 inline-block">
+            <Link href="/login" className="mt-8 inline-block">
               <Button size="lg">
                 Start your application <ArrowRight className="h-4 w-4" />
               </Button>

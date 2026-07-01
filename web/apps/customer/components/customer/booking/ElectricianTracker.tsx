@@ -82,27 +82,6 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
     }
   }
 
-  // Simulated status progression trigger for the demo
-  async function simulateNextStatus() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/bookings/${booking.bookingRef}/status`);
-      const data = await res.json();
-      if (data.nextStatus) {
-        await fetch(`/api/bookings/${booking.bookingRef}/status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: data.nextStatus }),
-        });
-        onRefresh();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function getTimelineStepDetails(stepKey: string, idx: number) {
     const isCompletedStep = idx < currentStatusIndex;
     const isActiveStep = idx === currentStatusIndex;
@@ -452,33 +431,6 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
           </div>
         )}
 
-        {/* Simulator Control Action Panel (fixed viewport bottom) */}
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 bg-white border-t border-gray-100 shadow-lg flex gap-3 z-50">
-          {!isCompleted ? (
-            <button
-              type="button"
-              onClick={simulateNextStatus}
-              disabled={loading}
-              className="w-full py-3 bg-purple-900 hover:bg-purple-955 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center"
-            >
-              {loading ? "Simulating..." : "Simulate Next Step (Demo)"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                fetch(`/api/bookings/${booking.bookingRef}/status`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ status: "PENDING" }),
-                }).then(() => onRefresh());
-              }}
-              className="w-full py-3 bg-purple-800 hover:bg-purple-900 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center"
-            >
-              Reset Simulation (Demo)
-            </button>
-          )}
-        </div>
       </div>
     );
   }
@@ -557,6 +509,17 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
             ) : (
               <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4 text-center">
                 <p className="text-xs font-semibold text-purple-950 m-0 animate-pulse">Searching for available technician near you...</p>
+              </div>
+            )}
+
+            {/* Start code — read aloud to the technician to start the job */}
+            {booking.startOtp && ["ASSIGNED", "PROVIDER_ARRIVING"].includes(status) && (
+              <div className="bg-purple-100/30 border border-dashed border-purple-300 rounded-2xl p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-purple-950 uppercase tracking-wide m-0">Start code</p>
+                  <p className="text-[10px] text-gray-500 m-0">Share with your technician to begin</p>
+                </div>
+                <p className="font-extrabold text-2xl tracking-[0.3em] text-purple-800 m-0">{booking.startOtp}</p>
               </div>
             )}
 
@@ -775,35 +738,6 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
           </button>
         </div>
       )}
-
-      {/* Simulator Control Action Panel (fixed viewport bottom) */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 bg-white border-t border-gray-100 shadow-lg flex gap-3 z-50">
-        {!isCompleted ? (
-          <button
-            type="button"
-            onClick={simulateNextStatus}
-            disabled={loading}
-            className="w-full py-3 bg-purple-900 hover:bg-purple-955 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center"
-          >
-            {loading ? "Simulating..." : "Simulate Next Step (Demo)"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              // Reset status back to pending to allow testing the simulation again!
-              fetch(`/api/bookings/${booking.bookingRef}/status`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: "PENDING" }),
-              }).then(() => onRefresh());
-            }}
-            className="w-full py-3 bg-purple-800 hover:bg-purple-900 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center"
-          >
-            Reset Simulation (Demo)
-          </button>
-        )}
-      </div>
 
       {/* Booking Details Modal Popup */}
       {showDetailsModal && (

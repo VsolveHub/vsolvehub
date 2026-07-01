@@ -84,8 +84,8 @@ export async function getAllUserBookings(userId: string): Promise<UserBookingLis
   const items: UserBookingListItem[] = [
     ...serviceBookings.map((b) => {
       let partnerName = null;
-      if (b.assignedProvider) {
-        partnerName = b.assignedProvider.worker?.displayName ?? b.assignedProvider.user.name ?? "Partner";
+      if (b.assignedPartner) {
+        partnerName = b.assignedPartner.fullName ?? "Partner";
       } else if (b.vendor) {
         partnerName = b.vendor.name;
       }

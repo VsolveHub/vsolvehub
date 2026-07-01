@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/format";
 import { WALLET_BALANCE_PAISE } from "@/lib/profile/section-data";
 import { RENTAL_TYPES } from "@/lib/vehicle/constants";
 import { computeRentalDurationDays, computeRentalTotal } from "@/lib/vehicle/pricing";
+import { uploadBookingMedia } from "@/lib/upload-media";
 import { VehicleFlowHeader } from "./VehicleFlowHeader";
 
 const STEPS = ["type", "vehicle", "dates", "license", "summary", "payment"] as const;
@@ -53,6 +54,7 @@ export function RentalBookingFlow() {
   const [paymentMethod, setPaymentMethod] = useState<(typeof PAYMENT_OPTIONS)[number]["id"] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadError, setUploadError] = useState("");
 
   const selected = assets.find((a) => a.id === assetId);
   const durationDays =
@@ -73,11 +75,13 @@ export function RentalBookingFlow() {
 
   async function uploadLicense(files: FileList | null) {
     if (!files?.length) return;
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("files", f));
-    const res = await fetch("/api/bookings/media", { method: "POST", body: formData });
-    const data = await res.json();
-    if (res.ok) setLicenseUrls((u) => [...u, ...data.urls].slice(0, 2));
+    setUploadError("");
+    const result = await uploadBookingMedia(files);
+    if (!result.ok) {
+      setUploadError(result.error);
+      return;
+    }
+    setLicenseUrls((u) => [...u, ...result.urls].slice(0, 2));
   }
 
   async function confirm() {
@@ -166,6 +170,7 @@ export function RentalBookingFlow() {
           <h2 className="section-title">Driving license</h2>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadLicense(e.target.files)} />
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>Upload license photo</Button>
+          {uploadError && <p className="alert alert-error">{uploadError}</p>}
           {licenseUrls.length > 0 && <p className="text-sm text-muted">{licenseUrls.length} file(s) uploaded</p>}
           <div className="booking-action-row">
             <Button variant="secondary" onClick={() => setStep("dates")}>Back</Button>

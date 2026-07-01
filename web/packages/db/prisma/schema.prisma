@@ -1,13 +1,15 @@
 // VSolveHub — shared schema (customer marketplace + partner portal).
-// SQLite for dev/MVP. Swap `provider` to postgresql later without touching models.
+// Postgres (Supabase) for dev + prod. DATABASE_URL = pooled (pgBouncer :6543)
+// for the app; DIRECT_URL = direct (:5432) for prisma migrate/introspect.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Partner portal ───────────────────────────────────────────────────────────
@@ -70,24 +72,48 @@ model Partner {
   cityId  String?
   city    City?   @relation(fields: [cityId], references: [id])
 
+  // Specific services the partner offers (JSON array of skill labels from config).
+  servicesOffered String @default("[]")
+
+  // Service-area location (auto-detected or entered during onboarding). lat/lng
+  // (below) also power dispatch matching.
+  area     String?
+  cityName String?
+  pincode  String?
+
   rating         Float @default(5.0)
   jobsCompleted  Int   @default(0)
   onlineHours    Int   @default(0)
   onboardingStep Int   @default(0)
 
+  // ─── Dispatch (single-provider marketplace) ───
+  // Merged from the former Provider/Worker models. The Partner is now the one
+  // and only provider identity that the push-dispatch engine offers jobs to.
+  isOnline       Boolean @default(false)
+  lat            Float?
+  lng            Float?
+  acceptanceRate Float   @default(92)
+
   aadhaarEnc   String?
   aadhaarLast4 String?
 
-  documents Document[]
-  payout    PayoutDetail?
-  vehicle   Vehicle?
-  skills    PartnerSkill[]
-  earnings  EarningRecord[]
-  trips     Trip[]
-  crew      Crew?
+  documents        Document[]
+  payout           PayoutDetail?
+  vehicle          Vehicle?
+  skills           PartnerSkill[]
+  earnings         EarningRecord[]
+  trips            Trip[]
+  crew             Crew?
+  jobAssignments   JobAssignment[]
+  jobEarnings      JobEarning[]
+  payouts          Payout[]
+  availability     PartnerAvailability[]
+  assignedBookings Booking[]             @relation("AssignedPartner")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([providerType, status, isOnline])
 }
 
 model Document {
@@ -231,7 +257,7 @@ model CrewMember {
   invitedAt    DateTime         @default(now())
   joinedAt     DateTime?
 
-  crew        Crew              @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  crew        Crew             @relation(fields: [crewId], references: [id], onDelete: Cascade)
   clockEvents CrewClockEvent[]
   assignments CrewAssignment[]
 
@@ -322,10 +348,13 @@ model CrewJobOffer {
 // ─── Customer marketplace ─────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  name        String?
+  // Aggregate rating given by partners across this customer's completed jobs.
+  rating      Float    @default(5.0)
+  ratingCount Int      @default(0)
+  createdAt   DateTime @default(now())
 
   sessions              Session[]
   addresses             Address[]
@@ -333,7 +362,6 @@ model User {
   bookings              Booking[]
   accommodationBookings AccommodationBooking[]
   vehicleBookings       VehicleBooking[]
-  provider              Provider?
 }
 
 model Session {
@@ -505,58 +533,61 @@ model SavedService {
 }
 
 model Booking {
-  id                   String   @id @default(cuid())
-  bookingRef           String   @unique
+  id                   String    @id @default(cuid())
+  bookingRef           String    @unique
   userId               String
   serviceId            String
   addressId            String
   vendorId             String?
   slot                 String
-  scheduleType         String   @default("scheduled")
-  status               String   @default("REQUESTED")
-  paymentStatus        String   @default("PENDING")
+  scheduleType         String    @default("scheduled")
+  status               String    @default("REQUESTED")
+  paymentStatus        String    @default("PENDING")
   paymentMethod        String?
-  archetype            String   @default("A")
-  archetypeDetails     String   @default("{}")
-  issueDescription     String   @default("")
-  mediaUrls            String   @default("[]")
-  vendorAssignmentMode String   @default("auto")
-  baseChargePaise      Int      @default(0)
+  archetype            String    @default("A")
+  archetypeDetails     String    @default("{}")
+  issueDescription     String    @default("")
+  mediaUrls            String    @default("[]")
+  vendorAssignmentMode String    @default("auto")
+  baseChargePaise      Int       @default(0)
   quotedAmount         Int
   finalAmountPaise     Int?
-  durationDays         Int      @default(1)
-  assignmentMode       String   @default("quotes")
+  durationDays         Int       @default(1)
+  assignmentMode       String    @default("quotes")
   startOtp             String?
   startConfirmedAt     DateTime?
   endOtp               String?
   cancelledAt          DateTime?
   cancelReason         String?
-  cancelFeePaise       Int      @default(0)
-  escrowPaise          Int      @default(0)
-  refundedPaise        Int      @default(0)
-  rescheduleCount      Int      @default(0)
+  cancelFeePaise       Int       @default(0)
+  escrowPaise          Int       @default(0)
+  refundedPaise        Int       @default(0)
+  rescheduleCount      Int       @default(0)
   disputeReason        String?
   disputedAt           DateTime?
-  extensionDays        Int      @default(0)
+  extensionDays        Int       @default(0)
   revisedAmountPaise   Int?
   revisedReason        String?
   rating               Int?
   review               String?
-  createdAt            DateTime @default(now())
+  // Partner's rating of the customer for this job (two-sided feedback).
+  customerRating       Int?
+  customerReview       String?
+  createdAt            DateTime  @default(now())
 
-  user               User               @relation(fields: [userId], references: [id])
-  service            Service            @relation(fields: [serviceId], references: [id])
-  address            Address            @relation(fields: [addressId], references: [id])
-  vendor             Vendor?            @relation(fields: [vendorId], references: [id])
-  statusLogs         BookingStatusLog[]
-  jobAssignments     JobAssignment[]
-  assignedProviderId String?
-  assignedProvider   Provider?          @relation(fields: [assignedProviderId], references: [id])
-  crewId             String?
-  crew               Crew?              @relation(fields: [crewId], references: [id])
-  crewJobDays        CrewJobDay[]
-  crewOffers         CrewJobOffer[]
-  crewAssignments    CrewAssignment[]
+  user              User               @relation(fields: [userId], references: [id])
+  service           Service            @relation(fields: [serviceId], references: [id])
+  address           Address            @relation(fields: [addressId], references: [id])
+  vendor            Vendor?            @relation(fields: [vendorId], references: [id])
+  statusLogs        BookingStatusLog[]
+  jobAssignments    JobAssignment[]
+  assignedPartnerId String?
+  assignedPartner   Partner?           @relation("AssignedPartner", fields: [assignedPartnerId], references: [id])
+  crewId            String?
+  crew              Crew?              @relation(fields: [crewId], references: [id])
+  crewJobDays       CrewJobDay[]
+  crewOffers        CrewJobOffer[]
+  crewAssignments   CrewAssignment[]
 }
 
 model BookingStatusLog {
@@ -649,93 +680,94 @@ model AccommodationBookingStatusLog {
 }
 
 /// In-app dispatch provider (customer-side worker matching).
-model Provider {
-  id                  String   @id @default(cuid())
-  userId              String   @unique
-  providerType        String
-  status              String   @default("PENDING")
-  onboardingCompleted Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  worker           Worker?
-  kycDocuments     ProviderKycDocument[]
-  availability     ProviderAvailability[]
-  jobAssignments   JobAssignment[]
-  earnings         JobEarning[]
-  assignedBookings Booking[]
-}
-
-model Worker {
-  id             String   @id @default(cuid())
-  providerId     String   @unique
-  displayName    String
-  phone          String
-  isOnline       Boolean  @default(false)
-  lat            Float    @default(17.385)
-  lng            Float    @default(78.4867)
-  rating         Float    @default(4.8)
-  completedJobs  Int      @default(0)
-  acceptanceRate Float    @default(92)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-}
+// ─── Dispatch (single-provider marketplace) ──────────────────────────────────
+// Job offers and earnings attach to Partner — the unified provider identity.
 
 model JobAssignment {
   id          String    @id @default(cuid())
   bookingId   String
-  providerId  String
+  partnerId   String
   status      String    @default("PENDING")
   offeredAt   DateTime  @default(now())
   expiresAt   DateTime
   respondedAt DateTime?
 
-  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
-  @@index([providerId, status])
+  @@index([partnerId, status])
   @@index([bookingId])
 }
 
 model JobEarning {
   id              String   @id @default(cuid())
-  providerId      String
+  partnerId       String
   bookingId       String?
   amountPaise     Int
   commissionPaise Int      @default(0)
   payoutStatus    String   @default("PENDING")
   earnedAt        DateTime @default(now())
 
-  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
-  @@index([providerId, earnedAt])
+  @@index([partnerId, earnedAt])
 }
 
-model ProviderKycDocument {
-  id         String   @id @default(cuid())
-  providerId String
-  docType    String
-  status     String   @default("PENDING")
-  lastFour   String?
-  url        String   @default("")
-  createdAt  DateTime @default(now())
+/// A withdrawal of the partner's available balance to their payout method.
+model Payout {
+  id          String   @id @default(cuid())
+  partnerId   String
+  amountPaise Int
+  reference   String
+  status      String   @default("PAID")
+  createdAt   DateTime @default(now())
 
-  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, createdAt])
 }
 
-model ProviderAvailability {
-  id         String  @id @default(cuid())
-  providerId String
-  dayOfWeek  Int?
-  date       String?
-  startTime  String?
-  endTime    String?
-  type       String
+model PartnerAvailability {
+  id        String  @id @default(cuid())
+  partnerId String
+  dayOfWeek Int?
+  date      String?
+  startTime String?
+  endTime   String?
+  type      String
 
-  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
-  @@index([providerId])
+  @@index([partnerId])
+}
+
+// ─── Admin portal ──────────────────────────────────────────────────────────
+// AdminUser is a standalone allowlist — authorization for admin.vsolvehub.com
+// is granted purely by email membership here, checked against a Supabase Auth
+// (magic-link) session. AdminAction is an app-level audit log keyed loosely by
+// partnerId (no FK) so it stays additive and never constrains Partner writes.
+
+enum AdminRole {
+  ADMIN
+  REVIEWER
+}
+
+model AdminUser {
+  id        String        @id @default(cuid())
+  email     String        @unique
+  role      AdminRole     @default(REVIEWER)
+  createdAt DateTime      @default(now())
+  actions   AdminAction[]
+}
+
+model AdminAction {
+  id        String    @id @default(cuid())
+  adminId   String
+  admin     AdminUser @relation(fields: [adminId], references: [id])
+  partnerId String
+  action    String // APPROVED | REQUESTED_CHANGES | REJECTED | SUSPENDED | REACTIVATED | DOC_APPROVED | DOC_REJECTED
+  reason    String?
+  createdAt DateTime  @default(now())
+
+  @@index([partnerId, createdAt])
 }

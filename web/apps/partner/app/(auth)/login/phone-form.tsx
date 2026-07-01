@@ -14,12 +14,13 @@ function SubmitButton() {
   );
 }
 
-export function PhoneForm({ service }: { service?: string }) {
+export function PhoneForm({ service, category }: { service?: string; category?: string }) {
   const [state, action] = useActionState<AuthState, FormData>(requestOtp, {});
 
   return (
     <form action={action} className="mt-6 space-y-4">
       {service ? <input type="hidden" name="service" value={service} /> : null}
+      {category ? <input type="hidden" name="category" value={category} /> : null}
       <div>
         <label htmlFor="phone" className="mb-1.5 block text-sm font-medium text-ink-900">
           Mobile number

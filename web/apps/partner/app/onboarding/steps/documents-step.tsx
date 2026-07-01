@@ -12,7 +12,7 @@ export function DocumentsStep() {
       <FileDrop name="aadhaarDoc" label="Aadhaar card (front & back)" />
       <FileDrop name="dlDoc" label="Driving licence" />
       {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
-      <StepActions submitLabel="Submit Application" />
+      <StepActions submitLabel="Submit Application" requireTerms />
     </form>
   );
 }

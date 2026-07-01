@@ -8,7 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
       // Auth-gated areas: keep out of the index.
-      disallow: ["/live", "/dashboard", "/onboarding", "/login", "/verify"],
+      disallow: ["/dashboard", "/onboarding", "/login", "/verify"],
     },
     sitemap: `${base}/sitemap.xml`,
   };

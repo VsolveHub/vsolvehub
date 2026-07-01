@@ -14,6 +14,7 @@
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
+    "seed:reference": "tsx prisma/seed-reference.ts",
     "studio": "prisma studio",
     "typecheck": "tsc --noEmit"
   },
