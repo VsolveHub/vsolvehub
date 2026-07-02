@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { prisma } from "@vsolve/db";
 import { createClient } from "@/utils/supabase/server";
 
 export type AuthState = { error?: string; sent?: boolean };
@@ -34,6 +35,14 @@ export async function sendMagicLink(_prev: AuthState, formData: FormData): Promi
   const email = normalizeEmail(String(formData.get("email") ?? ""));
   if (!email) return { error: "Enter a valid email address." };
 
+  // Only allowlisted admins get a link. Checking here (rather than only after
+  // the link is clicked) avoids emailing / creating Supabase auth users for
+  // unknown addresses. requireAdmin() still re-checks on every page as defense
+  // in depth. Trade-off: this makes admin emails weakly enumerable — acceptable
+  // for an internal, no-index console.
+  const admin = await prisma.adminUser.findUnique({ where: { email } });
+  if (!admin) return { error: "Invalid email — this address isn't authorized for admin access." };
+
   const origin = await resolveOrigin();
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
@@ -41,8 +50,6 @@ export async function sendMagicLink(_prev: AuthState, formData: FormData): Promi
     options: { emailRedirectTo: `${origin}/auth/callback` },
   });
 
-  // Authorization (AdminUser allowlist) is enforced after the link is clicked,
-  // not here — so this response can't be used to enumerate admin emails.
   if (error) return { error: "Couldn't send the link. Please try again." };
   return { sent: true };
 }
