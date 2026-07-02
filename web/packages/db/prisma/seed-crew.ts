@@ -1,5 +1,6 @@
 import { PrismaClient, ProviderType, PartnerStatus } from "@prisma/client";
 import { randomBytes } from "node:crypto";
+import { partnerId } from "../src/id";
 
 type MemberSpec = { role: string; count: number; dayRatePaise: number; skillLevel?: string };
 
@@ -94,6 +95,7 @@ export async function seedCrews(prisma: PrismaClient) {
         onboardingStep: 99,
       },
       create: {
+        id: partnerId(),
         phone: c.phone,
         fullName: c.leadName,
         status: PartnerStatus.ACTIVE,

@@ -62,7 +62,10 @@ model City {
 }
 
 model Partner {
-  id            String        @id @default(cuid())
+  // Branded primary key (e.g. "VSP-7K2M9QX4TB1F"), generated in app code via
+  // partnerId() from @vsolve/db — not a DB/cuid default, so every create must
+  // supply it (the Prisma types enforce this).
+  id            String        @id
   phone         String        @unique
   phoneVerified Boolean       @default(false)
   fullName      String?

@@ -27,11 +27,6 @@ const DOC_LABELS: Record<string, string> = {
   OTHER: "Document",
 };
 
-function refId(id: string): string {
-  let n = 0;
-  for (const ch of id) n = (n * 31 + ch.charCodeAt(0)) % 9000;
-  return `#VS-${1000 + n}`;
-}
 
 function tierFor(jobs: number): string {
   if (jobs >= 200) return "Gold Partner";
@@ -360,7 +355,7 @@ export default async function LivePage() {
       tier={tierFor(jobsCompleted)}
       bankLast4={payout?.accountLast4 ?? null}
       offer={displayOffer}
-      refId={refId(partner.id)}
+      refId={partner.id}
       reason={reason}
       checklist={checklist}
       crew={crewSummary}

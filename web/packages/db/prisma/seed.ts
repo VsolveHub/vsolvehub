@@ -1,4 +1,5 @@
 import { PrismaClient, ProviderType, PartnerStatus, DocStatus } from "@prisma/client";
+import { partnerId } from "../src/id";
 import { seedCustomerMarketplace } from "./seed-customer";
 import { seedCrews } from "./seed-crew";
 import { SERVICE_CATALOG as CUSTOMER_SERVICE_CATALOG } from "./seed-lib/service-catalog";
@@ -114,7 +115,7 @@ async function main() {
     const partner = await prisma.partner.upsert({
       where: { phone: d.phone },
       update: { ...d, phoneVerified: true },
-      create: { ...d, phoneVerified: true },
+      create: { id: partnerId(), ...d, phoneVerified: true },
     });
 
     // Reset relations for idempotency.

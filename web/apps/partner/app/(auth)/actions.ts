@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { prisma } from "@vsolve/db";
+import { prisma, partnerId } from "@vsolve/db";
 import { hashOtp } from "@vsolve/crypto";
 import { OTP_TTL_SECONDS, OTP_MAX_ATTEMPTS, serviceBySlug } from "@vsolve/config";
 import { createSession } from "@/lib/session";
@@ -108,7 +108,7 @@ export async function verifyOtp(_prev: AuthState, formData: FormData): Promise<A
   let partner = await prisma.partner.findUnique({ where: { phone } });
   if (!partner) {
     partner = await prisma.partner.create({
-      data: { phone, phoneVerified: true, providerType: svc?.archetype ?? "CAPTAIN" },
+      data: { id: partnerId(), phone, phoneVerified: true, providerType: svc?.archetype ?? "CAPTAIN" },
     });
   } else if (!partner.phoneVerified) {
     partner = await prisma.partner.update({ where: { id: partner.id }, data: { phoneVerified: true } });
