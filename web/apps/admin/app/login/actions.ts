@@ -50,6 +50,11 @@ export async function sendMagicLink(_prev: AuthState, formData: FormData): Promi
     options: { emailRedirectTo: `${origin}/auth/callback` },
   });
 
-  if (error) return { error: "Couldn't send the link. Please try again." };
+  if (error) {
+    // Surface the real Supabase reason (rate limit / provider disabled / bad key)
+    // — this is an internal console, so the detail is helpful, not sensitive.
+    console.error("[admin-login] signInWithOtp failed:", error.status, error.message);
+    return { error: `Couldn't send the link: ${error.message}` };
+  }
   return { sent: true };
 }
