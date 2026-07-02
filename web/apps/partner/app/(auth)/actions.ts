@@ -16,6 +16,17 @@ function normalizePhone(raw: string): string | null {
   return `+91${ten}`;
 }
 
+/**
+ * Whether to reveal the OTP on-screen instead of delivering it by SMS. True in
+ * dev always, and in prod when SHOW_OTP_ON_SCREEN=true — a stop-gap until an SMS
+ * provider (MSG91/Fast2SMS) is wired into issueOtp().
+ * SECURITY: while enabled, anyone can read the code and sign in as any number.
+ * Remove the env flag (and integrate SMS) before a real launch.
+ */
+function otpOnScreen(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.SHOW_OTP_ON_SCREEN === "true";
+}
+
 async function issueOtp(phone: string): Promise<string> {
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await prisma.otpChallenge.create({
@@ -25,8 +36,8 @@ async function issueOtp(phone: string): Promise<string> {
       expiresAt: new Date(Date.now() + OTP_TTL_SECONDS * 1000),
     },
   });
-  // Production: send via MSG91/Fast2SMS here. Dev: surface the code to the UI.
-  if (process.env.NODE_ENV !== "production") console.log(`[DEV OTP] ${phone} -> ${code}`);
+  // TODO: send via MSG91/Fast2SMS here. Until then the code is surfaced on-screen.
+  if (otpOnScreen()) console.log(`[OTP] ${phone} -> ${code}`);
   return code;
 }
 
@@ -42,7 +53,7 @@ export async function requestOtp(_prev: AuthState, formData: FormData): Promise<
   store.set("otp_phone", phone, opts);
   if (service) store.set("otp_service", service, opts);
   if (category) store.set("otp_category", category, opts);
-  if (process.env.NODE_ENV !== "production") {
+  if (otpOnScreen()) {
     store.set("otp_dev_code", code, { ...opts, httpOnly: false });
   }
   redirect("/verify");
@@ -53,7 +64,7 @@ export async function resendOtp(): Promise<AuthState> {
   const phone = store.get("otp_phone")?.value;
   if (!phone) return { error: "Session expired. Please re-enter your number." };
   const code = await issueOtp(phone);
-  if (process.env.NODE_ENV !== "production") {
+  if (otpOnScreen()) {
     store.set("otp_dev_code", code, {
       httpOnly: false,
       sameSite: "lax",
@@ -61,7 +72,7 @@ export async function resendOtp(): Promise<AuthState> {
       maxAge: OTP_TTL_SECONDS,
     });
   }
-  return { devCode: process.env.NODE_ENV !== "production" ? code : undefined };
+  return { devCode: otpOnScreen() ? code : undefined };
 }
 
 export async function verifyOtp(_prev: AuthState, formData: FormData): Promise<AuthState> {

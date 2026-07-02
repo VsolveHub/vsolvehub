@@ -20,7 +20,7 @@ export default async function VerifyPage() {
 
       {devCode ? (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          <span className="font-semibold">Dev mode:</span> your code is{" "}
+          <span className="font-semibold">SMS not enabled yet</span> — your code is{" "}
           <span className="font-mono font-bold tracking-widest">{devCode}</span>
         </div>
       ) : null}
