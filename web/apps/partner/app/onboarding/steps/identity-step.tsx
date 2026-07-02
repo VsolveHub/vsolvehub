@@ -56,13 +56,12 @@ export function IdentityStep({
       </div>
 
       <Field
-        label="Aadhaar Number"
+        label="Aadhaar Number (optional)"
         name="aadhaar"
         inputMode="numeric"
-        required
         maxLength={14}
         placeholder="1234 5678 9012"
-        hint="12 digits. Encrypted at rest — only the last 4 are ever shown."
+        hint="12 digits. Optional — encrypted at rest, only the last 4 are ever shown. You can add it later."
       />
 
       <FileDrop

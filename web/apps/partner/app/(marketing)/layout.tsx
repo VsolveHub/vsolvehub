@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Button, Logo } from "@vsolve/ui";
+import { MarketingMobileNav } from "@/components/marketing-mobile-nav";
 
 const NAV = [
   { href: "/solutions", label: "Solutions" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/resources", label: "Resources" },
+  { href: "/blog", label: "Blog" },
   { href: "/about", label: "About" },
 ];
 
@@ -13,16 +14,16 @@ const FOOTER_COLS = [
     title: "Quick links",
     links: [
       { href: "/dashboard", label: "Partner App" },
-      { href: "/resources", label: "Success Stories" },
-      { href: "/resources", label: "Safety Guidelines" },
+      { href: "/solutions", label: "Solutions" },
       { href: "/pricing", label: "Payout Policy" },
+      { href: "/blog", label: "Blog" },
     ],
   },
   {
     title: "Company",
     links: [
       { href: "/about", label: "About Us" },
-      { href: "/about", label: "Careers" },
+      { href: "/contact", label: "Contact Us" },
       { href: "/privacy", label: "Privacy Policy" },
       { href: "/terms", label: "Terms of Service" },
     ],
@@ -49,15 +50,18 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm font-medium text-gray-600 hover:text-ink-900"
-            >
-              Login
-            </Link>
-            <Link href="/login">
-              <Button size="sm">Become a Partner</Button>
-            </Link>
+            <div className="hidden items-center gap-3 md:flex">
+              <Link
+                href="/login"
+                className="text-sm font-medium text-gray-600 hover:text-ink-900"
+              >
+                Login
+              </Link>
+              <Link href="/login">
+                <Button size="sm">Become a Partner</Button>
+              </Link>
+            </div>
+            <MarketingMobileNav items={NAV} />
           </div>
         </div>
       </header>

@@ -61,12 +61,12 @@ export default async function WizardStepPage({
   }
 
   return (
-    <Card className="p-8">
+    <Card className="p-5 sm:p-8">
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-ink-900">Welcome to the Team</h1>
+        <h1 className="text-xl font-bold text-ink-900 sm:text-2xl">Welcome to the Team</h1>
         <p className="text-sm text-gray-500">Let&apos;s set up your partner profile.</p>
       </div>
-      <div className="my-7">
+      <div className="my-6 sm:my-7">
         <Stepper steps={steps.map((s) => ({ id: s.id, title: s.title }))} current={current} />
       </div>
       <h2 className="mb-1 text-lg font-semibold text-ink-900">{meta.title}</h2>

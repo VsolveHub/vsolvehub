@@ -76,8 +76,11 @@ export async function saveIdentity(_prev: StepState, formData: FormData): Promis
   const gender = String(formData.get("gender") ?? "").trim();
   if (!["MALE", "FEMALE", "OTHER"].includes(gender)) return { error: "Please select your gender." };
 
+  // Aadhaar is optional — but if provided it must be a valid 12-digit number.
   const aadhaar = String(formData.get("aadhaar") ?? "").replace(/\D/g, "");
-  if (aadhaar.length !== 12) return { error: "Enter your 12-digit Aadhaar number." };
+  if (aadhaar.length > 0 && aadhaar.length !== 12) {
+    return { error: "Aadhaar must be 12 digits, or leave it blank to add later." };
+  }
 
   // Profile photo is mandatory — but don't force a re-upload if one already exists.
   const photo = formData.get("profilePhoto") as File | null;
@@ -93,7 +96,11 @@ export async function saveIdentity(_prev: StepState, formData: FormData): Promis
 
   await prisma.partner.update({
     where: { id: partner.id },
-    data: { fullName, gender, aadhaarEnc: encrypt(aadhaar), aadhaarLast4: last4(aadhaar) },
+    data: {
+      fullName,
+      gender,
+      ...(aadhaar ? { aadhaarEnc: encrypt(aadhaar), aadhaarLast4: last4(aadhaar) } : {}),
+    },
   });
   if (hasPhoto) {
     const uploadError = await storeDocument(partner.id, "SELFIE", photo, {

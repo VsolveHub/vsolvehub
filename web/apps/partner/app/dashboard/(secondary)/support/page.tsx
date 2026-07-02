@@ -28,7 +28,7 @@ export default function SupportPage() {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <a
-          href="https://wa.me/918000000000"
+          href="https://wa.me/917330764634"
           className="block"
           target="_blank"
           rel="noreferrer"
@@ -41,22 +41,22 @@ export default function SupportPage() {
             <p className="text-sm text-gray-500">Chat with support instantly.</p>
           </Card>
         </a>
-        <a href="tel:+918000000000" className="block">
+        <a href="tel:+917330764634" className="block">
           <Card className="h-full transition-shadow hover:shadow-md">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
               <Phone className="h-5 w-5" />
             </span>
             <p className="mt-3 font-semibold text-ink-900">Call us</p>
-            <p className="text-sm text-gray-500">8000 000 000 · 9am–9pm</p>
+            <p className="text-sm text-gray-500">+91 733 076 4634 · 9am–9pm</p>
           </Card>
         </a>
-        <a href="mailto:partners@vsolvehub.com" className="block">
+        <a href="mailto:support@vsolvehub.com" className="block">
           <Card className="h-full transition-shadow hover:shadow-md">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
               <Mail className="h-5 w-5" />
             </span>
             <p className="mt-3 font-semibold text-ink-900">Email</p>
-            <p className="text-sm text-gray-500">partners@vsolvehub.com</p>
+            <p className="text-sm text-gray-500">support@vsolvehub.com</p>
           </Card>
         </a>
       </div>

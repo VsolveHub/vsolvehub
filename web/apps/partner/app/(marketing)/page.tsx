@@ -13,8 +13,36 @@ import {
 import { PARTNER_CATEGORIES } from "@vsolve/config";
 import { Button } from "@vsolve/ui";
 import { Medallion, EarningsHeroArt, type Tone } from "@/components/graphics";
+import { Faq, faqJsonLd } from "@/components/faq";
 
 export const dynamic = "force-static";
+
+const HOME_FAQS = [
+  {
+    q: "How do I become a V Solve Hub partner?",
+    a: "Sign up with your mobile number, choose the service you offer, add a profile photo and a few basic details, and submit. Most applications are verified within 24 hours.",
+  },
+  {
+    q: "Is there any joining or registration fee?",
+    a: "No. Signing up as a partner is completely free — you only pay a transparent platform commission on jobs you complete.",
+  },
+  {
+    q: "How much can I earn?",
+    a: "Earnings depend on your trade, the hours you work, and your area. You keep your payout after a transparent commission, and active partners in busy areas earn steadily.",
+  },
+  {
+    q: "How and when do I get paid?",
+    a: "Your earnings are settled to your bank account or UPI on a regular payout cycle once a job is marked complete.",
+  },
+  {
+    q: "What documents do I need to sign up?",
+    a: "A profile photo and basic details are enough to get started. Aadhaar is optional and can be added later; drivers also add a driving licence and vehicle registration (RC).",
+  },
+  {
+    q: "Which areas is V Solve Hub available in?",
+    a: "We're live across Telangana and expanding. Enter your area during signup to see the services available near you.",
+  },
+];
 
 const FEATURES = [
   { icon: Wallet, tone: "brand" as Tone, title: "Weekly Payouts", body: "Get your hard-earned money deposited directly into your bank account every single week." },
@@ -186,6 +214,25 @@ export default function LandingPage() {
                 </figcaption>
               </figure>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="px-5 pb-16">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd(HOME_FAQS)) }}
+        />
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-center text-3xl font-bold text-ink-900">
+            Frequently asked questions
+          </h2>
+          <p className="mx-auto mt-2 max-w-xl text-center text-gray-500">
+            Everything you need to know about partnering with V Solve Hub.
+          </p>
+          <div className="mt-8">
+            <Faq items={HOME_FAQS} />
           </div>
         </div>
       </section>

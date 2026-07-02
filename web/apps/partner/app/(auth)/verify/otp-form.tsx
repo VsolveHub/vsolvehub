@@ -50,7 +50,7 @@ export function OtpForm() {
   return (
     <form action={action} className="mt-6 space-y-5">
       <input type="hidden" name="code" value={code} />
-      <div className="flex justify-between gap-2">
+      <div className="flex gap-1.5 sm:gap-2">
         {digits.map((d, i) => (
           <input
             key={i}
@@ -63,7 +63,7 @@ export function OtpForm() {
             inputMode="numeric"
             maxLength={LENGTH}
             aria-label={`Digit ${i + 1}`}
-            className="h-14 w-12 rounded-lg border border-border text-center text-xl font-bold outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            className="h-12 min-w-0 flex-1 rounded-lg border border-border text-center text-lg font-bold outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:h-14 sm:text-xl"
           />
         ))}
       </div>
