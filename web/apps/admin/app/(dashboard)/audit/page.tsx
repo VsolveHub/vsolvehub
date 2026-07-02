@@ -40,8 +40,8 @@ export default async function AuditLogPage({
       <h1 className="text-2xl font-bold text-ink-900">Audit log</h1>
       <p className="mt-1 text-sm text-gray-500">Every status change and document decision, most recent first.</p>
 
-      <Card className="mt-6 overflow-hidden p-0">
-        <table className="w-full text-left text-sm">
+      <Card className="mt-6 overflow-x-auto p-0">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-border bg-surface-muted text-xs font-semibold uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-5 py-3">When</th>

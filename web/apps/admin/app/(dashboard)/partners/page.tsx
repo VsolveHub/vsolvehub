@@ -77,23 +77,23 @@ export default async function PartnersPage({
           ))}
         </nav>
 
-        <form action="/partners" method="get" className="flex items-center gap-2">
+        <form action="/partners" method="get" className="flex w-full items-center gap-2 sm:w-auto">
           <input type="hidden" name="status" value={status} />
-          <div className="relative">
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               name="q"
               defaultValue={q}
               placeholder="Search name or phone"
-              className="h-10 w-64 rounded-lg border border-border bg-white pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
           </div>
         </form>
       </div>
 
-      <Card className="mt-4 overflow-hidden p-0">
-        <table className="w-full text-left text-sm">
+      <Card className="mt-4 overflow-x-auto p-0">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="border-b border-border bg-surface-muted text-xs font-semibold uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-5 py-3">Name</th>

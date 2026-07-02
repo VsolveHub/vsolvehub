@@ -18,8 +18,8 @@ export function AddAdminForm() {
   const [state, action] = useActionState<AdminFormState, FormData>(addAdmin, {});
 
   return (
-    <form action={action} className="flex flex-wrap items-end gap-3">
-      <div>
+    <form action={action} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="w-full sm:w-auto">
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-900">
           Email
         </label>
@@ -29,10 +29,10 @@ export function AddAdminForm() {
           type="email"
           required
           placeholder="name@vsolvehub.com"
-          className="h-10 w-64 rounded-lg border border-border bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:w-64"
         />
       </div>
-      <div>
+      <div className="w-full sm:w-auto">
         <label htmlFor="role" className="mb-1.5 block text-sm font-medium text-ink-900">
           Role
         </label>
@@ -40,7 +40,7 @@ export function AddAdminForm() {
           id="role"
           name="role"
           defaultValue="REVIEWER"
-          className="h-10 rounded-lg border border-border bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className="h-10 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 sm:w-auto"
         >
           <option value="REVIEWER">Reviewer</option>
           <option value="ADMIN">Admin</option>

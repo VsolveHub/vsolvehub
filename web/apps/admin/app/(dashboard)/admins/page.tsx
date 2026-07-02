@@ -21,8 +21,8 @@ export default async function AdminsPage() {
         <AddAdminForm />
       </Card>
 
-      <Card className="mt-4 overflow-hidden p-0">
-        <table className="w-full text-left text-sm">
+      <Card className="mt-4 overflow-x-auto p-0">
+        <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-b border-border bg-surface-muted text-xs font-semibold uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-5 py-3">Email</th>
