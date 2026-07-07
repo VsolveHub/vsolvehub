@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth/session";
 import { createBooking } from "@/lib/bookings/queries";
 import { getAllUserBookings } from "@/lib/bookings/user-bookings";
-import { getVendorById } from "@/lib/bookings/vendors";
 import { bookingSchema } from "@/lib/validation/schemas";
-import { WALLET_BALANCE_PAISE } from "@/lib/profile/section-data";
 import { prisma } from "@/lib/db/client";
 import { resolveServiceArchetype, usesPushDispatch } from "@/lib/bookings/archetype";
-import { dispatchBookingOffers } from "@/lib/fulfillment/push-dispatch";
+import { dispatchBookingOffers, dispatchDirectOffer } from "@/lib/fulfillment/push-dispatch";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession();
@@ -25,13 +23,10 @@ export async function POST(req: NextRequest) {
     serviceId,
     addressId,
     slot,
-    vendorId,
+    partnerId,
     issueDescription,
     mediaUrls,
     scheduleType,
-    paymentMethod,
-    vendorAssignmentMode,
-    bookingType,
     archetypeDetails,
   } = parsed.data;
 
@@ -48,80 +43,58 @@ export async function POST(req: NextRequest) {
   }
 
   const archetype = resolveServiceArchetype(service.archetype);
-  const assignmentMode = vendorAssignmentMode ?? "auto";
-  const isAutoDispatch = usesPushDispatch(archetype) && assignmentMode === "auto" && !vendorId;
-
-  let vendor = null;
-  if (!isAutoDispatch) {
-    if (!vendorId) {
-      return NextResponse.json({ error: "Professional is required" }, { status: 400 });
-    }
-    vendor = await getVendorById(vendorId);
-    if (!vendor) {
-      return NextResponse.json({ error: "Professional not found" }, { status: 404 });
-    }
+  if (!usesPushDispatch(archetype)) {
+    return NextResponse.json({ error: "This service is not bookable here" }, { status: 400 });
   }
 
-  const finalBookingType = bookingType || archetypeDetails?.bookingType || "individual";
+  const quotedAmount = service.pricePaise;
 
-  let baseChargePaise = service.pricePaise;
-  if (finalBookingType === "team") {
-    baseChargePaise = 1860000; // ₹18,600 * 100 paise
-  }
-  const quotedAmount = baseChargePaise;
-
-  if (!isAutoDispatch && !paymentMethod) {
-    return NextResponse.json({ error: "Payment method is required" }, { status: 400 });
-  }
-
-  if (!isAutoDispatch && paymentMethod === "wallet" && quotedAmount > WALLET_BALANCE_PAISE) {
-    return NextResponse.json({ error: "Insufficient wallet balance" }, { status: 400 });
-  }
-
-  const paymentStatus = isAutoDispatch ? "PENDING" : paymentMethod === "cod" ? "COD" : "PAID";
-
+  // Single-provider dispatch: the customer pays *after* a partner accepts, so the
+  // booking is created PENDING with no upfront payment on either path.
   const booking = await createBooking({
     userId: session.id,
     serviceId,
     addressId,
     slot,
     quotedAmount,
-    baseChargePaise,
+    baseChargePaise: service.pricePaise,
     archetype,
-    vendorId: isAutoDispatch ? undefined : vendorId,
     issueDescription,
     mediaUrls,
-    paymentStatus,
-    paymentMethod: isAutoDispatch ? null : paymentMethod,
+    paymentStatus: "PENDING",
+    paymentMethod: null,
     scheduleType,
-    vendorAssignmentMode: assignmentMode,
-    archetypeDetails: {
-      ...archetypeDetails,
-      bookingType: finalBookingType,
-    },
+    vendorAssignmentMode: partnerId ? "manual" : "auto",
+    archetypeDetails: archetypeDetails ?? {},
   });
 
-  if (isAutoDispatch) {
-    await dispatchBookingOffers(booking.id);
-    const refreshed = await prisma.booking.findUnique({ where: { id: booking.id } });
-    if (refreshed) {
-      booking.status = refreshed.status;
+  // Direct offer to the hand-picked partner, else broadcast to the matched pool.
+  // A failed direct offer (partner went offline) falls back to auto-dispatch so
+  // the booking is never stranded.
+  let assignmentMode: "direct" | "auto" = "auto";
+  if (partnerId) {
+    const direct = await dispatchDirectOffer(booking.id, partnerId);
+    if (direct.ok) {
+      assignmentMode = "direct";
+    } else {
+      await dispatchBookingOffers(booking.id);
     }
+  } else {
+    await dispatchBookingOffers(booking.id);
   }
+
+  const refreshed = await prisma.booking.findUnique({ where: { id: booking.id } });
 
   return NextResponse.json({
     bookingRef: booking.bookingRef,
-    status: booking.status,
+    status: refreshed?.status ?? booking.status,
     paymentStatus: booking.paymentStatus,
     service: booking.service.name,
     slot: booking.slot,
     address: booking.address.fullAddress,
-    vendor: booking.vendor
-      ? { name: booking.vendor.name, rating: booking.vendor.rating }
-      : null,
-    baseChargePaise: booking.baseChargePaise,
     quotedAmount: booking.quotedAmount,
-    marketplace: isAutoDispatch,
+    assignmentMode,
+    marketplace: true,
   });
 }
 

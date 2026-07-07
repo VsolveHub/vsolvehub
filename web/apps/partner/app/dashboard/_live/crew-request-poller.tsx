@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, Calendar, Check, X, Bell } from "lucide-react";
 import { roleLabel } from "@/lib/crew-constants";
+import { jsonFetch, pqk } from "@/lib/query";
 
 type CrewRequest = {
   offerId: string;
@@ -28,47 +30,41 @@ function fmtDate(iso: string | null) {
  */
 export function CrewRequestPoller() {
   const router = useRouter();
-  const [requests, setRequests] = useState<CrewRequest[]>([]);
-  const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/crew-requests", { cache: "no-store" });
-      if (res.ok) setRequests((await res.json()).requests ?? []);
-    } catch {
-      /* offline — keep last state */
-    }
+  const { data } = useQuery({
+    queryKey: pqk.crewRequests(),
+    queryFn: () => jsonFetch<{ requests: CrewRequest[] }>("/api/crew-requests", { cache: "no-store" }),
+    refetchInterval: 4000,
+    staleTime: 0,
+  });
+  const requests = data?.requests ?? [];
+
+  // 1s ticker for the accept-window countdown (pure UI, not data).
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
   }, []);
 
-  useEffect(() => {
-    load();
-    const poll = setInterval(load, 4000);
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      clearInterval(poll);
-      clearInterval(tick);
-    };
-  }, [load]);
+  const respondMutation = useMutation({
+    mutationFn: (vars: { offerId: string; action: "accept" | "decline" }) =>
+      jsonFetch("/api/crew-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars),
+      }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: pqk.crewRequests() });
+      if (vars.action === "accept") router.refresh();
+    },
+  });
+  const busy = respondMutation.isPending;
 
   const top = requests[0];
 
-  async function respond(offerId: string, action: "accept" | "decline") {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await fetch("/api/crew-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offerId, action }),
-      });
-      setRequests((prev) => prev.filter((r) => r.offerId !== offerId));
-      await load();
-      if (action === "accept") router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
+  const respond = (offerId: string, action: "accept" | "decline") =>
+    respondMutation.mutate({ offerId, action });
 
   if (!top) return null;
 

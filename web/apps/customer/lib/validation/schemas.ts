@@ -57,6 +57,9 @@ export const bookingSchema = z.object({
   serviceId: z.string().min(1, "Service is required"),
   addressId: z.string().min(1, "Address is required"),
   slot: z.string().min(1, "Time slot is required"),
+  // Real partner hand-picked by the customer ("choose a professional"). When set,
+  // the booking sends a direct offer to just this partner (auto-fallback on decline).
+  partnerId: z.string().min(1).optional(),
   vendorId: z.string().min(1, "Professional is required").optional(),
   issueDescription: z.string().trim().max(1000).optional(),
   mediaUrls: z.array(z.string().min(1)).max(5).optional(),

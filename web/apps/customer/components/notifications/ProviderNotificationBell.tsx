@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { countUnread, useNotificationReadState } from "@/components/notifications/useNotificationReadState";
-import type { AppNotification } from "@/lib/notifications/types";
+import { api } from "@/lib/query/api";
+import { qk } from "@/lib/query/keys";
 
 type Props = {
   className?: string;
@@ -13,29 +14,14 @@ type Props = {
 export function ProviderNotificationBell({ className = "mode-topbar-bell" }: Props) {
   const router = useRouter();
   const { readIds } = useNotificationReadState("provider");
-  const [unread, setUnread] = useState(0);
+  const { data } = useQuery({
+    queryKey: qk.notifications("provider"),
+    queryFn: () => api.notifications("provider"),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
 
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      try {
-        const res = await fetch("/api/provider/notifications");
-        if (!active || !res.ok) return;
-        const json = (await res.json()) as { items: AppNotification[] };
-        setUnread(countUnread((json.items ?? []).map((n) => n.id), readIds));
-      } catch {
-        // Network errors (dev server restart / offline) shouldn't crash the portal chrome.
-      }
-    }
-
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [readIds]);
+  const unread = countUnread((data?.items ?? []).map((n) => n.id), readIds);
 
   return (
     <button

@@ -1,96 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ElectricianBookingFlow } from "./ElectricianBookingFlow";
-import { BeauticianBookingFlow } from "./BeauticianBookingFlow";
-import { ConstructionBookingFlow } from "./ConstructionBookingFlow";
+import { useQuery } from "@tanstack/react-query";
+import { ServiceBookingFlow } from "./ServiceBookingFlow";
 import { LoadingState } from "@/components/ui/LoadingState";
-import type { BookingServiceInfo } from "@/lib/bookings/types";
-
-type Address = {
-  id: string;
-  label: string;
-  fullAddress: string;
-  isDefault: boolean;
-};
+import { api } from "@/lib/query/api";
+import { qk } from "@/lib/query/keys";
 
 type Props = {
   serviceId: string;
 };
 
+/**
+ * Entry point for /booking?serviceId=… — resolves the service from the cached
+ * catalog, then renders the unified, config-driven ServiceBookingFlow. Crew
+ * (construction) bookings use their own dedicated flow and never route here.
+ */
 export function BookingFlow({ serviceId }: Props) {
-  const router = useRouter();
-  const [service, setService] = useState<BookingServiceInfo | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading } = useQuery({
+    queryKey: qk.catalog(),
+    queryFn: api.catalog,
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      const [catalogRes, addrRes] = await Promise.all([
-        fetch("/api/catalog"),
-        fetch("/api/profile/addresses"),
-      ]);
+  const service = data?.services?.find((s) => s.id === serviceId) ?? null;
 
-      if (catalogRes.ok) {
-        const { services } = await catalogRes.json();
-        const found = services.find((s: BookingServiceInfo) => s.id === serviceId);
-        setService(found ?? null);
-      }
-
-      if (addrRes.ok) {
-        const { addresses: list } = await addrRes.json();
-        setAddresses(list);
-      } else {
-        router.push(`/booking/otp?redirect=${encodeURIComponent(`/booking?serviceId=${serviceId}`)}`);
-      }
-      setLoading(false);
-    }
-    load();
-  }, [serviceId, router]);
-
-  if (loading) {
+  if (isLoading) {
     return <LoadingState label="Loading booking details…" variant="inline" />;
   }
-
   if (!service) {
     return <div className="alert alert-error">Service not found.</div>;
   }
 
-  function handleAddressSaved(newAddr: Address) {
-    setAddresses((prev) => [...prev, newAddr]);
-  }
-
-  // Route to the appropriate custom flow component based on the category slug
-  const categorySlug = service.category.slug;
-
-  if (categorySlug === "construction-services") {
-    return (
-      <ConstructionBookingFlow
-        service={service}
-        addresses={addresses}
-        onAddressSaved={handleAddressSaved}
-      />
-    );
-  }
-
-  if (categorySlug === "beauty-wellness") {
-    return (
-      <BeauticianBookingFlow
-        service={service}
-        addresses={addresses}
-        onAddressSaved={handleAddressSaved}
-      />
-    );
-  }
-
-  // Default flow (Electrician/Technician/etc. Archetype A)
   return (
-    <ElectricianBookingFlow
-      service={service}
-      addresses={addresses}
-      onAddressSaved={handleAddressSaved}
+    <ServiceBookingFlow
+      services={[service]}
+      categorySlug={service.category.slug}
+      categoryName={service.category.name}
+      initialServiceId={service.id}
     />
   );
 }

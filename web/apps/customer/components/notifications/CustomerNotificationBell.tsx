@@ -1,36 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { BellIcon } from "@/components/ui/AppIcons";
 import { countUnread, useNotificationReadState } from "@/components/notifications/useNotificationReadState";
-import type { AppNotification } from "@/lib/notifications/types";
+import { api } from "@/lib/query/api";
+import { qk } from "@/lib/query/keys";
 
 export function CustomerNotificationBell() {
   const { readIds } = useNotificationReadState("customer");
-  const [unread, setUnread] = useState(0);
+  const { data } = useQuery({
+    queryKey: qk.notifications("customer"),
+    queryFn: () => api.notifications("customer"),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
 
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      try {
-        const res = await fetch("/api/notifications");
-        if (!active || !res.ok) return;
-        const json = (await res.json()) as { items: AppNotification[] };
-        setUnread(countUnread((json.items ?? []).map((n) => n.id), readIds));
-      } catch {
-        // Network errors (dev server restart / offline) shouldn't crash the app shell.
-      }
-    }
-
-    load();
-    const interval = setInterval(load, 30_000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [readIds]);
+  const unread = countUnread((data?.items ?? []).map((n) => n.id), readIds);
 
   return (
     <Link

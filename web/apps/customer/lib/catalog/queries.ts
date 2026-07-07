@@ -1,5 +1,21 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@vsolve/db";
+
+// The service catalog is effectively static (it only changes when admin edits the
+// catalog). Cache these reads across requests and tag them "catalog" so a future
+// admin mutation can `revalidateTag("catalog")` to bust them. Per-user/dynamic
+// reads (bookings, session, search) are intentionally NOT cached here.
+const CATALOG_REVALIDATE_SECONDS = 3600;
+// Preserve the wrapped function's exact signature (generic over the whole callable)
+// so callers keep full type inference through the cache boundary.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function catalogCache<T extends (...args: any[]) => Promise<unknown>>(fn: T, key: string): T {
+  return unstable_cache(fn, [key], {
+    tags: ["catalog"],
+    revalidate: CATALOG_REVALIDATE_SECONDS,
+  }) as unknown as T;
+}
 
 const serviceInclude = {
   category: true,
@@ -49,7 +65,7 @@ export function serializeService(service: ServiceWithRelations) {
   };
 }
 
-export async function getCategories() {
+export const getCategories = catalogCache(async () => {
   return prisma.serviceCategory.findMany({
     orderBy: { sortOrder: "asc" },
     include: {
@@ -57,9 +73,9 @@ export async function getCategories() {
       _count: { select: { services: true } },
     },
   });
-}
+}, "categories");
 
-export async function getCatalogGrouped() {
+export const getCatalogGrouped = catalogCache(async () => {
   const categories = await prisma.serviceCategory.findMany({
     orderBy: { sortOrder: "asc" },
     include: {
@@ -94,26 +110,26 @@ export async function getCatalogGrouped() {
     })),
     services: cat.services.map(serializeService),
   }));
-}
+}, "catalog-grouped");
 
-export async function getAllServices() {
+export const getAllServices = catalogCache(async () => {
   const services = await prisma.service.findMany({
     include: serviceInclude,
     orderBy: { name: "asc" },
   });
   return services.map(serializeService);
-}
+}, "all-services");
 
-export async function getPopularServices(limit = 8) {
+export const getPopularServices = catalogCache(async (limit = 8) => {
   const services = await prisma.service.findMany({
     include: serviceInclude,
     take: limit,
     orderBy: { name: "asc" },
   });
   return services.map(serializeService);
-}
+}, "popular-services");
 
-export async function getServiceBySlug(categorySlug: string, serviceSlug: string) {
+export const getServiceBySlug = catalogCache(async (categorySlug: string, serviceSlug: string) => {
   const service = await prisma.service.findFirst({
     where: {
       slug: serviceSlug,
@@ -122,16 +138,16 @@ export async function getServiceBySlug(categorySlug: string, serviceSlug: string
     include: serviceInclude,
   });
   return service ? serializeService(service) : null;
-}
+}, "service-by-slug");
 
-export async function getServicesByCategory(categorySlug: string) {
+export const getServicesByCategory = catalogCache(async (categorySlug: string) => {
   const services = await prisma.service.findMany({
     where: { category: { slug: categorySlug } },
     include: serviceInclude,
     orderBy: { name: "asc" },
   });
   return services.map(serializeService);
-}
+}, "services-by-category");
 
 export async function searchServices(query: string) {
   const q = query.trim().toLowerCase();

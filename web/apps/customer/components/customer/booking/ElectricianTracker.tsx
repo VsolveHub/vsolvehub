@@ -635,17 +635,20 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
               <p className="text-xs text-gray-500 font-semibold m-0">Order #{booking.bookingRef}</p>
             </div>
 
-            {/* Experience Card */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm text-center flex flex-col items-center gap-3 select-none">
-              <p className="text-xs font-bold text-purple-955 m-0 uppercase tracking-wide">How was your experience?</p>
-              
-              {/* Clickable Star Ratings */}
+            {/* Experience / rating card — submits to the real /review API which
+                refreshes the partner's aggregate rating on their dashboard. */}
+            <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm text-center flex flex-col items-center gap-3">
+              <p className="text-xs font-bold text-purple-955 m-0 uppercase tracking-wide">
+                {reviewSubmitted ? "Your rating" : "How was your experience?"}
+              </p>
+
               <div className="flex justify-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
-                    className="text-3xl cursor-pointer focus:outline-none transition-transform hover:scale-110 active:scale-95"
+                    disabled={reviewSubmitted}
+                    className="text-3xl focus:outline-none transition-transform hover:scale-110 active:scale-95 disabled:cursor-default"
                     onClick={() => setRating(star)}
                   >
                     {star <= rating ? "★" : "☆"}
@@ -653,49 +656,33 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
                 ))}
               </div>
 
-              {/* Dynamic status badge under stars */}
               <span className="bg-amber-100 border border-amber-200/50 text-amber-800 text-[10px] font-extrabold px-3 py-1 rounded-full mt-1">
                 {getRatingLabel(rating)}
               </span>
-            </div>
 
-            {/* Project Evidence section */}
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 select-none">Project Evidence</p>
-              <div className="grid grid-cols-2 gap-3.5">
-                {/* BEFORE picture card */}
-                <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-200 border border-gray-100 shadow-inner">
-                  <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=250" alt="before" className="w-full h-full object-cover" />
-                  <span className="absolute top-2 left-2 bg-black/75 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
-                    Before
-                  </span>
-                </div>
-                {/* AFTER picture card */}
-                <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-200 border border-gray-100 shadow-inner">
-                  <img src="https://images.unsplash.com/photo-1558223180-113b869c647c?w=250" alt="after" className="w-full h-full object-cover" />
-                  <span className="absolute top-2 left-2 bg-purple-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
-                    After
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Completion OTP Card */}
-            <div className="bg-purple-100/30 border border-dashed border-purple-300 rounded-3xl p-5 flex flex-col items-center gap-3.5 select-none">
-              <p className="text-[10px] font-bold text-purple-955 uppercase tracking-wide m-0">Completion OTP sent to your mobile</p>
-              <div className="flex gap-2.5">
-                {["8", "4", "•", "•"].map((char, index) => (
-                  <div
-                    key={index}
-                    className="w-9 h-11 bg-white border border-gray-250 rounded-xl flex items-center justify-center font-extrabold text-sm text-purple-955 shadow-sm"
+              {reviewSubmitted ? (
+                <p className="text-[11px] text-emerald-600 font-bold m-0">
+                  ✓ Thanks! Your feedback is shared with the professional.
+                </p>
+              ) : (
+                <div className="w-full flex flex-col gap-2 mt-1">
+                  <textarea
+                    value={review}
+                    onChange={(e) => setReview(e.target.value)}
+                    placeholder="Add a few words about the professional (optional)"
+                    className="w-full min-h-[60px] p-2.5 text-xs border border-gray-200 rounded-2xl focus:outline-none focus:border-purple-500 text-left"
+                  />
+                  {error && <p className="text-[11px] text-red-600 m-0">{error}</p>}
+                  <button
+                    type="button"
+                    onClick={submitReview}
+                    disabled={loading}
+                    className="w-full py-2.5 bg-purple-900 hover:bg-purple-950 text-white text-xs font-bold rounded-full disabled:opacity-60"
                   >
-                    {char}
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="text-[10px] text-purple-700 font-extrabold underline hover:text-purple-950 cursor-pointer">
-                Resend OTP
-              </button>
+                    {loading ? "Submitting…" : "Submit rating"}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Paid Amount Card */}
@@ -714,6 +701,16 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
                 View Details
               </button>
             </div>
+
+            {/* Real invoice — opens a print/save-as-PDF invoice built from DB data */}
+            <a
+              href={`/booking/invoice/${booking.bookingRef}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 bg-white border border-purple-200 text-purple-800 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 no-underline hover:bg-purple-50"
+            >
+              ⬇ Download invoice
+            </a>
 
             {/* Refer & Earn Card */}
             <div className="bg-gradient-to-r from-amber-400 to-amber-500 rounded-3xl p-4 text-purple-955 shadow-sm relative overflow-hidden flex justify-between items-center select-none">

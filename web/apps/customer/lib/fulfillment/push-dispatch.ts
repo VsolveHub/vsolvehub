@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import { offerExpiresAt } from "@/lib/provider/queries";
 import { providerTypeForArchetype, usesPushDispatch } from "@/lib/bookings/archetype";
+import { partnerMatchesService, partnerMatchInclude } from "@/lib/provider/matching";
 
 const WAVE_SIZE = 5;
 const MAX_WAVES = 4;
@@ -63,16 +64,22 @@ function withinServiceArea(
   return haversineKm(partner.lat, partner.lng, addrLat, addrLng) <= SERVICE_RADIUS_KM;
 }
 
+const eligiblePartnerInclude = {
+  availability: true,
+  ...partnerMatchInclude,
+} as const;
+
 async function findEligiblePartners(bookingId: string, excludePartnerIds: string[]) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: { address: true },
+    include: { address: true, service: { include: { subCategory: true } } },
   });
   if (!booking) return [];
 
-  // Partner.providerType is the enum (CAPTAIN | DRIVER | CLEANER). Only CAPTAIN
-  // is dispatched in M1; archetypes B/D/E/F (PROFESSIONAL etc.) land in M2+.
-  const providerType = providerTypeForArchetype(booking.archetype) as "CAPTAIN" | "DRIVER" | "CLEANER";
+  // Partner.providerType is the enum (CAPTAIN | DRIVER | CLEANER). All four Phase-1
+  // dispatch categories (Technician/Beauty/Home/Pet) are archetype A → CAPTAIN;
+  // partners are then distinguished by trade/skill, not provider type.
+  const providerType = providerTypeForArchetype(booking.archetype);
   const addrLat = booking.address.lat ?? 17.385;
   const addrLng = booking.address.lng ?? 78.4867;
 
@@ -83,13 +90,14 @@ async function findEligiblePartners(bookingId: string, excludePartnerIds: string
       id: { notIn: excludePartnerIds },
       ...(providerType === "CAPTAIN" ? { isOnline: true } : {}),
     },
-    include: { availability: true },
+    include: eligiblePartnerInclude,
     take: 50,
   });
 
   return partners
     .filter(
       (p) =>
+        partnerMatchesService(p, booking.service) &&
         slotMatchesAvailability(booking.slot, p.availability) &&
         withinServiceArea(p, addrLat, addrLng)
     )
@@ -164,6 +172,53 @@ export async function dispatchBookingOffers(bookingId: string) {
   }
 
   return { offersCreated: eligible.length, expiresAt: expiresAt.toISOString() };
+}
+
+/**
+ * Direct offer — the customer hand-picked one specific online partner. We create a
+ * single offer to just that partner (they can still accept/decline within the TTL).
+ * If they decline or let it expire, `processExpiredOffersAndRedispatch` (triggered on
+ * the next customer status poll) falls back to a normal auto-dispatch wave, so the
+ * booking is never stranded.
+ */
+export async function dispatchDirectOffer(bookingId: string, partnerId: string) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { service: { include: { subCategory: true } } },
+  });
+  if (!booking) return { ok: false as const, error: "Booking not found" };
+  if (!usesPushDispatch(booking.archetype)) return { ok: false as const, error: "Not a dispatch service" };
+  if (booking.assignedPartnerId) return { ok: false as const, error: "Already assigned" };
+
+  const pending = await prisma.jobAssignment.count({
+    where: { bookingId, status: "PENDING", expiresAt: { gt: new Date() } },
+  });
+  if (pending > 0) return { ok: false as const, error: "Offer already outstanding" };
+
+  const partner = await prisma.partner.findFirst({
+    where: { id: partnerId, status: "ACTIVE", isOnline: true },
+    include: eligiblePartnerInclude,
+  });
+  if (!partner) return { ok: false as const, error: "Partner is no longer available" };
+  if (!partnerMatchesService(partner, booking.service)) {
+    return { ok: false as const, error: "Partner does not offer this service" };
+  }
+
+  const expiresAt = offerExpiresAt();
+  await prisma.$transaction([
+    prisma.jobAssignment.create({
+      data: { bookingId, partnerId, status: "PENDING", expiresAt },
+    }),
+    prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: "SEARCHING_PROVIDER" },
+    }),
+    prisma.bookingStatusLog.create({
+      data: { bookingId, status: "SEARCHING_PROVIDER" },
+    }),
+  ]);
+
+  return { ok: true as const, offersCreated: 1, expiresAt: expiresAt.toISOString() };
 }
 
 export async function processExpiredOffersAndRedispatch(bookingId: string) {

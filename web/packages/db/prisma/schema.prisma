@@ -368,6 +368,27 @@ model User {
   bookings              Booking[]
   accommodationBookings AccommodationBooking[]
   vehicleBookings       VehicleBooking[]
+  notifications         Notification[]
+}
+
+/// Real, DB-backed customer notification. Emitted on service-booking lifecycle
+/// events; `readAt` tracks the read state (replaces client-side localStorage).
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  type       String    @default("booking")
+  title      String
+  body       String
+  href       String    @default("/")
+  tone       String    @default("info")
+  icon       String    @default("bell")
+  bookingRef String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model Session {
@@ -554,8 +575,13 @@ model Booking {
   archetypeDetails     String    @default("{}")
   issueDescription     String    @default("")
   mediaUrls            String    @default("[]")
+  // Partner-uploaded proof-of-work images (Supabase "work" bucket object paths).
+  workPhotos           String    @default("[]")
   vendorAssignmentMode String    @default("auto")
   baseChargePaise      Int       @default(0)
+  // Customer-facing charge breakdown; quotedAmount is the payable total.
+  platformFeePaise     Int       @default(0)
+  taxPaise             Int       @default(0)
   quotedAmount         Int
   finalAmountPaise     Int?
   durationDays         Int       @default(1)

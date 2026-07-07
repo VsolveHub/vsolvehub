@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
+    "@tanstack/react-query": "^5.62.7",
     "@vsolve/config": "workspace:*",
     "@vsolve/crypto": "workspace:*",
     "@vsolve/db": "workspace:*",
+    "@vsolve/query": "workspace:*",
     "@vsolve/ui": "workspace:*",
     "lucide-react": "^0.469.0",
     "next": "^15.1.3",

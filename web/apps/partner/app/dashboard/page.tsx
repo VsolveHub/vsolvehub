@@ -4,6 +4,7 @@ import {
   getPartnerWallet,
   getPartnerJobHistory,
   getPartnerPayouts,
+  getPartnerRatingSummary,
 } from "@vsolve/db";
 import { requirePartner, type PartnerWithRelations } from "@/lib/auth";
 import { inr, timeAgo } from "@/lib/format";
@@ -15,6 +16,16 @@ export const metadata = { title: "Dashboard", robots: { index: false } };
 
 /** Platform commission on crew jobs — the lead's payout is the rest (lead-settled). */
 const CREW_COMMISSION_RATE = 0.15;
+
+/** Parse the customer's structured booking intake (stored as { label, value } pairs). */
+function parseJobDetails(raw: string): { label: string; value: string }[] {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    return Array.isArray(parsed.details) ? parsed.details : [];
+  } catch {
+    return [];
+  }
+}
 
 const DOC_LABELS: Record<string, string> = {
   SELFIE: "Profile Photo",
@@ -127,7 +138,7 @@ export default async function LivePage() {
   const cityName = partner.city?.name ?? "Hyderabad";
   const offer = offerFor(partner.providerType, serviceName, cityName);
 
-  const [wallet, jobHistory, payouts, documents, payout, crew, activeJobs] = await Promise.all([
+  const [wallet, jobHistory, payouts, documents, payout, crew, activeJobs, ratingSummary] = await Promise.all([
     getPartnerWallet(partner.id),
     getPartnerJobHistory(partner.id),
     getPartnerPayouts(partner.id),
@@ -135,6 +146,7 @@ export default async function LivePage() {
     prisma.payoutDetail.findUnique({ where: { partnerId: partner.id } }),
     prisma.crew.findUnique({ where: { leadPartnerId: partner.id }, select: { id: true, name: true } }),
     getPartnerActiveJobs(partner.id),
+    getPartnerRatingSummary(partner.id),
   ]);
 
   // The partner's current real job (accepted via the offer poller), if any.
@@ -149,6 +161,8 @@ export default async function LivePage() {
         customerName: jobRow.user.name ?? "Customer",
         customerPhone: jobRow.user.phone,
         amountPaise: jobRow.quotedAmount,
+        details: parseJobDetails(jobRow.archetypeDetails),
+        note: jobRow.issueDescription ?? "",
       }
     : null;
 
@@ -341,6 +355,8 @@ export default async function LivePage() {
       city={cityName}
       status={partner.status}
       rating={partner.rating}
+      reviewCount={ratingSummary.reviewCount}
+      reviews={ratingSummary.reviews}
       jobsCompleted={jobsCompleted}
       onlineHours={partner.onlineHours}
       todayEarnings={todayTotal}

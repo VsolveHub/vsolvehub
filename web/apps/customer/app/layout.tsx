@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "@flaticon/flaticon-uicons/css/regular/rounded.css";
 import "./globals.css";
+import { QueryProvider } from "@vsolve/query";
 import { ShellSwitcher } from "@/components/shared/ShellSwitcher";
 
 const inter = Inter({
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`app-shell ${inter.className}`} suppressHydrationWarning>
-        <ShellSwitcher>{children}</ShellSwitcher>
+        <QueryProvider>
+          <ShellSwitcher>{children}</ShellSwitcher>
+        </QueryProvider>
       </body>
     </html>
   );

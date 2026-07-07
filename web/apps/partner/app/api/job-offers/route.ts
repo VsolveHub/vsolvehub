@@ -29,16 +29,29 @@ export async function GET() {
     },
   });
 
-  const offers = assignments.map((a) => ({
-    offerId: a.id,
-    bookingRef: a.booking.bookingRef,
-    service: a.booking.service.name,
-    location: a.booking.address.area || a.booking.address.city || a.booking.address.fullAddress,
-    slot: a.booking.slot,
-    archetype: a.booking.archetype,
-    quotedAmount: a.booking.quotedAmount,
-    expiresAt: a.expiresAt.toISOString(),
-  }));
+  const offers = assignments.map((a) => {
+    // Structured intake the customer filled in (e.g. Switch type: Modular). Stored
+    // as human-readable { label, value } pairs, so we just surface them as-is.
+    let details: { label: string; value: string }[] = [];
+    try {
+      const parsed = JSON.parse(a.booking.archetypeDetails || "{}");
+      if (Array.isArray(parsed.details)) details = parsed.details;
+    } catch {
+      /* no structured details */
+    }
+    return {
+      offerId: a.id,
+      bookingRef: a.booking.bookingRef,
+      service: a.booking.service.name,
+      location: a.booking.address.area || a.booking.address.city || a.booking.address.fullAddress,
+      slot: a.booking.slot,
+      archetype: a.booking.archetype,
+      quotedAmount: a.booking.quotedAmount,
+      details,
+      note: a.booking.issueDescription || "",
+      expiresAt: a.expiresAt.toISOString(),
+    };
+  });
 
   return NextResponse.json({ offers });
 }

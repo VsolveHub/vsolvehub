@@ -1,31 +1,19 @@
 "use client";
 
-import { ElectricianBookingFlow } from "@/components/customer/booking/ElectricianBookingFlow";
-import type { BookingServiceInfo } from "@/lib/bookings/types";
+import { ServiceBookingFlow, type FlowService } from "@/components/customer/booking/ServiceBookingFlow";
 
 type Props = {
   categorySlug: string;
   categoryName: string;
   subCategoryName: string;
   subCategoryIcon: string;
-  services: any[];
+  services: FlowService[];
 };
 
-export function SubcategoryServicesView({
-  categorySlug,
-  categoryName,
-  subCategoryName,
-  subCategoryIcon,
-  services,
-}: Props) {
-  // Directly render the unified booking component starting at the select-service step
+export function SubcategoryServicesView({ categorySlug, categoryName, services }: Props) {
+  // The unified, config-driven flow. Starts at the service-picker because a
+  // sub-category (e.g. Electrician) lists several bookable services.
   return (
-    <ElectricianBookingFlow
-      initialStep="select-service"
-      services={services}
-      categorySlug={categorySlug}
-      categoryName={categoryName}
-      subCategoryName={subCategoryName}
-    />
+    <ServiceBookingFlow services={services} categorySlug={categorySlug} categoryName={categoryName} />
   );
 }

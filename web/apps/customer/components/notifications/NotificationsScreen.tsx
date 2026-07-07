@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { LoadingState } from "@/components/ui/LoadingState";
 import type { AppNotification } from "@/lib/notifications/types";
 import { formatRelativeTime } from "@/lib/notifications/format";
 import { countUnread, useNotificationReadState } from "./useNotificationReadState";
+import { api, ApiError } from "@/lib/query/api";
+import { qk } from "@/lib/query/keys";
 
 type Audience = "customer" | "provider";
 
@@ -17,60 +20,33 @@ type Props = {
   backLabel: string;
 };
 
-const API: Record<Audience, string> = {
-  customer: "/api/notifications",
-  provider: "/api/provider/notifications",
-};
-
 export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
   const router = useRouter();
   const { readIds, markRead, markAllRead } = useNotificationReadState(audience);
-  const [items, setItems] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
+  const { data, isLoading, error } = useQuery({
+    queryKey: qk.notifications(audience),
+    queryFn: () => api.notifications(audience),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+
+  // A 401 means the session lapsed — bounce to the right sign-in screen.
   useEffect(() => {
-    let active = true;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch(API[audience]);
-        if (!active) return;
-
-        if (res.status === 401) {
-          const redirect =
-            audience === "customer"
-              ? "/booking/otp?redirect=/notifications"
-              : "/partner/login?redirect=/partner/notifications";
-          router.replace(redirect);
-          return;
-        }
-
-        if (!res.ok) {
-          setError("Could not load notifications.");
-          setLoading(false);
-          return;
-        }
-
-        const json = (await res.json()) as { items: AppNotification[] };
-        setItems(json.items ?? []);
-        setLoading(false);
-      } catch {
-        if (!active) return;
-        setError("Could not load notifications.");
-        setLoading(false);
-      }
+    if (error instanceof ApiError && error.status === 401) {
+      router.replace(
+        audience === "customer"
+          ? "/booking/otp?redirect=/notifications"
+          : "/partner/login?redirect=/partner/notifications",
+      );
     }
+  }, [error, audience, router]);
 
-    load();
-    const interval = setInterval(load, 15_000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [audience, router]);
+  const items = data?.items ?? [];
+  const loading = isLoading;
+  const loadError = error && !(error instanceof ApiError && error.status === 401)
+    ? "Could not load notifications."
+    : "";
 
   const unread = countUnread(
     items.map((n) => n.id),
@@ -111,9 +87,9 @@ export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
 
       {loading && <LoadingState label="Loading notifications…" variant="inline" />}
 
-      {!loading && error && <div className="alert alert-error">{error}</div>}
+      {!loading && loadError && <div className="alert alert-error">{loadError}</div>}
 
-      {!loading && !error && items.length === 0 && (
+      {!loading && !loadError && items.length === 0 && (
         <div className="notif-page-empty">
           <FlaticonIcon name="bell" size={36} color="var(--color-text-muted)" />
           <p>No notifications yet.</p>
@@ -123,7 +99,7 @@ export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
         </div>
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {!loading && !loadError && items.length > 0 && (
         <ul className="notif-page-list">
           {items.map((item) => {
             const isUnread = !readIds.has(item.id);

@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, Clock, Check, X, Bell, IndianRupee } from "lucide-react";
+import { jsonFetch, pqk } from "@/lib/query";
 
 type JobOffer = {
   offerId: string;
@@ -12,6 +14,8 @@ type JobOffer = {
   slot: string;
   archetype: string;
   quotedAmount: number; // paise
+  details?: { label: string; value: string }[];
+  note?: string;
   expiresAt: string;
 };
 
@@ -41,47 +45,41 @@ function fmtRupees(paise: number) {
  */
 export function JobOfferPoller() {
   const router = useRouter();
-  const [offers, setOffers] = useState<JobOffer[]>([]);
-  const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
   const [now, setNow] = useState(() => Date.now());
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/job-offers", { cache: "no-store" });
-      if (res.ok) setOffers((await res.json()).offers ?? []);
-    } catch {
-      /* offline — keep last state */
-    }
+  const { data } = useQuery({
+    queryKey: pqk.jobOffers(),
+    queryFn: () => jsonFetch<{ offers: JobOffer[] }>("/api/job-offers", { cache: "no-store" }),
+    refetchInterval: 4000,
+    staleTime: 0,
+  });
+  const offers = data?.offers ?? [];
+
+  // 1s ticker for the accept-window countdown (pure UI, not data).
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
   }, []);
 
-  useEffect(() => {
-    load();
-    const poll = setInterval(load, 4000);
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      clearInterval(poll);
-      clearInterval(tick);
-    };
-  }, [load]);
+  const respondMutation = useMutation({
+    mutationFn: (vars: { offerId: string; action: "accept" | "decline" }) =>
+      jsonFetch("/api/job-offers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars),
+      }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: pqk.jobOffers() });
+      if (vars.action === "accept") router.refresh();
+    },
+  });
+  const busy = respondMutation.isPending;
 
   const top = offers[0];
 
-  async function respond(offerId: string, action: "accept" | "decline") {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await fetch("/api/job-offers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offerId, action }),
-      });
-      setOffers((prev) => prev.filter((o) => o.offerId !== offerId));
-      await load();
-      if (action === "accept") router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
+  const respond = (offerId: string, action: "accept" | "decline") =>
+    respondMutation.mutate({ offerId, action });
 
   if (!top) return null;
 
@@ -114,6 +112,22 @@ export function JobOfferPoller() {
               <IndianRupee className="h-3.5 w-3.5" /> {fmtRupees(top.quotedAmount)}
             </span>
           </div>
+
+          {top.details && top.details.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {top.details.map((d) => (
+                <span key={d.label} className="rounded-md bg-purple-50 px-2 py-0.5 text-[11px] font-semibold text-purple-800">
+                  {d.label}: {d.value}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {top.note ? (
+            <p className="mt-2 rounded-lg bg-surface-muted px-2.5 py-1.5 text-[11px] text-gray-600">
+              “{top.note}”
+            </p>
+          ) : null}
 
           <div className="mt-3 flex gap-2">
             <button

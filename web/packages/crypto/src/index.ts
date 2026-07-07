@@ -1,7 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "node:crypto";
 
 // AES-256-GCM application-layer encryption for PII at rest (Aadhaar, bank acct).
-// SQLite has no pgcrypto, so we encrypt before writing via Prisma.
+// Encryption happens in app code (not Postgres pgcrypto) so the key lives in the
+// app env, never in the database, and stays portable across DB/backends.
 // KEY must be 32 bytes. Provide a 64-char hex string in PARTNER_PII_KEY.
 
 const ALGO = "aes-256-gcm";

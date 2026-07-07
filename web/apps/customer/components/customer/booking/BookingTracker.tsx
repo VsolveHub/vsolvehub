@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/query/api";
+import { qk } from "@/lib/query/keys";
 import { ElectricianTracker } from "./ElectricianTracker";
 import { BeauticianTracker } from "./BeauticianTracker";
 import { ConstructionTracker } from "./ConstructionTracker";
@@ -40,67 +42,36 @@ type TrackingData = {
 type PaymentMethod = "upi" | "card" | "wallet" | "cod";
 
 export function BookingTracker({ bookingRef }: { bookingRef: string }) {
-  const router = useRouter();
-  const [data, setData] = useState<TrackingData | null>(null);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("upi");
-  const [actionLoading, setActionLoading] = useState(false);
-  const [actionError, setActionError] = useState("");
 
-  async function fetchStatus() {
-    const res = await fetch(`/api/bookings/${bookingRef}`);
-    if (!res.ok) {
-      setError("Booking not found");
-      return;
-    }
-    const json = await res.json();
-    setData(json);
-  }
+  // Live status: server-hydrated on first paint, then polled every 4s.
+  const { data, isError } = useQuery<TrackingData>({
+    queryKey: qk.booking(bookingRef),
+    queryFn: () => api.booking(bookingRef) as Promise<TrackingData>,
+    refetchInterval: 4000,
+    staleTime: 0,
+  });
 
-  async function payAfterAssignment() {
-    setActionLoading(true);
-    setActionError("");
-    try {
-      const res = await fetch(`/api/bookings/${bookingRef}/pay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethod }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setActionError(json.error ?? "Payment failed");
-        return;
-      }
-      await fetchStatus();
-    } finally {
-      setActionLoading(false);
-    }
-  }
+  // Child trackers call this after their own actions to force a fresh read.
+  const fetchStatus = () => queryClient.invalidateQueries({ queryKey: qk.booking(bookingRef) });
 
-  async function retryRequest() {
-    setActionLoading(true);
-    setActionError("");
-    try {
-      const res = await fetch(`/api/bookings/${bookingRef}/retry`, { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) {
-        setActionError(json.error ?? "Retry failed");
-        return;
-      }
-      await fetchStatus();
-    } finally {
-      setActionLoading(false);
-    }
-  }
+  const payMutation = useMutation({
+    mutationFn: () => api.payBooking(bookingRef, paymentMethod),
+    onSuccess: fetchStatus,
+  });
+  const retryMutation = useMutation({
+    mutationFn: () => api.retryBooking(bookingRef),
+    onSuccess: fetchStatus,
+  });
 
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 4000);
-    return () => clearInterval(interval);
-  }, [bookingRef]);
+  const actionLoading = payMutation.isPending || retryMutation.isPending;
+  const actionError =
+    (payMutation.error instanceof Error ? payMutation.error.message : "") ||
+    (retryMutation.error instanceof Error ? retryMutation.error.message : "");
 
-  if (error) {
-    return <div className="alert alert-error">{error}</div>;
+  if (isError) {
+    return <div className="alert alert-error">Booking not found</div>;
   }
 
   if (!data) {
@@ -147,7 +118,7 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
           </div>
           <button
             type="button"
-            onClick={payAfterAssignment}
+            onClick={() => payMutation.mutate()}
             disabled={actionLoading}
             className="w-full rounded-xl bg-purple-800 py-2.5 text-xs font-bold text-white disabled:opacity-60"
           >
@@ -162,7 +133,7 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
           </p>
           <button
             type="button"
-            onClick={retryRequest}
+            onClick={() => retryMutation.mutate()}
             disabled={actionLoading}
             className="w-full rounded-xl bg-purple-800 py-2.5 text-xs font-bold text-white disabled:opacity-60"
           >

@@ -1,5 +1,6 @@
 export {
   dispatchBookingOffers,
+  dispatchDirectOffer,
   processExpiredOffersAndRedispatch,
   retryBookingDispatch,
 } from "./push-dispatch";

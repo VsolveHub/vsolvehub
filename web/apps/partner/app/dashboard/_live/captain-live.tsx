@@ -82,6 +82,10 @@ type Props = {
   city: string;
   status: string;
   rating: number;
+  /** Number of customer reviews backing the rating (0 = not yet rated). */
+  reviewCount: number;
+  /** Recent customer reviews to surface on the profile. */
+  reviews: PartnerReview[];
   jobsCompleted: number;
   onlineHours: number;
   todayEarnings: number;
@@ -120,6 +124,19 @@ export type ActiveJob = {
   customerName: string;
   customerPhone: string;
   amountPaise: number;
+  /** Structured intake the customer submitted (e.g. Switch type: Modular). */
+  details: { label: string; value: string }[];
+  /** Optional free-text note from the customer. */
+  note: string;
+};
+
+export type PartnerReview = {
+  bookingRef: string;
+  rating: number;
+  review: string;
+  date: string;
+  service: string;
+  customerName: string;
 };
 
 /** Map a real booking status to the captain-live work-loop stage. */
@@ -979,6 +996,19 @@ function EnrouteScreen(p: HomeProps) {
           <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
           <p className="text-xs text-gray-600">{p.offer.drop}</p>
         </div>
+
+        {p.activeJob && p.activeJob.details.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {p.activeJob.details.map((d) => (
+              <span key={d.label} className="rounded-md bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
+                {d.label}: {d.value}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {p.activeJob?.note ? (
+          <p className="mt-2 rounded-lg bg-surface-muted px-2.5 py-1.5 text-[11px] italic text-gray-600">“{p.activeJob.note}”</p>
+        ) : null}
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
@@ -1490,9 +1520,39 @@ function ProfileTab(p: Props & { todayJobs: number }) {
 
       <div className="mt-4 grid grid-cols-3 gap-3">
         <MiniStat icon={Briefcase} tone="brand" label="Lifetime" value={p.jobsCompleted} />
-        <MiniStat icon={Star} tone="green" label="Rating" value={p.rating.toFixed(1)} />
+        <MiniStat
+          icon={Star}
+          tone="green"
+          label={p.reviewCount > 0 ? `${p.reviewCount} review${p.reviewCount === 1 ? "" : "s"}` : "Rating"}
+          value={p.reviewCount > 0 ? p.rating.toFixed(1) : "New"}
+        />
         <MiniStat icon={IndianRupee} tone="amber" label="Avg / day" value={inr(p.avgPerDay)} />
       </div>
+
+      {/* Customer reviews — real feedback that drives the rating above. */}
+      <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-gray-400">Customer reviews</p>
+      {p.reviews.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-white p-4 text-center text-xs text-gray-500">
+          No reviews yet. Complete jobs to start earning ratings.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {p.reviews.map((r) => (
+            <div key={r.bookingRef} className="rounded-2xl border border-border bg-white p-3.5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-ink-900">{r.customerName}</p>
+                <span className="flex items-center gap-1 text-xs font-bold text-ink-900">
+                  <Star className="h-3.5 w-3.5 fill-accent-400 text-accent-400" /> {r.rating.toFixed(1)}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                {r.service} · {new Date(r.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+              </p>
+              {r.review ? <p className="mt-1 text-xs text-gray-600">“{r.review}”</p> : null}
+            </div>
+          ))}
+        </div>
+      )}
 
       {p.bankLast4 && (
         <div className="mt-4 flex items-center gap-3 rounded-2xl border border-border bg-white p-3.5">

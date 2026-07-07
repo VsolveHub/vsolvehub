@@ -6,6 +6,43 @@
 import { prisma } from "./client";
 import type { EngineResult } from "./fulfillment";
 
+/** Aggregate rating + count + recent reviews for a partner's dashboard. */
+export async function getPartnerRatingSummary(partnerId: string, take = 10) {
+  const [agg, rows] = await Promise.all([
+    prisma.booking.aggregate({
+      where: { assignedPartnerId: partnerId, rating: { not: null } },
+      _avg: { rating: true },
+      _count: { rating: true },
+    }),
+    prisma.booking.findMany({
+      where: { assignedPartnerId: partnerId, rating: { not: null } },
+      select: {
+        bookingRef: true,
+        rating: true,
+        review: true,
+        createdAt: true,
+        service: { select: { name: true } },
+        user: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+    }),
+  ]);
+
+  return {
+    reviewCount: agg._count.rating,
+    average: agg._avg.rating != null ? Math.round(agg._avg.rating * 10) / 10 : null,
+    reviews: rows.map((r) => ({
+      bookingRef: r.bookingRef,
+      rating: r.rating ?? 0,
+      review: r.review ?? "",
+      date: r.createdAt.toISOString(),
+      service: r.service.name,
+      customerName: r.user.name ?? "Customer",
+    })),
+  };
+}
+
 /** Recompute Partner.rating as the average of all their reviewed bookings. */
 export async function recomputePartnerRating(partnerId: string): Promise<void> {
   const agg = await prisma.booking.aggregate({
