@@ -11,6 +11,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "db:migrate": "pnpm --filter @vsolve/db migrate",
+    "db:migrate:deploy": "pnpm --filter @vsolve/db migrate:deploy",
     "db:seed": "pnpm --filter @vsolve/db seed",
     "db:studio": "pnpm --filter @vsolve/db studio",
     "db:generate": "pnpm --filter @vsolve/db generate"

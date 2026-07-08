@@ -8,13 +8,9 @@ let serviceClient: ReturnType<typeof createClient> | null = null;
 
 function getServiceClient() {
   if (serviceClient) return serviceClient;
-  // KYC files live in a dedicated Storage project (the private "kyc" bucket the
-  // partner app uploads to), which may differ from the admin auth/DB project.
-  // Prefer KYC-specific vars; fall back to the generic ones when they're the
-  // same project.
-  const url = process.env.KYC_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.KYC_SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) throw new Error("Supabase KYC storage credentials are not configured");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_KEY;
+  if (!url || !key) throw new Error("Supabase service credentials are not configured");
   serviceClient = createClient(url, key, { auth: { persistSession: false } });
   return serviceClient;
 }
