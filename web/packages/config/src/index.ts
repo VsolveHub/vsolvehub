@@ -270,6 +270,21 @@ export function servicesForRole(slug: string): ServiceCard[] {
 export const OTP_TTL_SECONDS = 300;
 export const OTP_MAX_ATTEMPTS = 5;
 
+/** Work-experience bands offered during onboarding. Single source of truth for
+ *  both the identity form dropdown and the server action's validation. */
+export const EXPERIENCE_BANDS = [
+  { value: "0-6m", label: "0 – 6 months" },
+  { value: "6-12m", label: "6 – 12 months" },
+  { value: "1-3y", label: "1 – 3 years" },
+  { value: "3y+", label: "More than 3 years" },
+] as const;
+
+export type ExperienceBand = (typeof EXPERIENCE_BANDS)[number]["value"];
+
+export function isExperienceBand(value: string): value is ExperienceBand {
+  return EXPERIENCE_BANDS.some((b) => b.value === value);
+}
+
 /** Wizard steps for a provider type, excluding the terminal "success" step. */
 export function formStepsFor(type: ProviderType): WizardStep[] {
   return PROVIDER_FLOWS[type].steps.filter((s) => s.id !== "success");

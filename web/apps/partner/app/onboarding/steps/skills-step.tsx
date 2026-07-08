@@ -1,15 +1,17 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { Check } from "lucide-react";
-import { FileDrop, StepActions } from "@/components/forms";
+import { EXPERIENCE_BANDS } from "@vsolve/config";
+import { FileDrop, SelectField, StepActions, UploadForm } from "@/components/forms";
 import { LocationCapture } from "@/components/onboarding/location-capture";
-import { saveSkills, type StepState } from "../actions";
+import { saveSkills } from "../actions";
 
 export function SkillsStep({
   tradeName,
   skills,
   selectedSkills,
+  experience,
   area,
   cityName,
   pincode,
@@ -19,13 +21,13 @@ export function SkillsStep({
   tradeName: string;
   skills: string[];
   selectedSkills: string[];
+  experience: string | null;
   area: string | null;
   cityName: string | null;
   pincode: string | null;
   lat: number | null;
   lng: number | null;
 }) {
-  const [state, action] = useActionState<StepState, FormData>(saveSkills, {});
   const [picked, setPicked] = useState<string[]>(selectedSkills);
 
   function toggle(skill: string) {
@@ -33,7 +35,7 @@ export function SkillsStep({
   }
 
   return (
-    <form action={action} className="space-y-6">
+    <UploadForm action={saveSkills} className="space-y-6">
       <div>
         <p className="text-sm font-medium text-ink-900">Your {tradeName} skills</p>
         <p className="mb-3 text-xs text-gray-500">
@@ -65,6 +67,14 @@ export function SkillsStep({
         ))}
       </div>
 
+      <SelectField
+        label="Experience"
+        name="experience"
+        required
+        defaultValue={experience ?? ""}
+        options={EXPERIENCE_BANDS.map((b) => ({ value: b.value, label: b.label }))}
+      />
+
       <LocationCapture
         defaultArea={area}
         defaultCity={cityName}
@@ -73,10 +83,14 @@ export function SkillsStep({
         defaultLng={lng}
       />
 
-      <FileDrop name="tradeCert" label="Trade certificate / proof of skill (optional)" hint="JPG, PNG or PDF up to 5MB" />
+      <FileDrop
+        name="tradeCert"
+        docType="TRADE_CERTIFICATE"
+        label="Trade certificate / proof of skill (optional)"
+        hint="JPG, PNG or PDF up to 5MB"
+      />
 
-      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       <StepActions submitLabel="Submit Application" requireTerms />
-    </form>
+    </UploadForm>
   );
 }

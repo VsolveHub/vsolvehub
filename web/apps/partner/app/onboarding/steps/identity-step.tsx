@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { Field, SelectField, FileDrop, StepActions } from "@/components/forms";
-import { saveIdentity, type StepState } from "../actions";
+import { Field, SelectField, FileDrop, StepActions, UploadForm } from "@/components/forms";
+import { saveIdentity } from "../actions";
 
 export function IdentityStep({
   fullName,
@@ -12,11 +12,10 @@ export function IdentityStep({
   fullName: string | null;
   gender: string | null;
 }) {
-  const [state, action] = useActionState<StepState, FormData>(saveIdentity, {});
   const [note, setNote] = useState(false);
 
   return (
-    <form action={action} className="space-y-5">
+    <UploadForm action={saveIdentity} className="space-y-5">
       <Field
         label="Full Name"
         name="fullName"
@@ -66,14 +65,14 @@ export function IdentityStep({
 
       <FileDrop
         name="profilePhoto"
+        docType="SELFIE"
         label="Profile Photo"
         required
         accept="image/png,image/jpeg"
         hint="A clear face photo — JPG or PNG up to 5MB."
       />
 
-      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       <StepActions />
-    </form>
+    </UploadForm>
   );
 }

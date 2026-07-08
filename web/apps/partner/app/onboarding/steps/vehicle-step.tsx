@@ -1,18 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
-import { Field, SelectField, FileDrop, StepActions } from "@/components/forms";
-import { saveVehicle, type StepState } from "../actions";
+import { Field, SelectField, FileDrop, StepActions, UploadForm } from "@/components/forms";
+import { saveVehicle } from "../actions";
 
 export function VehicleStep({
   vehicle,
 }: {
   vehicle: { type: string; make: string | null; model: string | null; regNumber: string } | null;
 }) {
-  const [state, action] = useActionState<StepState, FormData>(saveVehicle, {});
-
   return (
-    <form action={action} className="space-y-5">
+    <UploadForm action={saveVehicle} className="space-y-5">
       <SelectField
         label="Vehicle type"
         name="vehicleType"
@@ -36,10 +33,15 @@ export function VehicleStep({
         defaultValue={vehicle?.regNumber ?? ""}
         placeholder="TS09 AB 1234"
       />
-      <FileDrop name="rc" label="Registration Certificate (RC)" />
+      <FileDrop
+        name="rc"
+        docType="RC"
+        label="Registration Certificate (RC)"
+        required
+        hint="Vehicle RC — JPG, PNG or PDF up to 5MB."
+      />
 
-      {state.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       <StepActions />
-    </form>
+    </UploadForm>
   );
 }

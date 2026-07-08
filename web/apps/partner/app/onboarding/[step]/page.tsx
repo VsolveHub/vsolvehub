@@ -9,6 +9,11 @@ import { SkillsStep } from "../steps/skills-step";
 import { VehicleStep } from "../steps/vehicle-step";
 import { DocumentsStep } from "../steps/documents-step";
 
+// Files now upload directly to storage from the browser, so the server actions
+// here only mint signed URLs and record small rows — fast. A modest ceiling
+// keeps a stuck DB call from hanging to the platform's hard limit.
+export const maxDuration = 30;
+
 export default async function WizardStepPage({
   params,
 }: {
@@ -46,6 +51,7 @@ export default async function WizardStepPage({
         tradeName={partner.trade?.name ?? "Partner"}
         skills={tradeSkills}
         selectedSkills={selectedSkills}
+        experience={partner.experience}
         area={partner.area}
         cityName={partner.cityName}
         pincode={partner.pincode}

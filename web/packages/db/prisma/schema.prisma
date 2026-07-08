@@ -70,6 +70,9 @@ model Partner {
   phoneVerified Boolean       @default(false)
   fullName      String?
   gender        String?
+  // Experience band chosen during onboarding (e.g. "0-6m", "1-3y"). Free-form
+  // string rather than a DB enum so bands can evolve without a schema migration.
+  experience    String?
   providerType  ProviderType
   status        PartnerStatus @default(DRAFT)
 

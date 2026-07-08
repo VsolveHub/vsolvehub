@@ -1,11 +1,79 @@
 "use client";
 
-import { useRef, useState } from "react";
+import {
+  createContext,
+  useActionState,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
-import { UploadCloud, Check, ArrowRight, AlertCircle } from "lucide-react";
+import { UploadCloud, Check, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 import { Button, cn } from "@vsolve/ui";
 import { validateUploadFile } from "@/lib/upload-rules";
+import { uploadToSignedUrl } from "@/lib/kyc-client";
+import { requestKycUpload, type StepState } from "@/app/onboarding/actions";
+
+// ── Upload coordination ──────────────────────────────────────────────────────
+// KYC files upload directly to storage the moment they're picked (see FileDrop).
+// This context lets the form's Submit button know when a required upload is
+// still missing or in flight, so it stays disabled until everything is ready —
+// no half-submitted applications, no waiting on a spinner after submit.
+
+type UploadStatus = "idle" | "uploading" | "done" | "error";
+
+type UploadCtxValue = {
+  register: (name: string, required: boolean) => void;
+  setStatus: (name: string, status: UploadStatus) => void;
+  /** True while any upload is in flight or a required upload is not yet done. */
+  blocked: boolean;
+  error?: string;
+};
+
+const UploadCtx = createContext<UploadCtxValue | null>(null);
+
+/**
+ * Drop-in replacement for a `<form action={serverAction}>` that also tracks the
+ * direct uploads inside it. Wrap each onboarding step's fields in this.
+ */
+export function UploadForm({
+  action,
+  children,
+  className,
+}: {
+  action: (prev: StepState, formData: FormData) => Promise<StepState>;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [state, formAction] = useActionState<StepState, FormData>(action, {});
+  const [fields, setFields] = useState<
+    Record<string, { required: boolean; status: UploadStatus }>
+  >({});
+
+  const register = useCallback((name: string, required: boolean) => {
+    setFields((f) => (f[name] ? f : { ...f, [name]: { required, status: "idle" } }));
+  }, []);
+  const setStatus = useCallback((name: string, status: UploadStatus) => {
+    setFields((f) => ({ ...f, [name]: { required: f[name]?.required ?? false, status } }));
+  }, []);
+
+  const values = Object.values(fields);
+  const uploading = values.some((f) => f.status === "uploading");
+  const missingRequired = values.some((f) => f.required && f.status !== "done");
+
+  return (
+    <UploadCtx.Provider
+      value={{ register, setStatus, blocked: uploading || missingRequired, error: state.error }}
+    >
+      <form action={formAction} className={className}>
+        {children}
+      </form>
+    </UploadCtx.Provider>
+  );
+}
 
 export function StepActions({
   submitLabel = "Next Step",
@@ -18,8 +86,9 @@ export function StepActions({
   requireTerms?: boolean;
 }) {
   const { pending } = useFormStatus();
+  const ctx = useContext(UploadCtx);
   const [accepted, setAccepted] = useState(false);
-  const blocked = pending || (requireTerms && !accepted);
+  const blocked = pending || (requireTerms && !accepted) || (ctx?.blocked ?? false);
 
   return (
     <div className="space-y-4 pt-2">
@@ -55,6 +124,11 @@ export function StepActions({
             .
           </span>
         </label>
+      ) : null}
+      {ctx?.error ? (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" /> {ctx.error}
+        </p>
       ) : null}
       <div className="flex items-center justify-end gap-3">
         <Link href={cancelHref}>
@@ -193,41 +267,85 @@ export function CheckboxCards({
   );
 }
 
+/**
+ * File picker that uploads the chosen file straight to Supabase Storage via a
+ * server-minted signed URL — the bytes never touch the server action, so large
+ * documents on slow mobile connections no longer stall or time out the submit.
+ * Only the resulting object path is submitted with the form (a hidden input).
+ * Registers with UploadForm so a `required` upload gates the Submit button.
+ */
 export function FileDrop({
   name,
+  docType,
   label,
   hint = "JPG, PNG or PDF up to 5MB",
   required = false,
   accept = "image/png,image/jpeg,application/pdf",
 }: {
   name: string;
+  /** KYC document type used to key the storage path (SELFIE, AADHAAR, …). */
+  docType: string;
   label: string;
   hint?: string;
   required?: boolean;
   accept?: string;
 }) {
+  const ctx = useContext(UploadCtx);
+  const [status, setStatus] = useState<UploadStatus>("idle");
   const [filename, setFilename] = useState<string | null>(null);
+  const [path, setPath] = useState("");
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  useEffect(() => {
+    ctx?.register(name, required);
+  }, [ctx, name, required]);
+
+  function fail(msg: string) {
+    setError(msg);
+    setStatus("error");
+    setPath("");
+    ctx?.setStatus(name, "error");
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     if (!file) {
       setFilename(null);
       setError(null);
+      setPath("");
+      setStatus("idle");
+      ctx?.setStatus(name, "idle");
       return;
     }
     const problem = validateUploadFile(file, { label: label.toLowerCase(), accept });
     if (problem) {
-      // Reject before submit: clear the picked file so it can't be sent.
-      setError(problem);
       setFilename(null);
-      if (inputRef.current) inputRef.current.value = "";
+      fail(problem);
       return;
     }
     setError(null);
     setFilename(file.name);
+    setStatus("uploading");
+    ctx?.setStatus(name, "uploading");
+    try {
+      const signed = await requestKycUpload(docType, file.name);
+      if (!signed.ok) {
+        fail(signed.error);
+        return;
+      }
+      await uploadToSignedUrl(signed.path, signed.token, file);
+      setPath(signed.path);
+      setStatus("done");
+      ctx?.setStatus(name, "done");
+    } catch {
+      fail("Upload failed — please check your connection and try again.");
+    }
   }
+
+  const uploading = status === "uploading";
+  const done = status === "done";
 
   return (
     <label className="block cursor-pointer">
@@ -239,7 +357,7 @@ export function FileDrop({
           "flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
           error
             ? "border-red-300 bg-red-50"
-            : filename
+            : done
               ? "border-brand-400 bg-brand-50"
               : "border-brand-200 bg-brand-50/40 hover:bg-brand-50",
         )}
@@ -250,9 +368,19 @@ export function FileDrop({
             error ? "bg-red-100 text-danger" : "bg-brand-100 text-brand-600",
           )}
         >
-          {error ? <AlertCircle className="h-6 w-6" /> : <UploadCloud className="h-6 w-6" />}
+          {error ? (
+            <AlertCircle className="h-6 w-6" />
+          ) : done ? (
+            <Check className="h-6 w-6" />
+          ) : uploading ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : (
+            <UploadCloud className="h-6 w-6" />
+          )}
         </span>
-        {filename ? (
+        {uploading ? (
+          <span className="text-sm font-semibold text-brand-700">Uploading…</span>
+        ) : done && filename ? (
           <span className="text-sm font-semibold text-brand-700">{filename}</span>
         ) : (
           <>
@@ -267,14 +395,17 @@ export function FileDrop({
           <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {error}
         </span>
       ) : null}
+      {/* The file input carries no `name`, so the raw file is never submitted —
+          only the uploaded object path (hidden input below) travels with the form. */}
       <input
         ref={inputRef}
-        name={name}
         type="file"
         accept={accept}
         className="hidden"
         onChange={handleChange}
+        disabled={uploading}
       />
+      <input type="hidden" name={name} value={path} />
     </label>
   );
 }
