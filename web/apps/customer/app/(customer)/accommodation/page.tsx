@@ -4,7 +4,7 @@ import { PropertyListingView } from "@/components/customer/accommodation/Propert
 
 export default function AccommodationPage() {
   return (
-    <div className="page-content">
+    <div className="page-content page-content--premium">
       <h1 className="page-title">Find your stay</h1>
       <p className="page-subtitle">Rooms, PG, hostels, apartments and more in Hyderabad.</p>
       <Suspense fallback={<LoadingState label="Loading accommodation…" />}>

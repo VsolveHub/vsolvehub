@@ -87,7 +87,7 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
   const noProviderFound = data.status === "NO_WORKER_FOUND";
   const searchingProvider = data.status === "PENDING" || data.status === "SEARCHING_PROVIDER";
   const actionPanel = data.marketplace ? (
-    <div className="mx-auto w-full max-w-md bg-white border-b border-purple-100 px-4 py-3 shadow-sm">
+    <div className="mx-auto w-full flow-page-shell__inner bg-white border-b border-purple-100 px-4 py-3 shadow-sm">
       {searchingProvider && (
         <p className="text-xs font-semibold text-purple-900 m-0">
           Request sent to nearby partners. Payment will open only after a partner accepts.

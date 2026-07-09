@@ -24,6 +24,9 @@ export default async function ProfileSavedPage() {
       <ProfileSavedSummary count={services.length} />
       {services.length === 0 ? (
         <div className="empty-state">
+          <div className="empty-state-icon" aria-hidden>
+            ⭐
+          </div>
           <p>No saved services yet.</p>
           <Link href="/services" className="btn btn-primary">
             Explore services

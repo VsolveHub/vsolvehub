@@ -25,7 +25,13 @@ export function BookingFlow({ serviceId }: Props) {
   const service = data?.services?.find((s) => s.id === serviceId) ?? null;
 
   if (isLoading) {
-    return <LoadingState label="Loading booking details…" variant="inline" />;
+    return (
+      <div className="flow-page-shell">
+        <div className="flow-page-shell__inner flex items-center justify-center p-8">
+          <LoadingState label="Loading booking details…" variant="inline" />
+        </div>
+      </div>
+    );
   }
   if (!service) {
     return <div className="alert alert-error">Service not found.</div>;

@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { getApiErrorMessage } from "@/lib/validation/api-error";
 import { normalizePhone, phoneValidationMessage } from "@/lib/validation/phone";
+import { qk } from "@/lib/query/keys";
 
 type OtpFormProps = {
   redirectTo?: string;
@@ -13,6 +15,7 @@ type OtpFormProps = {
 
 export function OtpForm({ redirectTo = "/booking" }: OtpFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"phone" | "otp">("phone");
@@ -66,6 +69,7 @@ export function OtpForm({ redirectTo = "/booking" }: OtpFormProps) {
       setLoading(false);
       return;
     }
+    await queryClient.invalidateQueries({ queryKey: qk.session() });
     router.push(redirectTo);
     router.refresh();
   }

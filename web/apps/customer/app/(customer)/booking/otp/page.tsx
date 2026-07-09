@@ -23,6 +23,11 @@ export default async function BookingOtpPage({ searchParams }: PageProps) {
         </p>
         <OtpForm redirectTo={redirectTo ?? "/booking"} />
       </div>
+      <div className="auth-trust-row" aria-hidden>
+        <span className="auth-trust-badge">🔒 Secure OTP</span>
+        <span className="auth-trust-badge">✓ Verified pros</span>
+        <span className="auth-trust-badge">⚡ Instant booking</span>
+      </div>
     </div>
   );
 }

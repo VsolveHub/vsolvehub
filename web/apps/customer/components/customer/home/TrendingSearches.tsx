@@ -3,7 +3,7 @@ import { TRENDING_SEARCHES } from "@/lib/catalog/display-catalog";
 
 export function TrendingSearches() {
   return (
-    <section className="home-section home-trending">
+    <div className="home-trending">
       <h2 className="home-section-title">Trending services</h2>
       <div className="home-chip-row home-chip-row--scroll">
         {TRENDING_SEARCHES.map((item) => (
@@ -12,6 +12,6 @@ export function TrendingSearches() {
           </Link>
         ))}
       </div>
-    </section>
+    </div>
   );
 }

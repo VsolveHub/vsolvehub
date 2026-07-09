@@ -2,7 +2,7 @@ import { HOW_IT_WORKS } from "@/lib/catalog/display-catalog";
 
 export function HomeHowItWorks() {
   return (
-    <section className="home-section" aria-labelledby="home-how-heading">
+    <div className="home-how-wrapper" aria-labelledby="home-how-heading">
       <h2 id="home-how-heading" className="home-section-title">
         How it works
       </h2>
@@ -19,6 +19,6 @@ export function HomeHowItWorks() {
           </li>
         ))}
       </ol>
-    </section>
+    </div>
   );
 }

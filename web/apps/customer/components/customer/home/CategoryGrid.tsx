@@ -19,11 +19,11 @@ export function CategoryGrid({ categories }: { categories: Category[] }) {
           <Link
             key={cat.slug}
             href={`/services/${cat.slug}`}
-            className="category-tile"
-            style={{ "--cat-color": color } as CSSProperties}
+            className="category-tile hover-lift glass-panel"
+            style={{ "--cat-color": color, borderRadius: "16px" } as CSSProperties}
           >
             <span className="category-icon-wrap" aria-hidden>
-              <CategoryIcon slug={cat.slug} icon={cat.icon} size={24} color={color} />
+              <CategoryIcon slug={cat.slug} name={cat.name} size={40} />
             </span>
             <span className="category-name">{cat.name}</span>
           </Link>

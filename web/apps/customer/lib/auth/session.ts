@@ -44,21 +44,26 @@ export async function getServerSession(): Promise<SessionUser | null> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
-    where: { token },
-    include: { user: true },
-  });
+  try {
+    const session = await prisma.session.findUnique({
+      where: { token },
+      include: { user: true },
+    });
 
-  if (!session || session.expiresAt < new Date()) {
-    if (session) await prisma.session.delete({ where: { id: session.id } });
+    if (!session || session.expiresAt < new Date()) {
+      if (session) await prisma.session.delete({ where: { id: session.id } });
+      return null;
+    }
+
+    return {
+      id: session.user.id,
+      phone: session.user.phone,
+      name: session.user.name,
+    };
+  } catch {
+    // DB unavailable — treat as logged out instead of crashing pages.
     return null;
   }
-
-  return {
-    id: session.user.id,
-    phone: session.user.phone,
-    name: session.user.name,
-  };
 }
 
 export async function findOrCreateUser(phone: string) {

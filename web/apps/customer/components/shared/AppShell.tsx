@@ -14,8 +14,11 @@ import {
   PlusIcon,
   MessagesIcon,
   ProfileIcon,
+  CartIcon,
+  MenuIcon,
 } from "@/components/ui/AppIcons";
 import { CustomerNotificationBell } from "@/components/notifications/CustomerNotificationBell";
+import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import {
   DEFAULT_LOCATION_LABEL,
   LocationError,
@@ -31,10 +34,12 @@ export function AppHeader() {
   const [displayLocation, setDisplayLocation] = useState(DEFAULT_LOCATION_LABEL);
   const [showAddrModal, setShowAddrModal] = useState(false);
   const [autoDetect, setAutoDetect] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const isBookingPage = pathname.startsWith("/booking");
   const isProfilePage = pathname.startsWith("/profile");
   const isNotificationPage = pathname.startsWith("/notifications");
+  const isServiceDetailPage = pathname.startsWith("/services/") && pathname.split("/").length > 3;
   const hideSearchLocation = isBookingPage || isProfilePage || isNotificationPage;
   const isHome = pathname === "/";
 
@@ -57,8 +62,26 @@ export function AppHeader() {
     };
 
     window.addEventListener("location_updated", handleLocationUpdate);
-    return () => window.removeEventListener("location_updated", handleLocationUpdate);
+    const openLocation = () => setShowAddrModal(true);
+    window.addEventListener("open_location_modal", openLocation);
+    return () => {
+      window.removeEventListener("location_updated", handleLocationUpdate);
+      window.removeEventListener("open_location_modal", openLocation);
+    };
   }, [isHome]);
+
+  useEffect(() => {
+    setShowMobileMenu(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!showMobileMenu) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [showMobileMenu]);
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -70,50 +93,59 @@ export function AppHeader() {
     <>
       <header className={`app-header ${hideSearchLocation ? "app-header--compact" : ""}`}>
         <div className="app-header-top">
+          <button
+            type="button"
+            className="header-menu-btn"
+            onClick={() => setShowMobileMenu(true)}
+            aria-label="Open menu"
+          >
+            <MenuIcon size={20} />
+          </button>
+
           <Link href="/" className="brand-logo">
             <img src="/logo-mark.png" alt="V Solve Hub" className="brand-mark" />
             <span className="brand-text">
-              <span className="brand-name">V SOLVE HUB</span>
-              <span className="brand-tagline">ONE APP, ALL SOLUTIONS</span>
+              <span className="brand-name">Vsolve Hub</span>
             </span>
           </Link>
 
+          <nav className="desktop-nav-links">
+            <Link href="/" className={pathname === "/" ? "active" : ""}>Find Services</Link>
+            <Link href="/profile/bookings" className={pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking") ? "active" : ""}>My Bookings</Link>
+            <Link href="/support" className={pathname.startsWith("/support") ? "active" : ""}>Support</Link>
+          </nav>
+
           <div className="header-actions">
-            <CustomerNotificationBell />
-            <div className="wallet-pill">
-              <WalletIcon />
-              <span>₹1,250</span>
-            </div>
+            {!hideSearchLocation && (
+              <button type="button" className="location-bar-clean" onClick={() => setShowAddrModal(true)}>
+                <PinIcon size={14} />
+                <span>{displayLocation}</span>
+                <ChevronDownIcon size={12} />
+              </button>
+            )}
+            <Link href="/cart" className="header-cart-icon">
+              <CartIcon size={20} />
+              <span className="cart-badge">1</span>
+            </Link>
+            <Link href="/profile" className="profile-avatar-mini">
+              <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Felix&backgroundColor=f3f4f6" alt="Profile" />
+            </Link>
           </div>
         </div>
 
-        {!hideSearchLocation && (
-          <>
-            <button type="button" className="location-bar" onClick={() => setShowAddrModal(true)}>
-              <PinIcon />
-              <span>{displayLocation}</span>
-              <ChevronDownIcon />
+        {isServiceDetailPage && (
+          <div className="header-inline-back">
+            <button type="button" className="header-back-btn" onClick={() => router.back()} aria-label="Go back">
+              ←
             </button>
-
-            <form className="m3-search-bar" onSubmit={handleSearch}>
-              <span className="m3-search-bar__leading" aria-hidden>
-                <HeaderSearchIcon />
-              </span>
-              <input
-                type="search"
-                className="m3-search-bar__input"
-                placeholder="Search services"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="Search for services"
-              />
-              <button type="submit" className="m3-search-bar__submit" aria-label="Search">
-                <HeaderSearchIcon />
-              </button>
-            </form>
-          </>
+            <span className="header-back-label">Back</span>
+          </div>
         )}
       </header>
+
+      {showMobileMenu && (
+        <MobileNavDrawer pathname={pathname} onClose={() => setShowMobileMenu(false)} />
+      )}
 
       {showAddrModal && (
         <AddressModal
@@ -126,6 +158,68 @@ export function AppHeader() {
         />
       )}
     </>
+  );
+}
+
+const MOBILE_NAV_LINKS = [
+  { href: "/", label: "Home", icon: HomeIcon, match: (p: string) => p === "/" },
+  { href: "/services", label: "Find Services", icon: HeaderSearchIcon, match: (p: string) => p.startsWith("/services") },
+  { href: "/profile/bookings", label: "My Bookings", icon: BookingsIcon, match: (p: string) => p.startsWith("/profile/bookings") || p.startsWith("/booking") },
+  { href: "/profile/messages", label: "Messages", icon: MessagesIcon, match: (p: string) => p.startsWith("/profile/messages") },
+  { href: "/notifications", label: "Notifications", icon: BellIcon, match: (p: string) => p.startsWith("/notifications") },
+  { href: "/support", label: "Support", icon: SupportNavIcon, match: (p: string) => p.startsWith("/support") },
+  { href: "/profile", label: "Profile", icon: ProfileIcon, match: (p: string) => p.startsWith("/profile") && !p.startsWith("/profile/bookings") && !p.startsWith("/profile/messages") },
+] as const;
+
+function SupportNavIcon({ size = 20 }: { size?: number; active?: boolean }) {
+  return <FlaticonIcon name="headset" size={size} />;
+}
+
+function MobileNavDrawer({ pathname, onClose }: { pathname: string; onClose: () => void }) {
+  return (
+    <div className="mobile-nav-backdrop" onClick={onClose} role="presentation">
+      <aside
+        className="mobile-nav-drawer"
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Navigation menu"
+      >
+        <div className="mobile-nav-drawer__head">
+          <div className="mobile-nav-drawer__brand">
+            <img src="/logo-mark.png" alt="" className="brand-mark" />
+            <span>Vsolve Hub</span>
+          </div>
+          <button type="button" className="mobile-nav-drawer__close" onClick={onClose} aria-label="Close menu">
+            &times;
+          </button>
+        </div>
+
+        <nav className="mobile-nav-drawer__links">
+          {MOBILE_NAV_LINKS.map((item) => {
+            const active = item.match(pathname);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`mobile-nav-drawer__link${active ? " active" : ""}`}
+                onClick={onClose}
+              >
+                <span className="mobile-nav-drawer__link-icon">
+                  <Icon size={20} active={active} />
+                </span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mobile-nav-drawer__footer">
+          <Link href="/services" className="mobile-nav-drawer__cta" onClick={onClose}>
+            Book a service
+          </Link>
+        </div>
+      </aside>
+    </div>
   );
 }
 

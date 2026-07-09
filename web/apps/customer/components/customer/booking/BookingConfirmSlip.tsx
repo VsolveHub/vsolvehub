@@ -44,7 +44,8 @@ export function BookingConfirmSlip({
 }: Props) {
   if (isTeam) {
     return (
-      <div className="w-full md:max-w-md md:mx-auto min-h-screen bg-gray-50 flex flex-col relative pb-24 md:shadow-lg md:border md:border-gray-100 md:rounded-3xl overflow-hidden">
+      <div className="flow-page-shell">
+        <div className="flow-page-shell__inner">
         {/* Header Bar */}
         <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 text-purple-900 shadow-sm select-none">
           <Link href="/" className="text-xl leading-none text-purple-800 hover:text-purple-955 cursor-pointer no-underline">
@@ -130,17 +131,20 @@ export function BookingConfirmSlip({
         </div>
 
         {/* Sticky Actions */}
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 bg-white border-t border-gray-100 shadow-lg flex gap-3 z-50">
+        <div className="flow-page-shell__footer flex gap-3">
           <Link href={trackHref} className="block w-full py-3 bg-purple-900 hover:bg-purple-950 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center no-underline">
             Track Project Status →
           </Link>
+        </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full md:max-w-md md:mx-auto min-h-screen bg-gray-50 p-4 pb-20 flex flex-col gap-5 md:rounded-3xl overflow-hidden md:shadow-lg md:border md:border-gray-100">
+    <div className="flow-page-shell">
+      <div className="flow-page-shell__inner">
+        <div className="flow-page-shell__body gap-5">
       {/* Success Animation Ring & Titles */}
       <div className="flex flex-col items-center text-center gap-3 mt-4">
         <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-3xl shadow-sm animate-bounce">
@@ -213,13 +217,15 @@ export function BookingConfirmSlip({
         </footer>
       </article>
 
-      <div className="flex flex-col gap-2 mt-2">
+      <div className="flow-page-shell__footer flex flex-col gap-2">
         <Link href={trackHref} className="block w-full py-3 bg-purple-800 hover:bg-purple-900 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition-all text-center no-underline">
           {trackLabel}
         </Link>
         <Link href={secondaryHref} className="block w-full py-3 border border-gray-200 text-gray-700 hover:bg-gray-100 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center no-underline">
           {secondaryLabel}
         </Link>
+      </div>
+        </div>
       </div>
     </div>
   );

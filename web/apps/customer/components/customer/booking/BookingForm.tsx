@@ -64,6 +64,7 @@ export function BookingForm({ serviceId }: BookingFormProps) {
   const [newAddress, setNewAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [formStep, setFormStep] = useState<1 | 2 | 3>(1);
 
   useEffect(() => {
     async function load() {
@@ -127,80 +128,242 @@ export function BookingForm({ serviceId }: BookingFormProps) {
     router.push(`/booking/confirm?ref=${data.bookingRef}`);
   }
 
+  const selectedAddrObj = useMemo(() => addresses.find((a) => a.id === selectedAddress), [addresses, selectedAddress]);
+  const selectedSlotObj = useMemo(() => slots.find((s) => s.value === selectedSlot), [slots, selectedSlot]);
+
   if (!service) {
     return <LoadingState label="Loading service details…" variant="inline" />;
   }
 
+  // Cost calculation details
+  const basePrice = service.pricePaise;
+  const platformFee = 2000; // ₹20.00
+  const gstTax = Math.round(basePrice * 0.18); // 18% GST
+  const totalAmount = basePrice + platformFee + gstTax;
+
   return (
-    <div className="stack-lg">
-      <div className="card">
-        <div className="service-card-header">
-          <span className="service-card-icon">
-            <FlaticonIcon name={service.category.icon} size={28} color="var(--color-brand)" />
-          </span>
-          <div>
-            <h2 className="card-title">{service.name}</h2>
-            <p className="card-price">{formatPrice(service.pricePaise)}{service.unit === "day" ? "/day" : ""}</p>
+    <div className="booking-wizard">
+      {/* Top Stepper Indicator */}
+      <div className="wizard-stepper">
+        <div className={`step-node ${formStep >= 1 ? "active" : ""}`}>
+          <span className="step-num">{formStep > 1 ? "✓" : "1"}</span>
+          <span className="step-label">Location</span>
+        </div>
+        <div className="step-divider" />
+        <div className={`step-node ${formStep >= 2 ? "active" : ""}`}>
+          <span className="step-num">{formStep > 2 ? "✓" : "2"}</span>
+          <span className="step-label">Slot</span>
+        </div>
+        <div className="step-divider" />
+        <div className={`step-node ${formStep === 3 ? "active" : ""}`}>
+          <span className="step-num">3</span>
+          <span className="step-label">Confirm</span>
+        </div>
+      </div>
+
+      <div className="wizard-layout-grid">
+        <div className="wizard-main-col">
+          {/* STEP 1: Address selection */}
+          {formStep === 1 && (
+            <div className="stack-lg">
+              <div className="card">
+                <div className="service-card-header">
+                  <span className="service-card-icon">
+                    <FlaticonIcon name={service.category.icon} size={24} color="var(--color-brand)" />
+                  </span>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Selected service</span>
+                    <h2 className="card-title text-sm">{service.name}</h2>
+                    <p className="card-price text-xs font-bold text-gray-800">{formatPrice(service.pricePaise)}{service.unit === "day" ? "/day" : ""}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card stack">
+                <div className="flex-between">
+                  <h2 className="section-title text-xs font-bold" style={{ margin: 0 }}>
+                    Select delivery address
+                  </h2>
+                  <Button variant="secondary" size="sm" onClick={() => setShowNewAddress(!showNewAddress)}>
+                    {showNewAddress ? "Cancel" : "Add new"}
+                  </Button>
+                </div>
+
+                <div className="address-options-list">
+                  {addresses.map((addr) => (
+                    <button
+                      key={addr.id}
+                      type="button"
+                      className={`card address-card ${selectedAddress === addr.id ? "selected" : ""}`}
+                      onClick={() => setSelectedAddress(addr.id)}
+                    >
+                      <p className="address-label font-bold text-xs">
+                        {addr.label} {addr.isDefault && <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">(Default)</span>}
+                      </p>
+                      <p className="address-text text-[11px] text-gray-500 mt-1">{addr.fullAddress}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {showNewAddress && (
+                  <div className="stack border-t border-gray-100 pt-3 mt-1">
+                    <Input label="Address tag label" placeholder="e.g. Home, Office, Rent Room" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
+                    <Textarea label="Full address details" placeholder="Flat number, building, landmark, area, city, pincode" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
+                    <Button onClick={addAddress} disabled={!newLabel || newAddress.length < 10}>
+                      Save Address
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <Button
+                disabled={!selectedAddress}
+                onClick={() => setFormStep(2)}
+                block
+              >
+                Continue to select slot →
+              </Button>
+            </div>
+          )}
+
+          {/* STEP 2: Slot Selection */}
+          {formStep === 2 && (
+            <div className="stack-lg">
+              <div className="card stack">
+                <h2 className="section-title text-xs font-bold">Select time slot</h2>
+                <div className="slot-grid">
+                  {slots.map((slot) => (
+                    <button
+                      key={slot.value}
+                      type="button"
+                      className={`slot-option ${selectedSlot === slot.value ? "selected" : ""}`}
+                      onClick={() => setSelectedSlot(slot.value)}
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="wizard-actions-row">
+                <Button variant="secondary" onClick={() => setFormStep(1)}>
+                  Back
+                </Button>
+                <Button
+                  disabled={!selectedSlot}
+                  onClick={() => setFormStep(3)}
+                  style={{ flexGrow: 1 }}
+                >
+                  Review details →
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Review & Summary */}
+          {formStep === 3 && (
+            <div className="stack-lg">
+              {/* Details Summary */}
+              <div className="card stack gap-sm">
+                <h2 className="section-title text-xs font-bold m-0 border-b border-gray-100 pb-2">Booking details</h2>
+                
+                <div className="review-item">
+                  <span className="review-label">Service</span>
+                  <span className="review-val font-bold">{service.name}</span>
+                </div>
+                <div className="review-item">
+                  <span className="review-label">Time slot</span>
+                  <span className="review-val font-bold text-purple-700">{selectedSlotObj?.label}</span>
+                </div>
+                <div className="review-item">
+                  <span className="review-label">Address</span>
+                  <span className="review-val text-gray-600">{selectedAddrObj?.fullAddress}</span>
+                </div>
+              </div>
+
+              {/* Price breakdown card */}
+              <div className="card stack gap-sm bg-purple-50/40 border border-purple-100 md:hidden">
+                <h2 className="section-title text-xs font-bold m-0 border-b border-purple-100/60 pb-2">Pricing breakdown</h2>
+                
+                <div className="review-item text-xs">
+                  <span className="review-label text-gray-500">Service cost</span>
+                  <span className="review-val">{formatPrice(basePrice)}</span>
+                </div>
+                <div className="review-item text-xs">
+                  <span className="review-label text-gray-500">Platform fee</span>
+                  <span className="review-val">{formatPrice(platformFee)}</span>
+                </div>
+                <div className="review-item text-xs">
+                  <span className="review-label text-gray-500">GST &amp; Taxes (18%)</span>
+                  <span className="review-val">{formatPrice(gstTax)}</span>
+                </div>
+                <div className="review-item border-t border-purple-100 pt-2 font-bold text-sm text-purple-950">
+                  <span className="review-label">Total payable</span>
+                  <span className="review-val">{formatPrice(totalAmount)}</span>
+                </div>
+              </div>
+
+              {error && <div className="alert alert-error">{error}</div>}
+
+              <div className="wizard-actions-row">
+                <Button variant="secondary" onClick={() => setFormStep(2)} disabled={loading}>
+                  Back
+                </Button>
+                <Button onClick={confirmBooking} loading={loading} disabled={loading} style={{ flexGrow: 1 }}>
+                  Confirm booking
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Persistent Summary Sidebar for Desktop */}
+        <aside className="wizard-sidebar-col">
+          <div className="card stack gap-sm sticky-sidebar-card">
+            <h3 className="text-xs font-black uppercase tracking-wider text-purple-900 border-b border-gray-150 pb-2 m-0">
+              Booking Summary
+            </h3>
+            
+            <div className="review-item">
+              <span className="review-label">Service</span>
+              <span className="review-val font-bold text-gray-900">{service.name}</span>
+            </div>
+
+            {selectedAddrObj && (
+              <div className="review-item">
+                <span className="review-label">Location</span>
+                <span className="review-val truncate text-gray-600">{selectedAddrObj.label}</span>
+              </div>
+            )}
+
+            {selectedSlotObj && (
+              <div className="review-item">
+                <span className="review-label">Time slot</span>
+                <span className="review-val text-purple-700 font-bold">{selectedSlotObj.label}</span>
+              </div>
+            )}
+
+            <div className="border-t border-dashed border-gray-200 pt-3 mt-1 stack gap-xs">
+              <div className="flex-between text-xs text-gray-500">
+                <span>Base price</span>
+                <span>{formatPrice(basePrice)}</span>
+              </div>
+              <div className="flex-between text-xs text-gray-500">
+                <span>Platform fee</span>
+                <span>{formatPrice(platformFee)}</span>
+              </div>
+              <div className="flex-between text-xs text-gray-500">
+                <span>Taxes &amp; GST (18%)</span>
+                <span>{formatPrice(gstTax)}</span>
+              </div>
+              <div className="flex-between font-extrabold text-sm text-purple-950 border-t border-gray-200 pt-2 mt-1">
+                <span>Total amount</span>
+                <span>{formatPrice(totalAmount)}</span>
+              </div>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
-
-      <div className="card stack">
-        <h2 className="section-title">Select time slot</h2>
-        <div className="slot-grid">
-          {slots.map((slot) => (
-            <button
-              key={slot.value}
-              type="button"
-              className={`slot-option ${selectedSlot === slot.value ? "selected" : ""}`}
-              onClick={() => setSelectedSlot(slot.value)}
-            >
-              {slot.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="card stack">
-        <div className="flex-between">
-          <h2 className="section-title" style={{ margin: 0 }}>
-            Delivery address
-          </h2>
-          <Button variant="secondary" size="sm" onClick={() => setShowNewAddress(!showNewAddress)}>
-            {showNewAddress ? "Cancel" : "Add new"}
-          </Button>
-        </div>
-
-        {addresses.map((addr) => (
-          <button
-            key={addr.id}
-            type="button"
-            className={`card address-card ${selectedAddress === addr.id ? "selected" : ""}`}
-            onClick={() => setSelectedAddress(addr.id)}
-          >
-            <p className="address-label">
-              {addr.label} {addr.isDefault && <span className="text-sm text-muted">(Default)</span>}
-            </p>
-            <p className="address-text">{addr.fullAddress}</p>
-          </button>
-        ))}
-
-        {showNewAddress && (
-          <div className="stack">
-            <Input label="Label" placeholder="Home, Work…" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
-            <Textarea label="Full address" placeholder="Street, area, city, pincode" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
-            <Button onClick={addAddress} disabled={!newLabel || newAddress.length < 10}>
-              Save address
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-
-      <Button onClick={confirmBooking} loading={loading} disabled={loading} block>
-        Confirm booking
-      </Button>
     </div>
   );
 }

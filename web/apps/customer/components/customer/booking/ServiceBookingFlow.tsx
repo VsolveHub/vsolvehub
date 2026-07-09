@@ -9,10 +9,11 @@
 // searching → pay-after-accept → live tracking sequence.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatPrice } from "@/lib/format";
+import { FlowPageHeader, FlowPageShell } from "@/components/shared/FlowPageShell";
 import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
 import {
@@ -21,6 +22,9 @@ import {
   toDetailPairs,
   type DetailField,
 } from "@/lib/catalog/service-config";
+import { ServiceIcon } from "@/components/ui/ServiceIcons";
+import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
+import { getServiceCardMeta } from "@/lib/catalog/service-card-meta";
 
 export type FlowService = {
   id: string;
@@ -52,6 +56,22 @@ type Provider = {
 
 type Step = "service" | "guidelines" | "when" | "details" | "provider";
 
+const BOOKING_RESUME_KEY = "vsolve:booking-flow-resume";
+
+type BookingResumeState = {
+  step: Step;
+  selectedServiceId: string;
+  scheduleType: "instant" | "scheduled";
+  dateKey: string;
+  timeSlot: string;
+  detailValues: Record<string, string | number>;
+  note: string;
+  photos: string[];
+  providerChoice: string;
+  addressId: string;
+  autoSubmit?: boolean;
+};
+
 type Props = {
   services: FlowService[];
   categorySlug: string;
@@ -76,8 +96,18 @@ function nextDays(count: number) {
   return out;
 }
 
+const FLOW_STEPS: { key: Step; label: string }[] = [
+  { key: "service", label: "Select" },
+  { key: "guidelines", label: "Scope" },
+  { key: "when", label: "Slot" },
+  { key: "details", label: "Address" },
+  { key: "provider", label: "Confirm" },
+];
+
 export function ServiceBookingFlow({ services, categorySlug, categoryName, initialServiceId }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const resumedRef = useRef(false);
 
   const singleService = services.length === 1;
   const [selectedServiceId, setSelectedServiceId] = useState(
@@ -122,6 +152,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   const [uploading, setUploading] = useState(false);
   const [providerChoice, setProviderChoice] = useState<string>("auto"); // "auto" | partnerId
   const [error, setError] = useState("");
+  const [pendingSubmit, setPendingSubmit] = useState(false);
 
   const days = useMemo(() => nextDays(5), []);
 
@@ -148,11 +179,63 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   });
   const providers = providerData?.providers ?? [];
 
-  function requireLoginThen(next: () => void) {
-    if (isLoggedIn) return next();
+  function buildResumeState(overrides: Partial<BookingResumeState> & { step: Step }): BookingResumeState {
+    return {
+      selectedServiceId,
+      scheduleType,
+      dateKey,
+      timeSlot,
+      detailValues,
+      note,
+      photos,
+      providerChoice,
+      addressId,
+      ...overrides,
+    };
+  }
+
+  async function requireLoginThen(next: () => void, resume: BookingResumeState) {
+    const latest = await queryClient.fetchQuery({ queryKey: qk.session(), queryFn: api.session });
+    if (latest?.user) return next();
+    try {
+      sessionStorage.setItem(BOOKING_RESUME_KEY, JSON.stringify(resume));
+    } catch {
+      /* private browsing */
+    }
     const target = window.location.pathname + window.location.search;
     router.push(`/booking/otp?redirect=${encodeURIComponent(target)}`);
   }
+
+  // After OTP (or a stale session cache), restore the step the customer was on.
+  useEffect(() => {
+    if (!isLoggedIn || resumedRef.current) return;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem(BOOKING_RESUME_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(BOOKING_RESUME_KEY);
+    } catch {
+      return;
+    }
+
+    try {
+      const saved = JSON.parse(raw) as BookingResumeState;
+      resumedRef.current = true;
+      if (saved.selectedServiceId) setSelectedServiceId(saved.selectedServiceId);
+      setStep(saved.step);
+      setScheduleType(saved.scheduleType);
+      setDateKey(saved.dateKey);
+      setTimeSlot(saved.timeSlot);
+      setDetailValues(saved.detailValues);
+      setNote(saved.note);
+      setPhotos(saved.photos);
+      setProviderChoice(saved.providerChoice);
+      if (saved.addressId) setAddressId(saved.addressId);
+      if (saved.autoSubmit) setPendingSubmit(true);
+    } catch {
+      /* corrupt resume payload */
+    }
+  }, [isLoggedIn]);
 
   async function handlePhotoUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -209,6 +292,17 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     });
   }
 
+  useEffect(() => {
+    if (!pendingSubmit || !service || !addressId) return;
+    setPendingSubmit(false);
+    submit();
+  }, [pendingSubmit, service, addressId]);
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
+
   function back() {
     const order: Step[] = ["service", "guidelines", "when", "details", "provider"];
     const i = order.indexOf(step);
@@ -225,113 +319,305 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       ? service?.subCategory?.name ?? categoryName
       : service?.name ?? categoryName;
 
-  return (
-    <div className="w-full md:max-w-md md:mx-auto min-h-screen bg-gray-50 flex flex-col relative pb-28 md:shadow-lg md:border md:border-gray-100 md:rounded-3xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-purple-900 text-white shadow-sm select-none sticky top-0 z-30">
-        <button type="button" onClick={back} className="text-xl leading-none text-purple-200 hover:text-white">
-          ←
-        </button>
-        <span className="font-semibold text-sm truncate">{title}</span>
-      </div>
+  const stepper = (
+    <div className="flow-page-stepper">
+      {FLOW_STEPS.map((s, i) => (
+        <Fragment key={s.key}>
+          {i > 0 ? <span className="flow-page-stepper__sep" aria-hidden>›</span> : null}
+          <div className={`flow-page-stepper__item ${step === s.key ? "is-active" : ""}`}>
+            <span className="flow-page-stepper__dot">{i + 1}</span>
+            <span>{s.label}</span>
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  );
 
-      <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
+  const taxAmount = Math.round(service ? service.pricePaise * 0.18 : 0);
+  const totalPayable = service ? service.pricePaise + taxAmount : 0;
+  
+  const summaryAside =
+    service ? (
+      <div className="flow-summary-card-v3">
+        <p className="summary-title-v3">BOOKING SUMMARY</p>
+        <h2 className="summary-service-name">{service.name}</h2>
+        <p className="summary-price-v3">
+          {step === 'provider' ? 'Starting from ' : 'From '} 
+          <strong>{formatPrice(service.pricePaise)}</strong>
+        </p>
+        <p className="summary-desc-v3">{config.guidelines.summary}</p>
+        
+        <div className="summary-pills-v3">
+          <span className="summary-pill active">⚡ INSTANT</span>
+          {service.duration > 0 && (
+            <span className="summary-pill">⏱ ~{Math.max(1, Math.round(service.duration / 60))} HR</span>
+          )}
+        </div>
+        
+        <div className="summary-breakdown-v3">
+          <div className="summary-row">
+            <span>Service base price</span>
+            <strong>{formatPrice(service.pricePaise)}</strong>
+          </div>
+          {step === 'details' ? (
+            <>
+              <div className="summary-row">
+                <span>Tax & Fees</span>
+                <strong>{formatPrice(taxAmount)}</strong>
+              </div>
+              <div className="summary-row total-row">
+                <span>Total Payable</span>
+                <strong>{formatPrice(totalPayable)}</strong>
+              </div>
+            </>
+          ) : step === 'provider' ? (
+            <>
+              <div className="summary-row">
+                <span>Platform Fee</span>
+                <strong className="text-green-600">FREE</strong>
+              </div>
+              <div className="summary-row total-row">
+                <span>Total to Pay</span>
+                <strong>{formatPrice(service.pricePaise)}</strong>
+              </div>
+            </>
+          ) : (
+            <div className="summary-row text-xs">
+              <span>Estimated Taxes</span>
+              <strong>Calculated at checkout</strong>
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null;
+
+  const customHeader = (
+    <div className="flow-step-header-v3">
+      <div className="flow-header-top">
+        <button className="flow-back-btn" onClick={back}>←</button>
+        <div className="flow-header-title-box">
+          <h1>{categoryName}</h1>
+          <div className="flow-breadcrumbs">
+            Services <span>›</span> <strong>{categoryName}</strong>
+          </div>
+        </div>
+      </div>
+      <div className="flow-progress-bar-v3">
+        <div className={`progress-step ${step === 'service' ? 'active' : 'done'}`}>
+          <div className="step-circle">1</div>
+          <span>Select</span>
+        </div>
+        <div className="step-divider">›</div>
+        <div className={`progress-step ${step === 'guidelines' ? 'active' : (['when', 'details', 'provider'].includes(step) ? 'done' : '')}`}>
+          <div className="step-circle">2</div>
+          <span>Scope</span>
+        </div>
+        <div className="step-divider">›</div>
+        <div className={`progress-step ${step === 'when' ? 'active' : (['details', 'provider'].includes(step) ? 'done' : '')}`}>
+          <div className="step-circle">3</div>
+          <span>Slot</span>
+        </div>
+        <div className="step-divider">›</div>
+        <div className={`progress-step ${step === 'details' ? 'active' : (step === 'provider' ? 'done' : '')}`}>
+          <div className="step-circle">4</div>
+          <span>Address</span>
+        </div>
+        <div className="step-divider">›</div>
+        <div className={`progress-step ${step === 'provider' ? 'active' : ''}`}>
+          <div className="step-circle">5</div>
+          <span>Confirm</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <FlowPageShell
+      header={customHeader}
+      stepper={null}
+      aside={step !== 'service' ? summaryAside : null}
+      footer={null}
+    >
         {error && <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-2">{error}</div>}
 
         {/* STEP: choose specific service */}
         {step === "service" && (
-          <div className="flex flex-col gap-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">Select a service</p>
-            {services.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  setSelectedServiceId(s.id);
-                  setStep("guidelines");
-                }}
-                className="text-left bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3 hover:border-purple-300 transition"
-              >
-                <div>
-                  <p className="font-bold text-sm text-gray-900 m-0">{s.name}</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5 m-0">{s.description}</p>
-                  <p className="text-xs font-bold text-purple-800 mt-1 m-0">
-                    From {formatPrice(s.pricePaise)}
-                  </p>
+          <div className="flow-step-service-v3">
+            <h2 className="flow-step-title">SELECT A SERVICE</h2>
+            <div className="flow-service-list-v3">
+              {services.map((s) => {
+                const isRecommended = s.name.toLowerCase().includes("deep") || s.name.toLowerCase().includes("premium");
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedServiceId(s.id);
+                      setStep("guidelines");
+                    }}
+                    className={`flow-service-card-v3 ${isRecommended ? 'recommended' : ''}`}
+                  >
+                    {isRecommended && (
+                      <div className="card-rec-badge">
+                        <span>Recommended</span>
+                        <div className="rec-check">✓</div>
+                      </div>
+                    )}
+                    <div className="card-img-col">
+                      <ServiceSketchImage
+                        slug={s.slug}
+                        subCategorySlug={s.subCategory?.slug ?? s.slug}
+                        categorySlug={s.category.slug}
+                        serviceName={s.name}
+                        variant="card"
+                        alt={s.name}
+                      />
+                    </div>
+                    <div className="card-info-col">
+                      <div className="card-info-top">
+                        <h3 className="card-title">{s.name}</h3>
+                        {!isRecommended && <span className="trending-badge">Trending</span>}
+                      </div>
+                      <p className="card-desc">{s.description}</p>
+                      <div className="card-info-bottom">
+                        <div className="card-price">From {formatPrice(s.pricePaise)}</div>
+                        {isRecommended ? (
+                          <div className="card-select-btn">Select</div>
+                        ) : (
+                          <div className="card-arrow">›</div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="expertpass-banner">
+              <div className="ep-content">
+                <h2>Save up to 30% with ExpertPass</h2>
+                <p>Get discounted rates and priority booking for all your home cleaning and maintenance needs.</p>
+                <button className="ep-btn">Explore Membership</button>
+              </div>
+              <div className="ep-graphic">
+                <div className="ep-card">
+                  <div className="ep-card-top">
+                    <strong>ExpertPass</strong>
+                    <span className="ep-badge">✓</span>
+                  </div>
+                  <div className="ep-card-line"></div>
+                  <div className="ep-card-bottom">Membership ID: EE-0921-2024</div>
                 </div>
-                <span className="text-purple-300 text-lg">›</span>
-              </button>
-            ))}
+              </div>
+            </div>
           </div>
         )}
 
         {/* STEP: guidelines / scope */}
         {step === "guidelines" && service && (
-          <div className="flex flex-col gap-4">
-            <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4">
-              <h2 className="font-extrabold text-base text-purple-950 m-0">{service.name}</h2>
-              <p className="text-xs text-purple-800 mt-1 m-0">{config.guidelines.summary}</p>
-              <p className="text-sm font-bold text-purple-900 mt-2 m-0">
-                From {formatPrice(service.pricePaise)}
-                {service.duration > 0 && (
-                  <span className="text-gray-500 font-medium"> · ~{Math.max(1, Math.round(service.duration / 60))} hr</span>
-                )}
+          <div className="flow-guidelines-v3">
+            <div className="flow-guidelines-header">
+              <h2 className="gl-title">{service.name}</h2>
+              <p className="gl-desc">{config.guidelines.summary}</p>
+              <p className="gl-price">
+                From {formatPrice(service.pricePaise)} 
+                <span className="gl-duration">· ~{Math.max(1, Math.round(service.duration / 60))} hr</span>
               </p>
             </div>
 
-            <GuidelineCard title="What's included" tone="good" items={config.guidelines.included} />
-            <GuidelineCard title="Not included" tone="bad" items={config.guidelines.notIncluded} />
-            <GuidelineCard title="Good to know" tone="info" items={config.guidelines.goodToKnow} />
+            <div className="gl-sections-wrapper">
+              <div className="gl-section good">
+                <p className="gl-section-title">WHAT'S INCLUDED</p>
+                <ul className="gl-list">
+                  {config.guidelines.included.map((it, i) => (
+                    <li key={i}><span className="gl-icon good-icon">✓</span>{it}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="gl-section bad">
+                <p className="gl-section-title">NOT INCLUDED</p>
+                <ul className="gl-list">
+                  {config.guidelines.notIncluded.map((it, i) => (
+                    <li key={i}><span className="gl-icon bad-icon">✕</span>{it}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="gl-section info">
+                <p className="gl-section-title">GOOD TO KNOW</p>
+                <ul className="gl-list">
+                  {config.guidelines.goodToKnow.map((it, i) => (
+                    <li key={i}><span className="gl-icon info-icon">•</span>{it}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            
+            <button className="flow-continue-btn" onClick={() => setStep('when')}>
+              Continue →
+            </button>
           </div>
         )}
 
         {/* STEP: instant vs scheduled */}
         {step === "when" && (
-          <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">When do you need it?</p>
-            {config.bookingTypes.includes("instant") && (
-              <OptionCard
-                selected={scheduleType === "instant"}
-                onClick={() => setScheduleType("instant")}
-                icon="⚡"
-                title="Instant"
-                desc="A professional arrives within 30–60 mins"
-                badge="Fastest"
-              />
-            )}
-            <OptionCard
-              selected={scheduleType === "scheduled"}
-              onClick={() => setScheduleType("scheduled")}
-              icon="🗓️"
-              title="Scheduled"
-              desc="Pick a date & time that suits you"
-            />
-
+          <div className="flow-when-v3">
+            <h2 className="when-title">When do you need it?</h2>
+            
+            <div className="when-options-v3">
+              {config.bookingTypes.includes("instant") && (
+                <button 
+                  className={`when-option-card ${scheduleType === 'instant' ? 'selected' : ''}`}
+                  onClick={() => setScheduleType("instant")}
+                >
+                  <div className="when-icon-box">⚡</div>
+                  <div className="when-info-box">
+                    <p className="when-opt-title">
+                      Instant <span className="when-badge">FASTEST</span>
+                    </p>
+                    <p className="when-opt-desc">A professional arrives within 30–60 mins</p>
+                  </div>
+                  <div className={`when-radio ${scheduleType === 'instant' ? 'checked' : ''}`}></div>
+                </button>
+              )}
+              
+              <button 
+                className={`when-option-card ${scheduleType === 'scheduled' ? 'selected' : ''}`}
+                onClick={() => setScheduleType("scheduled")}
+              >
+                <div className="when-icon-box plain">🗓️</div>
+                <div className="when-info-box">
+                  <p className="when-opt-title">Scheduled</p>
+                  <p className="when-opt-desc">Pick a date & time that suits you</p>
+                </div>
+                <div className={`when-radio ${scheduleType === 'scheduled' ? 'checked' : ''}`}></div>
+              </button>
+            </div>
+            
             {scheduleType === "scheduled" && (
-              <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col gap-3">
-                <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="scheduled-picker-v3">
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
                   {days.map((d) => (
                     <button
                       key={d.key}
                       type="button"
                       onClick={() => setDateKey(d.key)}
-                      className={`flex-shrink-0 w-16 rounded-xl border px-2 py-2 text-center ${
-                        dateKey === d.key ? "bg-purple-900 border-purple-900 text-white" : "border-gray-200 text-gray-700"
+                      className={`flex-shrink-0 w-20 rounded-2xl border-2 px-2 py-3 text-center transition-all snap-start ${
+                        dateKey === d.key ? "bg-blue-900 border-blue-900 text-white shadow-md transform scale-105" : "border-gray-100 text-gray-700 bg-gray-50 hover:border-blue-800"
                       }`}
                     >
-                      <span className="block text-[10px] font-bold">{d.day}</span>
-                      <span className="block text-xs font-extrabold mt-0.5">{d.date}</span>
+                      <span className="block text-[10px] font-black uppercase tracking-wider opacity-80">{d.day}</span>
+                      <span className="block text-sm font-extrabold mt-1">{d.date}</span>
                     </button>
                   ))}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-3 mt-4">
                   {TIME_SLOTS.map((slot) => (
                     <button
                       key={slot}
                       type="button"
                       onClick={() => setTimeSlot(slot)}
-                      className={`rounded-xl border px-1 py-2 text-xs font-bold ${
-                        timeSlot === slot ? "bg-purple-100 border-purple-400 text-purple-900" : "border-gray-200 text-gray-600"
+                      className={`rounded-xl border px-2 py-3 text-[11px] font-bold transition-all ${
+                        timeSlot === slot ? "bg-blue-50 border-blue-900 text-blue-900 shadow-sm ring-1 ring-blue-800" : "border-gray-200 text-gray-600 hover:border-blue-800 hover:bg-blue-50/50"
                       }`}
                     >
                       {slot}
@@ -340,106 +626,174 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 </div>
               </div>
             )}
+            
+            <div className="when-footer-v3">
+              <button 
+                className="flow-continue-btn black-btn" 
+                onClick={() => requireLoginThen(() => setStep("details"), buildResumeState({ step: "details" }))}
+              >
+                Continue
+              </button>
+            </div>
           </div>
         )}
 
         {/* STEP: job details */}
         {step === "details" && (
-          <div className="flex flex-col gap-4">
+          <div className="flow-details-v3">
             {/* Address */}
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">Service location</p>
+            <div className="details-section-v3">
+              <h3 className="details-section-title">SERVICE LOCATION</h3>
               {addresses.length === 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
                   No saved address. Add one from your profile to continue.
                 </div>
               )}
-              {addresses.map((a) => (
+              <div className="address-list-v3">
+                {addresses.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setAddressId(a.id)}
+                    className={`address-card-v3 ${addressId === a.id ? 'selected' : ''}`}
+                  >
+                    <div className="address-icon-box text-red-500">📍</div>
+                    <div className="address-info-box">
+                      <p className="address-label">{a.label}</p>
+                      <p className="address-full">{a.fullAddress}</p>
+                    </div>
+                    <div className={`address-radio ${addressId === a.id ? 'checked' : ''}`}>
+                      <div className="radio-inner"></div>
+                    </div>
+                  </button>
+                ))}
+                
+                {/* Dummy Current Location for mockups */}
                 <button
-                  key={a.id}
                   type="button"
-                  onClick={() => setAddressId(a.id)}
-                  className={`text-left bg-white border rounded-2xl p-3 flex items-start gap-3 ${
-                    addressId === a.id ? "border-purple-500 ring-1 ring-purple-200" : "border-gray-100"
-                  }`}
+                  className="address-card-v3 disabled"
                 >
-                  <span className="mt-0.5">📍</span>
-                  <div>
-                    <p className="font-bold text-xs text-gray-900 m-0">{a.label}</p>
-                    <p className="text-[11px] text-gray-500 m-0">{a.fullAddress}</p>
+                  <div className="address-icon-box text-gray-400">◎</div>
+                  <div className="address-info-box">
+                    <p className="address-label">Current Location</p>
+                    <p className="address-full">Detected Location, GPS Coordinates</p>
+                  </div>
+                  <div className="address-radio">
+                    <div className="radio-inner"></div>
                   </div>
                 </button>
-              ))}
+              </div>
             </div>
 
             {/* Structured fields */}
             {config.detailFields.length > 0 && (
-              <div className="flex flex-col gap-3">
+              <div className="details-fields-v3">
                 {config.detailFields.map((f) => (
-                  <DetailFieldInput
-                    key={f.key}
-                    field={f}
-                    value={detailValues[f.key]}
-                    onChange={(v) => setDetailValues((prev) => ({ ...prev, [f.key]: v }))}
-                  />
+                  <div key={f.key} className="details-section-v3">
+                    <h3 className="details-section-title">{f.label.toUpperCase()}</h3>
+                    {f.type === 'select' ? (
+                      <div className="pill-group-v3">
+                        {f.options.map(opt => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setDetailValues(prev => ({...prev, [f.key]: opt}))}
+                            className={`pill-btn-v3 ${detailValues[f.key] === opt ? 'selected' : ''}`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <DetailFieldInput
+                        field={f}
+                        value={detailValues[f.key]}
+                        onChange={(v) => setDetailValues((prev) => ({ ...prev, [f.key]: v }))}
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
             )}
 
-            {/* Photos (optional) */}
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">Add photos (optional)</p>
-              <div className="flex gap-2 flex-wrap">
-                {photos.map((url) => (
-                  <img key={url} src={url} alt="upload" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
-                ))}
-                {photos.length < 5 && (
-                  <label className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-2xl text-gray-400 cursor-pointer">
-                    {uploading ? "…" : "+"}
-                    <input type="file" accept="image/*" multiple hidden onChange={(e) => handlePhotoUpload(e.target.files)} />
-                  </label>
-                )}
+            <div className="details-media-grid-v3">
+              {/* Photos (optional) */}
+              <div className="details-section-v3 media-col">
+                <h3 className="details-section-title">ADD PHOTOS (OPTIONAL)</h3>
+                <div className="photo-upload-box-v3">
+                  <div className="photo-upload-btn-wrapper">
+                    {photos.map((url) => (
+                      <img key={url} src={url} alt="upload" className="uploaded-photo-v3" />
+                    ))}
+                    {photos.length < 5 && (
+                      <label className="upload-placeholder-v3">
+                        <span className="upload-plus">+</span>
+                        <input type="file" accept="image/*" multiple hidden onChange={(e) => handlePhotoUpload(e.target.files)} />
+                      </label>
+                    )}
+                  </div>
+                  <p className="upload-hint">Add images of rooms or specific problem areas.</p>
+                </div>
+              </div>
+
+              {/* Note (optional) */}
+              <div className="details-section-v3 note-col">
+                <div className="note-header-v3">
+                  <h3 className="details-section-title">ADD A NOTE (OPTIONAL)</h3>
+                  <span className="note-count">{note.length}/250</span>
+                </div>
+                <textarea
+                  value={note}
+                  maxLength={250}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Access instructions, problem areas, or preferences..."
+                  className="note-textarea-v3"
+                />
               </div>
             </div>
 
-            {/* Note (optional) */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">{config.noteLabel}</p>
-              <textarea
-                value={note}
-                maxLength={250}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder={config.notePlaceholder}
-                className="w-full min-h-[80px] p-3 text-xs border border-gray-200 rounded-2xl focus:outline-none focus:border-purple-500 bg-white"
-              />
-              <span className="text-[10px] text-gray-400 self-end">{note.length}/250</span>
+            <div className="details-footer-v3">
+              <div className="safe-badge-v3">
+                <span className="safe-icon">🛡️</span>
+                <span>Safe & Professional Services</span>
+              </div>
+              <button 
+                className="flow-continue-btn black-btn" 
+                onClick={() => setStep("provider")}
+              >
+                Choose professional ›
+              </button>
             </div>
           </div>
         )}
 
         {/* STEP: choose provider */}
         {step === "provider" && (
-          <div className="flex flex-col gap-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">Choose a professional</p>
+          <div className="flow-provider-v3">
+            <h2 className="provider-title">Choose your professional</h2>
+            <div className="provider-step-counter">Step 3 of 3</div>
+            
+            <div className="provider-divider-v3"></div>
+            
+            <p className="details-section-title">CHOOSE A PROFESSIONAL</p>
 
             <button
               type="button"
               onClick={() => setProviderChoice("auto")}
-              className={`text-left rounded-2xl p-4 border flex items-center gap-3 ${
-                providerChoice === "auto" ? "border-purple-500 bg-purple-50 ring-1 ring-purple-200" : "border-gray-100 bg-white"
-              }`}
+              className={`provider-card-v3 ${providerChoice === 'auto' ? 'selected' : ''}`}
             >
-              <span className="text-xl">⚡</span>
-              <div className="flex-grow">
-                <p className="font-bold text-sm text-purple-950 m-0">Auto Assign (Fastest)</p>
-                <p className="text-[11px] text-gray-500 m-0">We'll assign the best available professional</p>
+              <div className="provider-icon-box">⚡</div>
+              <div className="provider-info-box">
+                <p className="provider-opt-title">Auto Assign (Fastest)</p>
+                <p className="provider-opt-desc">We'll assign the best available professional to your request instantly.</p>
               </div>
-              <Radio checked={providerChoice === "auto"} />
+              <div className={`address-radio ${providerChoice === 'auto' ? 'checked' : ''}`}>
+                <div className="radio-inner"></div>
+              </div>
             </button>
-
-            {providersLoading && <p className="text-xs text-gray-400 text-center py-4">Finding professionals near you…</p>}
+            
             {!providersLoading && providers.length === 0 && (
-              <p className="text-[11px] text-gray-400 px-1">No professionals online right now — Auto Assign will notify them as they come online.</p>
+              <p className="provider-no-online">No professionals online right now. Auto Assign will notify them.</p>
             )}
 
             {providers.map((p) => (
@@ -447,47 +801,38 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 key={p.id}
                 type="button"
                 onClick={() => setProviderChoice(p.id)}
-                className={`text-left rounded-2xl p-3 border flex items-center gap-3 ${
-                  providerChoice === p.id ? "border-purple-500 bg-purple-50 ring-1 ring-purple-200" : "border-gray-100 bg-white"
-                }`}
+                className={`provider-card-v3 ${providerChoice === p.id ? 'selected' : ''}`}
               >
-                <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-900 flex items-center justify-center font-bold">
-                  {p.name.charAt(0)}
-                </div>
-                <div className="flex-grow">
-                  <p className="font-bold text-xs text-gray-900 m-0">{p.name}</p>
-                  <p className="text-[11px] text-gray-500 m-0">
-                    ★ {p.rating.toFixed(1)} · {p.jobsCompleted} jobs · {p.distanceKm} km · {p.etaMins} min
+                <div className="provider-icon-box avatar">{p.name.charAt(0)}</div>
+                <div className="provider-info-box">
+                  <p className="provider-opt-title">{p.name}</p>
+                  <p className="provider-opt-desc">
+                    <span className="text-amber-500">★ {p.rating.toFixed(1)}</span> · {p.jobsCompleted} jobs · {p.distanceKm} km
                   </p>
                 </div>
-                <Radio checked={providerChoice === p.id} />
+                <div className={`address-radio ${providerChoice === p.id ? 'checked' : ''}`}>
+                  <div className="radio-inner"></div>
+                </div>
               </button>
             ))}
 
-            <div className="bg-purple-50/60 border border-purple-100 rounded-xl p-3 text-[11px] text-purple-800 mt-1">
-              You'll pay <b>{formatPrice(service?.pricePaise ?? 0)}</b> only after the professional accepts your request.
+            <div className="provider-info-banner">
+              <span className="info-icon">ℹ️</span>
+              <p>You'll pay <strong>{formatPrice(service?.pricePaise ?? 0)}</strong> only after the professional accepts your request. No advance payment required.</p>
+            </div>
+            
+            <div className="provider-footer-v3">
+              <button 
+                className="flow-continue-btn blue-btn" 
+                onClick={() => requireLoginThen(submit, buildResumeState({ step: "provider", autoSubmit: true }))}
+                disabled={createBooking.isPending}
+              >
+                {createBooking.isPending ? "Confirming..." : `Confirm & request • ${formatPrice(service?.pricePaise ?? 0)}`}
+              </button>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Sticky footer CTA */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30">
-        <FooterButton
-          step={step}
-          priceRupees={priceRupees}
-          submitting={createBooking.isPending}
-          hasAddress={!!addressId}
-          onNext={() => {
-            if (step === "service") return; // handled by card click
-            if (step === "guidelines") setStep("when");
-            else if (step === "when") requireLoginThen(() => setStep("details"));
-            else if (step === "details") setStep("provider");
-            else if (step === "provider") requireLoginThen(submit);
-          }}
-        />
-      </div>
-    </div>
+    </FlowPageShell>
   );
 }
 
@@ -495,15 +840,16 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
 function GuidelineCard({ title, items, tone }: { title: string; items: string[]; tone: "good" | "bad" | "info" }) {
   const mark = tone === "good" ? "✓" : tone === "bad" ? "✕" : "•";
-  const color = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-500" : "text-purple-600";
+  const color = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-500" : "text-blue-900";
+  const bg = tone === "good" ? "bg-emerald-50/50 border-emerald-100" : tone === "bad" ? "bg-red-50/50 border-red-100" : "bg-blue-50/50 border-blue-100";
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-4">
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider m-0 mb-2">{title}</p>
-      <ul className="flex flex-col gap-1.5 m-0 p-0 list-none">
+    <div className={`border rounded-2xl p-4 shadow-sm ${bg}`}>
+      <p className="text-xs font-bold text-gray-600 uppercase tracking-wider m-0 mb-3">{title}</p>
+      <ul className="flex flex-col gap-2 m-0 p-0 list-none">
         {items.map((it) => (
-          <li key={it} className="flex items-start gap-2 text-xs text-gray-700">
-            <span className={`${color} font-bold`}>{mark}</span>
-            {it}
+          <li key={it} className="flex items-start gap-3 text-sm text-gray-800">
+            <span className={`${color} font-black mt-0.5`}>{mark}</span>
+            <span className="leading-tight">{it}</span>
           </li>
         ))}
       </ul>
@@ -530,17 +876,19 @@ function OptionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`text-left rounded-2xl p-4 border flex items-center gap-3 ${
-        selected ? "border-purple-500 bg-purple-50 ring-1 ring-purple-200" : "border-gray-100 bg-white"
+      className={`text-left rounded-2xl p-4 border flex items-center gap-4 transition-all hover-lift ${
+        selected ? "border-blue-900 bg-blue-50 shadow-md ring-2 ring-blue-900/20" : "border-gray-200 bg-white hover:border-blue-800 shadow-sm"
       }`}
     >
-      <span className="text-xl">{icon}</span>
+      <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-xl text-2xl ${selected ? "bg-white shadow-sm" : "bg-gray-50"}`}>
+        {icon}
+      </div>
       <div className="flex-grow">
-        <p className="font-bold text-sm text-purple-950 m-0 flex items-center gap-2">
+        <p className="font-bold text-base text-gray-900 m-0 flex items-center gap-2">
           {title}
-          {badge && <span className="bg-amber-400 text-purple-950 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">{badge}</span>}
+          {badge && <span className="bg-amber-400 text-blue-950 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">{badge}</span>}
         </p>
-        <p className="text-[11px] text-gray-500 m-0">{desc}</p>
+        <p className="text-xs text-gray-500 mt-1 m-0">{desc}</p>
       </div>
       <Radio checked={selected} />
     </button>
@@ -549,8 +897,8 @@ function OptionCard({
 
 function Radio({ checked }: { checked: boolean }) {
   return (
-    <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${checked ? "border-purple-600" : "border-gray-300"}`}>
-      {checked && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+    <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${checked ? "border-blue-900" : "border-gray-300"}`}>
+      {checked && <span className="w-2 h-2 rounded-full bg-blue-900" />}
     </span>
   );
 }
@@ -566,7 +914,7 @@ function DetailFieldInput({
 }) {
   if (field.type === "select") {
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">{field.label}</p>
         <div className="flex gap-2 flex-wrap">
           {field.options.map((opt) => (
@@ -574,8 +922,10 @@ function DetailFieldInput({
               key={opt}
               type="button"
               onClick={() => onChange(opt)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-bold border ${
-                value === opt ? "bg-purple-900 border-purple-900 text-white" : "border-gray-200 text-gray-600 bg-white"
+              className={`rounded-full px-4 py-2 text-xs font-bold border transition-all ${
+                value === opt 
+                  ? "bg-blue-900 border-blue-900 text-white shadow-md transform hover:scale-[1.02]" 
+                  : "border-gray-200 text-gray-700 bg-white hover:border-blue-800 hover:bg-blue-50"
               }`}
             >
               {opt}
@@ -590,24 +940,24 @@ function DetailFieldInput({
     const min = field.min ?? 1;
     const max = field.max ?? 99;
     return (
-      <div className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-3">
-        <span className="text-xs font-bold text-gray-700">{field.label}</span>
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={() => onChange(Math.max(min, n - 1))} className="w-7 h-7 rounded-full border border-gray-300 text-gray-700 font-bold">−</button>
-          <span className="text-sm font-extrabold text-purple-900 w-5 text-center">{n}</span>
-          <button type="button" onClick={() => onChange(Math.min(max, n + 1))} className="w-7 h-7 rounded-full border border-gray-300 text-gray-700 font-bold">+</button>
+      <div className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-blue-800 transition-all">
+        <span className="text-sm font-bold text-gray-800">{field.label}</span>
+        <div className="flex items-center gap-4 bg-gray-50 rounded-full p-1 border border-gray-100">
+          <button type="button" onClick={() => onChange(Math.max(min, n - 1))} className="w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-700 font-bold hover:border-blue-800 hover:text-blue-900 transition shadow-sm">−</button>
+          <span className="text-sm font-extrabold text-blue-900 w-6 text-center">{n}</span>
+          <button type="button" onClick={() => onChange(Math.min(max, n + 1))} className="w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-700 font-bold hover:border-blue-800 hover:text-blue-900 transition shadow-sm">+</button>
         </div>
       </div>
     );
   }
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">{field.label}</p>
       <input
         value={String(value ?? "")}
         placeholder={field.placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full p-3 text-xs border border-gray-200 rounded-2xl focus:outline-none focus:border-purple-500 bg-white"
+        className="w-full p-4 text-sm border border-gray-200 rounded-2xl focus:outline-none focus:border-blue-900 focus:ring-4 focus:ring-blue-900/10 bg-white transition shadow-sm"
       />
     </div>
   );
@@ -643,7 +993,7 @@ function FooterButton({
       type="button"
       onClick={onNext}
       disabled={disabled}
-      className="w-full py-3.5 bg-purple-900 hover:bg-purple-950 text-white font-bold text-sm rounded-full disabled:opacity-50 flex items-center justify-center gap-2"
+      className="w-full py-3.5 bg-blue-900 hover:bg-blue-950 text-white font-bold text-sm rounded-full disabled:opacity-50 flex items-center justify-center gap-2"
     >
       {submitting ? "Requesting…" : label}
       {step === "provider" && !submitting && <span className="opacity-80">· {formatPrice(priceRupees * 100)}</span>}

@@ -90,8 +90,10 @@ export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
       {!loading && loadError && <div className="alert alert-error">{loadError}</div>}
 
       {!loading && !loadError && items.length === 0 && (
-        <div className="notif-page-empty">
-          <FlaticonIcon name="bell" size={36} color="var(--color-text-muted)" />
+        <div className="empty-state notif-page-empty">
+          <div className="empty-state-icon" aria-hidden>
+            <FlaticonIcon name="bell" size={36} color="var(--vs-purple-700)" />
+          </div>
           <p>No notifications yet.</p>
           <span className="text-sm text-muted">
             Updates appear here when your bookings change status.

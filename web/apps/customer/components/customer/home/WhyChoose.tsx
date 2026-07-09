@@ -3,7 +3,7 @@ import { ServiceIcon } from "@/components/ui/ServiceIcons";
 
 export function WhyChoose() {
   return (
-    <section className="home-section">
+    <div className="why-choose-wrapper">
       <h2 className="home-section-title why-title">Why Choose V Solve Hub?</h2>
       <div className="why-choose-scroll">
         {WHY_CHOOSE.map((item) => (
@@ -15,6 +15,6 @@ export function WhyChoose() {
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }

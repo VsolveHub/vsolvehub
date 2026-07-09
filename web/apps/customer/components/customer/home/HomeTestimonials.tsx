@@ -15,7 +15,7 @@ export function HomeTestimonials() {
   }, []);
 
   return (
-    <section className="home-section" aria-labelledby="home-reviews-heading">
+    <div className="home-testimonials-wrapper" aria-labelledby="home-reviews-heading">
       <h2 id="home-reviews-heading" className="home-section-title">
         What customers say
       </h2>
@@ -26,8 +26,13 @@ export function HomeTestimonials() {
         </div>
         <p>&ldquo;{testimonial.quote}&rdquo;</p>
         <footer>
-          <strong>{testimonial.author}</strong>
-          <span>{testimonial.city}</span>
+          {testimonial.avatar && (
+            <img src={testimonial.avatar} alt={testimonial.author} className="testimonial-avatar" />
+          )}
+          <div className="testimonial-author-info">
+            <strong>{testimonial.author}</strong>
+            <span>{testimonial.city}</span>
+          </div>
         </footer>
       </blockquote>
       <div className="home-testimonial-dots">
@@ -41,6 +46,6 @@ export function HomeTestimonials() {
           />
         ))}
       </div>
-    </section>
+    </div>
   );
 }

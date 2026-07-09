@@ -171,17 +171,18 @@ export function AddressManager({ initialAddresses }: { initialAddresses: Address
       ) : (
         <div className="stack">
           {addresses.map((addr) => (
-            <div key={addr.id} className="card flex-between">
-              <div>
-                <p className="address-label">
-                  {addr.label}
-                  {addr.isDefault && <span className="text-sm text-muted"> · Default</span>}
-                </p>
-                <p className="address-text">{addr.fullAddress}</p>
+            <div key={addr.id} className="address-premium-card">
+              <div className="address-card-header">
+                <div className="address-label-wrap">
+                  <span className="address-icon">📍</span>
+                  <h3 className="address-label-title">{addr.label}</h3>
+                  {addr.isDefault && <span className="address-badge-default">Default</span>}
+                </div>
+                <button type="button" className="address-remove-btn" onClick={() => removeAddress(addr.id)}>
+                  Remove
+                </button>
               </div>
-              <Button variant="secondary" size="sm" onClick={() => removeAddress(addr.id)}>
-                Remove
-              </Button>
+              <p className="address-full-text">{addr.fullAddress}</p>
             </div>
           ))}
         </div>

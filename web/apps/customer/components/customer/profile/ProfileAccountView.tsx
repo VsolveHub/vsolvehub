@@ -29,6 +29,7 @@ type Props = {
 
 const QUICK_ICONS: Record<string, React.ReactNode> = {
   "My bookings": <ClipboardIcon />,
+  Notifications: <FlaticonIcon name="bell" size={20} />,
   "Saved services": <DeviceIcon />,
   "Help & support": <HeadsetIcon />,
 };
@@ -44,30 +45,62 @@ const MENU_ICONS: Record<string, React.ReactNode> = {
   "About V Solve Hub": <BrandIcon />,
 };
 
-export function ProfileAccountView({ name, phone, email, quickActions, menuItems }: Props) {
-  return (
-    <div className="profile-account">
-      <header className="profile-account-header">
-        <div>
-          <h1 className="profile-account-name">{name}</h1>
-          <p className="profile-account-meta">{phone}</p>
-          <p className="profile-account-meta">{email ?? "Add your email"}</p>
-        </div>
-        <Link href="/profile/edit" className="profile-edit-btn" aria-label="Edit profile">
-          <EditIcon />
-        </Link>
-      </header>
+function getInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "VS";
+}
 
-      <div className="profile-quick-actions">
+export function ProfileAccountView({ name, phone, email, quickActions, menuItems }: Props) {
+  const initials = getInitials(name);
+
+  return (
+    <div className="profile-account desktop-wide-layout profile-desktop-grid">
+      <aside className="profile-sidebar">
+        <div className="profile-account-hero">
+        <header className="profile-account-header">
+          <span className="profile-avatar" aria-hidden>
+            {initials}
+          </span>
+          <div className="profile-account-identity">
+            <h1 className="profile-account-name">{name}</h1>
+            <p className="profile-account-meta">{phone}</p>
+            <p className="profile-account-meta">{email ?? "Add your email"}</p>
+          </div>
+          <Link href="/profile/edit" className="profile-edit-btn" aria-label="Edit profile">
+            <EditIcon />
+          </Link>
+        </header>
+        </div>
+
+        <div className="profile-refer-card glass-panel hover-lift">
+          <div className="profile-refer-text">
+            <h2>Refer &amp; earn ₹100</h2>
+            <p>Get ₹100 when your friend completes their first booking</p>
+            <button type="button" className="profile-refer-btn" onClick={() => alert("Referral link coming soon!")}>
+              Refer now
+            </button>
+          </div>
+          <span className="profile-refer-gift" aria-hidden>
+            🎁
+          </span>
+        </div>
+      </aside>
+
+      <main className="profile-account-body">
+        <div className="profile-quick-actions">
         {quickActions.map((action) => (
           <Link key={action.label} href={action.href} className="profile-quick-card">
             <span className="profile-quick-icon">{QUICK_ICONS[action.label]}</span>
             <span>{action.label}</span>
           </Link>
         ))}
-      </div>
+        </div>
 
-      <nav className="profile-menu">
+        <nav className="profile-menu">
         {menuItems.map((item) => (
           <Link key={item.label} href={item.href} className="profile-menu-item">
             <span className="profile-menu-icon">{MENU_ICONS[item.label]}</span>
@@ -75,24 +108,12 @@ export function ProfileAccountView({ name, phone, email, quickActions, menuItems
             <ChevronIcon />
           </Link>
         ))}
-      </nav>
+        </nav>
 
-      <div className="profile-refer-card">
-        <div className="profile-refer-text">
-          <h2>Refer &amp; earn ₹100</h2>
-          <p>Get ₹100 when your friend completes their first booking</p>
-          <button type="button" className="profile-refer-btn" onClick={() => alert("Referral link coming soon!")}>
-            Refer now
-          </button>
-        </div>
-        <span className="profile-refer-gift" aria-hidden>
-          🎁
-        </span>
-      </div>
+        <LogoutButton />
 
-      <LogoutButton />
-
-      <p className="profile-version">Version 1.0.0</p>
+        <p className="profile-version">Version 1.0.0</p>
+      </main>
     </div>
   );
 }

@@ -13,8 +13,8 @@ export type QuickService = {
  *  disconnected for M1; their routes/UI remain for M3/M4. */
 export const QUICK_SERVICES: QuickService[] = [
   { id: "cleaning", label: "Cleaning", icon: "broom", color: "#059669", href: "/services?q=cleaning" },
-  { id: "plumbing", label: "Plumbing", icon: "faucet", color: "#2563eb", href: "/services/technician/plumber" },
-  { id: "electrician", label: "Electrician", icon: "bolt", color: "#d97706", href: "/services/technician/electrician" },
+  { id: "plumbing", label: "Plumbing", icon: "faucet", color: "#2563eb", href: "/services/home-services" },
+  { id: "electrician", label: "Electrician", icon: "bolt", color: "#d97706", href: "/services/home-services" },
   { id: "beauty", label: "Salon/Beauty", icon: "beauty", color: "#db2777", href: "/services/beauty-wellness" },
   { id: "all", label: "More", icon: "grid-menu", color: "#7c3aed", href: "/services" },
 ];
@@ -36,25 +36,57 @@ export const TRENDING_SEARCHES: TrendingSearch[] = [
   { label: "Salon at home", href: "/services?category=beauty-wellness" },
 ];
 
-// M1 single-provider promos only (Technician, Home, Beauty, Pet).
+// M1 single-provider promos — two cards per carousel slide.
 export const PROMO_CARDS = [
   {
     id: "home",
     title: "Home Services On Demand",
     cta: "Book Now",
-    bg: "#ede9fe",
+    subtitle: "Electrician, plumber, AC & more",
+    image: "/cleaner_illustration.jpg",
+    badge: { text: "Trending", color: "bg-red-600" },
+    bg: "linear-gradient(145deg, #ede9fe 0%, #f5f3ff 100%)",
     btnColor: "#6d28d9",
-    icon: "house" as IconName,
-    href: "/services?category=home-services",
+    icon: "broom" as IconName,
+    categorySlug: "home-services",
+    href: "/services/home-services",
   },
   {
     id: "beauty",
     title: "Beauty & Wellness At Home",
     cta: "Book Now",
-    bg: "#fce7f3",
+    subtitle: "Premium care at home",
+    image: "/beauty_hd.jpg",
+    badge: { text: "Save ₹100", color: "bg-green-700" },
+    bg: "linear-gradient(145deg, #fce7f3 0%, #fdf2f8 100%)",
     btnColor: "#db2777",
     icon: "beauty" as IconName,
-    href: "/services?category=beauty-wellness",
+    categorySlug: "beauty-wellness",
+    href: "/services/beauty-wellness",
+  },
+  {
+    id: "ac",
+    title: "Smart Home Setup",
+    cta: "Book Now",
+    subtitle: "Premium smart locks & devices",
+    image: "/ac_illustration.jpg",
+    bg: "linear-gradient(145deg, #e0f2fe 0%, #f0f9ff 100%)",
+    btnColor: "#0284c7",
+    icon: "ac-unit" as IconName,
+    categorySlug: "home-services",
+    href: "/services/home-services",
+  },
+  {
+    id: "pet",
+    title: "Pet Grooming & Care",
+    cta: "Book Now",
+    subtitle: "Pamper your furry friends",
+    image: "/pet_hd.jpg",
+    bg: "linear-gradient(145deg, #f3e8ff 0%, #faf5ff 100%)",
+    btnColor: "#7c3aed",
+    icon: "pets" as IconName,
+    categorySlug: "pet-services",
+    href: "/services",
   },
 ];
 
@@ -63,6 +95,8 @@ export const WHY_CHOOSE: { icon: IconName; label: string; color: string }[] = [
   { icon: "diamond", label: "Affordable\nPricing", color: "#db2777" },
   { icon: "headset", label: "Quick\nSupport", color: "#2563eb" },
   { icon: "lock", label: "Secure\nPayments", color: "#7c3aed" },
+  { icon: "check-circle", label: "Quality\nGuaranteed", color: "#059669" },
+  { icon: "tag-percent", label: "Best\nOffers", color: "#ea580c" },
 ];
 
 export const HERO_SLIDES: { id: number; title: string; highlight: string; icons: IconName[] }[] = [
@@ -92,24 +126,28 @@ export const HOME_TESTIMONIALS = [
     author: "Priya",
     city: "Hyderabad",
     rating: 5,
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
   },
   {
     quote: "Finally one place for wedding makeup, decor, and photography. Very easy to use.",
     author: "Ramesh",
     city: "Vijayawada",
     rating: 5,
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
   },
   {
     quote: "Hired masons for our home renovation. Transparent pricing and reliable workers.",
     author: "Lakshmi",
     city: "Guntur",
     rating: 5,
+    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
   },
   {
     quote: "Booked a cab and vehicle repair from the same app. Saved so much time!",
     author: "Suresh",
     city: "Warangal",
     rating: 4,
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
   },
 ];
 

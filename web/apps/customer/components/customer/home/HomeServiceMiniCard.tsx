@@ -1,14 +1,15 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { getCategoryTileMeta } from "@/lib/catalog/service-card-meta";
+import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
 
 type Props = {
   href: string;
   name: string;
   priceLabel: string;
   categorySlug: string;
-  categoryIcon: string;
+  serviceSlug: string;
+  subCategorySlug?: string;
 };
 
 export function HomeServiceMiniCard({
@@ -16,18 +17,26 @@ export function HomeServiceMiniCard({
   name,
   priceLabel,
   categorySlug,
-  categoryIcon,
+  serviceSlug,
+  subCategorySlug,
 }: Props) {
   const { color } = getCategoryTileMeta(categorySlug);
 
   return (
     <Link
       href={href}
-      className="popular-mini-card"
+      className="popular-mini-card hover-lift premium-card"
       style={{ "--cat-color": color } as CSSProperties}
     >
-      <span className="popular-mini-card-icon" aria-hidden>
-        <CategoryIcon slug={categorySlug} icon={categoryIcon} size={22} color={color} />
+      <span className="popular-mini-card-sketch" aria-hidden>
+        <ServiceSketchImage
+          slug={serviceSlug}
+          subCategorySlug={subCategorySlug}
+          categorySlug={categorySlug}
+          serviceName={name}
+          variant="hero"
+          alt={name}
+        />
       </span>
       <div className="popular-mini-card-body">
         <h3>{name}</h3>

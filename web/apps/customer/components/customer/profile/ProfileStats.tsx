@@ -47,11 +47,14 @@ export function ProfileSavedSummary({ count }: { count: number }) {
 
 export function ProfileAddressesSummary({ count }: { count: number }) {
   return (
-    <p className="profile-panel-intro">
-      {count === 0
-        ? "Add a home or site address for faster booking."
-        : `${count} saved address${count !== 1 ? "es" : ""} on your account.`}
-    </p>
+    <div className="address-summary-premium">
+      <div className="address-summary-icon">🏡</div>
+      <p className="address-summary-text">
+        {count === 0
+          ? "Add a home or site address for faster booking."
+          : <span className="address-count-highlight">{count} saved address{count !== 1 ? "es" : ""}</span>}
+      </p>
+    </div>
   );
 }
 

@@ -8,6 +8,7 @@ import { ServiceDetailReviews } from "./ServiceDetailReviews";
 import { ServiceShareButton } from "./ServiceShareButton";
 import { SaveServiceButton } from "./SaveServiceButton";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 
 type Service = {
@@ -20,7 +21,7 @@ type Service = {
   archetype: string;
   unit: string;
   category: { slug: string; name: string; icon: string };
-  subCategory?: { name: string } | null;
+  subCategory?: { name: string; slug?: string } | null;
 };
 
 type Props = {
@@ -30,6 +31,19 @@ type Props = {
   isSaved: boolean;
   showSave: boolean;
 };
+
+const DUMMY_REVIEWS = [
+  { id: 1, name: "Rahul Verma", location: "Hyderabad", time: "2 days ago", text: "The technician arrived on time and used the foam jet technology as described. My AC cooling has improved significantly. Very professional service.", initial: "R" },
+  { id: 2, name: "Priya S.", location: "Hyderabad", time: "5 days ago", text: "Good value for money. The cleaning was very thorough. They even cleaned the mess around the AC after the service.", initial: "P" },
+  { id: 3, name: "Kiran Kumar", location: "Hyderabad", time: "1 week ago", text: "The Foam-jet technique is way better than normal service. No mess at all since they use a specialized cleaning jacket.", initial: "K" }
+];
+
+const DUMMY_RELATED = [
+  { id: 1, name: "AC repair", rating: "4.73", time: "Instant", price: 29900, image: "/ac_repair.jpg" },
+  { id: 2, name: "AC installation", rating: "4.69", time: "Instant", price: 109900, image: "/ac_installation.jpg" },
+  { id: 3, name: "Foam-jet service (2 ACs)", rating: "4.76", time: "Instant", price: 109800, image: "/ac_foam.jpg" },
+  { id: 4, name: "AC uninstallation", rating: "4.80", time: "Instant", price: 69900, image: "/ac_uninstall.jpg" }
+];
 
 export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave }: Props) {
   const durationLabel =
@@ -56,182 +70,164 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
       : "Book now";
 
   return (
-    <div className="service-detail">
-      <div className="sd-topbar">
-        <Link href="/services" className="sd-close-btn" aria-label="Close">
-          <FlaticonIcon name="cross" size={18} />
-        </Link>
+    <div className="service-detail animate-fade-in desktop-wide-layout sd-desktop-container mt-6">
+      <div className="sd-desktop-layout-v3">
+        
+        {/* LEFT COLUMN: Booking Hub */}
+        <div className="sd-left-hub">
+          
+          <div className="sd-hero-image-wrapper">
+            <span className="sd-hero-badge">⭐ Best Seller</span>
+            <div className="sd-hero-image-inner">
+              <ServiceSketchImage
+                slug={service.slug}
+                subCategorySlug={service.subCategory?.slug}
+                categorySlug={service.category.slug}
+                serviceName={service.name}
+                variant="hero"
+                alt={service.name}
+              />
+            </div>
+          </div>
+
+          <div className="sd-breadcrumbs-v3 mt-4">
+            <Link href={`/services/${service.category.slug}`}>{service.category.name}</Link>
+            <span>›</span>
+            <span className="current">{service.name}</span>
+          </div>
+
+          <h1 className="sd-hero-title-v3">{service.name}</h1>
+          
+          <div className="sd-rating-row-hero-v3">
+            <span className="sd-badge-rating">★ {detail.rating.toFixed(2)}</span>
+            <span className="sd-review-count-hero">({detail.reviewCountLabel} reviews bookings)</span>
+          </div>
+
+          <div className="sd-pricing-card-v3">
+            <div className="sd-pricing-row">
+              <div className="price-stack">
+                <div className="price-main">
+                  <span className="sd-price-large">{formatPrice(service.pricePaise)}</span>
+                  {detail.originalPricePaise && (
+                    <span className="sd-price-old-large">{formatPrice(detail.originalPricePaise)}</span>
+                  )}
+                </div>
+                <div className="price-offer">
+                  33% OFF • Limited Time Offer
+                </div>
+              </div>
+              <Link href={bookHref} className="btn btn-black sd-book-btn-v3">
+                {primaryBookLabel}
+              </Link>
+            </div>
+            
+            <div className="sd-booking-perks-v3">
+              <div className="perk-item">
+                <FlaticonIcon name="shield-check" size={16} color="#6366f1" />
+                <span>UC Cover: 30 days warranty included</span>
+              </div>
+              {durationLabel && (
+                <div className="perk-item">
+                  <FlaticonIcon name="clock" size={16} color="#6366f1" />
+                  <span>Duration: {durationLabel}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+        </div>
+
+        {/* RIGHT COLUMN: Details & Reviews */}
+        <div className="sd-right-details">
+          
+          <section className="sd-section">
+            <h2 className="sd-section-title-v3">What's included in this service</h2>
+            
+            <div className="sd-included-card-v3 mt-6">
+              <div className="sd-accordion-item-v3 open">
+                <h3 className="sd-accordion-header-v3">
+                  Service inclusions
+                  <FlaticonIcon name="angle-small-down" size={20} />
+                </h3>
+                <ul className="sd-check-list-v3">
+                  {detail.covered.map((item) => (
+                    <li key={item}>
+                      <span className="check-circle">✓</span>
+                      {item}
+                    </li>
+                  ))}
+                  <li><span className="check-circle">✓</span> Custom scope for {service.name}</li>
+                  <li><span className="check-circle">✓</span> Consultation to define deliverables</li>
+                  <li><span className="check-circle">✓</span> Matched professional or vendor</li>
+                </ul>
+              </div>
+
+              {detail.notCovered.length > 0 && (
+                <div className="sd-accordion-item-v3">
+                  <h3 className="sd-accordion-header-v3">
+                    What is excluded
+                    <FlaticonIcon name="angle-small-down" size={20} />
+                  </h3>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="sd-section mt-12">
+            <h2 className="sd-section-title-v3">User reviews and ratings</h2>
+            <div className="sd-reviews-header-v3">
+              <span className="sd-rating-big">★ {detail.rating.toFixed(2)}/5</span>
+              <span className="sd-review-count">based on {detail.reviewCountLabel} reviews</span>
+              <Link href="#" className="view-all-link">View all reviews</Link>
+            </div>
+            
+            <div className="sd-reviews-grid-v3">
+              {DUMMY_REVIEWS.map(rev => (
+                <div key={rev.id} className="sd-review-card-v3">
+                  <div className="sd-review-card-header">
+                    <div className="sd-review-avatar">{rev.initial}</div>
+                    <div className="sd-review-meta">
+                      <strong>{rev.name}</strong>
+                      <span>{rev.location} • {rev.time}</span>
+                    </div>
+                    <div className="sd-review-stars">★★★★★</div>
+                  </div>
+                  <p className="sd-review-text">"{rev.text}"</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+        </div>
       </div>
 
-      <section className="sd-hero">
-        <div className="sd-hero-row">
-          <div>
-            <p className="sd-category">
-              <CategoryIcon slug={service.category.slug} icon={service.category.icon} size={16} />{" "}
-              {service.category.name}
-            </p>
-            <h1 className="sd-title">{service.name}</h1>
-            <div className="sd-rating-row">
-              <span className="sd-rating">★ {detail.rating.toFixed(2)}</span>
-              <span className="sd-review-count">({detail.reviewCountLabel})</span>
-            </div>
-            <div className="sd-price-row">
-              {service.pricePaise > 0 ? (
-                <>
-                  <span className="sd-price">{formatPrice(service.pricePaise)}</span>
-                  {detail.originalPricePaise && (
-                    <span className="sd-price-old">{formatPrice(detail.originalPricePaise)}</span>
-                  )}
-                </>
-              ) : (
-                <span className="sd-price">Free to browse</span>
-              )}
-              {durationLabel && <span className="sd-duration">• {durationLabel}</span>}
-            </div>
-            {detail.unitPriceLabel && (
-              <p className="sd-unit-price">
-                <span className="sd-unit-icon">🏷️</span> {detail.unitPriceLabel}
-              </p>
-            )}
-          </div>
-          <Link href={bookHref} className="sd-add-btn">
-            {isAccommodation ? "Browse" : bookLabel}
-          </Link>
-        </div>
-      </section>
-
-      <section className="sd-section">
-        <h2 className="sd-section-title">What is covered</h2>
-        <ul className="sd-check-list">
-          {detail.covered.map((item) => (
-            <li key={item}>
-              <span className="sd-icon-yes" aria-hidden>✓</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="sd-section">
-        <h2 className="sd-section-title">What is not covered</h2>
-        <ul className="sd-check-list">
-          {detail.notCovered.map((item) => (
-            <li key={item}>
-              <span className="sd-icon-no" aria-hidden>✕</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="sd-section">
-        <h2 className="sd-section-title">Our process</h2>
-        <ol className="sd-process-list">
-          {detail.process.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="sd-section sd-trust">
-        <h2 className="sd-section-title">{detail.professionalTitle}</h2>
-        <div className="sd-trust-grid">
-          <ul className="sd-trust-list">
-            {detail.trustSignals.map((signal) => (
-              <li key={signal.text}>
-                <span aria-hidden>
-                  <FlaticonIcon name={signal.icon} size={18} color="var(--color-brand)" />
-                </span>
-                {signal.text}
-              </li>
-            ))}
-          </ul>
-          <div className="sd-pro-photo" aria-hidden>
-            <FlaticonIcon name="hard-hat" size={40} color="var(--color-brand)" />
-          </div>
-        </div>
-      </section>
-
-      <section className="sd-section">
-        <h2 className="sd-section-title">Our equipments</h2>
-        <div className="sd-equipment-grid">
-          {detail.equipment.map((item) => (
-            <div key={item.name} className="sd-equipment-card">
-              <span className="sd-equipment-icon">
-                <FlaticonIcon name={item.icon} size={24} color="var(--color-brand)" />
-              </span>
-              <span className="sd-equipment-name">{item.name}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="sd-section">
-        <h2 className="sd-section-title">What we will need from you</h2>
-        <div className="sd-requirements-row">
-          {detail.requirements.map((item) => (
-            <div key={item.name} className="sd-requirement-card">
-              <span className="sd-req-icon">
-                <FlaticonIcon name={item.icon} size={22} color="var(--color-brand)" />
-              </span>
-              <span>{item.name}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="sd-section sd-protection">
-        <div>
-          <h2 className="sd-section-title">Damage protection</h2>
-          <p className="sd-protection-text">{detail.damageProtection}</p>
-        </div>
-        <span className="sd-shield" aria-hidden>
-          <FlaticonIcon name="shield-check" size={32} color="var(--color-brand)" />
-        </span>
-      </section>
-
-      <section className="sd-section">
-        <h2 className="sd-section-title">Frequently asked questions</h2>
-        <ServiceDetailFaq items={detail.faqs} />
-      </section>
-
-      <section className="sd-section">
-        <div className="sd-ratings-header">
-          <div>
-            <span className="sd-rating-big">★ {detail.rating.toFixed(2)}</span>
-            <span className="sd-review-count">{detail.reviewCountLabel}</span>
-          </div>
-        </div>
-        <div className="sd-rating-bars">
-          {detail.ratingDistribution.map((row) => (
-            <div key={row.stars} className="sd-rating-bar-row">
-              <span className="sd-bar-label">★ {row.stars}</span>
-              <div className="sd-bar-track">
-                <div className="sd-bar-fill" style={{ width: `${row.percent}%` }} />
+      {/* BOTTOM SECTION: Related Services */}
+      <div className="sd-related-services-v3">
+        <h2 className="sd-section-title-v3">Related services</h2>
+        <div className="sd-related-grid">
+          {DUMMY_RELATED.map(rel => (
+            <div key={rel.id} className="sd-related-card">
+              <div className="sd-related-img-box">
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3f4f6' }}>
+                  <FlaticonIcon name="air-conditioner" size={48} color="#6366f1" />
+                </div>
               </div>
-              <span className="sd-bar-count">{row.label}</span>
+              <div className="sd-related-info">
+                <h3>{rel.name}</h3>
+                <span className="sd-related-rating">★ {rel.rating} • {rel.time}</span>
+                <div className="sd-related-action">
+                  <strong>{formatPrice(rel.price)}</strong>
+                  <button className="sd-related-add-btn">Add</button>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-      </section>
+      </div>
 
-      <section className="sd-section">
-        <div className="sd-reviews-header">
-          <h2 className="sd-section-title">All reviews</h2>
-          <span className="sd-filter-link">Filter</span>
-        </div>
-        <div className="sd-filter-chips">
-          <span className="sd-chip">Most detailed</span>
-          <span className="sd-chip">In my area</span>
-          <span className="sd-chip">Frequent users</span>
-        </div>
-        <ServiceDetailReviews reviews={detail.reviews} />
-      </section>
-
-      <ServiceShareButton title={service.name} url={shareUrl} />
-
-      <div className="sd-footer-actions">
-        <Link href={bookHref} className="btn btn-primary sd-book-btn">
+      {/* Mobile Footer Sticky Action */}
+      <div className="sd-footer-actions desktop-hidden">
+        <Link href={bookHref} className="btn btn-black sd-book-btn">
           {service.archetype === "E" ? "View openings" : primaryBookLabel}
         </Link>
         {showSave && <SaveServiceButton serviceId={service.id} initialSaved={isSaved} />}

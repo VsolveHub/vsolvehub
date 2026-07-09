@@ -5,7 +5,6 @@ import { ProfileSubPage } from "@/components/customer/profile/ProfileSubPage";
 import { ProfileBookingsSummary } from "@/components/customer/profile/ProfileStats";
 import { getAllUserBookings } from "@/lib/bookings/user-bookings";
 import { formatPrice } from "@/lib/format";
-import { Badge } from "@/components/ui/Badge";
 
 const KIND_LABELS = {
   service: "Service",
@@ -25,35 +24,52 @@ export default async function ProfileBookingsPage() {
       <ProfileBookingsSummary count={bookings.length} totalPaise={totalPaise} />
       {bookings.length === 0 ? (
         <div className="empty-state">
+          <div className="empty-state-icon" aria-hidden>
+            📋
+          </div>
           <p>No bookings yet.</p>
           <Link href="/services" className="btn btn-primary">
             Browse services
           </Link>
         </div>
       ) : (
-        <div className="stack">
-          {bookings.map((b) => (
-            <Link key={`${b.kind}-${b.id}`} href={b.trackHref} className="card">
-              <div className="flex-between">
-                <p className="card-title">{b.title}</p>
-                <Badge status={b.status}>{b.status.replace(/_/g, " ")}</Badge>
+        <div className="booking-list-v3">
+          {bookings.map((b) => {
+            const isNoWorker = b.status === "pending" || b.status === "no_worker_found";
+            const statusText = isNoWorker ? "NO WORKER FOUND" : b.status.replace(/_/g, " ").toUpperCase();
+            
+            return (
+              <div key={`${b.kind}-${b.id}`} className="booking-list-card-v3">
+                <div className="card-header-v3">
+                  <div className="card-title-group-v3">
+                    <h3 className="card-title-v3">{b.title}</h3>
+                    <p className="card-ref-v3">{b.bookingRef}</p>
+                  </div>
+                  <div className={`card-status-v3 ${isNoWorker ? 'status-alert' : 'status-normal'}`}>
+                    {statusText}
+                  </div>
+                </div>
+
+                <div className="card-tags-v3">
+                  <span className="card-tag-v3">{KIND_LABELS[b.kind]}</span>
+                  <span className="card-tag-v3">{b.categoryLabel}</span>
+                  {b.assignedPartnerName && (
+                    <span className="card-tag-v3">👤 {b.assignedPartnerName}</span>
+                  )}
+                </div>
+
+                <div className="card-footer-v3">
+                  <div className="card-meta-v3">
+                    <span className="meta-item-v3">📅 {b.dateLabel}</span>
+                    <span className="meta-item-v3">💵 {formatPrice(b.amountPaise)}</span>
+                  </div>
+                  <Link href={b.trackHref} className="card-details-btn-v3">
+                    View Details
+                  </Link>
+                </div>
               </div>
-              <div className="flex justify-between items-center">
-                <p className="card-text m-0">{b.bookingRef}</p>
-                {b.assignedPartnerName && (
-                  <p className="text-[10px] bg-purple-50 text-purple-700 border border-purple-100 px-1.5 py-0.5 rounded-md font-extrabold m-0">
-                    👤 {b.assignedPartnerName}
-                  </p>
-                )}
-              </div>
-              <p className="text-sm text-muted">
-                {KIND_LABELS[b.kind]} · {b.categoryLabel}
-              </p>
-              <p className="text-sm text-muted">
-                {b.dateLabel} · {formatPrice(b.amountPaise)}
-              </p>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </ProfileSubPage>

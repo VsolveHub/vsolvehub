@@ -52,35 +52,49 @@ export function HelpSection() {
 
 export function PlansSection() {
   return (
-    <div className="profile-panel-stack">
-      <p className="profile-panel-intro">
-        Subscriptions and repeat service plans. Pause or cancel anytime.
-      </p>
-      {SERVICE_PLANS.map((plan) => (
-        <article key={plan.id} className="profile-panel">
-          <div className="profile-panel-row">
-            <h2 className="profile-panel-title">{plan.name}</h2>
-            <span className="profile-badge profile-badge-active">{plan.status}</span>
+    <div className="plans-split-layout">
+      <div className="plans-split-left">
+        <div className="profile-panel-stack">
+          <p className="profile-panel-intro">
+            Subscriptions and repeat service plans. Pause or cancel anytime.
+          </p>
+          {SERVICE_PLANS.map((plan) => (
+            <article key={plan.id} className="profile-panel">
+              <div className="profile-panel-row">
+                <h2 className="profile-panel-title">{plan.name}</h2>
+                <span className="profile-badge profile-badge-active">{plan.status}</span>
+              </div>
+              <div className="profile-meta-grid">
+                <div>
+                  <span className="profile-meta-label">Frequency</span>
+                  <span className="profile-meta-value">{plan.frequency}</span>
+                </div>
+                <div>
+                  <span className="profile-meta-label">Next visit</span>
+                  <span className="profile-meta-value">{plan.nextVisit}</span>
+                </div>
+                <div>
+                  <span className="profile-meta-label">Price</span>
+                  <span className="profile-meta-value">{formatPrice(plan.pricePaise)}/visit</span>
+                </div>
+              </div>
+            </article>
+          ))}
+          <Link href="/services?category=home-services" className="btn btn-secondary btn-block">
+            Browse plans &amp; packages
+          </Link>
+        </div>
+      </div>
+      <div className="plans-split-right">
+        <div className="plans-promo-card">
+          <img src="/basic_home_cleaning_hd.jpg" alt="Premium Home Services" className="plans-promo-image" />
+          <div className="plans-promo-content">
+            <h3>V Solve Plus Membership</h3>
+            <p>Unlock exclusive 15% discounts and unlimited priority bookings on all your recurring plans.</p>
+            <Link href="/profile/membership" className="plans-promo-btn">Explore Benefits</Link>
           </div>
-          <div className="profile-meta-grid">
-            <div>
-              <span className="profile-meta-label">Frequency</span>
-              <span className="profile-meta-value">{plan.frequency}</span>
-            </div>
-            <div>
-              <span className="profile-meta-label">Next visit</span>
-              <span className="profile-meta-value">{plan.nextVisit}</span>
-            </div>
-            <div>
-              <span className="profile-meta-label">Price</span>
-              <span className="profile-meta-value">{formatPrice(plan.pricePaise)}/visit</span>
-            </div>
-          </div>
-        </article>
-      ))}
-      <Link href="/services?category=home-services" className="btn btn-secondary btn-block">
-        Browse plans &amp; packages
-      </Link>
+        </div>
+      </div>
     </div>
   );
 }
@@ -88,25 +102,33 @@ export function PlansSection() {
 export function WalletSection() {
   return (
     <div className="profile-panel-stack">
-      <section className="profile-panel profile-wallet-balance">
-        <span className="profile-meta-label">Available balance</span>
-        <p className="profile-wallet-amount">{formatPrice(WALLET_BALANCE_PAISE)}</p>
-        <button type="button" className="btn btn-primary btn-sm">
-          Add money
+      <section className="wallet-premium-card">
+        <div className="wallet-premium-header">
+          <span className="wallet-label">Available Balance</span>
+          <span className="wallet-icon">💳</span>
+        </div>
+        <p className="wallet-amount">{formatPrice(WALLET_BALANCE_PAISE)}</p>
+        <button type="button" className="wallet-add-btn">
+          Add Money +
         </button>
       </section>
 
-      <section className="profile-panel">
-        <h2 className="profile-panel-title">Recent transactions</h2>
-        <div className="profile-tx-list">
+      <section className="wallet-tx-section">
+        <h2 className="wallet-tx-title">Recent Transactions</h2>
+        <div className="wallet-tx-list">
           {WALLET_TRANSACTIONS.map((tx) => (
-            <div key={tx.id} className="profile-tx-row">
-              <div>
-                <p className="profile-tx-label">{tx.label}</p>
-                <p className="profile-tx-date">{tx.date}</p>
+            <div key={tx.id} className="wallet-tx-item">
+              <div className="wallet-tx-info">
+                <div className={`wallet-tx-icon ${tx.type === "credit" ? "credit" : "debit"}`}>
+                  {tx.type === "credit" ? "↓" : "↑"}
+                </div>
+                <div>
+                  <p className="wallet-tx-label">{tx.label}</p>
+                  <p className="wallet-tx-date">{tx.date}</p>
+                </div>
               </div>
-              <span className={tx.type === "credit" ? "profile-tx-credit" : "profile-tx-debit"}>
-                {tx.type === "credit" ? "+" : ""}
+              <span className={`wallet-tx-amount ${tx.type === "credit" ? "credit" : "debit"}`}>
+                {tx.type === "credit" ? "+" : "-"}
                 {formatPrice(Math.abs(tx.amountPaise))}
               </span>
             </div>
@@ -119,25 +141,35 @@ export function WalletSection() {
 
 export function MembershipSection() {
   return (
-    <div className="profile-panel-stack">
-      <section className="profile-panel profile-membership-hero">
-        <span className="profile-membership-badge">V SOLVE HUB PLUS</span>
-        <h2 className="profile-panel-title">Unlock exclusive benefits</h2>
-        <p className="profile-panel-text">₹299/month · Cancel anytime</p>
-      </section>
-
-      <section className="profile-panel">
-        <h2 className="profile-panel-title">What you get</h2>
-        <ul className="profile-check-list">
-          {MEMBERSHIP_BENEFITS.map((benefit) => (
-            <li key={benefit}>{benefit}</li>
-          ))}
-        </ul>
-      </section>
-
-      <button type="button" className="btn btn-primary btn-block">
-        Join Plus membership
-      </button>
+    <div className="membership-split-layout">
+      <div className="membership-left">
+        <section className="membership-premium-card">
+          <div className="membership-badge-glow">V SOLVE HUB PLUS</div>
+          <h2 className="membership-title">Unlock Exclusive Benefits</h2>
+          <p className="membership-subtitle">₹299/month · Cancel anytime</p>
+          
+          <ul className="membership-benefits-list">
+            {MEMBERSHIP_BENEFITS.map((benefit) => (
+              <li key={benefit}>
+                <span className="membership-check">✨</span>
+                {benefit}
+              </li>
+            ))}
+          </ul>
+          
+          <button type="button" className="membership-join-btn">
+            Join Plus Membership
+          </button>
+        </section>
+      </div>
+      <div className="membership-right">
+        <div className="membership-promo-image-wrapper">
+          <img src="/basic_home_cleaning_hd.jpg" alt="V Solve Plus" className="membership-promo-image" />
+          <div className="membership-image-overlay">
+            <p>Experience true luxury home services.</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -147,30 +179,44 @@ export function RatingSection({ bookingCount }: { bookingCount: number }) {
 
   return (
     <div className="profile-panel-stack">
-      <section className="profile-panel profile-rating-hero">
-        <span className="profile-rating-big">★ {rating.score.toFixed(2)}</span>
-        <p className="profile-panel-text">Your rating as a customer on V Solve Hub</p>
+      <section className="rating-premium-card">
+        <div className="rating-glow-wrapper">
+          <span className="rating-star-icon">⭐</span>
+        </div>
+        <h2 className="rating-score">{rating.score.toFixed(2)}</h2>
+        <p className="rating-subtitle">Your rating as a customer on V Solve Hub</p>
       </section>
 
-      <section className="profile-panel">
-        <div className="profile-meta-grid">
-          <div>
-            <span className="profile-meta-label">Reviews given</span>
-            <span className="profile-meta-value">{rating.reviewsGiven}</span>
-          </div>
-          <div>
-            <span className="profile-meta-label">Compliments</span>
-            <span className="profile-meta-value">{rating.compliments.join(", ")}</span>
+      <section className="rating-stats-grid">
+        <div className="rating-stat-card">
+          <span className="stat-label">Reviews given</span>
+          <span className="stat-value">{rating.reviewsGiven}</span>
+        </div>
+        <div className="rating-stat-card">
+          <span className="stat-label">Compliments received</span>
+          <div className="stat-pill-list">
+            {rating.compliments.map(c => (
+              <span key={c} className="stat-pill">{c}</span>
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="profile-panel">
-        <h2 className="profile-panel-title">Tips to keep a high rating</h2>
-        <ul className="profile-bullet-list">
-          <li>Be available at the booked slot time</li>
-          <li>Provide clear site access and requirements</li>
-          <li>Rate professionals after each completed job</li>
+      <section className="rating-tips-card">
+        <h2 className="rating-tips-title">Tips to keep a high rating</h2>
+        <ul className="rating-tips-list">
+          <li>
+            <span className="tip-icon">🕒</span>
+            <p>Be available at the booked slot time</p>
+          </li>
+          <li>
+            <span className="tip-icon">🔑</span>
+            <p>Provide clear site access and requirements</p>
+          </li>
+          <li>
+            <span className="tip-icon">📝</span>
+            <p>Rate professionals after each completed job</p>
+          </li>
         </ul>
       </section>
     </div>

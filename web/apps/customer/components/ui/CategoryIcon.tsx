@@ -1,4 +1,4 @@
-import { FlaticonIcon } from "./FlaticonIcon";
+import { getCategorySketchIllustration } from "@/lib/catalog/service-sketch-illustrations";
 
 type Props = {
   slug: string;
@@ -6,17 +6,23 @@ type Props = {
   size?: number;
   color?: string;
   className?: string;
+  name?: string;
 };
 
-/** Renders a category icon via Flaticon (slug-first, then legacy icon string). */
-export function CategoryIcon({ slug, icon, size = 24, color = "currentColor", className }: Props) {
+/** Category tile / header — always uses hand-drawn niche illustration. */
+export function CategoryIcon({ slug, size = 24, className, name }: Props) {
+  const src = getCategorySketchIllustration(slug);
+
   return (
-    <FlaticonIcon
-      name={icon ?? slug}
-      categorySlug={slug}
-      size={size}
-      color={color}
-      className={className}
+    <img
+      src={src}
+      alt={name ?? slug}
+      width={size}
+      height={size}
+      className={`service-sketch service-sketch--icon${className ? ` ${className}` : ""}`}
+      style={{ borderRadius: "inherit", objectFit: "cover" }}
+      loading="lazy"
+      decoding="async"
     />
   );
 }

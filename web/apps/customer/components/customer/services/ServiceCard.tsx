@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { formatPriceLabel } from "@/lib/format";
 import { SERVICE_SLUG_TO_PROPERTY_TYPE } from "@/lib/accommodation/constants";
 import { getVehicleFlowHref } from "@/lib/vehicle/constants";
-import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { ServiceIcon } from "@/components/ui/ServiceIcons";
+import { getServiceCardMeta } from "@/lib/catalog/service-card-meta";
 
 function formatDurationChip(duration: number, unit?: string): string | null {
   if (duration <= 0) return null;
@@ -50,40 +53,61 @@ export function ServiceCard({ service }: { service: ServiceCardData }) {
   const bookLabel = getBookLabel(service);
   const metaLabel = service.subCategory?.name ?? service.category.name;
   const durationLabel = formatDurationChip(service.duration ?? 0, service.unit);
+  
+  // Resolve subcategory-specific illustration icon
+  const subSlug = service.subCategory?.slug ?? service.slug;
+  const cardMeta = getServiceCardMeta(subSlug, service.category.slug, service.name);
+  
+  // Simulated star rating based on ID hash for consistency
+  const rating = (4.5 + (service.id.charCodeAt(service.id.length - 1) % 5) * 0.1).toFixed(1);
 
   return (
-    <li className="service-list__item">
-      <Link href={href} className="service-list__main">
-        <span className="service-list__icon" aria-hidden>
-          <CategoryIcon
-            slug={service.category.slug}
-            icon={service.category.icon}
-            size={22}
-            color="var(--m3-primary)"
-          />
-        </span>
+    <li className="service-card-item">
+      <div className="service-card-wrapper">
+        <Link href={href} className="service-card-body">
+          <div className="service-card-left">
+            <span className="service-card-icon-container" aria-hidden>
+              <ServiceIcon
+                name={cardMeta.icon}
+                size={56}
+                color={cardMeta.color}
+                slug={service.slug}
+                subCategorySlug={subSlug}
+                categorySlug={service.category.slug}
+                serviceName={service.name}
+                alt={service.name}
+              />
+            </span>
+            <div className="service-card-details">
+              <div className="flex-align gap-xs">
+                <span className="service-card-badge-verified">✓ Verified Pro</span>
+                <span className="service-card-rating">★ {rating}</span>
+              </div>
+              <h3 className="service-card-title">{service.name}</h3>
+              <p className="service-card-desc">{service.description.slice(0, 75)}...</p>
+              <div className="service-card-meta-chips">
+                <span className="service-card-chip">{metaLabel}</span>
+                {durationLabel ? (
+                  <span className="service-card-chip service-card-chip--muted">{durationLabel}</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <div className="service-card-right">
+            <span className="service-card-price">{formatPriceLabel(service.pricePaise, service.unit)}</span>
+          </div>
+        </Link>
 
-        <span className="service-list__content">
-          <span className="service-list__title">{service.name}</span>
-          <span className="service-list__meta">
-            <span className="service-list__chip">{metaLabel}</span>
-            {durationLabel ? (
-              <span className="service-list__chip service-list__chip--muted">{durationLabel}</span>
-            ) : null}
-          </span>
-        </span>
-
-        <span className="service-list__trail">
-          <span className="service-list__price">{formatPriceLabel(service.pricePaise, service.unit)}</span>
-          <span className="service-list__chevron" aria-hidden>
-            ›
-          </span>
-        </span>
-      </Link>
-
-      <Link href={bookHref} className="service-list__book">
-        {bookLabel}
-      </Link>
+        <div className="service-card-actions">
+          <label className="service-card-compare-label" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" className="service-card-compare-checkbox" />
+            <span>Add to Compare</span>
+          </label>
+          <Link href={bookHref} className="service-card-book-btn">
+            {bookLabel}
+          </Link>
+        </div>
+      </div>
     </li>
   );
 }

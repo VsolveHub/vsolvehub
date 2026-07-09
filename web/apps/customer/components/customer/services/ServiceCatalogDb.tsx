@@ -16,11 +16,12 @@ export async function ServiceCatalogDb() {
       const count = sub.services.length;
       return {
         id: sub.id,
+        slug: sub.slug,
         name: sub.name,
         href: `/services/${category.slug}/${sub.slug}`,
         icon: meta.icon,
         color: meta.color,
-        subtitle: `${count} ${count === 1 ? "service" : "services"}`,
+        subtitle: `${count} ${count === 1 ? "service" : "services"} available`,
       };
     });
 
@@ -32,6 +33,7 @@ export async function ServiceCatalogDb() {
         const meta = getServiceCardMeta(service.slug, category.slug, service.name);
         return {
           id: service.id,
+          slug: service.slug,
           name: service.name,
           href: `/services/${category.slug}/${service.slug}`,
           icon: meta.icon,

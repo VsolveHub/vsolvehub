@@ -8,7 +8,7 @@ export function HomeFaq() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
-    <section className="home-section home-faq" aria-labelledby="home-faq-heading">
+    <div className="home-faq" aria-labelledby="home-faq-heading">
       <div className="section-header-row">
         <h2 id="home-faq-heading" className="home-section-title">
           Frequently asked questions
@@ -38,7 +38,7 @@ export function HomeFaq() {
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }
 

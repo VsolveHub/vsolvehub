@@ -10,6 +10,10 @@ export function MessagesInbox({ bookings }: Props) {
 
   return (
     <div className="messages-inbox">
+      <p className="messages-inbox-header">
+        Chat with support or open an active booking to track progress.
+      </p>
+
       <Link href="/profile/help" className="messages-thread messages-thread-support">
         <span className="messages-thread-avatar" aria-hidden>
           VS
@@ -49,6 +53,9 @@ export function MessagesInbox({ bookings }: Props) {
         </>
       ) : (
         <div className="empty-state messages-empty">
+          <div className="empty-state-icon" aria-hidden>
+            💬
+          </div>
           <p>No active booking chats yet.</p>
           <p className="text-sm text-muted">
             When you book a service, updates and contact options appear on the booking page.

@@ -5,7 +5,7 @@ import { ServiceIcon } from "@/components/ui/ServiceIcons";
 
 export function QuickServices() {
   return (
-    <section className="home-section quick-services">
+    <div className="quick-services">
       <div className="section-header-row">
         <h2 className="home-section-title">Quick Services</h2>
         <Link href="/services" className="section-link">
@@ -32,6 +32,6 @@ export function QuickServices() {
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }

@@ -77,3 +77,7 @@ export function ProfileIcon({ active, size = 22 }: IconProps) {
     />
   );
 }
+
+export function CartIcon({ size = 20 }: IconProps) {
+  return <FlaticonIcon name="shopping-cart" size={size} />;
+}

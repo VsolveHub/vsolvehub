@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { AppHeader, BottomNav } from "@/components/shared/AppShell";
+import { AppFooter } from "@/components/shared/AppFooter";
 
 export function ShellSwitcher({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -110,17 +111,17 @@ export function ShellSwitcher({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const isServiceSlugPage = pathname.startsWith("/services/") && pathname.split("/").length > 3;
-  const isBookingFlow = pathname.startsWith("/booking");
-  const isVehicleFlow = pathname.startsWith("/vehicle");
-  const hideHeader = isServiceSlugPage || isBookingFlow || isVehicleFlow;
-  const hideBottomNav = isServiceSlugPage || isBookingFlow;
+  // Keep navigation present on all customer pages for a consistent, user-friendly app feel.
+  // The header already supports a compact mode on certain routes via `app-header--compact`.
+  const hideHeader = false;
+  const hideBottomNav = false;
 
   return (
-    <div suppressHydrationWarning>
+    <div className="shell-switcher-layout" suppressHydrationWarning>
       {!hideHeader && <AppHeader />}
-      <main className={hideBottomNav ? "" : "main-content"}>{children}</main>
+      <main className={hideBottomNav ? "main-content-wrapper" : "main-content main-content-wrapper"}>{children}</main>
       {!hideBottomNav && <BottomNav />}
+      <AppFooter />
     </div>
   );
 }
