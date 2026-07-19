@@ -60,16 +60,34 @@ export async function authorizeOrder(input: AuthorizeOrderInput): Promise<Author
     };
   }
 
-  const order = await prisma.order.create({
-    data: {
-      orderRef: generateOrderRef(),
-      userId: input.userId,
-      status: "PENDING_PAYMENT",
-      paymentState: "NONE",
-      paymentMethod: input.method,
-      idempotencyKey: input.idempotencyKey,
-    },
+  // At most one open order per user (enforced by the partial unique index
+  // Order_one_open_per_user). An order left at PENDING_PAYMENT by an abandoned or
+  // declined attempt IS the user's open checkout, so recycle it rather than
+  // creating a second one — otherwise a single declined card would permanently
+  // block the customer from booking again.
+  const open = await prisma.order.findFirst({
+    where: { userId: input.userId, status: { in: ["DRAFT", "PENDING_PAYMENT"] } },
   });
+
+  const order = open
+    ? await prisma.order.update({
+        where: { id: open.id },
+        data: {
+          status: "PENDING_PAYMENT",
+          paymentMethod: input.method,
+          idempotencyKey: input.idempotencyKey,
+        },
+      })
+    : await prisma.order.create({
+        data: {
+          orderRef: generateOrderRef(),
+          userId: input.userId,
+          status: "PENDING_PAYMENT",
+          paymentState: "NONE",
+          paymentMethod: input.method,
+          idempotencyKey: input.idempotencyKey,
+        },
+      });
 
   const auth = await getPaymentGateway().authorize({
     amountPaise: input.amountPaise,
@@ -101,7 +119,7 @@ export async function authorizeOrder(input: AuthorizeOrderInput): Promise<Author
     prisma.order.update({
       where: { id: order.id },
       data: {
-        status: isCod ? "AUTHORIZED" : "AUTHORIZED",
+        status: "AUTHORIZED",
         paymentState: auth.state,
         gatewayIntentId: auth.intentId,
         authorizedPaise,
