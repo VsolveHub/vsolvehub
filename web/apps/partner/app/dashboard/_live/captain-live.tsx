@@ -54,7 +54,7 @@ import { inr } from "@/lib/format";
 import { logout } from "./actions";
 import { WithdrawSheet } from "./withdraw-sheet";
 import { setOnlineStatus } from "./availability-actions";
-import { arriveAction, startAction, completeAction } from "./work-actions";
+import { arriveAction, startAction, completeAction, releaseAction } from "./work-actions";
 export type Offer = {
   kind: "RIDE" | "CLEAN" | "REPAIR";
   title: string;
@@ -217,6 +217,7 @@ export function CaptainLive(props: Props) {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [workError, setWorkError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
 
   const active = props.status === "ACTIVE";
   const online = stage !== "offline" && stage !== "complete";
@@ -256,6 +257,17 @@ export function CaptainLive(props: Props) {
     setBusy(false);
     if (res.ok) setStage("arrived");
     else setWorkError(res.error ?? "Could not update status");
+  }
+  // Partner bails before starting — release the job for reassignment.
+  async function onRelease() {
+    if (!jobId || busy) return;
+    setBusy(true);
+    setWorkError("");
+    const res = await releaseAction(jobId);
+    setBusy(false);
+    setConfirmRelease(false);
+    if (res.ok) setStage("searching");
+    else setWorkError(res.error ?? "Could not release this job");
   }
   // PROVIDER_ARRIVING → STARTED (start OTP)
   async function onStartWork() {
@@ -339,6 +351,9 @@ export function CaptainLive(props: Props) {
                   onArrived={onArrived}
                   onStartWork={onStartWork}
                   onComplete={complete}
+                  onRelease={onRelease}
+                  confirmRelease={confirmRelease}
+                  setConfirmRelease={setConfirmRelease}
                   workError={workError}
                   busy={busy}
                   onContinue={backToQueue}
@@ -657,6 +672,9 @@ type HomeProps = Props & {
   onStartWork: () => void;
   onComplete: () => void;
   onContinue: () => void;
+  onRelease: () => void;
+  confirmRelease: boolean;
+  setConfirmRelease: (v: boolean) => void;
   workError: string;
   busy: boolean;
 };
@@ -1023,6 +1041,39 @@ function EnrouteScreen(p: HomeProps) {
       >
         <Navigation className="h-5 w-5" /> {p.busy ? "Updating…" : "I've Arrived"}
       </button>
+
+      {p.confirmRelease ? (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3">
+          <p className="text-xs font-semibold text-red-800">
+            Release this job? We'll find the customer another professional. Frequent releases affect
+            your reliability.
+          </p>
+          <div className="mt-2.5 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => p.setConfirmRelease(false)}
+              disabled={p.busy}
+              className="rounded-lg border border-gray-300 py-2 text-xs font-bold text-gray-600 disabled:opacity-50"
+            >
+              Keep job
+            </button>
+            <button
+              onClick={p.onRelease}
+              disabled={p.busy}
+              className="rounded-lg bg-red-600 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {p.busy ? "Releasing…" : "Yes, release"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => p.setConfirmRelease(true)}
+          disabled={p.busy}
+          className="mt-2 w-full rounded-xl py-2.5 text-xs font-semibold text-gray-500 underline-offset-2 hover:underline disabled:opacity-50"
+        >
+          Can't make it?
+        </button>
+      )}
       {p.workError ? <p className="mt-3 text-center text-sm font-medium text-red-600">{p.workError}</p> : null}
     </div>
   );

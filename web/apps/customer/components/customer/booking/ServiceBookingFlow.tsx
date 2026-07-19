@@ -20,8 +20,9 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatPrice } from "@/lib/format";
 import { FlowPageShell } from "@/components/shared/FlowPageShell";
-import { api } from "@/lib/query/api";
+import { api, ApiError } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
+import { NoProvidersScreen, type SlotSuggestion } from "@/components/customer/booking/NoProvidersScreen";
 import {
   getServiceConfig,
   defaultDetailValues,
@@ -164,6 +165,15 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   const [pendingSubmit, setPendingSubmit] = useState(false);
   const [showAddrPicker, setShowAddrPicker] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+  // Availability gate: how many pros can take the chosen slot (shown on the pay
+  // step), and the "no one is free" screen when the answer is zero.
+  const [availableCount, setAvailableCount] = useState<number | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [noProviders, setNoProviders] = useState<{
+    slotLabel: string;
+    suggestedSlots: SlotSuggestion[];
+    refunded: boolean;
+  } | null>(null);
 
   // Guard the details step: an address is required, and every field flagged
   // `required` in the service config must have a non-empty value. Returns true
@@ -191,7 +201,9 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     return true;
   }
 
-  const days = useMemo(() => nextDays(5), []);
+  // 7 days so a suggested slot (the matcher walks a 7-day grid) always has a
+  // matching date chip to highlight when the customer taps it.
+  const days = useMemo(() => nextDays(7), []);
 
   // The live estimate — recomputed on every requirement tap and shown wherever a
   // price appears, so the summary, the banner, and the confirm button can never
@@ -313,10 +325,68 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     return d.toISOString();
   }
 
+  /** Human label for the currently chosen slot, e.g. "Wed · 02–04 PM". */
+  function currentSlotLabel(): string {
+    if (scheduleType === "instant") return "the next hour";
+    const day = days.find((d) => d.key === dateKey);
+    return `${day?.day ?? "your slot"} · ${timeSlot}`;
+  }
+
+  /** Jump back to the slot step with a suggested time preselected. */
+  function applySuggestedSlot(iso: string) {
+    const d = new Date(iso);
+    const blockIdx = Math.max(0, Math.min(TIME_SLOTS.length - 1, Math.round((d.getHours() - 8) / 2)));
+    setScheduleType("scheduled");
+    setDateKey(d.toISOString().slice(0, 10));
+    setTimeSlot(TIME_SLOTS[blockIdx]!);
+    setAvailableCount(null);
+    setNoProviders(null);
+    setStep("when");
+  }
+
+  // The pre-payment gate. A cached (≤30s) check keeps this instant on revisit;
+  // the server re-checks authoritatively at submit regardless. If the check
+  // itself fails we don't block the customer — the server gate still protects us.
+  async function continueToPayment() {
+    if (!validateDetails() || !service) return;
+    setCheckingAvailability(true);
+    try {
+      const res = await queryClient.fetchQuery({
+        queryKey: qk.availability(service.id, addressId, buildSlotIso(), scheduleType),
+        queryFn: () =>
+          api.availability({ serviceId: service.id, addressId, slot: buildSlotIso(), scheduleType }),
+        staleTime: 30_000,
+      });
+      if (res.count === 0) {
+        setNoProviders({ slotLabel: currentSlotLabel(), suggestedSlots: res.suggestedSlots, refunded: false });
+      } else {
+        setAvailableCount(res.count);
+        setStep("payment");
+      }
+    } catch {
+      setStep("payment");
+    } finally {
+      setCheckingAvailability(false);
+    }
+  }
+
   const createBooking = useMutation({
     mutationFn: (payload: Record<string, unknown>) => api.createBooking(payload),
     onSuccess: (data) => router.push(`/booking/track/${data.bookingRef}`),
-    onError: (e) => setError(e instanceof Error ? e.message : "Could not create booking"),
+    onError: (e) => {
+      // A 409 NO_PROVIDERS means the slot emptied between the gate and submit
+      // (or the last pro was taken in the race). Show the same screen; the body
+      // tells us whether money was taken and refunded.
+      if (e instanceof ApiError && e.body?.code === "NO_PROVIDERS") {
+        setNoProviders({
+          slotLabel: currentSlotLabel(),
+          suggestedSlots: (e.body.suggestedSlots as SlotSuggestion[]) ?? [],
+          refunded: e.body.refunded === true,
+        });
+        return;
+      }
+      setError(e instanceof Error ? e.message : "Could not create booking");
+    },
   });
 
   function submit() {
@@ -458,6 +528,24 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       </div>
     </div>
   );
+
+  if (noProviders) {
+    return (
+      <FlowPageShell header={customHeader} stepper={null} aside={null} footer={null}>
+        <NoProvidersScreen
+          slotLabel={noProviders.slotLabel}
+          suggestedSlots={noProviders.suggestedSlots}
+          refunded={noProviders.refunded}
+          onPickSlot={applySuggestedSlot}
+          onTryAgain={() => {
+            setNoProviders(null);
+            setStep("when");
+          }}
+          onGoHome={() => router.push("/")}
+        />
+      </FlowPageShell>
+    );
+  }
 
   return (
     <FlowPageShell
@@ -797,10 +885,11 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 <span>Safe &amp; Professional Services</span>
               </div>
               <button
-                className="w-full p-4 rounded-lg text-base font-bold cursor-pointer transition-opacity bg-brand text-white hover:opacity-90"
-                onClick={() => { if (validateDetails()) setStep("payment"); }}
+                className="w-full p-4 rounded-lg text-base font-bold cursor-pointer transition-opacity bg-brand text-white hover:opacity-90 disabled:opacity-60"
+                onClick={continueToPayment}
+                disabled={checkingAvailability}
               >
-                Continue to payment ›
+                {checkingAvailability ? "Checking availability…" : "Continue to payment ›"}
               </button>
             </div>
           </div>
@@ -812,6 +901,14 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
             <h2 className="provider-title">Review &amp; pay</h2>
             <div className="provider-step-counter">Final step</div>
             <div className="provider-divider-v3"></div>
+
+            {availableCount !== null && availableCount > 0 && (
+              <div className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-[0.82rem] font-semibold text-green-800">
+                <FlaticonIcon name="bolt" size={15} />
+                {availableCount} professional{availableCount > 1 ? "s" : ""} available near you — you'll be
+                matched instantly.
+              </div>
+            )}
 
             {/* Price breakdown — the same numbers the server will recompute. */}
             <p className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">YOUR ESTIMATE</p>
@@ -875,10 +972,10 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
             <div className="provider-info-banner">
               <span className="info-icon"><FlaticonIcon name="bolt" size={16} /></span>
               <p>
-                We'll notify every available professional near you — the first to accept is
-                assigned. {paymentMethod === "cod"
+                We'll assign the best available professional the moment you confirm — you'll see
+                who's coming right away. {paymentMethod === "cod"
                   ? "You pay after the service is done."
-                  : "You're only charged once a professional accepts."}
+                  : "If no one can make it, you're refunded in full immediately."}
               </p>
             </div>
 

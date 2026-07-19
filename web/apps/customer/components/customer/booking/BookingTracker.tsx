@@ -90,7 +90,7 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
     <div className="mx-auto w-full flow-page-shell__inner bg-white border-b border-purple-100 px-4 py-3 shadow-sm">
       {searchingProvider && (
         <p className="text-xs font-semibold text-purple-900 m-0">
-          Request sent to nearby partners. Payment will open only after a partner accepts.
+          Your professional had to step away — we're finding you a new one now. No action needed.
         </p>
       )}
       {needsPayment && (

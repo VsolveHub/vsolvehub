@@ -12,6 +12,8 @@ export const qk = {
   bookings: () => ["bookings"] as const,
   providers: (serviceId: string, addressId?: string | null) =>
     ["providers", serviceId, addressId ?? ""] as const,
+  availability: (serviceId: string, addressId: string, slot: string, scheduleType: string) =>
+    ["availability", serviceId, addressId, slot, scheduleType] as const,
   vehicleBooking: (ref: string) => ["vehicle-booking", ref] as const,
   accommodationBooking: (ref: string) => ["accommodation-booking", ref] as const,
   properties: (query: string) => ["properties", query] as const,

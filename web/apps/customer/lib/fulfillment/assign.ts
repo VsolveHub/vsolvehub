@@ -125,6 +125,23 @@ export async function reassignAfterRelease(bookingId: string): Promise<void> {
 }
 
 /**
+ * Driven by the customer's tracker poll. A booking sits in SEARCHING_PROVIDER
+ * with no one assigned only after a partner bailed ("Can't make it") — direct
+ * assignment never leaves it there otherwise. When we see that state, run the
+ * reassignment. Safe to call on any booking: it acts only on that exact state,
+ * so it is a no-op for the happy ASSIGNED path and for terminal bookings.
+ */
+export async function driveReassignmentIfPending(bookingId: string): Promise<void> {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { status: true, assignedPartnerId: true, archetype: true },
+  });
+  if (!booking || booking.assignedPartnerId) return;
+  if (booking.archetype !== "A" || booking.status !== "SEARCHING_PROVIDER") return;
+  await reassignAfterRelease(bookingId);
+}
+
+/**
  * Terminal path when assignment cannot produce a professional after money has
  * moved: refund (captured) or void (uncaptured hold) this booking's share in
  * full, mark it NO_WORKER_FOUND, and re-derive the order. Idempotent — a booking
