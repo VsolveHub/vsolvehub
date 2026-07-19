@@ -1,6 +1,7 @@
 import { X, Star, Phone, MapPin, Navigation, Clock } from "lucide-react";
 import { MiniMap, type HomeProps } from "./homeShared";
 import { Stat } from "./Stat";
+import { ReleaseJobControl } from "./ReleaseJobControl";
 
 export function EnrouteScreen(p: HomeProps) {
   return (
@@ -65,38 +66,12 @@ export function EnrouteScreen(p: HomeProps) {
         <Navigation className="h-5 w-5" /> {p.busy ? "Updating…" : "I've Arrived"}
       </button>
 
-      {p.confirmRelease ? (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3">
-          <p className="text-xs font-semibold text-red-800">
-            Release this job? We'll find the customer another professional. Frequent releases affect
-            your reliability.
-          </p>
-          <div className="mt-2.5 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => p.setConfirmRelease(false)}
-              disabled={p.busy}
-              className="rounded-lg border border-gray-300 py-2 text-xs font-bold text-gray-600 disabled:opacity-50"
-            >
-              Keep job
-            </button>
-            <button
-              onClick={p.onRelease}
-              disabled={p.busy}
-              className="rounded-lg bg-red-600 py-2 text-xs font-bold text-white disabled:opacity-50"
-            >
-              {p.busy ? "Releasing…" : "Yes, release"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => p.setConfirmRelease(true)}
-          disabled={p.busy}
-          className="mt-2 w-full rounded-xl py-2.5 text-xs font-semibold text-gray-500 underline-offset-2 hover:underline disabled:opacity-50"
-        >
-          Can't make it?
-        </button>
-      )}
+      <ReleaseJobControl
+        confirmRelease={p.confirmRelease}
+        setConfirmRelease={p.setConfirmRelease}
+        onRelease={p.onRelease}
+        busy={p.busy}
+      />
       {p.workError ? <p className="mt-3 text-center text-sm font-medium text-red-600">{p.workError}</p> : null}
     </div>
   );
