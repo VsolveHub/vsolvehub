@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { ACTIVE_BOOKING_WHERE, recomputePartnerRating, type JobStatus } from "@vsolve/db";
 import { generateBookingRef } from "@/lib/format";
 import { isMarketplaceBooking } from "@/lib/bookings/archetype";
+import type { LineItem } from "@/lib/catalog/pricing";
 import {
   BOOKING_STATUSES,
   type AnyBookingStatus,
@@ -28,9 +29,16 @@ export async function createBooking(input: {
   paymentMethod?: string | null;
   scheduleType: string;
   vendorAssignmentMode?: string;
+  /** Priced breakdown snapshot — see Booking.lineItems in schema.prisma. */
+  lineItems?: LineItem[];
+  /**
+   * DRAFT for the pay-first flow (invisible and undispatchable until the order
+   * authorizes). Defaults to PENDING for legacy callers.
+   */
+  status?: JobStatus;
 }) {
   const bookingRef = generateBookingRef();
-  const initialStatus = "PENDING";
+  const initialStatus: JobStatus = input.status ?? "PENDING";
 
   const booking = await prisma.booking.create({
     data: {
@@ -45,6 +53,7 @@ export async function createBooking(input: {
       finalAmountPaise: input.quotedAmount,
       archetype: input.archetype ?? "A",
       archetypeDetails: JSON.stringify(input.archetypeDetails ?? {}),
+      lineItems: JSON.stringify(input.lineItems ?? []),
       issueDescription: input.issueDescription ?? "",
       mediaUrls: JSON.stringify(input.mediaUrls ?? []),
       paymentStatus: input.paymentStatus,

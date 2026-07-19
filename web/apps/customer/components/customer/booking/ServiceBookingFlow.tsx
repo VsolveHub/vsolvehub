@@ -2,18 +2,24 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ServiceBookingFlow — the single, config-driven booking flow for all four
-// Phase-1 dispatch categories (Technician, Beauty, Home, Pet). Replaces the
-// per-category *BookingFlow components. Screens:
-//   service → guidelines → when (instant/scheduled) → details → provider → submit
-// After submit it redirects to /booking/track/[ref], where BookingTracker owns the
-// searching → pay-after-accept → live tracking sequence.
+// Phase-1 dispatch categories (Technician, Beauty, Home, Pet). Screens:
+//   service → guidelines → when (instant/scheduled) → requirements → payment
+//
+// The customer never picks a professional. They pay, and dispatch fans the job
+// out to every eligible provider in range; the first to accept is assigned. That
+// keeps the customer out of a choice they cannot make well (who is actually free
+// right now) and it is what makes the money flow work: the job is funded before
+// any provider is asked to commit to it.
+//
+// After payment it redirects to /booking/track/[ref], where the tracker owns the
+// searching → assigned → live tracking sequence.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useRef, useState, Fragment } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatPrice } from "@/lib/format";
-import { FlowPageHeader, FlowPageShell } from "@/components/shared/FlowPageShell";
+import { FlowPageShell } from "@/components/shared/FlowPageShell";
 import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
 import {
@@ -22,9 +28,11 @@ import {
   toDetailPairs,
   type DetailField,
 } from "@/lib/catalog/service-config";
-import { ServiceIcon } from "@/components/ui/ServiceIcons";
+import { estimatePrice, startingPricePaise, type Selections } from "@/lib/catalog/pricing";
+import { RequirementSheet } from "@/components/customer/booking/RequirementSheet";
 import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
-import { getServiceCardMeta } from "@/lib/catalog/service-card-meta";
+import { AddressPicker } from "@/components/customer/address/AddressPicker";
+import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 
 export type FlowService = {
   id: string;
@@ -54,7 +62,16 @@ type Provider = {
   etaMins: number;
 };
 
-type Step = "service" | "guidelines" | "when" | "details" | "provider";
+type Step = "service" | "guidelines" | "when" | "details" | "payment";
+
+/** Payment methods offered at checkout. See PaymentMethod in @vsolve/db. */
+const PAYMENT_METHODS = [
+  { id: "upi", label: "UPI", hint: "Pay instantly via any UPI app" },
+  { id: "card", label: "Card", hint: "Credit or debit card" },
+  { id: "cod", label: "Pay after service", hint: "Cash or UPI to the professional" },
+] as const;
+
+type PaymentMethodId = (typeof PAYMENT_METHODS)[number]["id"];
 
 const BOOKING_RESUME_KEY = "vsolve:booking-flow-resume";
 
@@ -64,10 +81,10 @@ type BookingResumeState = {
   scheduleType: "instant" | "scheduled";
   dateKey: string;
   timeSlot: string;
-  detailValues: Record<string, string | number>;
+  detailValues: Selections;
   note: string;
   photos: string[];
-  providerChoice: string;
+  paymentMethod: PaymentMethodId;
   addressId: string;
   autoSubmit?: boolean;
 };
@@ -95,14 +112,6 @@ function nextDays(count: number) {
   }
   return out;
 }
-
-const FLOW_STEPS: { key: Step; label: string }[] = [
-  { key: "service", label: "Select" },
-  { key: "guidelines", label: "Scope" },
-  { key: "when", label: "Slot" },
-  { key: "details", label: "Address" },
-  { key: "provider", label: "Confirm" },
-];
 
 export function ServiceBookingFlow({ services, categorySlug, categoryName, initialServiceId }: Props) {
   const router = useRouter();
@@ -146,15 +155,55 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   const [scheduleType, setScheduleType] = useState<"instant" | "scheduled">("instant");
   const [dateKey, setDateKey] = useState(() => nextDays(1)[0]!.key);
   const [timeSlot, setTimeSlot] = useState(TIME_SLOTS[2]!);
-  const [detailValues, setDetailValues] = useState<Record<string, string | number>>({});
+  const [detailValues, setDetailValues] = useState<Selections>({});
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [providerChoice, setProviderChoice] = useState<string>("auto"); // "auto" | partnerId
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>("upi");
   const [error, setError] = useState("");
   const [pendingSubmit, setPendingSubmit] = useState(false);
+  const [showAddrPicker, setShowAddrPicker] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
+
+  // Guard the details step: an address is required, and every field flagged
+  // `required` in the service config must have a non-empty value. Returns true
+  // when the step is safe to advance/submit; otherwise sets inline errors.
+  function validateDetails(): boolean {
+    if (!addressId) {
+      setError("Please select or add a service address.");
+      return false;
+    }
+    const errs: Record<string, boolean> = {};
+    for (const f of config.detailFields) {
+      if (!f.required) continue;
+      const v = detailValues[f.key];
+      const empty = Array.isArray(v)
+        ? v.length === 0
+        : v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+      if (empty) errs[f.key] = true;
+    }
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setError("Please complete the highlighted required fields.");
+      return false;
+    }
+    setError("");
+    return true;
+  }
 
   const days = useMemo(() => nextDays(5), []);
+
+  // The live estimate — recomputed on every requirement tap and shown wherever a
+  // price appears, so the summary, the banner, and the confirm button can never
+  // disagree with each other. The server recomputes this independently at submit.
+  const estimate = useMemo(
+    () => estimatePrice(config.detailFields, detailValues),
+    [config.detailFields, detailValues],
+  );
+  const startsAtPaise = useMemo(
+    () => startingPricePaise(config.detailFields) || service?.pricePaise || 0,
+    [config.detailFields, service],
+  );
 
   // Seed structured-field defaults whenever the service (and thus config) changes.
   useEffect(() => {
@@ -170,15 +219,6 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     }
   }, [addresses, addressId]);
 
-  // Real online providers — only fetched once the customer reaches the provider step.
-  const { data: providerData, isFetching: providersLoading } = useQuery({
-    queryKey: qk.providers(service?.id ?? "", addressId),
-    queryFn: () => api.providers(service!.id, addressId || undefined),
-    enabled: step === "provider" && !!service,
-    staleTime: 30_000,
-  });
-  const providers = providerData?.providers ?? [];
-
   function buildResumeState(overrides: Partial<BookingResumeState> & { step: Step }): BookingResumeState {
     return {
       selectedServiceId,
@@ -188,7 +228,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       detailValues,
       note,
       photos,
-      providerChoice,
+      paymentMethod,
       addressId,
       ...overrides,
     };
@@ -229,7 +269,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       setDetailValues(saved.detailValues);
       setNote(saved.note);
       setPhotos(saved.photos);
-      setProviderChoice(saved.providerChoice);
+      if (saved.paymentMethod) setPaymentMethod(saved.paymentMethod);
       if (saved.addressId) setAddressId(saved.addressId);
       if (saved.autoSubmit) setPendingSubmit(true);
     } catch {
@@ -239,15 +279,26 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
   async function handlePhotoUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const picked = Array.from(files).slice(0, 5 - photos.length);
+    const tooBig = picked.find((f) => f.size > 8 * 1024 * 1024);
+    if (tooBig) {
+      setError(`"${tooBig.name}" is over 8 MB. Please choose a smaller image.`);
+      return;
+    }
     setUploading(true);
+    setError("");
     try {
       const fd = new FormData();
-      Array.from(files)
-        .slice(0, 5 - photos.length)
-        .forEach((f) => fd.append("files", f));
+      picked.forEach((f) => fd.append("files", f));
       const res = await fetch("/api/bookings/media", { method: "POST", body: fd });
       const data = await res.json();
-      if (res.ok && Array.isArray(data.urls)) setPhotos((p) => [...p, ...data.urls].slice(0, 5));
+      if (res.ok && Array.isArray(data.urls)) {
+        setPhotos((p) => [...p, ...data.urls].slice(0, 5));
+      } else {
+        setError(typeof data?.error === "string" ? data.error : "Couldn't upload photos. Please try again.");
+      }
+    } catch {
+      setError("Couldn't upload photos. Please check your connection and try again.");
     } finally {
       setUploading(false);
     }
@@ -270,19 +321,22 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
   function submit() {
     if (!service) return;
-    if (!addressId) {
-      setError("Please select a service address");
-      return;
-    }
-    setError("");
+    // Defense in depth: the details step is normally validated before we get
+    // here, but the resume/auto-submit path can call submit() directly.
+    if (!validateDetails()) return;
     createBooking.mutate({
       serviceId: service.id,
       addressId,
       slot: buildSlotIso(),
-      partnerId: providerChoice === "auto" ? undefined : providerChoice,
+      // No partnerId: the job always fans out to every eligible provider and the
+      // first to accept is assigned.
+      paymentMethod,
       issueDescription: note || undefined,
       mediaUrls: photos,
       scheduleType,
+      // The server recomputes the price from these; the estimate shown in the UI
+      // is never sent as an amount.
+      selections: detailValues,
       archetypeDetails: {
         bookingType: "individual",
         scheduleType,
@@ -304,7 +358,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   }, [step]);
 
   function back() {
-    const order: Step[] = ["service", "guidelines", "when", "details", "provider"];
+    const order: Step[] = ["service", "guidelines", "when", "details", "payment"];
     const i = order.indexOf(step);
     if (i <= 0 || (step === "guidelines" && (singleService || initialServiceId))) {
       router.back();
@@ -313,80 +367,54 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     setStep(order[i - 1]!);
   }
 
-  const priceRupees = Math.round((service?.pricePaise ?? 0) / 100);
-  const title =
-    step === "service"
-      ? service?.subCategory?.name ?? categoryName
-      : service?.name ?? categoryName;
 
-  const stepper = (
-    <div className="flow-page-stepper">
-      {FLOW_STEPS.map((s, i) => (
-        <Fragment key={s.key}>
-          {i > 0 ? <span className="flow-page-stepper__sep" aria-hidden>›</span> : null}
-          <div className={`flow-page-stepper__item ${step === s.key ? "is-active" : ""}`}>
-            <span className="flow-page-stepper__dot">{i + 1}</span>
-            <span>{s.label}</span>
-          </div>
-        </Fragment>
-      ))}
-    </div>
-  );
-
-  const taxAmount = Math.round(service ? service.pricePaise * 0.18 : 0);
-  const totalPayable = service ? service.pricePaise + taxAmount : 0;
-  
   const summaryAside =
     service ? (
       <div className="flow-summary-card-v3">
         <p className="summary-title-v3">BOOKING SUMMARY</p>
         <h2 className="summary-service-name">{service.name}</h2>
         <p className="summary-price-v3">
-          {step === 'provider' ? 'Starting from ' : 'From '} 
-          <strong>{formatPrice(service.pricePaise)}</strong>
+          Starts at <strong>{formatPrice(startsAtPaise)}</strong>
         </p>
         <p className="summary-desc-v3">{config.guidelines.summary}</p>
-        
+
         <div className="summary-pills-v3">
-          <span className="summary-pill active">⚡ INSTANT</span>
+          <span className="summary-pill active">
+            <FlaticonIcon name={scheduleType === "instant" ? "bolt" : "calendar"} size={11} />
+            {scheduleType === "instant" ? " INSTANT" : " SCHEDULED"}
+          </span>
           {service.duration > 0 && (
             <span className="summary-pill">⏱ ~{Math.max(1, Math.round(service.duration / 60))} HR</span>
           )}
         </div>
-        
+
         <div className="summary-breakdown-v3">
           <div className="summary-row">
-            <span>Service base price</span>
-            <strong>{formatPrice(service.pricePaise)}</strong>
+            <span>Base</span>
+            <strong>{formatPrice(estimate.basePaise)}</strong>
           </div>
-          {step === 'details' ? (
-            <>
-              <div className="summary-row">
-                <span>Tax & Fees</span>
-                <strong>{formatPrice(taxAmount)}</strong>
+          {estimate.lineItems
+            .filter((li) => li.kind !== "variant")
+            .map((li) => (
+              <div className="summary-row" key={`${li.key}-${li.value}`}>
+                <span>
+                  {li.value}
+                  {li.qty > 1 && ` × ${li.qty}`}
+                </span>
+                <strong>+{formatPrice(li.totalPaise)}</strong>
               </div>
-              <div className="summary-row total-row">
-                <span>Total Payable</span>
-                <strong>{formatPrice(totalPayable)}</strong>
-              </div>
-            </>
-          ) : step === 'provider' ? (
-            <>
-              <div className="summary-row">
-                <span>Platform Fee</span>
-                <strong className="text-green-600">FREE</strong>
-              </div>
-              <div className="summary-row total-row">
-                <span>Total to Pay</span>
-                <strong>{formatPrice(service.pricePaise)}</strong>
-              </div>
-            </>
-          ) : (
-            <div className="summary-row text-xs">
-              <span>Estimated Taxes</span>
-              <strong>Calculated at checkout</strong>
-            </div>
-          )}
+            ))}
+          <div className="summary-row">
+            <span>Platform fee</span>
+            <strong className="text-green-600">FREE</strong>
+          </div>
+          <div className="summary-row total-row">
+            <span>Estimated total</span>
+            <strong>{formatPrice(estimate.totalPaise)}</strong>
+          </div>
+          <p className="summary-row text-xs" style={{ color: "#6b7280" }}>
+            Final price is confirmed from your selected requirements.
+          </p>
         </div>
       </div>
     ) : null;
@@ -408,24 +436,24 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
           <span>Select</span>
         </div>
         <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'guidelines' ? 'active' : (['when', 'details', 'provider'].includes(step) ? 'done' : '')}`}>
+        <div className={`progress-step ${step === 'guidelines' ? 'active' : (['when', 'details', 'payment'].includes(step) ? 'done' : '')}`}>
           <div className="step-circle">2</div>
           <span>Scope</span>
         </div>
         <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'when' ? 'active' : (['details', 'provider'].includes(step) ? 'done' : '')}`}>
+        <div className={`progress-step ${step === 'when' ? 'active' : (['details', 'payment'].includes(step) ? 'done' : '')}`}>
           <div className="step-circle">3</div>
           <span>Slot</span>
         </div>
         <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'details' ? 'active' : (step === 'provider' ? 'done' : '')}`}>
+        <div className={`progress-step ${step === 'details' ? 'active' : (step === 'payment' ? 'done' : '')}`}>
           <div className="step-circle">4</div>
-          <span>Address</span>
+          <span>Details</span>
         </div>
         <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'provider' ? 'active' : ''}`}>
+        <div className={`progress-step ${step === 'payment' ? 'active' : ''}`}>
           <div className="step-circle">5</div>
-          <span>Confirm</span>
+          <span>Pay</span>
         </div>
       </div>
     </div>
@@ -480,7 +508,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                       </div>
                       <p className="card-desc">{s.description}</p>
                       <div className="card-info-bottom">
-                        <div className="card-price">From {formatPrice(s.pricePaise)}</div>
+                        <div className="card-price">Starts at {formatPrice(s.pricePaise)}</div>
                         {isRecommended ? (
                           <div className="card-select-btn">Select</div>
                         ) : (
@@ -520,7 +548,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
               <h2 className="gl-title">{service.name}</h2>
               <p className="gl-desc">{config.guidelines.summary}</p>
               <p className="gl-price">
-                From {formatPrice(service.pricePaise)} 
+                Starts at {formatPrice(startsAtPaise)}
                 <span className="gl-duration">· ~{Math.max(1, Math.round(service.duration / 60))} hr</span>
               </p>
             </div>
@@ -569,7 +597,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                   className={`when-option-card ${scheduleType === 'instant' ? 'selected' : ''}`}
                   onClick={() => setScheduleType("instant")}
                 >
-                  <div className="when-icon-box">⚡</div>
+                  <div className="when-icon-box"><FlaticonIcon name="bolt" size={22} /></div>
                   <div className="when-info-box">
                     <p className="when-opt-title">
                       Instant <span className="when-badge">FASTEST</span>
@@ -584,7 +612,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 className={`when-option-card ${scheduleType === 'scheduled' ? 'selected' : ''}`}
                 onClick={() => setScheduleType("scheduled")}
               >
-                <div className="when-icon-box plain">🗓️</div>
+                <div className="when-icon-box plain"><FlaticonIcon name="calendar" size={22} /></div>
                 <div className="when-info-box">
                   <p className="when-opt-title">Scheduled</p>
                   <p className="when-opt-desc">Pick a date & time that suits you</p>
@@ -602,7 +630,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                       type="button"
                       onClick={() => setDateKey(d.key)}
                       className={`flex-shrink-0 w-20 rounded-2xl border-2 px-2 py-3 text-center transition-all snap-start ${
-                        dateKey === d.key ? "bg-blue-900 border-blue-900 text-white shadow-md transform scale-105" : "border-gray-100 text-gray-700 bg-gray-50 hover:border-blue-800"
+                        dateKey === d.key ? "bg-brand border-brand text-white shadow-md transform scale-105" : "border-gray-100 text-gray-700 bg-gray-50 hover:border-blue-800"
                       }`}
                     >
                       <span className="block text-[10px] font-black uppercase tracking-wider opacity-80">{d.day}</span>
@@ -617,7 +645,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                       type="button"
                       onClick={() => setTimeSlot(slot)}
                       className={`rounded-xl border px-2 py-3 text-[11px] font-bold transition-all ${
-                        timeSlot === slot ? "bg-blue-50 border-blue-900 text-blue-900 shadow-sm ring-1 ring-blue-800" : "border-gray-200 text-gray-600 hover:border-blue-800 hover:bg-blue-50/50"
+                        timeSlot === slot ? "bg-blue-50 border-brand text-brand shadow-sm ring-1 ring-blue-800" : "border-gray-200 text-gray-600 hover:border-blue-800 hover:bg-blue-50/50"
                       }`}
                     >
                       {slot}
@@ -640,363 +668,243 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
         {/* STEP: job details */}
         {step === "details" && (
-          <div className="flow-details-v3">
+          <div>
             {/* Address */}
-            <div className="details-section-v3">
-              <h3 className="details-section-title">SERVICE LOCATION</h3>
-              {addresses.length === 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-                  No saved address. Add one from your profile to continue.
-                </div>
-              )}
-              <div className="address-list-v3">
-                {addresses.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setAddressId(a.id)}
-                    className={`address-card-v3 ${addressId === a.id ? 'selected' : ''}`}
-                  >
-                    <div className="address-icon-box text-red-500">📍</div>
-                    <div className="address-info-box">
-                      <p className="address-label">{a.label}</p>
-                      <p className="address-full">{a.fullAddress}</p>
-                    </div>
-                    <div className={`address-radio ${addressId === a.id ? 'checked' : ''}`}>
-                      <div className="radio-inner"></div>
-                    </div>
-                  </button>
-                ))}
-                
-                {/* Dummy Current Location for mockups */}
+            <div>
+              <h3 className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">SERVICE LOCATION</h3>
+              {addresses.length === 0 ? (
                 <button
                   type="button"
-                  className="address-card-v3 disabled"
+                  onClick={() => setShowAddrPicker(true)}
+                  className="flex items-center gap-3 w-full p-4 bg-white border border-dashed border-brand rounded-lg cursor-pointer text-left"
                 >
-                  <div className="address-icon-box text-gray-400">◎</div>
-                  <div className="address-info-box">
-                    <p className="address-label">Current Location</p>
-                    <p className="address-full">Detected Location, GPS Coordinates</p>
+                  <div className="w-10 h-10 shrink-0 flex items-center justify-center text-red-500">
+                    <FlaticonIcon name="marker" size={18} />
                   </div>
-                  <div className="address-radio">
-                    <div className="radio-inner"></div>
+                  <div className="grow text-left">
+                    <p className="text-[0.95rem] font-bold text-gray-900">Add a service address</p>
+                    <p className="text-[0.8rem] text-gray-500 mt-[0.2rem]">Use your current location or enter it manually</p>
                   </div>
+                  <span aria-hidden className="ml-auto text-xl text-brand">+</span>
                 </button>
-              </div>
+              ) : (
+                <div className="flex flex-col gap-3 mb-6">
+                  {addresses.map((a) => {
+                    const sel = addressId === a.id;
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setAddressId(a.id)}
+                        className={`flex items-center w-full p-4 bg-white rounded-lg cursor-pointer text-left ${
+                          sel ? "border-2 border-black" : "border border-gray-900"
+                        }`}
+                      >
+                        <div className="w-10 h-10 shrink-0 flex items-center justify-center text-red-500">
+                          <FlaticonIcon name="marker" size={18} />
+                        </div>
+                        <div className="grow text-left">
+                          <p className="text-[0.95rem] font-bold text-gray-900">{a.label}</p>
+                          <p className="text-[0.8rem] text-gray-500 mt-[0.2rem]">{a.fullAddress}</p>
+                        </div>
+                        <div
+                          className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center ${
+                            sel ? "border-black" : "border-gray-300"
+                          }`}
+                        >
+                          {sel && <span className="w-2 h-2 bg-black rounded-full" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAddrPicker(true)}
+                    className="flex items-center gap-3 w-full p-4 bg-white border border-dashed border-brand rounded-lg cursor-pointer text-left"
+                  >
+                    <div className="w-10 h-10 shrink-0 flex items-center justify-center text-[1.2rem] text-brand">+</div>
+                    <div className="grow text-left">
+                      <p className="text-[0.95rem] font-bold text-gray-900">Add / change address</p>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Structured fields */}
-            {config.detailFields.length > 0 && (
-              <div className="details-fields-v3">
-                {config.detailFields.map((f) => (
-                  <div key={f.key} className="details-section-v3">
-                    <h3 className="details-section-title">{f.label.toUpperCase()}</h3>
-                    {f.type === 'select' ? (
-                      <div className="pill-group-v3">
-                        {f.options.map(opt => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setDetailValues(prev => ({...prev, [f.key]: opt}))}
-                            className={`pill-btn-v3 ${detailValues[f.key] === opt ? 'selected' : ''}`}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <DetailFieldInput
-                        field={f}
-                        value={detailValues[f.key]}
-                        onChange={(v) => setDetailValues((prev) => ({ ...prev, [f.key]: v }))}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
+            {/* Priced requirement configurator — drives the live estimate. */}
+            {config.detailFields.length > 0 && service && (
+              <RequirementSheet
+                serviceName={service.name}
+                durationMins={service.duration}
+                fields={config.detailFields}
+                value={detailValues}
+                onChange={setDetailValues}
+                fieldErrors={fieldErrors}
+                showFooter={false}
+              />
             )}
 
-            <div className="details-media-grid-v3">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               {/* Photos (optional) */}
-              <div className="details-section-v3 media-col">
-                <h3 className="details-section-title">ADD PHOTOS (OPTIONAL)</h3>
-                <div className="photo-upload-box-v3">
-                  <div className="photo-upload-btn-wrapper">
+              <div>
+                <h3 className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">ADD PHOTOS (OPTIONAL)</h3>
+                <div>
+                  <div className="flex gap-4 mb-4">
                     {photos.map((url) => (
-                      <img key={url} src={url} alt="upload" className="uploaded-photo-v3" />
+                      <img key={url} src={url} alt="upload" className="w-20 h-20 object-cover rounded-lg" />
                     ))}
                     {photos.length < 5 && (
-                      <label className="upload-placeholder-v3">
-                        <span className="upload-plus">+</span>
-                        <input type="file" accept="image/*" multiple hidden onChange={(e) => handlePhotoUpload(e.target.files)} />
+                      <label
+                        className="w-20 h-20 border border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer bg-gray-50"
+                        aria-busy={uploading}
+                      >
+                        <span className="text-2xl text-gray-400">{uploading ? "…" : "+"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          hidden
+                          disabled={uploading}
+                          onChange={(e) => handlePhotoUpload(e.target.files)}
+                        />
                       </label>
                     )}
                   </div>
-                  <p className="upload-hint">Add images of rooms or specific problem areas.</p>
+                  <p className="text-[0.8rem] text-gray-500">Add images of rooms or specific problem areas.</p>
                 </div>
               </div>
 
               {/* Note (optional) */}
-              <div className="details-section-v3 note-col">
-                <div className="note-header-v3">
-                  <h3 className="details-section-title">ADD A NOTE (OPTIONAL)</h3>
-                  <span className="note-count">{note.length}/250</span>
+              <div>
+                <div className="flex justify-between">
+                  <h3 className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">ADD A NOTE (OPTIONAL)</h3>
+                  <span className="text-xs text-gray-400">{note.length}/250</span>
                 </div>
                 <textarea
                   value={note}
                   maxLength={250}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Access instructions, problem areas, or preferences..."
-                  className="note-textarea-v3"
+                  className="w-full h-[120px] p-4 border border-gray-200 rounded-lg resize-none text-[0.9rem]"
                 />
               </div>
             </div>
 
-            <div className="details-footer-v3">
-              <div className="safe-badge-v3">
-                <span className="safe-icon">🛡️</span>
-                <span>Safe & Professional Services</span>
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-4">
+              <div className="flex items-center gap-2 text-green-800 text-[0.9rem] font-semibold">
+                <FlaticonIcon name="shield" size={16} />
+                <span>Safe &amp; Professional Services</span>
               </div>
-              <button 
-                className="flow-continue-btn black-btn" 
-                onClick={() => setStep("provider")}
+              <button
+                className="w-full p-4 rounded-lg text-base font-bold cursor-pointer transition-opacity bg-brand text-white hover:opacity-90"
+                onClick={() => { if (validateDetails()) setStep("payment"); }}
               >
-                Choose professional ›
+                Continue to payment ›
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP: choose provider */}
-        {step === "provider" && (
+        {/* STEP: review & pay. Dispatch auto-assigns after payment. */}
+        {step === "payment" && service && (
           <div className="flow-provider-v3">
-            <h2 className="provider-title">Choose your professional</h2>
-            <div className="provider-step-counter">Step 3 of 3</div>
-            
+            <h2 className="provider-title">Review &amp; pay</h2>
+            <div className="provider-step-counter">Final step</div>
             <div className="provider-divider-v3"></div>
-            
-            <p className="details-section-title">CHOOSE A PROFESSIONAL</p>
 
-            <button
-              type="button"
-              onClick={() => setProviderChoice("auto")}
-              className={`provider-card-v3 ${providerChoice === 'auto' ? 'selected' : ''}`}
-            >
-              <div className="provider-icon-box">⚡</div>
-              <div className="provider-info-box">
-                <p className="provider-opt-title">Auto Assign (Fastest)</p>
-                <p className="provider-opt-desc">We'll assign the best available professional to your request instantly.</p>
-              </div>
-              <div className={`address-radio ${providerChoice === 'auto' ? 'checked' : ''}`}>
-                <div className="radio-inner"></div>
-              </div>
-            </button>
-            
-            {!providersLoading && providers.length === 0 && (
-              <p className="provider-no-online">No professionals online right now. Auto Assign will notify them.</p>
-            )}
-
-            {providers.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setProviderChoice(p.id)}
-                className={`provider-card-v3 ${providerChoice === p.id ? 'selected' : ''}`}
-              >
-                <div className="provider-icon-box avatar">{p.name.charAt(0)}</div>
-                <div className="provider-info-box">
-                  <p className="provider-opt-title">{p.name}</p>
-                  <p className="provider-opt-desc">
-                    <span className="text-amber-500">★ {p.rating.toFixed(1)}</span> · {p.jobsCompleted} jobs · {p.distanceKm} km
+            {/* Price breakdown — the same numbers the server will recompute. */}
+            <p className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">YOUR ESTIMATE</p>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 mb-6">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-[0.95rem] font-bold text-gray-900">{service.name}</p>
+                  <p className="text-[0.8rem] text-gray-500">
+                    {scheduleType === "instant" ? "Within 30–60 mins" : `${dateKey} · ${timeSlot}`}
                   </p>
                 </div>
-                <div className={`address-radio ${providerChoice === p.id ? 'checked' : ''}`}>
+                <span className="text-[0.8rem] font-semibold text-gray-500 whitespace-nowrap">
+                  ~{Math.max(1, Math.round(service.duration / 60))} hr
+                </span>
+              </div>
+
+              {estimate.lineItems.map((li) => (
+                <div
+                  key={`${li.key}-${li.value}`}
+                  className="flex items-center justify-between py-1 text-[0.85rem]"
+                >
+                  <span className="text-gray-600">
+                    {li.value}
+                    {li.qty > 1 && ` × ${li.qty}`}
+                  </span>
+                  <span className="font-semibold text-gray-900">{formatPrice(li.totalPaise)}</span>
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between border-t border-gray-100 mt-3 pt-3">
+                <span className="text-[0.9rem] font-bold text-gray-900">Total</span>
+                <span className="text-[1.05rem] font-extrabold text-gray-900">
+                  {formatPrice(estimate.totalPaise)}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment method */}
+            <p className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">PAYMENT METHOD</p>
+            {PAYMENT_METHODS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setPaymentMethod(m.id)}
+                aria-pressed={paymentMethod === m.id}
+                className={`provider-card-v3 ${paymentMethod === m.id ? "selected" : ""}`}
+              >
+                <div className="provider-icon-box">
+                  <FlaticonIcon name={m.id === "cod" ? "wallet" : "card"} size={22} />
+                </div>
+                <div className="provider-info-box">
+                  <p className="provider-opt-title">{m.label}</p>
+                  <p className="provider-opt-desc">{m.hint}</p>
+                </div>
+                <div className={`address-radio ${paymentMethod === m.id ? "checked" : ""}`}>
                   <div className="radio-inner"></div>
                 </div>
               </button>
             ))}
 
             <div className="provider-info-banner">
-              <span className="info-icon">ℹ️</span>
-              <p>You'll pay <strong>{formatPrice(service?.pricePaise ?? 0)}</strong> only after the professional accepts your request. No advance payment required.</p>
+              <span className="info-icon"><FlaticonIcon name="bolt" size={16} /></span>
+              <p>
+                We'll notify every available professional near you — the first to accept is
+                assigned. {paymentMethod === "cod"
+                  ? "You pay after the service is done."
+                  : "You're only charged once a professional accepts."}
+              </p>
             </div>
-            
+
             <div className="provider-footer-v3">
-              <button 
-                className="flow-continue-btn blue-btn" 
-                onClick={() => requireLoginThen(submit, buildResumeState({ step: "provider", autoSubmit: true }))}
+              <button
+                className="flow-continue-btn blue-btn"
+                onClick={() => requireLoginThen(submit, buildResumeState({ step: "payment", autoSubmit: true }))}
                 disabled={createBooking.isPending}
               >
-                {createBooking.isPending ? "Confirming..." : `Confirm & request • ${formatPrice(service?.pricePaise ?? 0)}`}
+                {createBooking.isPending
+                  ? "Confirming…"
+                  : `${paymentMethod === "cod" ? "Confirm booking" : "Pay"} • ${formatPrice(estimate.totalPaise)}`}
               </button>
             </div>
           </div>
         )}
+
+        <AddressPicker
+          open={showAddrPicker}
+          redirectAfterLogin={typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"}
+          onClose={() => setShowAddrPicker(false)}
+          onSelected={(a) => {
+            setAddressId(a.id);
+            queryClient.invalidateQueries({ queryKey: qk.addresses() });
+          }}
+        />
     </FlowPageShell>
-  );
-}
-
-// ─── Small presentational helpers ────────────────────────────────────────────
-
-function GuidelineCard({ title, items, tone }: { title: string; items: string[]; tone: "good" | "bad" | "info" }) {
-  const mark = tone === "good" ? "✓" : tone === "bad" ? "✕" : "•";
-  const color = tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-500" : "text-blue-900";
-  const bg = tone === "good" ? "bg-emerald-50/50 border-emerald-100" : tone === "bad" ? "bg-red-50/50 border-red-100" : "bg-blue-50/50 border-blue-100";
-  return (
-    <div className={`border rounded-2xl p-4 shadow-sm ${bg}`}>
-      <p className="text-xs font-bold text-gray-600 uppercase tracking-wider m-0 mb-3">{title}</p>
-      <ul className="flex flex-col gap-2 m-0 p-0 list-none">
-        {items.map((it) => (
-          <li key={it} className="flex items-start gap-3 text-sm text-gray-800">
-            <span className={`${color} font-black mt-0.5`}>{mark}</span>
-            <span className="leading-tight">{it}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function OptionCard({
-  selected,
-  onClick,
-  icon,
-  title,
-  desc,
-  badge,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  icon: string;
-  title: string;
-  desc: string;
-  badge?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`text-left rounded-2xl p-4 border flex items-center gap-4 transition-all hover-lift ${
-        selected ? "border-blue-900 bg-blue-50 shadow-md ring-2 ring-blue-900/20" : "border-gray-200 bg-white hover:border-blue-800 shadow-sm"
-      }`}
-    >
-      <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-xl text-2xl ${selected ? "bg-white shadow-sm" : "bg-gray-50"}`}>
-        {icon}
-      </div>
-      <div className="flex-grow">
-        <p className="font-bold text-base text-gray-900 m-0 flex items-center gap-2">
-          {title}
-          {badge && <span className="bg-amber-400 text-blue-950 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">{badge}</span>}
-        </p>
-        <p className="text-xs text-gray-500 mt-1 m-0">{desc}</p>
-      </div>
-      <Radio checked={selected} />
-    </button>
-  );
-}
-
-function Radio({ checked }: { checked: boolean }) {
-  return (
-    <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${checked ? "border-blue-900" : "border-gray-300"}`}>
-      {checked && <span className="w-2 h-2 rounded-full bg-blue-900" />}
-    </span>
-  );
-}
-
-function DetailFieldInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: DetailField;
-  value: string | number | undefined;
-  onChange: (v: string | number) => void;
-}) {
-  if (field.type === "select") {
-    return (
-      <div className="flex flex-col gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">{field.label}</p>
-        <div className="flex gap-2 flex-wrap">
-          {field.options.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => onChange(opt)}
-              className={`rounded-full px-4 py-2 text-xs font-bold border transition-all ${
-                value === opt 
-                  ? "bg-blue-900 border-blue-900 text-white shadow-md transform hover:scale-[1.02]" 
-                  : "border-gray-200 text-gray-700 bg-white hover:border-blue-800 hover:bg-blue-50"
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (field.type === "counter") {
-    const n = typeof value === "number" ? value : Number(value ?? field.min ?? 1);
-    const min = field.min ?? 1;
-    const max = field.max ?? 99;
-    return (
-      <div className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-blue-800 transition-all">
-        <span className="text-sm font-bold text-gray-800">{field.label}</span>
-        <div className="flex items-center gap-4 bg-gray-50 rounded-full p-1 border border-gray-100">
-          <button type="button" onClick={() => onChange(Math.max(min, n - 1))} className="w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-700 font-bold hover:border-blue-800 hover:text-blue-900 transition shadow-sm">−</button>
-          <span className="text-sm font-extrabold text-blue-900 w-6 text-center">{n}</span>
-          <button type="button" onClick={() => onChange(Math.min(max, n + 1))} className="w-8 h-8 rounded-full bg-white border border-gray-200 text-gray-700 font-bold hover:border-blue-800 hover:text-blue-900 transition shadow-sm">+</button>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1">{field.label}</p>
-      <input
-        value={String(value ?? "")}
-        placeholder={field.placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full p-4 text-sm border border-gray-200 rounded-2xl focus:outline-none focus:border-blue-900 focus:ring-4 focus:ring-blue-900/10 bg-white transition shadow-sm"
-      />
-    </div>
-  );
-}
-
-function FooterButton({
-  step,
-  priceRupees,
-  submitting,
-  hasAddress,
-  onNext,
-}: {
-  step: Step;
-  priceRupees: number;
-  submitting: boolean;
-  hasAddress: boolean;
-  onNext: () => void;
-}) {
-  if (step === "service") {
-    return <p className="text-center text-[11px] text-gray-400">Select a service to continue</p>;
-  }
-  const label =
-    step === "guidelines"
-      ? "Continue"
-      : step === "when"
-        ? "Continue"
-        : step === "details"
-          ? "Choose professional"
-          : "Confirm & request";
-  const disabled = submitting || (step === "details" && !hasAddress) || (step === "provider" && !hasAddress);
-  return (
-    <button
-      type="button"
-      onClick={onNext}
-      disabled={disabled}
-      className="w-full py-3.5 bg-blue-900 hover:bg-blue-950 text-white font-bold text-sm rounded-full disabled:opacity-50 flex items-center justify-center gap-2"
-    >
-      {submitting ? "Requesting…" : label}
-      {step === "provider" && !submitting && <span className="opacity-80">· {formatPrice(priceRupees * 100)}</span>}
-    </button>
   );
 }

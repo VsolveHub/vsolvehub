@@ -33,3 +33,10 @@ export function generateBookingRef(): string {
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `VSH-${ts}-${rand}`;
 }
+
+/** Customer-facing reference for an Order (the money envelope over N bookings). */
+export function generateOrderRef(): string {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `VSO-${ts}-${rand}`;
+}

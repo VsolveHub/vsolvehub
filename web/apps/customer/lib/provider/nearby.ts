@@ -29,9 +29,12 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
 }
 
 /**
- * Real, online partners the customer can hand-pick for a service. Only ACTIVE +
- * online partners whose trade/skill matches the service are returned, sorted by
- * distance then rating. Selecting one drives `dispatchDirectOffer`.
+ * Real, online partners matching a service — ACTIVE + online, trade/skill
+ * matched, sorted by distance then rating.
+ *
+ * Read-only social proof ("12 professionals available near you"). Customers do
+ * not choose a provider: jobs fan out to the whole eligible pool after payment
+ * and the first to accept is assigned.
  */
 export async function getNearbyProviders(input: {
   serviceId: string;

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import { isDispatchable } from "@vsolve/db";
+import { getPaymentGateway, isDispatchable, recomputeOrderStatus } from "@vsolve/db";
 import { offerExpiresAt } from "@/lib/provider/queries";
 import { providerTypeForArchetype, usesPushDispatch } from "@/lib/bookings/archetype";
 import { partnerMatchesService, partnerMatchInclude } from "@/lib/provider/matching";
@@ -116,6 +116,29 @@ async function markNoWorkerFound(bookingId: string) {
   await prisma.bookingStatusLog.create({
     data: { bookingId, status: "NO_WORKER_FOUND" },
   });
+
+  // Nobody took the job, so release its share of the hold. The customer is
+  // charged nothing for it, and a multi-service order keeps its other jobs.
+  if (booking.orderId && booking.capturedPaise === 0) {
+    const order = await prisma.order.findUnique({ where: { id: booking.orderId } });
+    if (order && order.authorizedPaise > 0) {
+      const releasable = Math.max(
+        0,
+        order.authorizedPaise - order.capturedPaise - order.voidedPaise,
+      );
+      const voidPaise = Math.min(booking.quotedAmount, releasable);
+      if (voidPaise > 0) {
+        if (order.gatewayIntentId) {
+          await getPaymentGateway().void(order.gatewayIntentId, voidPaise);
+        }
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { voidedPaise: { increment: voidPaise } },
+        });
+      }
+    }
+    await recomputeOrderStatus(booking.orderId);
+  }
 }
 
 export async function dispatchBookingOffers(bookingId: string) {

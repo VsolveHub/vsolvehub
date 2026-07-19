@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertMoneyInvariant, rollUpOrderStatus } from "./orders";
+import { assertMoneyInvariant, derivePaymentState, rollUpOrderStatus } from "./orders";
 
 describe("assertMoneyInvariant", () => {
   const ok = { authorizedPaise: 1000, capturedPaise: 600, voidedPaise: 400, refundedPaise: 0 };
@@ -50,5 +50,39 @@ describe("rollUpOrderStatus", () => {
 
   it("treats an empty order as DRAFT", () => {
     expect(rollUpOrderStatus([])).toBe("DRAFT");
+  });
+});
+
+describe("derivePaymentState", () => {
+  const ledger = (over: Partial<Record<string, number>> = {}) => ({
+    authorizedPaise: 1000,
+    capturedPaise: 0,
+    voidedPaise: 0,
+    refundedPaise: 0,
+    ...over,
+  });
+
+  it("is COD_PENDING when nothing was ever authorized", () => {
+    expect(derivePaymentState(ledger({ authorizedPaise: 0 }))).toBe("COD_PENDING");
+  });
+
+  it("is AUTHORIZED while the hold is untouched", () => {
+    expect(derivePaymentState(ledger())).toBe("AUTHORIZED");
+  });
+
+  it("is PARTIALLY_CAPTURED mid-fan-out", () => {
+    expect(derivePaymentState(ledger({ capturedPaise: 400 }))).toBe("PARTIALLY_CAPTURED");
+  });
+
+  it("is CAPTURED once captures and voids cover the authorization", () => {
+    expect(derivePaymentState(ledger({ capturedPaise: 600, voidedPaise: 400 }))).toBe("CAPTURED");
+  });
+
+  it("is VOIDED when the whole hold was released", () => {
+    expect(derivePaymentState(ledger({ voidedPaise: 1000 }))).toBe("VOIDED");
+  });
+
+  it("is REFUNDED once every captured paisa is returned", () => {
+    expect(derivePaymentState(ledger({ capturedPaise: 600, refundedPaise: 600 }))).toBe("REFUNDED");
   });
 });

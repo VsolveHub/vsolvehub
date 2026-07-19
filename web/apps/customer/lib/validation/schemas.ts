@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { isValidIndianPhone, normalizePhone } from "./phone";
 
+/**
+ * Customers may only book inside a 7-day window. Keeping the horizon short means
+ * a payment authorization taken at checkout is still valid when the job runs,
+ * which removes a whole class of re-authorization edge cases.
+ */
+export const BOOKING_WINDOW_DAYS = 7;
+export const BOOKING_WINDOW_MS = BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
 export const phoneSchema = z.preprocess(
   normalizePhone,
   z
@@ -53,13 +61,48 @@ export function buildFullAddress(data: z.infer<typeof addressSchema>) {
   return parts.join(", ");
 }
 
+// Structured intake produced by ServiceBookingFlow (config-driven detail fields).
+// Typed instead of `z.record(z.any())` so malformed partner-facing data can't be
+// persisted. `.passthrough()` keeps it forward-compatible with future archetypes.
+export const archetypeDetailsSchema = z
+  .object({
+    bookingType: z.string().max(50).optional(),
+    scheduleType: z.enum(["instant", "scheduled"]).optional(),
+    // Arrays carry multi-select add-on choices.
+    fieldValues: z
+      .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))
+      .optional(),
+    details: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1).max(120),
+          value: z.string().trim().max(500),
+        }),
+      )
+      .max(40)
+      .optional(),
+  })
+  .passthrough();
+
 export const bookingSchema = z.object({
   serviceId: z.string().min(1, "Service is required"),
   addressId: z.string().min(1, "Address is required"),
-  slot: z.string().min(1, "Time slot is required"),
-  // Real partner hand-picked by the customer ("choose a professional"). When set,
-  // the booking sends a direct offer to just this partner (auto-fallback on decline).
-  partnerId: z.string().min(1).optional(),
+  // ISO-8601 datetime (e.g. from `new Date(...).toISOString()`), not an arbitrary string.
+  // Bookings are limited to a 7-day window; the same rule is enforced by a DB
+  // check constraint so a direct write cannot bypass it.
+  slot: z
+    .string()
+    .datetime({ message: "A valid time slot is required" })
+    .refine((v) => new Date(v).getTime() <= Date.now() + BOOKING_WINDOW_MS, {
+      message: "Bookings can only be made up to 7 days ahead",
+    }),
+  // Raw requirement selections. The server recomputes the price from these; any
+  // price sent by the client is ignored.
+  selections: z
+    .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))
+    .optional(),
+  // No partnerId: customers do not pick a professional. Every job fans out to
+  // the whole eligible pool and the first to accept is assigned.
   vendorId: z.string().min(1, "Professional is required").optional(),
   issueDescription: z.string().trim().max(1000).optional(),
   mediaUrls: z.array(z.string().min(1)).max(5).optional(),
@@ -67,7 +110,7 @@ export const bookingSchema = z.object({
   paymentMethod: z.enum(["upi", "card", "wallet", "cod"]).optional(),
   vendorAssignmentMode: z.enum(["auto", "manual"]).optional(),
   bookingType: z.string().optional(),
-  archetypeDetails: z.record(z.any()).optional(),
+  archetypeDetails: archetypeDetailsSchema.optional(),
 });
 
 export const bookingReviewSchema = z.object({
