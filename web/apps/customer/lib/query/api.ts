@@ -49,14 +49,6 @@ export type Address = {
   area?: string | null;
   city?: string | null;
 };
-export type NearbyProvider = {
-  id: string;
-  name: string;
-  rating: number;
-  jobsCompleted: number;
-  distanceKm: number;
-  etaMins: number;
-};
 export type PaymentMethod = "upi" | "card" | "wallet" | "cod";
 /** A pickable professional on the choose step (real, matcher-ranked). */
 export type ProfessionalChoice = {
@@ -98,10 +90,6 @@ export const api = {
   vehicleBooking: (ref: string) => jsonFetch<any>(`/api/vehicle/bookings/${ref}`),
   getVehicleNextStatus: (ref: string) => jsonFetch<{ nextStatus: string }>(`/api/vehicle/bookings/${ref}/status`),
   catalog: () => jsonFetch<{ services: FlowService[] }>("/api/catalog"),
-  providers: (serviceId: string, addressId?: string | null) =>
-    jsonFetch<{ providers: NearbyProvider[] }>(
-      `/api/providers/nearby?serviceId=${serviceId}${addressId ? `&addressId=${addressId}` : ""}`,
-    ),
 
   // ── mutations ──
   addAddress: (input: Record<string, unknown>) =>
