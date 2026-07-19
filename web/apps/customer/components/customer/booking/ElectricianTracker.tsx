@@ -1,78 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPrice, formatDate } from "@/lib/format";
-import { STATUS_LABELS, STATUS_MESSAGES, normalizeBookingStatus, MARKETPLACE_TIMELINE } from "@/lib/constants";
-import {
-  useCancelBookingMutation,
-  useReviseBookingMutation,
-  useReviewBookingMutation,
-} from "@/lib/query/hooks";
+import { STATUS_MESSAGES, MARKETPLACE_TIMELINE } from "@/lib/constants";
+import { useBookingLifecycle } from "@/lib/booking/useBookingLifecycle";
+import type { Booking } from "@/lib/booking/types";
 
 type Props = {
-  booking: any;
+  booking: Booking;
   onRefresh: () => void;
 };
 
 export function ElectricianTracker({ booking, onRefresh }: Props) {
-  const [rating, setRating] = useState(booking.rating ?? 5);
-  const [review, setReview] = useState("");
-  const [reviewSubmitted, setReviewSubmitted] = useState(booking.rating != null);
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-
-  const cancelMutation = useCancelBookingMutation(booking.bookingRef);
-  const reviseMutation = useReviseBookingMutation(booking.bookingRef);
-  const reviewMutation = useReviewBookingMutation(booking.bookingRef);
-
-  const loading = cancelMutation.isPending || reviseMutation.isPending || reviewMutation.isPending;
-  const [error, setError] = useState("");
-
-  const status = normalizeBookingStatus(booking.status);
-  const professional = booking.provider ?? booking.vendor;
-  const isCompleted = status === "COMPLETED";
-
-  const details = booking.archetypeDetails ? JSON.parse(booking.archetypeDetails) : {};
-  const isTeam = details.bookingType === "team";
-
-  function cancelBooking() {
-    const fee = booking.cancelFeePaise ?? 0;
-    const msg =
-      fee > 0
-        ? `The professional is already on the way, so a ${formatPrice(fee)} visit fee applies. Cancel anyway?`
-        : "Cancel this booking? No fee applies.";
-    if (!window.confirm(msg)) return;
-    cancelMutation.mutate(undefined, {
-      onSuccess: () => {
-        onRefresh();
-      },
-    });
-  }
-
-  function reviseAction(action: "approve" | "decline") {
-    reviseMutation.mutate(action, {
-      onSuccess: () => {
-        onRefresh();
-      },
-    });
-  }
-
-  // Timeline indices to draw completed/active/upcoming states
-  const currentStatusIndex = MARKETPLACE_TIMELINE.indexOf(status as any);
-
-  function submitReview() {
-    setError("");
-    reviewMutation.mutate({ rating, review }, {
-      onSuccess: () => {
-        setReviewSubmitted(true);
-        onRefresh();
-      },
-      onError: (err: any) => {
-        setError(err.message || "Could not submit review");
-      },
-    });
-  }
+  const {
+    view: { status, currentStatusIndex, professional, isCompleted, isTeam },
+    rating,
+    setRating,
+    review,
+    setReview,
+    reviewSubmitted,
+    showDetailsModal,
+    setShowDetailsModal,
+    error,
+    loading,
+    cancelBooking,
+    reviseAction,
+    submitReview,
+  } = useBookingLifecycle(booking, onRefresh);
 
   function getTimelineStepDetails(stepKey: string, idx: number) {
     const isCompletedStep = idx < currentStatusIndex;
@@ -924,7 +878,7 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-bold text-gray-400">Booked On:</span>
-                <span className="font-bold text-gray-800">{formatDate(booking.createdAt)}</span>
+                <span className="font-bold text-gray-800">{formatDate(booking.createdAt ?? "")}</span>
               </div>
               <div className="flex justify-between items-start">
                 <span className="font-bold text-gray-400 flex-shrink-0 mr-4">Service Address:</span>

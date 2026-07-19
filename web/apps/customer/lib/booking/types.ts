@@ -4,6 +4,7 @@ export type BookingParty = {
   phone: string;
   rating: number;
   etaMinutes?: number;
+  image?: string;
 };
 
 export type Booking = {
@@ -28,4 +29,7 @@ export type Booking = {
   archetypeDetails: string;
   cancelFeePaise?: number;
   createdAt?: string;
+  startOtp?: string;
+  revisedAmountPaise?: number;
+  revisedReason?: string;
 };
