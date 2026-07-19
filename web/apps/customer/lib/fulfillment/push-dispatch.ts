@@ -1,74 +1,23 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY offer/accept wave dispatch. Superseded by direct assignment
+// (lib/fulfillment/assign.ts) for every archetype-A booking created from
+// 2026-07-20 onward — see docs/superpowers/plans/2026-07-19-availability-gated-dispatch.md.
+//
+// Kept only as a safety net: `processExpiredOffersAndRedispatch` is still
+// called from the booking-status poll and is a harmless no-op once a booking
+// carries an assignedPartnerId (which direct assignment sets immediately).
+// `dispatchBookingOffers`/`dispatchDirectOffer`/`retryBookingDispatch` are no
+// longer called from the booking-creation or retry paths.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { prisma } from "@/lib/db/client";
 import { getPaymentGateway, isDispatchable, recomputeOrderStatus } from "@vsolve/db";
 import { offerExpiresAt } from "@/lib/provider/queries";
-import { providerTypeForArchetype, usesPushDispatch } from "@/lib/bookings/archetype";
-import { partnerMatchesService, partnerMatchInclude } from "@/lib/provider/matching";
+import { usesPushDispatch } from "@/lib/bookings/archetype";
+import { candidatePartnerInclude, poolPartners, slotMatchesAvailability } from "@/lib/fulfillment/matching";
 
 const WAVE_SIZE = 5;
 const MAX_WAVES = 4;
-const SERVICE_RADIUS_KM = 25;
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-type AvailabilityRow = {
-  dayOfWeek: number | null;
-  date: string | null;
-  startTime: string | null;
-  endTime: string | null;
-  type: string;
-};
-
-function slotMatchesAvailability(slot: string, availability: AvailabilityRow[]): boolean {
-  if (availability.length === 0) return true;
-
-  const slotDate = new Date(slot);
-  const dow = slotDate.getDay();
-  const dateStr = slotDate.toISOString().slice(0, 10);
-  const timeStr = slotDate.toTimeString().slice(0, 5);
-
-  const blocks = availability.filter((a) => a.type === "blocked");
-  for (const block of blocks) {
-    if (block.date === dateStr) return false;
-    if (block.dayOfWeek === dow) return false;
-  }
-
-  const windows = availability.filter((a) => a.type === "available");
-  if (windows.length === 0) return true;
-
-  return windows.some((a) => {
-    const dayOk = a.dayOfWeek == null || a.dayOfWeek === dow;
-    const dateOk = a.date == null || a.date === dateStr;
-    if (!dayOk && !dateOk) return false;
-    if (a.startTime && a.endTime) {
-      return timeStr >= a.startTime && timeStr <= a.endTime;
-    }
-    return true;
-  });
-}
-
-function withinServiceArea(
-  partner: { lat: number | null; lng: number | null },
-  addrLat: number,
-  addrLng: number
-): boolean {
-  if (partner.lat == null || partner.lng == null) return true;
-  return haversineKm(partner.lat, partner.lng, addrLat, addrLng) <= SERVICE_RADIUS_KM;
-}
-
-const eligiblePartnerInclude = {
-  availability: true,
-  ...partnerMatchInclude,
-} as const;
 
 async function findEligiblePartners(bookingId: string, excludePartnerIds: string[]) {
   const booking = await prisma.booking.findUnique({
@@ -77,31 +26,30 @@ async function findEligiblePartners(bookingId: string, excludePartnerIds: string
   });
   if (!booking) return [];
 
-  // Partner.providerType is the enum (CAPTAIN | DRIVER | CLEANER). All four Phase-1
-  // dispatch categories (Technician/Beauty/Home/Pet) are archetype A → CAPTAIN;
-  // partners are then distinguished by trade/skill, not provider type.
-  const providerType = providerTypeForArchetype(booking.archetype);
   const addrLat = booking.address.lat ?? 17.385;
   const addrLng = booking.address.lng ?? 78.4867;
 
   const partners = await prisma.partner.findMany({
     where: {
-      providerType,
+      providerType: "CAPTAIN",
       status: "ACTIVE",
       id: { notIn: excludePartnerIds },
-      ...(providerType === "CAPTAIN" ? { isOnline: true } : {}),
+      isOnline: true,
     },
-    include: eligiblePartnerInclude,
+    include: candidatePartnerInclude,
     take: 50,
   });
 
-  return partners
-    .filter(
-      (p) =>
-        partnerMatchesService(p, booking.service) &&
-        slotMatchesAvailability(booking.slot, p.availability) &&
-        withinServiceArea(p, addrLat, addrLng)
-    )
+  const ctx = {
+    addrLat,
+    addrLng,
+    slot: booking.slot,
+    scheduleType: booking.scheduleType as "instant" | "scheduled",
+    service: booking.service,
+  };
+
+  return poolPartners(partners, ctx)
+    .filter((p) => slotMatchesAvailability(booking.slot, p.availability))
     .slice(0, WAVE_SIZE);
 }
 
@@ -196,56 +144,6 @@ export async function dispatchBookingOffers(bookingId: string) {
   }
 
   return { offersCreated: eligible.length, expiresAt: expiresAt.toISOString() };
-}
-
-/**
- * Direct offer — the customer hand-picked one specific online partner. We create a
- * single offer to just that partner (they can still accept/decline within the TTL).
- * If they decline or let it expire, `processExpiredOffersAndRedispatch` (triggered on
- * the next customer status poll) falls back to a normal auto-dispatch wave, so the
- * booking is never stranded.
- */
-export async function dispatchDirectOffer(bookingId: string, partnerId: string) {
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: { service: { include: { subCategory: true } } },
-  });
-  if (!booking) return { ok: false as const, error: "Booking not found" };
-  if (!usesPushDispatch(booking.archetype)) return { ok: false as const, error: "Not a dispatch service" };
-  if (booking.assignedPartnerId) return { ok: false as const, error: "Already assigned" };
-  if (!isDispatchable(booking.status)) {
-    return { ok: false as const, error: "Booking is not ready to dispatch" };
-  }
-
-  const pending = await prisma.jobAssignment.count({
-    where: { bookingId, status: "PENDING", expiresAt: { gt: new Date() } },
-  });
-  if (pending > 0) return { ok: false as const, error: "Offer already outstanding" };
-
-  const partner = await prisma.partner.findFirst({
-    where: { id: partnerId, status: "ACTIVE", isOnline: true },
-    include: eligiblePartnerInclude,
-  });
-  if (!partner) return { ok: false as const, error: "Partner is no longer available" };
-  if (!partnerMatchesService(partner, booking.service)) {
-    return { ok: false as const, error: "Partner does not offer this service" };
-  }
-
-  const expiresAt = offerExpiresAt();
-  await prisma.$transaction([
-    prisma.jobAssignment.create({
-      data: { bookingId, partnerId, status: "PENDING", expiresAt },
-    }),
-    prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: "SEARCHING_PROVIDER" },
-    }),
-    prisma.bookingStatusLog.create({
-      data: { bookingId, status: "SEARCHING_PROVIDER" },
-    }),
-  ]);
-
-  return { ok: true as const, offersCreated: 1, expiresAt: expiresAt.toISOString() };
 }
 
 export async function processExpiredOffersAndRedispatch(bookingId: string) {
