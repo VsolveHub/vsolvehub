@@ -8,6 +8,9 @@
 // answer.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { PaymentState } from "@prisma/client";
+import { prisma } from "./client";
+
 export type MoneyLedger = {
   authorizedPaise: number;
   capturedPaise: number;
@@ -58,4 +61,42 @@ export function rollUpOrderStatus(jobStatuses: string[]): OrderStatusValue {
   if (jobStatuses.every(isTerminal)) return "SETTLED";
   if (jobStatuses.some(isTerminal)) return "PARTIALLY_SETTLED";
   return "AUTHORIZED";
+}
+
+/** Payment state implied by a ledger, once authorization has happened. */
+export function derivePaymentState(ledger: MoneyLedger): PaymentState {
+  if (ledger.refundedPaise > 0 && ledger.refundedPaise >= ledger.capturedPaise) return "REFUNDED";
+  if (ledger.authorizedPaise === 0) return "COD_PENDING";
+  if (ledger.voidedPaise >= ledger.authorizedPaise) return "VOIDED";
+  if (ledger.capturedPaise === 0) return "AUTHORIZED";
+  if (ledger.capturedPaise + ledger.voidedPaise >= ledger.authorizedPaise) return "CAPTURED";
+  return "PARTIALLY_CAPTURED";
+}
+
+/**
+ * Re-derive an order's status and payment state from its bookings and ledger.
+ * Call after any transition that finalises a job — accept, cancel, exhaustion.
+ */
+export async function recomputeOrderStatus(orderId: string): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { bookings: { select: { status: true } } },
+  });
+  if (!order) return;
+
+  const ledger: MoneyLedger = {
+    authorizedPaise: order.authorizedPaise,
+    capturedPaise: order.capturedPaise,
+    voidedPaise: order.voidedPaise,
+    refundedPaise: order.refundedPaise,
+  };
+  assertMoneyInvariant(ledger);
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: rollUpOrderStatus(order.bookings.map((b) => b.status)),
+      paymentState: derivePaymentState(ledger),
+    },
+  });
 }

@@ -148,3 +148,16 @@ export class DemoPaymentGateway implements PaymentGateway {
     return new Date(Date.now() + CARD_HOLD_DAYS * 24 * 60 * 60 * 1000);
   }
 }
+
+// ─── Active gateway ──────────────────────────────────────────────────────────
+
+let gateway: PaymentGateway = new DemoPaymentGateway();
+
+/** Swap in the real gateway (e.g. Razorpay) at app bootstrap. */
+export function setPaymentGateway(g: PaymentGateway): void {
+  gateway = g;
+}
+
+export function getPaymentGateway(): PaymentGateway {
+  return gateway;
+}

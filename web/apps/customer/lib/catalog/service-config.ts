@@ -5,44 +5,33 @@
 //
 // For each service we describe:
 //   • guidelines   — scope card shown before booking (included / not / good-to-know)
-//   • detailFields — structured intake (e.g. Switch Type) that replaces the old
-//                    freeform "describe the issue" textarea
+//   • detailFields — priced requirement intake. Selecting requirements turns the
+//                    catalog's "starts at" price into an exact quote.
 //   • bookingTypes — whether Instant and/or Scheduled are offered
 //
 // Resolution is layered: service-slug override → sub-category → category default.
-// The chosen field values are serialised into booking.archetypeDetails.details as
-// human-readable { label, value } pairs, so the partner app can render them without
-// importing this config (no cross-app duplication).
+// A layer REPLACES the detailFields of the layer above it, so every layer that
+// defines detailFields must include its own `variant` field — that field is what
+// sets the base price.
+//
+// The chosen values are serialised into booking.archetypeDetails.details as
+// human-readable { label, value } pairs, so the partner app can render them
+// without importing this config (no cross-app duplication). The priced breakdown
+// is snapshotted separately onto booking.lineItems.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  estimatePrice,
+  startingPricePaise,
+  type PricedDetailField,
+  type Selections,
+} from "./pricing";
 
 export type BookingTypeOption = "instant" | "scheduled";
 
-export type DetailField =
-  | {
-      key: string;
-      label: string;
-      type: "select";
-      options: string[];
-      defaultValue?: string;
-      required?: boolean;
-    }
-  | {
-      key: string;
-      label: string;
-      type: "counter";
-      min?: number;
-      max?: number;
-      defaultValue?: number;
-      required?: boolean;
-    }
-  | {
-      key: string;
-      label: string;
-      type: "text";
-      placeholder?: string;
-      defaultValue?: string;
-      required?: boolean;
-    };
+/** Detail fields are the priced field union — see ./pricing.ts. */
+export type DetailField = PricedDetailField;
+export type { PricedDetailField, Selections };
 
 export type ServiceGuidelines = {
   /** One-line scope summary shown under the service name. */
@@ -90,10 +79,24 @@ const GENERIC_GUIDELINES: ServiceGuidelines = {
     "Major structural or civil work",
   ],
   goodToKnow: [
-    "Upfront pricing — pay after the professional accepts",
+    "Upfront pricing — you approve the estimate before paying",
     "Free cancellation before a professional is assigned",
   ],
 };
+
+/** Fallback so a service with no configured variant still prices at something. */
+const GENERIC_FIELDS: DetailField[] = [
+  {
+    key: "scope",
+    label: "Select scope",
+    type: "variant",
+    required: true,
+    options: [
+      { value: "Standard visit", pricePaise: 49900, description: "Diagnosis and standard work" },
+      { value: "Extended visit", pricePaise: 89900, description: "Complex or multi-point jobs" },
+    ],
+  },
+];
 
 const DEFAULT_BOOKING_TYPES: BookingTypeOption[] = ["instant", "scheduled"];
 
@@ -114,10 +117,32 @@ const TECHNICIAN: CategoryConfig = {
         "Full rewiring / re-plumbing / civil work",
       ],
       goodToKnow: [
-        "Pay after the technician accepts your job",
+        "Your estimate is confirmed before the technician is dispatched",
         "Free cancellation before assignment",
       ],
     },
+    detailFields: [
+      {
+        key: "scope",
+        label: "Select scope",
+        type: "variant",
+        required: true,
+        options: [
+          { value: "Inspection & diagnosis", pricePaise: 29900, description: "Fault finding, no parts" },
+          { value: "Standard repair", pricePaise: 49900, description: "Diagnosis plus common repairs" },
+          { value: "Major repair", pricePaise: 89900, description: "Extended labour, complex faults" },
+        ],
+      },
+      {
+        key: "extras",
+        label: "Select add-ons",
+        type: "addons",
+        options: [
+          { value: "Same-day priority", pricePaise: 14900, description: "Jump the queue" },
+          { value: "Annual maintenance check", pricePaise: 24900, description: "Full-system health check" },
+        ],
+      },
+    ],
     noteLabel: "Describe the problem (optional)",
     notePlaceholder: "e.g. 2 switches in the master bedroom are sparking",
   },
@@ -125,14 +150,33 @@ const TECHNICIAN: CategoryConfig = {
     "switch-socket-repair": {
       detailFields: [
         {
+          key: "jobType",
+          label: "What do you need?",
+          type: "variant",
+          required: true,
+          options: [
+            { value: "Repair a switch / socket", pricePaise: 19900 },
+            { value: "Replace a switch / socket", pricePaise: 29900 },
+            { value: "Install a new point", pricePaise: 49900 },
+          ],
+        },
+        {
           key: "switchType",
           label: "Switch type",
           type: "select",
-          options: ["Modular", "Conventional", "Smart switch"],
+          options: [{ value: "Modular" }, { value: "Conventional" }, { value: "Smart switch" }],
           defaultValue: "Modular",
           required: true,
         },
-        { key: "quantity", label: "Number of switches / sockets", type: "counter", min: 1, max: 20, defaultValue: 2 },
+        {
+          key: "extraUnits",
+          label: "Additional switches / sockets",
+          type: "counter",
+          min: 0,
+          max: 19,
+          defaultValue: 0,
+          perUnitPaise: 9900,
+        },
       ],
     },
     "fan-installation": {
@@ -140,25 +184,55 @@ const TECHNICIAN: CategoryConfig = {
         {
           key: "fanType",
           label: "Fan type",
-          type: "select",
-          options: ["Ceiling", "Wall", "Exhaust"],
-          defaultValue: "Ceiling",
+          type: "variant",
           required: true,
+          options: [
+            { value: "Ceiling fan", pricePaise: 39900 },
+            { value: "Wall fan", pricePaise: 29900 },
+            { value: "Exhaust fan", pricePaise: 34900 },
+          ],
         },
-        { key: "quantity", label: "Number of fans", type: "counter", min: 1, max: 10, defaultValue: 1 },
+        {
+          key: "extraFans",
+          label: "Additional fans",
+          type: "counter",
+          min: 0,
+          max: 9,
+          defaultValue: 0,
+          perUnitPaise: 24900,
+        },
       ],
     },
     "ac-general-service": {
       detailFields: [
         {
+          key: "acService",
+          label: "Select service",
+          type: "variant",
+          required: true,
+          options: [
+            { value: "Basic service", pricePaise: 49900, description: "Filter clean & performance check" },
+            { value: "Deep jet service", pricePaise: 79900, description: "Full coil jet-wash" },
+            { value: "Service + gas check", pricePaise: 99900, description: "Includes gas pressure check" },
+          ],
+        },
+        {
           key: "acType",
           label: "AC type",
           type: "select",
-          options: ["Split", "Window"],
+          options: [{ value: "Split" }, { value: "Window" }],
           defaultValue: "Split",
           required: true,
         },
-        { key: "quantity", label: "Number of units", type: "counter", min: 1, max: 10, defaultValue: 1 },
+        {
+          key: "extraUnits",
+          label: "Additional units",
+          type: "counter",
+          min: 0,
+          max: 9,
+          defaultValue: 0,
+          perUnitPaise: 44900,
+        },
       ],
     },
   },
@@ -178,10 +252,33 @@ const BEAUTY: CategoryConfig = {
         "Services not selected in this booking",
       ],
       goodToKnow: [
-        "Pay after the beautician accepts your booking",
+        "Your estimate is confirmed before the beautician is dispatched",
         "Please have a clean, well-lit space ready",
       ],
     },
+    detailFields: [
+      {
+        key: "package",
+        label: "Select package",
+        type: "variant",
+        required: true,
+        options: [
+          { value: "Express (60 min)", pricePaise: 59900, description: "The essentials" },
+          { value: "Classic (90 min)", pricePaise: 99900, description: "Most popular" },
+          { value: "Premium (2 hr)", pricePaise: 149900, description: "Full pampering session" },
+        ],
+      },
+      {
+        key: "extras",
+        label: "Select add-ons",
+        type: "addons",
+        options: [
+          { value: "Threading", pricePaise: 9900 },
+          { value: "De-tan pack", pricePaise: 29900 },
+          { value: "Hair spa", pricePaise: 49900 },
+        ],
+      },
+    ],
     noteLabel: "Preferences (optional)",
     notePlaceholder: "Skin concerns, product preferences, or setup notes…",
   },
@@ -201,10 +298,33 @@ const HOME: CategoryConfig = {
         "Consumables for extremely soiled surfaces",
       ],
       goodToKnow: [
-        "Pay after the professional accepts",
+        "Your estimate is confirmed before the professional is dispatched",
         "Please ensure water & power are available",
       ],
     },
+    detailFields: [
+      {
+        key: "scope",
+        label: "Select scope",
+        type: "variant",
+        required: true,
+        options: [
+          { value: "Standard clean", pricePaise: 69900 },
+          { value: "Deep clean", pricePaise: 129900, description: "Most popular" },
+          { value: "Premium deep clean", pricePaise: 199900 },
+        ],
+      },
+      {
+        key: "extras",
+        label: "Select add-ons",
+        type: "addons",
+        options: [
+          { value: "Sofa shampoo", pricePaise: 49900 },
+          { value: "Fridge cleaning", pricePaise: 29900 },
+          { value: "Balcony / utility", pricePaise: 19900 },
+        ],
+      },
+    ],
     noteLabel: "Add a note (optional)",
     notePlaceholder: "Access instructions, problem areas, or preferences…",
   },
@@ -214,22 +334,136 @@ const HOME: CategoryConfig = {
         {
           key: "homeSize",
           label: "Home size",
-          type: "select",
-          options: ["1 BHK", "2 BHK", "3 BHK", "4+ BHK / Villa"],
-          defaultValue: "2 BHK",
+          type: "variant",
           required: true,
+          options: [
+            { value: "1 BHK", pricePaise: 99900 },
+            { value: "2 BHK", pricePaise: 129900 },
+            { value: "3 BHK", pricePaise: 169900 },
+            { value: "4 BHK", pricePaise: 209900 },
+            { value: "5+ BHK / Villa", pricePaise: 259900 },
+          ],
+        },
+        {
+          key: "cleaningFocus",
+          label: "What needs cleaning?",
+          type: "select",
+          options: [
+            { value: "Entire home" },
+            { value: "Bedrooms & living" },
+            { value: "Kitchen" },
+            { value: "Bathrooms" },
+            { value: "Balcony / utility" },
+          ],
+          defaultValue: "Entire home",
+          required: true,
+          variant: "dropdown",
+        },
+        // Informational: home size already drives the price here.
+        { key: "bathrooms", label: "Number of bathrooms", type: "counter", min: 1, max: 6, defaultValue: 2 },
+        {
+          key: "extras",
+          label: "Select add-ons",
+          type: "addons",
+          options: [
+            { value: "Sofa shampoo", pricePaise: 49900 },
+            { value: "Fridge cleaning", pricePaise: 29900 },
+          ],
         },
       ],
     },
     "pest-control": {
       detailFields: [
         {
+          key: "coverage",
+          label: "Select area",
+          type: "variant",
+          required: true,
+          options: [
+            { value: "Only kitchen", pricePaise: 99800 },
+            { value: "1 Bathroom & kitchen", pricePaise: 109800 },
+            { value: "2 Bathrooms & kitchen", pricePaise: 119800 },
+            { value: "3 Bathrooms & kitchen", pricePaise: 124900 },
+            { value: "Full home", pricePaise: 149900 },
+          ],
+        },
+        {
           key: "propertyType",
           label: "Property type",
           type: "select",
-          options: ["Apartment", "Independent house", "Commercial"],
+          options: [
+            { value: "Apartment" },
+            { value: "Independent house" },
+            { value: "Villa / Duplex" },
+            { value: "Commercial space" },
+          ],
           defaultValue: "Apartment",
           required: true,
+          variant: "dropdown",
+        },
+        {
+          key: "extras",
+          label: "Select add-ons",
+          type: "addons",
+          options: [
+            { value: "Deep sanitisation", pricePaise: 29900 },
+            { value: "Odour treatment", pricePaise: 19900 },
+          ],
+        },
+      ],
+    },
+  },
+  // Service-level overrides — a more precise intake for room-specific cleans,
+  // where "home size" makes little sense.
+  services: {
+    "bathroom-deep-cleaning": {
+      detailFields: [
+        {
+          key: "bathroomPackage",
+          label: "Select package",
+          type: "variant",
+          required: true,
+          options: [
+            { value: "Standard clean", pricePaise: 49900 },
+            { value: "Hard water / scaling", pricePaise: 79900 },
+            { value: "Post-construction", pricePaise: 119900 },
+          ],
+        },
+        {
+          key: "extraBathrooms",
+          label: "Additional bathrooms",
+          type: "counter",
+          min: 0,
+          max: 5,
+          defaultValue: 0,
+          perUnitPaise: 39900,
+        },
+      ],
+    },
+    "kitchen-deep-cleaning": {
+      detailFields: [
+        {
+          key: "kitchenPackage",
+          label: "Select package",
+          type: "variant",
+          required: true,
+          options: [
+            { value: "Standard kitchen", pricePaise: 89900 },
+            { value: "With chimney", pricePaise: 129900 },
+            { value: "Modular deep clean", pricePaise: 169900 },
+          ],
+        },
+        {
+          key: "greaseLevel",
+          label: "Grease level",
+          type: "select",
+          options: [
+            { value: "Light" },
+            { value: "Moderate" },
+            { value: "Heavy / post-construction", priceDeltaPaise: 19900 },
+          ],
+          defaultValue: "Moderate",
+          variant: "dropdown",
         },
       ],
     },
@@ -250,18 +484,38 @@ const PET: CategoryConfig = {
         "Aggressive-animal handling without prior notice",
       ],
       goodToKnow: [
-        "Pay after the professional accepts",
+        "Your estimate is confirmed before the professional is dispatched",
         "Please share your pet's temperament in the note",
       ],
     },
     detailFields: [
       {
+        key: "grooming",
+        label: "Select service",
+        type: "variant",
+        required: true,
+        options: [
+          { value: "Bath & brush", pricePaise: 59900 },
+          { value: "Full grooming", pricePaise: 99900, description: "Bath, brush, trim" },
+          { value: "Grooming + nail & ear", pricePaise: 129900 },
+        ],
+      },
+      {
         key: "petType",
         label: "Pet",
         type: "select",
-        options: ["Dog", "Cat", "Other"],
+        options: [{ value: "Dog" }, { value: "Cat" }, { value: "Other" }],
         defaultValue: "Dog",
         required: true,
+      },
+      {
+        key: "extras",
+        label: "Select add-ons",
+        type: "addons",
+        options: [
+          { value: "Tick & flea treatment", pricePaise: 39900 },
+          { value: "Teeth cleaning", pricePaise: 24900 },
+        ],
       },
     ],
     noteLabel: "About your pet (optional)",
@@ -310,7 +564,7 @@ export function getServiceConfig(
   }
 
   let guidelines = GENERIC_GUIDELINES;
-  let detailFields: DetailField[] = [];
+  let detailFields: DetailField[] = GENERIC_FIELDS;
   let bookingTypes: BookingTypeOption[] = DEFAULT_BOOKING_TYPES;
   let noteLabel = "Add a note (optional)";
   let notePlaceholder = "Anything the professional should know?";
@@ -326,12 +580,24 @@ export function getServiceConfig(
   return { guidelines, detailFields, bookingTypes, noteLabel, notePlaceholder };
 }
 
+/** The advertised "Starts at" price for a service — the cheapest variant. */
+export function getStartingPricePaise(
+  categorySlug: string,
+  subCategorySlug?: string | null,
+  serviceSlug?: string | null,
+): number {
+  return startingPricePaise(getServiceConfig(categorySlug, subCategorySlug, serviceSlug).detailFields);
+}
+
 /** Default values for a config's detail fields (used to seed flow state). */
-export function defaultDetailValues(fields: DetailField[]): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
+export function defaultDetailValues(fields: DetailField[]): Selections {
+  const out: Selections = {};
   for (const f of fields) {
-    if (f.type === "counter") out[f.key] = f.defaultValue ?? f.min ?? 1;
-    else out[f.key] = f.defaultValue ?? (f.type === "select" ? f.options[0] ?? "" : "");
+    if (f.type === "variant") out[f.key] = f.options[0]?.value ?? "";
+    else if (f.type === "addons") out[f.key] = [];
+    else if (f.type === "counter") out[f.key] = f.defaultValue ?? f.min ?? 0;
+    else if (f.type === "select") out[f.key] = f.defaultValue ?? f.options[0]?.value ?? "";
+    else out[f.key] = f.defaultValue ?? "";
   }
   return out;
 }
@@ -339,9 +605,16 @@ export function defaultDetailValues(fields: DetailField[]): Record<string, strin
 /** Turn selected field values into human-readable { label, value } pairs for storage. */
 export function toDetailPairs(
   fields: DetailField[],
-  values: Record<string, string | number>,
+  values: Selections,
 ): { label: string; value: string }[] {
   return fields
-    .map((f) => ({ label: f.label, value: String(values[f.key] ?? "") }))
+    .map((f) => {
+      const raw = values[f.key];
+      const value = Array.isArray(raw) ? raw.join(", ") : String(raw ?? "");
+      return { label: f.label, value };
+    })
     .filter((p) => p.value !== "");
 }
+
+/** Convenience re-export so callers need only one import for config + pricing. */
+export { estimatePrice, startingPricePaise };

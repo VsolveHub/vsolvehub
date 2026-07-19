@@ -14,6 +14,7 @@
 import type { JobStatus } from "@prisma/client";
 import { prisma } from "./client";
 import { isDispatchable } from "./booking-scope";
+import { recomputeOrderStatus } from "./orders";
 
 /** Ordered happy-path timeline a single-provider booking moves through. */
 export const SINGLE_PROVIDER_TIMELINE = [
@@ -94,6 +95,14 @@ export async function acceptJobOffer(
 
   const now = new Date();
   const startOtp = genOtp();
+  const booking = assignment.booking;
+
+  // Capture this job's share of the order's authorization. Joining the existing
+  // first-to-accept transaction means the concurrent-accept race is already
+  // handled: only the winning accept can capture.
+  const alreadyCaptured = booking.capturedPaise > 0;
+  const capturePaise = alreadyCaptured ? 0 : booking.quotedAmount;
+  const isPrepaid = booking.paymentStatus !== "COD";
 
   await prisma.$transaction([
     prisma.jobAssignment.update({
@@ -106,12 +115,30 @@ export async function acceptJobOffer(
     }),
     prisma.booking.update({
       where: { id: assignment.bookingId },
-      data: { assignedPartnerId: partnerId, status: "ASSIGNED", startOtp },
+      data: {
+        assignedPartnerId: partnerId,
+        status: "ASSIGNED",
+        startOtp,
+        ...(isPrepaid && capturePaise > 0
+          ? { capturedPaise: capturePaise, paymentStatus: "PAID" }
+          : {}),
+      },
     }),
     prisma.bookingStatusLog.create({
       data: { bookingId: assignment.bookingId, status: "ASSIGNED" },
     }),
+    // Roll the capture up to the order's ledger.
+    ...(booking.orderId && isPrepaid && capturePaise > 0
+      ? [
+          prisma.order.update({
+            where: { id: booking.orderId },
+            data: { capturedPaise: { increment: capturePaise } },
+          }),
+        ]
+      : []),
   ]);
+
+  if (booking.orderId) await recomputeOrderStatus(booking.orderId);
 
   return {
     ok: true,
