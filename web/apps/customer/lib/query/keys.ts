@@ -10,8 +10,6 @@ export const qk = {
   savedServices: () => ["saved-services"] as const,
   booking: (ref: string) => ["booking", ref] as const,
   bookings: () => ["bookings"] as const,
-  providers: (serviceId: string, addressId?: string | null) =>
-    ["providers", serviceId, addressId ?? ""] as const,
   availability: (serviceId: string, addressId: string, slot: string, scheduleType: string) =>
     ["availability", serviceId, addressId, slot, scheduleType] as const,
   vehicleBooking: (ref: string) => ["vehicle-booking", ref] as const,
