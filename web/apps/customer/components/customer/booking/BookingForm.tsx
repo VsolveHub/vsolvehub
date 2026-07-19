@@ -8,6 +8,12 @@ import { Textarea } from "@/components/ui/Textarea";
 import { formatPrice } from "@/lib/format";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { LoadingState } from "@/components/ui/LoadingState";
+import {
+  useCatalogQuery,
+  useAddressesQuery,
+  useAddAddressMutation,
+  useCreateBookingMutation,
+} from "@/lib/query/hooks";
 
 type Address = {
   id: string;
@@ -55,84 +61,89 @@ type BookingFormProps = {
 export function BookingForm({ serviceId }: BookingFormProps) {
   const router = useRouter();
   const slots = useMemo(() => generateSlots(), []);
-  const [service, setService] = useState<Service | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>([]);
+
+  const { data: catalogData, isLoading: catalogLoading } = useCatalogQuery();
+  const { data: addressesData, isLoading: addressesLoading, isError: addressesError } = useAddressesQuery();
+
+  const service = useMemo(() => {
+    return catalogData?.services.find((s) => s.id === serviceId) || null;
+  }, [catalogData, serviceId]);
+
+  const addresses = addressesData?.addresses || [];
+
   const [selectedAddress, setSelectedAddress] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [showNewAddress, setShowNewAddress] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newAddress, setNewAddress] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formStep, setFormStep] = useState<1 | 2 | 3>(1);
 
+  const addAddressMutation = useAddAddressMutation();
+  const createBookingMutation = useCreateBookingMutation();
+
+  const loading = createBookingMutation.isPending || addAddressMutation.isPending;
+
   useEffect(() => {
-    async function load() {
-      const [catalogRes, addrRes] = await Promise.all([
-        fetch("/api/catalog"),
-        fetch("/api/profile/addresses"),
-      ]);
-
-      if (catalogRes.ok) {
-        const { services } = await catalogRes.json();
-        const found = services.find((s: Service) => s.id === serviceId);
-        setService(found ?? null);
-      }
-
-      if (addrRes.ok) {
-        const { addresses: list } = await addrRes.json();
-        setAddresses(list);
-        const defaultAddr = list.find((a: Address) => a.isDefault) ?? list[0];
-        if (defaultAddr) setSelectedAddress(defaultAddr.id);
-      } else {
-        router.push(`/booking/otp?redirect=${encodeURIComponent(`/booking?serviceId=${serviceId}`)}`);
-      }
+    if (addressesError) {
+      router.push(`/booking/otp?redirect=${encodeURIComponent(`/booking?serviceId=${serviceId}`)}`);
     }
-    load();
-  }, [serviceId, router]);
+  }, [addressesError, serviceId, router]);
 
-  async function addAddress() {
-    const res = await fetch("/api/profile/addresses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: newLabel, fullAddress: newAddress, isDefault: addresses.length === 0 }),
+  useEffect(() => {
+    if (addresses.length > 0 && !selectedAddress) {
+      const defaultAddr = addresses.find((a: Address) => a.isDefault) ?? addresses[0];
+      if (defaultAddr) setSelectedAddress(defaultAddr.id);
+    }
+  }, [addresses, selectedAddress]);
+
+  function addAddress() {
+    addAddressMutation.mutate({
+      label: newLabel,
+      fullAddress: newAddress,
+      isDefault: addresses.length === 0,
+    }, {
+      onSuccess: (data) => {
+        setSelectedAddress(data.address.id);
+        setShowNewAddress(false);
+        setNewLabel("");
+        setNewAddress("");
+      },
+      onError: (err: any) => {
+        setError(err.message || "Failed to add address");
+      }
     });
-    if (res.ok) {
-      const { address } = await res.json();
-      setAddresses((prev) => [...prev, address]);
-      setSelectedAddress(address.id);
-      setShowNewAddress(false);
-      setNewLabel("");
-      setNewAddress("");
-    }
   }
 
-  async function confirmBooking() {
+  function confirmBooking() {
     if (!selectedSlot || !selectedAddress) {
       setError("Please select a time slot and address");
       return;
     }
-    setLoading(true);
     setError("");
-    const res = await fetch("/api/bookings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId, addressId: selectedAddress, slot: selectedSlot }),
+    createBookingMutation.mutate({
+      serviceId,
+      addressId: selectedAddress,
+      slot: selectedSlot,
+    }, {
+      onSuccess: (data) => {
+        router.push(`/booking/confirm?ref=${data.bookingRef}`);
+      },
+      onError: (err: any) => {
+        setError(err.message || "Booking failed");
+      }
     });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error?.fieldErrors ? "Please fill all required fields" : data.error ?? "Booking failed");
-      setLoading(false);
-      return;
-    }
-    router.push(`/booking/confirm?ref=${data.bookingRef}`);
   }
 
-  const selectedAddrObj = useMemo(() => addresses.find((a) => a.id === selectedAddress), [addresses, selectedAddress]);
+  const selectedAddrObj = useMemo(() => addresses.find((a: Address) => a.id === selectedAddress), [addresses, selectedAddress]);
   const selectedSlotObj = useMemo(() => slots.find((s) => s.value === selectedSlot), [slots, selectedSlot]);
 
-  if (!service) {
+  if (catalogLoading || addressesLoading) {
     return <LoadingState label="Loading service details…" variant="inline" />;
+  }
+
+  if (!service) {
+    return <div style={{ padding: "2rem", textAlign: "center" }}>Service not found.</div>;
   }
 
   // Cost calculation details
@@ -190,7 +201,7 @@ export function BookingForm({ serviceId }: BookingFormProps) {
                 </div>
 
                 <div className="address-options-list">
-                  {addresses.map((addr) => (
+                  {addresses.map((addr: Address) => (
                     <button
                       key={addr.id}
                       type="button"

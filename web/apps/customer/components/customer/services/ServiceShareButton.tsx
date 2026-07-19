@@ -4,11 +4,11 @@ type Props = {
   title: string;
   url: string;
 };
-
 export function ServiceShareButton({ title, url }: Props) {
   async function handleShare() {
-    const shareData = { title, text: `Check out ${title} on V Solve Hub`, url };
-    if (navigator.share) {
+    const absoluteUrl = url.startsWith("http") ? url : `${window.location.origin}${url}`;
+    const shareData = { title, text: `Check out ${title} on V Solve Hub`, url: absoluteUrl };
+    if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
         return;
@@ -16,7 +16,7 @@ export function ServiceShareButton({ title, url }: Props) {
         /* user cancelled */
       }
     }
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(absoluteUrl);
     alert("Link copied to clipboard!");
   }
 

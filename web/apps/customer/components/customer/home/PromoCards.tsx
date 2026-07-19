@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import Image from "next/image";
 import { PROMO_CARDS } from "@/lib/catalog/display-catalog";
 
 type PromoCardData = (typeof PROMO_CARDS)[number];
@@ -16,7 +16,13 @@ function PromoCard({ card }: { card: PromoCardData }) {
 
   return (
     <Link href={card.href} className="spotlight-card">
-      <img src={image || "/ac_illustration.jpg"} alt={card.title} className="spotlight-bg-img" />
+      <Image
+        src={image || "/ac_illustration.jpg"}
+        alt={card.title}
+        width={440}
+        height={260}
+        className="spotlight-bg-img"
+      />
       <div className="spotlight-gradient-overlay" />
       
       {badge && (

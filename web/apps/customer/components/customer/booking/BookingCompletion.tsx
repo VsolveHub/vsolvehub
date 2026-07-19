@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { formatPrice, formatDate } from "@/lib/format";
+import { useReviewBookingMutation } from "@/lib/query/hooks";
 
 type Props = {
   bookingRef: string;
@@ -28,24 +29,20 @@ export function BookingCompletion({
   const [rating, setRating] = useState(existingRating ?? 5);
   const [review, setReview] = useState("");
   const [submitted, setSubmitted] = useState(existingRating != null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const reviewMutation = useReviewBookingMutation(bookingRef);
+  const loading = reviewMutation.isPending;
 
-  async function submitReview() {
-    setLoading(true);
+  function submitReview() {
     setError("");
-    const res = await fetch(`/api/bookings/${bookingRef}/review`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rating, review }),
+    reviewMutation.mutate({ rating, review }, {
+      onSuccess: () => {
+        setSubmitted(true);
+      },
+      onError: (err: any) => {
+        setError(err.message || "Could not submit review");
+      }
     });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Could not submit review");
-      return;
-    }
-    setSubmitted(true);
   }
 
   return (

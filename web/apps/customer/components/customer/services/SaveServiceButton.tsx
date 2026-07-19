@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { useSaveServiceMutation, useUnsaveServiceMutation } from "@/lib/query/hooks";
 
 type SaveButtonProps = {
   serviceId: string;
@@ -10,22 +11,20 @@ type SaveButtonProps = {
 
 export function SaveServiceButton({ serviceId, initialSaved = false }: SaveButtonProps) {
   const [saved, setSaved] = useState(initialSaved);
-  const [loading, setLoading] = useState(false);
+  const saveMutation = useSaveServiceMutation();
+  const unsaveMutation = useUnsaveServiceMutation();
+  const loading = saveMutation.isPending || unsaveMutation.isPending;
 
-  async function toggle() {
-    setLoading(true);
+  function toggle() {
     if (saved) {
-      await fetch(`/api/profile/saved?serviceId=${serviceId}`, { method: "DELETE" });
-      setSaved(false);
-    } else {
-      const res = await fetch("/api/profile/saved", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId }),
+      unsaveMutation.mutate(serviceId, {
+        onSuccess: () => setSaved(false),
       });
-      if (res.ok) setSaved(true);
+    } else {
+      saveMutation.mutate(serviceId, {
+        onSuccess: () => setSaved(true),
+      });
     }
-    setLoading(false);
   }
 
   return (

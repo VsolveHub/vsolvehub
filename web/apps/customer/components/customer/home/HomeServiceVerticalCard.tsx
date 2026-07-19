@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
 
 type Props = {
@@ -11,6 +12,9 @@ type Props = {
   serviceSlug: string;
   subCategorySlug?: string;
   badge?: string;
+  serviceId?: string;
+  pricePaise?: number;
+  unit?: string | null;
 };
 
 export function HomeServiceVerticalCard({
@@ -21,7 +25,17 @@ export function HomeServiceVerticalCard({
   serviceSlug,
   subCategorySlug,
   badge,
+  serviceId,
 }: Props) {
+  const router = useRouter();
+
+  // One service per booking: jump straight into the booking flow for this
+  // service (the card itself still links to the service detail page).
+  function handleBook(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(serviceId ? `/booking?serviceId=${serviceId}` : href);
+  }
   // Use deterministic dummy ratings so SSR matches Client to prevent hydration errors
   const seed = name.length;
   const dummyRating = (4.5 + (seed % 6) * 0.08).toFixed(2);
@@ -58,7 +72,9 @@ export function HomeServiceVerticalCard({
             <span className="vsc-price">{priceLabel}</span>
             {oldPrice && <span className="vsc-old-price">{oldPrice}</span>}
           </div>
-          <button className="vsc-add-btn" onClick={(e) => e.preventDefault()}>Add</button>
+          <button className="vsc-add-btn" onClick={handleBook}>
+            Book
+          </button>
         </div>
       </div>
     </Link>

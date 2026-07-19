@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { getServiceBySlug, serializeService, serviceInclude } from "@/lib/catalog/queries";
 import { buildServiceDetailContent } from "@/lib/catalog/service-detail-content";
 import { ServiceDetailView } from "@/components/customer/services/ServiceDetailView";
@@ -53,10 +52,7 @@ export default async function ServiceDetailPage({ params }: PageProps) {
     isSaved = !!saved;
   }
 
-  const headersList = await headers();
-  const host = headersList.get("host") ?? "localhost:3000";
-  const protocol = host.includes("localhost") || host.startsWith("127.") ? "http" : "https";
-  const shareUrl = `${protocol}://${host}/services/${category}/${slug}`;
+  const shareUrl = `/services/${category}/${slug}`;
 
   return (
     <>

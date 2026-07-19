@@ -107,9 +107,9 @@ export function HeroBanner({ categories = [] }: { categories?: Category[] }) {
             <div className="trust-unified-bottom">
               <div className="unified-avatars">
                 <div className="avatar-group">
-                  <img src="https://api.dicebear.com/7.x/notionists/svg?seed=A" alt="User" />
-                  <img src="https://api.dicebear.com/7.x/notionists/svg?seed=B" alt="User" />
-                  <img src="https://api.dicebear.com/7.x/notionists/svg?seed=C" alt="User" />
+                  <img src="/avatar-1.svg" alt="" />
+                  <img src="/avatar-2.svg" alt="" />
+                  <img src="/avatar-3.svg" alt="" />
                 </div>
                 <span>5M+ Customers</span>
               </div>

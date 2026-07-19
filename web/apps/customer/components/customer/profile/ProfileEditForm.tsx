@@ -6,6 +6,7 @@ import { ProfileSubPage } from "./ProfileSubPage";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatPhone } from "@/lib/format";
+import { useUpdateProfileMutation } from "@/lib/query/hooks";
 
 type Props = {
   name: string;
@@ -15,30 +16,23 @@ type Props = {
 export function ProfileEditForm({ name, phone }: Props) {
   const router = useRouter();
   const [fullName, setFullName] = useState(name);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const updateProfileMutation = useUpdateProfileMutation();
+  const loading = updateProfileMutation.isPending;
 
-  async function onSubmit(e: FormEvent) {
+  function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError("");
 
-    const res = await fetch("/api/user/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: fullName.trim() }),
+    updateProfileMutation.mutate({ name: fullName.trim() }, {
+      onSuccess: () => {
+        router.push("/profile");
+        router.refresh();
+      },
+      onError: (err: any) => {
+        setError(err.message || "Could not save profile");
+      }
     });
-
-    const data = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(typeof data.error === "string" ? data.error : "Could not save profile");
-      return;
-    }
-
-    router.push("/profile");
-    router.refresh();
   }
 
   return (

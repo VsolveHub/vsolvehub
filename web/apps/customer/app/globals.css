@@ -3,6 +3,26 @@
 @source "../app";
 @import "./premium.css";
 
+/* Brand + status design tokens → generate Tailwind utilities (bg-brand,
+   text-brand-accent, border-header, text-danger, bg-success, …). Values mirror
+   the :root custom properties below, so there is ZERO visual change — this just
+   lets the migration use semantic color utilities instead of hardcoded hex or
+   approximations like blue-900. Tailwind's default palette stays available. */
+@theme {
+  --color-brand: #1e3a8a;
+  --color-brand-dark: #081021;
+  --color-brand-light: #eff6ff;
+  --color-brand-accent: #f97316;
+  --color-header: #172a53;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+}
+
+@view-transition {
+  navigation: auto;
+}
+
 :root {
   --color-brand: #1e3a8a;
   --color-brand-dark: #081021;

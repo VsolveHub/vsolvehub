@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { formatPrice } from "@/lib/format";
 import { VEHICLE_STATUS_LABELS } from "@/lib/vehicle/constants";
 import { LoadingState } from "@/components/ui/LoadingState";
+import {
+  useVehicleBookingQuery,
+  useCancelVehicleBookingMutation,
+  useSimulateVehicleStatusMutation,
+  useResetVehicleSimulationMutation,
+} from "@/lib/query/hooks";
 
 type TrackingData = {
   bookingRef: string;
@@ -23,31 +29,21 @@ type TrackingData = {
 };
 
 export function VehicleTracker({ bookingRef }: { bookingRef: string }) {
-  const [data, setData] = useState<TrackingData | null>(null);
-  const [error, setError] = useState("");
-  const [cancelling, setCancelling] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const { data, error, isLoading } = useVehicleBookingQuery(bookingRef, {
+    refetchInterval: 4000,
+  });
+
+  const cancelMutation = useCancelVehicleBookingMutation(bookingRef);
+  const simulateMutation = useSimulateVehicleStatusMutation(bookingRef);
+  const resetMutation = useResetVehicleSimulationMutation(bookingRef);
+
+  const cancelling = cancelMutation.isPending;
+  const loading = simulateMutation.isPending || resetMutation.isPending;
 
   // Payment states for completed rides
   const [paid, setPaid] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "wallet" | "cod">("cod");
   const [showBreakup, setShowBreakup] = useState(true);
-
-  async function fetchStatus() {
-    const res = await fetch(`/api/vehicle/bookings/${bookingRef}`);
-    if (!res.ok) {
-      setError("Booking not found");
-      return;
-    }
-    const json = await res.json();
-    setData(json);
-  }
-
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 4000);
-    return () => clearInterval(interval);
-  }, [bookingRef]);
 
   // Keep paid state in sync with status
   const status = data ? data.status : "";
@@ -57,56 +53,22 @@ export function VehicleTracker({ bookingRef }: { bookingRef: string }) {
     }
   }, [status]);
 
-  async function cancelBooking() {
+  function cancelBooking() {
     if (!confirm("Cancel this booking?")) return;
-    setCancelling(true);
-    const res = await fetch(`/api/vehicle/bookings/${bookingRef}/cancel`, { method: "POST" });
-    setCancelling(false);
-    if (res.ok) {
-      fetchStatus();
-    }
+    cancelMutation.mutate();
   }
 
-  async function simulateNextStatus() {
-    if (!data) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/vehicle/bookings/${bookingRef}/status`);
-      const statusData = await res.json();
-      if (statusData.nextStatus) {
-        await fetch(`/api/vehicle/bookings/${bookingRef}/status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: statusData.nextStatus }),
-        });
-        fetchStatus();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  function simulateNextStatus() {
+    simulateMutation.mutate();
   }
 
-  async function resetSimulation() {
-    setLoading(true);
-    try {
-      await fetch(`/api/vehicle/bookings/${bookingRef}/status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "REQUESTED" }),
-      });
-      setPaid(false);
-      fetchStatus();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  function resetSimulation() {
+    setPaid(false);
+    resetMutation.mutate();
   }
 
-  if (error) return <div className="alert alert-error">{error}</div>;
-  if (!data) return <LoadingState label="Loading booking status…" variant="inline" />;
+  if (error) return <div className="alert alert-error">Booking not found</div>;
+  if (isLoading || !data) return <LoadingState label="Loading booking status…" variant="inline" />;
 
   const canCancel = !["COMPLETED", "CANCELLED"].includes(data.status);
   const assignee = data.driver ?? data.vendor;
@@ -587,7 +549,7 @@ export function VehicleTracker({ bookingRef }: { bookingRef: string }) {
       <div className="card">
         <h2 className="section-title">Status timeline</h2>
         <div className="stack">
-          {data.statusLogs.map((log, i) => (
+          {data.statusLogs.map((log: any, i: number) => (
             <div key={i} className="flex-between text-sm">
               <span>{VEHICLE_STATUS_LABELS[log.status] ?? log.status}</span>
               {log.status === data.status && <span className="text-muted">Current</span>}

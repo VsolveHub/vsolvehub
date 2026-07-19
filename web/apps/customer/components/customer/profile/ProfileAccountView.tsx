@@ -15,6 +15,7 @@ import {
   WalletMenuIcon,
 } from "./ProfileIcons";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
+import { useLogoutMutation } from "@/lib/query/hooks";
 
 type QuickAction = { label: string; href: string };
 type MenuItem = { label: string; href: string };
@@ -119,14 +120,19 @@ export function ProfileAccountView({ name, phone, email, quickActions, menuItems
 }
 
 export function LogoutButton() {
-  async function logout() {
-    await fetch("/api/auth/session", { method: "DELETE" });
-    window.location.href = "/";
+  const logoutMutation = useLogoutMutation();
+
+  function logout() {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        window.location.href = "/";
+      },
+    });
   }
 
   return (
-    <button type="button" className="profile-logout-btn" onClick={logout}>
-      Logout
+    <button type="button" className="profile-logout-btn" onClick={logout} disabled={logoutMutation.isPending}>
+      {logoutMutation.isPending ? "Logging out..." : "Logout"}
     </button>
   );
 }

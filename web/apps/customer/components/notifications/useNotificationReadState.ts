@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getCookie, setCookie } from "@/lib/cookies";
 
 function storageKey(audience: "customer" | "provider") {
   return `vsh_notif_read_${audience}`;
@@ -11,7 +12,7 @@ export function useNotificationReadState(audience: "customer" | "provider") {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(storageKey(audience));
+      const raw = getCookie(storageKey(audience));
       if (raw) {
         const parsed = JSON.parse(raw) as string[];
         setReadIds(new Set(parsed));
@@ -25,9 +26,9 @@ export function useNotificationReadState(audience: "customer" | "provider") {
     (next: Set<string>) => {
       setReadIds(next);
       try {
-        localStorage.setItem(storageKey(audience), JSON.stringify([...next]));
+        setCookie(storageKey(audience), JSON.stringify([...next]), 30); // keep read states for 30 days
       } catch {
-        /* ignore quota errors */
+        /* ignore errors */
       }
     },
     [audience]
