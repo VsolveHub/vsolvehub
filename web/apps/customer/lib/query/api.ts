@@ -82,6 +82,8 @@ export type CreateBookingResult = {
   status: string;
   assignmentMode?: string;
   partner?: AssignedPartner;
+  /** False when the customer's picked pro was taken and we fell back. */
+  preferredHonored?: boolean;
 };
 
 export const api = {

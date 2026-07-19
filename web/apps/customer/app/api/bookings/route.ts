@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     archetypeDetails,
     selections,
     paymentMethod,
+    preferredPartnerId,
   } = parsed.data;
 
   const [service, address] = await Promise.all([
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
   // Money has moved; put the job on the best available professional's schedule.
   // The gate ran seconds ago so this almost always succeeds, but if the last
   // candidate was taken in the race, refund/void in full and hand back slots.
-  const assigned = await assignBestPartner(booking.id);
+  const assigned = await assignBestPartner(booking.id, { preferredPartnerId });
   if (!assigned.ok) {
     const { refunded } = await failBookingNoProviders(booking.id);
     return NextResponse.json(
@@ -163,6 +164,8 @@ export async function POST(req: NextRequest) {
     quotedAmount: booking.quotedAmount,
     // Direct assignment: the customer leaves checkout knowing who is coming.
     partner: assigned.partner,
+    // False when the picked pro was taken and we fell back — the UI says so.
+    preferredHonored: assigned.preferredHonored,
     assignmentMode: "auto" as const,
     marketplace: true,
   });

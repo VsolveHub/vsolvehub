@@ -27,8 +27,25 @@ const DEFAULT_LAT = 17.385;
 const DEFAULT_LNG = 78.4867;
 
 export type AssignOutcome =
-  | { ok: true; partner: PublicPartner; startOtp: string }
+  | { ok: true; partner: PublicPartner; startOtp: string; preferredHonored: boolean }
   | { ok: false; code: "NO_PROVIDERS"; suggestedSlots: SlotSuggestion[] };
+
+/**
+ * Move the customer's chosen professional to the front of the ranked list, if
+ * they are still eligible. Pure. When the preferred id is absent (already taken,
+ * or the customer chose auto) the matcher's own ranking is used unchanged, which
+ * is exactly the silent-fallback behaviour: we try their pick first, then the
+ * next best.
+ */
+export function orderPreferredFirst<T extends { id: string }>(
+  ranked: T[],
+  preferredPartnerId?: string,
+): T[] {
+  if (!preferredPartnerId) return ranked;
+  const preferred = ranked.find((c) => c.id === preferredPartnerId);
+  if (!preferred) return ranked;
+  return [preferred, ...ranked.filter((c) => c.id !== preferredPartnerId)];
+}
 
 /** The engine call, injected so the ordering logic below is unit-testable. */
 export type AssignAttempt = (partnerId: string) => Promise<EngineResult<{ startOtp: string }>>;
@@ -73,7 +90,7 @@ async function loadPublicPartner(partnerId: string): Promise<PublicPartner> {
  */
 export async function assignBestPartner(
   bookingId: string,
-  opts: { excludePartnerIds?: string[] } = {},
+  opts: { excludePartnerIds?: string[]; preferredPartnerId?: string } = {},
 ): Promise<AssignOutcome> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -98,13 +115,15 @@ export async function assignBestPartner(
     excludePartnerIds: opts.excludePartnerIds,
   });
 
-  const outcome = await assignFirstAvailable(ranked, (pid) => assignPartnerDirect(bookingId, pid));
+  const ordered = orderPreferredFirst(ranked, opts.preferredPartnerId);
+  const outcome = await assignFirstAvailable(ordered, (pid) => assignPartnerDirect(bookingId, pid));
   if (!outcome.ok) {
     return { ok: false, code: "NO_PROVIDERS", suggestedSlots: suggestSlots(pool, ctx) };
   }
 
   const partner = await loadPublicPartner(outcome.partnerId);
-  return { ok: true, partner, startOtp: outcome.startOtp };
+  const preferredHonored = !!opts.preferredPartnerId && outcome.partnerId === opts.preferredPartnerId;
+  return { ok: true, partner, startOtp: outcome.startOtp, preferredHonored };
 }
 
 /**

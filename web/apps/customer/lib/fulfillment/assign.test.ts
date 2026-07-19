@@ -1,7 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
-import { assignFirstAvailable } from "./assign";
+import { assignFirstAvailable, orderPreferredFirst } from "./assign";
 
 const ranked = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+describe("orderPreferredFirst", () => {
+  it("moves the preferred candidate to the front", () =>
+    expect(orderPreferredFirst(ranked, "c").map((c) => c.id)).toEqual(["c", "a", "b"]));
+  it("leaves order unchanged when no preference is given (auto)", () =>
+    expect(orderPreferredFirst(ranked).map((c) => c.id)).toEqual(["a", "b", "c"]));
+  it("leaves order unchanged when the preferred pro is gone (silent fallback)", () =>
+    expect(orderPreferredFirst(ranked, "z").map((c) => c.id)).toEqual(["a", "b", "c"]));
+  it("does not duplicate the preferred candidate", () =>
+    expect(orderPreferredFirst(ranked, "a").map((c) => c.id)).toEqual(["a", "b", "c"]));
+});
 
 describe("assignFirstAvailable", () => {
   it("assigns the first candidate that succeeds", async () => {
