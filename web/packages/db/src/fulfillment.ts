@@ -216,10 +216,12 @@ export async function acceptJobOffer(
 
   // Capture this job's share of the order's authorization. Joining the existing
   // first-to-accept transaction means the concurrent-accept race is already
-  // handled: only the winning accept can capture.
-  const alreadyCaptured = booking.capturedPaise > 0;
-  const capturePaise = alreadyCaptured ? 0 : booking.quotedAmount;
-  const isPrepaid = booking.paymentStatus !== "COD";
+  // handled: only the winning accept can capture. Capture only a card hold still
+  // awaiting capture ("PENDING") — immediate methods (UPI/wallet) are already
+  // captured at authorize ("PAID"), COD captures nothing. Guarding on status
+  // (not capturedPaise) avoids double-counting the order ledger, which would
+  // trip assertMoneyInvariant on the default UPI path.
+  const capturePaise = booking.paymentStatus === "PENDING" ? booking.quotedAmount : 0;
 
   await prisma.$transaction([
     prisma.jobAssignment.update({
@@ -236,16 +238,14 @@ export async function acceptJobOffer(
         assignedPartnerId: partnerId,
         status: "ASSIGNED",
         startOtp,
-        ...(isPrepaid && capturePaise > 0
-          ? { capturedPaise: capturePaise, paymentStatus: "PAID" }
-          : {}),
+        ...(capturePaise > 0 ? { capturedPaise: capturePaise, paymentStatus: "PAID" } : {}),
       },
     }),
     prisma.bookingStatusLog.create({
       data: { bookingId: assignment.bookingId, status: "ASSIGNED" },
     }),
     // Roll the capture up to the order's ledger.
-    ...(booking.orderId && isPrepaid && capturePaise > 0
+    ...(booking.orderId && capturePaise > 0
       ? [
           prisma.order.update({
             where: { id: booking.orderId },
