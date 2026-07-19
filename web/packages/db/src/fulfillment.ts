@@ -82,8 +82,13 @@ export async function assignPartnerDirect(
   if (!isDispatchable(booking.status)) return { ok: false, error: "Not assignable" };
 
   const startOtp = genOtp();
-  const isPrepaid = booking.paymentStatus !== "COD";
-  const capturePaise = isPrepaid && booking.capturedPaise === 0 ? booking.quotedAmount : 0;
+  // Capture only a card hold awaiting capture. A card authorizes to "PENDING"
+  // and is captured here on assignment; immediate methods (UPI/wallet) are
+  // already captured at authorize ("PAID") and COD captures nothing — so
+  // "PENDING" is the one state that still owes a capture. Guarding on status
+  // (not capturedPaise) avoids double-counting the order ledger for immediate
+  // methods, which would otherwise trip assertMoneyInvariant on the default path.
+  const capturePaise = booking.paymentStatus === "PENDING" ? booking.quotedAmount : 0;
   const now = new Date();
 
   try {
