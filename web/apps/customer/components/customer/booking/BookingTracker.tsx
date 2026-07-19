@@ -11,33 +11,9 @@ import { CrewBookingTracker, type CrewTrackingData } from "./CrewBookingTracker"
 import { LoadingState } from "@/components/ui/LoadingState";
 import { formatPrice } from "@/lib/format";
 
-type TrackingData = {
-  bookingRef: string;
-  status: string;
-  message: string;
-  marketplace?: boolean;
-  isCrew?: boolean;
-  service: { id: string; name: string; slug: string; categorySlug: string };
-  issueDescription: string;
-  mediaUrls: string[];
-  slot: string;
-  scheduleType: string;
-  address: string;
-  vendor: { id: string; name: string; phone: string; rating: number } | null;
-  provider: {
-    id: string;
-    name: string;
-    phone: string;
-    rating: number;
-    etaMinutes: number;
-  } | null;
-  quotedAmount: number;
-  finalAmountPaise: number;
-  paymentStatus: string;
-  paymentMethod: string | null;
-  rating: number | null;
-  archetypeDetails: string;
-};
+import type { Booking } from "@/lib/booking/types";
+
+type TrackingData = Booking;
 
 type PaymentMethod = "upi" | "card" | "wallet" | "cod";
 
