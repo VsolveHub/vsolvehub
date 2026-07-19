@@ -640,6 +640,11 @@ model Order {
   bookings Booking[]
 
   @@index([userId, status])
+  /// NOTE: the migration also creates a PARTIAL unique index that Prisma cannot
+  /// express — `Order_one_open_per_user` on (userId) WHERE status IN
+  /// ('DRAFT','PENDING_PAYMENT'). It is what makes a double-submitted checkout
+  /// collide at the database instead of authorizing twice. `prisma migrate dev`
+  /// will report it as drift and try to drop it; keep it.
 }
 
 model Booking {
