@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { PinIcon } from "@/components/ui/AppIcons";
-import { getCookie } from "@/lib/cookies";
 import {
   LocationError,
   detectCurrentLocation,
   storeActiveLocation,
-  formatLocationLabel,
   type StoredLocation,
 } from "@/lib/location/geocode";
 import {
@@ -17,35 +14,9 @@ import {
   useAddAddressMutation,
   useSelectAddressMutation,
 } from "@/lib/query/hooks";
-
-type Address = {
-  id: string;
-  label: string;
-  fullAddress: string;
-  isDefault: boolean;
-  area?: string | null;
-  city?: string | null;
-};
-
-type AddrForm = {
-  label: string;
-  houseNumber: string;
-  landmark: string;
-  area: string;
-  city: string;
-  pincode: string;
-  lat?: number;
-  lng?: number;
-};
-
-const EMPTY_FORM: AddrForm = {
-  label: "Home",
-  houseNumber: "",
-  landmark: "",
-  area: "",
-  city: "",
-  pincode: "",
-};
+import { type Address, type AddrForm, EMPTY_FORM, validateAddressForm, buildGuestFullAddress } from "./model";
+import { AddressListView } from "./AddressListView";
+import { AddressFormView } from "./AddressFormView";
 
 /**
  * Shared address select/add modal. Used by both the app header (location chip)
@@ -131,7 +102,8 @@ export function AddressPicker({
 
   useEffect(() => {
     if (!open || loading) return;
-    if (autoDetect || (isLoggedIn && addresses.length === 0)) {
+    const shouldOpenForm = autoDetect || (isLoggedIn && addresses.length === 0);
+    if (shouldOpenForm) {
       setView("form");
       if (autoDetect) detectLocation(true);
     }
@@ -159,18 +131,9 @@ export function AddressPicker({
   function saveAddress(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!form.label.trim()) {
-      setError("Label is required");
-      return;
-    }
-    const hasArea = form.area.trim() && form.city.trim();
-    const hasCoords = form.lat != null && form.lng != null;
-    if (!hasArea && !hasCoords) {
-      setError("Enter at least an area and city, or use your current location.");
-      return;
-    }
-    if (form.pincode && !/^\d{6}$/.test(form.pincode)) {
-      setError("Enter a valid 6-digit pincode");
+    const validationError = validateAddressForm(form);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -197,14 +160,7 @@ export function AddressPicker({
         },
       );
     } else {
-      const fullAddress = [
-        payload.houseNumber,
-        payload.landmark,
-        payload.area,
-        [payload.city, payload.pincode].filter(Boolean).join(" — "),
-      ]
-        .filter(Boolean)
-        .join(", ");
+      const fullAddress = buildGuestFullAddress(payload);
       notifyChanged({ label: payload.label, area: payload.area, city: payload.city, fullAddress });
       onClose();
     }
@@ -239,183 +195,34 @@ export function AddressPicker({
         {loading ? (
           <p style={{ textAlign: "center", fontSize: "0.875rem" }}>Loading addresses…</p>
         ) : view === "list" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {detectButton}
-
-            {isLoggedIn ? (
-              <>
-                <div className="addr-modal-list">
-                  {addresses.map((addr) => {
-                    const active = getCookie("location_id") === addr.id || addr.isDefault;
-                    return (
-                      <div
-                        key={addr.id}
-                        className={`addr-item ${active ? "addr-item--active" : ""}`}
-                        onClick={() => selectAddress(addr.id)}
-                      >
-                        <span className="addr-item__icon">📍</span>
-                        <div className="addr-item__info">
-                          <span className="addr-item__label">{addr.label}</span>
-                          <span className="addr-item__text">{addr.fullAddress}</span>
-                        </div>
-                        {active && <span className="addr-item__check">✓</span>}
-                      </div>
-                    );
-                  })}
-                  {addresses.length === 0 && (
-                    <p className="text-muted" style={{ textAlign: "center", fontSize: "0.875rem", margin: 0 }}>
-                      No saved addresses yet.
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  className="addr-modal-btn"
-                  style={{
-                    background: "transparent",
-                    color: "var(--color-brand)",
-                    border: "1.5px dashed var(--color-brand)",
-                    boxShadow: "none",
-                  }}
-                  onClick={() => {
-                    setForm(EMPTY_FORM);
-                    setError("");
-                    setView("form");
-                  }}
-                >
-                  + Add new address
-                </button>
-              </>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", textAlign: "center" }}>
-                <p className="text-muted" style={{ fontSize: "0.825rem", margin: 0 }}>
-                  Log in to save addresses to your account, or set one for this session below.
-                </p>
-                <Link
-                  href={`/booking/otp?redirect=${encodeURIComponent(redirectAfterLogin)}`}
-                  className="addr-modal-btn"
-                  style={{ textDecoration: "none" }}
-                  onClick={onClose}
-                >
-                  Log In / Register
-                </Link>
-                <button
-                  className="addr-modal-btn"
-                  style={{
-                    background: "transparent",
-                    color: "var(--color-brand)",
-                    border: "1.5px dashed var(--color-brand)",
-                    boxShadow: "none",
-                  }}
-                  onClick={() => {
-                    setForm(EMPTY_FORM);
-                    setError("");
-                    setView("form");
-                  }}
-                >
-                  Enter address manually
-                </button>
-              </div>
-            )}
-          </div>
+          <AddressListView
+            isLoggedIn={isLoggedIn}
+            addresses={addresses}
+            redirectAfterLogin={redirectAfterLogin}
+            detectButton={detectButton}
+            onSelectAddress={selectAddress}
+            onAddNew={() => {
+              setForm(EMPTY_FORM);
+              setError("");
+              setView("form");
+            }}
+            onClose={onClose}
+          />
         ) : (
-          <form onSubmit={saveAddress} className="addr-modal-form" style={{ border: "none", paddingTop: 0 }}>
-            {detectButton}
-
-            <div className="addr-input-group">
-              <label className="addr-input-label">Label</label>
-              <input
-                type="text"
-                placeholder="Home, Office, Parent's house…"
-                value={form.label}
-                onChange={(e) => setField("label", e.target.value)}
-                className="addr-input"
-                required
-              />
-            </div>
-
-            <div className="addr-form-row">
-              <div className="addr-input-group">
-                <label className="addr-input-label">House / flat no.</label>
-                <input
-                  type="text"
-                  placeholder="Flat 204, Block B"
-                  value={form.houseNumber}
-                  onChange={(e) => setField("houseNumber", e.target.value)}
-                  className="addr-input"
-                />
-              </div>
-              <div className="addr-input-group">
-                <label className="addr-input-label">Pincode</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="500032"
-                  value={form.pincode}
-                  onChange={(e) => setField("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  className="addr-input"
-                />
-              </div>
-            </div>
-
-            <div className="addr-input-group">
-              <label className="addr-input-label">Landmark</label>
-              <input
-                type="text"
-                placeholder="Near metro station"
-                value={form.landmark}
-                onChange={(e) => setField("landmark", e.target.value)}
-                className="addr-input"
-              />
-            </div>
-
-            <div className="addr-form-row">
-              <div className="addr-input-group">
-                <label className="addr-input-label">Area / locality</label>
-                <input
-                  type="text"
-                  placeholder="Gachibowli"
-                  value={form.area}
-                  onChange={(e) => setField("area", e.target.value)}
-                  className="addr-input"
-                />
-              </div>
-              <div className="addr-input-group">
-                <label className="addr-input-label">City</label>
-                <input
-                  type="text"
-                  placeholder="Hyderabad"
-                  value={form.city}
-                  onChange={(e) => setField("city", e.target.value)}
-                  className="addr-input"
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button type="submit" className="addr-modal-btn" style={{ flexGrow: 1 }} disabled={saving || detecting}>
-                {saving ? "Saving…" : "Save & select"}
-              </button>
-              {(isLoggedIn ? addresses.length > 0 : true) && (
-                <button
-                  type="button"
-                  className="addr-modal-btn"
-                  style={{
-                    background: "var(--m3-surface-variant, #e7e0ec)",
-                    color: "var(--m3-on-surface, #1d1b20)",
-                    width: "auto",
-                    boxShadow: "none",
-                  }}
-                  onClick={() => {
-                    setError("");
-                    setView("list");
-                  }}
-                >
-                  {isLoggedIn && addresses.length > 0 ? "Back" : "Cancel"}
-                </button>
-              )}
-            </div>
-          </form>
+          <AddressFormView
+            form={form}
+            setField={setField}
+            detectButton={detectButton}
+            saving={saving}
+            detecting={detecting}
+            isLoggedIn={isLoggedIn}
+            hasSavedAddresses={addresses.length > 0}
+            onSubmit={saveAddress}
+            onBack={() => {
+              setError("");
+              setView("list");
+            }}
+          />
         )}
       </div>
     </div>
