@@ -101,8 +101,10 @@ export const bookingSchema = z.object({
   selections: z
     .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))
     .optional(),
-  // No partnerId: customers do not pick a professional. Every job fans out to
-  // the whole eligible pool and the first to accept is assigned.
+  // The professional the customer picked on the choose step. Optional: absent
+  // means "auto-assign". Tried first at assignment; if taken by then, the engine
+  // silently falls back to the next best (see assignBestPartner).
+  preferredPartnerId: z.string().min(1).optional(),
   vendorId: z.string().min(1, "Professional is required").optional(),
   issueDescription: z.string().trim().max(1000).optional(),
   mediaUrls: z.array(z.string().min(1)).max(5).optional(),
