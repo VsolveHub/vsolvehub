@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPrice, formatDate } from "@/lib/format";
 import { STATUS_LABELS, STATUS_MESSAGES, normalizeBookingStatus, MARKETPLACE_TIMELINE } from "@/lib/constants";
+import {
+  useCancelBookingMutation,
+  useReviseBookingMutation,
+  useReviewBookingMutation,
+} from "@/lib/query/hooks";
 
 type Props = {
   booking: any;
@@ -15,9 +20,14 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
   const [review, setReview] = useState("");
   const [reviewSubmitted, setReviewSubmitted] = useState(booking.rating != null);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  const cancelMutation = useCancelBookingMutation(booking.bookingRef);
+  const reviseMutation = useReviseBookingMutation(booking.bookingRef);
+  const reviewMutation = useReviewBookingMutation(booking.bookingRef);
+
+  const loading = cancelMutation.isPending || reviseMutation.isPending || reviewMutation.isPending;
+  const [error, setError] = useState("");
 
   const status = normalizeBookingStatus(booking.status);
   const professional = booking.provider ?? booking.vendor;
@@ -26,60 +36,42 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
   const details = booking.archetypeDetails ? JSON.parse(booking.archetypeDetails) : {};
   const isTeam = details.bookingType === "team";
 
-  async function cancelBooking() {
+  function cancelBooking() {
     const fee = booking.cancelFeePaise ?? 0;
     const msg =
       fee > 0
         ? `The professional is already on the way, so a ${formatPrice(fee)} visit fee applies. Cancel anyway?`
         : "Cancel this booking? No fee applies.";
     if (!window.confirm(msg)) return;
-    setLoading(true);
-    try {
-      await fetch(`/api/bookings/${booking.bookingRef}/cancel`, { method: "POST" });
-      onRefresh();
-    } finally {
-      setLoading(false);
-    }
+    cancelMutation.mutate(undefined, {
+      onSuccess: () => {
+        onRefresh();
+      },
+    });
   }
 
-  async function reviseAction(action: "approve" | "decline") {
-    setLoading(true);
-    try {
-      await fetch(`/api/bookings/${booking.bookingRef}/revise`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      onRefresh();
-    } finally {
-      setLoading(false);
-    }
+  function reviseAction(action: "approve" | "decline") {
+    reviseMutation.mutate(action, {
+      onSuccess: () => {
+        onRefresh();
+      },
+    });
   }
 
   // Timeline indices to draw completed/active/upcoming states
   const currentStatusIndex = MARKETPLACE_TIMELINE.indexOf(status as any);
 
-  async function submitReview() {
-    setLoading(true);
+  function submitReview() {
     setError("");
-    try {
-      const res = await fetch(`/api/bookings/${booking.bookingRef}/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, review }),
-      });
-      setLoading(false);
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? "Could not submit review");
-        return;
-      }
-      setReviewSubmitted(true);
-      onRefresh();
-    } catch (err) {
-      setError("An error occurred");
-      setLoading(false);
-    }
+    reviewMutation.mutate({ rating, review }, {
+      onSuccess: () => {
+        setReviewSubmitted(true);
+        onRefresh();
+      },
+      onError: (err: any) => {
+        setError(err.message || "Could not submit review");
+      },
+    });
   }
 
   function getTimelineStepDetails(stepKey: string, idx: number) {
@@ -475,6 +467,17 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
           ) : (
             <div className="tracker-partner-searching-v3">
               <p>Searching for available technician near you...</p>
+            </div>
+          )}
+
+          {/* Start code — read aloud to the technician to start the job (desktop) */}
+          {booking.startOtp && ["ASSIGNED", "PROVIDER_ARRIVING"].includes(status) && (
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-dashed border-purple-300 bg-purple-100/30 p-4">
+              <div>
+                <p className="m-0 text-[10px] font-bold uppercase tracking-wide text-purple-950">Start code</p>
+                <p className="m-0 text-[10px] text-gray-500">Share with your technician to begin</p>
+              </div>
+              <p className="m-0 text-2xl font-extrabold tracking-[0.3em] text-purple-800">{booking.startOtp}</p>
             </div>
           )}
 
