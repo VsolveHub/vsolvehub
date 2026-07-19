@@ -102,8 +102,18 @@ ALTER TABLE "Booking"
 ALTER TABLE "Booking" ALTER COLUMN "status" SET DEFAULT 'PENDING';
 
 -- 6. Enforce the 7-day booking window -------------------------------------------
--- Existing rows predate the rule, so the constraint is NOT VALID: it applies to
--- inserts and updates without rejecting historical data. `slot` is stored as an
--- ISO-8601 TEXT column, so compare on the parsed timestamp.
+-- Scoped to archetype 'A' (the four single-provider dispatch categories). Crew
+-- and other archetypes legitimately schedule further out, and a table-wide
+-- constraint would reject their updates.
+--
+-- NOT VALID skips the backfill scan, but note it still applies to UPDATEs of
+-- existing rows — hence the generous 8-day allowance over the 7-day product
+-- rule, so clock skew and timezone rounding cannot brick a status transition on
+-- a legacy booking. The real boundary is enforced in Zod at the API edge.
+--
+-- `slot` is an ISO-8601 TEXT column, so compare on the parsed timestamp.
 ALTER TABLE "Booking" ADD CONSTRAINT "Booking_slot_within_window"
-  CHECK ("slot"::timestamptz <= "createdAt" + INTERVAL '8 days') NOT VALID;
+  CHECK (
+    "archetype" <> 'A'
+    OR "slot"::timestamptz <= "createdAt" + INTERVAL '8 days'
+  ) NOT VALID;
