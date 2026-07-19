@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { formatPrice } from "@/lib/format";
 import { PaymentSheet } from "./PaymentSheet";
 import {
+  useCancelCrewBookingMutation,
+  usePayCrewBookingMutation,
+  usePostCrewActionMutation,
+  useApproveCrewExtensionMutation,
+  useRescheduleCrewBookingMutation,
+  useRetryCrewBookingMutation,
+} from "@/lib/query/hooks";
+import {
   CREW_STATUS_LABELS,
   CREW_STATUS_MESSAGES,
   CREW_DAY_STATUS_LABELS,
@@ -96,14 +104,22 @@ function OtpCard({ label, code, hint }: { label: string; code: string; hint: str
 
 export function CrewBookingTracker({ booking, onRefresh }: { booking: CrewTrackingData; onRefresh: () => void }) {
   const router = useRouter();
-  const [retrying, setRetrying] = useState(false);
+  const cancelMutation = useCancelCrewBookingMutation(booking.bookingRef);
+  const payMutation = usePayCrewBookingMutation(booking.bookingRef);
+  const postActionMutation = usePostCrewActionMutation(booking.bookingRef);
+  const extensionMutation = useApproveCrewExtensionMutation(booking.bookingRef);
+  const rescheduleMutation = useRescheduleCrewBookingMutation(booking.bookingRef);
+  const retryMutation = useRetryCrewBookingMutation(booking.bookingRef);
+
+  const cancelling = cancelMutation.isPending;
+  const busyF = postActionMutation.isPending || rescheduleMutation.isPending;
+  const retrying = retryMutation.isPending;
+
   const [showPay, setShowPay] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleMsg, setRescheduleMsg] = useState<string | null>(null);
   const [showExtPay, setShowExtPay] = useState(false);
-  const [busyF, setBusyF] = useState(false);
   const tomorrowISO = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
   const isSearching = booking.status === "SEARCHING_CREW";
   const isFailed = booking.status === "NO_CREW_FOUND";
@@ -117,93 +133,70 @@ export function CrewBookingTracker({ booking, onRefresh }: { booking: CrewTracki
     else router.push("/profile/bookings");
   }
 
-  async function cancel() {
+  function cancel() {
     const p = booking.cancelPreview;
     const msg = !p || p.free
       ? "Cancel this booking? No fee applies."
       : `Cancelling now has a fee of ${formatPrice(p.finalPaise)} (crew already mobilized/working). Continue?`;
     if (!window.confirm(msg)) return;
-    setCancelling(true);
-    try {
-      await fetch(`/api/crew/bookings/${booking.bookingRef}/cancel`, { method: "POST" });
-      onRefresh();
-    } finally {
-      setCancelling(false);
-    }
+    cancelMutation.mutate(undefined, {
+      onSuccess: () => {
+        onRefresh();
+      },
+    });
   }
 
   async function payNow(method: string) {
-    const res = await fetch(`/api/crew/bookings/${booking.bookingRef}/pay`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paymentMethod: method }),
-    });
-    if (!res.ok) throw new Error("Payment failed");
+    await payMutation.mutateAsync(method);
     onRefresh();
   }
 
-  async function post(path: string, body?: unknown) {
-    setBusyF(true);
-    try {
-      await fetch(`/api/crew/bookings/${booking.bookingRef}/${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      onRefresh();
-    } finally {
-      setBusyF(false);
-    }
+  function post(path: string, body?: unknown) {
+    postActionMutation.mutate({ path, body }, {
+      onSuccess: () => {
+        onRefresh();
+      },
+    });
   }
 
-  async function reportNoShow() {
+  function reportNoShow() {
     if (!window.confirm("Report that the crew didn't show up? We'll find you another crew.")) return;
-    await post("no-show");
+    post("no-show");
   }
-  async function reportIssue() {
+  function reportIssue() {
     const reason = window.prompt("Briefly describe the issue. We'll hold the payment and review it.");
     if (reason === null) return;
-    await post("dispute", { reason });
+    post("dispute", { reason });
   }
   async function approveExtension(method: string) {
-    const res = await fetch(`/api/crew/bookings/${booking.bookingRef}/extension`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "approve", paymentMethod: method }),
-    });
-    if (!res.ok) throw new Error("Failed");
+    await extensionMutation.mutateAsync(method);
     onRefresh();
   }
 
-  async function submitReschedule(dayId: string) {
+  function submitReschedule(dayId: string) {
     if (!rescheduleDate) return;
     setRescheduleMsg(null);
-    const res = await fetch(`/api/crew/bookings/${booking.bookingRef}/reschedule`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dayId, newDate: rescheduleDate }),
+    rescheduleMutation.mutate({ dayId, newDate: rescheduleDate }, {
+      onSuccess: () => {
+        setRescheduleId(null);
+        setRescheduleDate("");
+        onRefresh();
+      },
+      onError: (err: any) => {
+        setRescheduleMsg(err.message || "Could not reschedule");
+      },
     });
-    const data = await res.json();
-    if (!res.ok) {
-      setRescheduleMsg(data.error ?? "Could not reschedule");
-      return;
-    }
-    setRescheduleId(null);
-    setRescheduleDate("");
-    onRefresh();
   }
   const timeline: readonly string[] = booking.assignmentMode === "auto" ? CREW_AUTO_TIMELINE : CREW_TIMELINE;
   const currentStep = Math.max(0, timeline.indexOf(booking.status));
   const activeRoles = booking.roles.filter((r) => r.count > 0);
 
-  async function retry() {
-    setRetrying(true);
-    try {
-      await fetch(`/api/crew/bookings/${booking.bookingRef}/retry`, { method: "POST" });
-      onRefresh();
-    } finally {
-      setRetrying(false);
-    }
+  function retry() {
+    retryMutation.mutate(undefined, {
+      onSuccess: () => {
+        onRefresh();
+      },
+    });
   }
 
   return (

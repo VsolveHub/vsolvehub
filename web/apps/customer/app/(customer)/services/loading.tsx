@@ -1,21 +1,70 @@
 export default function ServicesLoading() {
   return (
-    <div className="services-page services-catalog-v2" aria-busy="true" aria-label="Loading services">
-      <div className="services-page__hero services-page__hero--skeleton">
-        <div className="skeleton" style={{ height: "2rem", width: "60%", marginBottom: "0.75rem", borderRadius: "8px" }} />
-        <div className="skeleton" style={{ height: "1rem", width: "80%", borderRadius: "6px" }} />
+    <div
+      className="w-full min-h-screen bg-slate-50"
+      aria-busy="true"
+      aria-label="Loading service catalog"
+    >
+      {/* Dark Hero Header */}
+      <div className="bg-slate-900 px-4 md:px-8 py-10 md:py-12 flex flex-col justify-center">
+        <div className="max-w-[1280px] w-full mx-auto">
+          {/* Header Title Skeleton */}
+          <div className="h-9 w-60 max-w-[60%] bg-slate-800 animate-pulse rounded-lg mb-3"></div>
+          {/* Header Description Skeleton */}
+          <div className="h-4 w-96 max-w-[80%] bg-slate-800/80 animate-pulse rounded-md"></div>
+        </div>
       </div>
-      <div className="services-page__body">
-        <div className="catalog-photo-grid">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="catalog-photo-card catalog-photo-card--skeleton">
-              <div className="skeleton catalog-photo-card__image" />
-              <div className="catalog-photo-card__body">
-                <div className="skeleton" style={{ height: "0.875rem", width: "70%", marginBottom: "0.5rem" }} />
-                <div className="skeleton" style={{ height: "0.75rem", width: "50%" }} />
-              </div>
-            </div>
+
+      {/* Categories Jump Bar for Mobile (Optional/Shimmer) */}
+      <div className="border-b border-slate-100 bg-white md:hidden">
+        <div className="flex gap-3 overflow-x-auto p-4 scrollbar-none">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-8 w-24 bg-slate-100 animate-pulse rounded-full flex-shrink-0"
+            ></div>
           ))}
+        </div>
+      </div>
+
+      {/* Main Body Layout */}
+      <div className="max-w-[1280px] mx-auto px-4 md:px-8 py-6 md:py-8">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          {/* Desktop Left Sidebar: Categories List */}
+          <aside className="hidden md:block md:col-span-3 space-y-4">
+            <div className="h-5 w-28 bg-slate-200 animate-pulse rounded mb-4"></div>
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-10 w-full bg-slate-100 animate-pulse rounded-xl"
+                ></div>
+              ))}
+            </div>
+          </aside>
+
+          {/* Main Feed Content Area */}
+          <div className="col-span-1 md:col-span-9 space-y-8">
+            {/* Active Category Title */}
+            <div className="h-6 w-44 bg-slate-200 animate-pulse rounded"></div>
+
+            {/* Grid of Catalog Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-white border border-slate-100 rounded-2xl p-3 space-y-3 shadow-sm flex flex-col"
+                >
+                  {/* Photo Thumbnail Placeholder */}
+                  <div className="w-full aspect-[4/3] bg-slate-100 animate-pulse rounded-xl"></div>
+                  {/* Service Title */}
+                  <div className="h-4 w-[75%] bg-slate-100/80 animate-pulse rounded"></div>
+                  {/* Service Price/Subtext */}
+                  <div className="h-3 w-[50%] bg-slate-100/60 animate-pulse rounded"></div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTrackRecentlyViewedMutation } from "@/lib/query/hooks";
 
 type Props = {
   serviceId: string;
 };
 
 export function TrackRecentlyViewed({ serviceId }: Props) {
+  const trackMutation = useTrackRecentlyViewedMutation();
+
   useEffect(() => {
-    fetch("/api/recently-viewed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceId }),
-    }).catch(() => {});
+    trackMutation.mutate(serviceId);
   }, [serviceId]);
 
   return null;

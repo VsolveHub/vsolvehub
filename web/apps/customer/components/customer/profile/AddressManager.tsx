@@ -5,6 +5,11 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PinIcon } from "@/components/ui/AppIcons";
 import { LocationError, detectCurrentLocation } from "@/lib/location/geocode";
+import {
+  useAddressesQuery,
+  useAddAddressMutation,
+  useDeleteAddressMutation,
+} from "@/lib/query/hooks";
 
 type Address = {
   id: string;
@@ -34,12 +39,20 @@ const EMPTY: FormState = {
 };
 
 export function AddressManager({ initialAddresses }: { initialAddresses: Address[] }) {
-  const [addresses, setAddresses] = useState(initialAddresses);
+  const { data: addressesData } = useAddressesQuery({
+    initialData: { addresses: initialAddresses },
+  });
+  const addresses = addressesData?.addresses || [];
+
+  const addAddressMutation = useAddAddressMutation();
+  const deleteAddressMutation = useDeleteAddressMutation();
+
   const [form, setForm] = useState<FormState>(EMPTY);
   const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [error, setError] = useState("");
+
+  const saving = addAddressMutation.isPending;
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -69,7 +82,7 @@ export function AddressManager({ initialAddresses }: { initialAddresses: Address
     }
   }
 
-  async function addAddress() {
+  function addAddress() {
     setError("");
     if (!form.label.trim()) {
       setError("Label is required");
@@ -84,36 +97,29 @@ export function AddressManager({ initialAddresses }: { initialAddresses: Address
       return;
     }
 
-    setSaving(true);
-    const res = await fetch("/api/profile/addresses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        label: form.label.trim(),
-        houseNumber: form.houseNumber.trim() || undefined,
-        landmark: form.landmark.trim() || undefined,
-        area: form.area.trim() || undefined,
-        city: form.city.trim() || undefined,
-        pincode: form.pincode.trim() || undefined,
-        lat: form.lat,
-        lng: form.lng,
-        isDefault: addresses.length === 0,
-      }),
+    addAddressMutation.mutate({
+      label: form.label.trim(),
+      houseNumber: form.houseNumber.trim() || undefined,
+      landmark: form.landmark.trim() || undefined,
+      area: form.area.trim() || undefined,
+      city: form.city.trim() || undefined,
+      pincode: form.pincode.trim() || undefined,
+      lat: form.lat,
+      lng: form.lng,
+      isDefault: addresses.length === 0,
+    }, {
+      onSuccess: () => {
+        setForm(EMPTY);
+        setShowForm(false);
+      },
+      onError: (err: any) => {
+        setError(err.message || "Could not save address. Please check the fields.");
+      }
     });
-    setSaving(false);
-    if (res.ok) {
-      const { address } = await res.json();
-      setAddresses((prev) => [...prev, address]);
-      setForm(EMPTY);
-      setShowForm(false);
-    } else {
-      setError("Could not save address. Please check the fields.");
-    }
   }
 
-  async function removeAddress(id: string) {
-    await fetch(`/api/profile/addresses?id=${id}`, { method: "DELETE" });
-    setAddresses((prev) => prev.filter((a) => a.id !== id));
+  function removeAddress(id: string) {
+    deleteAddressMutation.mutate(id);
   }
 
   return (
@@ -170,7 +176,7 @@ export function AddressManager({ initialAddresses }: { initialAddresses: Address
         </div>
       ) : (
         <div className="stack">
-          {addresses.map((addr) => (
+          {addresses.map((addr: Address) => (
             <div key={addr.id} className="address-premium-card">
               <div className="address-card-header">
                 <div className="address-label-wrap">

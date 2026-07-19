@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const NEW_SERVICES = [
   {
@@ -44,7 +45,7 @@ export function NewAndNoteworthy() {
         {NEW_SERVICES.map((item) => (
           <Link key={item.id} href={item.href} className="nan-card">
             <div className="nan-image">
-              <img src={item.image} alt={item.title} />
+              <Image src={item.image} alt={item.title} width={220} height={220} />
             </div>
             <h3 className="nan-title">{item.title}</h3>
             {item.subtitle && <p className="nan-subtitle">{item.subtitle}</p>}

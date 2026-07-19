@@ -119,6 +119,8 @@ const KEYS = {
   label: "user_location_label",
 } as const;
 
+import { getCookie, setCookie, removeCookie } from "@/lib/cookies";
+
 export type StoredLocation = {
   id?: string | null;
   label?: string | null;
@@ -130,13 +132,13 @@ export type StoredLocation = {
 /** Persist the active location and notify listeners. Returns the display label. */
 export function storeActiveLocation(loc: StoredLocation): string {
   if (typeof window === "undefined") return DEFAULT_LOCATION_LABEL;
-  if (loc.id) localStorage.setItem(KEYS.id, loc.id);
-  else localStorage.removeItem(KEYS.id);
-  localStorage.setItem(KEYS.area, loc.area ?? "");
-  localStorage.setItem(KEYS.city, loc.city ?? "");
-  localStorage.setItem(KEYS.address, loc.fullAddress ?? "");
+  if (loc.id) setCookie(KEYS.id, loc.id);
+  else removeCookie(KEYS.id);
+  setCookie(KEYS.area, loc.area ?? "");
+  setCookie(KEYS.city, loc.city ?? "");
+  setCookie(KEYS.address, loc.fullAddress ?? "");
   const display = formatLocationLabel(loc);
-  localStorage.setItem(KEYS.label, display);
+  setCookie(KEYS.label, display);
   window.dispatchEvent(new Event("location_updated"));
   return display;
 }
@@ -144,11 +146,11 @@ export function storeActiveLocation(loc: StoredLocation): string {
 /** Read the active location display label, or null if none is set. */
 export function readActiveLocationLabel(): string | null {
   if (typeof window === "undefined") return null;
-  const label = localStorage.getItem(KEYS.label);
+  const label = getCookie(KEYS.label);
   if (label) return label;
-  const area = localStorage.getItem(KEYS.area);
-  const city = localStorage.getItem(KEYS.city);
-  const address = localStorage.getItem(KEYS.address);
+  const area = getCookie(KEYS.area);
+  const city = getCookie(KEYS.city);
+  const address = getCookie(KEYS.address);
   if (area || city || address) {
     return formatLocationLabel({ area, city, fullAddress: address });
   }

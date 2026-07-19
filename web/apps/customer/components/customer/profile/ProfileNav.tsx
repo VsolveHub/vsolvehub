@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { useLogoutMutation } from "@/lib/query/hooks";
 
 const links = [
   { href: "/profile", label: "Overview" },
@@ -30,14 +31,19 @@ export function ProfileNav() {
 }
 
 export function LogoutButton() {
-  async function logout() {
-    await fetch("/api/auth/session", { method: "DELETE" });
-    window.location.href = "/";
+  const logoutMutation = useLogoutMutation();
+
+  function logout() {
+    logoutMutation.mutate(undefined, {
+      onSuccess: () => {
+        window.location.href = "/";
+      },
+    });
   }
 
   return (
-    <Button variant="secondary" onClick={logout}>
-      Logout
+    <Button variant="secondary" onClick={logout} disabled={logoutMutation.isPending}>
+      {logoutMutation.isPending ? "Logging out..." : "Logout"}
     </Button>
   );
 }

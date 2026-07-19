@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { formatPrice, formatDate } from "@/lib/format";
 import { STATUS_LABELS, STATUS_MESSAGES, normalizeBookingStatus } from "@/lib/constants";
+import {
+  useSimulateBookingStatusMutation,
+  useSetBookingStatusMutation,
+  useReviewBookingMutation,
+} from "@/lib/query/hooks";
 
 type Props = {
   booking: any;
@@ -20,7 +25,11 @@ export function ConstructionTracker({ booking, onRefresh }: Props) {
   const [review, setReview] = useState("");
   const [reviewSubmitted, setReviewSubmitted] = useState(booking.rating != null);
   
-  const [loading, setLoading] = useState(false);
+  const simulateStatusMutation = useSimulateBookingStatusMutation(booking.bookingRef);
+  const setStatusMutation = useSetBookingStatusMutation(booking.bookingRef);
+  const reviewMutation = useReviewBookingMutation(booking.bookingRef);
+
+  const loading = simulateStatusMutation.isPending || setStatusMutation.isPending || reviewMutation.isPending;
   const [error, setError] = useState("");
 
   const status = normalizeBookingStatus(booking.status);
@@ -57,28 +66,21 @@ export function ConstructionTracker({ booking, onRefresh }: Props) {
 
   const isCompleted = status === "COMPLETED";
 
-  async function updateStatus(nextStatus: string) {
-    setLoading(true);
-    const res = await fetch(`/api/bookings/${booking.bookingRef}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+  function updateStatus(nextStatus: string) {
+    setStatusMutation.mutate(nextStatus, {
+      onSuccess: () => {
+        onRefresh();
+      },
     });
-    setLoading(false);
-    if (res.ok) {
-      onRefresh();
-    }
   }
 
   // Simulated status progression
-  async function simulateNextStatus() {
-    setLoading(true);
-    const res = await fetch(`/api/bookings/${booking.bookingRef}/status`);
-    const data = await res.json();
-    if (data.nextStatus) {
-      await updateStatus(data.nextStatus);
-    }
-    setLoading(false);
+  function simulateNextStatus() {
+    simulateStatusMutation.mutate(undefined, {
+      onSuccess: () => {
+        onRefresh();
+      },
+    });
   }
 
   // Handle OTP digit changes
@@ -108,22 +110,17 @@ export function ConstructionTracker({ booking, onRefresh }: Props) {
     }
   }
 
-  async function submitFeedback() {
-    setLoading(true);
+  function submitFeedback() {
     setError("");
-    const res = await fetch(`/api/bookings/${booking.bookingRef}/review`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rating, review }),
+    reviewMutation.mutate({ rating, review }, {
+      onSuccess: () => {
+        setReviewSubmitted(true);
+        onRefresh();
+      },
+      onError: (err: any) => {
+        setError(err.message || "Could not submit review");
+      },
     });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Could not submit review");
-      return;
-    }
-    setReviewSubmitted(true);
-    onRefresh();
   }
 
   // Resolve step badge and title (matches the 10-screen booking diagram)
