@@ -729,6 +729,13 @@ model Booking {
 
   @@index([userId, status])
   @@index([orderId])
+  /// NOTE: the migration also creates a PARTIAL unique index that Prisma cannot
+  /// express — `Booking_partner_slot_active` on (assignedPartnerId, slot) WHERE
+  /// assignedPartnerId IS NOT NULL AND status IN
+  /// ('ASSIGNED','PROVIDER_ARRIVING','STARTED'). It is the referee for concurrent
+  /// checkouts: two customers grabbing the same partner+slot collide here and one
+  /// falls through to the next ranked candidate. `prisma migrate dev` will report
+  /// it as drift and try to drop it; keep it.
 }
 
 model BookingStatusLog {

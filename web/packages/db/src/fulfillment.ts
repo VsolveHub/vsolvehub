@@ -49,6 +49,118 @@ export type EngineResult<T = unknown> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
+/**
+ * True for a Prisma unique-constraint violation (P2002). Duck-typed rather than
+ * `instanceof PrismaClientKnownRequestError` so it stays pure and unit-testable
+ * without constructing a real Prisma error — the `code` field is the contract.
+ */
+export function isUniqueViolation(e: unknown): boolean {
+  return typeof e === "object" && e !== null && "code" in e &&
+    (e as { code?: unknown }).code === "P2002";
+}
+
+// ─── Direct assignment (Urban-Company-style) ─────────────────────────────────
+// The system picks the best available professional and puts the job on their
+// schedule — no offer, no accept prompt. Concurrency is refereed by the partial
+// unique index `Booking_partner_slot_active`: two checkouts racing for the same
+// partner+slot collide, and the loser sees SLOT_TAKEN so the caller can try the
+// next ranked candidate.
+
+/**
+ * Bind a specific partner to a booking, capture this job's prepaid share, and
+ * generate the customer's start OTP — all in one transaction. Returns
+ * `SLOT_TAKEN` (not a throw) when the unique index rejects the write, so
+ * `assignBestPartner` can fall through to the next candidate.
+ */
+export async function assignPartnerDirect(
+  bookingId: string,
+  partnerId: string,
+): Promise<EngineResult<{ startOtp: string }>> {
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) return { ok: false, error: "Booking not found" };
+  if (booking.assignedPartnerId) return { ok: false, error: "Already assigned" };
+  if (!isDispatchable(booking.status)) return { ok: false, error: "Not assignable" };
+
+  const startOtp = genOtp();
+  const isPrepaid = booking.paymentStatus !== "COD";
+  const capturePaise = isPrepaid && booking.capturedPaise === 0 ? booking.quotedAmount : 0;
+  const now = new Date();
+
+  try {
+    await prisma.$transaction([
+      prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          assignedPartnerId: partnerId,
+          status: "ASSIGNED",
+          startOtp,
+          ...(capturePaise > 0 ? { capturedPaise: capturePaise, paymentStatus: "PAID" } : {}),
+        },
+      }),
+      prisma.bookingStatusLog.create({ data: { bookingId, status: "ASSIGNED" } }),
+      // Audit trail: a pre-accepted assignment row, so partner history/earnings
+      // queries and admin views keep one consistent shape across both models.
+      prisma.jobAssignment.create({
+        data: { bookingId, partnerId, status: "ACCEPTED", offeredAt: now, respondedAt: now, expiresAt: now },
+      }),
+      ...(booking.orderId && capturePaise > 0
+        ? [
+            prisma.order.update({
+              where: { id: booking.orderId },
+              data: { capturedPaise: { increment: capturePaise } },
+            }),
+          ]
+        : []),
+    ]);
+  } catch (e) {
+    if (isUniqueViolation(e)) return { ok: false, error: "SLOT_TAKEN" };
+    throw e;
+  }
+
+  if (booking.orderId) await recomputeOrderStatus(booking.orderId);
+  return { ok: true, startOtp };
+}
+
+/**
+ * Partner's "Can't make it": free the slot so the job can be reassigned. Clears
+ * the assignment and start OTP, reverts the booking to SEARCHING_PROVIDER, and
+ * marks the audit row DECLINED. Reassignment (which needs the matcher) is the
+ * caller's job. Money is untouched: the captured amount rides along to the next
+ * professional and is refunded only if reassignment exhausts (Task 5 path).
+ */
+export async function releasePartnerAssignment(
+  bookingId: string,
+  partnerId: string,
+  reason?: string,
+): Promise<EngineResult> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, assignedPartnerId: partnerId },
+  });
+  if (!booking) return { ok: false, error: "Job not found" };
+  if (!(ACTIVE_JOB_STATUSES as readonly string[]).includes(booking.status)) {
+    return { ok: false, error: `Cannot release from ${booking.status}` };
+  }
+
+  await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        assignedPartnerId: null,
+        startOtp: null,
+        status: "SEARCHING_PROVIDER",
+        cancelReason: reason ?? booking.cancelReason,
+      },
+    }),
+    prisma.bookingStatusLog.create({ data: { bookingId, status: "SEARCHING_PROVIDER" } }),
+    prisma.jobAssignment.updateMany({
+      where: { bookingId, partnerId, status: "ACCEPTED" },
+      data: { status: "DECLINED", respondedAt: new Date() },
+    }),
+  ]);
+
+  return { ok: true };
+}
+
 // ─── Offer accept / decline ──────────────────────────────────────────────────
 
 /**
