@@ -10,6 +10,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:migrate": "pnpm --filter @vsolve/db migrate",
     "db:migrate:deploy": "pnpm --filter @vsolve/db migrate:deploy",
     "db:seed": "pnpm --filter @vsolve/db seed",
@@ -18,6 +20,7 @@
   },
   "devDependencies": {
     "turbo": "^2.3.3",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
   }
 }
