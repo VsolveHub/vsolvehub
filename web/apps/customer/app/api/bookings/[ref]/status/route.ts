@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/db/client";
+
 import {
   getBookingByRef,
   getSimulatedStatus,
@@ -19,8 +19,13 @@ type RouteContext = { params: Promise<{ ref: string }> };
 export async function GET(_req: NextRequest, context: RouteContext) {
   const { ref } = await context.params;
   const session = await getServerSession();
+  if (!session) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
 
-  let booking = await getBookingByRef(ref, session?.id);
+  // Always scope by userId — getBookingByRef matches ANY booking when the userId
+  // is omitted, and the payload carries the customer's address and phone.
+  let booking = await getBookingByRef(ref, session.id);
   if (!booking) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
@@ -40,7 +45,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
   if (marketplace) {
     await processExpiredOffersAndRedispatch(booking.id);
-    booking = (await getBookingByRef(ref, session?.id)) ?? booking;
+    booking = (await getBookingByRef(ref, session.id)) ?? booking;
     status = booking.status;
   } else {
     status = await syncBookingStatus(booking.id, booking.createdAt, booking.status);
@@ -73,40 +78,30 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   });
 }
 
-export async function POST(req: NextRequest, context: RouteContext) {
+/**
+ * Refresh a booking's status.
+ *
+ * This endpoint deliberately does NOT accept a status from the caller. Job state
+ * is driven exclusively by the partner through the shared fulfillment engine
+ * (accept → en route → start via OTP → complete). Honouring a client-supplied
+ * status would let a customer mark their own job ASSIGNED or COMPLETED.
+ */
+export async function POST(_req: NextRequest, context: RouteContext) {
   const { ref } = await context.params;
   const session = await getServerSession();
+  if (!session) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
 
-  const booking = await getBookingByRef(ref, session?.id);
+  // Scoped to the caller: without a userId, getBookingByRef matches any booking.
+  const booking = await getBookingByRef(ref, session.id);
   if (!booking) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
-  let status: string;
-  try {
-    const body = await req.json();
-    if (body.status) {
-      status = body.status;
-      
-      // Real status is driven by the partner via the shared fulfillment engine;
-      // no demo-provider assignment or fabricated revised quotes here.
-      await prisma.booking.update({
-        where: { id: booking.id },
-        data: { status },
-      });
-      await prisma.bookingStatusLog.create({
-        data: { bookingId: booking.id, status },
-      });
-    } else {
-      status = isMarketplaceBooking(booking)
-        ? booking.status
-        : await syncBookingStatus(booking.id, booking.createdAt, booking.status);
-    }
-  } catch {
-    status = isMarketplaceBooking(booking)
-      ? booking.status
-      : await syncBookingStatus(booking.id, booking.createdAt, booking.status);
-  }
+  const status = isMarketplaceBooking(booking)
+    ? booking.status
+    : await syncBookingStatus(booking.id, booking.createdAt, booking.status);
 
   const normalized = normalizeBookingStatus(status);
 

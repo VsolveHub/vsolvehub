@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { isDispatchable } from "@vsolve/db";
 import { offerExpiresAt } from "@/lib/provider/queries";
 import { providerTypeForArchetype, usesPushDispatch } from "@/lib/bookings/archetype";
 import { partnerMatchesService, partnerMatchInclude } from "@/lib/provider/matching";
@@ -122,9 +123,9 @@ export async function dispatchBookingOffers(bookingId: string) {
   if (!booking) throw new Error("Booking not found");
   if (!usesPushDispatch(booking.archetype)) return { offersCreated: 0 };
   if (booking.assignedPartnerId) return { offersCreated: 0 };
-  if (["COMPLETED", "CANCELLED", "NO_WORKER_FOUND"].includes(booking.status)) {
-    return { offersCreated: 0 };
-  }
+  // Covers terminal states AND cart drafts: an unpaid draft must never reach a
+  // provider, since no money has been authorized for it.
+  if (!isDispatchable(booking.status)) return { offersCreated: 0 };
 
   const existingOffers = await prisma.jobAssignment.findMany({
     where: { bookingId },
@@ -189,6 +190,9 @@ export async function dispatchDirectOffer(bookingId: string, partnerId: string) 
   if (!booking) return { ok: false as const, error: "Booking not found" };
   if (!usesPushDispatch(booking.archetype)) return { ok: false as const, error: "Not a dispatch service" };
   if (booking.assignedPartnerId) return { ok: false as const, error: "Already assigned" };
+  if (!isDispatchable(booking.status)) {
+    return { ok: false as const, error: "Booking is not ready to dispatch" };
+  }
 
   const pending = await prisma.jobAssignment.count({
     where: { bookingId, status: "PENDING", expiresAt: { gt: new Date() } },

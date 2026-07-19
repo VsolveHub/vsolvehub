@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@vsolve/db";
+import { prisma, type JobStatus } from "@vsolve/db";
 import { requirePartner } from "@/lib/auth";
 import { defaultRoleRatePaise } from "@/lib/crew-constants";
 import { crewCanServeDate, bookingDates } from "@/lib/crew-capacity";
@@ -39,7 +39,7 @@ async function ownedBooking(partnerId: string, bookingId: string) {
   return b;
 }
 
-async function logBooking(bookingId: string, status: string) {
+async function logBooking(bookingId: string, status: JobStatus) {
   await prisma.booking.update({ where: { id: bookingId }, data: { status } });
   await prisma.bookingStatusLog.create({ data: { bookingId, status } });
 }

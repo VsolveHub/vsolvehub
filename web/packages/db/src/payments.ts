@@ -28,7 +28,7 @@ export type AuthorizeInput = {
   idempotencyKey: string;
 };
 
-export type GatewayResult<T = Record<string, never>> =
+export type GatewayResult<T = unknown> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 

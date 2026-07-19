@@ -9,19 +9,27 @@
 // place to get it right, and a new cart-ish state only has to be added here.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** States that mean "this is a cart entry, not a real booking". */
-export const CART_STATUSES = ["DRAFT"] as const;
+import type { JobStatus } from "@prisma/client";
 
-/** Spread into any Prisma `where` that lists real (non-cart) bookings. */
-export const ACTIVE_BOOKING_WHERE = {
+/** States that mean "this is a cart entry, not a real booking". */
+export const CART_STATUSES: JobStatus[] = ["DRAFT"];
+
+/**
+ * Spread into any Prisma `where` that lists real (non-cart) bookings.
+ *
+ * Deliberately not `as const`: Prisma's generated input types take a mutable
+ * array, and a readonly one fails to assign.
+ */
+export const ACTIVE_BOOKING_WHERE: { status: { notIn: JobStatus[] } } = {
   status: { notIn: [...CART_STATUSES] },
-} as const;
+};
 
 const NON_DISPATCHABLE: readonly string[] = [
   ...CART_STATUSES,
   "COMPLETED",
   "CANCELLED",
   "NO_WORKER_FOUND",
+  "NO_CREW_FOUND",
 ];
 
 /**

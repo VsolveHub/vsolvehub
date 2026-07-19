@@ -11,7 +11,9 @@
 // never by a time-based simulation.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { JobStatus } from "@prisma/client";
 import { prisma } from "./client";
+import { isDispatchable } from "./booking-scope";
 
 /** Ordered happy-path timeline a single-provider booking moves through. */
 export const SINGLE_PROVIDER_TIMELINE = [
@@ -23,7 +25,10 @@ export const SINGLE_PROVIDER_TIMELINE = [
   "COMPLETED",
 ] as const;
 
-export type JobStatus = (typeof SINGLE_PROVIDER_TIMELINE)[number] | "CANCELLED" | "NO_WORKER_FOUND";
+// JobStatus itself now comes from the Prisma enum (see schema.prisma) so the
+// database and the engine cannot drift apart. Re-exported from the package root
+// via `export * from "@prisma/client"`.
+
 
 /** Transitions a PARTNER is allowed to drive once they hold the job. */
 const PARTNER_TRANSITIONS: Record<string, string[]> = {
@@ -74,6 +79,17 @@ export async function acceptJobOffer(
       data: { status: "EXPIRED", respondedAt: new Date() },
     });
     return { ok: false, error: "Job already taken" };
+  }
+
+  // Defensive: a draft (unpaid, still in someone's cart) or already-terminal
+  // booking must never be acceptable. Reaching here means an offer outlived its
+  // booking, so refuse rather than bind a partner to unfunded work.
+  if (!isDispatchable(assignment.booking.status)) {
+    await prisma.jobAssignment.update({
+      where: { id: assignmentId },
+      data: { status: "EXPIRED", respondedAt: new Date() },
+    });
+    return { ok: false, error: "This job is no longer available" };
   }
 
   const now = new Date();
@@ -217,7 +233,7 @@ export async function completeJob(
 
 // ─── Partner read models ─────────────────────────────────────────────────────
 
-const ACTIVE_JOB_STATUSES = ["ASSIGNED", "PROVIDER_ARRIVING", "STARTED"];
+const ACTIVE_JOB_STATUSES = ["ASSIGNED", "PROVIDER_ARRIVING", "STARTED"] satisfies JobStatus[];
 
 const bookingDetailInclude = {
   service: { include: { category: true } },
