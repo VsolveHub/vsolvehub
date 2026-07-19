@@ -3,11 +3,14 @@ import { getServerSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
 import { findAvailablePartners } from "@/lib/fulfillment/matching";
 import { suggestSlots } from "@/lib/fulfillment/slot-suggestions";
+import { toPublicProfiles } from "@/lib/fulfillment/profiles";
 
 // Hyderabad centre — used when an address has no geocode (matches the booking
 // route), so a missing pin never silently excludes the whole city.
 const DEFAULT_LAT = 17.385;
 const DEFAULT_LNG = 78.4867;
+/** How many professionals the choose step offers before "auto-assign". */
+const MAX_CHOICES = 4;
 
 /**
  * GET /api/providers/availability?serviceId=&addressId=&slot=&scheduleType=
@@ -56,8 +59,23 @@ export async function GET(req: NextRequest) {
     scheduleType,
   });
 
+  // The choose-your-professional list: top few real, assignable pros as
+  // profiles. Cap before enriching, then one scoped query for the PII the
+  // matcher deliberately omits — display always equals who can be assigned.
+  const top = ranked.slice(0, MAX_CHOICES);
+  const identityRows = top.length
+    ? await prisma.partner.findMany({
+        where: { id: { in: top.map((p) => p.id) } },
+        select: { id: true, fullName: true, jobsCompleted: true },
+      })
+    : [];
+  const identities = new Map(
+    identityRows.map((r) => [r.id, { name: r.fullName ?? "V Solve Professional", jobsCompleted: r.jobsCompleted }]),
+  );
+
   return NextResponse.json({
     count: ranked.length,
+    professionals: toPublicProfiles(top, { addrLat: ctx.addrLat, addrLng: ctx.addrLng }, identities),
     suggestedSlots: ranked.length === 0 ? suggestSlots(pool, ctx) : [],
   });
 }

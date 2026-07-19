@@ -58,6 +58,15 @@ export type NearbyProvider = {
   etaMins: number;
 };
 export type PaymentMethod = "upi" | "card" | "wallet" | "cod";
+/** A pickable professional on the choose step (real, matcher-ranked). */
+export type ProfessionalChoice = {
+  id: string;
+  name: string;
+  rating: number;
+  jobsCompleted: number;
+  distanceKm: number;
+  etaMins: number;
+};
 /** The professional revealed at checkout by direct assignment. */
 export type AssignedPartner = { name: string; rating: number; jobsCompleted: number };
 export type SlotSuggestion = { slotIso: string; label: string; count: number };
@@ -126,7 +135,7 @@ export const api = {
   reverseGeocode: (lat: number, lng: number) =>
     jsonFetch<Record<string, unknown>>(`/api/geocode/reverse?lat=${lat}&lng=${lng}`),
   availability: (input: { serviceId: string; addressId: string; slot: string; scheduleType: string }) =>
-    jsonFetch<{ count: number; suggestedSlots: SlotSuggestion[] }>(
+    jsonFetch<{ count: number; professionals: ProfessionalChoice[]; suggestedSlots: SlotSuggestion[] }>(
       `/api/providers/availability?serviceId=${input.serviceId}&addressId=${input.addressId}` +
         `&slot=${encodeURIComponent(input.slot)}&scheduleType=${input.scheduleType}`,
     ),
