@@ -12,7 +12,7 @@ import {
   MARKETPLACE_TIMELINE,
   normalizeBookingStatus,
 } from "@/lib/constants";
-import { processExpiredOffersAndRedispatch } from "@/lib/fulfillment/push-dispatch";
+import { driveReassignmentIfPending } from "@/lib/fulfillment/assign";
 import { isCrewBooking, expireCrewOffers, previewCancelFee } from "@/lib/crew/queries";
 import { CREW_STATUS_MESSAGES, roleRatePaise } from "@/lib/crew/constants";
 
@@ -175,7 +175,8 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   const marketplace = isMarketplaceBooking(booking);
 
   if (marketplace) {
-    await processExpiredOffersAndRedispatch(booking.id);
+    // Direct assignment: reassign only if a partner bailed (SEARCHING_PROVIDER).
+    await driveReassignmentIfPending(booking.id);
     booking = (await getBookingByRef(ref, session?.id)) ?? booking;
   }
 

@@ -9,7 +9,7 @@ import {
   syncBookingStatus,
 } from "@/lib/bookings/queries";
 import { BOOKING_STATUSES, MARKETPLACE_TIMELINE, normalizeBookingStatus } from "@/lib/constants";
-import { processExpiredOffersAndRedispatch } from "@/lib/fulfillment/push-dispatch";
+import { driveReassignmentIfPending } from "@/lib/fulfillment/assign";
 import { usesPushDispatch } from "@/lib/bookings/archetype";
 import { isCrewBooking } from "@/lib/crew/queries";
 import { CREW_STATUS_MESSAGES } from "@/lib/crew/constants";
@@ -44,7 +44,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   let status: string;
 
   if (marketplace) {
-    await processExpiredOffersAndRedispatch(booking.id);
+    // Direct assignment: the only reason to act here is a partner who bailed,
+    // leaving the job SEARCHING_PROVIDER — reassign it to the next best pro.
+    await driveReassignmentIfPending(booking.id);
     booking = (await getBookingByRef(ref, session.id)) ?? booking;
     status = booking.status;
   } else {
