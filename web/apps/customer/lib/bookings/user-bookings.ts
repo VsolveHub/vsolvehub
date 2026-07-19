@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { ACTIVE_BOOKING_WHERE } from "@vsolve/db";
 import { getUserAccommodationBookings } from "@/lib/accommodation/queries";
 import { getUserVehicleBookings, parseVehicleDetails } from "@/lib/vehicle/queries";
 import { formatDate } from "@/lib/format";
@@ -137,7 +138,7 @@ export async function getAllUserBookings(userId: string): Promise<UserBookingLis
 
 export async function getUserBookingCount(userId: string): Promise<number> {
   const [service, vehicle, accommodation] = await Promise.all([
-    prisma.booking.count({ where: { userId } }),
+    prisma.booking.count({ where: { userId, ...ACTIVE_BOOKING_WHERE } }),
     prisma.vehicleBooking.count({ where: { userId } }),
     prisma.accommodationBooking.count({ where: { userId } }),
   ]);

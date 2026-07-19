@@ -1,13 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Partner payout — wallet balances derived from JobEarning, and withdrawals
-// settled through a pluggable PaymentGateway. The stub is used in dev/MVP; a
-// real provider (RazorpayX Payouts) is dropped in via setPaymentGateway().
+// settled through a pluggable PayoutGateway. The stub is used in dev/MVP; a
+// real provider (RazorpayX Payouts) is dropped in via setPayoutGateway().
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { prisma } from "./client";
 import type { EngineResult } from "./fulfillment";
 
-// ─── Payment gateway interface (swap the impl, not the callers) ──────────────
+// ─── Payout gateway interface (swap the impl, not the callers) ───────────────
 
 export interface PayoutRequest {
   partnerId: string;
@@ -21,12 +21,12 @@ export interface PayoutResult {
   error?: string;
 }
 
-export interface PaymentGateway {
+export interface PayoutGateway {
   initiatePayout(req: PayoutRequest): Promise<PayoutResult>;
 }
 
 /** Dev/MVP gateway — instantly "succeeds" with a synthetic reference. */
-export const stubPaymentGateway: PaymentGateway = {
+export const stubPayoutGateway: PayoutGateway = {
   async initiatePayout(req) {
     // TODO(prod): integrate RazorpayX Payouts here (fund account → payout).
     if (req.amountPaise <= 0) return { ok: false, error: "Nothing to pay out" };
@@ -38,10 +38,10 @@ export const stubPaymentGateway: PaymentGateway = {
   },
 };
 
-let gateway: PaymentGateway = stubPaymentGateway;
+let gateway: PayoutGateway = stubPayoutGateway;
 
 /** Swap in a real gateway (e.g. RazorpayX) at app bootstrap. */
-export function setPaymentGateway(g: PaymentGateway): void {
+export function setPayoutGateway(g: PayoutGateway): void {
   gateway = g;
 }
 

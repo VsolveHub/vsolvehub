@@ -369,6 +369,7 @@ model User {
   addresses             Address[]
   savedServices         SavedService[]
   bookings              Booking[]
+  orders                Order[]
   accommodationBookings AccommodationBooking[]
   vehicleBookings       VehicleBooking[]
   notifications         Notification[]
@@ -562,6 +563,85 @@ model SavedService {
   @@unique([userId, serviceId])
 }
 
+/// Lifecycle of a single job. Names deliberately match the pre-existing string
+/// statuses — the partner app, the shared fulfillment engine, and every tracker
+/// depend on them, so renaming would buy nothing and risk a cross-app regression.
+/// DRAFT (sitting in a cart) and AUTHORIZED (hold placed, not yet dispatched) are
+/// the only genuinely new states.
+enum JobStatus {
+  // Cart + checkout
+  DRAFT
+  AUTHORIZED
+
+  // Single-provider dispatch (Technician, Beauty, Home, Pet)
+  PENDING
+  SEARCHING_PROVIDER
+  ASSIGNED
+  PROVIDER_ARRIVING
+  STARTED
+  NO_WORKER_FOUND
+
+  // Crew dispatch — a separate lifecycle sharing this column.
+  SEARCHING_CREW
+  CREW_ASSIGNED
+  CREW_EN_ROUTE
+  CREW_WORKING
+  NO_CREW_FOUND
+
+  // Terminal, shared by both lifecycles
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_PAYMENT
+  AUTHORIZED
+  PARTIALLY_SETTLED
+  SETTLED
+  CANCELLED
+}
+
+enum PaymentState {
+  NONE
+  AUTHORIZED
+  PARTIALLY_CAPTURED
+  CAPTURED
+  VOIDED
+  REFUNDED
+  COD_PENDING
+}
+
+/// The money envelope for a cart: ONE gateway authorization covering N bookings.
+/// Bookings remain the unit of work; this is the only place money is accounted,
+/// so "how much of this order is authorized vs captured vs voided" has exactly
+/// one answer. There are no Cart tables — the cart is Booking rows in DRAFT.
+model Order {
+  id              String       @id @default(cuid())
+  orderRef        String       @unique
+  userId          String
+  status          OrderStatus  @default(DRAFT)
+  paymentState    PaymentState @default(NONE)
+  paymentMethod   String?
+  gatewayIntentId String?
+  /// Guards double-checkout: a retried POST reuses the same order and the same
+  /// gateway idempotency key rather than authorizing twice.
+  idempotencyKey  String?      @unique
+  authorizedPaise Int          @default(0)
+  capturedPaise   Int          @default(0)
+  voidedPaise     Int          @default(0)
+  refundedPaise   Int          @default(0)
+  authorizedAt    DateTime?
+  authExpiresAt   DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  bookings Booking[]
+
+  @@index([userId, status])
+}
+
 model Booking {
   id                   String    @id @default(cuid())
   bookingRef           String    @unique
@@ -571,7 +651,7 @@ model Booking {
   vendorId             String?
   slot                 String
   scheduleType         String    @default("scheduled")
-  status               String    @default("REQUESTED")
+  status               JobStatus @default(PENDING)
   paymentStatus        String    @default("PENDING")
   paymentMethod        String?
   archetype            String    @default("A")
@@ -610,6 +690,24 @@ model Booking {
   customerReview       String?
   createdAt            DateTime  @default(now())
 
+  /// Set at checkout; null for legacy single bookings placed before Orders.
+  orderId              String?
+  /// Snapshot of the priced requirement selections taken at add-to-cart time.
+  /// JSON array of { key, label, value, qty, unitPaise, totalPaise, kind }.
+  /// Snapshotting means a later catalog price change can never silently mutate
+  /// a live cart — checkout revalidation surfaces it as a diff instead.
+  lineItems            String    @default("[]")
+  /// Captured for THIS job. The Order holds the authorization; each booking
+  /// captures its own share when its provider accepts.
+  capturedPaise        Int       @default(0)
+  /// Last known provider position, pushed by the partner app while the job is
+  /// active. Map rendering is deferred; the data lands now so it is a thin add.
+  providerLat          Float?
+  providerLng          Float?
+  providerLocatedAt    DateTime?
+  etaMinutes           Int?
+
+  order             Order?             @relation(fields: [orderId], references: [id])
   user              User               @relation(fields: [userId], references: [id])
   service           Service            @relation(fields: [serviceId], references: [id])
   address           Address            @relation(fields: [addressId], references: [id])
@@ -623,6 +721,9 @@ model Booking {
   crewJobDays       CrewJobDay[]
   crewOffers        CrewJobOffer[]
   crewAssignments   CrewAssignment[]
+
+  @@index([userId, status])
+  @@index([orderId])
 }
 
 model BookingStatusLog {

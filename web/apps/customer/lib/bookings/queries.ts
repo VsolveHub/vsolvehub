@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import { recomputePartnerRating } from "@vsolve/db";
+import { ACTIVE_BOOKING_WHERE, recomputePartnerRating, type JobStatus } from "@vsolve/db";
 import { generateBookingRef } from "@/lib/format";
 import { isMarketplaceBooking } from "@/lib/bookings/archetype";
 import {
@@ -91,7 +91,8 @@ export { isMarketplaceBooking };
 
 export async function getUserBookings(userId: string) {
   return prisma.booking.findMany({
-    where: { userId },
+    // ACTIVE_BOOKING_WHERE keeps cart drafts out of the customer's booking list.
+    where: { userId, ...ACTIVE_BOOKING_WHERE },
     include: {
       service: { include: { category: true, subCategory: true } },
       address: true,
@@ -136,8 +137,8 @@ export async function syncBookingStatus(
     return simulated;
   }
 
-  const updateData: { status: string; finalAmountPaise?: number } = {
-    status: simulated,
+  const updateData: { status: JobStatus; finalAmountPaise?: number } = {
+    status: simulated as JobStatus,
   };
 
   if (simulated === "COMPLETED") {
