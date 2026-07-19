@@ -2,22 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Textarea } from "@/components/ui/Textarea";
-import { formatPrice } from "@/lib/format";
-import { WALLET_BALANCE_PAISE } from "@/lib/profile/section-data";
-import { computeAccommodationPayment } from "@/lib/accommodation/pricing";
+import { uploadBookingMedia } from "@/lib/upload-media";
 import type { AccommodationBookingDraft } from "@/lib/accommodation/types";
 import type { PropertyDetail } from "@/lib/accommodation/types";
-import { uploadBookingMedia } from "@/lib/upload-media";
-
-const PAYMENT_OPTIONS = [
-  { id: "upi" as const, label: "UPI", detail: "Google Pay, PhonePe, Paytm" },
-  { id: "card" as const, label: "Card", detail: "Debit / credit card" },
-  { id: "wallet" as const, label: "Wallet", detail: `Balance: ${formatPrice(WALLET_BALANCE_PAISE)}` },
-  { id: "cod" as const, label: "Pay at property", detail: "Cash on arrival" },
-];
+import { TypeStep } from "./accommodationBookingFlow/TypeStep";
+import { RequirementsStep } from "./accommodationBookingFlow/RequirementsStep";
+import { PaymentStep } from "./accommodationBookingFlow/PaymentStep";
 
 type Props = {
   property: PropertyDetail;
@@ -45,8 +35,6 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
     paymentMethod: null,
   });
 
-  const payment = computeAccommodationPayment(property.pricePaise, draft.includeFirstMonthRent);
-
   async function uploadIdProof(files: FileList | null) {
     if (!files?.length) return;
     setUploadError("");
@@ -56,6 +44,15 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
       return;
     }
     setDraft((d) => ({ ...d, idProofUrls: [...d.idProofUrls, ...result.urls].slice(0, 3) }));
+  }
+
+  function goToPayment() {
+    if (!draft.occupation.trim()) {
+      setError("Occupation is required");
+      return;
+    }
+    setError("");
+    setStep("payment");
   }
 
   async function confirmBooking() {
@@ -101,167 +98,32 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
       </div>
 
       {step === "type" && (
-        <>
-          <div className="booking-mode-tabs">
-            <button
-              type="button"
-              className={`booking-mode-tab ${draft.bookingType === "move_in" ? "active" : ""}`}
-              onClick={() => setDraft((d) => ({ ...d, bookingType: "move_in" }))}
-            >
-              Immediate move-in
-            </button>
-            <button
-              type="button"
-              className={`booking-mode-tab ${draft.bookingType === "visit" ? "active" : ""}`}
-              onClick={() => setDraft((d) => ({ ...d, bookingType: "visit" }))}
-            >
-              Schedule visit
-            </button>
-          </div>
-          <Button block onClick={() => setStep("requirements")}>
-            Next
-          </Button>
-        </>
+        <TypeStep
+          bookingType={draft.bookingType}
+          setBookingType={(bookingType) => setDraft((d) => ({ ...d, bookingType }))}
+          onNext={() => setStep("requirements")}
+        />
       )}
 
       {step === "requirements" && (
-        <>
-          <div className="card stack">
-            <h2 className="section-title">Stay requirements</h2>
-            {draft.bookingType === "move_in" ? (
-              <Input
-                label="Move-in date"
-                type="date"
-                value={draft.moveInDate}
-                onChange={(e) => setDraft((d) => ({ ...d, moveInDate: e.target.value }))}
-              />
-            ) : (
-              <Input
-                label="Visit date"
-                type="date"
-                value={draft.visitDate}
-                onChange={(e) => setDraft((d) => ({ ...d, visitDate: e.target.value }))}
-              />
-            )}
-            {draft.bookingType === "move_in" && (
-              <Input
-                label="Duration of stay (months)"
-                type="number"
-                min={1}
-                max={24}
-                value={draft.durationMonths}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, durationMonths: Number(e.target.value) || 1 }))
-                }
-              />
-            )}
-            <Input
-              label="Number of people"
-              type="number"
-              min={1}
-              max={10}
-              value={draft.numberOfPeople}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, numberOfPeople: Number(e.target.value) || 1 }))
-              }
-            />
-            <Input
-              label="Occupation"
-              placeholder="Student, IT professional, etc."
-              value={draft.occupation}
-              onChange={(e) => setDraft((d) => ({ ...d, occupation: e.target.value }))}
-            />
-            <Textarea
-              label="Special requirements"
-              placeholder="Dietary needs, accessibility, etc."
-              value={draft.specialRequirements}
-              onChange={(e) => setDraft((d) => ({ ...d, specialRequirements: e.target.value }))}
-            />
-            <div>
-              <p className="section-title">ID proof upload</p>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*,.pdf"
-                hidden
-                onChange={(e) => uploadIdProof(e.target.files)}
-              />
-              <Button type="button" variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>
-                Upload ID proof
-              </Button>
-              {uploadError && <p className="alert alert-error">{uploadError}</p>}
-              {draft.idProofUrls.length > 0 && (
-                <p className="text-sm text-muted">{draft.idProofUrls.length} file(s) uploaded</p>
-              )}
-            </div>
-          </div>
-          <Button
-            block
-            onClick={() => {
-              if (!draft.occupation.trim()) {
-                setError("Occupation is required");
-                return;
-              }
-              setError("");
-              setStep("payment");
-            }}
-          >
-            Next
-          </Button>
-        </>
+        <RequirementsStep
+          draft={draft}
+          setDraft={setDraft}
+          fileRef={fileRef}
+          uploadError={uploadError}
+          onUploadIdProof={uploadIdProof}
+          onNext={goToPayment}
+        />
       )}
 
       {step === "payment" && (
-        <>
-          <div className="card stack">
-            <h2 className="section-title">Payment breakdown</h2>
-            <div className="flex-between">
-              <span>Token advance</span>
-              <span>{formatPrice(payment.tokenAdvancePaise)}</span>
-            </div>
-            <div className="flex-between">
-              <span>Booking fee</span>
-              <span>{formatPrice(payment.bookingFeePaise)}</span>
-            </div>
-            <label className="acc-filter-check">
-              <input
-                type="checkbox"
-                checked={draft.includeFirstMonthRent}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, includeFirstMonthRent: e.target.checked }))
-                }
-              />
-              Pay first month rent now ({formatPrice(property.pricePaise)}) — optional
-            </label>
-            <div className="flex-between" style={{ borderTop: "1px solid var(--color-border)", paddingTop: "0.5rem" }}>
-              <span className="card-title">Total</span>
-              <span className="detail-price" style={{ margin: 0 }}>
-                {formatPrice(
-                  computeAccommodationPayment(property.pricePaise, draft.includeFirstMonthRent)
-                    .totalPaidPaise
-                )}
-              </span>
-            </div>
-          </div>
-
-          <div className="stack">
-            {PAYMENT_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`card address-card ${draft.paymentMethod === opt.id ? "selected" : ""}`}
-                onClick={() => setDraft((d) => ({ ...d, paymentMethod: opt.id }))}
-              >
-                <p className="address-label">{opt.label}</p>
-                <p className="address-text">{opt.detail}</p>
-              </button>
-            ))}
-          </div>
-
-          <Button block onClick={confirmBooking} loading={loading} disabled={loading}>
-            Confirm booking
-          </Button>
-        </>
+        <PaymentStep
+          propertyPricePaise={property.pricePaise}
+          draft={draft}
+          setDraft={setDraft}
+          loading={loading}
+          onConfirm={confirmBooking}
+        />
       )}
 
       {error && <div className="alert alert-error">{error}</div>}
