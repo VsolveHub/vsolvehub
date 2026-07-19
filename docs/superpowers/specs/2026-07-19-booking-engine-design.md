@@ -369,6 +369,17 @@ A **ride** is a `Booking` with a live-tracking-heavy lifecycle. **Accommodation*
 differ only in *when money is captured* — a `paymentTiming` discriminator on the order,
 not a new engine.
 
+## Amendment (2026-07-19): availability-gated payment
+
+Payment is now collected **only when providers are available for the chosen
+slot**. Before the payment step (UI) and again inside POST /api/bookings before
+any row or gateway call (enforcement), the same availability matcher that feeds
+dispatch waves is consulted; zero eligible providers → a "No professionals
+available" screen with up to 3 alternative slots, and a 409 `NO_PROVIDERS` from
+the API. The void-on-exhaustion path remains as the backstop for providers
+vanishing after payment. Detailed design and tasks:
+`docs/superpowers/plans/2026-07-19-availability-gated-dispatch.md`.
+
 ## 12. Testing
 
 - **Unit:** `estimatePrice` (every field type, empty selections, unknown keys, add-on
