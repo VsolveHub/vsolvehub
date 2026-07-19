@@ -99,6 +99,11 @@ type Props = {
 
 const TIME_SLOTS = ["08–10 AM", "10–12 PM", "12–02 PM", "02–04 PM", "04–06 PM", "06–08 PM"];
 
+function isDetailValueEmpty(v: unknown): boolean {
+  if (Array.isArray(v)) return v.length === 0;
+  return v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+}
+
 function nextDays(count: number) {
   const out: { key: string; day: string; date: string }[] = [];
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -188,12 +193,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     }
     const errs: Record<string, boolean> = {};
     for (const f of config.detailFields) {
-      if (!f.required) continue;
-      const v = detailValues[f.key];
-      const empty = Array.isArray(v)
-        ? v.length === 0
-        : v === undefined || v === null || (typeof v === "string" && v.trim() === "");
-      if (empty) errs[f.key] = true;
+      if (f.required && isDetailValueEmpty(detailValues[f.key])) errs[f.key] = true;
     }
     setFieldErrors(errs);
     if (Object.keys(errs).length > 0) {
@@ -371,7 +371,8 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     mutationFn: (payload: Record<string, unknown>) => api.createBooking(payload),
     onSuccess: (data) => {
       // Picked pro was taken and we fell back — show who they got, then go.
-      if (data.preferredHonored === false && data.partner && preferredPartnerId) {
+      const fellBackToAnotherPro = data.preferredHonored === false && !!data.partner && !!preferredPartnerId;
+      if (fellBackToAnotherPro && data.partner) {
         const picked = professionals.find((p) => p.id === preferredPartnerId)?.name ?? "your professional";
         setFallbackNote({ picked, assigned: data.partner, ref: data.bookingRef });
         return;
@@ -437,7 +438,8 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   function back() {
     const order: Step[] = ["service", "guidelines", "when", "details", "choose", "payment"];
     const i = order.indexOf(step);
-    if (i <= 0 || (step === "guidelines" && (singleService || initialServiceId))) {
+    const isUnskippableGuidelines = step === "guidelines" && (singleService || initialServiceId);
+    if (i <= 0 || isUnskippableGuidelines) {
       router.back();
       return;
     }
