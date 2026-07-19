@@ -11,6 +11,7 @@ import { inr, timeAgo } from "@/lib/format";
 import { CaptainLive, type Offer, type LedgerEntry, type AlertItem, type ActiveJob } from "./_live/captain-live";
 import { CrewRequestPoller } from "./_live/crew-request-poller";
 import { JobOfferPoller } from "@/components/dashboard/job-offer-poller";
+import { ActiveJobRefresher } from "@/components/dashboard/active-job-refresher";
 
 export const metadata = { title: "Dashboard", robots: { index: false } };
 
@@ -345,6 +346,7 @@ export default async function LivePage() {
   return (
     <>
       {partner.status === "ACTIVE" ? <JobOfferPoller /> : null}
+      {partner.status === "ACTIVE" ? <ActiveJobRefresher /> : null}
       {crew ? <CrewRequestPoller /> : null}
       <CaptainLive
       activeJob={activeJob}
