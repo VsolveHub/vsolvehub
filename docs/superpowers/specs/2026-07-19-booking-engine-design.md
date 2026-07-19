@@ -369,15 +369,27 @@ A **ride** is a `Booking` with a live-tracking-heavy lifecycle. **Accommodation*
 differ only in *when money is captured* — a `paymentTiming` discriminator on the order,
 not a new engine.
 
-## Amendment (2026-07-19): availability-gated payment
+## Amendment 2 (2026-07-19): direct assignment, Urban-Company-style
 
-Payment is now collected **only when providers are available for the chosen
-slot**. Before the payment step (UI) and again inside POST /api/bookings before
-any row or gateway call (enforcement), the same availability matcher that feeds
-dispatch waves is consulted; zero eligible providers → a "No professionals
+The offer/accept wave dispatch (Rapido/Uber model) is replaced for archetype A
+by **direct assignment**: after payment, the system assigns the best-ranked
+available professional immediately — no accept prompt, no searching state on the
+happy path. The partner's availability calendar plus a partial unique index on
+(assignedPartnerId, slot) over active statuses replace the accept as the
+capacity control; a "Can't make it" release triggers automatic reassignment.
+Capture moves from on-accept to on-assignment. Scheduled bookings no longer
+require the partner to be online at booking time (that constraint existed only
+because offers expired in 30 s).
+
+## Amendment 1 (2026-07-19): availability-gated payment
+
+Payment is collected **only when providers are available for the chosen slot**.
+Before the payment step (UI) and again inside POST /api/bookings before any row
+or gateway call (enforcement), the same availability matcher that feeds
+assignment is consulted; zero eligible providers → a "No professionals
 available" screen with up to 3 alternative slots, and a 409 `NO_PROVIDERS` from
-the API. The void-on-exhaustion path remains as the backstop for providers
-vanishing after payment. Detailed design and tasks:
+the API. If assignment races out after payment, the customer is refunded in
+full within the same request. Detailed design and tasks:
 `docs/superpowers/plans/2026-07-19-availability-gated-dispatch.md`.
 
 ## 12. Testing
