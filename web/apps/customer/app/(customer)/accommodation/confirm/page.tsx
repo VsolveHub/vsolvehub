@@ -45,7 +45,7 @@ export default async function AccommodationConfirmPage({ searchParams }: PagePro
   ];
 
   return (
-    <div className="page-content">
+    <div className="mx-auto w-full max-w-[1280px] p-4">
       <BookingConfirmSlip
         title="Stay booked!"
         subtitle="Your accommodation request has been sent to the property owner."

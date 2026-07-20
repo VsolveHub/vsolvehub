@@ -17,7 +17,7 @@ export default async function BookingCompletePage({ params }: PageProps) {
   const status = normalizeBookingStatus(booking.status);
 
   return (
-    <div className="page-content" style={{ maxWidth: "32rem", margin: "0 auto" }}>
+    <div className="mx-auto w-full max-w-[1280px] p-4" style={{ maxWidth: "32rem", margin: "0 auto" }}>
       <BookingCompletion
         bookingRef={booking.bookingRef}
         serviceName={booking.service.name}
@@ -28,7 +28,7 @@ export default async function BookingCompletePage({ params }: PageProps) {
         existingRating={booking.rating}
       />
       {status !== "COMPLETED" && (
-        <p className="text-sm text-muted" style={{ marginTop: "1rem" }}>
+        <p className="mt-4 text-sm text-gray-500">
           Service is still in progress. You can rate once it is completed.
         </p>
       )}

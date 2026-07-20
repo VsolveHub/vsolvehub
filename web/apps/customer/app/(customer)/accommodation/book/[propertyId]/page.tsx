@@ -25,9 +25,9 @@ export default async function AccommodationBookPage({ params, searchParams }: Pa
   const initialMode = mode === "visit" ? "visit" : "move_in";
 
   return (
-    <div className="page-content">
-      <h1 className="page-title">Book your stay</h1>
-      <p className="page-subtitle">Complete the steps to confirm your accommodation.</p>
+    <div className="mx-auto w-full max-w-[1280px] p-4">
+      <h1 className="text-2xl font-bold tracking-tight text-gray-900">Book your stay</h1>
+      <p className="mt-1 mb-5 text-[15px] text-gray-500">Complete the steps to confirm your accommodation.</p>
       <AccommodationBookingFlow property={property} initialMode={initialMode} />
     </div>
   );
