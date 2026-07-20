@@ -48,7 +48,10 @@ export function SettingsIcon() {
 
 export function BrandIcon() {
   return (
-    <span className="profile-brand-icon" aria-hidden>
+    <span
+      className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-brand)] text-base font-black text-white"
+      aria-hidden
+    >
       V
     </span>
   );
