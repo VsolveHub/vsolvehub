@@ -14,7 +14,9 @@ export function BookingTimeline({ currentStatusIndex, getStepDetails, variant }:
 
   if (variant === "desktop") {
     return (
-      <div className="tracker-timeline-v3">
+      <div className="relative flex flex-col gap-5">
+        {/* Continuous connector behind the nodes */}
+        <div className="absolute bottom-3 left-3.5 top-3 w-px bg-gray-200" aria-hidden />
         {timeline.map(({ key: stepKey, index: idx, state }) => (
           <DesktopTimelineItem key={stepKey} stepKey={stepKey} state={state} details={getStepDetails(stepKey, idx)} />
         ))}

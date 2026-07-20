@@ -47,7 +47,11 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
     (retryMutation.error instanceof Error ? retryMutation.error.message : "");
 
   if (isError) {
-    return <div className="alert alert-error">Booking not found</div>;
+    return (
+      <div className="mx-auto mt-6 max-w-md rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-[var(--color-danger)]">
+        Booking not found
+      </div>
+    );
   }
 
   if (!data) {
@@ -63,7 +67,7 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
   const noProviderFound = data.status === "NO_WORKER_FOUND";
   const searchingProvider = data.status === "PENDING" || data.status === "SEARCHING_PROVIDER";
   const actionPanel = data.marketplace ? (
-    <div className="mx-auto w-full flow-page-shell__inner bg-white border-b border-purple-100 px-4 py-3 shadow-sm">
+    <div className="mx-auto w-full max-w-6xl border-b border-gray-100 bg-white px-4 py-3 shadow-sm">
       {searchingProvider && (
         <p className="text-xs font-semibold text-purple-900 m-0">
           Your professional had to step away — we're finding you a new one now. No action needed.
