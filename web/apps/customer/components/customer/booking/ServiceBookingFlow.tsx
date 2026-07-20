@@ -289,77 +289,104 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
   const summaryAside =
     service ? (
-      <div className="flow-summary-card-v3">
-        <p className="summary-title-v3">BOOKING SUMMARY</p>
-        <h2 className="summary-service-name">{service.name}</h2>
-        <p className="summary-price-v3">
-          Starts at <strong>{formatPrice(startsAtPaise)}</strong>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-4">
+        <p className="text-[11px] font-black uppercase tracking-widest text-[var(--color-brand-accent)]">
+          Booking summary
         </p>
-        <p className="summary-desc-v3">{config.guidelines.summary}</p>
+        <h2 className="mt-2 text-lg font-black text-gray-900">{service.name}</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Starts at <strong className="text-gray-900">{formatPrice(startsAtPaise)}</strong>
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-gray-500">{config.guidelines.summary}</p>
 
-        <div className="summary-pills-v3">
-          {service.duration > 0 && (
-            <span className="summary-pill active">⏱ ~{Math.max(1, Math.round(service.duration / 60))} HR</span>
-          )}
-        </div>
+        {service.duration > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-full bg-[var(--color-brand-light)] px-3 py-1 text-xs font-bold text-[var(--color-brand)]">
+              ⏱ ~{Math.max(1, Math.round(service.duration / 60))} hr
+            </span>
+          </div>
+        )}
 
-        <div className="summary-breakdown-v3">
-          <div className="summary-row">
-            <span>Base</span>
-            <strong>{formatPrice(estimate.basePaise)}</strong>
+        <div className="mt-5 space-y-2 border-t border-gray-100 pt-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500">Base</span>
+            <strong className="text-gray-900">{formatPrice(estimate.basePaise)}</strong>
           </div>
           {estimate.lineItems
             .filter((li) => li.kind !== "variant")
             .map((li) => (
-              <div className="summary-row" key={`${li.key}-${li.value}`}>
-                <span>
+              <div className="flex items-center justify-between" key={`${li.key}-${li.value}`}>
+                <span className="text-gray-500">
                   {li.value}
                   {li.qty > 1 && ` × ${li.qty}`}
                 </span>
-                <strong>+{formatPrice(li.totalPaise)}</strong>
+                <strong className="text-gray-900">+{formatPrice(li.totalPaise)}</strong>
               </div>
             ))}
-          <div className="summary-row">
-            <span>Platform fee</span>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500">Platform fee</span>
             <strong className="text-green-600">FREE</strong>
           </div>
-          <div className="summary-row total-row">
-            <span>Estimated total</span>
-            <strong>{formatPrice(estimate.totalPaise)}</strong>
+          <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-base">
+            <span className="font-bold text-gray-900">Estimated total</span>
+            <strong className="text-gray-900">{formatPrice(estimate.totalPaise)}</strong>
           </div>
-          <p className="summary-row text-xs" style={{ color: "#6b7280" }}>
+          <p className="text-xs text-gray-400">
             Final price is confirmed from your selected requirements.
           </p>
         </div>
       </div>
     ) : null;
 
+  const stepOrder: Step[] = ["service", "guidelines", "details"];
+  function StepPill({ target, num, label }: { target: Step; num: string; label: string }) {
+    const meIdx = stepOrder.indexOf(target);
+    const curIdx = stepOrder.indexOf(step);
+    const state = meIdx === curIdx ? "active" : meIdx < curIdx ? "done" : "todo";
+    return (
+      <div className="flex items-center gap-1.5">
+        <div
+          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
+            state === "active"
+              ? "bg-[var(--color-brand)] text-white"
+              : state === "done"
+                ? "bg-[var(--color-brand)]/15 text-[var(--color-brand)]"
+                : "bg-gray-100 text-gray-400"
+          }`}
+        >
+          {state === "done" ? "✓" : num}
+        </div>
+        <span className={`text-xs font-bold ${state === "todo" ? "text-gray-400" : "text-gray-700"}`}>
+          {label}
+        </span>
+      </div>
+    );
+  }
+
   const customHeader = (
-    <div className="flow-step-header-v3">
-      <div className="flow-header-top">
-        <button className="flow-back-btn" onClick={back}>←</button>
-        <div className="flow-header-title-box">
-          <h1>{categoryName}</h1>
-          <div className="flow-breadcrumbs">
-            Services <span>›</span> <strong>{categoryName}</strong>
+    <div className="border-b border-gray-100 bg-white px-4 py-4">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={back}
+          aria-label="Back"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg text-gray-700 transition-colors hover:bg-gray-200"
+        >
+          ←
+        </button>
+        <div>
+          <h1 className="text-lg font-black text-gray-900">{categoryName}</h1>
+          <div className="text-xs text-gray-400">
+            Services <span>›</span> <strong className="text-gray-600">{categoryName}</strong>
           </div>
         </div>
       </div>
-      <div className="flow-progress-bar-v3">
-        <div className={`progress-step ${step === 'service' ? 'active' : 'done'}`}>
-          <div className="step-circle">1</div>
-          <span>Select</span>
-        </div>
-        <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'guidelines' ? 'active' : (['details'].includes(step) ? 'done' : '')}`}>
-          <div className="step-circle">2</div>
-          <span>Scope</span>
-        </div>
-        <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'details' ? 'active' : ''}`}>
-          <div className="step-circle">3</div>
-          <span>Requirements</span>
-        </div>
+      <div className="mt-4 flex items-center gap-2 overflow-x-auto hide-scrollbar">
+        <StepPill target="service" num="1" label="Select" />
+        <span className="text-gray-300">›</span>
+        <StepPill target="guidelines" num="2" label="Scope" />
+        <span className="text-gray-300">›</span>
+        <StepPill target="details" num="3" label="Requirements" />
       </div>
     </div>
   );
@@ -375,11 +402,14 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
         {/* STEP: choose specific service */}
         {step === "service" && (
-          <div className="flow-step-service-v3">
-            <h2 className="flow-step-title">SELECT A SERVICE</h2>
-            <div className="flow-service-list-v3">
+          <div>
+            <h2 className="mb-4 text-xs font-black uppercase tracking-widest text-gray-500">
+              Select a service
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
               {services.map((s) => {
-                const isRecommended = s.name.toLowerCase().includes("deep") || s.name.toLowerCase().includes("premium");
+                const isRecommended =
+                  s.name.toLowerCase().includes("deep") || s.name.toLowerCase().includes("premium");
                 return (
                   <button
                     key={s.id}
@@ -388,15 +418,17 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                       setSelectedServiceId(s.id);
                       setStep("guidelines");
                     }}
-                    className={`flow-service-card-v3 ${isRecommended ? 'recommended' : ''}`}
+                    className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition-all hover:-translate-y-1 hover:shadow-md ${
+                      isRecommended ? "border-[var(--color-brand)]" : "border-gray-200"
+                    }`}
                   >
                     {isRecommended && (
-                      <div className="card-rec-badge">
+                      <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-[var(--color-brand)] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
                         <span>Recommended</span>
-                        <div className="rec-check">✓</div>
+                        <span>✓</span>
                       </div>
                     )}
-                    <div className="card-img-col">
+                    <div className="aspect-[16/10] w-full overflow-hidden bg-gray-50">
                       <ServiceSketchImage
                         slug={s.slug}
                         subCategorySlug={s.subCategory?.slug ?? s.slug}
@@ -406,19 +438,26 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                         alt={s.name}
                       />
                     </div>
-                    <div className="card-info-col">
-                      <div className="card-info-top">
-                        <h3 className="card-title">{s.name}</h3>
-                        {!isRecommended && <span className="trending-badge">Trending</span>}
-                      </div>
-                      <p className="card-desc">{s.description}</p>
-                      <div className="card-info-bottom">
-                        <div className="card-price">Starts at {formatPrice(s.pricePaise)}</div>
-                        {isRecommended ? (
-                          <div className="card-select-btn">Select</div>
-                        ) : (
-                          <div className="card-arrow">›</div>
+                    <div className="flex flex-1 flex-col p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-bold text-gray-900">{s.name}</h3>
+                        {!isRecommended && (
+                          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-700">
+                            Trending
+                          </span>
                         )}
+                      </div>
+                      <p className="mt-1 line-clamp-2 flex-1 text-xs leading-relaxed text-gray-500">
+                        {s.description}
+                      </p>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="text-sm font-black text-gray-900">
+                          <span className="text-[11px] font-semibold uppercase text-gray-400">Starts at </span>
+                          {formatPrice(s.pricePaise)}
+                        </div>
+                        <span className="rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-xs font-black text-white transition-colors group-hover:bg-blue-900">
+                          Select
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -426,21 +465,26 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
               })}
             </div>
 
-            <div className="expertpass-banner">
-              <div className="ep-content">
-                <h2>Save up to 30% with ExpertPass</h2>
-                <p>Get discounted rates and priority booking for all your home cleaning and maintenance needs.</p>
-                <button className="ep-btn">Explore Membership</button>
+            <div className="mt-6 flex flex-col items-start justify-between gap-4 overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-brand-dark)] to-[var(--color-brand)] p-6 text-white sm:flex-row sm:items-center">
+              <div className="max-w-md">
+                <h2 className="text-lg font-black">Save up to 30% with ExpertPass</h2>
+                <p className="mt-1 text-sm text-white/80">
+                  Get discounted rates and priority booking for all your home cleaning and maintenance needs.
+                </p>
+                <button
+                  type="button"
+                  className="mt-4 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[var(--color-brand)] transition-transform hover:scale-105"
+                >
+                  Explore membership
+                </button>
               </div>
-              <div className="ep-graphic">
-                <div className="ep-card">
-                  <div className="ep-card-top">
-                    <strong>ExpertPass</strong>
-                    <span className="ep-badge">✓</span>
-                  </div>
-                  <div className="ep-card-line"></div>
-                  <div className="ep-card-bottom">Membership ID: EE-0921-2024</div>
+              <div className="w-full max-w-[220px] rounded-2xl bg-white/10 p-4 backdrop-blur-md">
+                <div className="flex items-center justify-between">
+                  <strong className="text-sm">ExpertPass</strong>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-brand-accent)] text-[10px]">✓</span>
                 </div>
+                <div className="my-4 h-px bg-white/20" />
+                <div className="text-[11px] text-white/70">Membership ID: EE-0921-2024</div>
               </div>
             </div>
           </div>
@@ -448,44 +492,67 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
 
         {/* STEP: guidelines / scope */}
         {step === "guidelines" && service && (
-          <div className="flow-guidelines-v3">
-            <div className="flow-guidelines-header">
-              <h2 className="gl-title">{service.name}</h2>
-              <p className="gl-desc">{config.guidelines.summary}</p>
-              <p className="gl-price">
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-black text-gray-900">{service.name}</h2>
+              <p className="mt-1 text-sm text-gray-500">{config.guidelines.summary}</p>
+              <p className="mt-2 text-sm font-bold text-gray-900">
                 Starts at {formatPrice(startsAtPaise)}
-                <span className="gl-duration">· ~{Math.max(1, Math.round(service.duration / 60))} hr</span>
+                <span className="ml-1 font-medium text-gray-400">
+                  · ~{Math.max(1, Math.round(service.duration / 60))} hr
+                </span>
               </p>
             </div>
 
-            <div className="gl-sections-wrapper">
-              <div className="gl-section good">
-                <p className="gl-section-title">WHAT'S INCLUDED</p>
-                <ul className="gl-list">
-                  {config.guidelines.included.map((it, i) => (
-                    <li key={i}><span className="gl-icon good-icon">✓</span>{it}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="gl-section bad">
-                <p className="gl-section-title">NOT INCLUDED</p>
-                <ul className="gl-list">
-                  {config.guidelines.notIncluded.map((it, i) => (
-                    <li key={i}><span className="gl-icon bad-icon">✕</span>{it}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="gl-section info">
-                <p className="gl-section-title">GOOD TO KNOW</p>
-                <ul className="gl-list">
-                  {config.guidelines.goodToKnow.map((it, i) => (
-                    <li key={i}><span className="gl-icon info-icon">•</span>{it}</li>
-                  ))}
-                </ul>
-              </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[
+                {
+                  title: "What's included",
+                  items: config.guidelines.included,
+                  icon: "✓",
+                  tone: "border-green-100 bg-green-50/60",
+                  iconTone: "bg-green-100 text-green-700",
+                },
+                {
+                  title: "Not included",
+                  items: config.guidelines.notIncluded,
+                  icon: "✕",
+                  tone: "border-red-100 bg-red-50/60",
+                  iconTone: "bg-red-100 text-red-700",
+                },
+                {
+                  title: "Good to know",
+                  items: config.guidelines.goodToKnow,
+                  icon: "•",
+                  tone: "border-blue-100 bg-blue-50/60",
+                  iconTone: "bg-blue-100 text-blue-700",
+                },
+              ].map((sec) => (
+                <div key={sec.title} className={`rounded-2xl border p-4 ${sec.tone}`}>
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+                    {sec.title}
+                  </p>
+                  <ul className="space-y-2">
+                    {sec.items.map((it, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                        <span
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${sec.iconTone}`}
+                        >
+                          {sec.icon}
+                        </span>
+                        {it}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
 
-            <button className="flow-continue-btn" onClick={() => setStep('details')}>
+            <button
+              type="button"
+              onClick={() => setStep("details")}
+              className="mt-6 w-full rounded-xl bg-[var(--color-brand)] py-3.5 text-base font-bold text-white transition-colors hover:bg-blue-900 sm:w-auto sm:px-10"
+            >
               Continue →
             </button>
           </div>
