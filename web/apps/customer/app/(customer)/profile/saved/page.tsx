@@ -6,6 +6,7 @@ import { ProfileSavedSummary } from "@/components/customer/profile/ProfileStats"
 import { prisma } from "@/lib/db/client";
 import { serializeService, serviceInclude } from "@/lib/catalog/queries";
 import { ServiceCard } from "@/components/customer/services/ServiceCard";
+import { EmptyState } from "@/components/ui/primitives";
 
 export default async function ProfileSavedPage() {
   const session = await getServerSession();
@@ -23,17 +24,20 @@ export default async function ProfileSavedPage() {
     <ProfileSubPage title="Saved services">
       <ProfileSavedSummary count={services.length} />
       {services.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon" aria-hidden>
-            ⭐
-          </div>
-          <p>No saved services yet.</p>
-          <Link href="/services" className="btn btn-primary">
-            Explore services
-          </Link>
-        </div>
+        <EmptyState
+          icon="⭐"
+          title="No saved services yet."
+          action={
+            <Link
+              href="/services"
+              className="inline-flex items-center justify-center rounded-[10px] bg-[var(--color-brand)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-900"
+            >
+              Explore services
+            </Link>
+          }
+        />
       ) : (
-        <div className="grid-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {services.map((service) => (
             <ServiceCard key={service.id} service={service} />
           ))}
