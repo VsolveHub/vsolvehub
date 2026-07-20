@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Alert, EmptyState } from "@/components/ui/primitives";
 import type { AppNotification } from "@/lib/notifications/types";
 import { formatRelativeTime } from "@/lib/notifications/format";
 import { countUnread, useNotificationReadState } from "./useNotificationReadState";
@@ -59,19 +60,20 @@ export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
   }
 
   return (
-    <div className="notif-page">
-      <header className="notif-page-header">
-        <div className="notif-page-toprow">
-          <Link href={backHref} className="notif-page-back">
-            <span className="notif-page-back-icon" aria-hidden>
-              ←
-            </span>
+    <div className="mx-auto w-full max-w-2xl p-4">
+      <header className="mb-5">
+        <div className="mb-4 flex items-center justify-between">
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 transition-colors hover:text-[var(--color-brand)]"
+          >
+            <span aria-hidden>←</span>
             <span>{backLabel}</span>
           </Link>
           {unread > 0 && (
             <button
               type="button"
-              className="notif-page-mark-all"
+              className="text-sm font-bold text-[var(--color-brand)] transition-opacity hover:opacity-70"
               onClick={() => markAllRead(items.map((n) => n.id))}
             >
               Mark all read
@@ -79,48 +81,52 @@ export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
           )}
         </div>
 
-        <h1 className="notif-page-title">Notifications</h1>
-        <p className="notif-page-sub">
+        <h1 className="text-2xl font-black tracking-tight text-gray-900">Notifications</h1>
+        <p className="mt-1 text-sm text-gray-500">
           {unread > 0 ? `${unread} unread` : "Booking status updates"}
         </p>
       </header>
 
       {loading && <LoadingState label="Loading notifications…" variant="inline" />}
 
-      {!loading && loadError && <div className="alert alert-error">{loadError}</div>}
+      {!loading && loadError && <Alert variant="error">{loadError}</Alert>}
 
       {!loading && !loadError && items.length === 0 && (
-        <div className="empty-state notif-page-empty">
-          <div className="empty-state-icon" aria-hidden>
-            <FlaticonIcon name="bell" size={36} color="var(--vs-purple-700)" />
-          </div>
-          <p>No notifications yet.</p>
-          <span className="text-sm text-muted">
-            Updates appear here when your bookings change status.
-          </span>
-        </div>
+        <EmptyState
+          icon={<FlaticonIcon name="bell" size={36} color="var(--color-brand)" />}
+          title="No notifications yet."
+          description="Updates appear here when your bookings change status."
+        />
       )}
 
       {!loading && !loadError && items.length > 0 && (
-        <ul className="notif-page-list">
+        <ul className="flex flex-col gap-2">
           {items.map((item) => {
             const isUnread = !readIds.has(item.id);
             return (
               <li key={item.id}>
                 <button
                   type="button"
-                  className={`notif-page-item notif-page-item--${item.tone}${isUnread ? " is-unread" : ""}`}
                   onClick={() => openItem(item)}
+                  className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                    isUnread
+                      ? "border-[var(--color-brand)]/20 bg-[var(--color-brand-light)]/50"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  }`}
                 >
-                  <span className={`notif-page-icon notif-page-icon--${item.tone}`}>
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${TONE_STYLES[item.tone] ?? TONE_STYLES.default}`}>
                     <FlaticonIcon name={item.icon} size={20} color="currentColor" />
                   </span>
-                  <span className="notif-page-body">
-                    <strong>{item.title}</strong>
-                    <span className="notif-page-text">{item.body}</span>
-                    <span className="notif-page-time">{formatRelativeTime(item.createdAt)}</span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm font-bold text-gray-900">{item.title}</strong>
+                    <span className="mt-0.5 block text-sm text-gray-600">{item.body}</span>
+                    <span className="mt-1 block text-xs text-gray-400">
+                      {formatRelativeTime(item.createdAt)}
+                    </span>
                   </span>
-                  {isUnread && <span className="notif-page-dot" aria-hidden />}
+                  {isUnread && (
+                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-brand-accent)]" aria-hidden />
+                  )}
                 </button>
               </li>
             );
@@ -130,3 +136,12 @@ export function NotificationsScreen({ audience, backHref, backLabel }: Props) {
     </div>
   );
 }
+
+const TONE_STYLES: Record<string, string> = {
+  success: "bg-green-100 text-green-700",
+  warning: "bg-amber-100 text-amber-700",
+  danger: "bg-red-100 text-red-700",
+  error: "bg-red-100 text-red-700",
+  info: "bg-blue-100 text-blue-700",
+  default: "bg-[var(--color-brand-light)] text-[var(--color-brand)]",
+};

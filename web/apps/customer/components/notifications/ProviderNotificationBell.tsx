@@ -11,7 +11,9 @@ type Props = {
   className?: string;
 };
 
-export function ProviderNotificationBell({ className = "mode-topbar-bell" }: Props) {
+export function ProviderNotificationBell({
+  className = "relative inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100",
+}: Props) {
   const router = useRouter();
   const { readIds } = useNotificationReadState("provider");
   const { data } = useQuery({
@@ -30,10 +32,12 @@ export function ProviderNotificationBell({ className = "mode-topbar-bell" }: Pro
       onClick={() => router.push("/partner/notifications")}
       aria-label={unread > 0 ? `${unread} unread notifications` : "Notifications"}
     >
-      <span className="mode-topbar-bell-wrap">
+      <span className="relative inline-flex">
         <FlaticonIcon name="bell" size={20} />
         {unread > 0 && (
-          <span className="mode-topbar-bell-badge">{unread > 9 ? "9+" : unread}</span>
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-danger)] px-1 text-[10px] font-bold text-white">
+            {unread > 9 ? "9+" : unread}
+          </span>
         )}
       </span>
     </button>
