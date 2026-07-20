@@ -1,3 +1,5 @@
+import { roleRatePaise, DEFAULT_ROLE_RATE_PAISE } from "@/lib/crew/constants";
+
 export type Step =
   | "bookingType"
   | "workforce"
@@ -48,15 +50,21 @@ export type QuoteOption = {
   covers: boolean;
 };
 
-// Preset construction roles with indicative per-worker daily rates (₹).
+// Preset construction roles. The displayed ₹/day derives from the single
+// platform rate card (ROLE_DAY_RATE_PAISE, via roleRatePaise) — the same card
+// the server recomputes the real quote from — so this estimate can never drift
+// from the charge. Only labels/icons live here.
+const rupeesPerDay = (roleId: string) => roleRatePaise(roleId) / 100;
+
 export const WORKER_ROLES: WorkerRole[] = [
-  { id: "mason", label: "Masons", singular: "Mason", icon: "🧱", rate: 1200 },
-  { id: "helper", label: "Helpers / Labour", singular: "Helper", icon: "👷", rate: 800 },
-  { id: "bar-bender", label: "Bar Benders", singular: "Bar Bender", icon: "🦾", rate: 1100 },
-  { id: "carpenter", label: "Shuttering Carpenters", singular: "Shuttering Carpenter", icon: "🪵", rate: 1300 },
+  { id: "mason", label: "Masons", singular: "Mason", icon: "🧱", rate: rupeesPerDay("mason") },
+  { id: "helper", label: "Helpers / Labour", singular: "Helper", icon: "👷", rate: rupeesPerDay("helper") },
+  { id: "bar-bender", label: "Bar Benders", singular: "Bar Bender", icon: "🦾", rate: rupeesPerDay("bar-bender") },
+  { id: "carpenter", label: "Shuttering Carpenters", singular: "Shuttering Carpenter", icon: "🪵", rate: rupeesPerDay("carpenter") },
 ];
 
-export const CUSTOM_ROLE_RATE = 1000;
+// Custom (write-in) role falls back to the card's default rate, not a separate literal.
+export const CUSTOM_ROLE_RATE = DEFAULT_ROLE_RATE_PAISE / 100;
 
 export function makeDefaultTeam(): WorkerRow[] {
   const defaults: Record<string, number> = { mason: 2, helper: 4, "bar-bender": 2, carpenter: 1 };

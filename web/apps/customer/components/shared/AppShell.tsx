@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/AppIcons";
 import { CustomerNotificationBell } from "@/components/notifications/CustomerNotificationBell";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
+import { CartBadge } from "@/components/shared/CartBadge";
 import { DEFAULT_LOCATION_LABEL, readActiveLocationLabel } from "@/lib/location/geocode";
 import { AddressPicker } from "@/components/customer/address/AddressPicker";
 
@@ -116,6 +117,7 @@ export function AppHeader() {
                 <ChevronDownIcon size={12} />
               </button>
             )}
+            <CartBadge />
             <Link href="/profile" className="profile-avatar-mini">
               <img src="/avatar-default.svg" alt="Profile" />
             </Link>
@@ -153,6 +155,7 @@ export function AppHeader() {
 const MOBILE_NAV_LINKS = [
   { href: "/", label: "Home", icon: HomeIcon, match: (p: string) => p === "/" },
   { href: "/services", label: "Find Services", icon: HeaderSearchIcon, match: (p: string) => p.startsWith("/services") },
+  { href: "/cart", label: "Cart", icon: CartNavIcon, match: (p: string) => p.startsWith("/cart") },
   { href: "/profile/bookings", label: "My Bookings", icon: BookingsIcon, match: (p: string) => p.startsWith("/profile/bookings") || p.startsWith("/booking") },
   { href: "/profile/messages", label: "Messages", icon: MessagesIcon, match: (p: string) => p.startsWith("/profile/messages") },
   { href: "/notifications", label: "Notifications", icon: BellIcon, match: (p: string) => p.startsWith("/notifications") },
@@ -162,6 +165,10 @@ const MOBILE_NAV_LINKS = [
 
 function SupportNavIcon({ size = 20 }: { size?: number; active?: boolean }) {
   return <FlaticonIcon name="headset" size={size} />;
+}
+
+function CartNavIcon({ size = 20 }: { size?: number; active?: boolean }) {
+  return <FlaticonIcon name="cart" size={size} />;
 }
 
 function MobileNavDrawer({ pathname, onClose }: { pathname: string; onClose: () => void }) {

@@ -74,6 +74,67 @@ export function derivePaymentState(ledger: MoneyLedger): PaymentState {
 }
 
 /**
+ * This booking's captured share, defaulting to its quoted amount when the
+ * per-booking capture field was never populated (legacy rows, or an immediate
+ * method captured at authorize before per-booking capture was tracked).
+ */
+export function bookingCapturedShare(capturedPaise: number, quotedAmount: number): number {
+  return capturedPaise > 0 ? capturedPaise : quotedAmount;
+}
+
+export type CancelSettlement = { refundPaise: number; voidPaise: number };
+
+/**
+ * Money to return when a booking is cancelled, given the order ledger, the
+ * booking's own share, and the retained cancellation fee. A captured (prepaid)
+ * booking refunds its share minus the fee; an uncaptured card hold voids its
+ * share minus the fee. COD and never-authorized bookings move no money. Pure and
+ * clamped so it can never produce a negative or over-ledger amount — the caller
+ * still re-asserts the invariant before writing.
+ */
+export function computeCancelSettlement(input: {
+  paymentStatus: string;
+  quotedAmount: number;
+  capturedPaise: number;
+  feePaise: number;
+  order: MoneyLedger;
+}): CancelSettlement {
+  const fee = Math.max(0, input.feePaise);
+  if (input.paymentStatus === "PAID") {
+    const share = bookingCapturedShare(input.capturedPaise, input.quotedAmount);
+    const refundable = Math.max(0, input.order.capturedPaise - input.order.refundedPaise);
+    return { refundPaise: Math.max(0, Math.min(share, refundable) - fee), voidPaise: 0 };
+  }
+  if (input.paymentStatus === "PENDING") {
+    const releasable = Math.max(
+      0,
+      input.order.authorizedPaise - input.order.capturedPaise - input.order.voidedPaise,
+    );
+    return { refundPaise: 0, voidPaise: Math.max(0, Math.min(input.quotedAmount, releasable) - fee) };
+  }
+  return { refundPaise: 0, voidPaise: 0 };
+}
+
+/**
+ * How much of a booking's share still needs capturing against its order: the
+ * uncaptured, unvoided headroom capped at the booking's quoted amount. Zero once
+ * the share is already captured (immediate methods, or a card hold captured at
+ * assignment), which is what keeps a second capture from double-charging.
+ */
+export function bookingCaptureShortfall(input: {
+  paymentStatus: string;
+  quotedAmount: number;
+  order: MoneyLedger;
+}): number {
+  if (input.paymentStatus !== "PENDING") return 0;
+  const releasable = Math.max(
+    0,
+    input.order.authorizedPaise - input.order.capturedPaise - input.order.voidedPaise,
+  );
+  return Math.min(input.quotedAmount, releasable);
+}
+
+/**
  * Re-derive an order's status and payment state from its bookings and ledger.
  * Call after any transition that finalises a job — accept, cancel, exhaustion.
  */

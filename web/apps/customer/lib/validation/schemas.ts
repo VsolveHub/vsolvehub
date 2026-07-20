@@ -115,6 +115,43 @@ export const bookingSchema = z.object({
   archetypeDetails: archetypeDetailsSchema.optional(),
 });
 
+// A cart item is a DRAFT booking. Same shape as bookingSchema minus the
+// checkout-time fields (preferred partner, payment method) — those belong to the
+// cart's single checkout, not the individual item.
+export const cartAddSchema = z.object({
+  serviceId: z.string().min(1, "Service is required"),
+  addressId: z.string().optional(),
+  slot: z
+    .string()
+    .datetime({ message: "A valid time slot is required" })
+    .refine((v) => new Date(v).getTime() <= Date.now() + BOOKING_WINDOW_MS, {
+      message: "Bookings can only be made up to 7 days ahead",
+    })
+    .optional(),
+  scheduleType: z.enum(["instant", "scheduled"]).optional(),
+  selections: z
+    .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))
+    .optional(),
+  archetypeDetails: archetypeDetailsSchema.optional(),
+  note: z.string().trim().max(250).optional(),
+  mediaUrls: z.array(z.string().min(1)).max(5).optional(),
+});
+
+export const cartPatchSchema = z.object({
+  slot: z
+    .string()
+    .datetime()
+    .refine((v) => new Date(v).getTime() <= Date.now() + BOOKING_WINDOW_MS, {
+      message: "Bookings can only be made up to 7 days ahead",
+    })
+    .optional(),
+  scheduleType: z.enum(["instant", "scheduled"]).optional(),
+  addressId: z.string().min(1).optional(),
+  selections: z
+    .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))
+    .optional(),
+});
+
 export const bookingReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   review: z.string().trim().max(500).optional(),

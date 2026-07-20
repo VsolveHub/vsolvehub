@@ -5,7 +5,16 @@ import path from "path";
 import { randomUUID } from "crypto";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// MIME → extension. The stored extension is ALWAYS derived from this map, never
+// from the client-supplied filename — otherwise an `image/png` upload named
+// `x.svg`/`x.html` would be written as active content and served same-origin
+// (stored XSS). SVG is intentionally excluded: it can carry script.
+const ALLOWED_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession();
@@ -31,14 +40,14 @@ export async function POST(req: NextRequest) {
 
   for (const entry of files) {
     if (!(entry instanceof File)) continue;
-    if (!ALLOWED_TYPES.includes(entry.type)) {
-      return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
+    const ext = ALLOWED_EXT[entry.type];
+    if (!ext) {
+      return NextResponse.json({ error: "Only JPEG, PNG, WebP or GIF images are allowed" }, { status: 400 });
     }
     if (entry.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "Each file must be under 5 MB" }, { status: 400 });
     }
 
-    const ext = entry.name.split(".").pop() ?? "jpg";
     const filename = `${randomUUID()}.${ext}`;
     const buffer = Buffer.from(await entry.arrayBuffer());
     await writeFile(path.join(uploadDir, filename), buffer);

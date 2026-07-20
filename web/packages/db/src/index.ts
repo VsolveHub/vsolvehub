@@ -4,6 +4,7 @@ export * from "./id";
 export * from "./fulfillment";
 export * from "./booking-scope";
 export * from "./orders";
+export * from "./booking-settlement";
 export * from "./payments";
 export * from "./payout";
 export * from "./feedback";

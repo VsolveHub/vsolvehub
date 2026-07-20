@@ -10,6 +10,10 @@ export const qk = {
   savedServices: () => ["saved-services"] as const,
   booking: (ref: string) => ["booking", ref] as const,
   bookings: () => ["bookings"] as const,
+  cart: () => ["cart"] as const,
+  // Child of ["cart"] on purpose: any invalidateQueries(qk.cart()) prefix-matches
+  // and refreshes the header badge too, so the two never drift.
+  cartCount: () => ["cart", "count"] as const,
   availability: (serviceId: string, addressId: string, slot: string, scheduleType: string) =>
     ["availability", serviceId, addressId, slot, scheduleType] as const,
   vehicleBooking: (ref: string) => ["vehicle-booking", ref] as const,

@@ -3,6 +3,7 @@
 // inline `fetch("/api/…")` strings scattered across components.
 import type { AppNotification } from "@/lib/notifications/types";
 import type { FlowService } from "@/components/customer/booking/ServiceBookingFlow";
+import type { CartItem, CheckoutResult } from "@/lib/cart/types";
 
 export class ApiError extends Error {
   status: number;
@@ -131,6 +132,18 @@ export const api = {
     ),
   createBooking: (input: Record<string, unknown>) =>
     jsonPost<CreateBookingResult>("/api/bookings", input),
+  cart: () => jsonFetch<{ items: CartItem[]; totalPaise: number }>("/api/cart"),
+  cartCount: () => jsonFetch<{ count: number }>("/api/cart?count=1"),
+  addToCart: (input: Record<string, unknown>) => jsonPost<{ item: CartItem }>("/api/cart", input),
+  updateCartItem: (id: string, input: Record<string, unknown>) =>
+    jsonFetch<{ ok: boolean; quotedAmount: number }>(`/api/cart/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  removeCartItem: (id: string) => jsonFetch<{ ok: boolean }>(`/api/cart/${id}`, { method: "DELETE" }),
+  checkoutCart: (paymentMethod: PaymentMethod) =>
+    jsonPost<CheckoutResult>("/api/cart/checkout", { paymentMethod }),
   payBooking: (ref: string, paymentMethod: PaymentMethod) =>
     jsonPost<{ ok: boolean; paymentStatus?: string }>(`/api/bookings/${ref}/pay`, { paymentMethod }),
   cancelBooking: (ref: string) => jsonPost<{ success?: boolean }>(`/api/bookings/${ref}/cancel`),

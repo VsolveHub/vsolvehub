@@ -38,8 +38,36 @@ const PARTNER_TRANSITIONS: Record<string, string[]> = {
   STARTED: ["COMPLETED"],
 };
 
+/**
+ * Statuses an unassigned booking can be bound from. Used as the optimistic
+ * concurrency guard on assignment: the bind only lands if the booking is still
+ * in one of these AND still unassigned, so two racing reassigns can never both
+ * bind (and never double-capture).
+ */
+const ASSIGNABLE_STATUSES = ["AUTHORIZED", "PENDING", "SEARCHING_PROVIDER"] satisfies JobStatus[];
+
+/** Wrong start-OTP attempts allowed before the job's start is locked. */
+export const START_OTP_MAX_ATTEMPTS = 5;
+
 /** Platform commission on a completed single-provider job (partner keeps the rest). */
 export const PLATFORM_COMMISSION_RATE = 0.15;
+
+/** This booking's share to capture on assignment — only an uncaptured card hold
+ *  (paymentStatus PENDING) still owes a capture; immediate/COD owe nothing. */
+function captureOnAssign(paymentStatus: string, quotedAmount: number): number {
+  return paymentStatus === "PENDING" ? quotedAmount : 0;
+}
+
+/** Booking fields set when a partner binds to it; folds in the card-hold capture. */
+function assignBindData(partnerId: string, startOtp: string, capturePaise: number) {
+  return {
+    assignedPartnerId: partnerId,
+    status: "ASSIGNED" as const,
+    startOtp,
+    startOtpAttempts: 0,
+    ...(capturePaise > 0 ? { capturedPaise: capturePaise, paymentStatus: "PAID" } : {}),
+  };
+}
 
 function genOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -88,40 +116,44 @@ export async function assignPartnerDirect(
   // "PENDING" is the one state that still owes a capture. Guarding on status
   // (not capturedPaise) avoids double-counting the order ledger for immediate
   // methods, which would otherwise trip assertMoneyInvariant on the default path.
-  const capturePaise = booking.paymentStatus === "PENDING" ? booking.quotedAmount : 0;
+  const capturePaise = captureOnAssign(booking.paymentStatus, booking.quotedAmount);
   const now = new Date();
 
+  let bound = false;
   try {
-    await prisma.$transaction([
-      prisma.booking.update({
-        where: { id: bookingId },
-        data: {
-          assignedPartnerId: partnerId,
-          status: "ASSIGNED",
-          startOtp,
-          ...(capturePaise > 0 ? { capturedPaise: capturePaise, paymentStatus: "PAID" } : {}),
-        },
-      }),
-      prisma.bookingStatusLog.create({ data: { bookingId, status: "ASSIGNED" } }),
+    await prisma.$transaction(async (tx) => {
+      // Optimistic bind: only lands if the booking is STILL unassigned and in an
+      // assignable state. This closes the read-then-write race between two
+      // concurrent reassign drives — the loser's update matches zero rows and it
+      // falls through as "already taken" instead of overwriting the winner (and
+      // double-capturing). The partial unique index still refs the separate
+      // same-partner+slot race across different customers.
+      const bind = await tx.booking.updateMany({
+        where: { id: bookingId, assignedPartnerId: null, status: { in: ASSIGNABLE_STATUSES } },
+        data: assignBindData(partnerId, startOtp, capturePaise),
+      });
+      if (bind.count === 0) return;
+      bound = true;
+
+      await tx.bookingStatusLog.create({ data: { bookingId, status: "ASSIGNED" } });
       // Audit trail: a pre-accepted assignment row, so partner history/earnings
       // queries and admin views keep one consistent shape across both models.
-      prisma.jobAssignment.create({
+      await tx.jobAssignment.create({
         data: { bookingId, partnerId, status: "ACCEPTED", offeredAt: now, respondedAt: now, expiresAt: now },
-      }),
-      ...(booking.orderId && capturePaise > 0
-        ? [
-            prisma.order.update({
-              where: { id: booking.orderId },
-              data: { capturedPaise: { increment: capturePaise } },
-            }),
-          ]
-        : []),
-    ]);
+      });
+      if (booking.orderId && capturePaise > 0) {
+        await tx.order.update({
+          where: { id: booking.orderId },
+          data: { capturedPaise: { increment: capturePaise } },
+        });
+      }
+    });
   } catch (e) {
     if (isUniqueViolation(e)) return { ok: false, error: "SLOT_TAKEN" };
     throw e;
   }
 
+  if (!bound) return { ok: false, error: "SLOT_TAKEN" };
   if (booking.orderId) await recomputeOrderStatus(booking.orderId);
   return { ok: true, startOtp };
 }
@@ -326,13 +358,21 @@ export async function startJob(
   if (!canTransition(booking.status, "STARTED")) {
     return { ok: false, error: `Cannot start from ${booking.status}` };
   }
+  if (booking.startOtpAttempts >= START_OTP_MAX_ATTEMPTS) {
+    return { ok: false, error: "Too many incorrect codes. Ask the customer to refresh their booking." };
+  }
   if (!booking.startOtp || booking.startOtp !== otp.trim()) {
+    // Burn an attempt so the 6-digit code can't be brute-forced on site.
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { startOtpAttempts: { increment: 1 } },
+    });
     return { ok: false, error: "Incorrect start code" };
   }
   await prisma.$transaction([
     prisma.booking.update({
       where: { id: bookingId },
-      data: { status: "STARTED", startConfirmedAt: new Date() },
+      data: { status: "STARTED", startConfirmedAt: new Date(), startOtpAttempts: 0 },
     }),
     prisma.bookingStatusLog.create({ data: { bookingId, status: "STARTED" } }),
   ]);
@@ -349,6 +389,12 @@ export async function completeJob(
 ): Promise<EngineResult<{ amountPaise: number; commissionPaise: number; netPaise: number }>> {
   const booking = await loadAssignedBooking(bookingId, partnerId);
   if (!booking) return { ok: false, error: "Job not found" };
+  // A job can only be completed once it is actually paid (prepaid) or on COD.
+  // Without this a PENDING/unpaid job could be completed and an earning booked
+  // against money that never moved.
+  if (!["PAID", "COD"].includes(booking.paymentStatus)) {
+    return { ok: false, error: "Payment is not settled for this job" };
+  }
   if (!canTransition(booking.status, "COMPLETED")) {
     return { ok: false, error: `Cannot complete from ${booking.status}` };
   }
@@ -357,21 +403,27 @@ export async function completeJob(
   const commissionPaise = Math.round(amountPaise * PLATFORM_COMMISSION_RATE);
   const netPaise = amountPaise - commissionPaise;
 
-  await prisma.$transaction([
-    prisma.booking.update({
-      where: { id: bookingId },
+  // Single-winner completion: only the transaction that actually flips STARTED →
+  // COMPLETED books the earning. A concurrent double-tap (or retry) matches zero
+  // rows and no second JobEarning / jobsCompleted increment is written.
+  const applied = await prisma.$transaction(async (tx) => {
+    const upd = await tx.booking.updateMany({
+      where: { id: bookingId, assignedPartnerId: partnerId, status: "STARTED" },
       data: { status: "COMPLETED", finalAmountPaise: amountPaise },
-    }),
-    prisma.bookingStatusLog.create({ data: { bookingId, status: "COMPLETED" } }),
-    prisma.jobEarning.create({
+    });
+    if (upd.count === 0) return false;
+    await tx.bookingStatusLog.create({ data: { bookingId, status: "COMPLETED" } });
+    await tx.jobEarning.create({
       data: { partnerId, bookingId, amountPaise: netPaise, commissionPaise, payoutStatus: "PENDING" },
-    }),
-    prisma.partner.update({
+    });
+    await tx.partner.update({
       where: { id: partnerId },
       data: { jobsCompleted: { increment: 1 } },
-    }),
-  ]);
+    });
+    return true;
+  });
 
+  if (!applied) return { ok: false, error: "Job already completed" };
   return { ok: true, amountPaise, commissionPaise, netPaise };
 }
 
