@@ -1,38 +1,33 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ServiceBookingFlow — the single, config-driven booking flow for all four
-// Phase-1 dispatch categories (Technician, Beauty, Home, Pet). Screens:
-//   service → guidelines → when (instant/scheduled) → requirements → payment
+// ServiceBookingFlow — the single, config-driven flow for all four Phase-1
+// dispatch categories (Technician, Beauty, Home, Pet). Screens:
+//   service → guidelines → when (instant/scheduled) → requirements
 //
-// The customer never picks a professional. They pay, and dispatch fans the job
-// out to every eligible provider in range; the first to accept is assigned. That
-// keeps the customer out of a choice they cannot make well (who is actually free
-// right now) and it is what makes the money flow work: the job is funded before
-// any provider is asked to commit to it.
-//
-// After payment it redirects to /booking/track/[ref], where the tracker owns the
-// searching → assigned → live tracking sequence.
+// The flow ends by adding a configured service to the CART (a DRAFT booking).
+// The customer never picks a professional here and never pays here: payment
+// happens once at the cart, and each cart item is auto-assigned to its best
+// available professional at checkout. This is what lets a customer book several
+// services (each with its own slot/address) under one payment.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatPrice } from "@/lib/format";
 import { FlowPageShell } from "@/components/shared/FlowPageShell";
-import { api, ApiError, type AssignedPartner, type ProfessionalChoice } from "@/lib/query/api";
+import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
-import { NoProvidersScreen, type SlotSuggestion } from "@/components/customer/booking/NoProvidersScreen";
 import {
   getServiceConfig,
   defaultDetailValues,
   toDetailPairs,
-  type DetailField,
 } from "@/lib/catalog/service-config";
 import { estimatePrice, startingPricePaise, type Selections } from "@/lib/catalog/pricing";
 import { RequirementSheet } from "@/components/customer/booking/RequirementSheet";
 import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
-import { AddressPicker } from "@/components/customer/address/AddressPicker";
+// AddressPicker import removed
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 
 export type FlowService = {
@@ -47,46 +42,20 @@ export type FlowService = {
   subCategory: { slug: string; name: string } | null;
 };
 
-type Address = {
-  id: string;
-  label: string;
-  fullAddress: string;
-  isDefault: boolean;
-};
-
-type Provider = {
-  id: string;
-  name: string;
-  rating: number;
-  jobsCompleted: number;
-  distanceKm: number;
-  etaMins: number;
-};
-
-type Step = "service" | "guidelines" | "when" | "details" | "choose" | "payment";
-
-/** Payment methods offered at checkout. See PaymentMethod in @vsolve/db. */
-const PAYMENT_METHODS = [
-  { id: "upi", label: "UPI", hint: "Pay instantly via any UPI app" },
-  { id: "card", label: "Card", hint: "Credit or debit card" },
-  { id: "cod", label: "Pay after service", hint: "Cash or UPI to the professional" },
-] as const;
-
-type PaymentMethodId = (typeof PAYMENT_METHODS)[number]["id"];
+type Step = "service" | "guidelines" | "details";
 
 const BOOKING_RESUME_KEY = "vsolve:booking-flow-resume";
 
 type BookingResumeState = {
   step: Step;
   selectedServiceId: string;
-  scheduleType: "instant" | "scheduled";
-  dateKey: string;
-  timeSlot: string;
+  scheduleType?: "instant" | "scheduled";
+  dateKey?: string;
+  timeSlot?: string;
   detailValues: Selections;
   note: string;
   photos: string[];
-  paymentMethod: PaymentMethodId;
-  addressId: string;
+  addressId?: string;
   autoSubmit?: boolean;
 };
 
@@ -141,7 +110,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     [categorySlug, service],
   );
 
-  // Session + addresses — cached and shared across every screen (instant revisit).
+  // Session — cached and shared across every screen.
   const { data: sessionData } = useQuery({
     queryKey: qk.session(),
     queryFn: api.session,
@@ -149,48 +118,18 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   });
   const isLoggedIn = !!sessionData?.user;
 
-  const { data: addressData } = useQuery({
-    queryKey: qk.addresses(),
-    queryFn: api.addresses,
-    staleTime: 60_000,
-  });
-  const addresses = addressData?.addresses ?? [];
-  const [addressId, setAddressId] = useState("");
-
   // Booking form state
-  const [scheduleType, setScheduleType] = useState<"instant" | "scheduled">("instant");
-  const [dateKey, setDateKey] = useState(() => nextDays(1)[0]!.key);
-  const [timeSlot, setTimeSlot] = useState(TIME_SLOTS[2]!);
   const [detailValues, setDetailValues] = useState<Selections>({});
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>("upi");
   const [error, setError] = useState("");
   const [pendingSubmit, setPendingSubmit] = useState(false);
-  const [showAddrPicker, setShowAddrPicker] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
-  // Frozen at "continue to choose" so the availability query key is stable and
-  // the slot the customer saw professionals for is exactly the one we book.
-  const [slotIso, setSlotIso] = useState("");
-  // "" = auto-assign (the recommended default); otherwise the picked partner id.
-  const [preferredPartnerId, setPreferredPartnerId] = useState("");
-  // Shown when the picked pro was taken and we silently fell back to another.
-  const [fallbackNote, setFallbackNote] = useState<{ picked: string; assigned: AssignedPartner; ref: string } | null>(null);
-  const [noProviders, setNoProviders] = useState<{
-    slotLabel: string;
-    suggestedSlots: SlotSuggestion[];
-    refunded: boolean;
-  } | null>(null);
 
-  // Guard the details step: an address is required, and every field flagged
-  // `required` in the service config must have a non-empty value. Returns true
-  // when the step is safe to advance/submit; otherwise sets inline errors.
+  // Guard the details step: every field flagged
+  // `required` in the service config must have a non-empty value.
   function validateDetails(): boolean {
-    if (!addressId) {
-      setError("Please select or add a service address.");
-      return false;
-    }
     const errs: Record<string, boolean> = {};
     for (const f of config.detailFields) {
       if (f.required && isDetailValueEmpty(detailValues[f.key])) errs[f.key] = true;
@@ -204,13 +143,11 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     return true;
   }
 
-  // 7 days so a suggested slot (the matcher walks a 7-day grid) always has a
-  // matching date chip to highlight when the customer taps it.
   const days = useMemo(() => nextDays(7), []);
 
   // The live estimate — recomputed on every requirement tap and shown wherever a
   // price appears, so the summary, the banner, and the confirm button can never
-  // disagree with each other. The server recomputes this independently at submit.
+  // disagree with each other. The server recomputes this independently at add-time.
   const estimate = useMemo(
     () => estimatePrice(config.detailFields, detailValues),
     [config.detailFields, detailValues],
@@ -223,28 +160,14 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   // Seed structured-field defaults whenever the service (and thus config) changes.
   useEffect(() => {
     setDetailValues(defaultDetailValues(config.detailFields));
-    if (!config.bookingTypes.includes("instant")) setScheduleType("scheduled");
   }, [config]);
-
-  // Default-select the customer's primary address once addresses load.
-  useEffect(() => {
-    if (!addressId && addresses.length) {
-      const def = addresses.find((a) => a.isDefault) ?? addresses[0];
-      if (def) setAddressId(def.id);
-    }
-  }, [addresses, addressId]);
 
   function buildResumeState(overrides: Partial<BookingResumeState> & { step: Step }): BookingResumeState {
     return {
       selectedServiceId,
-      scheduleType,
-      dateKey,
-      timeSlot,
       detailValues,
       note,
       photos,
-      paymentMethod,
-      addressId,
       ...overrides,
     };
   }
@@ -278,14 +201,9 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       resumedRef.current = true;
       if (saved.selectedServiceId) setSelectedServiceId(saved.selectedServiceId);
       setStep(saved.step);
-      setScheduleType(saved.scheduleType);
-      setDateKey(saved.dateKey);
-      setTimeSlot(saved.timeSlot);
       setDetailValues(saved.detailValues);
       setNote(saved.note);
       setPhotos(saved.photos);
-      if (saved.paymentMethod) setPaymentMethod(saved.paymentMethod);
-      if (saved.addressId) setAddressId(saved.addressId);
       if (saved.autoSubmit) setPendingSubmit(true);
     } catch {
       /* corrupt resume payload */
@@ -319,124 +237,47 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     }
   }
 
-  function buildSlotIso(): string {
-    if (scheduleType === "instant") return new Date(Date.now() + 45 * 60 * 1000).toISOString();
-    // Map the display slot to its start hour.
-    const startHour = 8 + TIME_SLOTS.indexOf(timeSlot) * 2;
-    const d = new Date(`${dateKey}T00:00:00`);
-    d.setHours(startHour, 0, 0, 0);
-    return d.toISOString();
-  }
-
-  /** Human label for the currently chosen slot, e.g. "Wed · 02–04 PM". */
-  function currentSlotLabel(): string {
-    if (scheduleType === "instant") return "the next hour";
-    const day = days.find((d) => d.key === dateKey);
-    return `${day?.day ?? "your slot"} · ${timeSlot}`;
-  }
-
-  /** Jump back to the slot step with a suggested time preselected. */
-  function applySuggestedSlot(iso: string) {
-    const d = new Date(iso);
-    const blockIdx = Math.max(0, Math.min(TIME_SLOTS.length - 1, Math.round((d.getHours() - 8) / 2)));
-    setScheduleType("scheduled");
-    setDateKey(d.toISOString().slice(0, 10));
-    setTimeSlot(TIME_SLOTS[blockIdx]!);
-    setNoProviders(null);
-    setStep("when");
-  }
-
-  // Freeze the slot and move to the choose-professional step. The choose step's
-  // own availability fetch is the real gate; validating here keeps the details
-  // required-fields guarantee.
-  function continueToChoose() {
-    if (!validateDetails()) return;
-    setSlotIso(buildSlotIso());
-    setPreferredPartnerId("");
-    setStep("choose");
-  }
-
-  // The choose-step data: the top few real, assignable professionals for the
-  // frozen slot (or the empty-state suggestions). Same matcher as assignment.
-  const availabilityQuery = useQuery({
-    queryKey: service ? qk.availability(service.id, addressId, slotIso, scheduleType) : ["availability", "idle"],
-    queryFn: () =>
-      api.availability({ serviceId: service!.id, addressId, slot: slotIso, scheduleType }),
-    enabled: step === "choose" && !!service && !!addressId && !!slotIso,
-    staleTime: 30_000,
-  });
-  const professionals: ProfessionalChoice[] = availabilityQuery.data?.professionals ?? [];
-
-  const createBooking = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.createBooking(payload),
-    onSuccess: (data) => {
-      // Picked pro was taken and we fell back — show who they got, then go.
-      const fellBackToAnotherPro = data.preferredHonored === false && !!data.partner && !!preferredPartnerId;
-      if (fellBackToAnotherPro && data.partner) {
-        const picked = professionals.find((p) => p.id === preferredPartnerId)?.name ?? "your professional";
-        setFallbackNote({ picked, assigned: data.partner, ref: data.bookingRef });
-        return;
-      }
-      router.push(`/booking/track/${data.bookingRef}`);
+  // Add the configured service to the cart (a DRAFT booking). No pro pick, no
+  // payment — those happen once, at the cart, for the whole order.
+  const addToCart = useMutation({
+    mutationFn: () =>
+      api.addToCart({
+        serviceId: service!.id,
+        selections: detailValues,
+        note: note || undefined,
+        mediaUrls: photos,
+        archetypeDetails: {
+          bookingType: "individual",
+          fieldValues: detailValues,
+          details: toDetailPairs(config.detailFields, detailValues),
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.cart() });
+      router.push("/cart");
     },
-    onError: (e) => {
-      // A 409 NO_PROVIDERS means the slot emptied between the gate and submit
-      // (or the last pro was taken in the race). Show the same screen; the body
-      // tells us whether money was taken and refunded.
-      if (e instanceof ApiError && e.body?.code === "NO_PROVIDERS") {
-        setNoProviders({
-          slotLabel: currentSlotLabel(),
-          suggestedSlots: (e.body.suggestedSlots as SlotSuggestion[]) ?? [],
-          refunded: e.body.refunded === true,
-        });
-        return;
-      }
-      setError(e instanceof Error ? e.message : "Could not create booking");
-    },
+    onError: (e) => setError(e instanceof Error ? e.message : "Could not add to cart"),
   });
 
-  function submit() {
+  function addCurrentToCart() {
     if (!service) return;
-    // Defense in depth: the details step is normally validated before we get
-    // here, but the resume/auto-submit path can call submit() directly.
     if (!validateDetails()) return;
-    createBooking.mutate({
-      serviceId: service.id,
-      addressId,
-      // Frozen slot from the choose step; falls back for the resume/auto path.
-      slot: slotIso || buildSlotIso(),
-      // The picked professional, or "" for auto-assign. Tried first; if taken by
-      // assignment time, the server silently falls back to the next best.
-      preferredPartnerId: preferredPartnerId || undefined,
-      paymentMethod,
-      issueDescription: note || undefined,
-      mediaUrls: photos,
-      scheduleType,
-      // The server recomputes the price from these; the estimate shown in the UI
-      // is never sent as an amount.
-      selections: detailValues,
-      archetypeDetails: {
-        bookingType: "individual",
-        scheduleType,
-        fieldValues: detailValues,
-        details: toDetailPairs(config.detailFields, detailValues),
-      },
-    });
+    requireLoginThen(() => addToCart.mutate(), buildResumeState({ step: "details", autoSubmit: true }));
   }
 
   useEffect(() => {
-    if (!pendingSubmit || !service || !addressId) return;
+    if (!pendingSubmit || !service) return;
     setPendingSubmit(false);
-    submit();
-  }, [pendingSubmit, service, addressId]);
+    addToCart.mutate();
+  }, [pendingSubmit, service]);
 
   // Scroll to top when step changes
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [step]);
 
   function back() {
-    const order: Step[] = ["service", "guidelines", "when", "details", "choose", "payment"];
+    const order: Step[] = ["service", "guidelines", "details"];
     const i = order.indexOf(step);
     const isUnskippableGuidelines = step === "guidelines" && (singleService || initialServiceId);
     if (i <= 0 || isUnskippableGuidelines) {
@@ -445,7 +286,6 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     }
     setStep(order[i - 1]!);
   }
-
 
   const summaryAside =
     service ? (
@@ -458,12 +298,8 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
         <p className="summary-desc-v3">{config.guidelines.summary}</p>
 
         <div className="summary-pills-v3">
-          <span className="summary-pill active">
-            <FlaticonIcon name={scheduleType === "instant" ? "bolt" : "calendar"} size={11} />
-            {scheduleType === "instant" ? " INSTANT" : " SCHEDULED"}
-          </span>
           {service.duration > 0 && (
-            <span className="summary-pill">⏱ ~{Math.max(1, Math.round(service.duration / 60))} HR</span>
+            <span className="summary-pill active">⏱ ~{Math.max(1, Math.round(service.duration / 60))} HR</span>
           )}
         </div>
 
@@ -515,77 +351,18 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
           <span>Select</span>
         </div>
         <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'guidelines' ? 'active' : (['when', 'details', 'choose', 'payment'].includes(step) ? 'done' : '')}`}>
+        <div className={`progress-step ${step === 'guidelines' ? 'active' : (['details'].includes(step) ? 'done' : '')}`}>
           <div className="step-circle">2</div>
           <span>Scope</span>
         </div>
         <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'when' ? 'active' : (['details', 'choose', 'payment'].includes(step) ? 'done' : '')}`}>
+        <div className={`progress-step ${step === 'details' ? 'active' : ''}`}>
           <div className="step-circle">3</div>
-          <span>Slot</span>
-        </div>
-        <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'details' ? 'active' : (['choose', 'payment'].includes(step) ? 'done' : '')}`}>
-          <div className="step-circle">4</div>
-          <span>Details</span>
-        </div>
-        <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'choose' ? 'active' : (step === 'payment' ? 'done' : '')}`}>
-          <div className="step-circle">5</div>
-          <span>Pro</span>
-        </div>
-        <div className="step-divider">›</div>
-        <div className={`progress-step ${step === 'payment' ? 'active' : ''}`}>
-          <div className="step-circle">6</div>
-          <span>Pay</span>
+          <span>Requirements</span>
         </div>
       </div>
     </div>
   );
-
-  if (fallbackNote) {
-    return (
-      <FlowPageShell header={customHeader} stepper={null} aside={null} footer={null}>
-        <div className="mx-auto w-full max-w-md px-5 py-10 text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-blue-50 ring-8 ring-blue-50/40">
-            <FlaticonIcon name="bolt" size={32} />
-          </div>
-          <h1 className="text-xl font-black text-gray-900">You're booked — with a small change</h1>
-          <p className="mt-2 text-sm text-gray-500">
-            <strong className="text-gray-800">{fallbackNote.picked}</strong> was just booked by someone else,
-            so we've assigned <strong className="text-gray-800">{fallbackNote.assigned.name}</strong> (⭐{" "}
-            {fallbackNote.assigned.rating.toFixed(1)} · {fallbackNote.assigned.jobsCompleted} jobs) — also a
-            top-rated professional for your slot.
-          </p>
-          <button
-            type="button"
-            onClick={() => router.push(`/booking/track/${fallbackNote.ref}`)}
-            className="mt-8 w-full rounded-xl bg-brand py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
-          >
-            Track my booking
-          </button>
-        </div>
-      </FlowPageShell>
-    );
-  }
-
-  if (noProviders) {
-    return (
-      <FlowPageShell header={customHeader} stepper={null} aside={null} footer={null}>
-        <NoProvidersScreen
-          slotLabel={noProviders.slotLabel}
-          suggestedSlots={noProviders.suggestedSlots}
-          refunded={noProviders.refunded}
-          onPickSlot={applySuggestedSlot}
-          onTryAgain={() => {
-            setNoProviders(null);
-            setStep("when");
-          }}
-          onGoHome={() => router.push("/")}
-        />
-      </FlowPageShell>
-    );
-  }
 
   return (
     <FlowPageShell
@@ -648,7 +425,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 );
               })}
             </div>
-            
+
             <div className="expertpass-banner">
               <div className="ep-content">
                 <h2>Save up to 30% with ExpertPass</h2>
@@ -707,159 +484,16 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 </ul>
               </div>
             </div>
-            
-            <button className="flow-continue-btn" onClick={() => setStep('when')}>
+
+            <button className="flow-continue-btn" onClick={() => setStep('details')}>
               Continue →
             </button>
           </div>
         )}
 
-        {/* STEP: instant vs scheduled */}
-        {step === "when" && (
-          <div className="flow-when-v3">
-            <h2 className="when-title">When do you need it?</h2>
-            
-            <div className="when-options-v3">
-              {config.bookingTypes.includes("instant") && (
-                <button 
-                  className={`when-option-card ${scheduleType === 'instant' ? 'selected' : ''}`}
-                  onClick={() => setScheduleType("instant")}
-                >
-                  <div className="when-icon-box"><FlaticonIcon name="bolt" size={22} /></div>
-                  <div className="when-info-box">
-                    <p className="when-opt-title">
-                      Instant <span className="when-badge">FASTEST</span>
-                    </p>
-                    <p className="when-opt-desc">A professional arrives within 30–60 mins</p>
-                  </div>
-                  <div className={`when-radio ${scheduleType === 'instant' ? 'checked' : ''}`}></div>
-                </button>
-              )}
-              
-              <button 
-                className={`when-option-card ${scheduleType === 'scheduled' ? 'selected' : ''}`}
-                onClick={() => setScheduleType("scheduled")}
-              >
-                <div className="when-icon-box plain"><FlaticonIcon name="calendar" size={22} /></div>
-                <div className="when-info-box">
-                  <p className="when-opt-title">Scheduled</p>
-                  <p className="when-opt-desc">Pick a date & time that suits you</p>
-                </div>
-                <div className={`when-radio ${scheduleType === 'scheduled' ? 'checked' : ''}`}></div>
-              </button>
-            </div>
-            
-            {scheduleType === "scheduled" && (
-              <div className="scheduled-picker-v3">
-                <div className="flex gap-3 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
-                  {days.map((d) => (
-                    <button
-                      key={d.key}
-                      type="button"
-                      onClick={() => setDateKey(d.key)}
-                      className={`flex-shrink-0 w-20 rounded-2xl border-2 px-2 py-3 text-center transition-all snap-start ${
-                        dateKey === d.key ? "bg-brand border-brand text-white shadow-md transform scale-105" : "border-gray-100 text-gray-700 bg-gray-50 hover:border-blue-800"
-                      }`}
-                    >
-                      <span className="block text-[10px] font-black uppercase tracking-wider opacity-80">{d.day}</span>
-                      <span className="block text-sm font-extrabold mt-1">{d.date}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-3 mt-4">
-                  {TIME_SLOTS.map((slot) => (
-                    <button
-                      key={slot}
-                      type="button"
-                      onClick={() => setTimeSlot(slot)}
-                      className={`rounded-xl border px-2 py-3 text-[11px] font-bold transition-all ${
-                        timeSlot === slot ? "bg-blue-50 border-brand text-brand shadow-sm ring-1 ring-blue-800" : "border-gray-200 text-gray-600 hover:border-blue-800 hover:bg-blue-50/50"
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <div className="when-footer-v3">
-              <button 
-                className="flow-continue-btn black-btn" 
-                onClick={() => requireLoginThen(() => setStep("details"), buildResumeState({ step: "details" }))}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP: job details */}
+        {/* STEP: job details → add to cart */}
         {step === "details" && (
           <div>
-            {/* Address */}
-            <div>
-              <h3 className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">SERVICE LOCATION</h3>
-              {addresses.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setShowAddrPicker(true)}
-                  className="flex items-center gap-3 w-full p-4 bg-white border border-dashed border-brand rounded-lg cursor-pointer text-left"
-                >
-                  <div className="w-10 h-10 shrink-0 flex items-center justify-center text-red-500">
-                    <FlaticonIcon name="marker" size={18} />
-                  </div>
-                  <div className="grow text-left">
-                    <p className="text-[0.95rem] font-bold text-gray-900">Add a service address</p>
-                    <p className="text-[0.8rem] text-gray-500 mt-[0.2rem]">Use your current location or enter it manually</p>
-                  </div>
-                  <span aria-hidden className="ml-auto text-xl text-brand">+</span>
-                </button>
-              ) : (
-                <div className="flex flex-col gap-3 mb-6">
-                  {addresses.map((a) => {
-                    const sel = addressId === a.id;
-                    return (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => setAddressId(a.id)}
-                        className={`flex items-center w-full p-4 bg-white rounded-lg cursor-pointer text-left ${
-                          sel ? "border-2 border-black" : "border border-gray-900"
-                        }`}
-                      >
-                        <div className="w-10 h-10 shrink-0 flex items-center justify-center text-red-500">
-                          <FlaticonIcon name="marker" size={18} />
-                        </div>
-                        <div className="grow text-left">
-                          <p className="text-[0.95rem] font-bold text-gray-900">{a.label}</p>
-                          <p className="text-[0.8rem] text-gray-500 mt-[0.2rem]">{a.fullAddress}</p>
-                        </div>
-                        <div
-                          className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center ${
-                            sel ? "border-black" : "border-gray-300"
-                          }`}
-                        >
-                          {sel && <span className="w-2 h-2 bg-black rounded-full" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  <button
-                    type="button"
-                    onClick={() => setShowAddrPicker(true)}
-                    className="flex items-center gap-3 w-full p-4 bg-white border border-dashed border-brand rounded-lg cursor-pointer text-left"
-                  >
-                    <div className="w-10 h-10 shrink-0 flex items-center justify-center text-[1.2rem] text-brand">+</div>
-                    <div className="grow text-left">
-                      <p className="text-[0.95rem] font-bold text-gray-900">Add / change address</p>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* Priced requirement configurator — drives the live estimate. */}
             {config.detailFields.length > 0 && service && (
               <RequirementSheet
@@ -925,209 +559,15 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
                 <span>Safe &amp; Professional Services</span>
               </div>
               <button
-                className="w-full p-4 rounded-lg text-base font-bold cursor-pointer transition-opacity bg-brand text-white hover:opacity-90"
-                onClick={continueToChoose}
+                className="w-full p-4 rounded-lg text-base font-bold cursor-pointer transition-opacity bg-brand text-white hover:opacity-90 disabled:opacity-60"
+                onClick={addCurrentToCart}
+                disabled={addToCart.isPending}
               >
-                Choose your professional ›
+                {addToCart.isPending ? "Adding…" : "Add to cart ›"}
               </button>
             </div>
           </div>
         )}
-
-        {/* STEP: choose your professional (auto-assign is the recommended default) */}
-        {step === "choose" && service && (
-          <div className="flow-provider-v3">
-            <h2 className="provider-title">Choose your professional</h2>
-            <div className="provider-step-counter">
-              {scheduleType === "instant" ? "Within the next hour" : currentSlotLabel()}
-            </div>
-            <div className="provider-divider-v3"></div>
-
-            {availabilityQuery.isLoading || !availabilityQuery.data ? (
-              <div className="py-12 text-center text-sm text-gray-400">Finding professionals near you…</div>
-            ) : availabilityQuery.data.count === 0 ? (
-              <NoProvidersScreen
-                slotLabel={currentSlotLabel()}
-                suggestedSlots={availabilityQuery.data.suggestedSlots}
-                onPickSlot={applySuggestedSlot}
-                onTryAgain={() => setStep("when")}
-                onGoHome={() => router.push("/")}
-              />
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setPreferredPartnerId("")}
-                  aria-pressed={preferredPartnerId === ""}
-                  className={`provider-card-v3 ${preferredPartnerId === "" ? "selected" : ""}`}
-                >
-                  <div className="provider-icon-box"><FlaticonIcon name="bolt" size={22} /></div>
-                  <div className="provider-info-box">
-                    <p className="provider-opt-title">
-                      Auto-assign <span className="when-badge">RECOMMENDED</span>
-                    </p>
-                    <p className="provider-opt-desc">We pick the best available professional for you</p>
-                  </div>
-                  <div className={`address-radio ${preferredPartnerId === "" ? "checked" : ""}`}>
-                    <div className="radio-inner"></div>
-                  </div>
-                </button>
-
-                {professionals.length > 0 && (
-                  <p className="my-4 text-center text-[0.72rem] font-bold uppercase tracking-[0.08em] text-gray-400">
-                    — or choose yourself —
-                  </p>
-                )}
-
-                {professionals.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setPreferredPartnerId(p.id)}
-                    aria-pressed={preferredPartnerId === p.id}
-                    className={`provider-card-v3 ${preferredPartnerId === p.id ? "selected" : ""}`}
-                  >
-                    <div className="provider-icon-box font-extrabold text-brand">{p.name.charAt(0)}</div>
-                    <div className="provider-info-box">
-                      <p className="provider-opt-title">{p.name}</p>
-                      <p className="provider-opt-desc">
-                        ⭐ {p.rating.toFixed(1)} · {p.jobsCompleted} jobs · ~{p.etaMins} min away
-                      </p>
-                    </div>
-                    <div className={`address-radio ${preferredPartnerId === p.id ? "checked" : ""}`}>
-                      <div className="radio-inner"></div>
-                    </div>
-                  </button>
-                ))}
-
-                <div className="provider-footer-v3">
-                  <button className="flow-continue-btn blue-btn" onClick={() => setStep("payment")}>
-                    Continue to payment ›
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* STEP: review & pay. Dispatch auto-assigns after payment. */}
-        {step === "payment" && service && (
-          <div className="flow-provider-v3">
-            <h2 className="provider-title">Review &amp; pay</h2>
-            <div className="provider-step-counter">Final step</div>
-            <div className="provider-divider-v3"></div>
-
-            <button
-              type="button"
-              onClick={() => setStep("choose")}
-              className="mb-5 flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-50 text-brand">
-                <FlaticonIcon name="bolt" size={16} />
-              </span>
-              <span className="grow">
-                <span className="block text-[0.7rem] font-bold uppercase tracking-wide text-gray-400">
-                  Your professional
-                </span>
-                <span className="block text-[0.9rem] font-bold text-gray-900">
-                  {professionals.find((p) => p.id === preferredPartnerId)?.name ?? "Auto-assign (recommended)"}
-                </span>
-              </span>
-              <span className="text-xs font-bold text-brand">Change</span>
-            </button>
-
-            {/* Price breakdown — the same numbers the server will recompute. */}
-            <p className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">YOUR ESTIMATE</p>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 mb-6">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <p className="text-[0.95rem] font-bold text-gray-900">{service.name}</p>
-                  <p className="text-[0.8rem] text-gray-500">
-                    {scheduleType === "instant" ? "Within 30–60 mins" : `${dateKey} · ${timeSlot}`}
-                  </p>
-                </div>
-                <span className="text-[0.8rem] font-semibold text-gray-500 whitespace-nowrap">
-                  ~{Math.max(1, Math.round(service.duration / 60))} hr
-                </span>
-              </div>
-
-              {estimate.lineItems.map((li) => (
-                <div
-                  key={`${li.key}-${li.value}`}
-                  className="flex items-center justify-between py-1 text-[0.85rem]"
-                >
-                  <span className="text-gray-600">
-                    {li.value}
-                    {li.qty > 1 && ` × ${li.qty}`}
-                  </span>
-                  <span className="font-semibold text-gray-900">{formatPrice(li.totalPaise)}</span>
-                </div>
-              ))}
-
-              <div className="flex items-center justify-between border-t border-gray-100 mt-3 pt-3">
-                <span className="text-[0.9rem] font-bold text-gray-900">Total</span>
-                <span className="text-[1.05rem] font-extrabold text-gray-900">
-                  {formatPrice(estimate.totalPaise)}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment method */}
-            <p className="text-[0.8rem] font-bold text-gray-600 tracking-[0.05em] mb-4">PAYMENT METHOD</p>
-            {PAYMENT_METHODS.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setPaymentMethod(m.id)}
-                aria-pressed={paymentMethod === m.id}
-                className={`provider-card-v3 ${paymentMethod === m.id ? "selected" : ""}`}
-              >
-                <div className="provider-icon-box">
-                  <FlaticonIcon name={m.id === "cod" ? "wallet" : "card"} size={22} />
-                </div>
-                <div className="provider-info-box">
-                  <p className="provider-opt-title">{m.label}</p>
-                  <p className="provider-opt-desc">{m.hint}</p>
-                </div>
-                <div className={`address-radio ${paymentMethod === m.id ? "checked" : ""}`}>
-                  <div className="radio-inner"></div>
-                </div>
-              </button>
-            ))}
-
-            <div className="provider-info-banner">
-              <span className="info-icon"><FlaticonIcon name="bolt" size={16} /></span>
-              <p>
-                We'll assign the best available professional the moment you confirm — you'll see
-                who's coming right away. {paymentMethod === "cod"
-                  ? "You pay after the service is done."
-                  : "If no one can make it, you're refunded in full immediately."}
-              </p>
-            </div>
-
-            <div className="provider-footer-v3">
-              <button
-                className="flow-continue-btn blue-btn"
-                onClick={() => requireLoginThen(submit, buildResumeState({ step: "payment", autoSubmit: true }))}
-                disabled={createBooking.isPending}
-              >
-                {createBooking.isPending
-                  ? "Confirming…"
-                  : `${paymentMethod === "cod" ? "Confirm booking" : "Pay"} • ${formatPrice(estimate.totalPaise)}`}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <AddressPicker
-          open={showAddrPicker}
-          redirectAfterLogin={typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"}
-          onClose={() => setShowAddrPicker(false)}
-          onSelected={(a) => {
-            setAddressId(a.id);
-            queryClient.invalidateQueries({ queryKey: qk.addresses() });
-          }}
-        />
     </FlowPageShell>
   );
 }

@@ -1,4 +1,5 @@
 import type { AddrForm } from "./model";
+import { LocationMap } from "./LocationMap";
 
 type Props = {
   form: AddrForm;
@@ -10,14 +11,23 @@ type Props = {
   hasSavedAddresses: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onBack: () => void;
+  /** Fired when the user drags the map pin or taps the map. */
+  onPickCoords: (lat: number, lng: number) => void;
 };
 
-export function AddressFormView({ form, setField, detectButton, saving, detecting, isLoggedIn, hasSavedAddresses, onSubmit, onBack }: Props) {
+export function AddressFormView({ form, setField, detectButton, saving, detecting, isLoggedIn, hasSavedAddresses, onSubmit, onBack, onPickCoords }: Props) {
   const showBackButton = isLoggedIn ? hasSavedAddresses : true;
 
   return (
     <form onSubmit={onSubmit} className="addr-modal-form" style={{ border: "none", paddingTop: 0 }}>
       {detectButton}
+
+      <div className="addr-input-group">
+        <LocationMap lat={form.lat} lng={form.lng} onPick={onPickCoords} />
+        <p className="addr-input-label" style={{ marginTop: "0.4rem", color: "#6b7280" }}>
+          Drag the pin or tap the map to set your exact location.
+        </p>
+      </div>
 
       <div className="addr-input-group">
         <label className="addr-input-label">Label</label>

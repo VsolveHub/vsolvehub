@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/db/client";
-import { ACTIVE_BOOKING_WHERE, recomputePartnerRating, type JobStatus } from "@vsolve/db";
+import {
+  ACTIVE_BOOKING_WHERE,
+  captureRevisionDelta,
+  recomputePartnerRating,
+  settleCancelledBooking,
+  type JobStatus,
+} from "@vsolve/db";
 import { generateBookingRef } from "@/lib/format";
 import { isMarketplaceBooking } from "@/lib/bookings/archetype";
 import type { LineItem } from "@/lib/catalog/pricing";
@@ -203,7 +209,12 @@ export async function cancelBooking(bookingRef: string, userId: string) {
   });
   await prisma.bookingStatusLog.create({ data: { bookingId: booking.id, status: "CANCELLED" } });
 
-  return { success: true as const, feePaise };
+  // Return the customer's money: refund a captured prepaid booking or void an
+  // uncaptured hold, both net of the retained cancel fee, and re-derive the
+  // order. No-op for COD / unpaid / crew-escrow bookings.
+  const { refundedPaise } = await settleCancelledBooking(booking.id, feePaise);
+
+  return { success: true as const, feePaise, refundedPaise };
 }
 
 /** Customer accepts the provider's revised (extra-parts) quote — adds it to the total. */
@@ -212,7 +223,15 @@ export async function approveRevisedQuote(bookingRef: string, userId: string) {
   if (!booking) return null;
   if (booking.revisedAmountPaise == null) return { error: "Nothing to approve" as const };
 
-  const newTotal = booking.quotedAmount + booking.revisedAmountPaise;
+  const delta = booking.revisedAmountPaise;
+
+  // Charge the approved extra BEFORE raising the total, so finalAmountPaise never
+  // outruns what has actually been collected. If the supplementary charge fails,
+  // the revision stays pending and the total is unchanged.
+  const charge = await captureRevisionDelta(booking.id, delta);
+  if (!charge.ok) return { error: charge.error };
+
+  const newTotal = booking.quotedAmount + delta;
   await prisma.booking.update({
     where: { id: booking.id },
     data: { quotedAmount: newTotal, finalAmountPaise: newTotal, revisedAmountPaise: null, revisedReason: null },

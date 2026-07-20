@@ -17,36 +17,37 @@ import { isCrewBooking, expireCrewOffers, previewCancelFee } from "@/lib/crew/qu
 import { CREW_STATUS_MESSAGES, roleRatePaise } from "@/lib/crew/constants";
 
 type RouteContext = { params: Promise<{ ref: string }> };
+type Booking = NonNullable<Awaited<ReturnType<typeof getBookingByRef>>>;
+type CrewRole = { roleId: string; count: number };
 
-function parseRoles(raw: string): { roleId: string; count: number }[] {
+// Statuses in which a crew booking can no longer be rescheduled at all.
+const CREW_LOCKED_STATUSES = ["COMPLETED", "CANCELLED", "NO_CREW_FOUND", "SEARCHING_CREW"];
+// Statuses where the crew is dispatched but the job hasn't started yet.
+const CREW_PRE_START_STATUSES = ["CREW_ASSIGNED", "CREW_EN_ROUTE"];
+
+function parseRoles(raw: string): CrewRole[] {
   try {
     const d = JSON.parse(raw);
     const roles = Array.isArray(d?.roles) ? d.roles : [];
     return roles
-      .filter((r: unknown): r is { roleId: string; count: number } =>
+      .filter((r: unknown): r is CrewRole =>
         Boolean(r) && typeof (r as { roleId?: unknown }).roleId === "string",
       )
-      .map((r: { roleId: string; count: number }) => ({ roleId: r.roleId, count: Number(r.count) || 0 }));
+      .map((r: CrewRole) => ({ roleId: r.roleId, count: Number(r.count) || 0 }));
   } catch {
     return [];
   }
 }
 
-function serializeCrewBooking(booking: NonNullable<Awaited<ReturnType<typeof getBookingByRef>>>) {
-  const roles = parseRoles(booking.archetypeDetails);
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const rescheduleLimitReached = booking.rescheduleCount >= 2;
-  const bookingReschedulable =
-    !["COMPLETED", "CANCELLED", "NO_CREW_FOUND", "SEARCHING_CREW"].includes(booking.status) && !rescheduleLimitReached;
-
-  const days = booking.crewJobDays.map((d) => ({
+function mapCrewDays(booking: Booking, reschedulable: boolean, todayISO: string) {
+  return booking.crewJobDays.map((d) => ({
     id: d.id,
     date: d.dayDate,
     status: d.status,
     earnedPaise: d.earnedPaise,
     approvedAt: d.customerApprovedAt,
     rescheduleToDate: d.rescheduleToDate,
-    canReschedule: bookingReschedulable && d.status === "SCHEDULED" && !d.rescheduleToDate && d.dayDate > todayISO,
+    canReschedule: reschedulable && d.status === "SCHEDULED" && !d.rescheduleToDate && d.dayDate > todayISO,
     attendance: d.clockEvents.map((e) => ({
       memberId: e.member.id,
       name: e.member.name,
@@ -55,32 +56,71 @@ function serializeCrewBooking(booking: NonNullable<Awaited<ReturnType<typeof get
       clockOutAt: e.clockOutAt,
     })),
   }));
+}
+type CrewDay = ReturnType<typeof mapCrewDays>[number];
 
-  const started = Boolean(booking.startConfirmedAt);
+function mapCrew(booking: Booking) {
+  const crew = booking.crew;
+  if (!crew) return null;
+  return {
+    id: crew.id,
+    name: crew.name,
+    rating: crew.rating,
+    leadName: crew.lead.fullName,
+    leadPhone: crew.lead.phone,
+  };
+}
 
-  // Customer-facing OTPs the customer reads to crew members on site.
-  // Start code: available once escrow is paid and while the job is live (each day a
-  // member can clock in). Finish code: available once work has started, to end a day.
+// Customer-facing OTPs the customer reads to crew members on site.
+// Start code: available once escrow is paid and while the job is live (each day a
+// member can clock in). Finish code: available once work has started, to end a day.
+function crewOtps(booking: Booking, started: boolean) {
   const escrowPaid = booking.paymentStatus === "ESCROW_HELD";
-  const startOtp =
-    escrowPaid && ["CREW_ASSIGNED", "CREW_EN_ROUTE", "CREW_WORKING"].includes(booking.status) ? booking.startOtp : null;
-  const endOtp = started && booking.status === "CREW_WORKING" ? booking.endOtp : null;
+  const startLive = ["CREW_ASSIGNED", "CREW_EN_ROUTE", "CREW_WORKING"].includes(booking.status);
+  return {
+    startOtp: escrowPaid && startLive ? booking.startOtp : null,
+    endOtp: started && booking.status === "CREW_WORKING" ? booking.endOtp : null,
+  };
+}
 
-  // Cancel-fee preview (computed from the crew's rate card).
+// Cancel-fee preview computed from the crew's rate card.
+function crewPricing(booking: Booking, roles: CrewRole[], days: CrewDay[]) {
   const rateFor = (role: string) =>
     booking.crew?.roleRates.find((r) => r.role === role)?.dayRatePaise ?? roleRatePaise(role);
   const dailyRate = roles.reduce((s, r) => s + Math.max(0, r.count) * rateFor(r.roleId), 0);
-  const doneEarned = days.filter((d) => ["DAY_DONE", "APPROVED"].includes(d.status)).reduce((s, d) => s + d.earnedPaise, 0);
+  const doneEarned = days
+    .filter((d) => ["DAY_DONE", "APPROVED"].includes(d.status))
+    .reduce((s, d) => s + d.earnedPaise, 0);
   const cancellable = !["COMPLETED", "CANCELLED"].includes(booking.status);
-  const cancelPreview = cancellable ? previewCancelFee(booking.status, dailyRate, doneEarned) : null;
+  return {
+    dailyRate,
+    cancellable,
+    cancelPreview: cancellable ? previewCancelFee(booking.status, dailyRate, doneEarned) : null,
+  };
+}
 
-  // Abandonment / dispute / extension (Phase F).
-  const firstDayISO = days[0]?.date;
-  const canReportNoShow =
-    ["CREW_ASSIGNED", "CREW_EN_ROUTE"].includes(booking.status) && !started && Boolean(firstDayISO) && firstDayISO! <= todayISO;
-  const canDispute = booking.status === "COMPLETED" && booking.paymentStatus === "PAID";
-  const isDisputed = booking.paymentStatus === "DISPUTED";
-  const extensionChargePaise = dailyRate * booking.extensionDays;
+// Escrow / abandonment / dispute flags (Phase F).
+function crewStatusFlags(booking: Booking, started: boolean, firstDayISO: string | undefined, todayISO: string) {
+  const preStart = CREW_PRE_START_STATUSES.includes(booking.status);
+  return {
+    needsEscrowPayment: preStart && booking.paymentStatus === "PENDING",
+    canReportNoShow: preStart && !started && Boolean(firstDayISO) && firstDayISO! <= todayISO,
+    canDispute: booking.status === "COMPLETED" && booking.paymentStatus === "PAID",
+    isDisputed: booking.paymentStatus === "DISPUTED",
+  };
+}
+
+function serializeCrewBooking(booking: Booking) {
+  const roles = parseRoles(booking.archetypeDetails);
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const rescheduleLimitReached = booking.rescheduleCount >= 2;
+  const reschedulable = !CREW_LOCKED_STATUSES.includes(booking.status) && !rescheduleLimitReached;
+
+  const days = mapCrewDays(booking, reschedulable, todayISO);
+  const started = Boolean(booking.startConfirmedAt);
+  const { startOtp, endOtp } = crewOtps(booking, started);
+  const { dailyRate, cancellable, cancelPreview } = crewPricing(booking, roles, days);
+  const flags = crewStatusFlags(booking, started, days[0]?.date, todayISO);
 
   return {
     bookingRef: booking.bookingRef,
@@ -95,15 +135,7 @@ function serializeCrewBooking(booking: NonNullable<Awaited<ReturnType<typeof get
       slug: booking.service.slug,
       categorySlug: booking.service.category.slug,
     },
-    crew: booking.crew
-      ? {
-          id: booking.crew.id,
-          name: booking.crew.name,
-          rating: booking.crew.rating,
-          leadName: booking.crew.lead.fullName,
-          leadPhone: booking.crew.lead.phone,
-        }
-      : null,
+    crew: mapCrew(booking),
     days,
     durationDays: booking.durationDays,
     startDate: booking.slot,
@@ -116,15 +148,14 @@ function serializeCrewBooking(booking: NonNullable<Awaited<ReturnType<typeof get
     paymentMethod: booking.paymentMethod,
     escrowPaise: booking.escrowPaise,
     refundedPaise: booking.refundedPaise,
-    needsEscrowPayment:
-      ["CREW_ASSIGNED", "CREW_EN_ROUTE"].includes(booking.status) && booking.paymentStatus === "PENDING",
+    needsEscrowPayment: flags.needsEscrowPayment,
     rescheduleCount: booking.rescheduleCount,
     rescheduleLimitReached,
-    canReportNoShow,
-    canDispute,
-    isDisputed,
+    canReportNoShow: flags.canReportNoShow,
+    canDispute: flags.canDispute,
+    isDisputed: flags.isDisputed,
     extensionDays: booking.extensionDays,
-    extensionChargePaise,
+    extensionChargePaise: dailyRate * booking.extensionDays,
     started,
     startOtp,
     endOtp,
@@ -138,55 +169,25 @@ function serializeCrewBooking(booking: NonNullable<Awaited<ReturnType<typeof get
   };
 }
 
-function serializeProvider(booking: NonNullable<Awaited<ReturnType<typeof getBookingByRef>>>) {
+function serializeProvider(booking: Booking) {
   const partner = booking.assignedPartner;
   if (!partner) return null;
-
-  const name = partner.fullName ?? "Partner";
-  const phone = partner.phone;
-  const rating = partner.rating;
 
   const assignedLog = booking.statusLogs.find((l) => l.status === "ASSIGNED");
   const etaMinutes = assignedLog
     ? Math.max(5, 20 - Math.floor((Date.now() - assignedLog.createdAt.getTime()) / 60_000))
     : 15;
 
-  return { id: partner.id, name, phone, rating, etaMinutes };
+  return { id: partner.id, name: partner.fullName ?? "Partner", phone: partner.phone, rating: partner.rating, etaMinutes };
 }
 
-export async function GET(_req: NextRequest, context: RouteContext) {
-  const { ref } = await context.params;
-  const session = await getServerSession();
-
-  let booking = await getBookingByRef(ref, session?.id);
-  if (!booking) {
-    return NextResponse.json({ error: "Booking not found" }, { status: 404 });
-  }
-
-  // Crew bookings have their own day-wise track — no per-visit status simulation.
-  if (isCrewBooking(booking)) {
-    if (booking.status === "SEARCHING_CREW") {
-      await expireCrewOffers(booking.id);
-      booking = (await getBookingByRef(ref, session?.id)) ?? booking;
-    }
-    return NextResponse.json(serializeCrewBooking(booking));
-  }
-
-  const marketplace = isMarketplaceBooking(booking);
-
-  if (marketplace) {
-    // Direct assignment: reassign only if a partner bailed (SEARCHING_PROVIDER).
-    await driveReassignmentIfPending(booking.id);
-    booking = (await getBookingByRef(ref, session?.id)) ?? booking;
-  }
-
+function serializeMarketplaceBooking(booking: Booking, marketplace: boolean) {
   // Status is authoritative from the DB (driven by the partner / dispatch) —
   // never time-simulated.
   const normalized = normalizeBookingStatus(booking.status);
-  const provider = serializeProvider(booking);
   const paidForMobilization = ["PAID", "COD"].includes(booking.paymentStatus);
 
-  return NextResponse.json({
+  return {
     bookingRef: booking.bookingRef,
     status: normalized,
     message: getStatusMessage(normalized),
@@ -210,7 +211,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
           rating: booking.vendor.rating,
         }
       : null,
-    provider,
+    provider: serializeProvider(booking),
     // Shown to the customer once a partner is assigned; read aloud to start the job.
     startOtp: paidForMobilization && ["ASSIGNED", "PROVIDER_ARRIVING"].includes(normalized) ? booking.startOtp : null,
     baseChargePaise: booking.baseChargePaise,
@@ -229,5 +230,40 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     statuses: marketplace
       ? [...MARKETPLACE_TIMELINE, "CANCELLED"]
       : BOOKING_STATUSES.filter((s) => s !== "CANCELLED"),
-  });
+  };
+}
+
+export async function GET(_req: NextRequest, context: RouteContext) {
+  const { ref } = await context.params;
+  const session = await getServerSession();
+  if (!session) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  // Always scope by userId. getBookingByRef matches ANY booking when the userId
+  // is omitted, and this payload carries the customer's address and the assigned
+  // partner's phone — so an unscoped read would leak PII by ref enumeration.
+  let booking = await getBookingByRef(ref, session.id);
+  if (!booking) {
+    return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+  }
+
+  // Crew bookings have their own day-wise track — no per-visit status simulation.
+  if (isCrewBooking(booking)) {
+    if (booking.status === "SEARCHING_CREW") {
+      await expireCrewOffers(booking.id);
+      booking = (await getBookingByRef(ref, session.id)) ?? booking;
+    }
+    return NextResponse.json(serializeCrewBooking(booking));
+  }
+
+  const marketplace = isMarketplaceBooking(booking);
+
+  if (marketplace) {
+    // Direct assignment: reassign only if a partner bailed (SEARCHING_PROVIDER).
+    await driveReassignmentIfPending(booking.id);
+    booking = (await getBookingByRef(ref, session.id)) ?? booking;
+  }
+
+  return NextResponse.json(serializeMarketplaceBooking(booking, marketplace));
 }

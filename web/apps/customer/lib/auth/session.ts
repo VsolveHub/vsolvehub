@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/client";
-import { MOCK_OTP, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/constants";
+import { hashOtp } from "@vsolve/crypto";
+import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/constants";
 import { randomBytes } from "crypto";
 
 export type SessionUser = {
@@ -9,15 +10,103 @@ export type SessionUser = {
   name: string | null;
 };
 
-const pendingOtps = new Map<string, string>();
+// OTP lifetime and lockout, matched to the partner app so both surfaces behave
+// the same. Kept local (not imported from @vsolve/config) to avoid coupling the
+// customer app to a partner-config package.
+const OTP_TTL_SECONDS = 300;
+const OTP_MAX_ATTEMPTS = 5;
+// Send-side throttle: without it the endpoint can be scripted to SMS-bomb a
+// number (real gateway cost) and to hand out unlimited fresh codes to brute
+// force. Must wait between resends, and only so many codes per rolling window.
+const OTP_RESEND_COOLDOWN_SECONDS = 30;
+const OTP_SEND_WINDOW_SECONDS = 3600;
+const OTP_MAX_SENDS_PER_WINDOW = 5;
+/** Fixed code used only when on-screen delivery is enabled (never in prod). */
+const DEV_OTP = "1234";
 
-export function sendMockOtp(phone: string) {
-  pendingOtps.set(phone, MOCK_OTP);
-  return { otp: MOCK_OTP };
+/**
+ * Whether to reveal the OTP instead of delivering it by SMS. True in dev, and in
+ * prod only when SHOW_OTP_ON_SCREEN=true (a stop-gap until an SMS provider is
+ * wired in). SECURITY: while enabled the code is knowable, so it must never be
+ * on in a real launch — the same contract the partner app uses.
+ */
+function otpOnScreen(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.SHOW_OTP_ON_SCREEN === "true";
 }
 
-export function verifyMockOtp(phone: string, otp: string) {
-  return pendingOtps.get(phone) === otp || otp === MOCK_OTP;
+function generateCode(): string {
+  if (otpOnScreen()) return DEV_OTP;
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+export type SendOtpResult =
+  | { ok: true; devOtp?: string }
+  | { ok: false; error: string };
+
+/**
+ * Issue an OTP challenge for a phone number. The raw code is never stored — only
+ * a salted hash — and the challenge expires. Throttled per phone (see the
+ * OTP_RESEND_* / OTP_MAX_SENDS constants). Returns the code for on-screen
+ * display only while otpOnScreen() is enabled.
+ */
+export async function sendOtp(phone: string): Promise<SendOtpResult> {
+  const now = Date.now();
+
+  const latest = await prisma.otpChallenge.findFirst({
+    where: { phone },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (latest && now - latest.createdAt.getTime() < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
+    return { ok: false, error: "Please wait a moment before requesting another code." };
+  }
+
+  const windowStart = new Date(now - OTP_SEND_WINDOW_SECONDS * 1000);
+  const recentSends = await prisma.otpChallenge.count({
+    where: { phone, createdAt: { gt: windowStart } },
+  });
+  if (recentSends >= OTP_MAX_SENDS_PER_WINDOW) {
+    return { ok: false, error: "Too many code requests. Please try again later." };
+  }
+
+  const code = generateCode();
+  await prisma.otpChallenge.create({
+    data: {
+      phone,
+      codeHash: hashOtp(code, phone),
+      expiresAt: new Date(now + OTP_TTL_SECONDS * 1000),
+    },
+  });
+  // TODO(prod): deliver via SMS (MSG91/Fast2SMS) here.
+  return { ok: true, devOtp: otpOnScreen() ? code : undefined };
+}
+
+export type VerifyOtpResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Verify a submitted code against the latest unconsumed, unexpired challenge for
+ * the phone. Wrong codes burn an attempt; the challenge locks after
+ * OTP_MAX_ATTEMPTS and is single-use on success. There is no global bypass code:
+ * a code is only ever valid against a challenge that was actually issued.
+ */
+export async function verifyOtp(phone: string, code: string): Promise<VerifyOtpResult> {
+  const challenge = await prisma.otpChallenge.findFirst({
+    where: { phone, consumed: false, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!challenge) return { ok: false, error: "Code expired. Please request a new one." };
+  if (challenge.attempts >= OTP_MAX_ATTEMPTS) {
+    return { ok: false, error: "Too many attempts. Please request a new code." };
+  }
+  if (challenge.codeHash !== hashOtp(code.trim(), phone)) {
+    await prisma.otpChallenge.update({
+      where: { id: challenge.id },
+      data: { attempts: { increment: 1 } },
+    });
+    return { ok: false, error: "Incorrect code. Please try again." };
+  }
+  await prisma.otpChallenge.update({ where: { id: challenge.id }, data: { consumed: true } });
+  return { ok: true };
 }
 
 function generateToken() {

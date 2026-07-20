@@ -1,4 +1,3 @@
-export const MOCK_OTP = "1234";
 export const SESSION_COOKIE = "vsh_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 

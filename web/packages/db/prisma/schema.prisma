@@ -675,6 +675,9 @@ model Booking {
   durationDays         Int       @default(1)
   assignmentMode       String    @default("quotes")
   startOtp             String?
+  // Wrong start-OTP attempts by the assigned partner; locks the job's start once
+  // it hits the cap so a 6-digit code cannot be brute-forced on site.
+  startOtpAttempts     Int       @default(0)
   startConfirmedAt     DateTime?
   endOtp               String?
   cancelledAt          DateTime?

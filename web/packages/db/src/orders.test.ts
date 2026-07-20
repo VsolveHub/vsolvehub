@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { assertMoneyInvariant, derivePaymentState, rollUpOrderStatus } from "./orders";
+import {
+  assertMoneyInvariant,
+  bookingCaptureShortfall,
+  computeCancelSettlement,
+  derivePaymentState,
+  rollUpOrderStatus,
+} from "./orders";
 
 describe("assertMoneyInvariant", () => {
   const ok = { authorizedPaise: 1000, capturedPaise: 600, voidedPaise: 400, refundedPaise: 0 };
@@ -84,5 +90,64 @@ describe("derivePaymentState", () => {
 
   it("is REFUNDED once every captured paisa is returned", () => {
     expect(derivePaymentState(ledger({ capturedPaise: 600, refundedPaise: 600 }))).toBe("REFUNDED");
+  });
+});
+
+describe("computeCancelSettlement", () => {
+  const order = { authorizedPaise: 1000, capturedPaise: 1000, voidedPaise: 0, refundedPaise: 0 };
+
+  it("refunds a captured booking in full when the cancel fee is zero", () => {
+    expect(
+      computeCancelSettlement({ paymentStatus: "PAID", quotedAmount: 1000, capturedPaise: 1000, feePaise: 0, order }),
+    ).toEqual({ refundPaise: 1000, voidPaise: 0 });
+  });
+
+  it("retains the cancel fee out of a captured refund", () => {
+    expect(
+      computeCancelSettlement({ paymentStatus: "PAID", quotedAmount: 1000, capturedPaise: 1000, feePaise: 99, order }),
+    ).toEqual({ refundPaise: 901, voidPaise: 0 });
+  });
+
+  it("never refunds more than the order still has captured", () => {
+    const partlyRefunded = { ...order, refundedPaise: 800 };
+    expect(
+      computeCancelSettlement({ paymentStatus: "PAID", quotedAmount: 1000, capturedPaise: 1000, feePaise: 0, order: partlyRefunded }),
+    ).toEqual({ refundPaise: 200, voidPaise: 0 });
+  });
+
+  it("voids an uncaptured card hold minus the fee", () => {
+    const held = { authorizedPaise: 1000, capturedPaise: 0, voidedPaise: 0, refundedPaise: 0 };
+    expect(
+      computeCancelSettlement({ paymentStatus: "PENDING", quotedAmount: 1000, capturedPaise: 0, feePaise: 0, order: held }),
+    ).toEqual({ refundPaise: 0, voidPaise: 1000 });
+  });
+
+  it("moves no money for COD", () => {
+    expect(
+      computeCancelSettlement({ paymentStatus: "COD", quotedAmount: 1000, capturedPaise: 0, feePaise: 0, order }),
+    ).toEqual({ refundPaise: 0, voidPaise: 0 });
+  });
+
+  it("clamps a fee larger than the share to zero, never negative", () => {
+    expect(
+      computeCancelSettlement({ paymentStatus: "PAID", quotedAmount: 1000, capturedPaise: 1000, feePaise: 5000, order }),
+    ).toEqual({ refundPaise: 0, voidPaise: 0 });
+  });
+});
+
+describe("bookingCaptureShortfall", () => {
+  it("is the full quote when a card hold is uncaptured", () => {
+    const order = { authorizedPaise: 1000, capturedPaise: 0, voidedPaise: 0, refundedPaise: 0 };
+    expect(bookingCaptureShortfall({ paymentStatus: "PENDING", quotedAmount: 1000, order })).toBe(1000);
+  });
+
+  it("is zero once the booking is already paid", () => {
+    const order = { authorizedPaise: 1000, capturedPaise: 1000, voidedPaise: 0, refundedPaise: 0 };
+    expect(bookingCaptureShortfall({ paymentStatus: "PAID", quotedAmount: 1000, order })).toBe(0);
+  });
+
+  it("never exceeds the order's remaining authorization headroom", () => {
+    const order = { authorizedPaise: 1000, capturedPaise: 700, voidedPaise: 0, refundedPaise: 0 };
+    expect(bookingCaptureShortfall({ paymentStatus: "PENDING", quotedAmount: 1000, order })).toBe(300);
   });
 });

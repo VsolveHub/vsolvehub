@@ -32,27 +32,27 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
   const fullAddress = buildFullAddress(data);
 
-  if (data.isDefault) {
-    await prisma.address.updateMany({
-      where: { userId: session.id },
-      data: { isDefault: false },
-    });
-  }
+  const createData = {
+    userId: session.id,
+    label: data.label,
+    fullAddress,
+    houseNumber: data.houseNumber,
+    landmark: data.landmark,
+    area: data.area,
+    city: data.city,
+    pincode: data.pincode,
+    lat: data.lat,
+    lng: data.lng,
+    isDefault: data.isDefault ?? false,
+  };
 
-  const address = await prisma.address.create({
-    data: {
-      userId: session.id,
-      label: data.label,
-      fullAddress,
-      houseNumber: data.houseNumber,
-      landmark: data.landmark,
-      area: data.area,
-      city: data.city,
-      pincode: data.pincode,
-      lat: data.lat,
-      lng: data.lng,
-      isDefault: data.isDefault ?? false,
-    },
+  // Clearing the old default and setting the new one must be atomic, or two
+  // concurrent writes can leave the user with zero or two default addresses.
+  const address = await prisma.$transaction(async (tx) => {
+    if (data.isDefault) {
+      await tx.address.updateMany({ where: { userId: session.id }, data: { isDefault: false } });
+    }
+    return tx.address.create({ data: createData });
   });
 
   return NextResponse.json({ address });
@@ -70,14 +70,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Address id required" }, { status: 400 });
   }
 
-  await prisma.address.updateMany({
-    where: { userId: session.id },
-    data: { isDefault: false },
-  });
-
-  const address = await prisma.address.update({
-    where: { id, userId: session.id },
-    data: { isDefault: true },
+  // Atomic swap of the default flag so a concurrent PUT can't leave two defaults.
+  const address = await prisma.$transaction(async (tx) => {
+    await tx.address.updateMany({ where: { userId: session.id }, data: { isDefault: false } });
+    return tx.address.update({ where: { id, userId: session.id }, data: { isDefault: true } });
   });
 
   return NextResponse.json({ address });

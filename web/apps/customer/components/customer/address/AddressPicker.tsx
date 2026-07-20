@@ -5,6 +5,7 @@ import { PinIcon } from "@/components/ui/AppIcons";
 import {
   LocationError,
   detectCurrentLocation,
+  reverseGeocode,
   storeActiveLocation,
   type StoredLocation,
 } from "@/lib/location/geocode";
@@ -14,7 +15,14 @@ import {
   useAddAddressMutation,
   useSelectAddressMutation,
 } from "@/lib/query/hooks";
-import { type Address, type AddrForm, EMPTY_FORM, validateAddressForm, buildGuestFullAddress } from "./model";
+import {
+  type Address,
+  type AddrForm,
+  EMPTY_FORM,
+  validateAddressForm,
+  buildAddressPayload,
+  buildGuestFullAddress,
+} from "./model";
 import { AddressListView } from "./AddressListView";
 import { AddressFormView } from "./AddressFormView";
 
@@ -100,6 +108,25 @@ export function AddressPicker({
     }
   }, []);
 
+  // The user moved the map pin: keep the coordinates and reverse-geocode them to
+  // fill in the address fields (best-effort — coordinates are kept even if the
+  // lookup fails, so the address can still be saved).
+  const pickCoords = useCallback(async (lat: number, lng: number) => {
+    setForm((prev) => ({ ...prev, lat, lng }));
+    try {
+      const geo = await reverseGeocode(lat, lng);
+      setForm((prev) => ({
+        ...prev,
+        houseNumber: geo.houseNumber || prev.houseNumber,
+        area: geo.area || prev.area,
+        city: geo.city || prev.city,
+        pincode: geo.pincode || prev.pincode,
+      }));
+    } catch {
+      /* keep the picked coordinates even if the address lookup fails */
+    }
+  }, []);
+
   useEffect(() => {
     if (!open || loading) return;
     const shouldOpenForm = autoDetect || (isLoggedIn && addresses.length === 0);
@@ -137,16 +164,7 @@ export function AddressPicker({
       return;
     }
 
-    const payload = {
-      label: form.label.trim(),
-      houseNumber: form.houseNumber.trim() || undefined,
-      landmark: form.landmark.trim() || undefined,
-      area: form.area.trim() || undefined,
-      city: form.city.trim() || undefined,
-      pincode: form.pincode.trim() || undefined,
-      lat: form.lat,
-      lng: form.lng,
-    };
+    const payload = buildAddressPayload(form);
 
     if (isLoggedIn) {
       addAddressMutation.mutate(
@@ -218,6 +236,7 @@ export function AddressPicker({
             isLoggedIn={isLoggedIn}
             hasSavedAddresses={addresses.length > 0}
             onSubmit={saveAddress}
+            onPickCoords={pickCoords}
             onBack={() => {
               setError("");
               setView("list");

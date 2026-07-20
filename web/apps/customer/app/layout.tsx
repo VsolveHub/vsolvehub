@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import "@flaticon/flaticon-uicons/css/regular/rounded.css";
 import "./globals.css";
-import { QueryProvider } from "@vsolve/query";
+import { QueryProvider, getQueryClient } from "@vsolve/query";
 import { ShellSwitcher } from "@/components/shared/ShellSwitcher";
+import { getServerSession } from "@/lib/auth/session";
+import { qk } from "@/lib/query/keys";
 
 const inter = Inter({
   weight: ["400", "500", "700"],
@@ -22,7 +25,16 @@ export const viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Seed the session into the query cache from the server, so the shell doesn't
+  // fire a client-side /api/auth/session round-trip on first load. With the 60s
+  // default staleTime the hydrated data is fresh, so useSessionQuery reads it
+  // without an immediate refetch. Request-scoped client — never shared/leaked.
+  const queryClient = getQueryClient();
+  const session = await getServerSession();
+  queryClient.setQueryData(qk.session(), { user: session });
+  const dehydratedState = dehydrate(queryClient);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -52,7 +64,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`app-shell ${inter.className}`} suppressHydrationWarning>
         <QueryProvider>
-          <ShellSwitcher>{children}</ShellSwitcher>
+          <HydrationBoundary state={dehydratedState}>
+            <ShellSwitcher>{children}</ShellSwitcher>
+          </HydrationBoundary>
         </QueryProvider>
       </body>
     </html>

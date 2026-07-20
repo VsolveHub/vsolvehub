@@ -37,6 +37,32 @@ export function validateAddressForm(form: AddrForm): string | null {
   return null;
 }
 
+export type AddressPayload = {
+  label: string;
+  houseNumber?: string;
+  landmark?: string;
+  area?: string;
+  city?: string;
+  pincode?: string;
+  lat?: number;
+  lng?: number;
+};
+
+/** Trim the form into an API payload, dropping blank optional fields. */
+export function buildAddressPayload(form: AddrForm): AddressPayload {
+  const opt = (v: string) => v.trim() || undefined;
+  return {
+    label: form.label.trim(),
+    houseNumber: opt(form.houseNumber),
+    landmark: opt(form.landmark),
+    area: opt(form.area),
+    city: opt(form.city),
+    pincode: opt(form.pincode),
+    lat: form.lat,
+    lng: form.lng,
+  };
+}
+
 export function buildGuestFullAddress(payload: {
   houseNumber?: string;
   landmark?: string;

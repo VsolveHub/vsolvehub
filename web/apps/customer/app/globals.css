@@ -12087,3 +12087,13 @@ body:has(.flow-page-shell) .main-content {
 
 
 
+
+/* Leaflet address-picker pin: strip the default div-icon white box so only the
+   SVG pin shows. */
+.location-map-pin {
+  background: transparent;
+  border: none;
+}
+.location-map .leaflet-container {
+  font: inherit;
+}
