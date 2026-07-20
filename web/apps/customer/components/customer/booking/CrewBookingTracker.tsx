@@ -115,15 +115,22 @@ export function CrewBookingTracker({ booking, onRefresh }: { booking: CrewTracki
   }
 
   return (
-    <div className="vsh-simulator-frame">
-      <div className="vsh-navbar">
-        <button type="button" className="vsh-nav-back" onClick={goBack} aria-label="Back">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col bg-white md:min-h-screen">
+      <div className="flex items-center gap-3 bg-[var(--color-brand)] px-4 py-3 text-white shadow-sm">
+        <button
+          type="button"
+          onClick={goBack}
+          aria-label="Go back"
+          className="text-xl leading-none text-white/80 transition-colors hover:text-white"
+        >
           ←
         </button>
-        <span className="vsh-nav-title">{booking.service.name} · Team</span>
+        <span className="truncate text-sm font-black uppercase tracking-widest">
+          {booking.service.name} · Team
+        </span>
       </div>
 
-      <div className="vsh-content" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 pb-8">
         {/* Requested crew */}
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#a1a1aa", textTransform: "uppercase" }}>
