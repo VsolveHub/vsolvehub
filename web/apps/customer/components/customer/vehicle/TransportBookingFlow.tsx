@@ -107,22 +107,22 @@ export function TransportBookingFlow() {
   }
 
   return (
-    <div className="stack-lg booking-flow">
+    <div className="flex flex-col gap-6 booking-flow">
       <VehicleFlowHeader steps={STEPS} labels={STEP_LABELS} currentStep={step} />
 
       {step === "pickup" && (
-        <div className="card stack">
-          <h2 className="section-title">Pickup address</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Pickup address</h2>
           <Input label="Pickup location" value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Full pickup address" />
           <Button onClick={() => pickup.trim().length >= 5 && setStep("drop")} disabled={pickup.trim().length < 5}>Continue</Button>
         </div>
       )}
 
       {step === "drop" && (
-        <div className="card stack">
-          <h2 className="section-title">Drop address</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Drop address</h2>
           <Input label="Drop location" value={drop} onChange={(e) => setDrop(e.target.value)} placeholder="Full delivery address" />
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("pickup")}>Back</Button>
             <Button onClick={() => drop.trim().length >= 5 && setStep("goods")} disabled={drop.trim().length < 5}>Continue</Button>
           </div>
@@ -130,15 +130,15 @@ export function TransportBookingFlow() {
       )}
 
       {step === "goods" && (
-        <div className="card stack">
-          <h2 className="section-title">Goods details</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Goods details</h2>
           <Input label="Goods type" value={goodsType} onChange={(e) => setGoodsType(e.target.value)} placeholder="e.g. Furniture, boxes" />
           <Input label="Weight (kg)" type="number" value={String(weightKg)} onChange={(e) => setWeightKg(Number(e.target.value))} />
           <Textarea label="Size / dimensions" value={sizeDescription} onChange={(e) => setSizeDescription(e.target.value)} placeholder="Optional size details" />
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => uploadImages(e.target.files)} />
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>Upload photos</Button>
-          {uploadError && <p className="alert alert-error">{uploadError}</p>}
-          <div className="booking-action-row">
+          {uploadError && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{uploadError}</p>}
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("drop")}>Back</Button>
             <Button onClick={() => goodsType.trim().length >= 2 && setStep("vehicle")} disabled={goodsType.trim().length < 2}>Continue</Button>
           </div>
@@ -146,18 +146,18 @@ export function TransportBookingFlow() {
       )}
 
       {step === "vehicle" && (
-        <div className="card stack">
-          <h2 className="section-title">Select vehicle</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Select vehicle</h2>
           <div className="grid-2">
             {TRANSPORT_VEHICLE_TYPES.map((t) => (
               <button key={t.id} type="button" className={`vendor-card ${vehicleType === t.id ? "selected" : ""}`} onClick={() => setVehicleType(t.id)}>
                 <FlaticonIcon name={t.icon} size={28} color="var(--color-brand)" />
-                <p className="card-title">{t.label}</p>
-                <p className="text-sm text-muted">from {formatPrice(t.basePaise)}</p>
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{t.label}</p>
+                <p className="text-sm text-gray-500">from {formatPrice(t.basePaise)}</p>
               </button>
             ))}
           </div>
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("goods")}>Back</Button>
             <Button onClick={() => setStep("fare")}>Get fare estimate</Button>
           </div>
@@ -165,11 +165,11 @@ export function TransportBookingFlow() {
       )}
 
       {step === "fare" && (
-        <div className="card stack">
-          <h2 className="section-title">Fare estimate</h2>
-          <p className="text-sm text-muted">{pickup} → {drop}</p>
-          <p className="card-title">~{distanceKm} km · {formatPrice(fare)}</p>
-          <div className="booking-action-row">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Fare estimate</h2>
+          <p className="text-sm text-gray-500">{pickup} → {drop}</p>
+          <p className="mb-1 text-[15px] font-semibold text-gray-900">~{distanceKm} km · {formatPrice(fare)}</p>
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("vehicle")}>Back</Button>
             <Button onClick={() => setStep("driver")}>Find driver</Button>
           </div>
@@ -177,19 +177,19 @@ export function TransportBookingFlow() {
       )}
 
       {step === "driver" && (
-        <div className="card stack">
-          <h2 className="section-title">Assign driver</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Assign driver</h2>
           {drivers.length === 0 ? (
-            <p className="text-muted">Finding drivers…</p>
+            <p className="text-gray-500">Finding drivers…</p>
           ) : (
             drivers.map((d) => (
               <button key={d.id} type="button" className={`vendor-card ${driverId === d.id ? "selected" : ""}`} onClick={() => setDriverId(d.id)}>
-                <p className="card-title">{d.name}</p>
-                <p className="text-sm text-muted">★ {d.rating.toFixed(1)} · {d.vehicleNumber}</p>
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{d.name}</p>
+                <p className="text-sm text-gray-500">★ {d.rating.toFixed(1)} · {d.vehicleNumber}</p>
               </button>
             ))
           )}
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("fare")}>Back</Button>
             <Button onClick={() => driverId && setStep("payment")} disabled={!driverId}>Continue</Button>
           </div>
@@ -197,19 +197,19 @@ export function TransportBookingFlow() {
       )}
 
       {step === "payment" && (
-        <div className="card stack">
-          <h2 className="section-title">Confirm & pay</h2>
-          <p className="card-title">{formatPrice(fare)}</p>
-          <div className="stack">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Confirm & pay</h2>
+          <p className="mb-1 text-[15px] font-semibold text-gray-900">{formatPrice(fare)}</p>
+          <div className="flex flex-col gap-4">
             {PAYMENT_OPTIONS.map((p) => (
               <button key={p.id} type="button" className={`vendor-card ${paymentMethod === p.id ? "selected" : ""}`} onClick={() => setPaymentMethod(p.id)}>
-                <p className="card-title">{p.label}</p>
-                {p.id === "wallet" && <p className="text-sm text-muted">Balance: {formatPrice(WALLET_BALANCE_PAISE)}</p>}
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{p.label}</p>
+                {p.id === "wallet" && <p className="text-sm text-gray-500">Balance: {formatPrice(WALLET_BALANCE_PAISE)}</p>}
               </button>
             ))}
           </div>
-          {error && <p className="alert alert-error">{error}</p>}
-          <div className="booking-action-row">
+          {error && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</p>}
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("driver")}>Back</Button>
             <Button onClick={confirm} loading={loading} disabled={loading}>Confirm transport</Button>
           </div>

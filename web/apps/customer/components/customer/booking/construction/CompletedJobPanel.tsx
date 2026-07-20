@@ -61,8 +61,8 @@ export function CompletedJobPanel({
       {!otpVerified ? (
         <OtpEntry otp={otp} error={error} onOtpChange={onOtpChange} />
       ) : (
-        <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div className="alert alert-success" style={{ fontSize: "0.8rem", padding: "0.5rem 0.75rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
+        <div className="flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="rounded-xl px-4 py-3 text-sm bg-green-50 text-green-700" style={{ fontSize: "0.8rem", padding: "0.5rem 0.75rem", display: "flex", alignItems: "center", gap: "0.375rem" }}>
             ✓ Completion verified successfully!
           </div>
 

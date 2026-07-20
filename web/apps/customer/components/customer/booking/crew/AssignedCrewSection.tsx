@@ -32,7 +32,7 @@ export function AssignedCrewSection({
   return (
     <>
       {booking.crew && (
-        <div className="vsh-card" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--color-brand-light)", color: "var(--color-brand)", display: "grid", placeItems: "center", fontWeight: 800, fontSize: "1.2rem" }}>
             {booking.crew.name.charAt(0).toUpperCase()}
           </div>
@@ -43,14 +43,14 @@ export function AssignedCrewSection({
             </p>
           </div>
           {booking.crew.leadPhone && (
-            <a href={`tel:${booking.crew.leadPhone}`} className="btn btn-secondary" style={{ borderRadius: 12, padding: "0.5rem 0.9rem", fontSize: "0.8rem", fontWeight: 700 }}>
+            <a href={`tel:${booking.crew.leadPhone}`} className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50" style={{ borderRadius: 12, padding: "0.5rem 0.9rem", fontSize: "0.8rem", fontWeight: 700 }}>
               Call
             </a>
           )}
         </div>
       )}
 
-      <div className="vsh-card" style={{ background: "var(--color-brand)", color: "white" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ background: "var(--color-brand)", color: "white" }}>
         <p style={{ margin: 0, fontWeight: 800, fontSize: "1rem" }}>{CREW_STATUS_LABELS[booking.status] ?? booking.status}</p>
         <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem", opacity: 0.9 }}>{CREW_STATUS_MESSAGES[booking.status] ?? booking.message}</p>
       </div>

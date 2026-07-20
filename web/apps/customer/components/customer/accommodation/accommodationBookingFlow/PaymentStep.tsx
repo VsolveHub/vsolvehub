@@ -24,13 +24,13 @@ export function PaymentStep({ propertyPricePaise, draft, setDraft, loading, onCo
 
   return (
     <>
-      <div className="card stack">
-        <h2 className="section-title">Payment breakdown</h2>
-        <div className="flex-between">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Payment breakdown</h2>
+        <div className="flex items-center justify-between gap-2">
           <span>Token advance</span>
           <span>{formatPrice(payment.tokenAdvancePaise)}</span>
         </div>
-        <div className="flex-between">
+        <div className="flex items-center justify-between gap-2">
           <span>Booking fee</span>
           <span>{formatPrice(payment.bookingFeePaise)}</span>
         </div>
@@ -44,15 +44,15 @@ export function PaymentStep({ propertyPricePaise, draft, setDraft, loading, onCo
           />
           Pay first month rent now ({formatPrice(propertyPricePaise)}) — optional
         </label>
-        <div className="flex-between" style={{ borderTop: "1px solid var(--color-border)", paddingTop: "0.5rem" }}>
-          <span className="card-title">Total</span>
-          <span className="detail-price" style={{ margin: 0 }}>
+        <div className="flex items-center justify-between gap-2" style={{ borderTop: "1px solid var(--color-border)", paddingTop: "0.5rem" }}>
+          <span className="mb-1 text-[15px] font-semibold text-gray-900">Total</span>
+          <span className="text-lg font-black text-gray-900" style={{ margin: 0 }}>
             {formatPrice(payment.totalPaidPaise)}
           </span>
         </div>
       </div>
 
-      <div className="stack">
+      <div className="flex flex-col gap-4">
         {PAYMENT_OPTIONS.map((opt) => (
           <button
             key={opt.id}

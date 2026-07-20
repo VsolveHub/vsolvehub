@@ -98,7 +98,7 @@ export function SelectVehicleScreen({ rideType, setRideType, fares, loading, err
           </span>
         </div>
 
-        {error && <div className="alert alert-error text-center py-2 text-[11px]">{error}</div>}
+        {error && <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)] text-center py-2 text-[11px]">{error}</div>}
 
         {/* Directly book ride on click */}
         <button

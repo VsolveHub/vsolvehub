@@ -19,15 +19,15 @@ export function ActiveJobPanel({ booking, status, loading, onSimulateNext, detai
   return (
     <>
       {/* Status Card */}
-      <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        <div className="flex-between">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div className="flex items-center justify-between gap-2">
           <div>
             <p style={{ fontSize: "0.75rem", color: "#71717a", margin: 0 }}>Reference Code</p>
             <p style={{ fontWeight: 800, margin: 0, fontSize: "1.05rem" }}>{booking.bookingRef}</p>
           </div>
           <Badge status={status}>{STATUS_LABELS[status] ?? status}</Badge>
         </div>
-        <p className="alert alert-info" style={{ margin: "0.5rem 0", fontSize: "0.8rem", padding: "0.5rem 0.75rem" }}>
+        <p className="rounded-xl px-4 py-3 text-sm bg-[var(--color-brand-light)] text-[var(--color-brand-dark)]" style={{ margin: "0.5rem 0", fontSize: "0.8rem", padding: "0.5rem 0.75rem" }}>
           {STATUS_MESSAGES[status]}
         </p>
 
@@ -37,7 +37,7 @@ export function ActiveJobPanel({ booking, status, loading, onSimulateNext, detai
       </div>
 
       {/* Map and ETA */}
-      <div className="vsh-card" style={{ padding: 0, height: "200px", position: "relative", overflow: "hidden", borderRadius: "16px" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ padding: 0, height: "200px", position: "relative", overflow: "hidden", borderRadius: "16px" }}>
         <div className="mock-map-bg" style={{ width: "100%", height: "100%", background: "#f4f4f5", backgroundImage: "radial-gradient(#d4d4d8 1px, transparent 1px)", backgroundSize: "12px 12px", position: "absolute" }} />
         <svg style={{ position: "absolute", width: "100%", height: "100%" }}>
           <path d="M 120 180 Q 180 70 240 100 T 320 140" fill="none" stroke="var(--color-brand)" strokeWidth="3" strokeLinecap="round" strokeDasharray="5 3" />
@@ -54,7 +54,7 @@ export function ActiveJobPanel({ booking, status, loading, onSimulateNext, detai
       </div>
 
       {/* Crew Details */}
-      <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <p style={{ fontWeight: 700, fontSize: "0.9rem", margin: 0 }}>
           {bookingType === "individual" ? "Worker" : "Crew Requirements"}
         </p>

@@ -7,7 +7,7 @@ type Props = {
 
 export function BookingTypeStep({ bookingType, setBookingType }: Props) {
   return (
-    <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <p style={{ color: "#666", fontSize: "0.85rem", margin: 0 }}>How do you want to hire?</p>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <button

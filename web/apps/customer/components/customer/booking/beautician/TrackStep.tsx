@@ -13,15 +13,15 @@ export function TrackStep({ booking, status, partnerName }: Props) {
   return (
     <>
       {/* Tracking Status Card */}
-      <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        <div className="flex-between">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div className="flex items-center justify-between gap-2">
           <div>
             <p style={{ fontSize: "0.75rem", color: "#71717a", margin: 0 }}>Reference Code</p>
             <p style={{ fontWeight: 800, margin: 0, fontSize: "1.05rem" }}>{booking.bookingRef}</p>
           </div>
           <Badge status={status}>{STATUS_LABELS[status] ?? status}</Badge>
         </div>
-        <p className="alert alert-info" style={{ margin: "0.5rem 0", fontSize: "0.8rem", padding: "0.5rem 0.75rem" }}>
+        <p className="rounded-xl px-4 py-3 text-sm bg-[var(--color-brand-light)] text-[var(--color-brand-dark)]" style={{ margin: "0.5rem 0", fontSize: "0.8rem", padding: "0.5rem 0.75rem" }}>
           {STATUS_MESSAGES[status]}
         </p>
 
@@ -29,7 +29,7 @@ export function TrackStep({ booking, status, partnerName }: Props) {
 
       {/* Map View */}
       {["PENDING", "SEARCHING_PROVIDER", "ASSIGNED", "ON_THE_WAY"].includes(status) && (
-        <div className="vsh-card" style={{ padding: 0, height: "200px", position: "relative", overflow: "hidden", borderRadius: "16px" }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ padding: 0, height: "200px", position: "relative", overflow: "hidden", borderRadius: "16px" }}>
           <div className="mock-map-bg" style={{ width: "100%", height: "100%", background: "#fdf4ff", backgroundImage: "radial-gradient(#d8b4fe 1px, transparent 1px)", backgroundSize: "12px 12px", position: "absolute" }} />
           <svg style={{ position: "absolute", width: "100%", height: "100%" }}>
             <path d="M 60 40 Q 140 180 200 120 T 320 180" fill="none" stroke="var(--color-brand)" strokeWidth="3" strokeLinecap="round" strokeDasharray="5 3" />
@@ -48,7 +48,7 @@ export function TrackStep({ booking, status, partnerName }: Props) {
 
       {/* Beautician Arrived State Card */}
       {status === "PROVIDER_ARRIVING" && (
-        <div className="vsh-card stack text-center" style={{ padding: "1.5rem 1.25rem", border: "2px solid var(--color-brand)", borderRadius: "18px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 text-center" style={{ padding: "1.5rem 1.25rem", border: "2px solid var(--color-brand)", borderRadius: "18px", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: "56px", height: "56px", borderRadius: "50%", overflow: "hidden", border: "2px solid var(--color-brand)" }}>
             <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100" alt={partnerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
@@ -68,7 +68,7 @@ export function TrackStep({ booking, status, partnerName }: Props) {
 
       {/* Service In Progress State Card */}
       {status === "STARTED" && (
-        <div className="vsh-card stack text-center" style={{ padding: "2rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 text-center" style={{ padding: "2rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div className="facial-pulse-animation" style={{ display: "inline-block", position: "relative", marginBottom: "1rem", width: "18px", height: "18px" }}>
             <div style={{ width: "18px", height: "18px", background: "var(--color-brand)", borderRadius: "50%", transform: "scale(1.5)", opacity: 0.2, position: "absolute", animation: "ping 1.5s infinite" }} />
             <div style={{ width: "18px", height: "18px", background: "var(--color-brand)", borderRadius: "50%", position: "relative" }} />
@@ -86,7 +86,7 @@ export function TrackStep({ booking, status, partnerName }: Props) {
       )}
 
       {/* Standard Details */}
-      <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.825rem" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.825rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span style={{ color: "#71717a" }}>Service</span>
           <span style={{ fontWeight: 600 }}>{booking.service.name}</span>

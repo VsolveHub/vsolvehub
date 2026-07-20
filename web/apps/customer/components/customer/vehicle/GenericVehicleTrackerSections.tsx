@@ -5,30 +5,30 @@ import type { TrackingData } from "./types";
 
 export function StatusCard({ data }: { data: TrackingData }) {
   return (
-    <div className="card">
-      <div className="flex-between">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm text-muted">Booking reference</p>
-          <p className="card-title">{data.bookingRef}</p>
+          <p className="text-sm text-gray-500">Booking reference</p>
+          <p className="mb-1 text-[15px] font-semibold text-gray-900">{data.bookingRef}</p>
         </div>
         <Badge status={data.status}>
           {VEHICLE_STATUS_LABELS[data.status] ?? data.status}
         </Badge>
       </div>
-      <p className="alert alert-info mt-2">{data.message}</p>
+      <p className="rounded-xl px-4 py-3 text-sm bg-[var(--color-brand-light)] text-[var(--color-brand-dark)] mt-2">{data.message}</p>
     </div>
   );
 }
 
 export function StatusTimelineCard({ data }: { data: TrackingData }) {
   return (
-    <div className="card">
-      <h2 className="section-title">Status timeline</h2>
-      <div className="stack">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">Status timeline</h2>
+      <div className="flex flex-col gap-4">
         {data.statusLogs.map((log: any, i: number) => (
-          <div key={i} className="flex-between text-sm">
+          <div key={i} className="flex items-center justify-between gap-2 text-sm">
             <span>{VEHICLE_STATUS_LABELS[log.status] ?? log.status}</span>
-            {log.status === data.status && <span className="text-muted">Current</span>}
+            {log.status === data.status && <span className="text-gray-500">Current</span>}
           </div>
         ))}
       </div>
@@ -38,10 +38,10 @@ export function StatusTimelineCard({ data }: { data: TrackingData }) {
 
 export function VehicleAssetCard({ asset }: { asset: NonNullable<TrackingData["rentalAsset"]> }) {
   return (
-    <div className="card">
-      <h2 className="section-title">Vehicle</h2>
-      <p className="card-title">{asset.name}</p>
-      <p className="text-sm text-muted">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">Vehicle</h2>
+      <p className="mb-1 text-[15px] font-semibold text-gray-900">{asset.name}</p>
+      <p className="text-sm text-gray-500">
         {asset.brand} {asset.model}
       </p>
     </div>
@@ -50,15 +50,15 @@ export function VehicleAssetCard({ asset }: { asset: NonNullable<TrackingData["r
 
 export function AssigneeCard({ name, rating, phone, vehicleNumber }: { name: string; rating: number; phone: string; vehicleNumber?: string }) {
   return (
-    <div className="card">
-      <h2 className="section-title">{vehicleNumber ? "Driver" : "Mechanic"}</h2>
-      <p className="card-title">{name}</p>
-      <p className="text-sm text-muted">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <h2 className="mb-4 text-lg font-semibold text-gray-900">{vehicleNumber ? "Driver" : "Mechanic"}</h2>
+      <p className="mb-1 text-[15px] font-semibold text-gray-900">{name}</p>
+      <p className="text-sm text-gray-500">
         ★ {rating.toFixed(1)}
         {vehicleNumber ? ` · ${vehicleNumber}` : ""}
       </p>
       {phone ? (
-        <a href={`tel:${phone}`} className="btn btn-secondary btn-sm mt-2">
+        <a href={`tel:${phone}`} className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-3 py-1.5 text-[13px] border border-gray-200 bg-white text-gray-900 hover:bg-gray-50">
           Call
         </a>
       ) : null}
@@ -68,13 +68,13 @@ export function AssigneeCard({ name, rating, phone, vehicleNumber }: { name: str
 
 export function AmountCard({ data }: { data: TrackingData }) {
   return (
-    <div className="card">
-      <div className="flex-between">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
         <span>Amount</span>
-        <span className="card-title">{formatPrice(data.quotedAmount)}</span>
+        <span className="mb-1 text-[15px] font-semibold text-gray-900">{formatPrice(data.quotedAmount)}</span>
       </div>
       {data.depositPaise > 0 && (
-        <p className="text-sm text-muted mt-1">
+        <p className="text-sm text-gray-500 mt-1">
           Includes {formatPrice(data.depositPaise)} security deposit
         </p>
       )}

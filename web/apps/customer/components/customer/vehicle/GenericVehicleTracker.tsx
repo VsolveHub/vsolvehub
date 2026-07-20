@@ -17,7 +17,7 @@ export function GenericVehicleTracker({ data, canCancel, cancelling, loading, on
   const assignee = data.driver ?? data.vendor;
 
   return (
-    <div className="stack-lg">
+    <div className="flex flex-col gap-6">
       <StatusCard data={data} />
       <StatusTimelineCard data={data} />
 
@@ -34,13 +34,13 @@ export function GenericVehicleTracker({ data, canCancel, cancelling, loading, on
 
       <AmountCard data={data} />
 
-      <div className="booking-action-row">
+      <div className="mt-4 flex flex-col gap-2.5">
         {canCancel && (
           <Button variant="secondary" onClick={onCancel} disabled={cancelling}>
             {cancelling ? "Cancelling…" : "Cancel booking"}
           </Button>
         )}
-        <Link href="/services?category=vehicle-services" className="btn btn-primary">
+        <Link href="/services?category=vehicle-services" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm bg-[var(--color-brand)] text-white hover:bg-blue-900">
           Book another
         </Link>
       </div>

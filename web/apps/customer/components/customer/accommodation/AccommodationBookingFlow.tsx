@@ -91,10 +91,10 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
   }
 
   return (
-    <div className="stack-lg booking-flow">
-      <div className="card">
-        <h2 className="card-title">{property.title}</h2>
-        <p className="text-sm text-muted">{property.location}</p>
+    <div className="flex flex-col gap-6 booking-flow">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-1 text-[15px] font-semibold text-gray-900">{property.title}</h2>
+        <p className="text-sm text-gray-500">{property.location}</p>
       </div>
 
       {step === "type" && (
@@ -126,7 +126,7 @@ export function AccommodationBookingFlow({ property, initialMode }: Props) {
         />
       )}
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</div>}
     </div>
   );
 }

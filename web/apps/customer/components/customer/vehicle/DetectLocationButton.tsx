@@ -37,12 +37,12 @@ export function DetectLocationButton({ onDetected, label = "Use my current locat
   }
 
   return (
-    <div className="stack-xs">
+    <div className="flex flex-col gap-1.5">
       <button type="button" className="detect-location-btn" onClick={detect} disabled={loading}>
         <PinIcon />
         {loading ? "Detecting your location…" : label}
       </button>
-      {error && <p className="text-sm alert alert-error" style={{ margin: 0 }}>{error}</p>}
+      {error && <p className="text-sm rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]" style={{ margin: 0 }}>{error}</p>}
     </div>
   );
 }

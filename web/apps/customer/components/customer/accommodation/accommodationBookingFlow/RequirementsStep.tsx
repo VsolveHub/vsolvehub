@@ -15,8 +15,8 @@ type Props = {
 export function RequirementsStep({ draft, setDraft, fileRef, uploadError, onUploadIdProof, onNext }: Props) {
   return (
     <>
-      <div className="card stack">
-        <h2 className="section-title">Stay requirements</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Stay requirements</h2>
         {draft.bookingType === "move_in" ? (
           <Input
             label="Move-in date"
@@ -67,7 +67,7 @@ export function RequirementsStep({ draft, setDraft, fileRef, uploadError, onUplo
           onChange={(e) => setDraft((d) => ({ ...d, specialRequirements: e.target.value }))}
         />
         <div>
-          <p className="section-title">ID proof upload</p>
+          <p className="mb-4 text-lg font-semibold text-gray-900">ID proof upload</p>
           <input
             ref={fileRef}
             type="file"
@@ -78,9 +78,9 @@ export function RequirementsStep({ draft, setDraft, fileRef, uploadError, onUplo
           <Button type="button" variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>
             Upload ID proof
           </Button>
-          {uploadError && <p className="alert alert-error">{uploadError}</p>}
+          {uploadError && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{uploadError}</p>}
           {draft.idProofUrls.length > 0 && (
-            <p className="text-sm text-muted">{draft.idProofUrls.length} file(s) uploaded</p>
+            <p className="text-sm text-gray-500">{draft.idProofUrls.length} file(s) uploaded</p>
           )}
         </div>
       </div>

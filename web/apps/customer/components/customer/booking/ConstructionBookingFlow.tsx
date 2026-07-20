@@ -406,7 +406,7 @@ export function ConstructionBookingFlow({ service, addresses: initialAddresses }
           <PaymentStep totalAmount={totalAmount} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} error={error} />
         )}
 
-        {error && step !== "payment" && <div className="alert alert-error" style={{ marginTop: "0.75rem" }}>{error}</div>}
+        {error && step !== "payment" && <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]" style={{ marginTop: "0.75rem" }}>{error}</div>}
       </div>
 
       <div className="vsh-footer-actions">

@@ -16,7 +16,7 @@ type Props = {
 
 export function CompletedStep({ partnerName, rating, setRating, tip, setTip, review, setReview, error, loading, onSubmit }: Props) {
   return (
-    <div className="vsh-card stack text-center" style={{ padding: "1.5rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 text-center" style={{ padding: "1.5rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <span style={{ fontSize: "2.5rem" }}>🌸</span>
       <h3 style={{ fontWeight: 800, marginTop: "0.5rem", marginBottom: "0.25rem", fontSize: "1.15rem" }}>Service Completed!</h3>
       <p style={{ color: "#666", fontSize: "0.75rem", marginBottom: "1.25rem" }}>

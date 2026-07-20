@@ -12,7 +12,7 @@ type Props = {
 
 export function EscrowSummaryCard({ booking, isSearching, isCancelled, escrowHeld, settled }: Props) {
   return (
-    <div className="vsh-card" style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
       {settled ? (
         <>
           <Row label={isCancelled ? "Charged (incl. fee)" : "Charged for work done"} value={formatPrice(booking.finalAmountPaise)} bold />

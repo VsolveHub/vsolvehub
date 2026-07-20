@@ -26,8 +26,8 @@ const DETAILS: Record<(typeof METHODS)[number], string> = {
 
 export function PaymentStep({ totalAmount, paymentMethod, setPaymentMethod, error }: Props) {
   return (
-    <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div className="vsh-card" style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)", color: "white", padding: "1.25rem", borderRadius: "18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div className="flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)", color: "white", padding: "1.25rem", borderRadius: "18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <p style={{ fontSize: "0.8rem", opacity: 0.85, margin: 0 }}>Total Amount to Pay</p>
           <p style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, marginTop: "0.125rem" }}>₹{totalAmount}</p>
@@ -45,7 +45,7 @@ export function PaymentStep({ totalAmount, paymentMethod, setPaymentMethod, erro
           </button>
         ))}
       </div>
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</div>}
     </div>
   );
 }

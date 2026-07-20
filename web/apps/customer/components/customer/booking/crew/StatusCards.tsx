@@ -2,7 +2,7 @@ import { formatPrice } from "@/lib/format";
 
 export function SearchingCard({ message }: { message: string }) {
   return (
-    <div className="vsh-card" style={{ textAlign: "center", padding: "1.75rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ textAlign: "center", padding: "1.75rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
       <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
         {[0, 1, 2].map((i) => (
           <span key={i} style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--color-brand)", animation: `vsh-bounce 0.6s ${i * 0.15}s infinite alternate` }} />
@@ -17,7 +17,7 @@ export function SearchingCard({ message }: { message: string }) {
 
 export function NoCrewFoundCard({ message, retrying, onRetry }: { message: string; retrying: boolean; onRetry: () => void }) {
   return (
-    <div className="vsh-card" style={{ textAlign: "center", padding: "1.5rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ textAlign: "center", padding: "1.5rem 1.25rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" }}>
       <span style={{ fontSize: "2rem" }}>😕</span>
       <h3 style={{ margin: 0, fontWeight: 800, fontSize: "1rem" }}>No crew accepted in time</h3>
       <p style={{ margin: 0, fontSize: "0.8rem", color: "#71717a" }}>{message}</p>
@@ -35,7 +35,7 @@ export function NoCrewFoundCard({ message, retrying, onRetry }: { message: strin
 
 export function EscrowPaymentCard({ amountPaise, onPay }: { amountPaise: number; onPay: () => void }) {
   return (
-    <div className="vsh-card" style={{ border: "1px solid var(--color-brand)", background: "var(--color-brand-light)" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ border: "1px solid var(--color-brand)", background: "var(--color-brand-light)" }}>
       <p style={{ margin: 0, fontWeight: 800, fontSize: "0.95rem", color: "var(--color-brand)" }}>Confirm your crew</p>
       <p style={{ margin: "0.25rem 0 0.75rem 0", fontSize: "0.8rem", color: "#52525b" }}>
         Pay {formatPrice(amountPaise)} into secure escrow to confirm. It's only released as work is done —
@@ -62,7 +62,7 @@ type ExtensionProps = {
 
 export function ExtensionRequestCard({ extensionDays, extensionChargePaise, busy, onDecline, onApprove }: ExtensionProps) {
   return (
-    <div className="vsh-card" style={{ border: "1px solid #f59e0b", background: "#fffbeb" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ border: "1px solid #f59e0b", background: "#fffbeb" }}>
       <p style={{ margin: 0, fontWeight: 800, fontSize: "0.95rem", color: "#b45309" }}>
         Crew requested {extensionDays} more {extensionDays === 1 ? "day" : "days"}
       </p>
@@ -84,7 +84,7 @@ export function ExtensionRequestCard({ extensionDays, extensionChargePaise, busy
 
 export function NoShowCard({ busy, onReport }: { busy: boolean; onReport: () => void }) {
   return (
-    <div className="vsh-card" style={{ border: "1px solid #fecaca" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ border: "1px solid #fecaca" }}>
       <p style={{ margin: 0, fontSize: "0.82rem", color: "#3f3f46" }}>Crew hasn't turned up?</p>
       <button type="button" onClick={onReport} disabled={busy} style={{ marginTop: "0.5rem", background: "transparent", border: "1px solid #fecaca", color: "#dc2626", borderRadius: 12, padding: "0.55rem 1rem", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer" }}>
         Report a no-show
@@ -103,7 +103,7 @@ type DisputeProps = {
 export function DisputeSection({ isDisputed, canDispute, busy, onReportIssue }: DisputeProps) {
   if (isDisputed) {
     return (
-      <div className="vsh-card" style={{ border: "1px solid #f59e0b", background: "#fffbeb", fontSize: "0.82rem", color: "#b45309" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ border: "1px solid #f59e0b", background: "#fffbeb", fontSize: "0.82rem", color: "#b45309" }}>
         ⚠ Issue reported — the payment is on hold while our team reviews it.
       </div>
     );
