@@ -12,7 +12,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
   if (!property) notFound();
 
   return (
-    <div className="page-content acc-detail-page">
+    <div className="mx-auto w-full max-w-[1280px] p-4">
       <PropertyDetailView property={property} />
     </div>
   );
