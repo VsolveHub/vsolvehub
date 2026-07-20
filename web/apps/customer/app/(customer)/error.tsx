@@ -21,15 +21,19 @@ export default function CustomerError({
   }, [error]);
 
   return (
-    <div className="empty-state" style={{ minHeight: "60vh", justifyContent: "center", padding: "2rem" }}>
-      <div className="empty-state-icon" aria-hidden>
+    <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-8 text-center">
+      <div className="mb-3 text-4xl opacity-70" aria-hidden>
         ⚠️
       </div>
-      <h2 style={{ fontSize: "1.125rem", fontWeight: 700, margin: "0.5rem 0" }}>Something went wrong</h2>
-      <p className="text-muted" style={{ maxWidth: "28rem", textAlign: "center", margin: "0 0 1.25rem" }}>
+      <h2 className="my-2 text-lg font-bold text-gray-900">Something went wrong</h2>
+      <p className="mb-5 max-w-md text-sm text-gray-500">
         We hit a snag loading this page. Please try again — if it keeps happening, come back in a moment.
       </p>
-      <button type="button" className="btn-primary" onClick={() => reset()}>
+      <button
+        type="button"
+        onClick={() => reset()}
+        className="inline-flex items-center justify-center rounded-[10px] bg-[var(--color-brand)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-900"
+      >
         Try again
       </button>
     </div>
