@@ -19,24 +19,22 @@ export function FlowPageShell({
   className = "",
 }: FlowPageShellProps) {
   return (
-    <div className={`min-h-screen w-full bg-gradient-to-b from-slate-100 to-slate-200 ${className}`.trim()}>
-      <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col bg-[#fafafa] shadow-sm lg:max-w-5xl">
-        {header ? <div className="shrink-0">{header}</div> : null}
-        {stepper ? <div className="shrink-0 px-4 pt-4">{stepper}</div> : null}
-        <div className="flex flex-1 flex-col lg:flex-row">
-          <div className="flex flex-1 flex-col p-4">{children}</div>
+    <div className={`flex min-h-screen w-full flex-col bg-slate-50 ${className}`.trim()}>
+      {header ? <div className="w-full shrink-0">{header}</div> : null}
+      <div className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 sm:px-6">
+        {stepper ? <div className="pt-4">{stepper}</div> : null}
+        <div className="flex flex-col gap-6 py-6 lg:flex-row lg:items-start">
+          <main className="min-w-0 flex-1">{children}</main>
           {aside ? (
-            <aside className="border-t border-gray-200 p-4 lg:w-[360px] lg:shrink-0 lg:border-l lg:border-t-0">
-              {aside}
-            </aside>
+            <aside className="w-full lg:sticky lg:top-4 lg:w-[340px] lg:shrink-0">{aside}</aside>
           ) : null}
         </div>
-        {footer ? (
-          <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 p-4 backdrop-blur-md">
-            {footer}
-          </div>
-        ) : null}
       </div>
+      {footer ? (
+        <div className="sticky bottom-0 z-10 border-t border-gray-200 bg-white/90 backdrop-blur-md">
+          <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6">{footer}</div>
+        </div>
+      ) : null}
     </div>
   );
 }
