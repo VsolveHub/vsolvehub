@@ -8,6 +8,20 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   loading?: boolean;
 };
 
+const BASE =
+  "inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2";
+
+const VARIANTS = {
+  primary: "bg-[var(--color-brand)] text-white hover:bg-blue-900",
+  secondary:
+    "border border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
+};
+
+const SIZES = {
+  default: "px-4 py-2.5 text-sm",
+  sm: "px-3 py-1.5 text-[13px]",
+};
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -23,11 +37,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const classes = [
-      "btn",
-      variant === "primary" ? "btn-primary" : "btn-secondary",
-      size === "sm" ? "btn-sm" : "",
-      block ? "btn-block" : "",
-      loading ? "btn-loading" : "",
+      BASE,
+      VARIANTS[variant],
+      SIZES[size],
+      block ? "w-full" : "",
       className,
     ]
       .filter(Boolean)
@@ -36,8 +49,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button ref={ref} className={classes} disabled={disabled || loading} {...props}>
         {loading ? (
-          <span className="btn-inner">
-            <Spinner size="sm" className="btn-spinner" />
+          <span className="inline-flex items-center gap-1.5">
+            <Spinner size="sm" />
             <span>{children}</span>
           </span>
         ) : (
