@@ -21,11 +21,13 @@ export function CustomerNotificationBell() {
   return (
     <Link
       href="/notifications"
-      className="icon-btn notif-btn"
+      className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
       aria-label={unread > 0 ? `${unread} unread notifications` : "Notifications"}
     >
       <BellIcon />
-      {unread > 0 && <span className="notif-dot" />}
+      {unread > 0 && (
+        <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-[var(--color-brand-accent)]" />
+      )}
     </Link>
   );
 }
