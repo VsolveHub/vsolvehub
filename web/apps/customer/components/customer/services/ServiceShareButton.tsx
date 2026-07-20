@@ -21,9 +21,13 @@ export function ServiceShareButton({ title, url }: Props) {
   }
 
   return (
-    <div className="sd-share">
-      <p className="sd-share-label">Share this service with your loved ones</p>
-      <button type="button" className="sd-share-btn" onClick={handleShare}>
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4">
+      <p className="text-sm font-medium text-gray-600">Share this service with your loved ones</p>
+      <button
+        type="button"
+        onClick={handleShare}
+        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-50"
+      >
         <ShareIcon />
         Share
       </button>

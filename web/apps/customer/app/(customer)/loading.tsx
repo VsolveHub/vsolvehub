@@ -1,18 +1,24 @@
+import { Skeleton } from "@/components/ui/primitives";
+
 export default function CustomerLoading() {
   return (
-    <div className="home-skeleton" aria-busy="true" aria-label="Loading">
-      <div className="skeleton home-skeleton__hero" />
-      <div className="skeleton-line skeleton-line--title" />
-      <div className="skeleton-line skeleton-line--short" />
-      <div className="home-skeleton__grid">
+    <div
+      className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-6 sm:px-6 lg:px-12"
+      aria-busy="true"
+      aria-label="Loading"
+    >
+      <Skeleton className="h-[300px] w-full rounded-[32px]" />
+      <Skeleton className="h-6 w-64 rounded-lg" />
+      <Skeleton className="h-4 w-40 rounded-lg" />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="skeleton skeleton-card" />
+          <Skeleton key={i} className="h-28 rounded-2xl" />
         ))}
       </div>
-      <div className="skeleton-line" />
-      <div className="home-skeleton__grid">
+      <Skeleton className="h-4 w-48 rounded-lg" />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={`b-${i}`} className="skeleton skeleton-card" />
+          <Skeleton key={`b-${i}`} className="h-28 rounded-2xl" />
         ))}
       </div>
     </div>
