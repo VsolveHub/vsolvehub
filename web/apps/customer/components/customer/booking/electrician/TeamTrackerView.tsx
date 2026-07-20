@@ -38,26 +38,25 @@ export function TeamTrackerView({
   const crewTotal = formatPrice(booking.finalAmountPaise ?? booking.quotedAmount);
 
   return (
-    <div className="flow-page-shell">
-      <div className="flow-page-shell__inner flex flex-col">
-      {/* Header Bar */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-purple-900 text-white shadow-sm select-none">
-        <Link href="/" className="text-xl leading-none text-purple-200 hover:text-white cursor-pointer no-underline">
+    <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col bg-white md:min-h-screen">
+      {/* Header bar */}
+      <div className="flex items-center gap-3 bg-[var(--color-brand)] px-4 py-3 text-white shadow-sm">
+        <Link href="/" className="text-xl leading-none text-white/80 transition-colors hover:text-white">
           ←
         </Link>
-        <span className="font-semibold text-sm truncate">Electrician — Team</span>
+        <span className="truncate text-sm font-black uppercase tracking-widest">Electrician — Team</span>
       </div>
 
-      {/* Numbered Step Progress Header */}
-      <div className="flex items-center gap-3 px-4 py-2.5 bg-purple-50 border-b border-purple-100/60 select-none">
-        <span className="w-5 h-5 flex items-center justify-center bg-purple-600 text-white font-bold rounded-full text-[10px] shadow-sm">
+      {/* Numbered step progress header */}
+      <div className="flex items-center gap-3 border-b border-[var(--color-brand)]/20 bg-[var(--color-brand-light)] px-4 py-2.5">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-brand)] text-[10px] font-black text-white shadow-sm">
           {badge}
         </span>
-        <span className="font-bold text-xs text-purple-900">{title}</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-brand)]">{title}</span>
       </div>
 
-      {/* Scrollable Tracker Content */}
-      <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4 pb-20">
+      {/* Scrollable tracker content */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 pb-28">
         {!isCompleted ? (
           <TeamActivePanel teamName={teamName} currentStatusIndex={currentStatusIndex} getStepDetails={getStepDetails} />
         ) : (
@@ -72,37 +71,50 @@ export function TeamTrackerView({
         )}
       </div>
 
-      {/* Component Footer Bar (inside simulator frame) */}
+      {/* Footer action bar */}
       {!isCompleted ? (
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex gap-3.5 z-40 select-none items-center justify-between">
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-gray-100 bg-white p-4">
           <div className="flex gap-2">
-            <button type="button" className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-800 flex items-center justify-center text-lg border border-purple-100/50">
+            <a
+              href={`tel:${professional?.phone || "9876543210"}`}
+              aria-label="Call team"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-light)] text-lg text-[var(--color-brand)]"
+            >
               📞
-            </button>
-            <button type="button" className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-800 flex items-center justify-center text-lg border border-purple-100/50">
+            </a>
+            <Link
+              href="/profile/messages"
+              aria-label="Chat with team"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-light)] text-lg text-[var(--color-brand)]"
+            >
               💬
-            </button>
+            </Link>
           </div>
-          <button type="button" onClick={cancelBooking} disabled={loading} className="border border-red-500 hover:bg-red-50 text-red-500 font-extrabold text-xs rounded-2xl py-3 flex-grow text-center cursor-pointer transition-all disabled:opacity-50">
+          <button
+            type="button"
+            onClick={cancelBooking}
+            disabled={loading}
+            className="flex-1 rounded-2xl border border-red-500 py-3 text-xs font-extrabold text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50"
+          >
             Cancel
           </button>
         </div>
       ) : (
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex justify-between items-center gap-4 z-40 select-none">
+        <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-gray-100 bg-white p-4">
           <div>
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Total Amount Paid</span>
-            <p className="font-black text-purple-955 text-sm m-0">₹{crewTotal}</p>
+            <span className="block text-[9px] font-bold uppercase tracking-wider text-gray-400">
+              Total amount paid
+            </span>
+            <p className="text-sm font-black text-[var(--color-brand)]">{crewTotal}</p>
           </div>
           <Link
             href="/"
-            className="py-3 bg-purple-900 hover:bg-purple-955 text-white text-xs font-bold rounded-full px-8 text-center cursor-pointer transition-all no-underline shadow"
+            className="rounded-full bg-[var(--color-brand)] px-8 py-3 text-xs font-bold text-white shadow transition-colors hover:bg-blue-900"
           >
-            Back to Home
+            Back to home
           </Link>
         </div>
       )}
-
-      </div>
     </div>
   );
 }

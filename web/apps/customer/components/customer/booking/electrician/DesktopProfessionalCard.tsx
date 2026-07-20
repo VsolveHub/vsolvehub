@@ -4,25 +4,40 @@ import type { BookingParty } from "@/lib/booking/types";
 export function DesktopProfessionalCard({ professional }: { professional: BookingParty | null }) {
   if (!professional) {
     return (
-      <div className="tracker-partner-searching-v3">
-        <p>Searching for available technician near you...</p>
+      <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-sm text-gray-500">
+        Searching for an available technician near you…
       </div>
     );
   }
   return (
-    <div className="tracker-partner-card-v3">
+    <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
       <img
         src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
         alt={professional.name}
-        className="partner-avatar-v3"
+        className="h-14 w-14 rounded-full object-cover"
       />
-      <div className="partner-info-v3">
-        <h4 className="partner-name-v3">{professional.name}</h4>
-        <p className="partner-rating-v3">★ {professional.rating?.toFixed(1) || "4.9"} (128 reviews)</p>
+      <div className="min-w-0 flex-1">
+        <h4 className="text-sm font-black text-gray-900">{professional.name}</h4>
+        <p className="text-xs font-semibold text-gray-500">
+          <span className="text-[var(--color-brand-accent)]">★</span>{" "}
+          {professional.rating?.toFixed(1) || "4.9"} (128 reviews)
+        </p>
       </div>
-      <div className="partner-actions-v3">
-        <Link href="/profile/messages" className="action-btn-v3 chat no-underline">💬</Link>
-        <a href={`tel:${professional.phone || "9876543210"}`} className="action-btn-v3 call">📞</a>
+      <div className="flex gap-2">
+        <Link
+          href="/profile/messages"
+          aria-label="Chat with partner"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-brand-light)] text-[var(--color-brand)] transition-colors hover:bg-[var(--color-brand)] hover:text-white"
+        >
+          💬
+        </Link>
+        <a
+          href={`tel:${professional.phone || "9876543210"}`}
+          aria-label="Call partner"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-700 transition-colors hover:bg-green-600 hover:text-white"
+        >
+          📞
+        </a>
       </div>
     </div>
   );
