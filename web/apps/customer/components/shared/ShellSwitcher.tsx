@@ -1,24 +1,32 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { AppHeader, BottomNav } from "@/components/shared/AppShell";
 import { AppFooter } from "@/components/shared/AppFooter";
+import { AnimatePresence, motion } from "framer-motion";
 
 /**
  * App chrome wrapper (header, bottom nav, footer) shared by every customer page.
- *
- * Location detection is intentionally NOT handled here. It lives entirely in
- * <AppHeader>'s address modal, which prompts the user *with context* (and routes
- * reverse-geocoding through the /api/geocode/reverse proxy). Doing it here too
- * caused a second, uncontextualized geolocation prompt and a direct call to the
- * external Nominatim host from the browser.
+ * Uses Framer Motion for smooth page-to-page transitions.
  */
 export function ShellSwitcher({ children }: { children: React.ReactNode }) {
-  // Keep navigation present on all customer pages for a consistent app feel.
-  // The header supports a compact mode on certain routes via `app-header--compact`.
+  const pathname = usePathname();
+
   return (
-    <div className="shell-switcher-layout" suppressHydrationWarning>
+    <div className="flex flex-col min-h-screen w-full bg-[#f1f5f9]" suppressHydrationWarning>
       <AppHeader />
-      <main className="main-content main-content-wrapper">{children}</main>
+      <AnimatePresence mode="wait">
+        <motion.main
+          key={pathname}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -15 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="flex-1 w-full max-w-full m-0 pb-[88px]"
+        >
+          {children}
+        </motion.main>
+      </AnimatePresence>
       <BottomNav />
       <AppFooter />
     </div>
