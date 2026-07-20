@@ -10,12 +10,12 @@ type Props = {
 
 export function QuotesStep({ bookingType, quoteOptions, selectedQuoteId, setSelectedQuoteId, duration }: Props) {
   return (
-    <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <p style={{ color: "#666", fontSize: "0.8rem", margin: 0 }}>
         {bookingType === "individual" ? "Choose the best worker for your task:" : "Choose the best team for your work:"}
       </p>
       {bookingType === "team" && quoteOptions.length === 0 && (
-        <div className="vsh-card" style={{ textAlign: "center", padding: "1.5rem", color: "#71717a", fontSize: "0.85rem" }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ textAlign: "center", padding: "1.5rem", color: "#71717a", fontSize: "0.85rem" }}>
           No verified teams are available for this requirement right now. Try adjusting your crew or pick
           “Auto Assign”.
         </div>

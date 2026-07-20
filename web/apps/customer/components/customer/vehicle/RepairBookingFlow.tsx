@@ -107,35 +107,35 @@ export function RepairBookingFlow() {
   }
 
   return (
-    <div className="stack-lg booking-flow">
+    <div className="flex flex-col gap-6 booking-flow">
       <VehicleFlowHeader steps={STEPS} labels={STEP_LABELS} currentStep={step} />
 
       {step === "issue" && (
-        <div className="card stack">
-          <h2 className="section-title">What&apos;s the issue?</h2>
-          <div className="stack">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">What&apos;s the issue?</h2>
+          <div className="flex flex-col gap-4">
             {REPAIR_ISSUES.map((i) => (
               <button key={i} type="button" className={`vendor-card ${issue === i ? "selected" : ""}`} onClick={() => setIssue(i)}>
-                <p className="card-title">{i}</p>
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{i}</p>
               </button>
             ))}
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => uploadImages(e.target.files)} />
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>Upload vehicle photos</Button>
-          {uploadError && <p className="alert alert-error">{uploadError}</p>}
-          {mediaUrls.length > 0 && <p className="text-sm text-muted">{mediaUrls.length} photo(s)</p>}
+          {uploadError && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{uploadError}</p>}
+          {mediaUrls.length > 0 && <p className="text-sm text-gray-500">{mediaUrls.length} photo(s)</p>}
           <Button onClick={() => issue && setStep("vehicle")} disabled={!issue}>Continue</Button>
         </div>
       )}
 
       {step === "vehicle" && (
-        <div className="card stack">
-          <h2 className="section-title">Vehicle details</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Vehicle details</h2>
           <Input label="Vehicle type" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} placeholder="e.g. Car, Bike" />
           <Input label="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. Maruti" />
           <Input label="Model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. Swift" />
           <Input label="Year" value={year} onChange={(e) => setYear(e.target.value)} placeholder="2020" maxLength={4} />
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("issue")}>Back</Button>
             <Button onClick={() => vehicleType && brand && model && year.length === 4 && setStep("pickup")} disabled={!vehicleType || !brand || !model || year.length !== 4}>Continue</Button>
           </div>
@@ -143,14 +143,14 @@ export function RepairBookingFlow() {
       )}
 
       {step === "pickup" && (
-        <div className="card stack">
-          <h2 className="section-title">Service location</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Service location</h2>
           <div className="booking-mode-tabs">
             <button type="button" className={`booking-mode-tab ${pickupOption === "garage" ? "active" : ""}`} onClick={() => setPickupOption("garage")}>At garage</button>
             <button type="button" className={`booking-mode-tab ${pickupOption === "doorstep" ? "active" : ""}`} onClick={() => setPickupOption("doorstep")}>Doorstep service</button>
           </div>
           <Textarea label="Address" value={serviceAddress} onChange={(e) => setServiceAddress(e.target.value)} placeholder="Service location address" />
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("vehicle")}>Back</Button>
             <Button onClick={() => serviceAddress.trim().length >= 5 && setStep("schedule")} disabled={serviceAddress.trim().length < 5}>Continue</Button>
           </div>
@@ -158,11 +158,11 @@ export function RepairBookingFlow() {
       )}
 
       {step === "schedule" && (
-        <div className="card stack">
-          <h2 className="section-title">Schedule</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Schedule</h2>
           <Input label="Date" type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} />
           <Input label="Time" type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("pickup")}>Back</Button>
             <Button onClick={() => scheduleDate && setStep("mechanic")} disabled={!scheduleDate}>Find mechanic</Button>
           </div>
@@ -170,15 +170,15 @@ export function RepairBookingFlow() {
       )}
 
       {step === "mechanic" && (
-        <div className="card stack">
-          <h2 className="section-title">Assign mechanic</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Assign mechanic</h2>
           {vendors.map((v) => (
             <button key={v.id} type="button" className={`vendor-card ${vendorId === v.id ? "selected" : ""}`} onClick={() => setVendorId(v.id)}>
-              <p className="card-title">{v.name}</p>
-              <p className="text-sm text-muted">★ {v.rating.toFixed(1)}</p>
+              <p className="mb-1 text-[15px] font-semibold text-gray-900">{v.name}</p>
+              <p className="text-sm text-gray-500">★ {v.rating.toFixed(1)}</p>
             </button>
           ))}
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("schedule")}>Back</Button>
             <Button onClick={() => vendorId && setStep("payment")} disabled={!vendorId}>Continue</Button>
           </div>
@@ -186,18 +186,18 @@ export function RepairBookingFlow() {
       )}
 
       {step === "payment" && (
-        <div className="card stack">
-          <h2 className="section-title">Payment</h2>
-          <div className="stack">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Payment</h2>
+          <div className="flex flex-col gap-4">
             {PAYMENT_OPTIONS.map((p) => (
               <button key={p.id} type="button" className={`vendor-card ${paymentMethod === p.id ? "selected" : ""}`} onClick={() => setPaymentMethod(p.id)}>
-                <p className="card-title">{p.label}</p>
-                {p.id === "wallet" && <p className="text-sm text-muted">Balance: {formatPrice(WALLET_BALANCE_PAISE)}</p>}
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{p.label}</p>
+                {p.id === "wallet" && <p className="text-sm text-gray-500">Balance: {formatPrice(WALLET_BALANCE_PAISE)}</p>}
               </button>
             ))}
           </div>
-          {error && <p className="alert alert-error">{error}</p>}
-          <div className="booking-action-row">
+          {error && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</p>}
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("mechanic")}>Back</Button>
             <Button onClick={confirm} loading={loading} disabled={loading}>Confirm repair</Button>
           </div>

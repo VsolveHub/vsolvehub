@@ -9,7 +9,7 @@ type Props = {
 
 export function SearchingStep({ bookingType, activeWorkers, foundRows }: Props) {
   return (
-    <div className="vsh-card stack text-center" style={{ padding: "2.5rem 1.5rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 text-center" style={{ padding: "2.5rem 1.5rem", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div className="search-workers-animation" style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
         <div style={{ width: "12px", height: "12px", background: "var(--color-brand)", borderRadius: "50%", animation: "bounce 0.6s infinite alternate" }} />
         <div style={{ width: "12px", height: "12px", background: "var(--color-brand)", borderRadius: "50%", animation: "bounce 0.6s infinite 0.15s alternate" }} />

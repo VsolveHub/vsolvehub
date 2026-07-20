@@ -125,7 +125,7 @@ export function CrewBookingTracker({ booking, onRefresh }: { booking: CrewTracki
 
       <div className="vsh-content" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {/* Requested crew */}
-        <div className="vsh-card" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#a1a1aa", textTransform: "uppercase" }}>
             Crew requirement · {booking.durationDays} {booking.durationDays === 1 ? "day" : "days"}
           </span>

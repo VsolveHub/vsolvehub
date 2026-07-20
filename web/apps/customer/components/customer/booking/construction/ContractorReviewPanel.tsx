@@ -15,7 +15,7 @@ type Props = {
 export function ContractorReviewPanel({ reviewSubmitted, rating, setRating, review, setReview, error, loading, onSubmit }: Props) {
   if (reviewSubmitted) {
     return (
-      <div className="alert alert-success" style={{ fontSize: "0.8rem" }}>
+      <div className="rounded-xl px-4 py-3 text-sm bg-green-50 text-green-700" style={{ fontSize: "0.8rem" }}>
         Thanks for your rating and feedback!
       </div>
     );

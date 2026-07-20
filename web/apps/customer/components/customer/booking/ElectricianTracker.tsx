@@ -59,37 +59,39 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
   const title = isCompleted ? "Job Completed" : "Live Tracking";
 
   return (
-    <div className="flow-page-shell tracker-page-shell-v3">
+    <div className="flex w-full h-[100dvh] md:h-auto md:min-h-screen bg-gray-100 overflow-hidden text-gray-900">
       {/* Desktop view */}
-      <DesktopPanel
-        booking={booking}
-        professional={professional}
-        status={status}
-        currentStatusIndex={currentStatusIndex}
-        getStepDetails={getStepDetails}
-        onShowDetails={() => setShowDetailsModal(true)}
-      />
+      <div className="hidden md:flex w-full max-w-6xl mx-auto h-full p-6">
+        <DesktopPanel
+          booking={booking}
+          professional={professional}
+          status={status}
+          currentStatusIndex={currentStatusIndex}
+          getStepDetails={getStepDetails}
+          onShowDetails={() => setShowDetailsModal(true)}
+        />
+      </div>
 
       {/* Mobile view wrapped */}
-      <div className="tracker-mobile-view-v3 flex flex-col h-full">
+      <div className="flex md:hidden flex-col w-full h-full bg-white relative">
         {/* Header Bar */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-blue-900 text-white shadow-sm select-none">
-          <Link href="/" className="text-xl leading-none text-blue-200 hover:text-white cursor-pointer no-underline">
+        <div className="flex items-center gap-3 px-4 py-3 bg-[var(--color-brand)] text-white shadow-sm select-none z-10">
+          <Link href="/" className="text-xl leading-none text-white/80 hover:text-white cursor-pointer no-underline">
             ←
           </Link>
-          <span className="font-semibold text-sm truncate">Booking Status</span>
+          <span className="font-black text-sm truncate uppercase tracking-widest">Booking Status</span>
         </div>
 
         {/* Numbered Step Progress Header */}
-        <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border-b border-blue-100/60 select-none">
-          <span className="w-5 h-5 flex items-center justify-center bg-blue-600 text-white font-bold rounded-full text-[10px] shadow-sm">
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-[var(--color-brand-light)] border-b border-[var(--color-brand)]/20 select-none z-10">
+          <span className="w-5 h-5 flex items-center justify-center bg-[var(--color-brand)] text-white font-black rounded-full text-[10px] shadow-sm">
             {badge}
           </span>
-          <span className="font-bold text-xs text-blue-900">{title}</span>
+          <span className="font-bold text-xs text-[var(--color-brand)] uppercase tracking-wider">{title}</span>
         </div>
 
         {/* Scrollable Tracker Content */}
-        <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4 pb-20">
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 pb-24 bg-gray-50">
           {!isCompleted ? (
             <ActiveJobPanel
               booking={booking}
@@ -116,13 +118,13 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
           )}
         </div>
 
-        {/* Component Footer Bar (inside simulator frame, only when not completed) */}
+        {/* Component Footer Bar */}
         {!isCompleted && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex gap-3 z-40 select-none">
-            <button type="button" onClick={cancelBooking} disabled={loading} className="flex-1 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-full text-center cursor-pointer transition-all disabled:opacity-50">
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-150 flex gap-3 z-40 select-none shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+            <button type="button" onClick={cancelBooking} disabled={loading} className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-xl text-center cursor-pointer transition-colors disabled:opacity-50">
               Cancel Booking
             </button>
-            <button type="button" className="flex-1 py-2.5 bg-purple-900 hover:bg-purple-950 text-white text-xs font-bold rounded-full flex items-center justify-center gap-1.5 cursor-pointer transition-all">
+            <button type="button" className="flex-1 py-3 bg-[var(--color-brand)] hover:opacity-90 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-opacity shadow-md">
               💬 Chat with {professional?.name.split(" ")[0] || "Partner"}
             </button>
           </div>

@@ -116,16 +116,16 @@ export function RentalBookingFlow() {
   }
 
   return (
-    <div className="stack-lg booking-flow">
+    <div className="flex flex-col gap-6 booking-flow">
       <VehicleFlowHeader steps={STEPS} labels={STEP_LABELS} currentStep={step} />
 
       {step === "type" && (
-        <div className="card stack">
-          <h2 className="section-title">Rental type</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Rental type</h2>
           <div className="grid-2">
             {RENTAL_TYPES.map((t) => (
               <button key={t.id} type="button" className={`vendor-card ${rentalType === t.id ? "selected" : ""}`} onClick={() => setRentalType(t.id)}>
-                <p className="card-title">{t.label}</p>
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{t.label}</p>
               </button>
             ))}
           </div>
@@ -134,16 +134,16 @@ export function RentalBookingFlow() {
       )}
 
       {step === "vehicle" && (
-        <div className="card stack">
-          <h2 className="section-title">Select vehicle</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Select vehicle</h2>
           {assets.map((a) => (
             <button key={a.id} type="button" className={`vendor-card ${assetId === a.id ? "selected" : ""}`} onClick={() => setAssetId(a.id)}>
-              <p className="card-title">{a.name}</p>
-              <p className="text-sm text-muted">{a.brand} {a.model} · {a.year}</p>
+              <p className="mb-1 text-[15px] font-semibold text-gray-900">{a.name}</p>
+              <p className="text-sm text-gray-500">{a.brand} {a.model} · {a.year}</p>
               <p className="text-sm">{formatPrice(a.pricePerDayPaise)}/day · Deposit {formatPrice(a.depositPaise)}</p>
             </button>
           ))}
-          <div className="booking-action-row">
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("type")}>Back</Button>
             <Button onClick={() => assetId && setStep("dates")} disabled={!assetId}>Continue</Button>
           </div>
@@ -151,14 +151,14 @@ export function RentalBookingFlow() {
       )}
 
       {step === "dates" && (
-        <div className="card stack">
-          <h2 className="section-title">Pickup & return</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Pickup & return</h2>
           <Input label="Pickup date" type="date" value={pickupDate} onChange={(e) => setPickupDate(e.target.value)} />
           <Input label="Pickup time" type="time" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} />
           <Input label="Return date" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
           <Input label="Return time" type="time" value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
-          {durationDays > 0 && <p className="text-sm text-muted">{durationDays} day(s)</p>}
-          <div className="booking-action-row">
+          {durationDays > 0 && <p className="text-sm text-gray-500">{durationDays} day(s)</p>}
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("vehicle")}>Back</Button>
             <Button onClick={() => pickupDate && returnDate && setStep("license")} disabled={!pickupDate || !returnDate}>Continue</Button>
           </div>
@@ -166,13 +166,13 @@ export function RentalBookingFlow() {
       )}
 
       {step === "license" && (
-        <div className="card stack">
-          <h2 className="section-title">Driving license</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Driving license</h2>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadLicense(e.target.files)} />
           <Button variant="secondary" onClick={() => fileRef.current?.click()}>Upload license photo</Button>
-          {uploadError && <p className="alert alert-error">{uploadError}</p>}
-          {licenseUrls.length > 0 && <p className="text-sm text-muted">{licenseUrls.length} file(s) uploaded</p>}
-          <div className="booking-action-row">
+          {uploadError && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{uploadError}</p>}
+          {licenseUrls.length > 0 && <p className="text-sm text-gray-500">{licenseUrls.length} file(s) uploaded</p>}
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("dates")}>Back</Button>
             <Button onClick={() => licenseUrls.length && setStep("summary")} disabled={!licenseUrls.length}>Continue</Button>
           </div>
@@ -180,13 +180,13 @@ export function RentalBookingFlow() {
       )}
 
       {step === "summary" && totals && selected && (
-        <div className="card stack">
-          <h2 className="section-title">Booking summary</h2>
-          <p className="card-title">{selected.name}</p>
-          <p className="text-sm text-muted">{durationDays} days · {formatPrice(totals.rentalPaise)} rental</p>
-          <p className="text-sm text-muted">Security deposit: {formatPrice(totals.depositPaise)}</p>
-          <p className="card-title">Total: {formatPrice(totals.totalPaise)}</p>
-          <div className="booking-action-row">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Booking summary</h2>
+          <p className="mb-1 text-[15px] font-semibold text-gray-900">{selected.name}</p>
+          <p className="text-sm text-gray-500">{durationDays} days · {formatPrice(totals.rentalPaise)} rental</p>
+          <p className="text-sm text-gray-500">Security deposit: {formatPrice(totals.depositPaise)}</p>
+          <p className="mb-1 text-[15px] font-semibold text-gray-900">Total: {formatPrice(totals.totalPaise)}</p>
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("license")}>Back</Button>
             <Button onClick={() => setStep("payment")}>Proceed to payment</Button>
           </div>
@@ -194,19 +194,19 @@ export function RentalBookingFlow() {
       )}
 
       {step === "payment" && totals && (
-        <div className="card stack">
-          <h2 className="section-title">Payment</h2>
-          <p className="card-title">{formatPrice(totals.totalPaise)}</p>
-          <div className="stack">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Payment</h2>
+          <p className="mb-1 text-[15px] font-semibold text-gray-900">{formatPrice(totals.totalPaise)}</p>
+          <div className="flex flex-col gap-4">
             {PAYMENT_OPTIONS.map((p) => (
               <button key={p.id} type="button" className={`vendor-card ${paymentMethod === p.id ? "selected" : ""}`} onClick={() => setPaymentMethod(p.id)}>
-                <p className="card-title">{p.label}</p>
-                {p.id === "wallet" && <p className="text-sm text-muted">Balance: {formatPrice(WALLET_BALANCE_PAISE)}</p>}
+                <p className="mb-1 text-[15px] font-semibold text-gray-900">{p.label}</p>
+                {p.id === "wallet" && <p className="text-sm text-gray-500">Balance: {formatPrice(WALLET_BALANCE_PAISE)}</p>}
               </button>
             ))}
           </div>
-          {error && <p className="alert alert-error">{error}</p>}
-          <div className="booking-action-row">
+          {error && <p className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</p>}
+          <div className="mt-4 flex flex-col gap-2.5">
             <Button variant="secondary" onClick={() => setStep("summary")}>Back</Button>
             <Button onClick={confirm} loading={loading} disabled={loading}>Confirm rental</Button>
           </div>

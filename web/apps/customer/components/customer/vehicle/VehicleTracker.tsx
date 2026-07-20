@@ -54,7 +54,7 @@ export function VehicleTracker({ bookingRef }: { bookingRef: string }) {
     resetMutation.mutate();
   }
 
-  if (error) return <div className="alert alert-error">Booking not found</div>;
+  if (error) return <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">Booking not found</div>;
   if (isLoading || !data) return <LoadingState label="Loading booking status…" variant="inline" />;
 
   const canCancel = !["COMPLETED", "CANCELLED"].includes(data.status);

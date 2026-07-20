@@ -40,7 +40,7 @@ export function WorkforceStep({
 }: Props) {
   if (bookingType === "individual") {
     return (
-      <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <p style={{ fontWeight: 700, fontSize: "0.9rem", margin: 0 }}>What kind of worker do you need?</p>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {WORKER_ROLES.map((r) => (
@@ -67,7 +67,7 @@ export function WorkforceStep({
   }
 
   return (
-    <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <p style={{ fontWeight: 700, fontSize: "0.9rem", margin: 0 }}>Select number of workers</p>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
         {teamWorkers.map((w) => (

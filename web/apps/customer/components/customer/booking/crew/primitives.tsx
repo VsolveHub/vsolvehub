@@ -11,7 +11,7 @@ export function Row({ label, value, bold, tone }: { label: string; value: string
 
 export function OtpCard({ label, code, hint }: { label: string; code: string; hint: string }) {
   return (
-    <div className="vsh-card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", border: "1px dashed var(--color-brand)", background: "var(--color-brand-light)" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", border: "1px dashed var(--color-brand)", background: "var(--color-brand-light)" }}>
       <div style={{ minWidth: 0 }}>
         <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700, color: "var(--color-brand)", textTransform: "uppercase" }}>{label}</p>
         <p style={{ margin: "0.1rem 0 0 0", fontSize: "0.72rem", color: "#71717a" }}>{hint}</p>

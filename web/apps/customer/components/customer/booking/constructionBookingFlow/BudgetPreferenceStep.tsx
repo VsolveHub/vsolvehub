@@ -25,8 +25,8 @@ export function BudgetPreferenceStep({
   setProceedChoice,
 }: Props) {
   return (
-    <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <div className="flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <Input label="Budget per day (Optional ₹)" value={budget} onChange={(e) => setBudget(e.target.value.replace(/\D/g, ""))} placeholder={`Suggested ₹${baseDailyRate}`} inputMode="numeric" />
         <div>
           <p style={{ fontWeight: 700, fontSize: "0.8rem", color: "#4b5563", margin: "0 0 0.375rem 0" }}>Work Priority</p>

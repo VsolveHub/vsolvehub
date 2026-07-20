@@ -16,7 +16,7 @@ type Props = {
 
 export function SummaryStep({ bookingType, activeWorkers, startDate, duration, siteLocation, proceedChoice, selectedQuote, dailyRate, totalAmount }: Props) {
   return (
-    <div className="vsh-card stack" style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4" style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
       <SummaryRow label="Project Type" value={bookingType === "individual" ? "Individual Worker" : "Construction Crew"} />
       <div style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "0.625rem" }}>
         <p style={{ fontSize: "0.8rem", color: "#71717a", margin: 0 }}>{bookingType === "individual" ? "Worker" : "Crew"}</p>

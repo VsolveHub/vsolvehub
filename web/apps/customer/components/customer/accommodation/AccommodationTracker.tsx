@@ -57,45 +57,45 @@ export function AccommodationTracker({ bookingRef }: { bookingRef: string }) {
     }
   }
 
-  if (error) return <div className="alert alert-error">{error}</div>;
+  if (error) return <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</div>;
   if (!data) return <LoadingState label="Loading booking…" variant="inline" />;
 
   const status = data.status as keyof typeof ACCOMMODATION_STATUS_LABELS;
   const canCancel = !["CHECKED_IN", "CANCELLED"].includes(data.status);
 
   return (
-    <div className="stack-lg">
-      <div className="card">
-        <div className="flex-between">
+    <div className="flex flex-col gap-6">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm text-muted">Booking reference</p>
-            <p className="card-title">{data.bookingRef}</p>
+            <p className="text-sm text-gray-500">Booking reference</p>
+            <p className="mb-1 text-[15px] font-semibold text-gray-900">{data.bookingRef}</p>
           </div>
           <Badge status={status}>{ACCOMMODATION_STATUS_LABELS[status] ?? status}</Badge>
         </div>
-        <p className="alert alert-info mt-2">{data.message}</p>
+        <p className="rounded-xl px-4 py-3 text-sm bg-[var(--color-brand-light)] text-[var(--color-brand-dark)] mt-2">{data.message}</p>
       </div>
 
-      <div className="card">
-        <h2 className="section-title">Status</h2>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Status</h2>
         <AccommodationStatusTimeline currentStatus={data.status} />
       </div>
 
-      <div className="card stack">
-        <h2 className="section-title">Owner</h2>
-        <p className="card-title">{data.owner.name}</p>
-        <p className="text-sm text-muted">★ {data.owner.rating.toFixed(1)}</p>
-        <div className="booking-action-row">
-          <a href={`tel:${data.owner.phone}`} className="btn btn-secondary btn-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Owner</h2>
+        <p className="mb-1 text-[15px] font-semibold text-gray-900">{data.owner.name}</p>
+        <p className="text-sm text-gray-500">★ {data.owner.rating.toFixed(1)}</p>
+        <div className="mt-4 flex flex-col gap-2.5">
+          <a href={`tel:${data.owner.phone}`} className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-3 py-1.5 text-[13px] border border-gray-200 bg-white text-gray-900 hover:bg-gray-50">
             Call
           </a>
         </div>
       </div>
 
-      <div className="card stack">
-        <p className="text-sm text-muted">Property</p>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+        <p className="text-sm text-gray-500">Property</p>
         <p>{data.property.title}</p>
-        <p className="text-sm text-muted">{data.property.location}</p>
+        <p className="text-sm text-gray-500">{data.property.location}</p>
         {data.moveInDate && (
           <p>
             Move-in: {formatDate(data.moveInDate)}
@@ -103,7 +103,7 @@ export function AccommodationTracker({ bookingRef }: { bookingRef: string }) {
           </p>
         )}
         {data.visitDate && <p>Visit: {formatDate(data.visitDate)}</p>}
-        <p className="detail-price">{formatPrice(data.totalPaidPaise)} paid</p>
+        <p className="text-lg font-black text-gray-900">{formatPrice(data.totalPaidPaise)} paid</p>
       </div>
 
       {canCancel && (
@@ -112,7 +112,7 @@ export function AccommodationTracker({ bookingRef }: { bookingRef: string }) {
         </Button>
       )}
 
-      <Link href="/accommodation" className="btn btn-secondary btn-block" style={{ textAlign: "center" }}>
+      <Link href="/accommodation" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 w-full" style={{ textAlign: "center" }}>
         Browse more stays
       </Link>
     </div>

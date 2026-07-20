@@ -176,23 +176,23 @@ export function BookingForm({ serviceId }: BookingFormProps) {
         <div className="wizard-main-col">
           {/* STEP 1: Address selection */}
           {formStep === 1 && (
-            <div className="stack-lg">
-              <div className="card">
+            <div className="flex flex-col gap-6">
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="service-card-header">
                   <span className="service-card-icon">
                     <FlaticonIcon name={service.category.icon} size={24} color="var(--color-brand)" />
                   </span>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600">Selected service</span>
-                    <h2 className="card-title text-sm">{service.name}</h2>
+                    <h2 className="mb-1 text-[15px] font-semibold text-gray-900 text-sm">{service.name}</h2>
                     <p className="card-price text-xs font-bold text-gray-800">{formatPrice(service.pricePaise)}{service.unit === "day" ? "/day" : ""}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="card stack">
-                <div className="flex-between">
-                  <h2 className="section-title text-xs font-bold" style={{ margin: 0 }}>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="mb-4 text-lg font-semibold text-gray-900 text-xs font-bold" style={{ margin: 0 }}>
                     Select delivery address
                   </h2>
                   <Button variant="secondary" size="sm" onClick={() => setShowNewAddress(!showNewAddress)}>
@@ -217,7 +217,7 @@ export function BookingForm({ serviceId }: BookingFormProps) {
                 </div>
 
                 {showNewAddress && (
-                  <div className="stack border-t border-gray-100 pt-3 mt-1">
+                  <div className="flex flex-col gap-4 border-t border-gray-100 pt-3 mt-1">
                     <Input label="Address tag label" placeholder="e.g. Home, Office, Rent Room" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} />
                     <Textarea label="Full address details" placeholder="Flat number, building, landmark, area, city, pincode" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
                     <Button onClick={addAddress} disabled={!newLabel || newAddress.length < 10}>
@@ -239,9 +239,9 @@ export function BookingForm({ serviceId }: BookingFormProps) {
 
           {/* STEP 2: Slot Selection */}
           {formStep === 2 && (
-            <div className="stack-lg">
-              <div className="card stack">
-                <h2 className="section-title text-xs font-bold">Select time slot</h2>
+            <div className="flex flex-col gap-6">
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+                <h2 className="mb-4 text-lg font-semibold text-gray-900 text-xs font-bold">Select time slot</h2>
                 <div className="slot-grid">
                   {slots.map((slot) => (
                     <button
@@ -273,48 +273,48 @@ export function BookingForm({ serviceId }: BookingFormProps) {
 
           {/* STEP 3: Review & Summary */}
           {formStep === 3 && (
-            <div className="stack-lg">
+            <div className="flex flex-col gap-6">
               {/* Details Summary */}
-              <div className="card stack gap-sm">
-                <h2 className="section-title text-xs font-bold m-0 border-b border-gray-100 pb-2">Booking details</h2>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 gap-sm">
+                <h2 className="mb-4 text-lg font-semibold text-gray-900 text-xs font-bold m-0 border-b border-gray-100 pb-2">Booking details</h2>
                 
-                <div className="review-item">
-                  <span className="review-label">Service</span>
-                  <span className="review-val font-bold">{service.name}</span>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-sm text-gray-500">Service</span>
+                  <span className="text-sm font-semibold text-gray-900 font-bold">{service.name}</span>
                 </div>
-                <div className="review-item">
-                  <span className="review-label">Time slot</span>
-                  <span className="review-val font-bold text-purple-700">{selectedSlotObj?.label}</span>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-sm text-gray-500">Time slot</span>
+                  <span className="text-sm font-semibold text-gray-900 font-bold text-purple-700">{selectedSlotObj?.label}</span>
                 </div>
-                <div className="review-item">
-                  <span className="review-label">Address</span>
-                  <span className="review-val text-gray-600">{selectedAddrObj?.fullAddress}</span>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-sm text-gray-500">Address</span>
+                  <span className="text-sm font-semibold text-gray-900 text-gray-600">{selectedAddrObj?.fullAddress}</span>
                 </div>
               </div>
 
               {/* Price breakdown card */}
-              <div className="card stack gap-sm bg-purple-50/40 border border-purple-100 md:hidden">
-                <h2 className="section-title text-xs font-bold m-0 border-b border-purple-100/60 pb-2">Pricing breakdown</h2>
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 gap-sm bg-purple-50/40 border border-purple-100 md:hidden">
+                <h2 className="mb-4 text-lg font-semibold text-gray-900 text-xs font-bold m-0 border-b border-purple-100/60 pb-2">Pricing breakdown</h2>
                 
-                <div className="review-item text-xs">
-                  <span className="review-label text-gray-500">Service cost</span>
-                  <span className="review-val">{formatPrice(basePrice)}</span>
+                <div className="flex items-center justify-between py-1 text-xs">
+                  <span className="text-sm text-gray-500 text-gray-500">Service cost</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatPrice(basePrice)}</span>
                 </div>
-                <div className="review-item text-xs">
-                  <span className="review-label text-gray-500">Platform fee</span>
-                  <span className="review-val">{formatPrice(platformFee)}</span>
+                <div className="flex items-center justify-between py-1 text-xs">
+                  <span className="text-sm text-gray-500 text-gray-500">Platform fee</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatPrice(platformFee)}</span>
                 </div>
-                <div className="review-item text-xs">
-                  <span className="review-label text-gray-500">GST &amp; Taxes (18%)</span>
-                  <span className="review-val">{formatPrice(gstTax)}</span>
+                <div className="flex items-center justify-between py-1 text-xs">
+                  <span className="text-sm text-gray-500 text-gray-500">GST &amp; Taxes (18%)</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatPrice(gstTax)}</span>
                 </div>
-                <div className="review-item border-t border-purple-100 pt-2 font-bold text-sm text-purple-950">
-                  <span className="review-label">Total payable</span>
-                  <span className="review-val">{formatPrice(totalAmount)}</span>
+                <div className="flex items-center justify-between py-1 border-t border-purple-100 pt-2 font-bold text-sm text-purple-950">
+                  <span className="text-sm text-gray-500">Total payable</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatPrice(totalAmount)}</span>
                 </div>
               </div>
 
-              {error && <div className="alert alert-error">{error}</div>}
+              {error && <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</div>}
 
               <div className="wizard-actions-row">
                 <Button variant="secondary" onClick={() => setFormStep(2)} disabled={loading}>
@@ -330,44 +330,44 @@ export function BookingForm({ serviceId }: BookingFormProps) {
 
         {/* Persistent Summary Sidebar for Desktop */}
         <aside className="wizard-sidebar-col">
-          <div className="card stack gap-sm sticky-sidebar-card">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 gap-sm sticky-sidebar-card">
             <h3 className="text-xs font-black uppercase tracking-wider text-purple-900 border-b border-gray-150 pb-2 m-0">
               Booking Summary
             </h3>
             
-            <div className="review-item">
-              <span className="review-label">Service</span>
-              <span className="review-val font-bold text-gray-900">{service.name}</span>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-gray-500">Service</span>
+              <span className="text-sm font-semibold text-gray-900 font-bold text-gray-900">{service.name}</span>
             </div>
 
             {selectedAddrObj && (
-              <div className="review-item">
-                <span className="review-label">Location</span>
-                <span className="review-val truncate text-gray-600">{selectedAddrObj.label}</span>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-sm text-gray-500">Location</span>
+                <span className="text-sm font-semibold text-gray-900 truncate text-gray-600">{selectedAddrObj.label}</span>
               </div>
             )}
 
             {selectedSlotObj && (
-              <div className="review-item">
-                <span className="review-label">Time slot</span>
-                <span className="review-val text-purple-700 font-bold">{selectedSlotObj.label}</span>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-sm text-gray-500">Time slot</span>
+                <span className="text-sm font-semibold text-gray-900 text-purple-700 font-bold">{selectedSlotObj.label}</span>
               </div>
             )}
 
-            <div className="border-t border-dashed border-gray-200 pt-3 mt-1 stack gap-xs">
-              <div className="flex-between text-xs text-gray-500">
+            <div className="border-t border-dashed border-gray-200 pt-3 mt-1 flex flex-col gap-4 gap-xs">
+              <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
                 <span>Base price</span>
                 <span>{formatPrice(basePrice)}</span>
               </div>
-              <div className="flex-between text-xs text-gray-500">
+              <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
                 <span>Platform fee</span>
                 <span>{formatPrice(platformFee)}</span>
               </div>
-              <div className="flex-between text-xs text-gray-500">
+              <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
                 <span>Taxes &amp; GST (18%)</span>
                 <span>{formatPrice(gstTax)}</span>
               </div>
-              <div className="flex-between font-extrabold text-sm text-purple-950 border-t border-gray-200 pt-2 mt-1">
+              <div className="flex items-center justify-between gap-2 font-extrabold text-sm text-purple-950 border-t border-gray-200 pt-2 mt-1">
                 <span>Total amount</span>
                 <span>{formatPrice(totalAmount)}</span>
               </div>

@@ -46,34 +46,34 @@ export function BookingCompletion({
   }
 
   return (
-    <div className="stack-lg">
+    <div className="flex flex-col gap-6">
       <div className="text-center">
         <p style={{ fontSize: "2.5rem", margin: 0 }}>✓</p>
-        <h1 className="page-title">Service completed</h1>
-        <p className="page-subtitle">Thank you for using V Solve Hub.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Service completed</h1>
+        <p className="mt-1 mb-5 text-[15px] text-gray-500">Thank you for using V Solve Hub.</p>
       </div>
 
-      <div className="card stack">
-        <h2 className="section-title">Invoice</h2>
-        <p className="text-sm text-muted">Booking ref</p>
-        <p className="card-title">{bookingRef}</p>
-        <p className="text-sm text-muted">Service</p>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Invoice</h2>
+        <p className="text-sm text-gray-500">Booking ref</p>
+        <p className="mb-1 text-[15px] font-semibold text-gray-900">{bookingRef}</p>
+        <p className="text-sm text-gray-500">Service</p>
         <p>{serviceName}</p>
         {vendorName && (
           <>
-            <p className="text-sm text-muted">Professional</p>
+            <p className="text-sm text-gray-500">Professional</p>
             <p>{vendorName}</p>
           </>
         )}
-        <p className="text-sm text-muted">Date</p>
+        <p className="text-sm text-gray-500">Date</p>
         <p>{formatDate(slot)}</p>
-        <p className="text-sm text-muted">Final amount</p>
-        <p className="detail-price">{formatPrice(finalAmountPaise)}</p>
+        <p className="text-sm text-gray-500">Final amount</p>
+        <p className="text-lg font-black text-gray-900">{formatPrice(finalAmountPaise)}</p>
       </div>
 
       {!submitted ? (
-        <div className="card stack">
-          <h2 className="section-title">Rate your experience</h2>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900">Rate your experience</h2>
           <div className="booking-rating-row">
             {[1, 2, 3, 4, 5].map((n) => (
               <button
@@ -92,19 +92,19 @@ export function BookingCompletion({
             value={review}
             onChange={(e) => setReview(e.target.value)}
           />
-          {error && <div className="alert alert-error">{error}</div>}
+          {error && <div className="rounded-xl px-4 py-3 text-sm bg-red-50 text-[var(--color-danger)]">{error}</div>}
           <Button onClick={submitReview} loading={loading} disabled={loading} block>
             Submit review
           </Button>
         </div>
       ) : (
-        <div className="alert alert-info">Thanks for your feedback!</div>
+        <div className="rounded-xl px-4 py-3 text-sm bg-[var(--color-brand-light)] text-[var(--color-brand-dark)]">Thanks for your feedback!</div>
       )}
 
-      <Link href={`/booking?serviceId=${serviceId}`} className="btn btn-primary btn-block" style={{ textAlign: "center" }}>
+      <Link href={`/booking?serviceId=${serviceId}`} className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm bg-[var(--color-brand)] text-white hover:bg-blue-900 w-full" style={{ textAlign: "center" }}>
         Rebook this service
       </Link>
-      <Link href="/" className="btn btn-secondary btn-block" style={{ textAlign: "center" }}>
+      <Link href="/" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50 w-full" style={{ textAlign: "center" }}>
         Back to home
       </Link>
     </div>

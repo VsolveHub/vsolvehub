@@ -319,7 +319,7 @@ export function PropertyListingView() {
             </div>
 
             <div className="acc-filter-sheet-footer">
-              <button type="button" className="btn btn-primary btn-block" onClick={applyFilters}>
+              <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm bg-[var(--color-brand)] text-white hover:bg-blue-900 w-full" onClick={applyFilters}>
                 Show properties
               </button>
             </div>
@@ -330,10 +330,10 @@ export function PropertyListingView() {
       {loading ? (
         <LoadingState label="Loading properties…" className="acc-loading" />
       ) : properties.length === 0 ? (
-        <div className="empty-state">
+        <div className="px-4 py-10 text-center text-gray-500">
           <p>No properties match your filters.</p>
           {activeCount > 0 && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={clearFilters}>
+            <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-3 py-1.5 text-[13px] border border-gray-200 bg-white text-gray-900 hover:bg-gray-50" onClick={clearFilters}>
               Clear filters
             </button>
           )}

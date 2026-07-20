@@ -141,12 +141,12 @@ export function ConstructionTracker({ booking, onRefresh }: Props) {
       <div className="vsh-footer-actions">
         {!isCompleted ? (
           <>
-            <button type="button" className="btn btn-secondary" style={{ flex: 1, borderRadius: "12px" }}>Call Team</button>
-            <button type="button" className="btn btn-secondary" style={{ flex: 1, borderRadius: "12px" }}>Chat</button>
+            <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50" style={{ flex: 1, borderRadius: "12px" }}>Call Team</button>
+            <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50" style={{ flex: 1, borderRadius: "12px" }}>Chat</button>
             <Button variant="secondary" style={{ flex: 1, borderRadius: "12px" }} onClick={() => updateStatus("CANCELLED")} loading={loading}>Cancel</Button>
           </>
         ) : (
-          <Link href="/" className="btn btn-primary" style={{ flex: 1, height: "44px", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: "12px" }}>
+          <Link href="/" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm bg-[var(--color-brand)] text-white hover:bg-blue-900" style={{ flex: 1, height: "44px", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: "12px" }}>
             Back to Dashboard
           </Link>
         )}
