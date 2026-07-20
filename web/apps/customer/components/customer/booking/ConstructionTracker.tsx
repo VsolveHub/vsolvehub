@@ -90,33 +90,25 @@ export function ConstructionTracker({ booking, onRefresh }: Props) {
   const title = isCompleted ? "Work Completed" : "Live Tracking";
 
   return (
-    <div className="vsh-simulator-frame">
-      {/* Status Bar */}
-      <div className="vsh-status-bar">
-        <span>9:41</span>
-        <div className="vsh-status-bar-icons">
-          <span>📶</span>
-          <span>📶</span>
-          <span>🔋 100%</span>
-        </div>
-      </div>
-
-      {/* Navbar Header */}
-      <div className="vsh-navbar">
-        <Link href="/" className="vsh-nav-back" style={{ textDecoration: "none" }}>
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col bg-white md:min-h-screen">
+      {/* Navbar */}
+      <div className="flex items-center gap-3 bg-[var(--color-brand)] px-4 py-3 text-white shadow-sm">
+        <Link href="/" className="text-xl leading-none text-white/80 transition-colors hover:text-white">
           ←
         </Link>
-        <span className="vsh-nav-title">Construction Tracker</span>
+        <span className="truncate text-sm font-black uppercase tracking-widest">Construction Tracker</span>
       </div>
 
-      {/* Circle Step Header */}
-      <div className="vsh-step-header">
-        <span className="vsh-step-badge">{badge}</span>
-        <span className="vsh-step-title">{title}</span>
+      {/* Step header */}
+      <div className="flex items-center gap-3 border-b border-[var(--color-brand)]/20 bg-[var(--color-brand-light)] px-4 py-2.5">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-brand)] text-[10px] font-black text-white shadow-sm">
+          {badge}
+        </span>
+        <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-brand)]">{title}</span>
       </div>
 
-      {/* Scrollable Simulator Content */}
-      <div className="vsh-content">
+      {/* Scrollable content */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 pb-28">
         {!isCompleted ? (
           <ActiveJobPanel booking={booking} status={status} loading={loading} onSimulateNext={simulateNextStatus} details={details} />
         ) : (
@@ -137,17 +129,32 @@ export function ConstructionTracker({ booking, onRefresh }: Props) {
         )}
       </div>
 
-      {/* Sticky Bottom Actions */}
-      <div className="vsh-footer-actions">
+      {/* Sticky bottom actions */}
+      <div className="sticky bottom-0 flex gap-3 border-t border-gray-100 bg-white p-4">
         {!isCompleted ? (
           <>
-            <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50" style={{ flex: 1, borderRadius: "12px" }}>Call Team</button>
-            <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-900 hover:bg-gray-50" style={{ flex: 1, borderRadius: "12px" }}>Chat</button>
-            <Button variant="secondary" style={{ flex: 1, borderRadius: "12px" }} onClick={() => updateStatus("CANCELLED")} loading={loading}>Cancel</Button>
+            <a
+              href="tel:9876543210"
+              className="flex flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-900 transition-colors hover:bg-gray-50"
+            >
+              Call
+            </a>
+            <Link
+              href="/profile/messages"
+              className="flex flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white py-3 text-sm font-bold text-gray-900 transition-colors hover:bg-gray-50"
+            >
+              Chat
+            </Link>
+            <Button variant="secondary" block onClick={() => updateStatus("CANCELLED")} loading={loading}>
+              Cancel
+            </Button>
           </>
         ) : (
-          <Link href="/" className="inline-flex items-center justify-center gap-1.5 rounded-[10px] font-medium transition-colors disabled:opacity-60 px-4 py-2.5 text-sm bg-[var(--color-brand)] text-white hover:bg-blue-900" style={{ flex: 1, height: "44px", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: "12px" }}>
-            Back to Dashboard
+          <Link
+            href="/"
+            className="flex flex-1 items-center justify-center rounded-xl bg-[var(--color-brand)] py-3 text-sm font-bold text-white transition-colors hover:bg-blue-900"
+          >
+            Back to dashboard
           </Link>
         )}
       </div>
