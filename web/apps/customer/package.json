@@ -16,6 +16,7 @@
     "@vsolve/db": "workspace:*",
     "@vsolve/query": "workspace:*",
     "@vsolve/ui": "workspace:*",
+    "framer-motion": "^12.42.2",
     "leaflet": "^1.9.4",
     "next": "^15.1.3",
     "react": "^19.0.0",

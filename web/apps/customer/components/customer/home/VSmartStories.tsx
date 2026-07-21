@@ -2,130 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 
-type StorySlide = {
-  title: string;
-  desc: string;
-  imageBg: string;
-};
 
-type StoryGroup = {
-  id: string;
-  title: string;
-  icon: string;
-  iconBg: string;
-  borderGlow: string;
-  ctaText: string;
-  ctaHref: string;
-  slides: StorySlide[];
-};
 
-const STORY_DATA: StoryGroup[] = [
-  {
-    id: "salon",
-    title: "Salon Glow",
-    icon: "beauty",
-    iconBg: "linear-gradient(135deg, #ec4899, #db2777)",
-    borderGlow: "from-pink-500 to-rose-600",
-    ctaText: "Book Salon At Home",
-    ctaHref: "/services?category=beauty-wellness",
-    slides: [
-      {
-        title: "Salon At Your Doorstep",
-        desc: "Skip the waiting room. Top-rated artists and stylists arrive in 60 mins.",
-        imageBg: "linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)",
-      },
-      {
-        title: "Wedding & Party Packages",
-        desc: "Stunning makeovers, facials, and hair design. 100% hygienic, single-use products.",
-        imageBg: "linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%)",
-      },
-    ],
-  },
-  {
-    id: "ac-repair",
-    title: "AC Jet Care",
-    icon: "ac-unit",
-    iconBg: "linear-gradient(135deg, #0ea5e9, #2563eb)",
-    borderGlow: "from-sky-400 to-blue-600",
-    ctaText: "Book AC Clean",
-    ctaHref: "/services?q=ac",
-    slides: [
-      {
-        title: "Jet-Pump AC Cleaning",
-        desc: "Enhance cooling efficiency by 40% and lower electricity bills instantly.",
-        imageBg: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
-      },
-      {
-        title: "Certified Pro Dispatch",
-        desc: "Standard 30-day service warranty. Fast diagnosis and genuine spares.",
-        imageBg: "linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)",
-      },
-    ],
-  },
-  {
-    id: "premium-stay",
-    title: "Luxury Stays",
-    icon: "house",
-    iconBg: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
-    borderGlow: "from-purple-500 to-indigo-600",
-    ctaText: "Explore PGs & Stays",
-    ctaHref: "/accommodation",
-    slides: [
-      {
-        title: "Premium PGs & Rooms",
-        desc: "Cozy rooms with zero broker fees. Wi-Fi, food, AC, and daily housekeeping.",
-        imageBg: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
-      },
-      {
-        title: "Instant Visit Booking",
-        desc: "Schedule a physical visit or unlock contact info immediately to book your spot.",
-        imageBg: "linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)",
-      },
-    ],
-  },
-  {
-    id: "v-coins",
-    title: "Rewards",
-    icon: "diamond",
-    iconBg: "linear-gradient(135deg, #eab308, #ca8a04)",
-    borderGlow: "from-yellow-400 to-amber-600",
-    ctaText: "View Rewards",
-    ctaHref: "/profile/rating",
-    slides: [
-      {
-        title: "V Coins & Free Stays",
-        desc: "Earn V Coins on every booking. Use them to redeem free services and stay discounts.",
-        imageBg: "linear-gradient(135deg, #fefce8 0%, #fef9c3 100%)",
-      },
-      {
-        title: "Refer and Earn ₹100",
-        desc: "Invite your friends to book. Get ₹100 cash in wallet instantly on completion.",
-        imageBg: "linear-gradient(135deg, #fef9c3 0%, #fef08a 100%)",
-      },
-    ],
-  },
-];
-
-export function VSmartStories() {
+export function VSmartStories({ stories }: { stories: any[] }) {
   const router = useRouter();
   const [activeStoryIdx, setActiveStoryIdx] = useState<number | null>(null);
   const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
 
   useEffect(() => {
-    if (activeStoryIdx === null) return;
-    const story = STORY_DATA[activeStoryIdx]!;
+    if (activeStoryIdx === null || !stories || stories.length === 0) return;
+    const story = stories[activeStoryIdx]!;
     const timer = setTimeout(() => {
       if (activeSlideIdx < story.slides.length - 1) {
         setActiveSlideIdx((prev) => prev + 1);
       } else {
-        // Go to next story group
-        if (activeStoryIdx < STORY_DATA.length - 1) {
+        if (activeStoryIdx < stories.length - 1) {
           setActiveStoryIdx((prev) => prev! + 1);
           setActiveSlideIdx(0);
         } else {
-          // Wrap up / Close modal
           setActiveStoryIdx(null);
         }
       }
@@ -134,102 +31,145 @@ export function VSmartStories() {
     return () => clearTimeout(timer);
   }, [activeStoryIdx, activeSlideIdx]);
 
-  const activeStory = activeStoryIdx !== null ? STORY_DATA[activeStoryIdx] : null;
+  const activeStory = activeStoryIdx !== null && stories ? stories[activeStoryIdx] : null;
 
   return (
-    <div className="smart-stories" aria-label="Smart stories">
-      <div className="section-header-row">
-        <h2 className="home-section-title">V Smart Stories</h2>
-        <span className="text-[11px] font-bold text-yellow-600 flex items-center gap-1 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100 animate-pulse">
+    <div className="w-full" aria-label="Smart stories">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-black text-gray-900 tracking-tight">V Smart Stories</h2>
+        <span className="text-[10px] font-bold text-yellow-700 flex items-center gap-1.5 bg-yellow-100 px-3 py-1 rounded-full border border-yellow-200 animate-pulse">
           🪙 Rewards inside
         </span>
       </div>
 
-      <div className="stories-card-scroll">
-        {STORY_DATA.map((group, idx) => (
-          <button
+      <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory hide-scrollbar">
+        {stories?.map((group, idx) => (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             key={group.id}
             type="button"
-            className="story-bento-card"
-            style={{ background: group.iconBg }}
+            className="relative w-[140px] h-[200px] rounded-3xl shrink-0 snap-start overflow-hidden shadow-md flex flex-col items-center justify-center p-4 text-center focus:outline-none ring-2 ring-transparent focus:ring-[var(--color-brand)] transition-shadow"
+            style={{ 
+              background: group.iconBg.startsWith('url') ? group.iconBg : `url('https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=400&auto=format&fit=crop')`, 
+              backgroundSize: "cover", 
+              backgroundPosition: "center" 
+            }}
             onClick={() => {
               setActiveStoryIdx(idx);
               setActiveSlideIdx(0);
             }}
           >
-            <div className="story-bento-overlay"></div>
-            <div className="story-bento-icon">
-              <FlaticonIcon name={group.icon} size={28} color="#fff" />
+            <div className="absolute inset-0 bg-black/50 hover:bg-black/40 transition-colors"></div>
+            
+            <div className="relative z-10 flex flex-col items-center gap-3 w-full mt-4">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]">
+                <FlaticonIcon name={group.icon} size={28} color="#000" />
+              </div>
+              <div className="flex flex-col gap-1 mt-2">
+                <span className="text-[13px] font-black text-white leading-tight">{group.title}</span>
+                <span className="text-[9px] font-bold text-white/80 uppercase tracking-widest">Tap to view</span>
+              </div>
             </div>
-            <div className="story-bento-content">
-              <span className="story-bento-title">{group.title}</span>
-              <span className="story-bento-action">Tap to view</span>
-            </div>
-          </button>
+          </motion.button>
         ))}
       </div>
 
-      {activeStory && (
-        <div className="story-player-overlay" onClick={() => setActiveStoryIdx(null)}>
-          <div className="story-player-card" onClick={(e) => e.stopPropagation()} style={{ background: activeStory.slides[activeSlideIdx].imageBg }}>
-            {/* Top progress bars */}
-            <div className="story-progress-bar">
-              {activeStory.slides.map((_, sIdx) => {
-                let fillWidth = "0%";
-                if (sIdx < activeSlideIdx) fillWidth = "100%";
-                else if (sIdx === activeSlideIdx) fillWidth = "100%"; // styled using css transitions
-
-                return (
-                  <div key={sIdx} className="story-progress-segment">
-                    <div
-                      className={`story-progress-fill ${sIdx === activeSlideIdx ? "story-progress-fill--active" : ""}`}
-                      style={sIdx < activeSlideIdx ? { width: "100%" } : undefined}
+      <AnimatePresence>
+        {activeStory && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" 
+            onClick={() => setActiveStoryIdx(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="relative w-full max-w-sm h-[80vh] max-h-[600px] rounded-[32px] overflow-hidden shadow-2xl flex flex-col" 
+              onClick={(e) => e.stopPropagation()} 
+            >
+              <div 
+                className="absolute inset-0 z-0"
+                style={{ 
+                  background: activeStory.slides[activeSlideIdx].imageBg.startsWith('url') 
+                    ? activeStory.slides[activeSlideIdx].imageBg 
+                    : activeStory.iconBg.startsWith('url') 
+                      ? activeStory.iconBg 
+                      : `url('https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=600&auto=format&fit=crop')`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center"
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-white z-0" />
+              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-white z-0" />
+              {/* Top progress bars */}
+              <div className="absolute top-4 left-4 right-4 flex gap-1 z-20">
+                {activeStory.slides.map((_: any, sIdx: number) => (
+                  <div key={sIdx} className="h-1 flex-1 bg-black/10 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: sIdx < activeSlideIdx ? "100%" : "0%" }}
+                      animate={{ width: sIdx < activeSlideIdx ? "100%" : sIdx === activeSlideIdx ? "100%" : "0%" }}
+                      transition={{ duration: sIdx === activeSlideIdx ? 4.5 : 0, ease: "linear" }}
+                      className="h-full bg-black/60 rounded-full"
                     />
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Header info */}
-            <div className="story-player-header">
-              <div className="story-player-avatar" style={{ background: activeStory.iconBg }}>
-                <FlaticonIcon name={activeStory.icon} size={14} color="#fff" />
+                ))}
               </div>
-              <span className="story-player-author">{activeStory.title}</span>
-              <button
-                type="button"
-                className="story-player-close"
-                onClick={() => setActiveStoryIdx(null)}
-                aria-label="Close stories"
-              >
-                &times;
-              </button>
-            </div>
 
-            {/* Main content body */}
-            <div className="story-player-body">
-              <div className="story-slide-content">
-                <h3 className="story-slide-title">{activeStory.slides[activeSlideIdx].title}</h3>
-                <p className="story-slide-desc">{activeStory.slides[activeSlideIdx].desc}</p>
+              {/* Header info */}
+              <div className="absolute top-8 left-4 right-4 flex items-center gap-3 z-20">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center shadow-md bg-yellow-400">
+                  <FlaticonIcon name={activeStory.icon} size={18} color="#000" />
+                </div>
+                <span className="text-[15px] font-black text-white drop-shadow-md">{activeStory.title}</span>
+                <button
+                  type="button"
+                  className="ml-auto w-8 h-8 flex items-center justify-center rounded-full bg-black/20 text-white hover:bg-black/40 transition-colors backdrop-blur-md"
+                  onClick={() => setActiveStoryIdx(null)}
+                  aria-label="Close stories"
+                >
+                  &times;
+                </button>
               </div>
-            </div>
 
-            {/* Footer action link */}
-            <div className="story-player-footer">
-              <button
-                type="button"
-                className="story-cta-btn"
-                onClick={() => {
-                  setActiveStoryIdx(null);
-                  router.push(activeStory.ctaHref);
-                }}
-              >
-                {activeStory.ctaText} →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              {/* Main content body */}
+              <div className="flex-1 flex flex-col justify-end p-8 pb-24 z-10">
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={activeSlideIdx}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <h3 className="text-2xl font-black text-gray-900 leading-tight mb-3">{activeStory.slides[activeSlideIdx].title}</h3>
+                    <p className="text-sm text-gray-700 font-medium leading-relaxed">{activeStory.slides[activeSlideIdx].desc}</p>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {/* Footer action link */}
+              <div className="absolute bottom-0 left-0 w-full p-6 z-20 bg-white">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  className="w-full py-4 bg-yellow-400 text-gray-900 rounded-2xl text-[15px] font-black shadow-lg"
+                  onClick={() => {
+                    setActiveStoryIdx(null);
+                    router.push(activeStory.ctaHref);
+                  }}
+                >
+                  {activeStory.ctaText} →
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

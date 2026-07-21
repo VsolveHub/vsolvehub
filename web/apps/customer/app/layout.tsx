@@ -62,7 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }}
         />
       </head>
-      <body className={`app-shell ${inter.className}`} suppressHydrationWarning>
+      <body className={`flex flex-col min-h-screen w-full bg-[#f1f5f9] ${inter.className}`} suppressHydrationWarning>
         <QueryProvider>
           <HydrationBoundary state={dehydratedState}>
             <ShellSwitcher>{children}</ShellSwitcher>

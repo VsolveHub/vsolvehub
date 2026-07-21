@@ -4,20 +4,15 @@ import { ActiveBookings } from "@/components/customer/home/ActiveBookings";
 import { HomeServiceSquareAddCard } from "@/components/customer/home/HomeServiceSquareAddCard";
 import { HomeServiceVerticalCard } from "@/components/customer/home/HomeServiceVerticalCard";
 
-import { getServicesByIds, serializeService, serviceInclude } from "@/lib/catalog/queries";
+import { getServicesByIds, serializeService, serviceInclude, getPopularServices } from "@/lib/catalog/queries";
 import { getRecentlyViewedIds } from "@/lib/recently-viewed";
 import { getServerSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
 import { CART_STATUSES } from "@vsolve/db";
 import { formatPriceLabel } from "@/lib/format";
 
-/**
- * Session + personalized data (recently viewed, saved services, active bookings).
- * Rendered inside a <Suspense> boundary on the home page so the static, cached
- * catalog content paints immediately while these per-user DB queries stream in.
- */
 export async function PersonalizedSections() {
-  const [recentIds, session] = await Promise.all([getRecentlyViewedIds(), getServerSession()]);
+  const [recentIds, session, popular] = await Promise.all([getRecentlyViewedIds(), getServerSession(), getPopularServices(5)]);
 
   const [recentlyViewed, saved, standard, accommodation, vehicle] = await Promise.all([
     getServicesByIds(recentIds),
@@ -33,8 +28,6 @@ export async function PersonalizedSections() {
       ? prisma.booking.findMany({
           where: {
             userId: session.id,
-            // CART_STATUSES keeps cart drafts out; "CLOSED" was never a booking
-            // status and silently matched nothing.
             status: { notIn: [...CART_STATUSES, "COMPLETED", "CANCELLED"] },
           },
           include: { service: { include: { category: true } } },
@@ -67,6 +60,15 @@ export async function PersonalizedSections() {
   ]);
 
   const savedServices = saved.map((s) => serializeService(s.service));
+
+  // Merge recently viewed with popular to ensure we have exactly 5 items for a perfect grid
+  const recentOrPopular = [...recentlyViewed];
+  for (const p of popular) {
+    if (recentOrPopular.length >= 5) break;
+    if (!recentOrPopular.some(r => r.id === p.id)) {
+      recentOrPopular.push(p as any);
+    }
+  }
 
   const activeBookings = [
     ...standard.map((b) => ({
@@ -105,33 +107,35 @@ export async function PersonalizedSections() {
 
   return (
     <>
-      {recentlyViewed.length > 0 && (
-        <section className="section-wrapper bg-gray">
-          <div className="desktop-wide-layout section-pad-y">
-            <div className="section-header-row" style={{ alignItems: "flex-start" }}>
+      {recentOrPopular.length > 0 && (
+        <section className="w-full bg-slate-50">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-10 sm:py-16">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <h2 className="home-section-title">Cleaning Essentials</h2>
-                <p className="nan-subtitle" style={{ color: "#4b5563", marginTop: "0.25rem" }}>
-                  Monthly cleaning essential services
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Recommended for you</h2>
+                <p className="text-sm font-semibold text-gray-500 mt-1">
+                  Based on your recent activity
                 </p>
               </div>
-              <Link href="/services" className="section-link">
-                See all
+              <Link href="/services" className="text-sm font-bold text-[var(--color-brand)] hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-full transition-colors flex items-center gap-2">
+                See all <span>→</span>
               </Link>
             </div>
-            <div className="popular-scroll">
-              {recentlyViewed.map((service) => (
-                <HomeServiceSquareAddCard
-                  key={service.id}
-                  href={`/services/${service.category.slug}/${service.slug}`}
-                  name={service.name}
-                  priceLabel={formatPriceLabel(service.pricePaise, service.unit)}
-                  categorySlug={service.category.slug}
-                  serviceSlug={service.slug}
-                  serviceId={service.id}
-                  pricePaise={service.pricePaise}
-                  unit={service.unit}
-                />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+              {recentOrPopular.map((service) => (
+                <div key={service.id} className="w-full">
+                  <HomeServiceSquareAddCard
+                    href={`/services/${service.category.slug}/${service.slug}`}
+                    name={service.name}
+                    priceLabel={formatPriceLabel(service.pricePaise, service.unit)}
+                    categorySlug={service.category.slug}
+                    serviceSlug={service.slug}
+                    serviceId={service.id}
+                    pricePaise={service.pricePaise}
+                    unit={service.unit}
+                    imageUrl={service.imageUrl}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -139,27 +143,29 @@ export async function PersonalizedSections() {
       )}
 
       {savedServices.length > 0 && (
-        <section className="section-wrapper bg-white">
-          <div className="desktop-wide-layout section-pad-y">
-            <div className="section-header-row">
-              <h2 className="home-section-title">Saved Services</h2>
-              <Link href="/profile" className="section-link">
-                See all
+        <section className="w-full bg-white">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 py-10 sm:py-16">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-black text-gray-900 tracking-tight">Saved Services</h2>
+              <Link href="/profile" className="text-sm font-bold text-[var(--color-brand)] hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-full transition-colors flex items-center gap-2">
+                See all <span>→</span>
               </Link>
             </div>
-            <div className="popular-scroll">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
               {savedServices.map((service) => (
-                <HomeServiceVerticalCard
-                  key={service.id}
-                  href={`/services/${service.category.slug}/${service.slug}`}
-                  name={service.name}
-                  priceLabel={formatPriceLabel(service.pricePaise, service.unit)}
-                  categorySlug={service.category.slug}
-                  serviceSlug={service.slug}
-                  serviceId={service.id}
-                  pricePaise={service.pricePaise}
-                  unit={service.unit}
-                />
+                <div key={service.id} className="w-full">
+                  <HomeServiceVerticalCard
+                    href={`/services/${service.category.slug}/${service.slug}`}
+                    name={service.name}
+                    priceLabel={formatPriceLabel(service.pricePaise, service.unit)}
+                    categorySlug={service.category.slug}
+                    serviceSlug={service.slug}
+                    serviceId={service.id}
+                    pricePaise={service.pricePaise}
+                    unit={service.unit}
+                    imageUrl={service.imageUrl}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -167,11 +173,9 @@ export async function PersonalizedSections() {
       )}
 
       {activeBookings.length > 0 && (
-        <section className="section-wrapper bg-gray">
-          <div className="desktop-wide-layout section-pad-y">
-            <div className="home-section active-bookings-wide" aria-label="Active bookings">
-              <ActiveBookings bookings={activeBookings} />
-            </div>
+        <section className="w-full bg-slate-50">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+            <ActiveBookings bookings={activeBookings} />
           </div>
         </section>
       )}

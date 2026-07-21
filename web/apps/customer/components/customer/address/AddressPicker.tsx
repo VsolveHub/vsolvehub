@@ -25,13 +25,8 @@ import {
 } from "./model";
 import { AddressListView } from "./AddressListView";
 import { AddressFormView } from "./AddressFormView";
+import { motion, AnimatePresence } from "framer-motion";
 
-/**
- * Shared address select/add modal. Used by both the app header (location chip)
- * and the booking flow (so a first-time customer can add an address without
- * leaving the flow). Reverse-geocoding goes through the /api/geocode/reverse
- * proxy via `detectCurrentLocation`.
- */
 export function AddressPicker({
   open,
   autoDetect = false,
@@ -44,15 +39,11 @@ export function AddressPicker({
   autoDetect?: boolean;
   redirectAfterLogin?: string;
   onClose: () => void;
-  /** Fired with the chosen/added address (logged-in users). */
   onSelected?: (address: Address) => void;
-  /** Fired with the display label (used by the header chip; also fires for guests). */
   onLocationChanged?: (label: string) => void;
 }) {
   const { data: sessionData, isLoading: sessionLoading } = useSessionQuery();
   const isLoggedIn = !!sessionData?.user;
-  // Only fetch addresses while the modal is actually open, so mounting it closed
-  // on every page (header) adds no background request.
   const { data: addressesData, isLoading: addressesLoading } = useAddressesQuery({ enabled: isLoggedIn && open });
   const addresses: Address[] = addressesData?.addresses || [];
   const loading = sessionLoading || (isLoggedIn && addressesLoading);
@@ -108,9 +99,6 @@ export function AddressPicker({
     }
   }, []);
 
-  // The user moved the map pin: keep the coordinates and reverse-geocode them to
-  // fill in the address fields (best-effort — coordinates are kept even if the
-  // lookup fails, so the address can still be saved).
   const pickCoords = useCallback(async (lat: number, lng: number) => {
     setForm((prev) => ({ ...prev, lat, lng }));
     try {
@@ -123,7 +111,6 @@ export function AddressPicker({
         pincode: geo.pincode || prev.pincode,
       }));
     } catch {
-      /* keep the picked coordinates even if the address lookup fails */
     }
   }, []);
 
@@ -185,65 +172,98 @@ export function AddressPicker({
   }
 
   const detectButton = (
-    <button type="button" className="addr-detect-btn" onClick={() => detectLocation(false)} disabled={detecting}>
+    <button
+      type="button"
+      className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl font-bold text-sm bg-[var(--color-brand-light)] text-[var(--color-brand)] border border-[var(--color-brand-light)] hover:border-[var(--color-brand)]/30 transition-all shadow-sm"
+      onClick={() => detectLocation(false)}
+      disabled={detecting}
+    >
       <PinIcon />
       {detecting ? "Detecting your location…" : "Use my current location"}
     </button>
   );
 
   return (
-    <div className="addr-modal-backdrop" onClick={onClose}>
-      <div className="addr-modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="addr-modal-header">
-          <h2 className="addr-modal-title">{view === "form" ? "Add address" : "Select Address"}</h2>
-          <button className="addr-modal-close" onClick={onClose} aria-label="Close">
-            &times;
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
+      />
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }}
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        className="relative w-full max-w-md bg-white rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white sticky top-0 z-10">
+          <h2 className="text-xl font-black text-gray-900 tracking-tight">
+            {view === "form" ? "Add address" : "Select Address"}
+          </h2>
+          <button
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors focus:outline-none"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
           </button>
         </div>
 
-        {error && (
-          <div
-            className="alert alert-error"
-            style={{ fontSize: "0.8rem", padding: "0.6rem 0.75rem", borderRadius: "8px", margin: 0 }}
-          >
-            {error}
-          </div>
-        )}
+        <div className="p-6 overflow-y-auto bg-gray-50/50 flex-1">
+          <AnimatePresence mode="popLayout">
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-xs font-semibold border border-red-200"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {loading ? (
-          <p style={{ textAlign: "center", fontSize: "0.875rem" }}>Loading addresses…</p>
-        ) : view === "list" ? (
-          <AddressListView
-            isLoggedIn={isLoggedIn}
-            addresses={addresses}
-            redirectAfterLogin={redirectAfterLogin}
-            detectButton={detectButton}
-            onSelectAddress={selectAddress}
-            onAddNew={() => {
-              setForm(EMPTY_FORM);
-              setError("");
-              setView("form");
-            }}
-            onClose={onClose}
-          />
-        ) : (
-          <AddressFormView
-            form={form}
-            setField={setField}
-            detectButton={detectButton}
-            saving={saving}
-            detecting={detecting}
-            isLoggedIn={isLoggedIn}
-            hasSavedAddresses={addresses.length > 0}
-            onSubmit={saveAddress}
-            onPickCoords={pickCoords}
-            onBack={() => {
-              setError("");
-              setView("list");
-            }}
-          />
-        )}
-      </div>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="w-8 h-8 border-4 border-gray-200 border-t-[var(--color-brand)] rounded-full animate-spin" />
+              <p className="text-sm font-semibold text-gray-500">Loading addresses…</p>
+            </div>
+          ) : view === "list" ? (
+            <AddressListView
+              isLoggedIn={isLoggedIn}
+              addresses={addresses}
+              redirectAfterLogin={redirectAfterLogin}
+              detectButton={detectButton}
+              onSelectAddress={selectAddress}
+              onAddNew={() => {
+                setForm(EMPTY_FORM);
+                setError("");
+                setView("form");
+              }}
+              onClose={onClose}
+            />
+          ) : (
+            <AddressFormView
+              form={form}
+              setField={setField}
+              detectButton={detectButton}
+              saving={saving}
+              detecting={detecting}
+              isLoggedIn={isLoggedIn}
+              hasSavedAddresses={addresses.length > 0}
+              onSubmit={saveAddress}
+              onPickCoords={pickCoords}
+              onBack={() => {
+                setError("");
+                setView("list");
+              }}
+            />
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
