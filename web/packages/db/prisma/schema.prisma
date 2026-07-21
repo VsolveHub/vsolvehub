@@ -511,6 +511,7 @@ model ServiceCategory {
   slug      String  @unique
   tagline   String?
   icon      String
+  imageUrl  String?
   sortOrder Int     @default(0)
 
   subCategories ServiceSubCategory[]
@@ -522,6 +523,7 @@ model ServiceSubCategory {
   categoryId String
   name       String
   slug       String
+  imageUrl   String?
   sortOrder  Int    @default(0)
 
   category ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -542,6 +544,7 @@ model Service {
   archetype     String  @default("A")
   unit          String  @default("visit")
   tags          String  @default("[]")
+  imageUrl      String?
 
   category      ServiceCategory     @relation(fields: [categoryId], references: [id])
   subCategory   ServiceSubCategory? @relation(fields: [subCategoryId], references: [id])
@@ -790,6 +793,32 @@ model AccommodationProperty {
 
   owner    PropertyOwner          @relation(fields: [ownerId], references: [id])
   bookings AccommodationBooking[]
+}
+
+model AppPromo {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String?
+  imageUrl  String
+  href      String
+  badge     String?
+  badgeColor String? @default("blue")
+  type      String   @default("spotlight") // spotlight, banner
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model AppStory {
+  id         String   @id @default(cuid())
+  title      String
+  icon       String
+  iconBg     String
+  borderGlow String
+  ctaText    String
+  ctaHref    String
+  slidesJson String   @default("[]") // [{ title, desc, imageBg }]
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
 }
 
 model AccommodationBooking {
