@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 
 export type ActiveBookingItem = {
@@ -8,7 +9,7 @@ export type ActiveBookingItem = {
   ref: string;
   title: string;
   status: string;
-  type: string; // "service" | "accommodation" | "vehicle"
+  type: string;
   date: string;
   trackHref: string;
 };
@@ -37,40 +38,49 @@ export function ActiveBookings({ bookings }: Props) {
   if (!bookings || bookings.length === 0) return null;
 
   return (
-    <section className="home-section active-bookings" aria-label="Active Bookings">
-      <div className="section-header-row">
-        <h2 className="home-section-title">Active Bookings</h2>
-        <Link href="/profile/bookings" className="section-link">
+    <section className="w-full" aria-label="Active Bookings">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Active Bookings</h2>
+        <Link href="/profile/bookings" className="text-sm font-bold text-[var(--color-brand)] hover:underline">
           All bookings ({bookings.length})
         </Link>
       </div>
 
-      <div className="active-bookings__scroll">
+      <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory hide-scrollbar">
         {bookings.map((booking) => (
-          <div key={booking.ref} className="active-booking-card">
-            <div className="active-booking-card__top">
-              <div className="active-booking-icon-wrap" data-type={booking.type}>
-                <FlaticonIcon name={getIcon(booking.type)} size={18} />
+          <motion.div 
+            whileHover={{ y: -4 }}
+            key={booking.ref} 
+            className="min-w-[280px] sm:min-w-[320px] max-w-[320px] shrink-0 snap-start bg-white rounded-3xl border border-gray-150 p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+          >
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-blue-50 text-blue-600 shadow-inner">
+                  <FlaticonIcon name={getIcon(booking.type)} size={20} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{booking.ref}</span>
+                  <h3 className="text-sm font-bold text-gray-900 leading-tight mt-0.5">{booking.title}</h3>
+                </div>
               </div>
-              <div className="active-booking-info">
-                <span className="active-booking-ref">{booking.ref}</span>
-                <h3 className="active-booking-title">{booking.title}</h3>
-              </div>
-              <span className="active-booking-status-badge">
-                <span className="status-dot animate-ping" />
+            </div>
+
+            <div className="flex items-center gap-2 mb-5">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-xs font-black text-blue-700">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                 {formatStatus(booking.status)}
               </span>
             </div>
 
-            <div className="active-booking-card__bottom">
-              <span className="active-booking-time">
-                🗓️ {booking.date}
+            <div className="pt-4 border-t border-gray-100 flex items-center justify-between mt-auto">
+              <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                <span className="text-base">🗓️</span> {booking.date}
               </span>
-              <Link href={booking.trackHref} className="active-booking-track-btn">
+              <Link href={booking.trackHref} className="text-xs font-black text-[var(--color-brand)] bg-[var(--color-brand-light)] px-4 py-2 rounded-xl hover:opacity-80 transition-opacity">
                 Track Live →
               </Link>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </section>
