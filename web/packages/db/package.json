@@ -16,6 +16,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
     "seed:reference": "tsx prisma/seed-reference.ts",
+    "seed:home-images": "tsx prisma/seed-home-images.ts",
     "studio": "prisma studio",
     "typecheck": "tsc --noEmit"
   },
