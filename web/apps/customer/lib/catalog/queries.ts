@@ -48,12 +48,14 @@ export function serializeService(service: ServiceWithRelations) {
     archetype: service.archetype,
     unit: service.unit,
     tags: parseTags(service.tags),
+    imageUrl: service.imageUrl,
     category: {
       id: service.category.id,
       name: service.category.name,
       slug: service.category.slug,
       icon: service.category.icon,
       tagline: service.category.tagline,
+      imageUrl: service.category.imageUrl,
     },
     subCategory: service.subCategory
       ? {
@@ -181,3 +183,19 @@ export async function getServicesByIds(ids: string[]) {
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
     .map(serializeService);
 }
+
+export const getAppStories = catalogCache(async () => {
+  const stories = await prisma.appStory.findMany({
+    orderBy: { sortOrder: "asc" },
+  });
+  return stories.map(s => ({
+    ...s,
+    slides: JSON.parse(s.slidesJson),
+  }));
+}, "app-stories");
+
+export const getAppPromos = catalogCache(async () => {
+  return prisma.appPromo.findMany({
+    orderBy: { sortOrder: "asc" },
+  });
+}, "app-promos");
