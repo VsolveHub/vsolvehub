@@ -12,51 +12,91 @@ export function BookingSummary({
   startsAtPaise: number;
   estimate: PriceEstimate;
 }) {
+  const durationHr = Math.max(1, Math.round(service.duration / 60));
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-4">
-      <p className="text-[11px] font-black uppercase tracking-widest text-[var(--color-brand-accent)]">
-        Booking summary
-      </p>
-      <h2 className="mt-2 text-lg font-black text-gray-900">{service.name}</h2>
-      <p className="mt-1 text-sm text-gray-500">
-        Starts at <strong className="text-gray-900">{formatPrice(startsAtPaise)}</strong>
-      </p>
-      <p className="mt-3 text-sm leading-relaxed text-gray-500">{config.guidelines.summary}</p>
+    <div className="overflow-hidden rounded-2xl shadow-lg lg:sticky lg:top-4">
+      {/* Dark header */}
+      <div className="bg-gray-900 px-6 py-5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          Booking Summary
+        </p>
+        <h2 className="mt-2 text-xl font-black text-white">{service.name}</h2>
+        {service.duration > 0 && (
+          <div className="mt-2 flex items-center gap-1.5 text-gray-400">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M7 4v3.5l2 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <span className="text-sm font-medium">Estimated duration: {durationHr} hour</span>
+          </div>
+        )}
+      </div>
 
-      {service.duration > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="rounded-full bg-[var(--color-brand-light)] px-3 py-1 text-xs font-bold text-[var(--color-brand)]">
-            ⏱ ~{Math.max(1, Math.round(service.duration / 60))} hr
-          </span>
+      {/* Price breakdown */}
+      <div className="bg-white px-6 py-5">
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500">Base Service</span>
+            <span className="font-semibold text-gray-900">{formatPrice(estimate.basePaise)}</span>
+          </div>
+          {estimate.lineItems
+            .filter((li) => li.kind !== "variant")
+            .map((li) => (
+              <div className="flex items-center justify-between" key={`${li.key}-${li.value}`}>
+                <span className="text-gray-500">
+                  {li.value}
+                  {li.qty > 1 && ` × ${li.qty}`}
+                </span>
+                <span className="font-semibold text-gray-900">+{formatPrice(li.totalPaise)}</span>
+              </div>
+            ))}
+          <div className="flex items-center justify-between">
+            <span className="text-gray-500">Platform fee</span>
+            <span className="font-bold text-green-500">FREE</span>
+          </div>
         </div>
-      )}
 
-      <div className="mt-5 space-y-2 border-t border-gray-100 pt-4 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-gray-500">Base</span>
-          <strong className="text-gray-900">{formatPrice(estimate.basePaise)}</strong>
+        {/* Total */}
+        <div className="mt-5 border-t border-gray-100 pt-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            Total Payable
+          </p>
+          <div className="mt-1 flex items-end justify-between">
+            <span className="text-3xl font-black text-gray-900">
+              {formatPrice(estimate.totalPaise)}
+            </span>
+            <span className="mb-1 text-xs text-gray-400">Price confirmed after{"\n"}scope selection</span>
+          </div>
         </div>
-        {estimate.lineItems
-          .filter((li) => li.kind !== "variant")
-          .map((li) => (
-            <div className="flex items-center justify-between" key={`${li.key}-${li.value}`}>
-              <span className="text-gray-500">
-                {li.value}
-                {li.qty > 1 && ` × ${li.qty}`}
-              </span>
-              <strong className="text-gray-900">+{formatPrice(li.totalPaise)}</strong>
-            </div>
-          ))}
-        <div className="flex items-center justify-between">
-          <span className="text-gray-500">Platform fee</span>
-          <strong className="text-green-600">FREE</strong>
+
+        {/* Premium Guarantee */}
+        <div className="mt-4 flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-600">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 2L3 4.5v4c0 2.8 2.1 5.4 5 6 2.9-.6 5-3.2 5-6v-4L8 2z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <path d="M6 8l1.5 1.5L10 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-900">Premium Guarantee</p>
+            <p className="text-[11px] text-gray-500">100% satisfaction or full refund.</p>
+          </div>
         </div>
-        <div className="flex items-center justify-between border-t border-gray-100 pt-2 text-base">
-          <span className="font-bold text-gray-900">Estimated total</span>
-          <strong className="text-gray-900">{formatPrice(estimate.totalPaise)}</strong>
-        </div>
-        <p className="text-xs text-gray-400">
-          Final price is confirmed from your selected requirements.
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-gray-100 bg-white px-6 py-3">
+        <p className="text-center text-xs text-gray-400">
+          Need help with your booking?{" "}
+          <a href="/support" className="font-semibold text-[var(--color-brand)] hover:underline">
+            Contact us
+          </a>
         </p>
       </div>
     </div>

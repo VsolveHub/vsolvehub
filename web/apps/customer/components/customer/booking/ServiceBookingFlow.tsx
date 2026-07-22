@@ -45,6 +45,8 @@ type BookingResumeState = {
   detailValues: Selections;
   note: string;
   photos: string[];
+  /** Product add-on picks: productId → qty. */
+  products?: Record<string, number>;
   autoSubmit?: boolean;
 };
 
@@ -100,6 +102,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   const [detailValues, setDetailValues] = useState<Selections>({});
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [productSelections, setProductSelections] = useState<Record<string, number>>({});
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [pendingSubmit, setPendingSubmit] = useState(false);
@@ -149,6 +152,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
           if (saved.detailValues) setDetailValues(saved.detailValues);
           if (typeof saved.note === "string") setNote(saved.note);
           if (Array.isArray(saved.photos)) setPhotos(saved.photos);
+          if (saved.products && typeof saved.products === "object") setProductSelections(saved.products);
           if (saved.step) setStep(saved.step);
         }
       }
@@ -174,15 +178,15 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     try {
       sessionStorage.setItem(
         persistKey,
-        JSON.stringify({ step, selectedServiceId, detailValues, note, photos }),
+        JSON.stringify({ step, selectedServiceId, detailValues, note, photos, products: productSelections }),
       );
     } catch {
       /* ignore quota / private-mode errors */
     }
-  }, [hydrated, persistKey, step, selectedServiceId, detailValues, note, photos]);
+  }, [hydrated, persistKey, step, selectedServiceId, detailValues, note, photos, productSelections]);
 
   function buildResumeState(overrides: Partial<BookingResumeState> & { step: Step }): BookingResumeState {
-    return { selectedServiceId, detailValues, note, photos, ...overrides };
+    return { selectedServiceId, detailValues, note, photos, products: productSelections, ...overrides };
   }
 
   async function requireLoginThen(next: () => void, resume: BookingResumeState) {
@@ -220,6 +224,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       setDetailValues(saved.detailValues);
       setNote(saved.note);
       setPhotos(saved.photos);
+      if (saved.products) setProductSelections(saved.products);
       if (saved.autoSubmit) setPendingSubmit(true);
     } catch {
       /* corrupt resume payload */
@@ -262,6 +267,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
         selections: detailValues,
         note: note || undefined,
         mediaUrls: photos,
+        products: Object.entries(productSelections).map(([productId, qty]) => ({ productId, qty })),
         archetypeDetails: {
           bookingType: "individual",
           fieldValues: detailValues,
@@ -356,6 +362,8 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
           photos={photos}
           uploading={uploading}
           onPhotoUpload={handlePhotoUpload}
+          productSelections={productSelections}
+          onProductChange={setProductSelections}
           submitting={addToCart.isPending}
           onSubmit={addCurrentToCart}
         />

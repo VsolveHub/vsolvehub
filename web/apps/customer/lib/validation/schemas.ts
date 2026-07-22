@@ -135,6 +135,12 @@ export const cartAddSchema = z.object({
   archetypeDetails: archetypeDetailsSchema.optional(),
   note: z.string().trim().max(250).optional(),
   mediaUrls: z.array(z.string().min(1)).max(5).optional(),
+  /** Product add-ons picked in the booking flow — ids only; the server prices
+   *  them from the catalog and rejects anything not mapped to the service. */
+  products: z
+    .array(z.object({ productId: z.string().min(1), qty: z.number().int().min(1).max(99) }))
+    .max(20)
+    .optional(),
 });
 
 export const cartPatchSchema = z.object({

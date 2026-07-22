@@ -2,6 +2,7 @@ import { PrismaClient, ProviderType, PartnerStatus, DocStatus } from "@prisma/cl
 import { partnerId } from "../src/id";
 import { seedCustomerMarketplace } from "./seed-customer";
 import { seedCrews } from "./seed-crew";
+import { seedProducts } from "./seed-products";
 import { SERVICE_CATALOG as CUSTOMER_SERVICE_CATALOG } from "./seed-lib/service-catalog";
 
 const prisma = new PrismaClient();
@@ -208,9 +209,10 @@ async function main() {
   console.log("Seeded trades, cities, skills, and demo partners (active/pending/action-required/driver).");
   await seedCustomerMarketplace(prisma);
   await seedCrews(prisma);
+  await seedProducts(prisma);
 
   // First admin portal login — allowlisted so magic-link sign-in is testable immediately.
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "dasari.soumith3088@gmail.com";
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "bonalasriman@gmail.com";
   await prisma.adminUser.upsert({
     where: { email: adminEmail },
     update: {},
