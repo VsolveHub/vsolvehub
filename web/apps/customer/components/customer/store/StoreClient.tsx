@@ -36,7 +36,17 @@ export function StoreClient() {
 
   const addMutation = useMutation({
     mutationFn: (productId: string) => api.addToStoreCart(productId, 1),
-    onSuccess: (next) => queryClient.setQueryData(qk.storeCart(), next),
+    onSuccess: (next) => {
+      queryClient.setQueryData(qk.storeCart(), next);
+      queryClient.invalidateQueries({ queryKey: qk.cart() });
+      queryClient.invalidateQueries({ queryKey: qk.cartCount() });
+    },
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : "Could not add item";
+      if (msg.toLowerCase().includes("auth") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("login")) {
+        router.push("/booking/otp?redirect=/store");
+      }
+    },
   });
 
   const add = (productId: string) => {

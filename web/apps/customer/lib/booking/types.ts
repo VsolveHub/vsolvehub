@@ -32,4 +32,7 @@ export type Booking = {
   startOtp?: string;
   revisedAmountPaise?: number;
   revisedReason?: string;
+  baseChargePaise?: number;
+  lineItems?: any[];
+  productItems?: any[];
 };

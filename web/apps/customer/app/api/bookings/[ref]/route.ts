@@ -181,6 +181,37 @@ function serializeProvider(booking: Booking) {
   return { id: partner.id, name: partner.fullName ?? "Partner", phone: partner.phone, rating: partner.rating, etaMinutes };
 }
 
+function getDetailedLineItems(booking: Booking) {
+  let items: any[] = [];
+  try {
+    items = JSON.parse(booking.lineItems || "[]");
+  } catch {}
+
+  // Deduplicate by name/key so parts never duplicate between JSON lineItems and BookingProductItem rows
+  const existingNames = new Set(
+    items.map((i) => (i.value || i.name || "").trim().toLowerCase()),
+  );
+
+  if (booking.productItems && booking.productItems.length > 0) {
+    for (const p of booking.productItems) {
+      const nameLower = (p.product?.name || "").trim().toLowerCase();
+      if (p.status === "APPROVED" && nameLower && !existingNames.has(nameLower)) {
+        existingNames.add(nameLower);
+        items.push({
+          key: `product:${p.productId}:${p.id}`,
+          label: "Extra part (approved)",
+          value: p.product.name,
+          qty: p.qty,
+          unitPaise: p.unitPricePaise,
+          totalPaise: p.totalPaise,
+          kind: "product",
+        });
+      }
+    }
+  }
+  return items;
+}
+
 function serializeMarketplaceBooking(booking: Booking, marketplace: boolean) {
   // Status is authoritative from the DB (driven by the partner / dispatch) —
   // never time-simulated.
@@ -217,6 +248,7 @@ function serializeMarketplaceBooking(booking: Booking, marketplace: boolean) {
     baseChargePaise: booking.baseChargePaise,
     quotedAmount: booking.quotedAmount,
     finalAmountPaise: booking.finalAmountPaise ?? booking.quotedAmount,
+    lineItems: getDetailedLineItems(booking),
     paymentStatus: booking.paymentStatus,
     paymentMethod: booking.paymentMethod,
     cancellable: !["COMPLETED", "CANCELLED"].includes(normalized),

@@ -2,6 +2,7 @@ import { formatPrice } from "@/lib/format";
 import type { Booking, BookingParty } from "@/lib/booking/types";
 import { BookingTimeline } from "./BookingTimeline";
 import { ProfessionalCard } from "./ProfessionalCard";
+import { DetailedBookingCard } from "./DetailedBookingCard";
 import type { StepDetails } from "./steps";
 
 type Props = {
@@ -86,23 +87,8 @@ export function ActiveJobPanel({ booking, professional, status, currentStatusInd
         </div>
       </div>
 
-      {/* Booking Details Card */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-        <div className="flex justify-between border-b border-gray-100 pb-2">
-          <div>
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Booking ID</span>
-            <p className="font-mono font-bold text-gray-800 mt-0.5 m-0">#{booking.bookingRef}</p>
-          </div>
-          <div className="text-right">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Total Amount</span>
-            <p className="font-bold text-sm text-purple-900 mt-0.5 m-0">₹{formatPrice(booking.finalAmountPaise ?? booking.quotedAmount)}</p>
-          </div>
-        </div>
-        <div>
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Service Address</span>
-          <p className="text-xs font-semibold text-gray-700 mt-0.5 m-0 leading-relaxed">{booking.address}</p>
-        </div>
-      </div>
+      {/* Detailed Booking & Partner Info Card */}
+      <DetailedBookingCard booking={booking} professional={professional} />
 
       {/* Service Status Timeline */}
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-col gap-4">

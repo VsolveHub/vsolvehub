@@ -38,8 +38,8 @@ type Props = {
 export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, setScheduledMap }: Props) {
   const queryClient = useQueryClient();
   
-  // Track which item is currently expanded for scheduling
-  const [expandedItemId, setExpandedItemId] = useState<string>("");
+  // Track which item is currently expanded for scheduling (default to first item if empty)
+  const [expandedItemId, setExpandedItemId] = useState<string>(() => items[0]?.id ?? "");
   const [scheduleType, setScheduleType] = useState<"instant" | "scheduled">("scheduled");
   const [dateKey, setDateKey] = useState(() => nextDays(1)[0]!.key);
   const [timeSlot, setTimeSlot] = useState(TIME_SLOTS[2]!);
@@ -56,7 +56,7 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
   const days = useMemo(() => nextDays(7), []);
 
   const activeItem = useMemo(() => {
-    return items.find((it) => it.id === expandedItemId) ?? null;
+    return items.find((it) => it.id === expandedItemId) ?? items[0] ?? null;
   }, [items, expandedItemId]);
 
   const serviceConfig = useMemo(() => {
@@ -94,7 +94,7 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
       
       setScheduledMap((prev) => ({ ...prev, [variables.id]: formatted }));
       queryClient.invalidateQueries({ queryKey: qk.cart() });
-      setExpandedItemId(""); // Collapse the row on success
+      setExpandedItemId("");
       setError("");
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not book slot"),
@@ -102,6 +102,7 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
 
   if (!open) return null;
 
+  const currentActiveId = expandedItemId || items[0]?.id || "";
   const allScheduled = items.every((it) => scheduledMap[it.id]);
 
   const handleConfirmSlot = (itemId: string) => {
@@ -115,15 +116,18 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in select-none">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-          <h2 className="text-xl font-black text-gray-900 tracking-tight">Select slots</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <div>
+            <h2 className="text-lg font-black text-[#0b1c30] tracking-tight">Select Time Slot</h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Pick a convenient arrival window</p>
+          </div>
           <button 
             onClick={onClose} 
-            className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
+            className="w-8 h-8 flex items-center justify-center hover:bg-slate-200/60 rounded-full text-slate-500 font-bold transition-colors cursor-pointer"
           >
             ✕
           </button>
@@ -132,47 +136,48 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
         {/* Services List with Expandable Slots */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {error && (
-            <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-semibold border border-red-200">
+            <div className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-bold border border-red-200">
               {error}
             </div>
           )}
 
           {items.map((it) => {
-            const isExpanded = it.id === expandedItemId;
+            const isExpanded = it.id === currentActiveId;
             const scheduledText = scheduledMap[it.id];
             
-            // Find service details from catalog for duration
+            // Find service details from catalog for duration in minutes
             const catalogSvc = catalogServices.find((s) => s.id === it.serviceId || s.slug === it.serviceSlug);
-            const durationMin = catalogSvc ? catalogSvc.duration / 60 : 60;
+            const durationMin = catalogSvc?.durationMinutes || (catalogSvc?.duration ? Math.round(catalogSvc.duration) : 45);
             const durationText = durationMin >= 60 
-              ? `Service will take approx. ${Math.floor(durationMin / 60)} hrs ${durationMin % 60 > 0 ? `& ${durationMin % 60} mins` : ""}`
-              : `Service will take approx. ${durationMin} mins`;
+              ? `Duration: ~${Math.floor(durationMin / 60)} hr ${durationMin % 60 > 0 ? `${durationMin % 60} mins` : ""}`
+              : `Duration: ~${durationMin} mins`;
 
             return (
               <div 
                 key={it.id} 
-                className={`rounded-2xl border transition-all duration-350 overflow-hidden ${
-                  isExpanded ? "border-brand ring-1 ring-brand/30 shadow-md" : "border-gray-100 bg-white"
+                className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                  isExpanded ? "border-[#ea580c] ring-2 ring-[#ea580c]/15 shadow-sm bg-white" : "border-slate-200 bg-white"
                 }`}
               >
                 {/* Accordion Trigger Row */}
                 <div className="p-4 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-extrabold text-gray-900 truncate">
+                    <p className="text-sm font-black text-[#0b1c30] truncate">
                       {it.serviceName}
                     </p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
                       {durationText}
                     </p>
                     {scheduledText && !isExpanded && (
-                      <p className="text-xs text-green-700 font-bold mt-1 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-600 shrink-0" />
+                      <p className="text-xs text-emerald-700 font-extrabold mt-1 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
                         {scheduledText}
                       </p>
                     )}
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => {
                       if (isExpanded) {
                         setExpandedItemId("");
@@ -182,100 +187,122 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
                         setScheduleType(config.bookingTypes?.includes("instant") ? "instant" : "scheduled");
                       }
                     }}
-                    className={`px-4 py-2 text-xs font-black rounded-xl border transition-all ${
+                    className={`px-4 py-2 text-xs font-extrabold rounded-xl border transition-all cursor-pointer ${
                       scheduledText
-                        ? "border-gray-200 text-gray-700 hover:bg-gray-50"
-                        : "border-brand text-brand hover:bg-brand-light"
+                        ? "border-slate-200 text-slate-700 hover:bg-slate-50"
+                        : "border-[#ea580c] text-[#ea580c] bg-[#fff7ed] hover:bg-[#ea580c] hover:text-white"
                     }`}
                   >
-                    {scheduledText ? "Reschedule" : "Select"}
+                    {scheduledText ? "Reschedule" : "Select Slot"}
                   </button>
                 </div>
 
-                {/* Inline Expansion Area */}
+                {/* Inline Slot Picker Area */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50/30 animate-in fade-in duration-200">
+                  <div className="px-4 pb-4 pt-3 border-t border-slate-100 bg-slate-50/50 space-y-4">
                     {/* Instant vs Scheduled selector */}
-                    <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="grid grid-cols-2 gap-2">
                       {supportsInstant && (
                         <button
+                          type="button"
                           onClick={() => setScheduleType("instant")}
-                          className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
-                            scheduleType === "instant" ? "border-brand bg-blue-50/50 shadow-sm" : "border-gray-200 bg-white"
+                          className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                            scheduleType === "instant" ? "border-[#ea580c] bg-[#fff7ed] text-[#ea580c] ring-1 ring-[#ea580c]/20" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                           }`}
                         >
-                          <div className={`p-1.5 rounded-lg ${scheduleType === "instant" ? "bg-brand text-white" : "bg-gray-100 text-gray-500"}`}>
-                            <FlaticonIcon name="bolt" size={12} />
+                          <div className={`p-2 rounded-lg ${scheduleType === "instant" ? "bg-[#ea580c] text-white" : "bg-slate-100 text-slate-500"}`}>
+                            ⚡
                           </div>
                           <div>
-                            <p className="text-[11px] font-bold text-gray-900">Instant</p>
-                            <p className="text-[9px] text-gray-400 mt-0.5">30-60m arrival</p>
+                            <p className="text-xs font-black text-[#0b1c30]">Instant</p>
+                            <p className="text-[10px] text-slate-500 font-bold mt-0.5">30-60 min arrival</p>
                           </div>
                         </button>
                       )}
                       
                       <button
+                        type="button"
                         onClick={() => setScheduleType("scheduled")}
-                        className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
-                          scheduleType === "scheduled" ? "border-brand bg-blue-50/50 shadow-sm" : "border-gray-200 bg-white"
+                        className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
+                          scheduleType === "scheduled" ? "border-[#ea580c] bg-[#fff7ed] text-[#ea580c] ring-1 ring-[#ea580c]/20" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         } ${!supportsInstant ? "col-span-2" : ""}`}
                       >
-                        <div className={`p-1.5 rounded-lg ${scheduleType === "scheduled" ? "bg-brand text-white" : "bg-gray-100 text-gray-500"}`}>
-                          <FlaticonIcon name="calendar" size={12} />
+                        <div className={`p-2 rounded-lg ${scheduleType === "scheduled" ? "bg-[#ea580c] text-white" : "bg-slate-100 text-slate-500"}`}>
+                          📅
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold text-gray-900">Scheduled</p>
-                          <p className="text-[9px] text-gray-400 mt-0.5">Pick date/time</p>
+                          <p className="text-xs font-black text-[#0b1c30]">Scheduled</p>
+                          <p className="text-[10px] text-slate-500 font-bold mt-0.5">Select date &amp; time</p>
                         </div>
                       </button>
                     </div>
 
-                    {/* Calendar and Time picker */}
+                    {/* Calendar Date Badges and Time Slot Picker */}
                     {scheduleType === "scheduled" && (
-                      <div className="space-y-3 mb-4">
-                        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
-                          {days.map((d) => (
-                            <button
-                              key={d.key}
-                              onClick={() => setDateKey(d.key)}
-                              className={`flex-shrink-0 w-14 rounded-xl border py-1.5 text-center transition-all snap-start ${
-                                dateKey === d.key
-                                  ? "bg-brand border-brand text-white font-bold"
-                                  : "border-gray-200 text-gray-600 bg-white hover:bg-gray-50"
-                              }`}
-                            >
-                              <span className="block text-[8px] font-black uppercase opacity-85">{d.day}</span>
-                              <span className="block text-[11px] font-extrabold mt-0.5">{d.date.split(" ")[0]}</span>
-                            </button>
-                          ))}
+                      <div className="space-y-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          AVAILABLE DATES
+                        </span>
+                        <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar">
+                          {days.map((d) => {
+                            const isSelected = dateKey === d.key;
+                            return (
+                              <button
+                                key={d.key}
+                                type="button"
+                                onClick={() => setDateKey(d.key)}
+                                className={`flex-shrink-0 w-16 rounded-xl border py-2 text-center transition-all cursor-pointer ${
+                                  isSelected
+                                    ? "bg-[#ea580c] border-[#ea580c] text-white shadow-xs"
+                                    : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+                                }`}
+                              >
+                                <span className={`block text-[9px] font-black uppercase tracking-wider ${isSelected ? "text-white/90" : "text-slate-500"}`}>
+                                  {d.day}
+                                </span>
+                                <span className={`block text-xs font-black mt-0.5 ${isSelected ? "text-white" : "text-[#0b1c30]"}`}>
+                                  {d.date.split(" ")[0]}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
 
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block pt-1">
+                          SELECT TIME SLOT
+                        </span>
                         <div className="grid grid-cols-3 gap-2">
-                          {TIME_SLOTS.map((slot) => (
-                            <button
-                              key={slot}
-                              onClick={() => setTimeSlot(slot)}
-                              className={`rounded-xl border py-1.5 text-[9px] font-bold transition-all ${
-                                timeSlot === slot
-                                  ? "bg-blue-50 border-brand text-brand"
-                                  : "border-gray-200 text-gray-600 bg-white hover:bg-gray-50"
-                              }`}
-                            >
-                              {slot}
-                            </button>
-                          ))}
+                          {TIME_SLOTS.map((slot) => {
+                            const isSelected = timeSlot === slot;
+                            return (
+                              <button
+                                key={slot}
+                                type="button"
+                                onClick={() => setTimeSlot(slot)}
+                                className={`rounded-xl border py-2.5 text-xs font-black transition-all cursor-pointer ${
+                                  isSelected
+                                    ? "bg-[#ea580c] border-[#ea580c] text-white shadow-xs"
+                                    : "border-slate-200 text-[#0b1c30] bg-white hover:bg-slate-50 hover:border-slate-300"
+                                }`}
+                              >
+                                {slot}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between border-t border-gray-100 pt-3 mt-1">
-                      <span className="text-xs text-gray-500">
-                        Confirming slot for {formatPrice(it.quotedAmount)}
+                    {/* Slot Save Action */}
+                    <div className="flex items-center justify-between border-t border-slate-200 pt-3">
+                      <span className="text-xs font-extrabold text-slate-700">
+                        Selected for {formatPrice(it.quotedAmount)}
                       </span>
                       <button
+                        type="button"
                         onClick={() => handleConfirmSlot(it.id)}
                         disabled={updateSlotMutation.isPending}
-                        className="px-5 py-2 bg-brand text-white text-xs font-black rounded-xl transition-all shadow-md shadow-brand/10 disabled:opacity-50"
+                        className="px-5 py-2 bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white text-xs font-black rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
                       >
                         {updateSlotMutation.isPending && updateSlotMutation.variables?.id === it.id 
                           ? "Saving..." 
@@ -289,9 +316,10 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
           })}
         </div>
 
-        {/* Modal Footer Confirm Button */}
-        <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+        {/* Modal Footer Main Confirm Button */}
+        <div className="p-5 border-t border-slate-100 bg-white">
           <button
+            type="button"
             onClick={() => {
               if (allScheduled) {
                 onSuccess();
@@ -299,13 +327,13 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
               }
             }}
             disabled={!allScheduled}
-            className={`w-full py-4 rounded-2xl text-sm font-black transition-all shadow-lg ${
+            className={`w-full py-3.5 rounded-2xl text-sm font-black transition-all shadow-md ${
               allScheduled
-                ? "bg-brand text-white shadow-brand/10 hover:opacity-95 cursor-pointer"
-                : "bg-gray-150 text-gray-400 shadow-none cursor-not-allowed border border-gray-200"
+                ? "bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white shadow-orange-500/20 cursor-pointer"
+                : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
             }`}
           >
-            Confirm
+            {allScheduled ? "Confirm Slot Selection" : "Save slot above to confirm"}
           </button>
         </div>
 
