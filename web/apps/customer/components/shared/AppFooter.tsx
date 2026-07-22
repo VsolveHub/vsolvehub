@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
+import logoMark from "@/public/logo-mark.png";
 
 export function AppFooter() {
   return (
@@ -12,8 +13,8 @@ export function AppFooter() {
           {/* Brand Col */}
           <div className="flex flex-col gap-6 lg:col-span-1">
             <Link href="/" className="flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] rounded-lg">
-              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-1 shadow-md group-hover:scale-105 transition-transform">
-                <img src="/logo-mark.png" alt="V Solve Hub" className="w-full h-full object-contain" />
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-0.5 shadow-md group-hover:scale-105 transition-transform overflow-hidden">
+                <img src={logoMark.src} alt="Vsolve Hub" className="w-full h-full object-cover rounded-lg" />
               </div>
               <span className="text-xl font-black text-white tracking-tight group-hover:text-[var(--color-brand-light)] transition-colors">Vsolve Hub</span>
             </Link>

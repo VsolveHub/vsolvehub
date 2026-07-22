@@ -234,7 +234,7 @@ export function RequirementSheet({
                     invalid
                       ? "border-red-500"
                       : open
-                        ? "border-[#006b5f] ring-2 ring-[#006b5f]/15"
+                        ? "border-[#ea580c] ring-2 ring-[#ea580c]/15"
                         : "border-[#c6c6cd]"
                   }`}
                   aria-expanded={open}
@@ -274,7 +274,7 @@ export function RequirementSheet({
                           key={o.value}
                           className={`flex cursor-pointer items-center justify-between gap-3 rounded-[8px] p-3 transition-colors ${
                             checked
-                              ? "border border-[#006b5f] bg-[#e6f4f1]/50"
+                              ? "border border-[#ea580c] bg-[#fff7ed]/80"
                               : "border border-[#c6c6cd] bg-white hover:bg-[#f8f9ff]"
                           }`}
                         >
@@ -283,7 +283,7 @@ export function RequirementSheet({
                               type="checkbox"
                               checked={!!checked}
                               onChange={() => toggleAddon(field.key, o.value)}
-                              className="h-4 w-4 rounded border-[#c6c6cd] text-[#006b5f] accent-[#006b5f] focus:ring-[#006b5f]"
+                              className="h-4 w-4 rounded border-[#c6c6cd] text-[#ea580c] accent-[#ea580c] focus:ring-[#ea580c]"
                             />
                             <div className="min-w-0 flex-1">
                               <span className="block text-sm font-semibold text-[#0b1c30]">{o.value}</span>

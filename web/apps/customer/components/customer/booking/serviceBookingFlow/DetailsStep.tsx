@@ -60,7 +60,7 @@ export function DetailsStep({
           <h3 className="text-xs font-bold uppercase tracking-wider text-[#45464d]">
             VISUAL CONTEXT (OPTIONAL)
           </h3>
-          <span className="rounded-full bg-[#e6f4f1] px-3 py-0.5 text-xs font-bold text-[#006b5f]">
+          <span className="rounded-full bg-[#fff7ed] px-3 py-0.5 text-xs font-bold text-[#ea580c]">
             Highly Recommended
           </span>
         </div>
@@ -80,7 +80,7 @@ export function DetailsStep({
             className="flex flex-col items-center justify-center rounded-[16px] border-2 border-dashed border-[#c6c6cd] bg-[#f8f9ff] p-8 text-center cursor-pointer transition-colors hover:bg-slate-100/50"
             aria-busy={uploading}
           >
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#d0f2ed] text-[#006b5f]">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#fff7ed] text-[#ea580c]">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -117,8 +117,21 @@ export function DetailsStep({
           maxLength={250}
           onChange={(e) => onNoteChange(e.target.value)}
           placeholder="e.g., Gate code is 1234, the leak is under the sink..."
-          className="h-[110px] w-full resize-none rounded-[8px] border border-[#c6c6cd] bg-white p-4 text-sm text-slate-900 outline-none transition-colors focus:border-[#006b5f] placeholder:text-slate-400"
+          className="h-[110px] w-full resize-none rounded-[8px] border border-[#c6c6cd] bg-white p-4 text-sm text-slate-900 outline-none transition-colors focus:border-[#ea580c] placeholder:text-slate-400"
         />
+      </div>
+
+      {/* Primary CTA Button for Form */}
+      <div className="mt-8 pt-4 border-t border-slate-100 flex justify-end">
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={submitting}
+          className="flex min-h-[48px] w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-[#ea580c] hover:bg-[#c2410c] px-8 text-sm font-bold text-white shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span>{submitting ? "Adding to cart…" : "Confirm and proceed"}</span>
+          <span>→</span>
+        </button>
       </div>
     </div>
   );

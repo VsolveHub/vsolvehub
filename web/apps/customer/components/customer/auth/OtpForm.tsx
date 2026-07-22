@@ -77,29 +77,39 @@ export function OtpForm({ redirectTo = "/booking" }: OtpFormProps) {
   const canSend = phoneValidationMessage(normalizedPhone) === null;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="w-full">
       <AnimatePresence mode="wait">
         {step === "phone" ? (
           <motion.div
             key="phone"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             className="flex flex-col gap-5"
           >
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-black text-gray-500 uppercase tracking-wider">Mobile number</label>
-              <input
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:border-transparent transition-all text-sm font-semibold text-gray-900 placeholder:text-gray-400 placeholder:font-medium"
-                placeholder="10-digit mobile number"
-                value={phone}
-                onChange={(e) => setPhone(normalizePhone(e.target.value))}
-                inputMode="numeric"
-                autoComplete="tel"
-              />
-              <p className="text-[11px] font-semibold text-gray-400 mt-1">We'll send a one-time password to your phone</p>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="mobile-input" className="text-xs font-bold text-[#45464d] uppercase tracking-wider">
+                Mobile number
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-4 text-slate-400 text-sm select-none pointer-events-none">
+                  📞
+                </span>
+                <input
+                  id="mobile-input"
+                  className="w-full pl-10 pr-4 py-3.5 rounded-xl border border-slate-200 bg-[#f8f9fa] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ea580c]/20 focus:border-[#ea580c] transition-all text-sm font-bold text-[#0b1c30] placeholder:text-slate-400 placeholder:font-normal"
+                  placeholder="Enter 10-digit mobile number"
+                  value={phone}
+                  onChange={(e) => setPhone(normalizePhone(e.target.value))}
+                  inputMode="numeric"
+                  autoComplete="tel"
+                />
+              </div>
+              <p className="text-[11px] font-semibold text-slate-400">
+                We'll send a one-time password to your phone
+              </p>
             </div>
-            
+
             <AnimatePresence>
               {error && (
                 <motion.div
@@ -114,36 +124,51 @@ export function OtpForm({ redirectTo = "/booking" }: OtpFormProps) {
             </AnimatePresence>
 
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               type="button"
               onClick={sendOtp}
               disabled={loading || !canSend}
-              className="w-full py-4 px-6 bg-[var(--color-brand)] text-white rounded-xl text-sm font-black shadow-xl shadow-[var(--color-brand)]/20 disabled:opacity-60 transition-opacity flex items-center justify-center gap-2"
+              className="w-full py-3.5 px-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white rounded-xl text-sm font-bold shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : "Send OTP"}
+              {loading ? (
+                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                "Send OTP"
+              )}
             </motion.button>
           </motion.div>
         ) : (
           <motion.div
             key="otp"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             className="flex flex-col gap-5"
           >
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-black text-gray-500 uppercase tracking-wider">Enter OTP</label>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="otp-input" className="text-xs font-bold text-[#45464d] uppercase tracking-wider">
+                  Enter 4-digit OTP
+                </label>
+                <span className="text-[11px] font-bold text-[#ea580c] bg-[#fff7ed] px-2.5 py-0.5 rounded-full border border-[#ffedd5]">
+                  Demo OTP: 1234
+                </span>
+              </div>
               <input
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] focus:border-transparent transition-all text-sm font-semibold text-gray-900 placeholder:text-gray-400 placeholder:font-medium tracking-widest text-center text-lg"
+                id="otp-input"
+                className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-[#f8f9fa] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ea580c]/20 focus:border-[#ea580c] transition-all text-lg font-bold text-[#0b1c30] placeholder:text-slate-300 tracking-widest text-center"
                 placeholder="••••"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 inputMode="numeric"
+                autoFocus
               />
-              <p className="text-[11px] font-semibold text-gray-400 mt-1 text-center">Demo OTP: 1234</p>
+              <p className="text-[11px] font-semibold text-slate-400 text-center">
+                OTP sent to +91 {phone}
+              </p>
             </div>
-            
+
             <AnimatePresence>
               {error && (
                 <motion.div
@@ -157,30 +182,78 @@ export function OtpForm({ redirectTo = "/booking" }: OtpFormProps) {
               )}
             </AnimatePresence>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
                 type="button"
                 onClick={verifyOtp}
                 disabled={loading || otp.length < 4}
-                className="w-full py-4 px-6 bg-[var(--color-brand)] text-white rounded-xl text-sm font-black shadow-xl shadow-[var(--color-brand)]/20 disabled:opacity-60 transition-opacity flex items-center justify-center gap-2"
+                className="w-full py-3.5 px-6 bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white rounded-xl text-sm font-bold shadow-md shadow-orange-500/20 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : "Sign in to customer app"}
+                {loading ? (
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  "Verify & Sign In"
+                )}
               </motion.button>
 
               <button
                 type="button"
-                onClick={() => setStep("phone")}
+                onClick={() => {
+                  setStep("phone");
+                  setOtp("");
+                  setError("");
+                }}
                 disabled={loading}
-                className="w-full py-4 px-6 bg-transparent text-gray-500 hover:text-gray-900 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+                className="w-full py-2.5 px-4 bg-transparent text-slate-500 hover:text-[#0b1c30] text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
               >
-                Change number
+                ← Change mobile number
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Trusted By Thousands Divider */}
+      <div className="relative my-6 text-center">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-slate-100" />
+        </div>
+        <span className="relative bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          TRUSTED BY THOUSANDS
+        </span>
+      </div>
+
+      {/* 3 Trust Badges */}
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-red-50/50 border border-red-100/50">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600 text-sm font-bold">
+            🔒
+          </div>
+          <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">
+            SECURE OTP
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-blue-50/50 border border-blue-100/50">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 text-sm font-bold">
+            🛡️
+          </div>
+          <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">
+            VERIFIED PROS
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-amber-50/50 border border-amber-100/50">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-sm font-bold">
+            ⚡
+          </div>
+          <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">
+            INSTANT BOOKING
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

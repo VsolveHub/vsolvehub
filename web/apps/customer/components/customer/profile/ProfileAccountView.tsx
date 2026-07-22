@@ -60,79 +60,111 @@ export function ProfileAccountView({ name, phone, email, quickActions, menuItems
   const initials = getInitials(name);
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 md:py-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      <aside className="lg:col-span-4 flex flex-col gap-6 sticky top-6">
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)] relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-[var(--color-brand)] to-[var(--color-brand-dark)] opacity-10"></div>
-          <header className="flex items-center gap-5 relative z-10">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[var(--color-brand)] text-white flex items-center justify-center text-xl sm:text-2xl font-black tracking-widest shadow-xl shadow-[var(--color-brand)]/20 flex-shrink-0">
-              {initials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl font-black text-gray-900 truncate tracking-tight">{name}</h1>
-              <p className="text-sm font-semibold text-gray-500 mt-1">{phone}</p>
-              <p className="text-sm font-semibold text-gray-500 truncate">{email ?? "Add your email"}</p>
-            </div>
-            <Link 
-              href="/profile/edit" 
-              className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 hover:text-[var(--color-brand)] hover:bg-[var(--color-brand-light)] transition-colors flex items-center justify-center focus:outline-none flex-shrink-0" 
-              aria-label="Edit profile"
-            >
-              <EditIcon />
-            </Link>
-          </header>
-        </div>
-
-        <motion.div 
-          whileHover={{ scale: 1.02 }}
-          className="bg-gradient-to-br from-[#4f46e5] to-[#3b82f6] rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-blue-500/20 cursor-pointer"
-          onClick={() => alert("Referral link coming soon!")}
-        >
-          <div className="relative z-10 pr-12">
-            <h2 className="text-xl font-black mb-2 drop-shadow-sm">Refer & earn ₹100</h2>
-            <p className="text-sm font-medium text-blue-100 leading-relaxed mb-4">Get ₹100 when your friend completes their first booking</p>
-            <span className="inline-block py-2 px-4 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-sm font-bold transition-colors">
-              Refer now
-            </span>
-          </div>
-          <span className="absolute -right-4 -bottom-4 text-8xl opacity-20 transform -rotate-12" aria-hidden>
-            🎁
-          </span>
-        </motion.div>
-      </aside>
-
-      <main className="lg:col-span-8 flex flex-col gap-6">
-        <div className="grid grid-cols-4 gap-3 sm:gap-4">
-          {quickActions.map((action) => (
-            <Link key={action.label} href={action.href} className="group flex flex-col items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-[var(--color-brand)] hover:shadow-md transition-all text-center">
-              <div className="w-12 h-12 rounded-full bg-gray-50 text-gray-600 group-hover:bg-[var(--color-brand)] group-hover:text-white flex items-center justify-center transition-colors">
-                {QUICK_ICONS[action.label]}
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 items-start">
+        {/* Left Column: Profile Card + Refer & Earn */}
+        <aside className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
+          {/* Main User Card */}
+          <div className="rounded-[20px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)] border border-slate-100 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-r from-[#0b1c30] to-[#ea580c] opacity-95" />
+            <div className="relative z-10 pt-6">
+              <div className="flex items-end justify-between mb-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#ea580c] text-white font-heading font-extrabold text-2xl shadow-lg ring-4 ring-white">
+                  {initials}
+                </div>
+                <Link
+                  href="/profile/edit"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[#0b1c30] transition-colors hover:bg-slate-200"
+                  aria-label="Edit profile"
+                >
+                  <EditIcon />
+                </Link>
               </div>
-              <span className="text-xs sm:text-sm font-bold text-gray-700 group-hover:text-gray-900 leading-tight">{action.label}</span>
-            </Link>
-          ))}
-        </div>
+              <h1 className="font-heading text-xl font-extrabold text-[#0b1c30] truncate">{name}</h1>
+              <p className="text-xs font-semibold text-[#45464d] mt-1 flex items-center gap-1.5">
+                <span>📱</span> {phone}
+              </p>
+              <p className="text-xs font-semibold text-[#76777d] mt-0.5 truncate">
+                {email ?? "Add your email"}
+              </p>
+            </div>
+          </div>
 
-        <nav className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col divide-y divide-gray-50">
-          {menuItems.map((item) => (
-            <Link key={item.label} href={item.href} className="group flex items-center gap-4 px-6 py-5 hover:bg-gray-50 transition-colors">
-              <span className="w-10 h-10 rounded-xl bg-gray-100 text-gray-500 group-hover:bg-[var(--color-brand)] group-hover:text-white flex items-center justify-center transition-colors">
-                {MENU_ICONS[item.label]}
+          {/* Refer & Earn Banner */}
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="rounded-[20px] bg-gradient-to-br from-[#0b1c30] via-[#ea580c] to-[#c2410c] p-6 text-white relative overflow-hidden shadow-[0_4px_16px_rgba(15,23,42,0.12)] cursor-pointer"
+            onClick={() => alert("Referral link coming soon!")}
+          >
+            <div className="relative z-10 pr-10">
+              <span className="inline-block rounded-full bg-white/20 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-100 mb-2">
+                REWARD PROGRAM
               </span>
-              <span className="flex-1 text-sm sm:text-base font-bold text-gray-800 group-hover:text-gray-900">{item.label}</span>
-              <span className="text-gray-300 group-hover:text-gray-400 transition-colors">
-                <ChevronIcon />
+              <h2 className="font-heading text-lg font-bold text-white mb-1">Refer & earn ₹100</h2>
+              <p className="text-xs font-medium text-orange-100 leading-relaxed mb-4">
+                Get ₹100 instant credit when your friend completes their first service booking.
+              </p>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-bold text-[#ea580c] shadow-sm hover:bg-slate-50 transition-colors">
+                Refer now →
               </span>
-            </Link>
-          ))}
-        </nav>
+            </div>
+            <span className="absolute -right-2 -bottom-2 text-7xl opacity-20 transform -rotate-12 pointer-events-none" aria-hidden>
+              🎁
+            </span>
+          </motion.div>
+        </aside>
 
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-2">
-          <LogoutButton />
-        </div>
+        {/* Right Column: Quick Actions + Navigation Menu + Logout */}
+        <main className="lg:col-span-8 space-y-6">
+          {/* Quick Actions Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {quickActions.map((action) => (
+              <Link
+                key={action.label}
+                href={action.href}
+                className="group flex flex-col items-center gap-2.5 p-4 rounded-[16px] bg-white border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:border-[#ea580c] hover:shadow-md transition-all text-center"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#fff7ed] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white transition-colors">
+                  {QUICK_ICONS[action.label]}
+                </div>
+                <span className="text-xs font-bold text-[#0b1c30] group-hover:text-[#ea580c] leading-snug">
+                  {action.label}
+                </span>
+              </Link>
+            ))}
+          </div>
 
-        <p className="text-center text-xs font-bold text-gray-400 tracking-wider uppercase mt-4">Version 1.0.0</p>
-      </main>
+          {/* Menu Navigation List */}
+          <div className="rounded-[20px] bg-white border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.08)] overflow-hidden divide-y divide-slate-100">
+            {menuItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="group flex items-center gap-4 px-6 py-4.5 hover:bg-slate-50/80 transition-colors"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[#fff7ed] text-[#ea580c] group-hover:bg-[#ea580c] group-hover:text-white transition-colors">
+                  {MENU_ICONS[item.label]}
+                </div>
+                <span className="flex-1 text-sm font-bold text-[#0b1c30] group-hover:text-[#ea580c] transition-colors">
+                  {item.label}
+                </span>
+                <span className="text-slate-400 group-hover:text-[#ea580c] transition-colors text-sm">
+                  <ChevronIcon />
+                </span>
+              </Link>
+            ))}
+          </div>
+
+          {/* Logout Block */}
+          <div className="rounded-[20px] bg-white border border-slate-100 shadow-[0_4px_16px_rgba(15,23,42,0.08)] p-2">
+            <LogoutButton />
+          </div>
+
+          <p className="text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 pt-2">
+            Vsolve Hub v1.0.0
+          </p>
+        </main>
+      </div>
     </div>
   );
 }
@@ -149,21 +181,21 @@ export function LogoutButton() {
   }
 
   return (
-    <button 
-      type="button" 
-      className="w-full flex items-center justify-center gap-2 py-4 text-sm font-bold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-colors disabled:opacity-50 focus:outline-none" 
-      onClick={logout} 
+    <button
+      type="button"
+      className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 rounded-[16px] transition-colors disabled:opacity-50 cursor-pointer focus:outline-none"
+      onClick={logout}
       disabled={logoutMutation.isPending}
     >
-      {logoutMutation.isPending ? "Logging out..." : "Logout"}
+      {logoutMutation.isPending ? "Logging out…" : "Logout"}
     </button>
   );
 }
 
 function EditIcon() {
-  return <FlaticonIcon name="pen-clip" size={18} />;
+  return <FlaticonIcon name="pen-clip" size={16} />;
 }
 
 function ChevronIcon() {
-  return <FlaticonIcon name="angle-right" size={18} />;
+  return <FlaticonIcon name="angle-right" size={16} />;
 }

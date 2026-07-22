@@ -72,13 +72,41 @@ export function CheckoutClient() {
     onError: (e) => setError(e instanceof Error ? e.message : "Checkout failed"),
   });
 
-  // Default select first address when loaded
+  // Synchronize scheduledMap with items loaded from cart
+  useEffect(() => {
+    if (items.length > 0) {
+      setScheduledMap((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const item of items) {
+          if (!next[item.id] && item.slot) {
+            const formatted =
+              item.scheduleType === "instant"
+                ? "Instant (Within 1 hour)"
+                : `${new Date(item.slot).toLocaleString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`;
+            next[item.id] = formatted;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [items]);
+
+  // Default select address when loaded
   useEffect(() => {
     if (!globalAddressId && addresses.length > 0) {
-      const def = addresses.find((a) => a.isDefault) ?? addresses[0];
+      const cartAddrId = items[0]?.addressId;
+      const matched = cartAddrId ? addresses.find((a) => a.id === cartAddrId) : null;
+      const def = matched ?? addresses.find((a) => a.isDefault) ?? addresses[0];
       if (def) {
         setGlobalAddressId(def.id);
-        if (items.length > 0) {
+        if (items.length > 0 && def.id !== cartAddrId) {
           updateAllAddresses.mutate(def.id);
         }
       }
@@ -165,7 +193,7 @@ export function CheckoutClient() {
           <div className="flex items-center gap-2">
             <div
               className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                globalAddressId ? "bg-[#006b5f] text-white" : "bg-[#0b1c30] text-white"
+                globalAddressId ? "bg-[#ea580c] text-white" : "bg-[#0b1c30] text-white"
               }`}
             >
               {globalAddressId ? "✓" : "1"}
@@ -179,7 +207,7 @@ export function CheckoutClient() {
             <div
               className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                 allScheduled
-                  ? "bg-[#006b5f] text-white"
+                  ? "bg-[#ea580c] text-white"
                   : globalAddressId
                     ? "bg-[#0b1c30] text-white"
                     : "bg-slate-100 text-slate-400"
@@ -224,7 +252,7 @@ export function CheckoutClient() {
           <div className="rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <h2 className="font-heading text-lg font-bold text-[#0b1c30]">Order Summary</h2>
-              <Link href="/cart" className="text-xs font-bold text-[#006b5f] hover:underline">
+              <Link href="/cart" className="text-xs font-bold text-[#ea580c] hover:underline">
                 Edit cart
               </Link>
             </div>
@@ -256,7 +284,7 @@ export function CheckoutClient() {
               <button
                 type="button"
                 onClick={() => setShowAddrPicker(true)}
-                className="text-xs font-bold text-[#006b5f] hover:underline cursor-pointer"
+                className="text-xs font-bold text-[#ea580c] hover:underline cursor-pointer"
               >
                 {selectedAddress ? "Change" : "Add address"}
               </button>
@@ -293,7 +321,7 @@ export function CheckoutClient() {
                 id="saveAddress"
                 checked={saveAddressForFuture}
                 onChange={(e) => setSaveAddressForFuture(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-[#006b5f] accent-[#006b5f]"
+                className="h-4 w-4 rounded border-slate-300 text-[#ea580c] accent-[#ea580c]"
               />
               <label htmlFor="saveAddress" className="text-xs text-[#45464d] font-medium cursor-pointer">
                 Save this address for future bookings
@@ -314,7 +342,7 @@ export function CheckoutClient() {
               <button
                 type="button"
                 onClick={() => setShowSlotModal(true)}
-                className="text-xs font-bold text-[#006b5f] hover:underline cursor-pointer"
+                className="text-xs font-bold text-[#ea580c] hover:underline cursor-pointer"
               >
                 Edit slots
               </button>
@@ -347,7 +375,7 @@ export function CheckoutClient() {
             <button
               type="button"
               onClick={() => setShowSlotModal(true)}
-              className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[#006b5f] bg-[#e6f4f1]/50 text-[#006b5f] hover:bg-[#e6f4f1] font-bold text-xs transition-all cursor-pointer"
+              className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-[#ea580c] bg-[#fff7ed]/50 text-[#ea580c] hover:bg-[#fff7ed] font-bold text-xs transition-all cursor-pointer"
             >
               📅 Select date & time slots for all services
             </button>
@@ -362,14 +390,14 @@ export function CheckoutClient() {
               <button
                 type="button"
                 onClick={() => setShowOffersModal(true)}
-                className="text-xs font-bold text-[#006b5f] hover:underline cursor-pointer"
+                className="text-xs font-bold text-[#ea580c] hover:underline cursor-pointer"
               >
                 Available offers ({AVAILABLE_OFFERS.length})
               </button>
             </div>
 
             {appliedCoupon ? (
-              <div className="rounded-[12px] bg-[#e6f4f1] p-3.5 border border-[#b2e5dd] flex items-center justify-between text-xs text-[#004d44]">
+              <div className="rounded-[12px] bg-[#fff7ed] p-3.5 border border-[#ffedd5] flex items-center justify-between text-xs text-[#9a3412]">
                 <div>
                   <strong className="font-bold block text-sm">Coupon '{appliedCoupon.code}' applied!</strong>
                   <span>Saved {formatPrice(appliedCoupon.discountPaise)} on this booking</span>
@@ -389,12 +417,12 @@ export function CheckoutClient() {
                   value={couponInput}
                   onChange={(e) => setCouponInput(e.target.value)}
                   placeholder="Enter promo code (e.g. WELCOME50)"
-                  className="h-12 flex-1 rounded-[8px] border border-[#c6c6cd] bg-white px-4 text-sm font-semibold uppercase text-[#0b1c30] placeholder:lowercase outline-none focus:border-[#006b5f]"
+                  className="h-12 flex-1 rounded-[8px] border border-[#c6c6cd] bg-white px-4 text-sm font-semibold uppercase text-[#0b1c30] placeholder:lowercase outline-none focus:border-[#ea580c]"
                 />
                 <button
                   type="button"
                   onClick={() => handleApplyCoupon()}
-                  className="h-12 rounded-[8px] bg-[#006b5f] hover:bg-[#005249] px-6 text-sm font-bold text-white transition-all cursor-pointer"
+                  className="h-12 rounded-[8px] bg-[#ea580c] hover:bg-[#c2410c] px-6 text-sm font-bold text-white transition-all cursor-pointer"
                 >
                   Apply
                 </button>
@@ -425,7 +453,7 @@ export function CheckoutClient() {
                 ))}
 
                 {appliedCoupon && (
-                  <div className="flex justify-between font-bold text-[#006b5f]">
+                  <div className="flex justify-between font-bold text-[#ea580c]">
                     <span>Discount ('{appliedCoupon.code}')</span>
                     <span>-{formatPrice(appliedCoupon.discountPaise)}</span>
                   </div>
@@ -433,7 +461,7 @@ export function CheckoutClient() {
 
                 <div className="flex justify-between items-center pt-1">
                   <span className="font-medium text-[#45464d]">Platform Convenience Fee</span>
-                  <span className="rounded-md bg-[#e6f4f1] px-2.5 py-0.5 text-[11px] font-bold text-[#006b5f]">
+                  <span className="rounded-md bg-[#fff7ed] px-2.5 py-0.5 text-[11px] font-bold text-[#ea580c]">
                     FREE / WAIVED
                   </span>
                 </div>
@@ -443,7 +471,7 @@ export function CheckoutClient() {
 
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-semibold text-[#45464d]">Amount to Pay</span>
-                <span className="font-heading text-3xl font-extrabold text-[#006b5f]">
+                <span className="font-heading text-3xl font-extrabold text-[#ea580c]">
                   {formatPrice(finalPayablePaise)}
                 </span>
               </div>
@@ -475,7 +503,7 @@ export function CheckoutClient() {
                   type="button"
                   onClick={() => checkout.mutate()}
                   disabled={checkout.isPending}
-                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#006b5f] hover:bg-[#005249] text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-sm shadow-md transition-all cursor-pointer"
                 >
                   <span>{checkout.isPending ? "Processing…" : `Pay ${formatPrice(finalPayablePaise)}`}</span>
                   <span>→</span>
@@ -522,13 +550,13 @@ export function CheckoutClient() {
               {AVAILABLE_OFFERS.map((offer) => (
                 <div key={offer.code} className="rounded-[12px] border border-slate-200 p-4 flex items-center justify-between">
                   <div>
-                    <span className="font-bold text-[#006b5f] text-sm block">{offer.code}</span>
+                    <span className="font-bold text-[#ea580c] text-sm block">{offer.code}</span>
                     <span className="text-xs text-[#45464d]">{offer.description}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleApplyCoupon(offer.code)}
-                    className="rounded-full bg-[#006b5f] px-3 py-1 text-xs font-bold text-white hover:bg-[#005249]"
+                    className="rounded-full bg-[#ea580c] px-3 py-1 text-xs font-bold text-white hover:bg-[#c2410c]"
                   >
                     Apply
                   </button>

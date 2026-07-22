@@ -6,11 +6,15 @@ export function BookingSummary({
   service,
   startsAtPaise,
   estimate,
+  onProceed,
+  submitting = false,
 }: {
   service: FlowService;
   config: ServiceConfig;
   startsAtPaise: number;
   estimate: PriceEstimate;
+  onProceed?: () => void;
+  submitting?: boolean;
 }) {
   return (
     <div className="w-full lg:sticky lg:top-6">
@@ -26,8 +30,8 @@ export function BookingSummary({
         {/* White Body Panel */}
         <div className="p-6 bg-white">
           {/* Verified Provider Badge Block */}
-          <div className="mb-6 flex items-center gap-3.5 rounded-[16px] bg-[#f0f7ff] p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#006b5f] shadow-xs">
+          <div className="mb-6 flex items-center gap-3.5 rounded-[16px] bg-[#fff7ed] p-4 border border-[#ffedd5]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#ea580c] shadow-xs">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 4a2 2 0 114 0v1a2 2 0 01-2 2 2 2 0 01-2-2V4zm-6 8a2 2 0 100-4 2 2 0 000 4zm14 0a2 2 0 100-4 2 2 0 000 4zM4 18a2 2 0 110-4 2 2 0 010 4zm14 0a2 2 0 110-4 2 2 0 010 4z" />
               </svg>
@@ -66,7 +70,7 @@ export function BookingSummary({
 
             <div className="flex items-center justify-between pt-1">
               <span className="font-medium text-[#45464d]">Platform Convenience Fee</span>
-              <span className="rounded-md bg-[#e6f4f1] px-2.5 py-0.5 text-[11px] font-bold text-[#006b5f]">
+              <span className="rounded-md bg-[#fff7ed] px-2.5 py-0.5 text-[11px] font-bold text-[#ea580c]">
                 WAIVED
               </span>
             </div>
@@ -88,8 +92,8 @@ export function BookingSummary({
           </div>
 
           {/* Guarantee Box */}
-          <div className="my-5 flex items-start gap-3 rounded-[16px] border border-[#b2e5dd] bg-[#e6f4f1]/60 p-3.5 text-xs text-[#004d44]">
-            <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#006b5f] text-white text-xs">
+          <div className="my-5 flex items-start gap-3 rounded-[16px] border border-[#ffedd5] bg-[#fff7ed]/80 p-3.5 text-xs text-[#9a3412]">
+            <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-white text-xs">
               ✓
             </div>
             <div className="font-medium leading-normal">
@@ -100,9 +104,11 @@ export function BookingSummary({
           {/* Primary CTA */}
           <button
             type="button"
-            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#000000] px-6 text-sm font-bold text-white shadow-md transition-all hover:bg-[#0b1c30] active:scale-98 cursor-pointer"
+            onClick={onProceed}
+            disabled={submitting}
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#000000] px-6 text-sm font-bold text-white shadow-md transition-all hover:bg-[#0b1c30] active:scale-98 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>Confirm and proceed</span>
+            <span>{submitting ? "Adding to cart…" : "Confirm and proceed"}</span>
             <span>→</span>
           </button>
         </div>

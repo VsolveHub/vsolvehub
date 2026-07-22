@@ -16,6 +16,7 @@ import {
   ProfileIcon,
   MenuIcon,
 } from "@/components/ui/AppIcons";
+import logoMark from "@/public/logo-mark.png";
 import { CustomerNotificationBell } from "@/components/notifications/CustomerNotificationBell";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { CartBadge } from "@/components/shared/CartBadge";
@@ -86,52 +87,89 @@ export function AppHeader() {
 
   return (
     <>
-      <header className={`bg-white text-gray-900 sticky top-0 z-50 border-b border-gray-100 ${hideSearchLocation ? "py-3" : "pt-3 pb-4"}`}>
-        <div className="flex items-center justify-between gap-2 mb-2.5 w-full max-w-[1600px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16">
+      <header className="bg-white/95 backdrop-blur-md text-[#0b1c30] sticky top-0 z-50 border-b border-slate-100 shadow-[0_2px_15px_rgba(0,0,0,0.03)] py-2.5">
+        <div className="flex items-center justify-between gap-3 w-full max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
           <button
             type="button"
-            className="md:hidden flex items-center justify-center w-9 h-9 border-none bg-transparent text-gray-900 cursor-pointer p-0"
+            className="md:hidden flex items-center justify-center w-9 h-9 border-none bg-transparent text-[#0b1c30] cursor-pointer p-0"
             onClick={() => setShowMobileMenu(true)}
             aria-label="Open menu"
           >
             <MenuIcon size={20} />
           </button>
 
-          <Link href="/" className="flex items-center gap-2 flex-1 md:flex-none justify-center md:justify-start">
-            <div className="w-8 h-8 rounded-lg bg-[#0f172a] flex items-center justify-center text-white shrink-0 shadow-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
+          <Link href="/" className="flex items-center gap-2.5 flex-1 md:flex-none justify-center md:justify-start group">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-xs group-hover:scale-105 transition-transform">
+              <img src={logoMark.src} alt="Vsolve Hub" className="w-full h-full object-contain" />
             </div>
             <span className="flex flex-col leading-tight hidden sm:flex">
-              <span className="text-[15px] font-extrabold tracking-tight text-gray-900">Vsolve Hub</span>
+              <span className="font-heading text-lg font-black tracking-tight text-[#0b1c30]">
+                Vsolve <span className="text-[#ea580c]">Hub</span>
+              </span>
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-5 text-[13px] font-normal">
-            <Link href="/services" className={pathname.startsWith("/services") ? "text-gray-900 font-semibold" : "text-gray-600 hover:text-gray-900"}>Find Services</Link>
-            <Link href="/profile/bookings" className={pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking") ? "text-gray-900 font-semibold" : "text-gray-600 hover:text-gray-900"}>My Bookings</Link>
-            <Link href="/support" className={pathname.startsWith("/support") ? "text-gray-900 font-semibold" : "text-gray-600 hover:text-gray-900"}>Support</Link>
+          <nav className="hidden md:flex items-center gap-1.5 text-xs sm:text-sm font-semibold">
+            <Link
+              href="/services"
+              className={`px-3.5 py-1.5 rounded-full transition-all ${
+                pathname.startsWith("/services")
+                  ? "bg-[#fff7ed] text-[#ea580c] font-bold border border-[#ffedd5]"
+                  : "text-slate-600 hover:text-[#ea580c] hover:bg-slate-50"
+              }`}
+            >
+              Find Services
+            </Link>
+            <Link
+              href="/profile/bookings"
+              className={`px-3.5 py-1.5 rounded-full transition-all ${
+                pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking")
+                  ? "bg-[#fff7ed] text-[#ea580c] font-bold border border-[#ffedd5]"
+                  : "text-slate-600 hover:text-[#ea580c] hover:bg-slate-50"
+              }`}
+            >
+              My Bookings
+            </Link>
+            <Link
+              href="/support"
+              className={`px-3.5 py-1.5 rounded-full transition-all ${
+                pathname.startsWith("/support")
+                  ? "bg-[#fff7ed] text-[#ea580c] font-bold border border-[#ffedd5]"
+                  : "text-slate-600 hover:text-[#ea580c] hover:bg-slate-50"
+              }`}
+            >
+              Support
+            </Link>
           </nav>
 
           <div className="flex items-center gap-3">
+            <CustomerNotificationBell />
             <CartBadge />
-            <Link href="/profile" className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0 ring-1 ring-gray-200/80">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-                alt="User profile"
-                className="w-full h-full object-cover"
-              />
+            <Link
+              href="/profile"
+              aria-label="Profile"
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-all shrink-0 cursor-pointer ${
+                pathname.startsWith("/profile") && !pathname.startsWith("/profile/bookings")
+                  ? "bg-[#ea580c] text-white shadow-sm ring-2 ring-[#ea580c]/20"
+                  : "bg-slate-100 text-[#0b1c30] hover:bg-[#fff7ed] hover:text-[#ea580c]"
+              }`}
+            >
+              <ProfileIcon size={18} />
             </Link>
           </div>
         </div>
 
         {isServiceDetailPage && (
-          <div className="flex items-center gap-2 mt-2">
-            <button type="button" className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 text-white border-none cursor-pointer hover:bg-white/20 transition-colors" onClick={() => router.back()} aria-label="Go back">
+          <div className="flex items-center gap-2 px-4 sm:px-6 md:px-8 max-w-7xl mx-auto mt-2">
+            <button
+              type="button"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-[#0b1c30] hover:bg-slate-200 transition-colors cursor-pointer"
+              onClick={() => router.back()}
+              aria-label="Go back"
+            >
               ←
             </button>
-            <span className="text-sm font-semibold">Back</span>
+            <span className="text-sm font-semibold text-slate-700">Back</span>
           </div>
         )}
       </header>
@@ -196,7 +234,7 @@ function MobileNavDrawer({ pathname, onClose }: { pathname: string; onClose: () 
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <img src="/logo-mark.png" alt="" className="w-8 h-8 object-contain rounded-full border border-gray-100" />
+            <img src={logoMark.src} alt="Vsolve Hub" className="w-8 h-8 object-cover rounded-lg border border-gray-100 shadow-xs" />
             <span className="font-extrabold text-gray-900 tracking-tight">Vsolve Hub</span>
           </div>
           <button type="button" className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors" onClick={onClose} aria-label="Close menu">
