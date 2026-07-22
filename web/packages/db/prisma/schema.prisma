@@ -373,6 +373,7 @@ model User {
   accommodationBookings AccommodationBooking[]
   vehicleBookings       VehicleBooking[]
   notifications         Notification[]
+  productOrders         ProductOrder[]
 }
 
 /// Real, DB-backed customer notification. Emitted on service-booking lifecycle
@@ -420,8 +421,9 @@ model Address {
   isDefault   Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookings Booking[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  productOrders ProductOrder[]
 }
 
 model Vendor {
@@ -526,8 +528,9 @@ model ServiceSubCategory {
   imageUrl   String?
   sortOrder  Int    @default(0)
 
-  category ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  services Service[]
+  category    ServiceCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  services    Service[]
+  productMaps ServiceProductMap[]
 
   @@unique([slug, categoryId])
 }
@@ -550,6 +553,7 @@ model Service {
   subCategory   ServiceSubCategory? @relation(fields: [subCategoryId], references: [id])
   savedServices SavedService[]
   bookings      Booking[]
+  productMaps   ServiceProductMap[]
 
   @@unique([slug, categoryId])
 }
@@ -639,8 +643,9 @@ model Order {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id])
-  bookings Booking[]
+  user          User           @relation(fields: [userId], references: [id])
+  bookings      Booking[]
+  productOrders ProductOrder[]
 
   @@index([userId, status])
   /// NOTE: the migration also creates a PARTIAL unique index that Prisma cannot
@@ -724,6 +729,7 @@ model Booking {
   address           Address            @relation(fields: [addressId], references: [id])
   vendor            Vendor?            @relation(fields: [vendorId], references: [id])
   statusLogs        BookingStatusLog[]
+  productItems      BookingProductItem[]
   jobAssignments    JobAssignment[]
   assignedPartnerId String?
   assignedPartner   Partner?           @relation("AssignedPartner", fields: [assignedPartnerId], references: [id])
@@ -945,9 +951,169 @@ model AdminAction {
   adminId   String
   admin     AdminUser @relation(fields: [adminId], references: [id])
   partnerId String
-  action    String // APPROVED | REQUESTED_CHANGES | REJECTED | SUSPENDED | REACTIVATED | DOC_APPROVED | DOC_REJECTED
+  action    String // APPROVED | REQUESTED_CHANGES | REJECTED | SUSPENDED | REACTIVATED | DOC_APPROVED | DOC_REJECTED | PRODUCT_* | MAPPING_* | PRODUCT_ORDER_*
   reason    String?
   createdAt DateTime  @default(now())
 
   @@index([partnerId, createdAt])
+}
+
+// ─── Product marketplace ──────────────────────────────────────────────────────
+// One centrally-managed product catalog shared by the booking flow (service
+// add-ons + technician mid-job parts) and the standalone /store marketplace.
+// Prices live ONLY here (pricePaise + gstRatePct); every booking/order line is
+// a snapshot at add time, so a catalog edit never mutates a live cart.
+
+model ProductCategory {
+  id        String  @id @default(cuid())
+  name      String
+  slug      String  @unique
+  icon      String?
+  sortOrder Int     @default(0)
+
+  products Product[]
+}
+
+model Brand {
+  id      String  @id @default(cuid())
+  name    String
+  slug    String  @unique
+  logoUrl String?
+
+  products Product[]
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  sku               String   @unique
+  name              String
+  slug              String   @unique
+  description       String   @default("")
+  brandId           String?
+  productCategoryId String
+  /// JSON array of image URLs.
+  images            String   @default("[]")
+  mrpPaise          Int
+  /// Selling price — the single source of truth, admin-editable only.
+  pricePaise        Int
+  gstRatePct        Int      @default(18)
+  stockQty          Int      @default(0)
+  isActive          Boolean  @default(true)
+  /// JSON object of free-form spec key/values (e.g. {"Amperage":"16A"}).
+  specs             String   @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  brand           Brand?               @relation(fields: [brandId], references: [id])
+  productCategory ProductCategory      @relation(fields: [productCategoryId], references: [id])
+  serviceMaps     ServiceProductMap[]
+  bookingItems    BookingProductItem[]
+  orderItems      ProductOrderItem[]
+
+  @@index([productCategoryId, isActive])
+  @@index([brandId])
+}
+
+/// Service → Product mapping: the visibility filter for everything product-
+/// related in the service flows. A row maps a product to either ONE exact
+/// service or a whole subcategory (e.g. all "electrician" services share
+/// switches/MCBs/wires). Customers and technicians only ever see products
+/// mapped to the service at hand.
+model ServiceProductMap {
+  id            String  @id @default(cuid())
+  productId     String
+  serviceId     String?
+  subCategoryId String?
+  sortOrder     Int     @default(0)
+  featured      Boolean @default(false)
+
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  service     Service?            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  subCategory ServiceSubCategory? @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, serviceId, subCategoryId])
+  @@index([serviceId])
+  @@index([subCategoryId])
+}
+
+enum ProductItemAddedBy {
+  CUSTOMER
+  PARTNER
+}
+
+enum ProductItemStatus {
+  APPROVED
+  PENDING_APPROVAL
+  DECLINED
+}
+
+/// A product line attached to a service booking. Added pre-booking by the
+/// customer (APPROVED immediately) or mid-job by the technician
+/// (PENDING_APPROVAL until the customer accepts). Prices are snapshots from
+/// the Product catalog — partners can never set or edit them.
+model BookingProductItem {
+  id               String             @id @default(cuid())
+  bookingId        String
+  productId        String
+  qty              Int                @default(1)
+  unitPricePaise   Int
+  gstPaise         Int                @default(0)
+  totalPaise       Int
+  addedBy          ProductItemAddedBy @default(CUSTOMER)
+  addedByPartnerId String?
+  status           ProductItemStatus  @default(APPROVED)
+  approvedAt       DateTime?
+  createdAt        DateTime           @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([bookingId, status])
+}
+
+enum ProductOrderStatus {
+  /// Draft cart — items being gathered, not yet paid.
+  CART
+  PLACED
+  PACKED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+/// A standalone marketplace purchase (no service booking). Money still flows
+/// through the same Order envelope as service checkouts.
+model ProductOrder {
+  id         String             @id @default(cuid())
+  orderRef   String             @unique
+  userId     String
+  addressId  String?
+  /// Set at checkout; links to the money envelope.
+  orderId    String?
+  status     ProductOrderStatus @default(CART)
+  totalPaise Int                @default(0)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user    User               @relation(fields: [userId], references: [id])
+  address Address?           @relation(fields: [addressId], references: [id])
+  order   Order?             @relation(fields: [orderId], references: [id])
+  items   ProductOrderItem[]
+
+  @@index([userId, status])
+}
+
+model ProductOrderItem {
+  id             String @id @default(cuid())
+  productOrderId String
+  productId      String
+  qty            Int    @default(1)
+  unitPricePaise Int
+  gstPaise       Int    @default(0)
+  totalPaise     Int
+
+  productOrder ProductOrder @relation(fields: [productOrderId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id])
+
+  @@unique([productOrderId, productId])
 }

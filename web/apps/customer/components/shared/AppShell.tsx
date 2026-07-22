@@ -106,6 +106,7 @@ export function AppHeader() {
 
           <nav className="hidden md:flex items-center gap-6 text-[13px] font-bold">
             <Link href="/services" className={pathname.startsWith("/services") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>Find Services</Link>
+            <Link href="/store" className={pathname.startsWith("/store") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>Store</Link>
             <Link href="/profile/bookings" className={pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>My Bookings</Link>
             <Link href="/support" className={pathname.startsWith("/support") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>Support</Link>
           </nav>
@@ -168,6 +169,7 @@ export function AppHeader() {
 const MOBILE_NAV_LINKS = [
   { href: "/", label: "Home", icon: HomeIcon, match: (p: string) => p === "/" },
   { href: "/services", label: "Find Services", icon: HeaderSearchIcon, match: (p: string) => p.startsWith("/services") },
+  { href: "/store", label: "Store", icon: CartNavIcon, match: (p: string) => p.startsWith("/store") },
   { href: "/cart", label: "Cart", icon: CartNavIcon, match: (p: string) => p.startsWith("/cart") },
   { href: "/profile/bookings", label: "My Bookings", icon: BookingsIcon, match: (p: string) => p.startsWith("/profile/bookings") || p.startsWith("/booking") },
   { href: "/profile/messages", label: "Messages", icon: MessagesIcon, match: (p: string) => p.startsWith("/profile/messages") },

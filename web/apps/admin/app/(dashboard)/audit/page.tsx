@@ -54,6 +54,9 @@ export default async function AuditLogPage({
           <tbody>
             {actions.map((a) => {
               const partner = partnerById.get(a.partnerId);
+              // Catalog/marketplace actions reuse the loose partnerId column for
+              // their own subject id — they are not about a partner at all.
+              const isCatalogAction = /^(PRODUCT|BRAND|MAPPING)/.test(a.action);
               return (
                 <tr key={a.id} className="border-b border-border last:border-0 hover:bg-surface-muted">
                   <td className="whitespace-nowrap px-5 py-3 text-gray-500">{a.createdAt.toLocaleString("en-IN")}</td>
@@ -64,6 +67,8 @@ export default async function AuditLogPage({
                       <Link href={`/partners/${a.partnerId}`} className="text-brand-600 hover:text-brand-700">
                         {partner.fullName ?? partner.phone}
                       </Link>
+                    ) : isCatalogAction ? (
+                      <span className="text-gray-400">—</span>
                     ) : (
                       <span className="text-gray-400">(deleted)</span>
                     )}

@@ -71,12 +71,12 @@ export function CategorySlugPageClient({
   const express = allFilteredServices.filter(s => s.pricePaise < 90000);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
 
       <CategoryTabs activeTab={activeTab} setActiveTab={setActiveTab} subCategories={subCategories} />
 
       {/* Main Services Display */}
-      <div className="space-y-12 sm:space-y-16">
+      <div className="space-y-10">
         <BestValueSection services={bestValue} categorySlug={categorySlug} onBook={handleBook} />
         <ExpressSection services={express} categorySlug={categorySlug} onBook={handleBook} />
 

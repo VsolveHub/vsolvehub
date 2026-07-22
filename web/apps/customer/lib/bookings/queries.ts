@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import {
   ACTIVE_BOOKING_WHERE,
   captureRevisionDelta,
+  decrementStock,
   recomputePartnerRating,
   settleCancelledBooking,
   type JobStatus,
@@ -225,6 +226,25 @@ export async function approveRevisedQuote(bookingRef: string, userId: string) {
 
   const delta = booking.revisedAmountPaise;
 
+  // Catalog parts behind this revision: claim their stock BEFORE charging, so
+  // a sold-out part fails the approval instead of stranding a captured charge.
+  const pendingItems = await prisma.bookingProductItem.findMany({
+    where: { bookingId: booking.id, status: "PENDING_APPROVAL" },
+    include: { product: { select: { name: true } } },
+  });
+  if (pendingItems.length > 0) {
+    try {
+      await prisma.$transaction((tx) =>
+        decrementStock(
+          tx,
+          pendingItems.map((i) => ({ productId: i.productId, qty: i.qty })),
+        ),
+      );
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : ("Part out of stock" as string) };
+    }
+  }
+
   // Charge the approved extra BEFORE raising the total, so finalAmountPaise never
   // outruns what has actually been collected. If the supplementary charge fails,
   // the revision stays pending and the total is unchanged.
@@ -232,20 +252,59 @@ export async function approveRevisedQuote(bookingRef: string, userId: string) {
   if (!charge.ok) return { error: charge.error };
 
   const newTotal = booking.quotedAmount + delta;
-  await prisma.booking.update({
-    where: { id: booking.id },
-    data: { quotedAmount: newTotal, finalAmountPaise: newTotal, revisedAmountPaise: null, revisedReason: null },
-  });
+
+  // Approved parts join the invoice snapshot as product lines.
+  let lineItems: LineItem[] = [];
+  try {
+    lineItems = JSON.parse(booking.lineItems) as LineItem[];
+  } catch {
+    /* keep empty */
+  }
+  for (const item of pendingItems) {
+    lineItems.push({
+      key: `product:${item.productId}:${item.id}`,
+      label: "Extra part",
+      value: item.product.name,
+      qty: item.qty,
+      unitPaise: item.unitPricePaise,
+      totalPaise: item.totalPaise,
+      kind: "product",
+    });
+  }
+
+  await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        quotedAmount: newTotal,
+        finalAmountPaise: newTotal,
+        revisedAmountPaise: null,
+        revisedReason: null,
+        lineItems: JSON.stringify(lineItems),
+      },
+    }),
+    prisma.bookingProductItem.updateMany({
+      where: { id: { in: pendingItems.map((i) => i.id) } },
+      data: { status: "APPROVED", approvedAt: new Date() },
+    }),
+  ]);
   return { success: true as const, newTotalPaise: newTotal };
 }
 
 export async function declineRevisedQuote(bookingRef: string, userId: string) {
   const booking = await prisma.booking.findFirst({ where: { bookingRef, userId } });
   if (!booking) return null;
-  await prisma.booking.update({
-    where: { id: booking.id },
-    data: { revisedAmountPaise: null, revisedReason: null },
-  });
+  await prisma.$transaction([
+    prisma.booking.update({
+      where: { id: booking.id },
+      data: { revisedAmountPaise: null, revisedReason: null },
+    }),
+    // Declined parts never reach the invoice; keep the rows for the record.
+    prisma.bookingProductItem.updateMany({
+      where: { bookingId: booking.id, status: "PENDING_APPROVAL" },
+      data: { status: "DECLINED" },
+    }),
+  ]);
   return { success: true as const };
 }
 

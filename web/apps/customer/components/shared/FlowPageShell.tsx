@@ -19,7 +19,7 @@ export function FlowPageShell({
   className = "",
 }: FlowPageShellProps) {
   return (
-    <div className={`flex min-h-screen w-full flex-col bg-slate-50 ${className}`.trim()}>
+    <div className={`flex min-h-screen w-full flex-col bg-white ${className}`.trim()}>
       {header ? <div className="w-full shrink-0">{header}</div> : null}
       <div className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 sm:px-6">
         {stepper ? <div className="pt-4">{stepper}</div> : null}
