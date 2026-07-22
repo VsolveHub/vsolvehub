@@ -3,8 +3,9 @@
 type Props = {
   title: string;
   url: string;
+  variant?: "full" | "button";
 };
-export function ServiceShareButton({ title, url }: Props) {
+export function ServiceShareButton({ title, url, variant = "button" }: Props) {
   async function handleShare() {
     const absoluteUrl = url.startsWith("http") ? url : `${window.location.origin}${url}`;
     const shareData = { title, text: `Check out ${title} on V Solve Hub`, url: absoluteUrl };
@@ -20,16 +21,29 @@ export function ServiceShareButton({ title, url }: Props) {
     alert("Link copied to clipboard!");
   }
 
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4">
-      <p className="text-sm font-medium text-gray-600">Share this service with your loved ones</p>
+  if (variant === "button") {
+    return (
       <button
         type="button"
         onClick={handleShare}
-        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-50"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-50 hover:text-[#ea580c] cursor-pointer shadow-xs"
       >
         <ShareIcon />
-        Share
+        <span>Share</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-sm font-medium text-slate-600">Share this service with your loved ones</p>
+      <button
+        type="button"
+        onClick={handleShare}
+        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-800 transition-colors hover:bg-slate-50 hover:text-[#ea580c] cursor-pointer"
+      >
+        <ShareIcon />
+        <span>Share</span>
       </button>
     </div>
   );
