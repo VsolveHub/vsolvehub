@@ -73,169 +73,175 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
       : "Book now";
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:py-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       
       {/* Breadcrumbs */}
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="mb-6">
-        <div className="text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase flex items-center space-x-2">
-          <Link href={`/services/${service.category.slug}`} className="hover:text-[var(--color-brand)] transition-colors">
+        <div className="text-xs font-bold tracking-wider text-slate-400 uppercase flex items-center space-x-2">
+          <Link href={`/services/${service.category.slug}`} className="hover:text-[#ea580c] transition-colors">
             {service.category.name}
           </Link>
-          <span className="text-gray-300 font-normal">›</span>
-          <span className="text-[var(--color-brand)]">{service.name}</span>
+          <span className="text-slate-300 font-normal">›</span>
+          <span className="text-[#ea580c] font-black">{service.name}</span>
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
         
-        {/* LEFT COLUMN: Image & Pricing Hub (lg:col-span-5) */}
-        <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
-          
-          {/* Main Visual Image Card */}
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative aspect-[4/3] w-full rounded-3xl overflow-hidden border border-gray-150 shadow-md bg-slate-50 group">
-            <span className="absolute top-4 left-4 z-10 bg-[var(--color-brand-accent)] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg shadow-sm">
-              ⭐ Best Seller
-            </span>
-            <div className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700 flex items-center justify-center overflow-hidden">
-              <ServiceSketchImage
-                slug={service.slug}
-                subCategorySlug={service.subCategory?.slug}
-                categorySlug={service.category.slug}
-                serviceName={service.name}
-                variant="hero"
-                alt={service.name}
-              />
+        {/* LEFT COLUMN: Unified Hero & Booking Sidebar Card (lg:col-span-5) */}
+        <div className="lg:col-span-5 lg:sticky lg:top-24">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-[0_4px_25px_rgba(0,0,0,0.04)] space-y-0"
+          >
+            {/* Visual Image Header */}
+            <div className="relative aspect-[4/3] w-full bg-slate-50 border-b border-slate-100 group overflow-hidden">
+              <span className="absolute top-3.5 left-3.5 z-10 bg-[#ea580c] text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1">
+                ⭐ Best Seller
+              </span>
+              <div className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 flex items-center justify-center">
+                <ServiceSketchImage
+                  slug={service.slug}
+                  subCategorySlug={service.subCategory?.slug}
+                  categorySlug={service.category.slug}
+                  serviceName={service.name}
+                  variant="hero"
+                  alt={service.name}
+                />
+              </div>
             </div>
-          </motion.div>
 
-          {/* Pricing & Booking Action Card */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white border border-gray-150 rounded-[32px] p-6 shadow-sm space-y-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1.5">
-                <div className="flex items-baseline space-x-3">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Starts at</span>
-                    <span className="text-3xl font-black text-gray-900 mt-1">
+            {/* Pricing & Booking Details Body */}
+            <div className="p-5 sm:p-6 space-y-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Starts at</span>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-2xl sm:text-3xl font-black text-[#0b1c30]">
                       {formatPrice(service.pricePaise)}
                     </span>
+                    {detail.originalPricePaise && (
+                      <span className="text-sm font-bold text-slate-400 line-through">
+                        {formatPrice(detail.originalPricePaise)}
+                      </span>
+                    )}
                   </div>
-                  {detail.originalPricePaise && (
-                    <span className="text-base font-bold text-gray-400 line-through">
-                      {formatPrice(detail.originalPricePaise)}
-                    </span>
-                  )}
-                </div>
-                <div className="inline-block bg-[var(--color-brand-light)] border border-[var(--color-brand)]/20 text-[var(--color-brand)] text-[10px] font-black px-3 py-1 rounded-md uppercase tracking-widest">
-                  33% OFF • Limited Offer
-                </div>
-              </div>
-
-              {/* Saved & Share controls */}
-              <div className="flex items-center space-x-2">
-                {showSave && (
-                  <SaveServiceButton serviceId={service.id} initialSaved={isSaved} />
-                )}
-                <ServiceShareButton url={shareUrl} title={service.name} />
-              </div>
-            </div>
-
-            {/* CTAs */}
-            <div className="space-y-3 pt-3">
-              <Link
-                href={bookHref}
-              >
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full py-4 bg-[var(--color-brand)] text-white text-center rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-opacity cursor-pointer flex items-center justify-center">
-                  {primaryBookLabel}
-                </motion.div>
-              </Link>
-            </div>
-
-            {/* Perks details */}
-            <div className="border-t border-gray-100 pt-5 space-y-3 text-xs text-gray-600">
-              <div className="flex items-center space-x-3">
-                <span className="text-[var(--color-brand-accent)] bg-orange-50 p-1.5 rounded-lg">
-                  <FlaticonIcon name="shield-check" size={16} />
-                </span>
-                <span className="font-bold text-gray-700">VSolve Cover: 30 days warranty included</span>
-              </div>
-              {durationLabel && (
-                <div className="flex items-center space-x-3">
-                  <span className="text-[var(--color-brand)] bg-[var(--color-brand-light)] p-1.5 rounded-lg">
-                    <FlaticonIcon name="clock" size={16} />
+                  <span className="inline-block bg-[#fff7ed] border border-[#ffedd5] text-[#ea580c] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    33% OFF • Limited Offer
                   </span>
-                  <span className="font-bold text-gray-700">Estimated Duration: {durationLabel}</span>
                 </div>
-              )}
+
+                {/* Saved & Share controls */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {showSave && (
+                    <SaveServiceButton serviceId={service.id} initialSaved={isSaved} />
+                  )}
+                  <ServiceShareButton url={shareUrl} title={service.name} variant="button" />
+                </div>
+              </div>
+
+              {/* Main Booking Action CTA */}
+              <div>
+                <Link href={bookHref} className="block w-full">
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    type="button"
+                    className="w-full py-3.5 bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white text-center rounded-xl font-extrabold text-sm shadow-md shadow-orange-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>{primaryBookLabel}</span>
+                    <span>→</span>
+                  </motion.button>
+                </Link>
+              </div>
+
+              {/* Service Perks & Coverage */}
+              <div className="border-t border-slate-100 pt-4 space-y-2.5 text-xs text-slate-600 font-medium">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[#ea580c] bg-[#fff7ed] p-1.5 rounded-lg shrink-0">
+                    <FlaticonIcon name="shield-check" size={15} />
+                  </span>
+                  <span className="font-bold text-[#0b1c30]">VSolve Cover: 30 days warranty included</span>
+                </div>
+                {durationLabel && (
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[#ea580c] bg-[#fff7ed] p-1.5 rounded-lg shrink-0">
+                      <FlaticonIcon name="clock" size={15} />
+                    </span>
+                    <span className="font-bold text-[#0b1c30]">Estimated Duration: {durationLabel}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
-          
         </div>
 
         {/* RIGHT COLUMN: Service Details, Inclusions & Reviews (lg:col-span-7) */}
-        <div className="lg:col-span-7 space-y-10 sm:space-y-12">
+        <div className="lg:col-span-7 space-y-8">
           
           {/* Main Info Header */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tight leading-tight">
+          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-[#0b1c30] tracking-tight leading-tight">
               {service.name}
             </h1>
             
             <div className="flex flex-wrap items-center gap-3">
-              <span className="bg-orange-50 text-orange-700 text-xs font-black px-3 py-1.5 rounded-full flex items-center space-x-1.5 border border-orange-100/50">
-                <span className="text-orange-600">★</span>
+              <span className="bg-[#fff7ed] text-[#ea580c] text-xs font-black px-3 py-1 rounded-full flex items-center gap-1 border border-[#ffedd5]">
+                <span>★</span>
                 <span>{detail.rating.toFixed(2)}</span>
               </span>
-              <span className="text-xs font-bold text-gray-500">
+              <span className="text-xs font-bold text-slate-500">
                 ({detail.reviewCountLabel} verified reviews & bookings)
               </span>
             </div>
             
-            <p className="text-sm sm:text-base font-medium text-gray-600 leading-relaxed pt-2">
+            <p className="text-sm sm:text-base font-medium text-slate-600 leading-relaxed pt-1">
               {service.description}
             </p>
           </motion.div>
 
           {/* What's Included Accordions */}
-          <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-5">
-            <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+          <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
+            <h2 className="text-lg sm:text-xl font-black text-[#0b1c30] tracking-tight">
               What's included in this service
             </h2>
             
-            <div className="border border-gray-150 rounded-[32px] overflow-hidden shadow-sm bg-white divide-y divide-gray-100">
+            <div className="border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs bg-white divide-y divide-slate-100">
               
               {/* Inclusions Accordion */}
               <div>
                 <button 
                   onClick={() => setInclusionsOpen(!inclusionsOpen)}
-                  className={`w-full px-6 py-5 flex items-center justify-between text-left font-bold text-gray-900 transition-colors ${inclusionsOpen ? "bg-gray-50/50" : "hover:bg-gray-50"}`}
+                  className={`w-full px-5 py-4 flex items-center justify-between text-left font-bold text-[#0b1c30] transition-colors cursor-pointer ${inclusionsOpen ? "bg-slate-50/60" : "hover:bg-slate-50"}`}
                 >
-                  <span className="text-sm sm:text-base">Service Inclusions</span>
-                  <motion.span animate={{ rotate: inclusionsOpen ? 180 : 0 }} className="text-gray-400">
-                    <FlaticonIcon name="angle-small-down" size={20} />
+                  <span className="text-sm font-bold">Service Inclusions</span>
+                  <motion.span animate={{ rotate: inclusionsOpen ? 180 : 0 }} className="text-slate-400">
+                    <FlaticonIcon name="angle-small-down" size={18} />
                   </motion.span>
                 </button>
                 
                 <AnimatePresence>
                   {inclusionsOpen && (
                     <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
-                      <div className="px-6 pb-6 pt-2">
-                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="px-5 pb-5 pt-2">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {detail.covered.map((item) => (
-                            <li key={item} className="flex items-start space-x-3 text-sm text-gray-600 font-medium">
-                              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 font-black mt-0.5 text-[10px]">✓</span>
+                            <li key={item} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 font-semibold">
+                              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 font-black shrink-0 mt-0.5 text-[9px]">✓</span>
                               <span>{item}</span>
                             </li>
                           ))}
-                          <li className="flex items-start space-x-3 text-sm text-gray-600 font-medium">
-                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 font-black mt-0.5 text-[10px]">✓</span>
+                          <li className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 font-semibold">
+                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 font-black shrink-0 mt-0.5 text-[9px]">✓</span>
                             <span>Custom scope for {service.name}</span>
                           </li>
-                          <li className="flex items-start space-x-3 text-sm text-gray-600 font-medium">
-                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 font-black mt-0.5 text-[10px]">✓</span>
+                          <li className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 font-semibold">
+                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 font-black shrink-0 mt-0.5 text-[9px]">✓</span>
                             <span>Consultation to define deliverables</span>
                           </li>
-                          <li className="flex items-start space-x-3 text-sm text-gray-600 font-medium">
-                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 font-black mt-0.5 text-[10px]">✓</span>
+                          <li className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 font-semibold">
+                            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 font-black shrink-0 mt-0.5 text-[9px]">✓</span>
                             <span>Matched professional or vendor</span>
                           </li>
                         </ul>
@@ -250,22 +256,22 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
                 <div>
                   <button 
                     onClick={() => setExclusionsOpen(!exclusionsOpen)}
-                    className={`w-full px-6 py-5 flex items-center justify-between text-left font-bold text-gray-900 transition-colors ${exclusionsOpen ? "bg-gray-50/50" : "hover:bg-gray-50"}`}
+                    className={`w-full px-5 py-4 flex items-center justify-between text-left font-bold text-[#0b1c30] transition-colors cursor-pointer ${exclusionsOpen ? "bg-slate-50/60" : "hover:bg-slate-50"}`}
                   >
-                    <span className="text-sm sm:text-base">What is excluded</span>
-                    <motion.span animate={{ rotate: exclusionsOpen ? 180 : 0 }} className="text-gray-400">
-                      <FlaticonIcon name="angle-small-down" size={20} />
+                    <span className="text-sm font-bold">What is excluded</span>
+                    <motion.span animate={{ rotate: exclusionsOpen ? 180 : 0 }} className="text-slate-400">
+                      <FlaticonIcon name="angle-small-down" size={18} />
                     </motion.span>
                   </button>
                   
                   <AnimatePresence>
                     {exclusionsOpen && (
                       <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
-                        <div className="px-6 pb-6 pt-2">
-                          <ul className="space-y-4">
+                        <div className="px-5 pb-5 pt-2">
+                          <ul className="space-y-3">
                             {detail.notCovered.map((item) => (
-                              <li key={item} className="flex items-start space-x-3 text-sm text-gray-600 font-medium">
-                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 font-black mt-0.5 text-[10px]">✗</span>
+                              <li key={item} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-700 font-semibold">
+                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-rose-100 text-rose-600 font-black shrink-0 mt-0.5 text-[9px]">✗</span>
                                 <span>{item}</span>
                               </li>
                             ))}
@@ -281,43 +287,43 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
           </motion.section>
 
           {/* User Reviews Section */}
-          <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-6">
-            <div className="flex items-baseline justify-between border-b border-gray-150 pb-4">
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+          <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-5">
+            <div className="flex items-baseline justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-lg sm:text-xl font-black text-[#0b1c30] tracking-tight">
                 User reviews and ratings
               </h2>
-              <Link href="#" className="text-xs font-bold text-[var(--color-brand)] hover:underline">
+              <Link href="#" className="text-xs font-bold text-[#ea580c] hover:underline">
                 View all reviews
               </Link>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-gray-150 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="text-center sm:text-left space-y-2">
-                <span className="text-4xl font-black text-gray-900">★ {detail.rating.toFixed(2)}<span className="text-2xl text-gray-400">/5</span></span>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">based on {detail.reviewCountLabel} verified reviews</p>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left space-y-1">
+                <span className="text-3xl font-black text-[#0b1c30]">★ {detail.rating.toFixed(2)}<span className="text-xl text-slate-400">/5</span></span>
+                <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">based on {detail.reviewCountLabel} verified reviews</p>
               </div>
-              <div className="h-px sm:h-16 w-full sm:w-px bg-gray-150" />
-              <div className="text-center sm:text-right text-xs text-green-700 font-bold bg-green-50 border border-green-100 px-5 py-3 rounded-xl shadow-sm">
+              <div className="h-px sm:h-12 w-full sm:w-px bg-slate-100" />
+              <div className="text-center sm:text-right text-xs text-emerald-800 font-extrabold bg-emerald-50 border border-emerald-100 px-4 py-2.5 rounded-xl">
                 ✓ 98.4% customers rate this service 5-stars
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {DUMMY_REVIEWS.map((rev) => (
-                <div key={rev.id} className="bg-white p-6 rounded-[24px] border border-gray-150 shadow-sm flex flex-col justify-between space-y-5 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-full bg-[var(--color-brand-light)] text-[var(--color-brand)] flex items-center justify-center font-black text-sm">
+                <div key={rev.id} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#fff7ed] text-[#ea580c] flex items-center justify-center font-black text-xs shrink-0">
                         {rev.initial}
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-900">{rev.name}</span>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{rev.location} • {rev.time}</span>
+                        <span className="text-xs font-extrabold text-[#0b1c30]">{rev.name}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{rev.location} • {rev.time}</span>
                       </div>
                     </div>
-                    <span className="text-sm font-black text-[var(--color-brand-accent)]">★★★★★</span>
+                    <span className="text-xs font-black text-amber-500 shrink-0">★★★★★</span>
                   </div>
-                  <p className="text-sm text-gray-600 font-medium italic leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-600 font-medium italic leading-relaxed">
                     "{rev.text}"
                   </p>
                 </div>
@@ -329,31 +335,31 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
       </div>
 
       {/* BOTTOM SECTION: Related Services Grid */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-20 border-t border-gray-150 pt-12 space-y-8">
-        <h2 className="text-2xl font-black text-gray-900 tracking-tight">Related services</h2>
+      <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-16 border-t border-slate-100 pt-10 space-y-6">
+        <h2 className="text-xl font-black text-[#0b1c30] tracking-tight">Related services</h2>
         
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {DUMMY_RELATED.map((rel) => (
             <Link href="#" key={rel.id} className="group block h-full">
-              <motion.div whileHover={{ y: -4 }} className="bg-white p-4 rounded-3xl border border-gray-150 shadow-sm flex flex-col justify-between hover:shadow-lg transition-all duration-300 h-full">
+              <motion.div whileHover={{ y: -3 }} className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-all duration-300 h-full">
                 <div>
-                  <div className="w-full aspect-[4/3] rounded-2xl bg-gray-50 flex items-center justify-center overflow-hidden border border-gray-100 group-hover:bg-gray-100 transition-colors">
-                    <span className="text-[var(--color-brand)] group-hover:scale-110 transition-transform">
-                      <FlaticonIcon name="bolt" size={32} />
+                  <div className="w-full aspect-[4/3] rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 group-hover:bg-slate-100 transition-colors">
+                    <span className="text-[#ea580c] group-hover:scale-110 transition-transform">
+                      <FlaticonIcon name="bolt" size={28} />
                     </span>
                   </div>
                   
-                  <h3 className="text-sm font-bold text-gray-900 mt-4 leading-snug line-clamp-2 group-hover:text-[var(--color-brand)] transition-colors">
+                  <h3 className="text-xs sm:text-sm font-bold text-[#0b1c30] mt-3 leading-snug line-clamp-2 group-hover:text-[#ea580c] transition-colors">
                     {rel.name}
                   </h3>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-2 block">
-                    <span className="text-[var(--color-brand-accent)]">★</span> {rel.rating} • {rel.time}
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-1.5 block">
+                    <span className="text-amber-500">★</span> {rel.rating} • {rel.time}
                   </span>
                 </div>
                 
-                <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-50">
-                  <span className="text-sm font-black text-gray-900">{formatPrice(rel.price)}</span>
-                  <span className="px-4 py-2 bg-gray-50 text-[var(--color-brand)] border border-gray-200 rounded-xl text-xs font-black group-hover:bg-[var(--color-brand)] group-hover:text-white group-hover:border-[var(--color-brand)] transition-all">
+                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
+                  <span className="text-xs sm:text-sm font-black text-[#0b1c30]">{formatPrice(rel.price)}</span>
+                  <span className="px-3 py-1 bg-slate-50 text-[#ea580c] border border-slate-200 rounded-lg text-xs font-extrabold group-hover:bg-[#ea580c] group-hover:text-white group-hover:border-[#ea580c] transition-all">
                     Book
                   </span>
                 </div>
@@ -364,19 +370,19 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
       </motion.section>
 
       {/* Sticky Mobile Action Footer */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/80 backdrop-blur-xl border-t border-gray-150 p-4 pb-8 flex items-center justify-between gap-4 lg:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-3.5 px-4 flex items-center justify-between gap-4 lg:hidden shadow-[0_-5px_25px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Starts at</span>
-          <span className="text-xl font-black text-gray-900 mt-0.5">{formatPrice(service.pricePaise)}</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Starts at</span>
+          <span className="text-lg font-black text-[#0b1c30]">{formatPrice(service.pricePaise)}</span>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-2">
           {showSave && (
             <SaveServiceButton serviceId={service.id} initialSaved={isSaved} />
           )}
           <Link 
             href={bookHref}
-            className="px-8 py-3 bg-[var(--color-brand)] text-white text-sm font-black rounded-xl shadow-lg cursor-pointer"
+            className="px-6 py-2.5 bg-gradient-to-r from-[#ea580c] to-[#f97316] text-white text-xs font-extrabold rounded-xl shadow-md cursor-pointer"
           >
             {primaryBookLabel}
           </Link>
