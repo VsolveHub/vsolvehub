@@ -12,58 +12,77 @@ export function GuidelinesStep({
   startsAtPaise: number;
   onContinue: () => void;
 }) {
+  const durationHrs = Math.max(1, Math.round(service.duration / 60));
+
   const sections = [
     {
-      title: "What's included",
+      title: "WHAT'S INCLUDED",
       items: config.guidelines.included,
-      icon: "✓",
-      tone: "border-green-100 bg-green-50/60",
-      iconTone: "bg-green-100 text-green-700",
+      bg: "bg-[#f0fdf4] border-emerald-100/60",
+      badgeBg: "bg-emerald-100 text-emerald-600",
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      ),
     },
     {
-      title: "Not included",
+      title: "NOT INCLUDED",
       items: config.guidelines.notIncluded,
-      icon: "✕",
-      tone: "border-red-100 bg-red-50/60",
-      iconTone: "bg-red-100 text-red-700",
+      bg: "bg-[#fff1f2] border-rose-100/60",
+      badgeBg: "bg-rose-100 text-rose-500",
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      ),
     },
     {
-      title: "Good to know",
+      title: "GOOD TO KNOW",
       items: config.guidelines.goodToKnow,
-      icon: "•",
-      tone: "border-blue-100 bg-blue-50/60",
-      iconTone: "bg-blue-100 text-blue-700",
+      bg: "bg-[#f0f9ff] border-sky-100/60",
+      badgeBg: "bg-sky-100 text-sky-600",
+      icon: (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
     },
   ];
 
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-black text-gray-900">{service.name}</h2>
-        <p className="mt-1 text-sm text-gray-500">{config.guidelines.summary}</p>
-        <p className="mt-2 text-sm font-bold text-gray-900">
-          Starts at {formatPrice(startsAtPaise)}
-          <span className="ml-1 font-medium text-gray-400">
-            · ~{Math.max(1, Math.round(service.duration / 60))} hr
-          </span>
-        </p>
+        <h2 className="text-2xl font-bold tracking-tight text-gray-900">{service.name}</h2>
+        <p className="mt-1.5 text-sm text-gray-500 max-w-2xl leading-relaxed">{config.guidelines.summary}</p>
+        
+        <div className="mt-4 flex items-center gap-8 text-xs">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">STARTS AT</span>
+            <span className="text-base font-extrabold text-gray-900 mt-0.5 block">{formatPrice(startsAtPaise)}</span>
+          </div>
+          <div className="h-7 w-[1px] bg-gray-200" />
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">DURATION</span>
+            <span className="text-xs font-semibold text-gray-600 mt-1 block">~{durationHrs} {durationHrs === 1 ? "hr" : "hrs"}</span>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3 w-full">
         {sections.map((sec) => (
-          <div key={sec.title} className={`rounded-2xl border p-4 ${sec.tone}`}>
-            <p className="mb-3 text-[11px] font-black uppercase tracking-widest text-gray-500">
+          <div key={sec.title} className={`rounded-[16px] border p-5 sm:p-6 ${sec.bg}`}>
+            <div className={`mb-3.5 flex h-7 w-7 items-center justify-center rounded-full ${sec.badgeBg}`}>
+              {sec.icon}
+            </div>
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-500">
               {sec.title}
             </p>
-            <ul className="space-y-2">
-              {sec.items.map((it, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span
-                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${sec.iconTone}`}
-                  >
-                    {sec.icon}
-                  </span>
-                  {it}
+            <ul className="space-y-2.5">
+              {sec.items.slice(0, 3).map((it, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-gray-600 font-medium">
+                  <span className="text-gray-400 font-bold select-none">•</span>
+                  <span>{it}</span>
                 </li>
               ))}
             </ul>
@@ -74,9 +93,10 @@ export function GuidelinesStep({
       <button
         type="button"
         onClick={onContinue}
-        className="mt-6 w-full rounded-xl bg-[var(--color-brand)] py-3.5 text-base font-bold text-white transition-colors hover:bg-blue-900 sm:w-auto sm:px-10"
+        className="mt-7 inline-flex items-center gap-2 rounded-full bg-[#0f172a] px-8 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800 active:scale-95"
       >
-        Continue →
+        <span>Continue</span>
+        <span>→</span>
       </button>
     </div>
   );
