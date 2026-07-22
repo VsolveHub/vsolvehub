@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
+import { getProductsForService, priceProductLine } from "@vsolve/db";
 import { cartAddSchema } from "@/lib/validation/schemas";
 import { resolveServiceArchetype, usesPushDispatch } from "@/lib/bookings/archetype";
 import { coerceSelections, priceBooking } from "@/lib/catalog/price-service";
@@ -117,7 +118,38 @@ export async function POST(req: NextRequest) {
       data.selections ?? (data.archetypeDetails as { fieldValues?: unknown } | undefined)?.fieldValues,
     ),
   });
-  const quotedAmount = estimate.totalPaise > 0 ? estimate.totalPaise : service.pricePaise;
+  const serviceAmount = estimate.totalPaise > 0 ? estimate.totalPaise : service.pricePaise;
+
+  // Product add-ons: only products mapped to THIS service are accepted, and
+  // every line is priced from the catalog — client-sent prices don't exist.
+  const productLines: {
+    productId: string;
+    qty: number;
+    unitPricePaise: number;
+    gstPaise: number;
+    totalPaise: number;
+    name: string;
+  }[] = [];
+  if (data.products && data.products.length > 0) {
+    const mapped = await getProductsForService(prisma, service.id);
+    const mappedById = new Map(mapped.map((p) => [p.id, p]));
+    for (const req of data.products) {
+      const product = mappedById.get(req.productId);
+      if (!product) {
+        return NextResponse.json(
+          { error: "One of the selected products isn't available for this service" },
+          { status: 400 },
+        );
+      }
+      if (product.stockQty < req.qty) {
+        return NextResponse.json({ error: `"${product.name}" is out of stock` }, { status: 409 });
+      }
+      const price = priceProductLine(product, req.qty);
+      productLines.push({ productId: product.id, qty: req.qty, name: product.name, ...price });
+    }
+  }
+  const productsTotal = productLines.reduce((s, l) => s + l.totalPaise, 0);
+  const quotedAmount = serviceAmount + productsTotal;
 
   const booking = await createBooking({
     userId: session.id,
@@ -126,7 +158,21 @@ export async function POST(req: NextRequest) {
     slot,
     quotedAmount,
     baseChargePaise: estimate.basePaise > 0 ? estimate.basePaise : service.pricePaise,
-    lineItems: estimate.lineItems,
+    lineItems: [
+      ...estimate.lineItems,
+      // Product lines ride along in the display snapshot so the cart and the
+      // invoice render them without extra queries; BookingProductItem rows
+      // below are the transactional source of truth.
+      ...productLines.map((l) => ({
+        key: `product:${l.productId}`,
+        label: "Product",
+        value: l.name,
+        qty: l.qty,
+        unitPaise: l.unitPricePaise,
+        totalPaise: l.totalPaise,
+        kind: "product" as const,
+      })),
+    ],
     archetype,
     issueDescription: data.note,
     mediaUrls: data.mediaUrls,
@@ -137,6 +183,22 @@ export async function POST(req: NextRequest) {
     vendorAssignmentMode: "auto",
     archetypeDetails: data.archetypeDetails ?? {},
   });
+
+  if (productLines.length > 0) {
+    await prisma.bookingProductItem.createMany({
+      data: productLines.map((l) => ({
+        bookingId: booking.id,
+        productId: l.productId,
+        qty: l.qty,
+        unitPricePaise: l.unitPricePaise,
+        gstPaise: l.gstPaise,
+        totalPaise: l.totalPaise,
+        addedBy: "CUSTOMER",
+        status: "APPROVED",
+        approvedAt: new Date(),
+      })),
+    });
+  }
 
   return NextResponse.json({ item: toCartItem(booking) });
 }

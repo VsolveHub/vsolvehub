@@ -20,18 +20,18 @@ export function BestValueSection({ services, categorySlug, onBook }: Props) {
   if (services.length === 0) return null;
 
   return (
-    <section className="space-y-6">
-      <div className="flex items-end justify-between border-b border-gray-100 pb-3">
+    <section>
+      <div className="flex items-end justify-between border-b border-gray-100 pb-3 mb-5">
         <div>
-          <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Best Value Packages</h2>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">Our most requested bundles for a complete home makeover.</p>
+          <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Best Value Packages</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Our most requested bundles for a complete home makeover.</p>
         </div>
         <Link href="#" className="text-xs sm:text-sm font-bold text-orange-600 hover:text-orange-700 transition-colors">
           View all
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {services.map((service) => {
           const bullets = getServiceBullets(service.slug, service.description);
           const serviceImg = getServiceImage(service.slug, categorySlug);
@@ -43,7 +43,7 @@ export function BestValueSection({ services, categorySlug, onBook }: Props) {
               className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-md hover:shadow-lg transition-all duration-300 flex flex-col h-full"
             >
               {/* Card Image */}
-              <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-50">
+              <div className="relative aspect-[16/7] w-full overflow-hidden bg-slate-50">
                 <img
                   src={serviceImg}
                   alt={service.name}
@@ -64,17 +64,17 @@ export function BestValueSection({ services, categorySlug, onBook }: Props) {
               </div>
 
               {/* Card Body */}
-              <div className="p-5 sm:p-6 flex flex-col flex-grow justify-between">
+              <div className="p-4 sm:p-5 flex flex-col flex-grow justify-between">
                 <div className="space-y-4">
-                  <h3 className="text-lg font-extrabold text-gray-900 leading-snug group-hover:text-orange-600 transition-colors">
+                  <h3 className="text-base font-extrabold text-gray-900 leading-snug group-hover:text-orange-600 transition-colors">
                     <Link href={`/services/${categorySlug}/${service.slug}`}>
                       {service.name}
                     </Link>
                   </h3>
 
-                  {/* Bullet points */}
-                  <ul className="space-y-2 text-xs sm:text-sm text-gray-500">
-                    {bullets.map((bullet, idx) => (
+                  {/* Bullet points — show max 2 to keep card compact */}
+                  <ul className="space-y-1.5 text-xs text-gray-500">
+                    {bullets.slice(0, 2).map((bullet, idx) => (
                       <li key={idx} className="flex items-start space-x-2">
                         <span className="text-emerald-500 font-bold mt-0.5">✓</span>
                         <span>{bullet}</span>
@@ -84,10 +84,10 @@ export function BestValueSection({ services, categorySlug, onBook }: Props) {
                 </div>
 
                 {/* Pricing and Action */}
-                <div className="flex items-center justify-between pt-5 border-t border-gray-50 mt-6">
+                <div className="flex items-center justify-between pt-4 border-t border-gray-50 mt-4">
                   <div className="flex flex-col">
                     <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase">Starting At</span>
-                    <span className="text-xl font-extrabold text-gray-900">{formatPrice(service.pricePaise)}</span>
+                    <span className="text-lg font-extrabold text-gray-900">{formatPrice(service.pricePaise)}</span>
                   </div>
 
                   <button

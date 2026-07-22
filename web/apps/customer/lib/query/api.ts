@@ -79,6 +79,47 @@ export type CreateBookingResult = {
   preferredHonored?: boolean;
 };
 
+/** Catalog product as served to clients (see @vsolve/db PublicProduct). */
+export type StoreProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  slug: string;
+  description: string;
+  brandName: string | null;
+  categoryName: string;
+  categorySlug: string;
+  images: string[];
+  mrpPaise: number;
+  pricePaise: number;
+  gstRatePct: number;
+  inStock: boolean;
+  stockQty: number;
+  specs: Record<string, string>;
+  featured?: boolean;
+};
+
+export type StoreCartLine = {
+  id: string;
+  productId: string;
+  qty: number;
+  unitPricePaise: number;
+  gstPaise: number;
+  totalPaise: number;
+  product: StoreProduct;
+};
+
+export type StoreCart = { id: string | null; items: StoreCartLine[]; totalPaise: number };
+
+export type StoreOrderSummary = {
+  orderRef: string;
+  status: string;
+  totalPaise: number;
+  createdAt: string;
+  itemCount: number;
+  items: { name: string; qty: number; totalPaise: number }[];
+};
+
 export const api = {
   // ── reads ──
   session: () => jsonFetch<{ user: SessionUser }>("/api/auth/session").catch(() => ({ user: null })),
@@ -91,6 +132,35 @@ export const api = {
   vehicleBooking: (ref: string) => jsonFetch<any>(`/api/vehicle/bookings/${ref}`),
   getVehicleNextStatus: (ref: string) => jsonFetch<{ nextStatus: string }>(`/api/vehicle/bookings/${ref}/status`),
   catalog: () => jsonFetch<{ services: FlowService[] }>("/api/catalog"),
+  serviceProducts: (serviceId: string) =>
+    jsonFetch<{ products: StoreProduct[] }>(`/api/services/${serviceId}/products`),
+
+  // ── marketplace (/store) ──
+  storeProducts: (params?: { category?: string; q?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.set("category", params.category);
+    if (params?.q) qs.set("q", params.q);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return jsonFetch<{
+      products: StoreProduct[];
+      categories: { slug: string; name: string; icon: string | null }[];
+    }>(`/api/store/products${suffix}`);
+  },
+  storeProduct: (slug: string) => jsonFetch<{ product: StoreProduct }>(`/api/store/products/${slug}`),
+  storeCart: () => jsonFetch<StoreCart>("/api/store/cart"),
+  addToStoreCart: (productId: string, qty = 1) =>
+    jsonPost<StoreCart>("/api/store/cart", { productId, qty }),
+  updateStoreCartLine: (lineId: string, qty: number) =>
+    jsonFetch<StoreCart>(`/api/store/cart/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qty }),
+    }),
+  removeStoreCartLine: (lineId: string) =>
+    jsonFetch<StoreCart>(`/api/store/cart/${lineId}`, { method: "DELETE" }),
+  checkoutStoreCart: (input: { addressId: string; paymentMethod: PaymentMethod }) =>
+    jsonPost<{ ok: boolean; orderRef?: string; error?: string }>("/api/store/checkout", input),
+  storeOrders: () => jsonFetch<{ orders: StoreOrderSummary[] }>("/api/store/orders"),
 
   // ── mutations ──
   addAddress: (input: Record<string, unknown>) =>

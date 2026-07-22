@@ -130,7 +130,7 @@ export default async function CategoryPage({ params }: PageProps) {
     <div className="bg-white min-h-screen pb-16">
       {/* Breadcrumbs */}
       <div className="bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase flex items-center space-x-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-[10px] sm:text-xs font-bold tracking-widest text-gray-400 uppercase flex items-center space-x-2">
           <Link href="/" className="hover:text-gray-800 transition-colors">Home</Link>
           <span className="text-gray-300 font-normal">›</span>
           <span className="text-amber-800/80">{category.name}</span>
@@ -138,7 +138,7 @@ export default async function CategoryPage({ params }: PageProps) {
       </div>
 
       {/* Styled Hero Banner */}
-      <header className="relative bg-gradient-to-r from-orange-50 via-orange-100/50 to-amber-50/30 overflow-hidden py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8">
+      <header className="relative bg-gradient-to-r from-orange-50 via-orange-100/50 to-amber-50/30 overflow-hidden py-8 sm:py-10 px-4 sm:px-6 lg:px-8">
         {/* Abstract background blobs for premium aesthetic */}
         <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-amber-100/30 rounded-full blur-3xl pointer-events-none" />
@@ -151,11 +151,11 @@ export default async function CategoryPage({ params }: PageProps) {
               <span>Verified Hub</span>
             </div>
             
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-gray-900 leading-[1.1] max-w-xl">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 leading-[1.1] max-w-xl">
               {hero.title}
             </h1>
             
-            <p className="text-sm sm:text-base text-gray-600 max-w-xl leading-relaxed">
+            <p className="text-sm text-gray-600 max-w-lg leading-relaxed">
               {hero.description}
             </p>
 

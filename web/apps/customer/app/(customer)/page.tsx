@@ -27,10 +27,12 @@ function Section({
   tone = "white",
 }: {
   children: React.ReactNode;
-  tone?: "white" | "muted";
+  tone?: "white" | "muted" | "indigo";
 }) {
+  const bg =
+    tone === "muted" ? "bg-slate-50" : tone === "indigo" ? "bg-indigo-50/60" : "bg-white";
   return (
-    <section className={`w-full ${tone === "muted" ? "bg-slate-50" : "bg-white"}`}>
+    <section className={`w-full ${bg}`}>
       <div className="mx-auto w-full max-w-[1600px] px-4 py-12 sm:px-6 sm:py-20 lg:px-12 xl:px-16">
         {children}
       </div>
@@ -56,7 +58,7 @@ export default async function HomePage() {
   }));
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f1f5f9] pb-6">
+    <div className="flex min-h-screen flex-col bg-white pb-6">
       {/* Hero + stories + trust */}
       <section className="w-full bg-white">
         <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-12 xl:px-16">
@@ -71,11 +73,12 @@ export default async function HomePage() {
       </section>
 
       {/* Browse by category — primary navigation */}
-      <Section tone="muted">
+      <Section tone="indigo">
         <SectionHeading
           eyebrow="Explore"
           title="Browse by category"
           action={{ label: "All services", href: "/services" }}
+          actionVariant="outline"
         />
         <CategoryGrid categories={categoryTiles} />
       </Section>

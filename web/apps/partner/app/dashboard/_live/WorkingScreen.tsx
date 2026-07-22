@@ -1,6 +1,7 @@
 import { CheckCircle2, Circle, Camera } from "lucide-react";
 import { cn } from "@vsolve/ui";
 import { inr } from "@/lib/format";
+import { AddPartsPanel } from "./AddPartsPanel";
 import type { HomeProps } from "./homeShared";
 
 export function WorkingScreen(p: HomeProps) {
@@ -70,6 +71,8 @@ export function WorkingScreen(p: HomeProps) {
           </div>
         </>
       )}
+
+      {p.activeJob ? <AddPartsPanel bookingId={p.activeJob.bookingId} /> : null}
 
       <div className="mt-4 flex items-center gap-2 rounded-xl border border-dashed border-border bg-white p-3">
         <div className="grid h-10 w-10 place-items-center rounded-lg bg-brand-50 text-brand-600">

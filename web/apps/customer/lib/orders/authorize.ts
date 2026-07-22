@@ -33,6 +33,12 @@ export type AuthorizeOrderInput = {
    * a unique index.
    */
   idempotencyKey: string;
+  /**
+   * Marketplace checkout: the Order money envelope funds a ProductOrder
+   * instead of bookings. There is no per-job capture step for products, so
+   * even "hold" methods (card) capture the full amount at authorization.
+   */
+  productOrderId?: string;
 };
 
 export type AuthorizeOrderResult =
@@ -44,7 +50,9 @@ export type AuthorizeOrderResult =
  * DRAFT so they become dispatchable.
  */
 export async function authorizeOrder(input: AuthorizeOrderInput): Promise<AuthorizeOrderResult> {
-  if (input.bookingIds.length === 0) return { ok: false, error: "Nothing to pay for" };
+  if (input.bookingIds.length === 0 && !input.productOrderId) {
+    return { ok: false, error: "Nothing to pay for" };
+  }
   if (input.amountPaise <= 0) return { ok: false, error: "Invalid order amount" };
 
   // Idempotency: a retried submit returns the original order untouched.
@@ -104,8 +112,10 @@ export async function authorizeOrder(input: AuthorizeOrderInput): Promise<Author
   const strategy = authStrategy(input.method);
   const isCod = strategy === "none";
   // "immediate" methods (UPI, wallet) are captured the moment they authorize;
-  // card holds funds and is captured per job on accept.
-  const capturedPaise = strategy === "immediate" ? input.amountPaise : 0;
+  // card holds funds and is captured per job on accept. Product orders have no
+  // accept step, so they capture in full here regardless of method.
+  const captureNow = strategy === "immediate" || (!!input.productOrderId && !isCod);
+  const capturedPaise = captureNow ? input.amountPaise : 0;
   const authorizedPaise = isCod ? 0 : input.amountPaise;
 
   assertMoneyInvariant({
@@ -128,17 +138,29 @@ export async function authorizeOrder(input: AuthorizeOrderInput): Promise<Author
         authExpiresAt: auth.expiresAt,
       },
     }),
-    prisma.booking.updateMany({
-      where: { id: { in: input.bookingIds }, userId: input.userId },
-      data: {
-        orderId: order.id,
-        status: "AUTHORIZED",
-        paymentMethod: input.method,
-        // COD needs no hold, so the partner gate ("PAID" or "COD") is satisfied
-        // up front. Prepaid stays PENDING until its per-job capture on accept.
-        paymentStatus: isCod ? "COD" : strategy === "immediate" ? "PAID" : "PENDING",
-      },
-    }),
+    ...(input.bookingIds.length > 0
+      ? [
+          prisma.booking.updateMany({
+            where: { id: { in: input.bookingIds }, userId: input.userId },
+            data: {
+              orderId: order.id,
+              status: "AUTHORIZED",
+              paymentMethod: input.method,
+              // COD needs no hold, so the partner gate ("PAID" or "COD") is satisfied
+              // up front. Prepaid stays PENDING until its per-job capture on accept.
+              paymentStatus: isCod ? "COD" : strategy === "immediate" ? "PAID" : "PENDING",
+            },
+          }),
+        ]
+      : []),
+    ...(input.productOrderId
+      ? [
+          prisma.productOrder.updateMany({
+            where: { id: input.productOrderId, userId: input.userId },
+            data: { orderId: order.id, status: "PLACED" },
+          }),
+        ]
+      : []),
   ]);
 
   return { ok: true, orderRef: order.orderRef, orderId: order.id, codPending: isCod };

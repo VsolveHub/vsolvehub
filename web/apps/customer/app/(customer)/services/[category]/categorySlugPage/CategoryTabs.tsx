@@ -10,7 +10,7 @@ type Props = {
 
 export function CategoryTabs({ activeTab, setActiveTab, subCategories }: Props) {
   return (
-    <div className="border-b border-gray-100 pb-4 mb-8">
+    <div className="border-b border-gray-100 pb-3 mb-5">
       <div className="flex items-center justify-between gap-4 overflow-x-auto no-scrollbar py-2">
         <div className="flex items-center gap-2 sm:gap-3 whitespace-nowrap">
           {/* All Services Tab */}

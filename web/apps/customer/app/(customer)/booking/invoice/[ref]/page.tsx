@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getServerSession } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/client";
 import { getBookingByRef } from "@/lib/bookings/queries";
 import { formatPrice, formatDate } from "@/lib/format";
 import { normalizeBookingStatus } from "@/lib/constants";
@@ -21,6 +22,18 @@ export default async function InvoicePage({ params }: PageProps) {
   if (!booking) notFound();
 
   const amountPaise = booking.finalAmountPaise ?? booking.quotedAmount;
+
+  // Product lines (booking add-ons + approved mid-job parts) with their GST
+  // portion. Declined items never appear here.
+  const productItems = await prisma.bookingProductItem.findMany({
+    where: { bookingId: booking.id, status: "APPROVED" },
+    include: { product: { select: { name: true, gstRatePct: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const productsTotalPaise = productItems.reduce((s, i) => s + i.totalPaise, 0);
+  const productsGstPaise = productItems.reduce((s, i) => s + i.gstPaise, 0);
+  const serviceAmountPaise = Math.max(0, amountPaise - productsTotalPaise);
+
   const professional = booking.assignedPartner?.fullName ?? booking.vendor?.name ?? "Assigned professional";
   const status = normalizeBookingStatus(booking.status);
   const paid = ["PAID", "COD"].includes(booking.paymentStatus);
@@ -78,14 +91,32 @@ export default async function InvoicePage({ params }: PageProps) {
                 {booking.service.category?.name}
               </span>
             </td>
-            <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(amountPaise)}</td>
+            <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(serviceAmountPaise)}</td>
           </tr>
+          {productItems.map((item) => (
+            <tr key={item.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+              <td style={{ padding: "0.75rem" }}>
+                {item.product.name}
+                <span style={{ display: "block", color: "#6b7280", fontSize: "0.75rem" }}>
+                  {item.addedBy === "PARTNER" ? "Extra part (approved)" : "Product"} · {item.qty} ×{" "}
+                  {formatPrice(item.unitPricePaise)} · GST {item.product.gstRatePct}% incl.
+                </span>
+              </td>
+              <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(item.totalPaise)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
       {/* Total */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
         <div style={{ width: 240 }}>
+          {productsGstPaise > 0 ? (
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#6b7280", padding: "0.2rem 0" }}>
+              <span>Includes GST on products</span>
+              <span>{formatPrice(productsGstPaise)}</span>
+            </div>
+          ) : null}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "0.4rem 0", borderTop: "2px solid #1a1a2e", fontWeight: 800 }}>
             <span>Total</span>
             <span>{formatPrice(amountPaise)}</span>

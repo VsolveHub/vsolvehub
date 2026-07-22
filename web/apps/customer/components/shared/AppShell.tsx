@@ -121,6 +121,16 @@ export function AppHeader() {
               Find Services
             </Link>
             <Link
+              href="/store"
+              className={`px-3.5 py-1.5 rounded-full transition-all ${
+                pathname.startsWith("/store")
+                  ? "bg-[#fff7ed] text-[#ea580c] font-bold border border-[#ffedd5]"
+                  : "text-slate-600 hover:text-[#ea580c] hover:bg-slate-50"
+              }`}
+            >
+              Store
+            </Link>
+            <Link
               href="/profile/bookings"
               className={`px-3.5 py-1.5 rounded-full transition-all ${
                 pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking")
@@ -197,6 +207,7 @@ export function AppHeader() {
 const MOBILE_NAV_LINKS = [
   { href: "/", label: "Home", icon: HomeIcon, match: (p: string) => p === "/" },
   { href: "/services", label: "Find Services", icon: HeaderSearchIcon, match: (p: string) => p.startsWith("/services") },
+  { href: "/store", label: "Store", icon: CartNavIcon, match: (p: string) => p.startsWith("/store") },
   { href: "/cart", label: "Cart", icon: CartNavIcon, match: (p: string) => p.startsWith("/cart") },
   { href: "/profile/bookings", label: "My Bookings", icon: BookingsIcon, match: (p: string) => p.startsWith("/profile/bookings") || p.startsWith("/booking") },
   { href: "/profile/messages", label: "Messages", icon: MessagesIcon, match: (p: string) => p.startsWith("/profile/messages") },

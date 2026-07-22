@@ -11,6 +11,7 @@ const draft = (id: string, ref: string, amount: number, name: string) => ({
 function deps(over: Partial<CheckoutDeps>): CheckoutDeps {
   return {
     loadDrafts: async () => [draft("b1", "VSH-1", 50000, "Deep Clean")],
+    reserveStock: async () => {},
     authorize: async () => ({ ok: true, orderRef: "VSO-1", orderId: "o1", codPending: false }),
     assign: async () => ({ ok: true, partner: { name: "Asha" } }),
     fail: async () => ({ refunded: true }),
@@ -73,6 +74,22 @@ describe("checkoutCart", () => {
     expect(fail).toHaveBeenCalledWith("b2");
     if (!res.ok) throw new Error("expected ok");
     expect(res.items[1]).toEqual({ bookingRef: "VSH-2", serviceName: "Wiring", outcome: "no_provider", refunded: true });
+  });
+
+  it("fails cleanly (no authorization) when product stock can't be reserved", async () => {
+    const authorize = vi.fn();
+    const res = await checkoutCart(
+      "u1",
+      "upi",
+      deps({
+        reserveStock: async () => {
+          throw new Error('"MCB 16A" is out of stock');
+        },
+        authorize,
+      }),
+    );
+    expect(res).toEqual({ ok: false, error: '"MCB 16A" is out of stock' });
+    expect(authorize).not.toHaveBeenCalled();
   });
 
   it("returns the auth error and assigns nothing when authorization fails", async () => {

@@ -16,6 +16,11 @@ export const qk = {
   cartCount: () => ["cart", "count"] as const,
   availability: (serviceId: string, addressId: string, slot: string, scheduleType: string) =>
     ["availability", serviceId, addressId, slot, scheduleType] as const,
+  serviceProducts: (serviceId: string) => ["service-products", serviceId] as const,
+  storeProducts: (category: string, q: string) => ["store-products", category, q] as const,
+  storeProduct: (slug: string) => ["store-product", slug] as const,
+  storeCart: () => ["store-cart"] as const,
+  storeOrders: () => ["store-orders"] as const,
   vehicleBooking: (ref: string) => ["vehicle-booking", ref] as const,
   accommodationBooking: (ref: string) => ["accommodation-booking", ref] as const,
   properties: (query: string) => ["properties", query] as const,

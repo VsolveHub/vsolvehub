@@ -1,3 +1,5 @@
+"use client";
+
 import type { AddrForm } from "./model";
 import { LocationMap } from "./LocationMap";
 import { motion } from "framer-motion";
