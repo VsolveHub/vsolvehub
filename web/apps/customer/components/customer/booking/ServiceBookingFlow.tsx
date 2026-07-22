@@ -323,6 +323,8 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
             config={config}
             startsAtPaise={startsAtPaise}
             estimate={estimate}
+            onProceed={step === "guidelines" ? () => setStep("details") : addCurrentToCart}
+            submitting={addToCart.isPending}
           />
         ) : null
       }

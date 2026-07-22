@@ -19,13 +19,15 @@ export function CartBadge() {
     <Link
       href="/cart"
       aria-label={`Cart, ${count} item${count === 1 ? "" : "s"}`}
-      className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 transition-colors"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[#0b1c30] hover:bg-[#fff7ed] hover:text-[#ea580c] transition-all shrink-0 cursor-pointer"
     >
-      <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.8">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
       {count > 0 && (
-        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+        <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[#ea580c] px-1 text-[10px] font-extrabold text-white shadow-xs ring-2 ring-white">
+          {count}
+        </span>
       )}
     </Link>
   );

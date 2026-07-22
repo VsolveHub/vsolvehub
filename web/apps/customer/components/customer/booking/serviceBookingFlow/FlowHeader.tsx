@@ -58,7 +58,7 @@ export function FlowHeader({
                       <div
                         className={`flex h-6 w-6 items-center justify-center rounded-full text-xs transition-all ${
                           state === "done"
-                            ? "bg-[#006b5f] text-white font-bold"
+                            ? "bg-[#ea580c] text-white font-bold"
                             : state === "active"
                               ? "bg-[#0b1c30] text-white font-bold shadow-xs"
                               : "bg-slate-100 text-slate-400 font-medium"

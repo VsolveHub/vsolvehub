@@ -95,7 +95,7 @@ export function CartClient() {
   if (items.length === 0) {
     return (
       <div className="mx-auto w-full max-w-md px-5 py-20 text-center">
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#e6f4f1] text-[#006b5f]">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#fff7ed] text-[#ea580c]">
           <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
             <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
           </svg>
@@ -105,7 +105,7 @@ export function CartClient() {
         <Link href="/services">
           <button
             type="button"
-            className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[#006b5f] hover:bg-[#005249] px-8 text-sm font-bold text-white shadow-md transition-all cursor-pointer"
+            className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-[#ea580c] hover:bg-[#c2410c] px-8 text-sm font-bold text-white shadow-md transition-all cursor-pointer"
           >
             Browse services
           </button>
@@ -156,16 +156,16 @@ export function CartClient() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         {/* Left Column: Cart Items + Offers + Recommendations */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Green Savings Banner */}
-          <div className="rounded-[16px] border border-[#b2e5dd] bg-[#e6f4f1] p-4 flex items-center gap-3 text-sm text-[#004d44]">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#006b5f] text-white font-bold text-lg">
+          {/* Orange Savings Banner */}
+          <div className="rounded-[16px] border border-[#ffedd5] bg-[#fff7ed] p-4 flex items-center gap-3 text-sm text-[#9a3412]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-white font-bold text-lg">
               %
             </div>
             <div>
-              <strong className="block font-bold text-[#004d44]">
+              <strong className="block font-bold text-[#9a3412]">
                 Saving {formatPrice(mockSavingsAmount * 100)} on this order
               </strong>
-              <span className="text-xs text-[#006b5f]">
+              <span className="text-xs text-[#ea580c]">
                 Yay! You are getting premium rates on these services
               </span>
             </div>
@@ -180,7 +180,7 @@ export function CartClient() {
               return (
                 <div key={group.serviceId} className="py-5 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <span className="inline-block rounded-full bg-[#e6f4f1] px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#006b5f] uppercase">
+                    <span className="inline-block rounded-full bg-[#fff7ed] px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#ea580c] uppercase">
                       {categoryTag}
                     </span>
                     <h3 className="font-heading text-base font-bold text-[#0b1c30]">
@@ -271,7 +271,7 @@ export function CartClient() {
                         type="button"
                         onClick={() => addToCart.mutate({ serviceId: srv.id })}
                         disabled={addToCart.isPending}
-                        className="rounded-full border border-[#006b5f] text-[#006b5f] hover:bg-[#006b5f] hover:text-white px-3 py-1 text-xs font-bold transition-all cursor-pointer"
+                        className="rounded-full border border-[#ea580c] text-[#ea580c] hover:bg-[#ea580c] hover:text-white px-3 py-1 text-xs font-bold transition-all cursor-pointer"
                       >
                         Add
                       </button>
@@ -295,7 +295,7 @@ export function CartClient() {
                 <span>Items Subtotal ({items.length})</span>
                 <span className="font-bold text-[#0b1c30]">{formatPrice(totalAmount)}</span>
               </div>
-              <div className="flex justify-between text-[#006b5f] font-medium text-xs">
+              <div className="flex justify-between text-[#ea580c] font-medium text-xs">
                 <span>Estimated Savings</span>
                 <span className="font-bold">-{formatPrice(mockSavingsAmount * 100)}</span>
               </div>
@@ -313,7 +313,7 @@ export function CartClient() {
             <button
               type="button"
               onClick={() => router.push("/checkout")}
-              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#006b5f] hover:bg-[#005249] text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-sm shadow-md transition-all cursor-pointer"
             >
               <span>Proceed to Checkout</span>
               <span>→</span>
