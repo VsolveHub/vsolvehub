@@ -70,9 +70,31 @@ export function DetailsModal({ booking, professional, onClose }: Props) {
             <span className="font-bold text-gray-400 flex-shrink-0 mr-4">Service Address:</span>
             <span className="font-semibold text-gray-800 text-right leading-snug">{booking.address}</span>
           </div>
+
+          {/* Itemized Price Breakdown */}
+          <div className="border-t border-gray-100 pt-3 space-y-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">ITEMIZED BREAKDOWN</span>
+            <div className="flex justify-between items-center text-[#0b1c30]">
+              <span className="font-medium">{booking.service.name} (Base)</span>
+              <strong className="font-bold">{formatPrice(booking.baseChargePaise ?? booking.quotedAmount)}</strong>
+            </div>
+            {booking.lineItems && booking.lineItems.length > 0 && (
+              <div className="space-y-1 pl-2 border-l-2 border-[#ea580c]/30">
+                {booking.lineItems
+                  .filter((li: any) => li.kind === "product" || li.kind === "addon")
+                  .map((li: any, idx: number) => (
+                    <div key={`${li.key || idx}`} className="flex justify-between items-center text-slate-700 text-[11px]">
+                      <span>📦 {li.value} {li.qty > 1 ? `× ${li.qty}` : ""}</span>
+                      <strong className="font-bold text-[#0b1c30]">{formatPrice(li.totalPaise)}</strong>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-between items-center border-t border-gray-100 pt-3">
-            <span className="font-bold text-gray-400">Total Paid Amount:</span>
-            <span className="font-black text-purple-955 text-sm">₹{formatPrice(booking.finalAmountPaise ?? booking.quotedAmount)}</span>
+            <span className="font-bold text-gray-500">Total Amount:</span>
+            <span className="font-black text-[#ea580c] text-base">{formatPrice(booking.finalAmountPaise ?? booking.quotedAmount)}</span>
           </div>
         </div>
 

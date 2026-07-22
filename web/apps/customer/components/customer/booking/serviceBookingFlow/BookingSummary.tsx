@@ -19,12 +19,12 @@ export function BookingSummary({
   return (
     <div className="w-full lg:sticky lg:top-6">
       <div className="overflow-hidden rounded-[16px] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-        {/* Deep Navy Header Block */}
-        <div className="bg-[#0b1c30] p-6 text-white">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+        {/* Header Block with Crisp Black Title */}
+        <div className="bg-slate-50 p-6 text-black border-b border-slate-100">
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#ea580c]">
             BOOKING SUMMARY
           </p>
-          <h2 className="font-heading mt-1 text-lg font-bold text-white">{service.name}</h2>
+          <h2 className="font-heading mt-1 text-lg font-black text-black">{service.name}</h2>
         </div>
 
         {/* White Body Panel */}

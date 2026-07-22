@@ -94,12 +94,13 @@ export async function getBookingByRef(ref: string, userId?: string) {
       vendor: true,
       assignedPartner: true,
       statusLogs: { orderBy: { createdAt: "asc" } },
+      productItems: { include: { product: true } },
       crew: { include: { lead: { select: { fullName: true, phone: true } }, roleRates: true } },
       crewJobDays: {
         orderBy: { dayDate: "asc" },
         include: { clockEvents: { include: { member: { select: { id: true, name: true, role: true } } } } },
       },
-    },
+    } as any,
   });
 }
 
@@ -228,7 +229,7 @@ export async function approveRevisedQuote(bookingRef: string, userId: string) {
 
   // Catalog parts behind this revision: claim their stock BEFORE charging, so
   // a sold-out part fails the approval instead of stranding a captured charge.
-  const pendingItems = await prisma.bookingProductItem.findMany({
+  const pendingItems = await (prisma as any).bookingProductItem.findMany({
     where: { bookingId: booking.id, status: "PENDING_APPROVAL" },
     include: { product: { select: { name: true } } },
   });
@@ -237,7 +238,7 @@ export async function approveRevisedQuote(bookingRef: string, userId: string) {
       await prisma.$transaction((tx) =>
         decrementStock(
           tx,
-          pendingItems.map((i) => ({ productId: i.productId, qty: i.qty })),
+          pendingItems.map((i: any) => ({ productId: i.productId, qty: i.qty })),
         ),
       );
     } catch (e) {
@@ -283,8 +284,8 @@ export async function approveRevisedQuote(bookingRef: string, userId: string) {
         lineItems: JSON.stringify(lineItems),
       },
     }),
-    prisma.bookingProductItem.updateMany({
-      where: { id: { in: pendingItems.map((i) => i.id) } },
+    (prisma as any).bookingProductItem.updateMany({
+      where: { id: { in: pendingItems.map((i: any) => i.id) } },
       data: { status: "APPROVED", approvedAt: new Date() },
     }),
   ]);
@@ -300,7 +301,7 @@ export async function declineRevisedQuote(bookingRef: string, userId: string) {
       data: { revisedAmountPaise: null, revisedReason: null },
     }),
     // Declined parts never reach the invoice; keep the rows for the record.
-    prisma.bookingProductItem.updateMany({
+    (prisma as any).bookingProductItem.updateMany({
       where: { bookingId: booking.id, status: "PENDING_APPROVAL" },
       data: { status: "DECLINED" },
     }),

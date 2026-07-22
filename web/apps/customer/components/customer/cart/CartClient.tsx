@@ -33,7 +33,10 @@ export function CartClient() {
   // Mutations
   const remove = useMutation({
     mutationFn: (id: string) => api.removeCartItem(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: qk.cart() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.cart() });
+      queryClient.invalidateQueries({ queryKey: qk.cartCount() });
+    },
   });
 
   const addToCart = useMutation({
@@ -45,8 +48,17 @@ export function CartClient() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.cart() });
+      queryClient.invalidateQueries({ queryKey: qk.cartCount() });
+      setError("");
     },
-    onError: (e) => setError(e instanceof Error ? e.message : "Could not add item"),
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : "Could not add item";
+      if (msg.toLowerCase().includes("auth") || msg.toLowerCase().includes("unauthorized") || msg.toLowerCase().includes("login")) {
+        router.push("/booking/otp?redirect=/cart");
+        return;
+      }
+      setError(msg);
+    },
   });
 
   // Group items by serviceId to support quantity counter UI
@@ -116,7 +128,6 @@ export function CartClient() {
 
   // Savings computation
   const totalAmount = data?.totalPaise ?? 0;
-  const mockSavingsAmount = Math.round((totalAmount * 0.08) / 100) * 100 || 80;
 
   // Cross-sell services filter
   const inCartSlugs = new Set(items.map((it) => it.serviceSlug));
@@ -154,22 +165,8 @@ export function CartClient() {
       )}
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-        {/* Left Column: Cart Items + Offers + Recommendations */}
+        {/* Left Column: Cart Items + Recommendations */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Orange Savings Banner */}
-          <div className="rounded-[16px] border border-[#ffedd5] bg-[#fff7ed] p-4 flex items-center gap-3 text-sm text-[#9a3412]">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#ea580c] text-white font-bold text-lg">
-              %
-            </div>
-            <div>
-              <strong className="block font-bold text-[#9a3412]">
-                Saving {formatPrice(mockSavingsAmount * 100)} on this order
-              </strong>
-              <span className="text-xs text-[#ea580c]">
-                Yay! You are getting premium rates on these services
-              </span>
-            </div>
-          </div>
 
           {/* Cart Items List */}
           <div className="rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)] divide-y divide-slate-100">
@@ -183,12 +180,24 @@ export function CartClient() {
                     <span className="inline-block rounded-full bg-[#fff7ed] px-2.5 py-0.5 text-[10px] font-bold tracking-wider text-[#ea580c] uppercase">
                       {categoryTag}
                     </span>
-                    <h3 className="font-heading text-base font-bold text-[#0b1c30]">
+                    <h3 className="font-heading text-base font-black text-black">
                       {group.serviceName}
                     </h3>
                     <p className="text-xs text-[#45464d] font-medium">
                       • {group.items[0]?.archetypeDetails?.variantLabel || "Standard service"}
                     </p>
+                    {/* Itemized Parts & Add-ons list */}
+                    {group.items.some((it) => it.lineItems && it.lineItems.length > 0) && (
+                      <div className="mt-2 pl-2 border-l-2 border-[#ea580c]/30 space-y-1">
+                        <span className="text-[10px] font-bold text-[#ea580c] uppercase tracking-wide block">Included Parts &amp; Add-ons:</span>
+                        {group.items.flatMap((it) => it.lineItems || []).map((li, idx) => (
+                          <div key={`${li.key}-${idx}`} className="flex items-center justify-between text-xs text-slate-700 font-medium gap-4">
+                            <span>📦 {li.value} {li.qty > 1 ? `× ${li.qty}` : ""}</span>
+                            <span className="font-bold text-[#0b1c30]">{formatPrice(li.totalPaise)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-6">
@@ -283,45 +292,92 @@ export function CartClient() {
           )}
         </div>
 
-        {/* Right Column: Running Subtotal & Proceed to Checkout */}
+        {/* Right Column: Detailed Cart Summary & Proceed to Checkout */}
         <div className="lg:col-span-4">
-          <div className="rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)] lg:sticky lg:top-6">
-            <h2 className="text-[10px] font-bold uppercase tracking-widest text-[#45464d]">
-              CART SUMMARY
-            </h2>
+          <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] lg:sticky lg:top-24 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-xs font-black uppercase tracking-wider text-[#0b1c30]">
+                DETAILED CART SUMMARY
+              </h2>
+              <span className="rounded-full bg-[#fff7ed] px-2.5 py-0.5 text-[10px] font-extrabold text-[#ea580c] border border-[#ffedd5]">
+                {items.length} {items.length === 1 ? "Item" : "Items"}
+              </span>
+            </div>
 
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between text-[#45464d] font-medium">
-                <span>Items Subtotal ({items.length})</span>
+            {/* Detailed Itemized Line Items List */}
+            <div className="space-y-3 text-xs sm:text-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                SELECTED SERVICES
+              </span>
+              {Object.values(groupedItems).map((group) => (
+                <div key={group.serviceId} className="flex items-start justify-between gap-2 pb-2 border-b border-slate-50 last:border-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="font-black text-black text-sm truncate">{group.serviceName}</p>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Qty: {group.items.length} • {group.items[0]?.archetypeDetails?.variantLabel || "Standard service"}
+                    </p>
+                  </div>
+                  <strong className="font-extrabold text-[#0b1c30] shrink-0">
+                    {formatPrice(group.price * group.items.length)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+
+            {/* Detailed Fee Breakdown */}
+            <div className="border-t border-slate-100 pt-4 space-y-2.5 text-xs sm:text-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                FEE BREAKDOWN
+              </span>
+              <div className="flex justify-between text-slate-600 font-medium">
+                <span>Items Base Total</span>
                 <span className="font-bold text-[#0b1c30]">{formatPrice(totalAmount)}</span>
               </div>
-              <div className="flex justify-between text-[#ea580c] font-medium text-xs">
-                <span>Estimated Savings</span>
-                <span className="font-bold">-{formatPrice(mockSavingsAmount * 100)}</span>
+              <div className="flex justify-between items-center text-slate-600 font-medium">
+                <span>Platform Convenience Fee</span>
+                <span className="rounded-md bg-[#fff7ed] px-2 py-0.5 text-[10px] font-bold text-[#ea580c]">
+                  WAIVED
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-600 font-medium">
+                <span>Taxes &amp; GST</span>
+                <span className="font-bold text-emerald-600">INCLUDED</span>
               </div>
             </div>
 
-            <div className="my-5 border-t border-dashed border-slate-200" />
+            <div className="my-3 border-t border-dashed border-slate-200" />
 
-            <div className="flex items-baseline justify-between mb-6">
-              <span className="text-sm font-semibold text-[#45464d]">Subtotal</span>
-              <span className="font-heading text-2xl font-extrabold text-[#0b1c30]">
+            {/* Total Payable Box */}
+            <div className="flex items-baseline justify-between">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Total Payable</span>
+              </div>
+              <span className="font-heading text-2xl sm:text-3xl font-black text-[#0b1c30]">
                 {formatPrice(totalAmount)}
               </span>
             </div>
 
+            {/* Checkout CTA */}
             <button
               type="button"
               onClick={() => router.push("/checkout")}
-              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold text-sm shadow-md transition-all cursor-pointer"
+              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] hover:from-[#c2410c] hover:to-[#ea580c] text-white font-black text-sm shadow-md shadow-orange-500/20 transition-all cursor-pointer"
             >
               <span>Proceed to Checkout</span>
               <span>→</span>
             </button>
 
-            <p className="mt-3 text-center text-[11px] text-[#76777d]">
-              Address, scheduling slots & payment will be set on checkout
-            </p>
+            {/* Trust Badges */}
+            <div className="pt-3 border-t border-slate-100 space-y-2 text-[11px] text-slate-500 font-medium">
+              <div className="flex items-center gap-2">
+                <span className="text-[#ea580c]">🛡️</span>
+                <span>30-Day VSolve Service Warranty</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-600">⚡</span>
+                <span>Verified Professional Assigned Instantly</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

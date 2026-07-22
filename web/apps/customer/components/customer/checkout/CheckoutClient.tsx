@@ -258,14 +258,27 @@ export function CheckoutClient() {
             </div>
             <div className="space-y-3">
               {items.map((it) => (
-                <div key={it.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <span className="font-bold text-[#0b1c30]">{it.serviceName}</span>
-                    <span className="text-xs text-[#45464d] block">
-                      {it.archetypeDetails?.variantLabel || "Standard service"}
-                    </span>
+                <div key={it.id} className="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="font-bold text-[#0b1c30]">{it.serviceName}</span>
+                      <span className="text-xs text-[#45464d] block">
+                        {it.archetypeDetails?.variantLabel || "Standard service"}
+                      </span>
+                    </div>
+                    <span className="font-extrabold text-[#0b1c30]">{formatPrice(it.quotedAmount)}</span>
                   </div>
-                  <span className="font-extrabold text-[#0b1c30]">{formatPrice(it.quotedAmount)}</span>
+                  {it.lineItems && it.lineItems.length > 0 && (
+                    <div className="mt-2 pl-3 border-l-2 border-[#ea580c]/30 space-y-1">
+                      <span className="text-[10px] font-bold text-[#ea580c] uppercase tracking-wide block">Included Parts &amp; Add-ons:</span>
+                      {it.lineItems.map((li, idx) => (
+                        <div key={`${li.key}-${idx}`} className="flex items-center justify-between text-xs text-slate-700 font-medium">
+                          <span>📦 {li.value} {li.qty > 1 ? `× ${li.qty}` : ""}</span>
+                          <span className="font-bold text-[#0b1c30]">{formatPrice(li.totalPaise)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -7,8 +7,11 @@ import { DesktopPanel } from "./electrician/DesktopPanel";
 import { ActiveJobPanel } from "./electrician/ActiveJobPanel";
 import { CompletedJobPanel } from "./electrician/CompletedJobPanel";
 import { TeamTrackerView } from "./electrician/TeamTrackerView";
+import { CompletedJobModal } from "./electrician/CompletedJobModal";
+import { RevisedQuoteModal } from "./electrician/RevisedQuoteModal";
 import { DetailsModal } from "./electrician/DetailsModal";
 import { soloStepDetails, teamStepDetails } from "./electrician/steps";
+import { useState } from "react";
 
 type Props = {
   booking: Booking;
@@ -31,6 +34,8 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
     reviseAction,
     submitReview,
   } = useBookingLifecycle(booking, onRefresh);
+
+  const [showCompletedModal, setShowCompletedModal] = useState(isCompleted);
 
   const getStepDetails = (stepKey: string, idx: number) =>
     soloStepDetails(stepKey, idx, currentStatusIndex, booking);
@@ -69,6 +74,15 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
           currentStatusIndex={currentStatusIndex}
           getStepDetails={getStepDetails}
           onShowDetails={() => setShowDetailsModal(true)}
+          loading={loading}
+          reviseAction={reviseAction}
+          rating={rating}
+          setRating={setRating}
+          review={review}
+          setReview={setReview}
+          reviewSubmitted={reviewSubmitted}
+          error={error}
+          submitReview={submitReview}
         />
       </div>
 
@@ -130,6 +144,34 @@ export function ElectricianTracker({ booking, onRefresh }: Props) {
           </div>
         )}
       </div>
+
+      {/* Celebratory Completion Modal Pop-up */}
+      {isCompleted && showCompletedModal && (
+        <CompletedJobModal
+          booking={booking}
+          professional={professional}
+          rating={rating}
+          setRating={setRating}
+          review={review}
+          setReview={setReview}
+          reviewSubmitted={reviewSubmitted}
+          error={error}
+          loading={loading}
+          submitReview={submitReview}
+          onClose={() => setShowCompletedModal(false)}
+        />
+      )}
+
+      {/* Technician Extra Parts Request Pop-up Modal */}
+      {Boolean(booking.revisedAmountPaise) && (
+        <RevisedQuoteModal
+          booking={booking}
+          professional={professional}
+          loading={loading}
+          onApprove={() => reviseAction("approve")}
+          onDecline={() => reviseAction("decline")}
+        />
+      )}
 
       {/* Booking Details Modal Popup */}
       {showDetailsModal && (
