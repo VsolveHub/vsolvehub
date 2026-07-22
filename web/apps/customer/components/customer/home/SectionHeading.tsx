@@ -8,6 +8,8 @@ type Props = {
   description?: string;
   /** Optional "see all" style link on the right. */
   action?: { label: string; href: string };
+  /** Visual style for the action button. "filled" (default) or "outline". */
+  actionVariant?: "filled" | "outline";
   align?: "left" | "center";
   id?: string;
 };
@@ -22,6 +24,7 @@ export function SectionHeading({
   title,
   description,
   action,
+  actionVariant = "filled",
   align = "left",
   id,
 }: Props) {
@@ -55,7 +58,11 @@ export function SectionHeading({
       {action && (
         <Link
           href={action.href}
-          className="group inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--color-brand-light)] px-4 py-2 text-sm font-bold text-[var(--color-brand)] transition-colors hover:bg-[var(--color-brand)] hover:text-white"
+          className={`group inline-flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2 text-sm font-semibold transition-all duration-200 ${
+            actionVariant === "outline"
+              ? "border border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50"
+              : "bg-[var(--color-brand-light)] text-[var(--color-brand)] hover:bg-[var(--color-brand)] hover:text-white"
+          }`}
         >
           {action.label}
           <span className="transition-transform group-hover:translate-x-0.5">→</span>

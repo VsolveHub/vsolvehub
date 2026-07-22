@@ -1,6 +1,7 @@
 import type { Selections } from "@/lib/catalog/pricing";
 import { RequirementSheet } from "@/components/customer/booking/RequirementSheet";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
+import { ProductAddOns, type ProductSelections } from "./ProductAddOns";
 import type { FlowService, ServiceConfig } from "./types";
 
 const SECTION_TITLE = "mb-4 text-[0.8rem] font-bold tracking-[0.05em] text-gray-600";
@@ -16,6 +17,8 @@ export function DetailsStep({
   photos,
   uploading,
   onPhotoUpload,
+  productSelections,
+  onProductChange,
   submitting,
   onSubmit,
 }: {
@@ -29,6 +32,8 @@ export function DetailsStep({
   photos: string[];
   uploading: boolean;
   onPhotoUpload: (files: FileList | null) => void;
+  productSelections: ProductSelections;
+  onProductChange: (v: ProductSelections) => void;
   submitting: boolean;
   onSubmit: () => void;
 }) {
@@ -52,6 +57,10 @@ export function DetailsStep({
           fieldErrors={fieldErrors}
           showFooter={false}
         />
+      )}
+
+      {service && (
+        <ProductAddOns serviceId={service.id} value={productSelections} onChange={onProductChange} />
       )}
 
       {/* Visual Context (Optional) */}

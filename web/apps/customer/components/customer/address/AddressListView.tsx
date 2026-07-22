@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { getCookie } from "@/lib/cookies";
 import type { Address } from "./model";

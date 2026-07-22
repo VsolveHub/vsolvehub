@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardList, ScrollText, ShieldCheck, LogOut, Menu, X } from "lucide-react";
+import { ClipboardList, Package, ShoppingBag, ScrollText, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { Logo } from "@vsolve/ui";
 import { logout } from "@/lib/auth-actions";
 import { NavLink } from "./nav-link";
@@ -12,6 +12,12 @@ function NavItems({ admin, onNavigate }: { admin: CurrentAdmin; onNavigate?: () 
     <nav className="flex flex-1 flex-col gap-1">
       <NavLink href="/partners" icon={<ClipboardList className="h-4 w-4" />} onClick={onNavigate}>
         Partners
+      </NavLink>
+      <NavLink href="/products" icon={<Package className="h-4 w-4" />} onClick={onNavigate}>
+        Products
+      </NavLink>
+      <NavLink href="/orders" icon={<ShoppingBag className="h-4 w-4" />} onClick={onNavigate}>
+        Store orders
       </NavLink>
       <NavLink href="/audit" icon={<ScrollText className="h-4 w-4" />} onClick={onNavigate}>
         Audit log

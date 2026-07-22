@@ -57,8 +57,11 @@ export function VSmartStories({ stories }: { stories: any[] }) {
   return (
     <div className="w-full" aria-label="Smart stories">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-black text-[#0b1c30] tracking-tight">V Smart Stories</h2>
-        <span className="text-[10px] font-bold text-amber-800 flex items-center gap-1.5 bg-amber-100 px-3 py-1 rounded-full border border-amber-200 animate-pulse">
+        <div>
+          <h2 className="text-xl font-black text-[#0b1c30] tracking-tight">V Smart Stories</h2>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">Quick updates and curated inspiration for your home.</p>
+        </div>
+        <span className="text-[10px] font-bold text-amber-800 flex items-center gap-1.5 bg-amber-100 px-3 py-1 rounded-full border border-amber-200 animate-pulse shrink-0">
           🪙 Rewards inside
         </span>
       </div>

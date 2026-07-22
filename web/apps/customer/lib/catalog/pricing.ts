@@ -52,7 +52,7 @@ export type PricedDetailField =
 
 export type Selections = Record<string, string | number | string[] | undefined>;
 
-export type LineItemKind = "variant" | "option" | "counter" | "addon";
+export type LineItemKind = "variant" | "option" | "counter" | "addon" | "product";
 
 export type LineItem = {
   key: string;
