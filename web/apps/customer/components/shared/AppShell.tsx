@@ -97,43 +97,34 @@ export function AppHeader() {
             <MenuIcon size={20} />
           </button>
 
-          <Link href="/" className="flex items-center gap-1.5 flex-1 md:flex-none justify-center md:justify-start">
-            <img src="/logo-mark.png" alt="V Solve Hub" className="w-9 h-9 object-contain rounded-full shrink-0" />
+          <Link href="/" className="flex items-center gap-2 flex-1 md:flex-none justify-center md:justify-start">
+            <div className="w-8 h-8 rounded-lg bg-[#0f172a] flex items-center justify-center text-white shrink-0 shadow-sm">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            </div>
             <span className="flex flex-col leading-tight hidden sm:flex">
-              <span className="text-[15px] font-extrabold tracking-tight">Vsolve Hub</span>
+              <span className="text-[15px] font-extrabold tracking-tight text-gray-900">Vsolve Hub</span>
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-6 text-[13px] font-bold">
-            <Link href="/services" className={pathname.startsWith("/services") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>Find Services</Link>
-            <Link href="/profile/bookings" className={pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>My Bookings</Link>
-            <Link href="/support" className={pathname.startsWith("/support") ? "text-[var(--color-brand)]" : "text-gray-600 hover:text-gray-900"}>Support</Link>
+          <nav className="hidden md:flex items-center gap-5 text-[13px] font-normal">
+            <Link href="/services" className={pathname.startsWith("/services") ? "text-gray-900 font-semibold" : "text-gray-600 hover:text-gray-900"}>Find Services</Link>
+            <Link href="/profile/bookings" className={pathname.startsWith("/profile/bookings") || pathname.startsWith("/booking") ? "text-gray-900 font-semibold" : "text-gray-600 hover:text-gray-900"}>My Bookings</Link>
+            <Link href="/support" className={pathname.startsWith("/support") ? "text-gray-900 font-semibold" : "text-gray-600 hover:text-gray-900"}>Support</Link>
           </nav>
 
-          <div className="flex items-center gap-4">
-            {!hideSearchLocation && (
-              <button type="button" className="hidden lg:flex items-center gap-1.5 bg-transparent border-none text-gray-600 hover:text-gray-900 text-[13px] font-semibold cursor-pointer" onClick={() => setShowAddrModal(true)}>
-                <PinIcon size={14} />
-                <span>{displayLocation}</span>
-                <ChevronDownIcon size={12} />
-              </button>
-            )}
+          <div className="flex items-center gap-3">
             <CartBadge />
-            <Link href="/profile" className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
-              <ProfileIcon size={18} />
+            <Link href="/profile" className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0 ring-1 ring-gray-200/80">
+              <img
+                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+                alt="User profile"
+                className="w-full h-full object-cover"
+              />
             </Link>
           </div>
         </div>
-        
-        {!hideSearchLocation && (
-           <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6">
-             <button type="button" className="lg:hidden flex items-center justify-center gap-1.5 w-full bg-transparent border-none text-gray-700 text-[13px] font-semibold py-1 cursor-pointer" onClick={() => setShowAddrModal(true)}>
-              <PinIcon size={14} />
-              <span className="truncate max-w-[200px]">{displayLocation}</span>
-              <ChevronDownIcon size={12} />
-             </button>
-           </div>
-        )}
 
         {isServiceDetailPage && (
           <div className="flex items-center gap-2 mt-2">

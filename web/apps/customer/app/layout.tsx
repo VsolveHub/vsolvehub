@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import "@flaticon/flaticon-uicons/css/regular/rounded.css";
 import "./globals.css";
@@ -9,8 +9,16 @@ import { getServerSession } from "@/lib/auth/session";
 import { qk } from "@/lib/query/keys";
 
 const inter = Inter({
-  weight: ["400", "500", "700"],
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const plusJakarta = Plus_Jakarta_Sans({
+  weight: ["600", "700", "800"],
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
   display: "swap",
 });
 
@@ -42,11 +50,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           type="speculationrules"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
-              // Prefetch (cheap: just the document) eagerly on hover/pointer-down,
-              // but only *prerender* (expensive: runs the full server render) the
-              // handful of high-intent routes, and only conservatively. Prerendering
-              // every "/*" link on moderate eagerness was hammering the server and
-              // making navigation feel slow.
               prefetch: [
                 { where: { href_matches: "/*" }, eagerness: "moderate" },
               ],
@@ -62,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }}
         />
       </head>
-      <body className={`flex flex-col min-h-screen w-full bg-[#f1f5f9] ${inter.className}`} suppressHydrationWarning>
+      <body className={`flex flex-col min-h-screen w-full bg-[#f8f9ff] text-[#0b1c30] ${inter.variable} ${plusJakarta.variable} ${inter.className}`} suppressHydrationWarning>
         <QueryProvider>
           <HydrationBoundary state={dehydratedState}>
             <ShellSwitcher>{children}</ShellSwitcher>
