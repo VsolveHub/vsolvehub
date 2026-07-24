@@ -36,7 +36,7 @@ export function VSmartStories({ stories }: { stories: any[] }) {
     if (activeSlideIdx < activeStory.slides.length - 1) {
       setActiveSlideIdx((prev) => prev + 1);
     } else if (activeStoryIdx !== null && activeStoryIdx < stories.length - 1) {
-      setActiveStoryIdx((prev) => prev + 1);
+      setActiveStoryIdx((prev) => (prev !== null ? prev + 1 : 0));
       setActiveSlideIdx(0);
     } else {
       setActiveStoryIdx(null);

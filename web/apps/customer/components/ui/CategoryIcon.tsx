@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { getCategorySketchIllustration } from "@/lib/catalog/service-sketch-illustrations";
 
 type Props = {
@@ -14,15 +15,13 @@ export function CategoryIcon({ slug, size = 24, className, name }: Props) {
   const src = getCategorySketchIllustration(slug);
 
   return (
-    <img
+    <Image
       src={src}
       alt={name ?? slug}
       width={size}
       height={size}
       className={`service-sketch service-sketch--icon${className ? ` ${className}` : ""}`}
       style={{ borderRadius: "inherit", objectFit: "cover" }}
-      loading="lazy"
-      decoding="async"
     />
   );
 }

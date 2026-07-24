@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { FileWarning, ExternalLink } from "lucide-react";
 import { Badge } from "@vsolve/ui";
 import type { Document } from "@vsolve/db";
@@ -22,8 +23,7 @@ export function DocumentCard({ doc, preview }: { doc: Document; preview: DocPrev
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="flex aspect-video items-center justify-center bg-surface-muted">
         {preview.kind === "signed" ? (
-          // eslint-disable-next-line @next/next/no-img-element -- signed URL is short-lived, not an optimizable asset
-          <img src={preview.url} alt={DOC_LABELS[doc.type] ?? doc.type} className="h-full w-full object-cover" />
+          <Image src={preview.url} alt={DOC_LABELS[doc.type] ?? doc.type} unoptimized fill className="h-full w-full object-cover" />
         ) : preview.kind === "legacy" ? (
           <a
             href={preview.url}

@@ -1,10 +1,24 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 import { PrismaPlugin } from "@prisma/nextjs-monorepo-workaround-plugin";
 
+// pnpm workspace root (web/). Turbopack otherwise infers a root from the nearest
+// lockfile and can pick the wrong one in a monorepo.
+const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
 const nextConfig: NextConfig = {
   transpilePackages: ["@vsolve/ui"],
+  // `next dev --turbopack` reads this; `next build` still goes through the
+  // webpack config below. Declaring it also silences Next's "Webpack is
+  // configured while Turbopack is not" warning.
+  turbopack: { root: workspaceRoot },
   serverExternalPackages: ["@prisma/client", "@vsolve/db"],
-  allowedDevOrigins: ["127.0.0.1", "localhost", "*.local"],
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
   // Tree-shake large icon/utility barrels so a page only ships the icons it uses.
   experimental: {
     optimizePackageImports: ["@flaticon/flaticon-uicons"],

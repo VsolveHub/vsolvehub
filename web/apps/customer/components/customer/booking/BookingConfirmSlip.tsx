@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
 
 export type ConfirmSlipRow = {
@@ -107,9 +108,9 @@ export function BookingConfirmSlip({
             <div className="flex items-center gap-3">
               {/* Overlapping avatars */}
               <div className="flex -space-x-2 select-none">
-                <img className="w-8 h-8 rounded-full border-2 border-white object-cover animate-pulse" src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=60" alt="avatar" />
-                <img className="w-8 h-8 rounded-full border-2 border-white object-cover animate-pulse" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60" alt="avatar" />
-                <img className="w-8 h-8 rounded-full border-2 border-white object-cover animate-pulse" src="https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=60" alt="avatar" />
+                <Image className="w-8 h-8 rounded-full border-2 border-white object-cover animate-pulse" width={32} height={32} src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=60" alt="avatar" />
+                <Image className="w-8 h-8 rounded-full border-2 border-white object-cover animate-pulse" width={32} height={32} src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60" alt="avatar" />
+                <Image className="w-8 h-8 rounded-full border-2 border-white object-cover animate-pulse" width={32} height={32} src="https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=60" alt="avatar" />
                 <div className="w-8 h-8 rounded-full border-2 border-white bg-purple-50 text-purple-700 text-[10px] font-black flex items-center justify-center">+2</div>
               </div>
               <p className="text-xs font-bold text-gray-700 m-0">5 Experts Assigned. Led by Senior Raju</p>

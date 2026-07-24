@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function SiteFooter({ variant = "dark" }: { variant?: "dark" | "light" }) {
   const dark = variant === "dark";
@@ -12,7 +13,7 @@ export function SiteFooter({ variant = "dark" }: { variant?: "dark" | "light" })
               (dark ? " bg-white" : "")
             }
           >
-            <img src="/logo-mark.png" alt="V Solve Hub" className="h-full w-full object-contain" />
+            <Image src="/logo-mark.png" alt="V Solve Hub" width={24} height={24} className="h-full w-full object-contain" />
           </span>
           <span className={dark ? "text-accent-500" : "text-brand-600"}>V Solve Hub</span>
         </span>

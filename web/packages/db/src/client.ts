@@ -8,15 +8,29 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * Ensure a workable connection pool. Pages like the partner dashboard fan out
- * ~8 queries per request via `Promise.all`; with `connection_limit=1` they all
- * queue behind a single pooled connection — which is slow (10s+ page loads) and
- * trips Prisma's pool-acquire timeout (P2024). We raise the pool to a small
- * parallel count and lengthen the acquire timeout. Safe with the Supabase
- * transaction pooler, which multiplexes these onto its own Postgres pool.
+ * Pick the connection string for this environment.
+ *
+ * `DATABASE_URL` points at Supabase's transaction pooler (:6543, pgbouncer).
+ * That is required in production on Vercel, where each serverless invocation is
+ * short-lived and would otherwise exhaust Postgres connections.
+ *
+ * It is the wrong choice for local dev. Measured against this project's Supabase
+ * instance from a dev machine:
+ *
+ *     pooled :6543 (pgbouncer)   SELECT 1  267ms   session+user  396ms
+ *     direct :5432 (session)     SELECT 1   58ms   session+user  183ms
+ *
+ * 58ms is the raw TCP round-trip, so the pooler adds ~210ms to *every* query —
+ * ~4.6x. A page issuing a handful of queries paid a second or more of pure
+ * pooler overhead. `next dev` is one long-lived process holding a handful of
+ * connections, which is exactly what session mode is for, so dev uses
+ * `DIRECT_URL` when it is available and production stays on the pooler.
  */
-function pooledDatabaseUrl(): string | undefined {
-  const raw = process.env.DATABASE_URL;
+function resolveDatabaseUrl(): string | undefined {
+  const raw =
+    process.env.NODE_ENV === "production"
+      ? process.env.DATABASE_URL
+      : process.env.DIRECT_URL ?? process.env.DATABASE_URL;
   if (!raw) return undefined;
   try {
     const url = new URL(raw);
@@ -29,10 +43,25 @@ function pooledDatabaseUrl(): string | undefined {
   }
 }
 
+const resolvedUrl = resolveDatabaseUrl();
+
+// One line at startup so it is obvious which connection dev actually picked.
+// :5432 is the fast direct/session connection, :6543 the ~4.6x slower pooler.
+if (process.env.NODE_ENV !== "production" && !globalForPrisma.prisma && resolvedUrl) {
+  try {
+    const { hostname, port } = new URL(resolvedUrl);
+    console.log(
+      `[db] ${hostname}:${port} ${port === "5432" ? "(direct — fast)" : "(pgbouncer pooler — slow, expected only in prod)"}`
+    );
+  } catch {
+    // Malformed URL is Prisma's problem to report, not ours.
+  }
+}
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasourceUrl: pooledDatabaseUrl(),
+    datasourceUrl: resolvedUrl,
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 

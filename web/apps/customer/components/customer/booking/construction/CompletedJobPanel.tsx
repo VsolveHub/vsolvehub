@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { formatPrice } from "@/lib/format";
 import type { Booking } from "@/lib/booking/types";
 import { OtpEntry } from "./OtpEntry";
@@ -48,11 +49,11 @@ export function CompletedJobPanel({
         <p style={{ fontWeight: 700, fontSize: "0.8rem", color: "#3f3f46", margin: "0 0 0.5rem 0" }}>Work Progress Photos</p>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <div style={{ flex: 1, position: "relative", height: "80px", borderRadius: "8px", overflow: "hidden" }}>
-            <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300" alt="before" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <Image src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=300" alt="before" fill style={{ objectFit: "cover" }} />
             <span style={{ position: "absolute", bottom: "4px", left: "4px", background: "rgba(0,0,0,0.6)", color: "white", padding: "1px 4px", fontSize: "0.6rem", borderRadius: "3px" }}>Before</span>
           </div>
           <div style={{ flex: 1, position: "relative", height: "80px", borderRadius: "8px", overflow: "hidden" }}>
-            <img src="https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300" alt="after" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <Image src="https://images.unsplash.com/photo-1590069261209-f8e9b8642343?w=300" alt="after" fill style={{ objectFit: "cover" }} />
             <span style={{ position: "absolute", bottom: "4px", left: "4px", background: "rgba(0,0,0,0.6)", color: "white", padding: "1px 4px", fontSize: "0.6rem", borderRadius: "3px" }}>After</span>
           </div>
         </div>

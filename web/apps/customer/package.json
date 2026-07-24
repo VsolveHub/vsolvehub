@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --turbopack --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@flaticon/flaticon-uicons": "^3.3.1",
+    "@prisma/client": "^6.2.1",
     "@tanstack/react-query": "^5.62.7",
     "@vsolve/crypto": "workspace:*",
     "@vsolve/db": "workspace:*",

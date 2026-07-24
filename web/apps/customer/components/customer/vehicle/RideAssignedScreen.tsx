@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   driverName: string;
@@ -31,7 +32,7 @@ export function RideAssignedScreen({ driverName, driverRating, vehicleNumber, dr
 
       {/* Map perspective view */}
       <div className="flex-grow h-[45vh] bg-slate-100 relative overflow-hidden select-none">
-        <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=450" alt="map" className="w-full h-full object-cover opacity-80 filter brightness-95" />
+        <Image src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=450" alt="map" fill className="object-cover opacity-80 filter brightness-95" />
 
         {/* Tooltip arriving info overlay */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1">
@@ -52,7 +53,7 @@ export function RideAssignedScreen({ driverName, driverRating, vehicleNumber, dr
         {/* Driver profile card */}
         <div className="flex justify-between items-center border-b border-gray-100 pb-3">
           <div className="flex items-center gap-3">
-            <img src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100" alt="driver" className="w-11 h-11 rounded-full object-cover border border-purple-100" />
+            <Image src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=100" alt="driver" width={44} height={44} className="w-11 h-11 rounded-full object-cover border border-purple-100" />
             <div>
               <h3 className="font-extrabold text-sm text-slate-800 m-0">{driverName}</h3>
               <p className="text-[10px] text-gray-400 font-bold mt-0.5 m-0">★ {driverRating} (1,240 trips)</p>

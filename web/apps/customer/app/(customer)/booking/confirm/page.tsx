@@ -17,29 +17,30 @@ export default async function BookingConfirmPage({ searchParams }: PageProps) {
   const booking = await getBookingByRef(ref, session?.id);
   if (!booking) notFound();
 
-  const status = normalizeBookingStatus(booking.status);
+  const b = booking as any;
+  const status = normalizeBookingStatus(b.status);
 
   const scheduleLabel =
-    booking.scheduleType === "instant"
+    b.scheduleType === "instant"
       ? "Instant booking"
-      : `${formatDate(booking.slot)} · ${new Date(booking.slot).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+      : `${formatDate(b.slot)} · ${new Date(b.slot).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
 
   const rows = [
-    { label: "Service", value: booking.service.name, highlight: true },
-    ...(booking.issueDescription
-      ? [{ label: "Description", value: booking.issueDescription }]
+    { label: "Service", value: b.service.name, highlight: true },
+    ...(b.issueDescription
+      ? [{ label: "Description", value: b.issueDescription }]
       : []),
-    ...(parseMediaUrls(booking.mediaUrls).length > 0
-      ? [{ label: "Attachments", value: `${parseMediaUrls(booking.mediaUrls).length} file(s)` }]
+    ...(parseMediaUrls(b.mediaUrls).length > 0
+      ? [{ label: "Attachments", value: `${parseMediaUrls(b.mediaUrls).length} file(s)` }]
       : []),
     { label: "Schedule", value: scheduleLabel },
-    { label: "Address", value: booking.address.fullAddress },
-    ...(booking.vendor
-      ? [{ label: "Professional", value: `${booking.vendor.name} · ★ ${booking.vendor.rating.toFixed(1)}` }]
+    { label: "Address", value: b.address.fullAddress },
+    ...(b.vendor
+      ? [{ label: "Professional", value: `${b.vendor.name} · ★ ${b.vendor.rating.toFixed(1)}` }]
       : []),
   ];
 
-  const details = booking.archetypeDetails ? JSON.parse(booking.archetypeDetails) : {};
+  const details = b.archetypeDetails ? JSON.parse(b.archetypeDetails) : {};
   const isTeam = details.bookingType === "team";
 
   return (

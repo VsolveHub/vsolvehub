@@ -3,6 +3,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { HERO_SLIDES } from "@/lib/catalog/display-catalog";
 import { ServiceIcon } from "@/components/ui/ServiceIcons";
@@ -129,7 +130,13 @@ export function HeroBanner({ categories = [] }: { categories?: Category[] }) {
               transition={{ duration: 0.5 }}
               className="absolute inset-0"
             >
-              <img src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=800&auto=format&fit=crop" alt="Service" className="w-full h-full object-cover object-center" />
+              <Image
+                src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=800&auto=format&fit=crop"
+                alt="Service"
+                fill
+                sizes="(min-width: 768px) 45vw, 0px"
+                className="object-cover object-center"
+              />
             </motion.div>
           </AnimatePresence>
           <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-[#0A1629] to-transparent z-10" />

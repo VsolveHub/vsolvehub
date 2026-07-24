@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
@@ -117,8 +118,7 @@ export function StoreClient() {
               <Link href={`/store/${p.slug}`} className="flex-1">
                 <div className="flex h-24 items-center justify-center rounded-xl bg-gray-50 text-3xl">
                   {p.images[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.images[0]} alt={p.name} className="h-full w-full rounded-xl object-cover" />
+                    <Image src={p.images[0]} alt={p.name} width={96} height={96} unoptimized className="h-full w-full rounded-xl object-cover" />
                   ) : (
                     <span>📦</span>
                   )}

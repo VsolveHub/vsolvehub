@@ -1,15 +1,12 @@
-"use client";
-
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
 
 export function CleaningEssentials({ promos }: { promos: any[] }) {
   return (
     <div className={`grid gap-5 grid-cols-1 md:grid-cols-2 ${promos.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
         {promos.map((card) => (
           <Link key={card.id} href={card.href} className="block relative w-full h-[240px] shrink-0 rounded-[28px] overflow-hidden shadow-md group">
-            <motion.div whileHover={{ scale: 1.02 }} className="w-full h-full relative">
+            <div className="w-full h-full relative transition-transform duration-300 group-hover:scale-[1.02]">
               <Image
                 src={card.imageUrl}
                 alt={card.title}
@@ -21,7 +18,7 @@ export function CleaningEssentials({ promos }: { promos: any[] }) {
                 <h3 className="text-xl font-black leading-tight tracking-tight">{card.title}</h3>
                 {card.subtitle && <p className="text-xs text-white/80 font-medium mt-1">{card.subtitle}</p>}
               </div>
-            </motion.div>
+            </div>
           </Link>
         ))}
     </div>

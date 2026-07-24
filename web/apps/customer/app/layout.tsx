@@ -46,24 +46,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script
-          type="speculationrules"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              prefetch: [
-                { where: { href_matches: "/*" }, eagerness: "moderate" },
-              ],
-              prerender: [
-                {
-                  where: {
-                    href_matches: ["/services", "/services/*", "/profile"],
+        {/*
+          Production only. In dev there is no build output to prefetch — every
+          speculated URL forces Next to compile that route on demand and render it
+          server-side, so simply hovering the nav would kick off several 1-3s
+          compiles and duplicate SSR passes that compete with the page you are
+          actually navigating to.
+        */}
+        {process.env.NODE_ENV === "production" && (
+          <script
+            type="speculationrules"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                prefetch: [
+                  { where: { href_matches: "/*" }, eagerness: "moderate" },
+                ],
+                prerender: [
+                  {
+                    where: {
+                      href_matches: ["/services", "/services/*", "/profile"],
+                    },
+                    eagerness: "conservative",
                   },
-                  eagerness: "conservative",
-                },
-              ],
-            }),
-          }}
-        />
+                ],
+              }),
+            }}
+          />
+        )}
       </head>
       <body className={`flex flex-col min-h-screen w-full bg-[#f8f9ff] text-[#0b1c30] ${inter.variable} ${plusJakarta.variable} ${inter.className}`} suppressHydrationWarning>
         <QueryProvider>

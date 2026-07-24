@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
 import { formatDate } from "@/lib/format";
 import { STATUS_LABELS, STATUS_MESSAGES } from "@/lib/constants";
@@ -50,7 +51,7 @@ export function TrackStep({ booking, status, partnerName }: Props) {
       {status === "PROVIDER_ARRIVING" && (
         <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-4 text-center" style={{ padding: "1.5rem 1.25rem", border: "2px solid var(--color-brand)", borderRadius: "18px", display: "flex", flexDirection: "column", alignItems: "center" }}>
           <div style={{ width: "56px", height: "56px", borderRadius: "50%", overflow: "hidden", border: "2px solid var(--color-brand)" }}>
-            <img src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100" alt={partnerName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <Image src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100" alt={partnerName} width={56} height={56} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <h4 style={{ fontWeight: 700, marginTop: "0.75rem", marginBottom: "0.125rem", fontSize: "0.95rem" }}>{partnerName}</h4>
           <p style={{ color: "#059669", fontWeight: 700, fontSize: "0.8rem", margin: "0 0 0.5rem 0" }}>Beautician Arrived!</p>

@@ -21,12 +21,13 @@ export default async function InvoicePage({ params }: PageProps) {
   const booking = await getBookingByRef(ref, session?.id);
   if (!booking) notFound();
 
-  const amountPaise = booking.finalAmountPaise ?? booking.quotedAmount;
+  const b = booking as any;
+  const amountPaise = b.finalAmountPaise ?? b.quotedAmount;
 
   // Product lines (booking add-ons + approved mid-job parts) with their GST
   // portion. Declined items never appear here.
   const productItems = await prisma.bookingProductItem.findMany({
-    where: { bookingId: booking.id, status: "APPROVED" },
+    where: { bookingId: b.id, status: "APPROVED" },
     include: { product: { select: { name: true, gstRatePct: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -34,13 +35,13 @@ export default async function InvoicePage({ params }: PageProps) {
   const productsGstPaise = productItems.reduce((s, i) => s + i.gstPaise, 0);
   const serviceAmountPaise = Math.max(0, amountPaise - productsTotalPaise);
 
-  const professional = booking.assignedPartner?.fullName ?? booking.vendor?.name ?? "Assigned professional";
-  const status = normalizeBookingStatus(booking.status);
-  const paid = ["PAID", "COD"].includes(booking.paymentStatus);
-  const paymentLabel = booking.paymentStatus === "COD"
+  const professional = b.assignedPartner?.fullName ?? b.vendor?.name ?? "Assigned professional";
+  const status = normalizeBookingStatus(b.status);
+  const paid = ["PAID", "COD"].includes(b.paymentStatus);
+  const paymentLabel = b.paymentStatus === "COD"
     ? "Cash on service"
-    : booking.paymentMethod
-      ? booking.paymentMethod.toUpperCase()
+    : b.paymentMethod
+      ? b.paymentMethod.toUpperCase()
       : "—";
 
   return (
@@ -57,8 +58,8 @@ export default async function InvoicePage({ params }: PageProps) {
         </div>
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: 0, fontWeight: 700 }}>Tax Invoice</p>
-          <p style={{ margin: "0.25rem 0 0", color: "#6b7280", fontSize: "0.75rem" }}>#{booking.bookingRef}</p>
-          <p style={{ margin: "0.15rem 0 0", color: "#6b7280", fontSize: "0.75rem" }}>{formatDate(booking.createdAt)}</p>
+          <p style={{ margin: "0.25rem 0 0", color: "#6b7280", fontSize: "0.75rem" }}>#{b.bookingRef}</p>
+          <p style={{ margin: "0.15rem 0 0", color: "#6b7280", fontSize: "0.75rem" }}>{formatDate(b.createdAt)}</p>
         </div>
       </div>
 
@@ -67,7 +68,7 @@ export default async function InvoicePage({ params }: PageProps) {
         <div>
           <p style={{ margin: 0, fontSize: "0.7rem", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Billed to</p>
           <p style={{ margin: "0.25rem 0 0", fontWeight: 600 }}>{session?.name ?? "Customer"}</p>
-          <p style={{ margin: "0.15rem 0 0", color: "#6b7280", fontSize: "0.8rem", maxWidth: 260 }}>{booking.address.fullAddress}</p>
+          <p style={{ margin: "0.15rem 0 0", color: "#6b7280", fontSize: "0.8rem", maxWidth: 260 }}>{b.address?.fullAddress}</p>
         </div>
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: 0, fontSize: "0.7rem", textTransform: "uppercase", color: "#6b7280", fontWeight: 700 }}>Professional</p>
@@ -86,9 +87,9 @@ export default async function InvoicePage({ params }: PageProps) {
         <tbody>
           <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
             <td style={{ padding: "0.75rem" }}>
-              {booking.service.name}
+              {b.service?.name}
               <span style={{ display: "block", color: "#6b7280", fontSize: "0.75rem" }}>
-                {booking.service.category?.name}
+                {b.service?.category?.name}
               </span>
             </td>
             <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(serviceAmountPaise)}</td>

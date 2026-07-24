@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { STATUS_MESSAGES } from "@/lib/constants";
 import type { BookingParty } from "@/lib/booking/types";
 
@@ -13,9 +14,11 @@ export function MobileTopProfessionalCard({ professional, status }: { profession
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm flex items-center justify-between gap-3">
       <div className="flex items-center gap-3">
-        <img
+        <Image
           src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
           alt={professional.name}
+          width={40}
+          height={40}
           className="w-10 h-10 rounded-full object-cover border border-purple-100"
         />
         <div>

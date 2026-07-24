@@ -39,8 +39,8 @@ function parseRoles(raw: string): CrewRole[] {
   }
 }
 
-function mapCrewDays(booking: Booking, reschedulable: boolean, todayISO: string) {
-  return booking.crewJobDays.map((d) => ({
+function mapCrewDays(booking: any, reschedulable: boolean, todayISO: string) {
+  return (booking.crewJobDays || []).map((d: any) => ({
     id: d.id,
     date: d.dayDate,
     status: d.status,
@@ -48,10 +48,10 @@ function mapCrewDays(booking: Booking, reschedulable: boolean, todayISO: string)
     approvedAt: d.customerApprovedAt,
     rescheduleToDate: d.rescheduleToDate,
     canReschedule: reschedulable && d.status === "SCHEDULED" && !d.rescheduleToDate && d.dayDate > todayISO,
-    attendance: d.clockEvents.map((e) => ({
-      memberId: e.member.id,
-      name: e.member.name,
-      role: e.member.role,
+    attendance: (d.clockEvents || []).map((e: any) => ({
+      memberId: e.member?.id,
+      name: e.member?.name,
+      role: e.member?.role,
       clockInAt: e.clockInAt,
       clockOutAt: e.clockOutAt,
     })),
@@ -59,15 +59,15 @@ function mapCrewDays(booking: Booking, reschedulable: boolean, todayISO: string)
 }
 type CrewDay = ReturnType<typeof mapCrewDays>[number];
 
-function mapCrew(booking: Booking) {
+function mapCrew(booking: any) {
   const crew = booking.crew;
   if (!crew) return null;
   return {
     id: crew.id,
     name: crew.name,
     rating: crew.rating,
-    leadName: crew.lead.fullName,
-    leadPhone: crew.lead.phone,
+    leadName: crew.lead?.fullName || "Lead",
+    leadPhone: crew.lead?.phone || "",
   };
 }
 
@@ -84,9 +84,9 @@ function crewOtps(booking: Booking, started: boolean) {
 }
 
 // Cancel-fee preview computed from the crew's rate card.
-function crewPricing(booking: Booking, roles: CrewRole[], days: CrewDay[]) {
+function crewPricing(booking: any, roles: CrewRole[], days: CrewDay[]) {
   const rateFor = (role: string) =>
-    booking.crew?.roleRates.find((r) => r.role === role)?.dayRatePaise ?? roleRatePaise(role);
+    booking.crew?.roleRates?.find((r: any) => r.role === role)?.dayRatePaise ?? roleRatePaise(role);
   const dailyRate = roles.reduce((s, r) => s + Math.max(0, r.count) * rateFor(r.roleId), 0);
   const doneEarned = days
     .filter((d) => ["DAY_DONE", "APPROVED"].includes(d.status))
@@ -100,7 +100,7 @@ function crewPricing(booking: Booking, roles: CrewRole[], days: CrewDay[]) {
 }
 
 // Escrow / abandonment / dispute flags (Phase F).
-function crewStatusFlags(booking: Booking, started: boolean, firstDayISO: string | undefined, todayISO: string) {
+function crewStatusFlags(booking: any, started: boolean, firstDayISO: string | undefined, todayISO: string) {
   const preStart = CREW_PRE_START_STATUSES.includes(booking.status);
   return {
     needsEscrowPayment: preStart && booking.paymentStatus === "PENDING",
@@ -110,7 +110,7 @@ function crewStatusFlags(booking: Booking, started: boolean, firstDayISO: string
   };
 }
 
-function serializeCrewBooking(booking: Booking) {
+function serializeCrewBooking(booking: any) {
   const roles = parseRoles(booking.archetypeDetails);
   const todayISO = new Date().toISOString().slice(0, 10);
   const rescheduleLimitReached = booking.rescheduleCount >= 2;
@@ -169,13 +169,13 @@ function serializeCrewBooking(booking: Booking) {
   };
 }
 
-function serializeProvider(booking: Booking) {
+function serializeProvider(booking: any) {
   const partner = booking.assignedPartner;
   if (!partner) return null;
 
-  const assignedLog = booking.statusLogs.find((l) => l.status === "ASSIGNED");
+  const assignedLog = booking.statusLogs?.find((l: any) => l.status === "ASSIGNED");
   const etaMinutes = assignedLog
-    ? Math.max(5, 20 - Math.floor((Date.now() - assignedLog.createdAt.getTime()) / 60_000))
+    ? Math.max(5, 20 - Math.floor((Date.now() - new Date(assignedLog.createdAt).getTime()) / 60_000))
     : 15;
 
   return { id: partner.id, name: partner.fullName ?? "Partner", phone: partner.phone, rating: partner.rating, etaMinutes };
@@ -193,17 +193,18 @@ function getDetailedLineItems(booking: Booking) {
   );
 
   if (booking.productItems && booking.productItems.length > 0) {
-    for (const p of booking.productItems) {
+    for (const pItem of booking.productItems) {
+      const p = pItem as any;
       const nameLower = (p.product?.name || "").trim().toLowerCase();
       if (p.status === "APPROVED" && nameLower && !existingNames.has(nameLower)) {
         existingNames.add(nameLower);
         items.push({
           key: `product:${p.productId}:${p.id}`,
           label: "Extra part (approved)",
-          value: p.product.name,
+          value: p.product?.name || "Part",
           qty: p.qty,
-          unitPaise: p.unitPricePaise,
-          totalPaise: p.totalPaise,
+          unitPaise: p.unitPricePaise || 0,
+          totalPaise: p.totalPaise || 0,
           kind: "product",
         });
       }
@@ -215,31 +216,32 @@ function getDetailedLineItems(booking: Booking) {
 function serializeMarketplaceBooking(booking: Booking, marketplace: boolean) {
   // Status is authoritative from the DB (driven by the partner / dispatch) —
   // never time-simulated.
-  const normalized = normalizeBookingStatus(booking.status);
-  const paidForMobilization = ["PAID", "COD"].includes(booking.paymentStatus);
+  const b = booking as any;
+  const normalized = normalizeBookingStatus(b.status);
+  const paidForMobilization = ["PAID", "COD"].includes(b.paymentStatus);
 
   return {
-    bookingRef: booking.bookingRef,
+    bookingRef: b.bookingRef,
     status: normalized,
     message: getStatusMessage(normalized),
     marketplace,
     service: {
-      id: booking.service.id,
-      name: booking.service.name,
-      slug: booking.service.slug,
-      categorySlug: booking.service.category.slug,
+      id: b.service.id,
+      name: b.service.name,
+      slug: b.service.slug,
+      categorySlug: b.service.category.slug,
     },
-    issueDescription: booking.issueDescription,
-    mediaUrls: parseMediaUrls(booking.mediaUrls),
-    slot: booking.slot,
-    scheduleType: booking.scheduleType,
-    address: booking.address.fullAddress,
-    vendor: booking.vendor
+    issueDescription: b.issueDescription,
+    mediaUrls: parseMediaUrls(b.mediaUrls),
+    slot: b.slot,
+    scheduleType: b.scheduleType,
+    address: b.address.fullAddress,
+    vendor: b.vendor
       ? {
-          id: booking.vendor.id,
-          name: booking.vendor.name,
-          phone: booking.vendor.phone,
-          rating: booking.vendor.rating,
+          id: b.vendor.id,
+          name: b.vendor.name,
+          phone: b.vendor.phone,
+          rating: b.vendor.rating,
         }
       : null,
     provider: serializeProvider(booking),

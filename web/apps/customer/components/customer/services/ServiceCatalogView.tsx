@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ServiceIcon } from "@/components/ui/ServiceIcons";
@@ -182,7 +183,7 @@ export function ServiceCatalogView({ categories }: Props) {
                                   nameSeed += service.name.charCodeAt(i);
                                 }
                                 const fallbackUrl = fallbacks[nameSeed % fallbacks.length];
-                                return <img src={fallbackUrl} alt={service.name} className="w-full h-full object-cover" />;
+                                return <Image src={fallbackUrl} alt={service.name} fill className="w-full h-full object-cover" />;
                               })()}
                             </motion.div>
                           </div>

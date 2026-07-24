@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 
 type Props = {
   href: string;
@@ -55,10 +54,7 @@ export function HomeServiceVerticalCard({
 
   return (
     <Link href={href} className="group block h-full">
-      <motion.div
-        whileHover={{ y: -5 }}
-        className="relative flex h-full flex-col overflow-hidden rounded-[24px] border border-gray-150 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl hover:shadow-[var(--color-brand)]/5"
-      >
+      <div className="relative flex h-full flex-col overflow-hidden rounded-[24px] border border-gray-150 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[var(--color-brand)]/5">
         <div className="relative h-[150px] w-full overflow-hidden bg-gray-50">
           {badge && (
             <span className="absolute left-3 top-3 z-10 rounded-full bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-gray-900 shadow-sm">
@@ -97,17 +93,16 @@ export function HomeServiceVerticalCard({
               </span>
               <span className="text-sm font-black text-gray-900">{priceLabel}</span>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="rounded-xl bg-[var(--color-brand)] px-5 py-2 text-xs font-black text-white shadow-md transition-colors hover:bg-blue-900"
+            <button
+              type="button"
+              className="rounded-xl bg-[var(--color-brand)] px-5 py-2 text-xs font-black text-white shadow-md transition-all duration-200 hover:bg-blue-900 hover:scale-105 active:scale-95"
               onClick={handleBook}
             >
               Book
-            </motion.button>
+            </button>
           </div>
         </div>
-      </motion.div>
+      </div>
     </Link>
   );
 }

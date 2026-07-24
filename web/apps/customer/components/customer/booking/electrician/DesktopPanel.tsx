@@ -1,5 +1,6 @@
 import { formatPrice } from "@/lib/format";
 import Link from "next/link";
+import Image from "next/image";
 import type { Booking, BookingParty } from "@/lib/booking/types";
 import { BookingTimeline } from "./BookingTimeline";
 import { ProfessionalCard } from "./ProfessionalCard";
@@ -158,9 +159,10 @@ export function DesktopPanel({
         />
       ) : (
         <div className="relative min-h-[420px] overflow-hidden rounded-3xl border border-gray-200 shadow-sm">
-          <img
+          <Image
             src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1200"
             alt="Live tracking map"
+            fill
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0">

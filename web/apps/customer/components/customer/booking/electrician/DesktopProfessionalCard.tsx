@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { BookingParty } from "@/lib/booking/types";
 
 export function DesktopProfessionalCard({ professional }: { professional: BookingParty | null }) {
@@ -11,9 +12,11 @@ export function DesktopProfessionalCard({ professional }: { professional: Bookin
   }
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
-      <img
+      <Image
         src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
         alt={professional.name}
+        width={56}
+        height={56}
         className="h-14 w-14 rounded-full object-cover"
       />
       <div className="min-w-0 flex-1">
