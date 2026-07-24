@@ -45,7 +45,7 @@ export function DetailsModal({ booking, professional, onClose }: Props) {
             <div>
               <p className="font-bold text-xs text-gray-800 m-0">{professional.name}</p>
               <p className="text-[10px] text-purple-700 font-bold mt-0.5 m-0">
-                ★ {professional.rating?.toFixed(1) || "4.9"} · Assigned Partner
+                {professional.rating != null ? `★ ${professional.rating.toFixed(1)} · ` : ""}Assigned Partner
               </p>
             </div>
           </div>

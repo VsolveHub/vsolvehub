@@ -34,7 +34,7 @@ export function TeamTrackerView({
 }: Props) {
   const badge = isCompleted ? 12 : 11;
   const title = isCompleted ? "Confirm Completion" : "Live Tracking";
-  const teamName = professional?.name || "Raju Electricals";
+  const teamName = professional?.name || "Assigned team";
   const crewTotal = formatPrice(booking.finalAmountPaise ?? booking.quotedAmount);
 
   return (

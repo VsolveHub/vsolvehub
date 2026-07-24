@@ -21,10 +21,12 @@ export function DesktopProfessionalCard({ professional }: { professional: Bookin
       />
       <div className="min-w-0 flex-1">
         <h4 className="text-sm font-black text-gray-900">{professional.name}</h4>
-        <p className="text-xs font-semibold text-gray-500">
-          <span className="text-[var(--color-brand-accent)]">★</span>{" "}
-          {professional.rating?.toFixed(1) || "4.9"} (128 reviews)
-        </p>
+        {professional.rating != null && (
+          <p className="text-xs font-semibold text-gray-500">
+            <span className="text-[var(--color-brand-accent)]">★</span>{" "}
+            {professional.rating.toFixed(1)}
+          </p>
+        )}
       </div>
       <div className="flex gap-2">
         <Link

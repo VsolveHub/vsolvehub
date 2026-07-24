@@ -57,8 +57,6 @@ export function ServiceCard({ service }: { service: ServiceCardData }) {
   
   const subSlug = service.subCategory?.slug ?? service.slug;
   const cardMeta = getServiceCardMeta(subSlug, service.category.slug, service.name);
-  
-  const rating = (4.5 + (service.id.charCodeAt(service.id.length - 1) % 5) * 0.1).toFixed(1);
 
   return (
     <motion.li whileHover={{ y: -4 }} className="list-none group">
@@ -81,9 +79,6 @@ export function ServiceCard({ service }: { service: ServiceCardData }) {
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-green-700 bg-green-50 px-2 py-1 rounded-full">
                   <span className="w-1 h-1 bg-green-500 rounded-full" /> Verified Pro
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-900 bg-gray-100 px-2 py-1 rounded-full">
-                  <span className="text-[var(--color-brand-accent)]">★</span> {rating}
                 </span>
               </div>
               <h3 className="text-base sm:text-lg font-black text-gray-900 leading-tight mb-1 tracking-tight group-hover:text-[var(--color-brand)] transition-colors line-clamp-2">{service.name}</h3>
