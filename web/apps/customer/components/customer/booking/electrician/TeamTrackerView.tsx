@@ -76,7 +76,7 @@ export function TeamTrackerView({
         <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-gray-100 bg-white p-4">
           <div className="flex gap-2">
             <a
-              href={`tel:${professional?.phone || "9876543210"}`}
+              href={`tel:${professional?.phone ?? ""}`}
               aria-label="Call team"
               className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-light)] text-lg text-[var(--color-brand)]"
             >

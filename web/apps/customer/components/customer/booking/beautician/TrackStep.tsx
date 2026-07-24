@@ -41,7 +41,7 @@ export function TrackStep({ booking, status, partnerName }: Props) {
               <p style={{ fontWeight: 700, margin: 0, fontSize: "0.85rem" }}>{partnerName}</p>
               <p style={{ fontSize: "0.7rem", color: "#666", margin: 0 }}>Beautician is arriving</p>
             </div>
-            <span style={{ fontWeight: 800, color: "var(--color-brand)", fontSize: "1rem" }}>12 mins</span>
+            <span style={{ fontWeight: 800, color: "var(--color-brand)", fontSize: "0.85rem" }}>On the way</span>
           </div>
         </div>
       )}

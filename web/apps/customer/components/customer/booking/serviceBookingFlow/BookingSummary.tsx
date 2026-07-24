@@ -37,13 +37,19 @@ export function BookingSummary({
               </svg>
             </div>
             <div>
-              <div className="font-bold text-[#0b1c30] text-sm">Verified Technician</div>
-              <div className="mt-0.5 text-xs font-medium text-[#45464d] flex items-center gap-1">
-                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>60-90 mins est. duration</span>
-              </div>
+              <div className="font-bold text-[#0b1c30] text-sm">Verified professional</div>
+              {service.duration > 0 && (
+                <div className="mt-0.5 text-xs font-medium text-[#45464d] flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    {service.duration >= 60
+                      ? `~${Math.round(service.duration / 60)} hr est. duration`
+                      : `~${service.duration} mins est. duration`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
