@@ -120,37 +120,6 @@ export const HERO_SLIDES: { id: number; title: string; highlight: string; icons:
   },
 ];
 
-export const HOME_TESTIMONIALS = [
-  {
-    quote: "Booked an electrician in 10 minutes. The worker arrived on time and fixed everything.",
-    author: "Priya",
-    city: "Hyderabad",
-    rating: 5,
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-  },
-  {
-    quote: "Finally one place for wedding makeup, decor, and photography. Very easy to use.",
-    author: "Ramesh",
-    city: "Vijayawada",
-    rating: 5,
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-  },
-  {
-    quote: "Hired masons for our home renovation. Transparent pricing and reliable workers.",
-    author: "Lakshmi",
-    city: "Guntur",
-    rating: 5,
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
-  },
-  {
-    quote: "Booked a cab and vehicle repair from the same app. Saved so much time!",
-    author: "Suresh",
-    city: "Warangal",
-    rating: 4,
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-  },
-];
-
 export const HOW_IT_WORKS = [
   { step: "1", title: "Pick a service", desc: "Browse categories or search 850+ services." },
   { step: "2", title: "Book in minutes", desc: "Choose a slot, pay securely, get confirmation." },

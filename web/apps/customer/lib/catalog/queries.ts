@@ -244,6 +244,45 @@ export async function getServiceReviews(serviceId: string, take = 6): Promise<Se
   };
 }
 
+export type HomeTestimonial = {
+  id: string;
+  rating: number;
+  quote: string;
+  author: string;
+  city: string;
+};
+
+/**
+ * Real customer testimonials for the home page — the most recent bookings that
+ * left written feedback, across all services. Returns [] when there are none
+ * yet (the section then renders nothing rather than showing invented quotes).
+ */
+export async function getRecentReviews(take = 8): Promise<HomeTestimonial[]> {
+  const rows = await prisma.booking.findMany({
+    where: { rating: { not: null }, review: { not: null } },
+    select: {
+      id: true,
+      rating: true,
+      review: true,
+      user: { select: { name: true } },
+      address: { select: { area: true, city: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: take * 2,
+  });
+
+  return rows
+    .filter((r) => (r.review ?? "").trim().length > 0)
+    .slice(0, take)
+    .map((r) => ({
+      id: r.id,
+      rating: r.rating ?? 5,
+      quote: (r.review ?? "").trim(),
+      author: r.user?.name?.trim() || "Verified customer",
+      city: r.address?.city || r.address?.area || "",
+    }));
+}
+
 export const getAppStories = catalogCache(async () => {
   const stories = await prisma.appStory.findMany({
     orderBy: { sortOrder: "asc" },
