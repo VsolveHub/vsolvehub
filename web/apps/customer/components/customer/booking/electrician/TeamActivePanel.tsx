@@ -21,7 +21,7 @@ export function TeamActivePanel({ teamName, currentStatusIndex, getStepDetails }
             <h3 className="font-extrabold text-sm text-purple-950 m-0">{teamName}</h3>
             <p className="text-[10px] text-purple-750 font-bold mt-0.5 m-0 flex items-center gap-1 select-none">
               <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block" />
-              Crew is arriving on site · 20 mins
+              Crew is arriving on site
             </p>
           </div>
         </div>

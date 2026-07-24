@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { PartyAvatar } from "@/components/customer/booking/PartyAvatar";
 import { formatPrice } from "@/lib/format";
 import type { Booking, BookingParty } from "@/lib/booking/types";
 
@@ -65,17 +65,11 @@ export function RevisedQuoteModal({
         {/* Technician info card */}
         {professional && (
           <div className="mb-4 flex items-center gap-3 rounded-2xl bg-slate-50 p-3 border border-slate-200/80">
-            <Image
-              src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
-              alt={professional.name}
-              width={40}
-              height={40}
-              className="h-10 w-10 rounded-full object-cover border border-amber-300"
-            />
+            <PartyAvatar party={professional} size={40} className="border border-amber-300" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-extrabold text-gray-900 truncate">{professional.name}</p>
               <p className="text-[10px] font-bold text-amber-700 mt-0.5">
-                ★ {professional.rating?.toFixed(1) || "5.0"} · Assigned Technician
+                ★ {professional.rating.toFixed(1)} · Assigned Technician
               </p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
+import { PartyAvatar } from "@/components/customer/booking/PartyAvatar";
 import { formatPrice } from "@/lib/format";
 import type { Booking, BookingParty } from "@/lib/booking/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -76,17 +76,11 @@ export function DetailedBookingCard({
       {!hidePartnerCard && professional && (
         <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3.5 border border-slate-200/80">
           <div className="flex items-center gap-3">
-            <Image
-              src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
-              alt={professional.name}
-              width={40}
-              height={40}
-              className="h-10 w-10 rounded-full object-cover border-2 border-[#ea580c]"
-            />
+            <PartyAvatar party={professional} size={40} className="border-2 border-[#ea580c]" />
             <div>
               <div className="font-extrabold text-black text-sm">{professional.name}</div>
               <div className="text-[11px] text-[#ea580c] font-bold mt-0.5 flex items-center gap-1">
-                <span>★ {professional.rating?.toFixed(1) || "5.0"}</span>
+                <span>★ {professional.rating.toFixed(1)}</span>
                 <span className="text-slate-400">· Assigned Partner</span>
               </div>
             </div>

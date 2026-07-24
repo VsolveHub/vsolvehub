@@ -55,11 +55,11 @@ export function ActiveJobPanel({ booking, professional, status, currentStatusInd
       {/* Live Tracking Map Card */}
       <div className="relative w-full h-44 bg-white border border-gray-100 rounded-2xl p-2 shadow-sm overflow-hidden">
         <div className="relative w-full h-full rounded-xl overflow-hidden bg-slate-50 border border-gray-100/60 shadow-inner">
-          {/* 12 mins away badge */}
+          {/* ETA badge — real etaMinutes when the partner app has reported one */}
           {professional && status === "PROVIDER_ARRIVING" && (
             <div className="absolute top-2.5 left-1/2 -translate-x-1/2 bg-white/95 px-3 py-1 rounded-full text-[10px] font-bold text-slate-700 shadow-md border border-slate-100 flex items-center gap-1.5 z-10 select-none">
               <span className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
-              12 mins away
+              {professional.etaMinutes != null ? `${professional.etaMinutes} mins away` : "On the way"}
             </div>
           )}
 

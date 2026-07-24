@@ -1,6 +1,5 @@
 import { formatPrice } from "@/lib/format";
 import Link from "next/link";
-import Image from "next/image";
 import type { Booking, BookingParty } from "@/lib/booking/types";
 import { BookingTimeline } from "./BookingTimeline";
 import { ProfessionalCard } from "./ProfessionalCard";
@@ -159,11 +158,12 @@ export function DesktopPanel({
         />
       ) : (
         <div className="relative min-h-[420px] overflow-hidden rounded-3xl border border-gray-200 shadow-sm">
-          <Image
-            src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=1200"
-            alt="Live tracking map"
-            fill
-            className="absolute inset-0 h-full w-full object-cover"
+          {/* Map placeholder — live map is a deferred feature; use a neutral grid
+              rather than a stock photo pretending to be a map. */}
+          <div
+            className="absolute inset-0 bg-slate-100"
+            style={{ backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: "16px 16px" }}
+            aria-label="Live tracking map (coming soon)"
           />
           <div className="absolute inset-0">
             {/* User location pin */}

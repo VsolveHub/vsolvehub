@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { PartyAvatar } from "@/components/customer/booking/PartyAvatar";
 import { STATUS_MESSAGES } from "@/lib/constants";
 import type { BookingParty } from "@/lib/booking/types";
 
@@ -14,13 +14,7 @@ export function MobileTopProfessionalCard({ professional, status }: { profession
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm flex items-center justify-between gap-3">
       <div className="flex items-center gap-3">
-        <Image
-          src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
-          alt={professional.name}
-          width={40}
-          height={40}
-          className="w-10 h-10 rounded-full object-cover border border-purple-100"
-        />
+        <PartyAvatar party={professional} size={40} className="border border-purple-100" />
         <div>
           <p className="font-bold text-xs text-gray-800 m-0">{professional.name}</p>
           <p className="text-[10px] text-purple-700 font-bold mt-0.5 m-0 flex items-center gap-1">
@@ -32,7 +26,7 @@ export function MobileTopProfessionalCard({ professional, status }: { profession
         <button type="button" className="w-8 h-8 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100 flex items-center justify-center text-xs border border-purple-100/50">
           💬
         </button>
-        <a href={`tel:${professional.phone || "9876543210"}`} className="w-8 h-8 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100 flex items-center justify-center text-xs border border-purple-100/50 no-underline">
+        <a href={`tel:${professional.phone}`} className="w-8 h-8 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100 flex items-center justify-center text-xs border border-purple-100/50 no-underline">
           📞
         </a>
       </div>
