@@ -18,7 +18,7 @@ import { PersonalizedSections } from "@/components/customer/home/PersonalizedSec
 import { CleaningEssentials } from "@/components/customer/home/CleaningEssentials";
 import { SectionHeading } from "@/components/customer/home/SectionHeading";
 
-import { getPopularServices, getCategories, getAppPromos, getAppStories } from "@/lib/catalog/queries";
+import { getPopularServices, getCategories, getAppPromos, getAppStories, getRecentReviews } from "@/lib/catalog/queries";
 import { formatPriceLabel } from "@/lib/format";
 
 /** One shell for every home section: consistent max width, gutters, and vertical rhythm. */
@@ -41,11 +41,12 @@ function Section({
 }
 
 export default async function HomePage() {
-  const [popular, categories, promos, stories] = await Promise.all([
+  const [popular, categories, promos, stories, testimonials] = await Promise.all([
     getPopularServices(12),
     getCategories(),
     getAppPromos(),
     getAppStories(),
+    getRecentReviews(8),
   ]);
 
   const spotlightPromos = promos.filter((p) => p.type === "spotlight");
@@ -118,7 +119,7 @@ export default async function HomePage() {
               categorySlug={service.category.slug}
               serviceSlug={service.slug}
               subCategorySlug={service.subCategory?.slug}
-              badge={index === 0 ? "Best Seller" : undefined}
+              badge={index === 0 ? "Popular" : undefined}
               serviceId={service.id}
               pricePaise={service.pricePaise}
               unit={service.unit}
@@ -149,9 +150,11 @@ export default async function HomePage() {
         </div>
       </Section>
 
-      <Section tone="muted">
-        <HomeTestimonials />
-      </Section>
+      {testimonials.length > 0 && (
+        <Section tone="muted">
+          <HomeTestimonials testimonials={testimonials} />
+        </Section>
+      )}
 
       <Section>
         <HomeFaq />
