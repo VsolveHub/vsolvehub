@@ -103,9 +103,6 @@ export function ServiceDetailView({ service, detail, reviews, related, shareUrl,
           >
             {/* Visual Image Header */}
             <div className="relative aspect-[4/3] w-full bg-slate-50 border-b border-slate-100 group overflow-hidden">
-              <span className="absolute top-3.5 left-3.5 z-10 bg-[#ea580c] text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1">
-                ⭐ Best Seller
-              </span>
               <div className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500 flex items-center justify-center">
                 <ServiceSketchImage
                   slug={service.slug}
@@ -133,9 +130,11 @@ export function ServiceDetailView({ service, detail, reviews, related, shareUrl,
                       </span>
                     )}
                   </div>
-                  <span className="inline-block bg-[#fff7ed] border border-[#ffedd5] text-[#ea580c] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    33% OFF • Limited Offer
-                  </span>
+                  {detail.originalPricePaise && detail.originalPricePaise > service.pricePaise && (
+                    <span className="inline-block bg-[#fff7ed] border border-[#ffedd5] text-[#ea580c] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      {Math.round((1 - service.pricePaise / detail.originalPricePaise) * 100)}% OFF
+                    </span>
+                  )}
                 </div>
 
                 {/* Saved & Share controls */}

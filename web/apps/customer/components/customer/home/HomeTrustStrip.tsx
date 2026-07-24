@@ -2,7 +2,7 @@ const TRUST_ITEMS = [
   { icon: "✓", label: "Verified pros", sub: "Background-checked" },
   { icon: "⚡", label: "Same-day service", sub: "Book in minutes" },
   { icon: "🔒", label: "Secure payments", sub: "Pay after checks" },
-  { icon: "★", label: "4.8 average", sub: "Across 50k+ jobs" },
+  { icon: "★", label: "Rated by customers", sub: "Genuine reviews only" },
 ] as const;
 
 /**
