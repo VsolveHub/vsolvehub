@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
 
 type Props = {
@@ -38,11 +38,11 @@ export function HomeServiceSquareAddCard({
 
   return (
     <Link href={href} className="block group">
-      <motion.div whileHover={{ y: -4 }} className="flex flex-col bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm transition-shadow hover:shadow-md h-full">
+      <div className="flex flex-col bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md h-full">
         <div className="relative h-24 w-full bg-gray-50 overflow-hidden">
-          <motion.div className="w-full h-full transition-transform duration-500 group-hover:scale-105">
+          <div className="w-full h-full transition-transform duration-500 group-hover:scale-105">
             {imageUrl ? (
-              <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+              <Image src={imageUrl} alt={name} fill className="w-full h-full object-cover" />
             ) : (
               (() => {
                 const fallbacks = [
@@ -62,10 +62,10 @@ export function HomeServiceSquareAddCard({
                   nameSeed += name.charCodeAt(i);
                 }
                 const fallbackUrl = fallbacks[nameSeed % fallbacks.length];
-                return <img src={fallbackUrl} alt={name} className="w-full h-full object-cover" />;
+                return <Image src={fallbackUrl} alt={name} fill className="w-full h-full object-cover" />;
               })()
             )}
-          </motion.div>
+          </div>
         </div>
         
         <div className="p-3 flex flex-col flex-1">
@@ -73,18 +73,17 @@ export function HomeServiceSquareAddCard({
           
           <div className="mt-auto pt-2 border-t border-gray-50 flex items-center justify-between">
             <span className="text-sm font-black text-gray-900">{priceLabel}</span>
-            <motion.button 
-              whileHover={{ scale: 1.1 }} 
-              whileTap={{ scale: 0.9 }} 
-              className="w-7 h-7 flex items-center justify-center bg-[var(--color-brand-light)] text-[var(--color-brand)] rounded-full font-bold text-lg hover:bg-[var(--color-brand)] hover:text-white transition-colors" 
+            <button 
+              type="button"
+              className="w-7 h-7 flex items-center justify-center bg-[var(--color-brand-light)] text-[var(--color-brand)] rounded-full font-bold text-lg hover:bg-[var(--color-brand)] hover:text-white transition-all duration-200 hover:scale-110 active:scale-90" 
               onClick={handleBook} 
               aria-label={`Book ${name}`}
             >
               +
-            </motion.button>
+            </button>
           </div>
         </div>
-      </motion.div>
+      </div>
     </Link>
   );
 }

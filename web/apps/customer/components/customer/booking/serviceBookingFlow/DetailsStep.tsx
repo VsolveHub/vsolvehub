@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Selections } from "@/lib/catalog/pricing";
 import { RequirementSheet } from "@/components/customer/booking/RequirementSheet";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
@@ -78,7 +79,7 @@ export function DetailsStep({
         {photos.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-3">
             {photos.map((url) => (
-              <img key={url} src={url} alt="Uploaded reference" className="h-20 w-20 rounded-[8px] object-cover border border-slate-200" />
+              <Image key={url} src={url} alt="Uploaded reference" width={80} height={80} unoptimized className="h-20 w-20 rounded-[8px] object-cover border border-slate-200" />
             ))}
           </div>
         )}

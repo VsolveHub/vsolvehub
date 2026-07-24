@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type Props = {
   bookingRef: string;
   crewTotal: string;
@@ -33,14 +35,14 @@ export function TeamCompletedPanel({ bookingRef, crewTotal, rating, setRating, r
         <div className="grid grid-cols-2 gap-3.5">
           {/* BEFORE picture card */}
           <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-200 border border-gray-100 shadow-inner">
-            <img src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=250" alt="before" className="w-full h-full object-cover" />
+            <Image src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=250" alt="before" fill className="object-cover" />
             <span className="absolute top-2 left-2 bg-black/75 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
               Before
             </span>
           </div>
           {/* AFTER picture card */}
           <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-200 border border-gray-100 shadow-inner">
-            <img src="https://images.unsplash.com/photo-1558223180-113b869c647c?w=250" alt="after" className="w-full h-full object-cover" />
+            <Image src="https://images.unsplash.com/photo-1558223180-113b869c647c?w=250" alt="after" fill className="object-cover" />
             <span className="absolute top-2 left-2 bg-purple-700 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
               After
             </span>

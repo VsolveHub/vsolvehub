@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, FormEvent, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -100,7 +101,7 @@ export function AppHeader() {
 
           <Link href="/" className="flex items-center gap-2.5 flex-1 md:flex-none justify-center md:justify-start group">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-xs group-hover:scale-105 transition-transform">
-              <img src={logoMark.src} alt="Vsolve Hub" className="w-full h-full object-contain" />
+              <Image src={logoMark} alt="Vsolve Hub" priority sizes="36px" className="w-full h-full object-contain" />
             </div>
             <span className="flex flex-col leading-tight hidden sm:flex">
               <span className="font-heading text-lg font-black tracking-tight text-[#0b1c30]">
@@ -245,7 +246,7 @@ function MobileNavDrawer({ pathname, onClose }: { pathname: string; onClose: () 
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <img src={logoMark.src} alt="Vsolve Hub" className="w-8 h-8 object-cover rounded-lg border border-gray-100 shadow-xs" />
+            <Image src={logoMark} alt="Vsolve Hub" sizes="32px" className="w-8 h-8 object-cover rounded-lg border border-gray-100 shadow-xs" />
             <span className="font-extrabold text-gray-900 tracking-tight">Vsolve Hub</span>
           </div>
           <button type="button" className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-500 hover:bg-gray-100 transition-colors" onClick={onClose} aria-label="Close menu">

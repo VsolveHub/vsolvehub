@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { prisma } from "@/lib/db/client";
 import { serializeService, serviceInclude } from "@/lib/catalog/queries";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
@@ -184,9 +185,10 @@ export default async function CategoryPage({ params }: PageProps) {
               {/* Image card with white frame */}
               <div className="absolute inset-0 bg-white p-3 sm:p-4 rounded-[32px] sm:rounded-[40px] rounded-tl-[64px] rounded-br-[64px] sm:rounded-tl-[80px] sm:rounded-br-[80px] shadow-md border border-orange-100/50 overflow-hidden">
                 <div className="relative w-full h-full rounded-[20px] sm:rounded-[28px] rounded-tl-[48px] rounded-br-[48px] sm:rounded-tl-[64px] sm:rounded-br-[64px] overflow-hidden bg-gray-100">
-                  <img
+                  <Image
                     src={hero.image}
                     alt={category.name}
+                    fill
                     className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
                   />
                 </div>

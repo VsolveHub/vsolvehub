@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { formatPrice } from "@/lib/format";
 import type { PropertyDetail } from "@/lib/accommodation/types";
@@ -25,9 +26,11 @@ export function PropertyDetailView({ property }: Props) {
       </div>
 
       <div className="acc-gallery">
-        <img
+        <Image
           src={property.images[activeImage] ?? property.imageUrl}
           alt={property.title}
+          width={600}
+          height={400}
           className="acc-gallery-main"
         />
         <div className="acc-gallery-thumbs">
@@ -38,7 +41,7 @@ export function PropertyDetailView({ property }: Props) {
               className={`acc-gallery-thumb ${i === activeImage ? "active" : ""}`}
               onClick={() => setActiveImage(i)}
             >
-              <img src={img} alt="" />
+              <Image src={img} alt="" width={80} height={60} />
             </button>
           ))}
         </div>

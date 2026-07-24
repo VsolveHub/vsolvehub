@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "@/lib/format";
 import { getServiceBullets, getServiceImage } from "./serviceMeta";
 
@@ -44,9 +45,10 @@ export function BestValueSection({ services, categorySlug, onBook }: Props) {
             >
               {/* Card Image */}
               <div className="relative aspect-[16/7] w-full overflow-hidden bg-slate-50">
-                <img
+                <Image
                   src={serviceImg}
                   alt={service.name}
+                  fill
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 {/* Floating Badges */}

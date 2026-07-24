@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "@/lib/format";
 import {
   ABOUT_INFO,
@@ -103,9 +104,10 @@ export function PlansSection() {
       </Stack>
 
       <div className="relative overflow-hidden rounded-3xl shadow-md">
-        <img
+        <Image
           src="/basic_home_cleaning_hd.jpg"
           alt="Premium home services"
+          fill
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-brand-dark)]/95 via-[var(--color-brand-dark)]/50 to-transparent" />
@@ -204,9 +206,10 @@ export function MembershipSection() {
       </section>
 
       <div className="relative overflow-hidden rounded-3xl shadow-md">
-        <img
+        <Image
           src="/basic_home_cleaning_hd.jpg"
           alt="V Solve Plus"
+          fill
           className="absolute inset-0 h-full w-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />

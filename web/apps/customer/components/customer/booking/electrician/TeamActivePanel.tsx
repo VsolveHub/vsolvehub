@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { TeamTimeline } from "./TeamTimeline";
 import type { StepDetails } from "./steps";
 
@@ -37,7 +38,7 @@ export function TeamActivePanel({ teamName, currentStatusIndex, getStepDetails }
       {/* 3D Map Card */}
       <div className="relative w-full h-44 bg-white border border-gray-100 rounded-3xl p-2.5 shadow-sm overflow-hidden select-none">
         <div className="relative w-full h-full rounded-2xl overflow-hidden bg-slate-50 border border-gray-100 shadow-inner">
-          <img src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=450" alt="map" className="w-full h-full object-cover opacity-80 filter brightness-95" />
+          <Image src="https://images.unsplash.com/photo-1524661135-423995f22d0b?w=450" alt="map" fill className="object-cover opacity-80 filter brightness-95" />
 
           {/* Overlay Badges */}
           <div className="absolute top-2.5 left-3 bg-white/95 px-2.5 py-1 rounded-lg text-[9px] font-bold text-slate-700 shadow-md border border-slate-100 flex items-center gap-1">

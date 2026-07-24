@@ -2,7 +2,9 @@ import { OtpForm } from "@/components/customer/auth/OtpForm";
 import { getServerSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import logoMark from "@/public/logo-mark.png";
+import heroCouples from "@/public/login_hero_couples.png";
 
 type PageProps = {
   searchParams: Promise<{ redirect?: string }>;
@@ -25,9 +27,11 @@ export default async function BookingOtpPage({ searchParams }: PageProps) {
           <div className="lg:col-span-6 flex flex-col items-center text-center p-6 sm:p-10 bg-slate-50/50">
             {/* Logo Mark */}
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center p-1 overflow-hidden mx-auto">
-              <img
-                src={logoMark.src}
+              <Image
+                src={logoMark}
                 alt="Vsolve Hub Logo"
+                priority
+                sizes="96px"
                 className="w-full h-full object-contain"
               />
             </div>
@@ -44,9 +48,11 @@ export default async function BookingOtpPage({ searchParams }: PageProps) {
 
             {/* Hero Illustration */}
             <div className="mt-6 w-full max-w-xs sm:max-w-sm overflow-hidden mx-auto">
-              <img
-                src="/login_hero_couples.png"
+              <Image
+                src={heroCouples}
                 alt="Vsolve Hub booking illustration"
+                placeholder="blur"
+                sizes="(min-width: 640px) 384px, 320px"
                 className="w-full h-auto object-contain max-h-[300px]"
               />
             </div>

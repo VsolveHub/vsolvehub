@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 
@@ -31,7 +32,7 @@ export function ProjectDetailsStep({ projectDescription, setProjectDescription, 
             +
           </button>
           {photos.map((p, idx) => (
-            <img key={idx} src={p} alt="project" className="booking-media-thumb" style={{ width: "72px", height: "72px", borderRadius: "12px", objectFit: "cover" }} />
+            <Image key={idx} src={p} alt="project" width={72} height={72} className="booking-media-thumb" style={{ width: "72px", height: "72px", borderRadius: "12px", objectFit: "cover" }} />
           ))}
         </div>
       </div>

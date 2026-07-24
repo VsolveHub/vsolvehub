@@ -14,18 +14,19 @@ export default async function BookingCompletePage({ params }: PageProps) {
   const booking = await getBookingByRef(ref, session?.id);
   if (!booking) notFound();
 
-  const status = normalizeBookingStatus(booking.status);
+  const b = booking as any;
+  const status = normalizeBookingStatus(b.status);
 
   return (
     <div className="mx-auto w-full max-w-[1280px] p-4" style={{ maxWidth: "32rem", margin: "0 auto" }}>
       <BookingCompletion
-        bookingRef={booking.bookingRef}
-        serviceName={booking.service.name}
-        serviceId={booking.service.id}
-        finalAmountPaise={booking.finalAmountPaise ?? booking.quotedAmount}
-        slot={booking.slot}
-        vendorName={booking.vendor?.name ?? null}
-        existingRating={booking.rating}
+        bookingRef={b.bookingRef}
+        serviceName={b.service.name}
+        serviceId={b.service.id}
+        finalAmountPaise={b.finalAmountPaise ?? b.quotedAmount}
+        slot={b.slot}
+        vendorName={b.vendor?.name ?? null}
+        existingRating={b.rating}
       />
       {status !== "COMPLETED" && (
         <p className="mt-4 text-sm text-gray-500">

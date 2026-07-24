@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { formatDate, formatPrice } from "@/lib/format";
 import type { Booking, BookingParty } from "@/lib/booking/types";
 
@@ -34,9 +35,11 @@ export function DetailsModal({ booking, professional, onClose }: Props) {
         {/* Partner Details */}
         {professional ? (
           <div className="bg-purple-50/50 border border-purple-100 rounded-2xl p-3 flex items-center gap-3">
-            <img
+            <Image
               src={professional.image || "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=120"}
               alt={professional.name}
+              width={40}
+              height={40}
               className="w-10 h-10 rounded-full object-cover border border-purple-250"
             />
             <div>

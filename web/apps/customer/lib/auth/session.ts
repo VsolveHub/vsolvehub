@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db/client";
 import { hashOtp } from "@vsolve/crypto";
@@ -128,7 +129,20 @@ export async function deleteSession(token: string) {
   await prisma.session.deleteMany({ where: { token } });
 }
 
-export async function getServerSession(): Promise<SessionUser | null> {
+/**
+ * Resolve the signed-in user for the current request.
+ *
+ * Wrapped in React `cache()` so it is memoised per request. This is called from
+ * ~78 places — the root layout, page components, and most route handlers — and
+ * each call is a `session join user` round-trip. Against the remote Supabase
+ * instance a single query costs ~280ms, so an uncached home render paid that
+ * twice (layout + PersonalizedSections) before rendering anything. Memoised, a
+ * request makes the query at most once no matter how many callers ask.
+ *
+ * Safe to memoise: the only mutators (`createSession`/`deleteSession`) live in
+ * separate route handlers, so no request both writes and re-reads the session.
+ */
+export const getServerSession = cache(async function getServerSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -153,7 +167,7 @@ export async function getServerSession(): Promise<SessionUser | null> {
     // DB unavailable — treat as logged out instead of crashing pages.
     return null;
   }
-}
+})
 
 export async function findOrCreateUser(phone: string) {
   return prisma.user.upsert({

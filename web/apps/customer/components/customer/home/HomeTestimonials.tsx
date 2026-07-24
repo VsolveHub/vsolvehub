@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { HOME_TESTIMONIALS } from "@/lib/catalog/display-catalog";
 
@@ -38,7 +39,7 @@ export function HomeTestimonials() {
             <p className="text-lg font-medium text-gray-700 italic leading-relaxed mb-6">&ldquo;{testimonial.quote}&rdquo;</p>
             <footer className="flex items-center justify-center gap-4 mt-auto">
               {testimonial.avatar && (
-                <img src={testimonial.avatar} alt={testimonial.author} className="w-10 h-10 rounded-full object-cover shadow-sm" />
+                <Image src={testimonial.avatar} alt={testimonial.author} width={40} height={40} className="w-10 h-10 rounded-full object-cover shadow-sm" />
               )}
               <div className="flex flex-col text-left">
                 <strong className="text-sm font-black text-gray-900">{testimonial.author}</strong>

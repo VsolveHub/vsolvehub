@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/query/api";
@@ -57,8 +58,7 @@ export function ProductDetailClient({ slug }: { slug: string }) {
       <div className="mt-4 grid gap-6 sm:grid-cols-2">
         <div className="flex h-64 items-center justify-center rounded-3xl bg-gray-50 text-6xl">
           {p.images[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.images[0]} alt={p.name} className="h-full w-full rounded-3xl object-cover" />
+            <Image src={p.images[0]} alt={p.name} width={256} height={256} unoptimized className="h-full w-full rounded-3xl object-cover" />
           ) : (
             <span>📦</span>
           )}

@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 type Props = {
   onBack: () => void;
   onChangePickup: () => void;
@@ -14,7 +16,7 @@ export function SetPickupScreen({ onBack, onChangePickup, onConfirmPickup }: Pro
         </button>
         <span className="font-black text-sm text-purple-955 bg-white/90 px-3 py-1 rounded-full shadow-sm">VSolveHub</span>
         <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-md">
-          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" alt="avatar" className="w-full h-full object-cover" />
+          <Image src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" alt="avatar" width={36} height={36} className="w-full h-full object-cover" />
         </div>
       </div>
 

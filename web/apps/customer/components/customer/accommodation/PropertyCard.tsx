@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "@/lib/format";
 import type { PropertyListItem } from "@/lib/accommodation/types";
 
@@ -14,7 +15,7 @@ export function PropertyCard({ property }: { property: PropertyListItem }) {
     <Link href={`/accommodation/property/${property.id}`} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm acc-property-card">
       <div className="acc-property-image-wrap">
         {property.imageUrl ? (
-          <img src={property.imageUrl} alt={property.title} className="acc-property-image" />
+          <Image src={property.imageUrl} alt={property.title} fill className="acc-property-image" />
         ) : (
           <div className="acc-property-image acc-property-image-placeholder">🏨</div>
         )}

@@ -1,8 +1,16 @@
 "use client";
 
 import type { AddrForm } from "./model";
-import { LocationMap } from "./LocationMap";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+
+// Leaflet + its CSS are heavy and only needed once this form renders. Code-split
+// the map out of the address bundle so the rest of the flow stays lightweight.
+// ssr:false because Leaflet touches `window` and never needs to run on the server.
+const LocationMap = dynamic(() => import("./LocationMap").then((m) => m.LocationMap), {
+  ssr: false,
+  loading: () => <div className="h-[200px] w-full animate-pulse bg-gray-200" />,
+});
 
 type Props = {
   form: AddrForm;

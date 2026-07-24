@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 
 /** Dark navy top bar used across auth + onboarding (matches the Figma). */
@@ -13,7 +14,7 @@ export function BrandBar({ backHref }: { backHref?: string }) {
         ) : null}
         <Link href="/" className="flex items-center gap-2 font-bold">
           <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white">
-            <img src="/logo-mark.png" alt="V Solve Hub" className="h-full w-full object-contain" />
+            <Image src="/logo-mark.png" alt="V Solve Hub" width={28} height={28} className="h-full w-full object-contain" />
           </span>
           <span className="text-lg">
             <span className="text-accent-500">V Solve</span>{" "}

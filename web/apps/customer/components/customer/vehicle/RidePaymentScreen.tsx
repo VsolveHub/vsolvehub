@@ -1,3 +1,5 @@
+import { useState } from "react";
+import Image from "next/image";
 import { PaymentMethodOption } from "./PaymentMethodOption";
 
 type PaymentMethod = "upi" | "card" | "wallet" | "cod";
@@ -31,7 +33,7 @@ export function RidePaymentScreen({
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 text-slate-900 select-none">
         <span className="font-extrabold text-sm">Payment</span>
         <div className="w-8 h-8 rounded-full overflow-hidden border border-purple-100 shadow-sm">
-          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" alt="avatar" className="w-full h-full object-cover" />
+          <Image src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" alt="avatar" width={32} height={32} className="w-full h-full object-cover" />
         </div>
       </div>
 

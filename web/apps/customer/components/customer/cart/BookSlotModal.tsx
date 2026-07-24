@@ -147,7 +147,7 @@ export function BookSlotModal({ open, items, onClose, onSuccess, scheduledMap, s
             
             // Find service details from catalog for duration in minutes
             const catalogSvc = catalogServices.find((s) => s.id === it.serviceId || s.slug === it.serviceSlug);
-            const durationMin = catalogSvc?.durationMinutes || (catalogSvc?.duration ? Math.round(catalogSvc.duration) : 45);
+            const durationMin = (catalogSvc as { durationMinutes?: number; duration?: number } | undefined)?.durationMinutes || (catalogSvc?.duration ? Math.round(catalogSvc.duration) : 45);
             const durationText = durationMin >= 60 
               ? `Duration: ~${Math.floor(durationMin / 60)} hr ${durationMin % 60 > 0 ? `${durationMin % 60} mins` : ""}`
               : `Duration: ~${durationMin} mins`;

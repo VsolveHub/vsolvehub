@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { FlaticonIcon } from "./FlaticonIcon";
 import { SERVICE_ICON_MAP, type ServiceIconName } from "@/lib/icons/flaticon-map";
 import {
@@ -24,7 +25,7 @@ type ServiceIconProps = SketchResolveInput & {
 export function ServiceIcon({
   name,
   size = 24,
-  color = "currentColor",
+  color,
   className,
   alt,
   slug,
@@ -45,20 +46,18 @@ export function ServiceIcon({
     });
 
     return (
-      <img
+      <Image
         src={sketchSrc}
         alt={alt ?? serviceName ?? String(name)}
         width={size}
         height={size}
         className={`service-sketch service-sketch--icon${className ? ` ${className}` : ""}`}
         style={{ borderRadius: "inherit", objectFit: "cover" }}
-        loading="lazy"
-        decoding="async"
       />
     );
   }
 
-  return <FlaticonIcon name={name} size={size} color={color} className={className} />;
+  return <FlaticonIcon name={name} size={size} color={color ?? "currentColor"} className={className} />;
 }
 
 /** Vector icon fallback for UI chrome (nav, trust badges, hero orbit). */

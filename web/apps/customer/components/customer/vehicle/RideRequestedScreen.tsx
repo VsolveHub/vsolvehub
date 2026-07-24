@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type Props = {
   pickupAddress: string;
@@ -24,7 +25,7 @@ export function RideRequestedScreen({ pickupAddress, dropAddress, priceVal, cate
           <span className="text-[10px] font-black text-slate-800 tracking-wide uppercase">Finding Captain</span>
         </div>
         <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-md">
-          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" alt="avatar" className="w-full h-full object-cover" />
+          <Image src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" alt="avatar" width={36} height={36} className="w-full h-full object-cover" />
         </div>
       </div>
 
