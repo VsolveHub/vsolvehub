@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { formatPrice } from "@/lib/format";
 import type { ServiceDetailContent } from "@/lib/catalog/service-detail-content";
+import type { ServiceReviews } from "@/lib/catalog/queries";
+import { serviceImageSrc } from "@/lib/catalog/service-sketch-illustrations";
 import { SERVICE_SLUG_TO_PROPERTY_TYPE } from "@/lib/accommodation/constants";
 import { getVehicleFlowHref } from "@/lib/vehicle/constants";
 import { ServiceShareButton } from "./ServiceShareButton";
@@ -25,30 +28,33 @@ type Service = {
   subCategory?: { name: string; slug?: string } | null;
 };
 
+type RelatedService = {
+  id: string;
+  name: string;
+  slug: string;
+  pricePaise: number;
+  imageUrl?: string | null;
+  category: { slug: string };
+  subCategory?: { slug?: string } | null;
+};
+
 type Props = {
   service: Service;
   detail: ServiceDetailContent;
+  reviews: ServiceReviews;
+  related: RelatedService[];
   shareUrl: string;
   isSaved: boolean;
   showSave: boolean;
 };
 
-const DUMMY_REVIEWS = [
-  { id: 1, name: "Rahul Verma", location: "Hyderabad", time: "2 days ago", text: "The technician arrived on time and used the foam jet technology as described. My AC cooling has improved significantly. Very professional service.", initial: "R" },
-  { id: 2, name: "Priya S.", location: "Hyderabad", time: "5 days ago", text: "Good value for money. The cleaning was very thorough. They even cleaned the mess around the AC after the service.", initial: "P" },
-  { id: 3, name: "Kiran Kumar", location: "Hyderabad", time: "1 week ago", text: "The Foam-jet technique is way better than normal service. No mess at all since they use a specialized cleaning jacket.", initial: "K" }
-];
+const reviewDateFmt = new Intl.DateTimeFormat("en-IN", { month: "short", year: "numeric" });
 
-const DUMMY_RELATED = [
-  { id: 1, name: "AC repair", rating: "4.73", time: "Instant", price: 29900, image: "/ac_repair.jpg" },
-  { id: 2, name: "AC installation", rating: "4.69", time: "Instant", price: 109900, image: "/ac_installation.jpg" },
-  { id: 3, name: "Foam-jet service (2 ACs)", rating: "4.76", time: "Instant", price: 109800, image: "/ac_foam.jpg" },
-  { id: 4, name: "AC uninstallation", rating: "4.80", time: "Instant", price: 69900, image: "/ac_uninstall.jpg" }
-];
-
-export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave }: Props) {
+export function ServiceDetailView({ service, detail, reviews, related, shareUrl, isSaved, showSave }: Props) {
   const [inclusionsOpen, setInclusionsOpen] = useState(true);
   const [exclusionsOpen, setExclusionsOpen] = useState(false);
+
+  const hasReviews = reviews.count > 0;
 
   const durationLabel =
     service.duration > 0
@@ -187,13 +193,21 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
             </h1>
             
             <div className="flex flex-wrap items-center gap-3">
-              <span className="bg-[#fff7ed] text-[#ea580c] text-xs font-black px-3 py-1 rounded-full flex items-center gap-1 border border-[#ffedd5]">
-                <span>★</span>
-                <span>{detail.rating.toFixed(2)}</span>
-              </span>
-              <span className="text-xs font-bold text-slate-500">
-                ({detail.reviewCountLabel} verified reviews & bookings)
-              </span>
+              {hasReviews ? (
+                <>
+                  <span className="bg-[#fff7ed] text-[#ea580c] text-xs font-black px-3 py-1 rounded-full flex items-center gap-1 border border-[#ffedd5]">
+                    <span>★</span>
+                    <span>{reviews.average.toFixed(1)}</span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">
+                    ({reviews.count} verified {reviews.count === 1 ? "review" : "reviews"})
+                  </span>
+                </>
+              ) : (
+                <span className="bg-slate-100 text-slate-500 text-xs font-black px-3 py-1 rounded-full border border-slate-200">
+                  New service
+                </span>
+              )}
             </div>
             
             <p className="text-sm sm:text-base font-medium text-slate-600 leading-relaxed pt-1">
@@ -292,82 +306,100 @@ export function ServiceDetailView({ service, detail, shareUrl, isSaved, showSave
               <h2 className="text-lg sm:text-xl font-black text-[#0b1c30] tracking-tight">
                 User reviews and ratings
               </h2>
-              <Link href="#" className="text-xs font-bold text-[#ea580c] hover:underline">
-                View all reviews
-              </Link>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-center sm:text-left space-y-1">
-                <span className="text-3xl font-black text-[#0b1c30]">★ {detail.rating.toFixed(2)}<span className="text-xl text-slate-400">/5</span></span>
-                <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">based on {detail.reviewCountLabel} verified reviews</p>
-              </div>
-              <div className="h-px sm:h-12 w-full sm:w-px bg-slate-100" />
-              <div className="text-center sm:text-right text-xs text-emerald-800 font-extrabold bg-emerald-50 border border-emerald-100 px-4 py-2.5 rounded-xl">
-                ✓ 98.4% customers rate this service 5-stars
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {DUMMY_REVIEWS.map((rev) => (
-                <div key={rev.id} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-[#fff7ed] text-[#ea580c] flex items-center justify-center font-black text-xs shrink-0">
-                        {rev.initial}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-extrabold text-[#0b1c30]">{rev.name}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{rev.location} • {rev.time}</span>
-                      </div>
-                    </div>
-                    <span className="text-xs font-black text-amber-500 shrink-0">★★★★★</span>
+            {hasReviews ? (
+              <>
+                <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+                  <div className="text-center sm:text-left space-y-1">
+                    <span className="text-3xl font-black text-[#0b1c30]">★ {reviews.average.toFixed(1)}<span className="text-xl text-slate-400">/5</span></span>
+                    <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">based on {reviews.count} verified {reviews.count === 1 ? "review" : "reviews"}</p>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-600 font-medium italic leading-relaxed">
-                    "{rev.text}"
-                  </p>
                 </div>
-              ))}
-            </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {reviews.items.map((rev) => (
+                    <div key={rev.id} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-[#fff7ed] text-[#ea580c] flex items-center justify-center font-black text-xs shrink-0">
+                            {rev.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-extrabold text-[#0b1c30]">{rev.name}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                              {[rev.location, reviewDateFmt.format(new Date(rev.createdAt))].filter(Boolean).join(" • ")}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-black text-amber-500 shrink-0" aria-label={`${rev.rating} out of 5 stars`}>
+                          {"★".repeat(rev.rating)}{"☆".repeat(Math.max(0, 5 - rev.rating))}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-600 font-medium italic leading-relaxed">
+                        &ldquo;{rev.text}&rdquo;
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="bg-white p-8 rounded-2xl border border-dashed border-slate-200 text-center">
+                <p className="text-sm font-black text-[#0b1c30]">No reviews yet</p>
+                <p className="text-xs text-slate-500 font-medium mt-1">Be the first to book {service.name} and share how it went.</p>
+              </div>
+            )}
           </motion.section>
 
         </div>
       </div>
 
-      {/* BOTTOM SECTION: Related Services Grid */}
-      <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-16 border-t border-slate-100 pt-10 space-y-6">
-        <h2 className="text-xl font-black text-[#0b1c30] tracking-tight">Related services</h2>
-        
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {DUMMY_RELATED.map((rel) => (
-            <Link href="#" key={rel.id} className="group block h-full">
-              <motion.div whileHover={{ y: -3 }} className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-all duration-300 h-full">
-                <div>
-                  <div className="w-full aspect-[4/3] rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden border border-slate-100 group-hover:bg-slate-100 transition-colors">
-                    <span className="text-[#ea580c] group-hover:scale-110 transition-transform">
-                      <FlaticonIcon name="bolt" size={28} />
+      {/* BOTTOM SECTION: Related Services Grid — real sibling services */}
+      {related.length > 0 && (
+        <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="mt-16 border-t border-slate-100 pt-10 space-y-6">
+          <h2 className="text-xl font-black text-[#0b1c30] tracking-tight">Related services</h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {related.map((rel) => (
+              <Link href={`/services/${rel.category.slug}/${rel.slug}`} key={rel.id} className="group block h-full">
+                <motion.div whileHover={{ y: -3 }} className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-all duration-300 h-full">
+                  <div>
+                    <div className="relative w-full aspect-[4/3] rounded-xl bg-slate-50 overflow-hidden border border-slate-100">
+                      <Image
+                        src={serviceImageSrc({
+                          imageUrl: rel.imageUrl,
+                          slug: rel.slug,
+                          subCategorySlug: rel.subCategory?.slug,
+                          categorySlug: rel.category.slug,
+                          serviceName: rel.name,
+                        })}
+                        alt={rel.name}
+                        fill
+                        sizes="(max-width: 640px) 50vw, 25vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+
+                    <h3 className="text-xs sm:text-sm font-bold text-[#0b1c30] mt-3 leading-snug line-clamp-2 group-hover:text-[#ea580c] transition-colors">
+                      {rel.name}
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Starts at</span>
+                      <span className="text-xs sm:text-sm font-black text-[#0b1c30]">{formatPrice(rel.pricePaise)}</span>
+                    </div>
+                    <span className="px-3 py-1 bg-slate-50 text-[#ea580c] border border-slate-200 rounded-lg text-xs font-extrabold group-hover:bg-[#ea580c] group-hover:text-white group-hover:border-[#ea580c] transition-all">
+                      Book
                     </span>
                   </div>
-                  
-                  <h3 className="text-xs sm:text-sm font-bold text-[#0b1c30] mt-3 leading-snug line-clamp-2 group-hover:text-[#ea580c] transition-colors">
-                    {rel.name}
-                  </h3>
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-1.5 block">
-                    <span className="text-amber-500">★</span> {rel.rating} • {rel.time}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
-                  <span className="text-xs sm:text-sm font-black text-[#0b1c30]">{formatPrice(rel.price)}</span>
-                  <span className="px-3 py-1 bg-slate-50 text-[#ea580c] border border-slate-200 rounded-lg text-xs font-extrabold group-hover:bg-[#ea580c] group-hover:text-white group-hover:border-[#ea580c] transition-all">
-                    Book
-                  </span>
-                </div>
-              </motion.div>
-            </Link>
-          ))}
-        </div>
-      </motion.section>
+                </motion.div>
+              </Link>
+            ))}
+          </div>
+        </motion.section>
+      )}
 
       {/* Sticky Mobile Action Footer */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-3.5 px-4 flex items-center justify-between gap-4 lg:hidden shadow-[0_-5px_25px_rgba(0,0,0,0.06)]">

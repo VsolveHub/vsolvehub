@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ServiceIcon } from "@/components/ui/ServiceIcons";
-import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
+import { serviceImageSrc } from "@/lib/catalog/service-sketch-illustrations";
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import type { IconName } from "@/components/ui/ServiceIcons";
 
@@ -19,6 +19,7 @@ export type CatalogServiceItem = {
   icon: IconName;
   color: string;
   subtitle: string;
+  imageUrl?: string | null;
 };
 
 export type CatalogCategoryData = {
@@ -165,26 +166,19 @@ export function ServiceCatalogView({ categories }: Props) {
                         <motion.div whileHover={{ y: -4 }} className="flex flex-col bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm hover:shadow-md transition-shadow h-full">
                           <div className="relative aspect-[4/3] w-full bg-gray-50 overflow-hidden">
                             <motion.div className="w-full h-full transition-transform duration-500 group-hover:scale-110">
-                              {(() => {
-                                const fallbacks = [
-                                  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1618220179428-22790b46a0eb?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=400&auto=format&fit=crop",
-                                  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=400&auto=format&fit=crop"
-                                ];
-                                let nameSeed = 0;
-                                for (let i = 0; i < service.name.length; i++) {
-                                  nameSeed += service.name.charCodeAt(i);
-                                }
-                                const fallbackUrl = fallbacks[nameSeed % fallbacks.length];
-                                return <Image src={fallbackUrl} alt={service.name} fill className="w-full h-full object-cover" />;
-                              })()}
+                              <Image
+                                src={serviceImageSrc({
+                                  imageUrl: service.imageUrl,
+                                  slug: service.slug,
+                                  categorySlug: category.slug,
+                                  serviceName: service.name,
+                                  icon: service.icon,
+                                })}
+                                alt={service.name}
+                                fill
+                                sizes="(max-width: 1024px) 50vw, 25vw"
+                                className="w-full h-full object-cover"
+                              />
                             </motion.div>
                           </div>
                           <div className="p-3 sm:p-4 flex-1 flex flex-col justify-center">

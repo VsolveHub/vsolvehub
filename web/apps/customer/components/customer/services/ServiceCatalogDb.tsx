@@ -22,10 +22,12 @@ export async function ServiceCatalogDb() {
         icon: meta.icon,
         color: meta.color,
         subtitle: `${count} ${count === 1 ? "service" : "services"} available`,
+        imageUrl: sub.imageUrl,
       };
     });
 
-    // Fallback for categories that have no subcategories: list their services.
+    // When a category has no subcategories, browse its services directly. Real
+    // catalog rows — not placeholder data.
     const fallbackItems: CatalogServiceItem[] = category.services
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -39,6 +41,7 @@ export async function ServiceCatalogDb() {
           icon: meta.icon,
           color: meta.color,
           subtitle: meta.subtitle,
+          imageUrl: service.imageUrl,
         };
       });
 

@@ -181,3 +181,15 @@ export function resolveSketchIllustration(input: SketchResolveInput): string {
 export function getCategorySketchIllustration(categorySlug: string): string {
   return SKETCH_ILLUSTRATIONS[CATEGORY_SKETCH[categorySlug] ?? "electrician"];
 }
+
+/**
+ * The single source of truth for "what image does this service show?": the real
+ * catalog `imageUrl` when it exists, otherwise the deterministic category sketch.
+ * Both the <ServiceImage> component and any raw <Image fill> card use this, so no
+ * component keeps its own stock-photo array.
+ */
+export function serviceImageSrc(input: SketchResolveInput & { imageUrl?: string | null }): string {
+  const { imageUrl, ...resolveInput } = input;
+  if (imageUrl && imageUrl.trim().length > 0) return imageUrl;
+  return resolveSketchIllustration(resolveInput);
+}
