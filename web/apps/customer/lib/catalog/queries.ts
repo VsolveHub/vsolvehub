@@ -108,6 +108,7 @@ export const getCatalogGrouped = catalogCache(async () => {
       id: sub.id,
       name: sub.name,
       slug: sub.slug,
+      imageUrl: sub.imageUrl,
       services: sub.services.map(serializeService),
     })),
     services: cat.services.map(serializeService),
@@ -182,6 +183,65 @@ export async function getServicesByIds(ids: string[]) {
   return services
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
     .map(serializeService);
+}
+
+export type ServiceReviewItem = {
+  id: string;
+  name: string;
+  location: string;
+  rating: number;
+  text: string;
+  createdAt: Date;
+};
+
+export type ServiceReviews = {
+  average: number;
+  count: number;
+  items: ServiceReviewItem[];
+};
+
+/**
+ * Real customer reviews for a service, drawn from completed bookings — never
+ * placeholder data. `average`/`count` aggregate every rated booking; `items`
+ * are the most recent ones that also left written feedback. NOT cached: reviews
+ * change as jobs complete and should read fresh.
+ */
+export async function getServiceReviews(serviceId: string, take = 6): Promise<ServiceReviews> {
+  const [agg, rows] = await Promise.all([
+    prisma.booking.aggregate({
+      where: { serviceId, rating: { not: null } },
+      _avg: { rating: true },
+      _count: { rating: true },
+    }),
+    prisma.booking.findMany({
+      where: { serviceId, rating: { not: null }, review: { not: null } },
+      select: {
+        id: true,
+        rating: true,
+        review: true,
+        createdAt: true,
+        user: { select: { name: true } },
+        address: { select: { area: true, city: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+    }),
+  ]);
+
+  return {
+    average: agg._avg.rating ?? 0,
+    count: agg._count.rating ?? 0,
+    items: rows
+      .filter((r) => (r.review ?? "").trim().length > 0)
+      .map((r) => ({
+        id: r.id,
+        name: r.user?.name?.trim() || "Verified customer",
+        location: r.address?.area || r.address?.city || "",
+        rating: r.rating ?? 5,
+        text: (r.review ?? "").trim(),
+        createdAt: r.createdAt,
+      })),
+  };
 }
 
 export const getAppStories = catalogCache(async () => {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ServiceSketchImage } from "@/components/ui/ServiceSketchImage";
+import { serviceImageSrc } from "@/lib/catalog/service-sketch-illustrations";
 
 type Props = {
   href: string;
@@ -41,30 +41,13 @@ export function HomeServiceSquareAddCard({
       <div className="flex flex-col bg-white rounded-2xl border border-gray-150 overflow-hidden shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md h-full">
         <div className="relative h-24 w-full bg-gray-50 overflow-hidden">
           <div className="w-full h-full transition-transform duration-500 group-hover:scale-105">
-            {imageUrl ? (
-              <Image src={imageUrl} alt={name} fill className="w-full h-full object-cover" />
-            ) : (
-              (() => {
-                const fallbacks = [
-                  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1618220179428-22790b46a0eb?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=400&auto=format&fit=crop",
-                  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=400&auto=format&fit=crop"
-                ];
-                let nameSeed = 0;
-                for (let i = 0; i < name.length; i++) {
-                  nameSeed += name.charCodeAt(i);
-                }
-                const fallbackUrl = fallbacks[nameSeed % fallbacks.length];
-                return <Image src={fallbackUrl} alt={name} fill className="w-full h-full object-cover" />;
-              })()
-            )}
+            <Image
+              src={serviceImageSrc({ imageUrl, slug: serviceSlug, subCategorySlug, categorySlug, serviceName: name })}
+              alt={name}
+              fill
+              sizes="(max-width: 768px) 33vw, 12vw"
+              className="w-full h-full object-cover"
+            />
           </div>
         </div>
         

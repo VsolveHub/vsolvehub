@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getServiceBySlug, serializeService, serviceInclude } from "@/lib/catalog/queries";
+import { getServiceBySlug, getServiceReviews, getServicesByCategory, serializeService, serviceInclude } from "@/lib/catalog/queries";
 import { buildServiceDetailContent } from "@/lib/catalog/service-detail-content";
 import { ServiceDetailView } from "@/components/customer/services/ServiceDetailView";
 import { SubcategoryServicesView } from "@/components/customer/services/SubcategoryServicesView";
@@ -41,6 +41,13 @@ export default async function ServiceDetailPage({ params }: PageProps) {
 
   const detail = buildServiceDetailContent(service);
 
+  // Real reviews (from completed bookings) + real sibling services — no dummy data.
+  const [reviews, categoryServices] = await Promise.all([
+    getServiceReviews(service.id),
+    getServicesByCategory(category),
+  ]);
+  const related = categoryServices.filter((s) => s.id !== service.id).slice(0, 4);
+
   const session = await getServerSession();
   let isSaved = false;
   if (session) {
@@ -60,6 +67,8 @@ export default async function ServiceDetailPage({ params }: PageProps) {
       <ServiceDetailView
         service={service}
         detail={detail}
+        reviews={reviews}
+        related={related}
         shareUrl={shareUrl}
         isSaved={isSaved}
         showSave={!!session}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { serviceImageSrc } from "@/lib/catalog/service-sketch-illustrations";
 
 type Props = {
   href: string;
@@ -18,33 +19,19 @@ type Props = {
   imageUrl?: string | null;
 };
 
-const FALLBACK_IMAGES = [
-  "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1618220179428-22790b46a0eb?q=80&w=400&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=400&auto=format&fit=crop",
-];
-
-function fallbackFor(name: string) {
-  let seed = 0;
-  for (let i = 0; i < name.length; i++) seed += name.charCodeAt(i);
-  return FALLBACK_IMAGES[seed % FALLBACK_IMAGES.length];
-}
-
 export function HomeServiceVerticalCard({
   href,
   name,
+  categorySlug,
+  serviceSlug,
+  subCategorySlug,
   priceLabel,
   badge,
   serviceId,
   imageUrl,
 }: Props) {
   const router = useRouter();
-  const imgSrc = imageUrl && imageUrl.trim() !== "" ? imageUrl : fallbackFor(name);
+  const imgSrc = serviceImageSrc({ imageUrl, slug: serviceSlug, subCategorySlug, categorySlug, serviceName: name });
 
   function handleBook(e: React.MouseEvent) {
     e.preventDefault();
