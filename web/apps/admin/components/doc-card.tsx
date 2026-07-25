@@ -21,7 +21,7 @@ const STATUS_TONE = { PENDING: "warning", APPROVED: "success", REJECTED: "danger
 export function DocumentCard({ doc, preview }: { doc: Document; preview: DocPreview }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border">
-      <div className="flex aspect-video items-center justify-center bg-surface-muted">
+      <div className="relative flex aspect-video items-center justify-center bg-surface-muted">
         {preview.kind === "signed" ? (
           <Image src={preview.url} alt={DOC_LABELS[doc.type] ?? doc.type} unoptimized fill className="h-full w-full object-cover" />
         ) : preview.kind === "legacy" ? (
