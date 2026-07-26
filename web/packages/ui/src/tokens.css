@@ -13,6 +13,10 @@
   --color-accent-500: #f59e0b;
   --color-accent-600: #d97706;
 
+  /* Aurora background colors */
+  --color-aurora-1: #2dd4bf;
+  --color-aurora-2: #34d399;
+
   /* Sidebar / footer dark navy */
   --color-ink-900: #14122e;
   --color-ink-800: #1e1b4b;

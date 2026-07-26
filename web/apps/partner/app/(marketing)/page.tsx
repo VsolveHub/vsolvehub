@@ -14,6 +14,7 @@ import { PARTNER_CATEGORIES } from "@vsolve/config";
 import { Button } from "@vsolve/ui";
 import { Medallion, EarningsHeroArt, type Tone } from "@/components/graphics";
 import { Faq, faqJsonLd } from "@/components/faq";
+import { PartnerHero } from "@/components/hero/partner-hero";
 
 export const dynamic = "force-static";
 
@@ -79,37 +80,7 @@ export default function LandingPage() {
   return (
     <main>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-700 to-brand-900 text-white">
-        <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-accent-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -right-10 bottom-0 h-72 w-72 rounded-full bg-brand-500/30 blur-3xl" />
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-20 md:grid-cols-2">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-medium text-white/90">
-              <Zap className="h-4 w-4 text-accent-400" /> Join 5,000+ partners across Telangana
-            </span>
-            <h1 className="mt-5 text-4xl font-bold leading-tight sm:text-5xl">
-              Grow your business with V Solve Hub
-            </h1>
-            <p className="mt-4 max-w-md text-lg text-white/80">
-              Join India&rsquo;s fastest-growing marketplace for local services. Onboard today and
-              reach thousands of customers in Telangana.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/solutions">
-                <Button variant="accent" size="lg">
-                  Become a Partner <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="#testimonials">
-                <Button size="lg" className="bg-white/10 text-white hover:bg-white/20">
-                  Partner Stories
-                </Button>
-              </Link>
-            </div>
-          </div>
-          <EarningsHeroArt icons={{ primary: Wallet, rupee: IndianRupee, star: Star, bolt: Zap }} />
-        </div>
-      </section>
+      <PartnerHero />
 
       {/* Designed for your success */}
       <section className="px-5 py-20">
