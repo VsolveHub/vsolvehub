@@ -1,0 +1,105 @@
+[project]
+name = "vsolve-hub-backend"
+version = "0.1.0"
+description = "Vsolve Hub Django business backend"
+requires-python = ">=3.13,<3.14"
+readme = "README.md"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = [
+  ".venv",
+  "migrations",
+]
+
+[tool.ruff.lint]
+select = [
+  "A",
+  "ARG",
+  "ASYNC",
+  "B",
+  "C4",
+  "DJ",
+  "E",
+  "F",
+  "I",
+  "N",
+  "PERF",
+  "PIE",
+  "PL",
+  "RUF",
+  "S",
+  "SIM",
+  "T20",
+  "UP",
+  "W",
+]
+ignore = [
+  "DJ001",
+  "PLR0913",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/models.py" = ["RUF012"]
+"config/settings/*.py" = ["F403", "F405"]
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+addopts = [
+  "--strict-config",
+  "--strict-markers",
+  "--cov=apps",
+  "--cov=common",
+  "--cov-report=term-missing",
+  "-ra",
+]
+markers = [
+  "integration: requires PostgreSQL and Redis",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["apps", "common"]
+omit = [
+  "*/migrations/*",
+  "*/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+warn_unused_configs = true
+exclude = [
+  "/migrations/",
+  "/.venv/",
+]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[[tool.mypy.overrides]]
+module = [
+  "celery",
+  "environ",
+]
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "apps.*.admin"
+disable_error_code = ["type-arg"]

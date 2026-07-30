@@ -77,14 +77,14 @@ export function ServiceCatalogView({ categories }: Props) {
 
   return (
     <div className="w-full min-h-screen bg-[#f1f5f9] pb-24">
-      <header className="bg-[#0A1629] border-b border-gray-800 pt-12 pb-12 px-4 sm:px-8 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/20 to-purple-900/20 z-0"></div>
+      <header className="relative overflow-hidden border-b border-orange-100 bg-gradient-to-br from-[#fffaf5] via-[#fff7ed] to-[#ffedd5] px-4 pb-12 pt-12 sm:px-8">
+        <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-orange-200/30 blur-3xl" />
         <div className="max-w-6xl mx-auto relative z-10 flex flex-col items-center text-center">
-          <span className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full text-[11px] font-bold tracking-widest uppercase mb-4 w-max border border-white/10 text-[var(--color-brand-accent)]">
+          <span className="mb-4 inline-flex w-max items-center gap-2 rounded-full border border-orange-200 bg-white/75 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[#c2410c] shadow-sm backdrop-blur-md">
             ★ EXPERT PROFESSIONALS
           </span>
-          <h1 className="text-4xl sm:text-5xl font-black text-white tracking-tight mb-3">Our Services</h1>
-          <p className="text-sm font-semibold text-white/70 max-w-lg">Everything you need for your home, delivered by top-rated professionals right at your doorstep.</p>
+          <h1 className="mb-3 text-4xl font-black tracking-tight text-[#0b1c30] sm:text-5xl">Our Services</h1>
+          <p className="max-w-lg text-sm font-semibold text-slate-600">Everything you need for your home, delivered by top-rated professionals right at your doorstep.</p>
         </div>
       </header>
 

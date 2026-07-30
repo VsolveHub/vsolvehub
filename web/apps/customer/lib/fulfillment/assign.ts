@@ -90,7 +90,11 @@ async function loadPublicPartner(partnerId: string): Promise<PublicPartner> {
  */
 export async function assignBestPartner(
   bookingId: string,
-  opts: { excludePartnerIds?: string[]; preferredPartnerId?: string } = {},
+  opts: {
+    excludePartnerIds?: string[];
+    preferredPartnerId?: string;
+    dryRun?: boolean;
+  } = {},
 ): Promise<AssignOutcome> {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
@@ -103,6 +107,7 @@ export async function assignBestPartner(
     addrLng: booking.address.lng ?? DEFAULT_LNG,
     slot: booking.slot,
     scheduleType: booking.scheduleType as "instant" | "scheduled",
+    durationMinutes: booking.durationMinutes,
     service: booking.service,
   };
 
@@ -112,10 +117,24 @@ export async function assignBestPartner(
     addrLng: ctx.addrLng,
     slot: booking.slot,
     scheduleType: ctx.scheduleType,
+    durationMinutes: booking.durationMinutes,
     excludePartnerIds: opts.excludePartnerIds,
   });
 
   const ordered = orderPreferredFirst(ranked, opts.preferredPartnerId);
+  if (opts.dryRun) {
+    const first = ordered[0];
+    if (!first) {
+      return { ok: false, code: "NO_PROVIDERS", suggestedSlots: suggestSlots(pool, ctx) };
+    }
+    const partner = await loadPublicPartner(first.id);
+    return {
+      ok: true,
+      partner,
+      startOtp: "",
+      preferredHonored: Boolean(opts.preferredPartnerId && first.id === opts.preferredPartnerId),
+    };
+  }
   const outcome = await assignFirstAvailable(ordered, (pid) => assignPartnerDirect(bookingId, pid));
   if (!outcome.ok) {
     return { ok: false, code: "NO_PROVIDERS", suggestedSlots: suggestSlots(pool, ctx) };

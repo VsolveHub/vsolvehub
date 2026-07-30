@@ -129,6 +129,7 @@ export const cartAddSchema = z.object({
     })
     .optional(),
   scheduleType: z.enum(["instant", "scheduled"]).optional(),
+  durationMinutes: z.number().int().min(60).max(480).multipleOf(30).optional(),
   selections: z
     .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))
     .optional(),
@@ -152,6 +153,9 @@ export const cartPatchSchema = z.object({
     })
     .optional(),
   scheduleType: z.enum(["instant", "scheduled"]).optional(),
+  durationMinutes: z.number().int().min(60).max(480).multipleOf(30).optional(),
+  preferredPartnerId: z.string().min(1).nullable().optional(),
+  slotConfirmed: z.boolean().optional(),
   addressId: z.string().min(1).optional(),
   selections: z
     .record(z.union([z.string(), z.number(), z.array(z.string()).max(20)]))

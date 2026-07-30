@@ -14,8 +14,13 @@ export const qk = {
   // Child of ["cart"] on purpose: any invalidateQueries(qk.cart()) prefix-matches
   // and refreshes the header badge too, so the two never drift.
   cartCount: () => ["cart", "count"] as const,
-  availability: (serviceId: string, addressId: string, slot: string, scheduleType: string) =>
-    ["availability", serviceId, addressId, slot, scheduleType] as const,
+  availability: (
+    serviceId: string,
+    addressId: string,
+    slot: string,
+    scheduleType: string,
+    durationMinutes = 60,
+  ) => ["availability", serviceId, addressId, slot, scheduleType, durationMinutes] as const,
   serviceProducts: (serviceId: string) => ["service-products", serviceId] as const,
   storeProducts: (category: string, q: string) => ["store-products", category, q] as const,
   storeProduct: (slug: string) => ["store-product", slug] as const,

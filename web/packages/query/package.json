@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",
-    "@tanstack/react-query-devtools": "^5.62.7"
+    "@tanstack/react-query-devtools": "^5.62.7",
+    "@vsolve/api-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

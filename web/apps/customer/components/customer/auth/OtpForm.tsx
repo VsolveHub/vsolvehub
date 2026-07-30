@@ -68,7 +68,10 @@ export function OtpForm({ redirectTo = "/booking" }: OtpFormProps) {
       setLoading(false);
       return;
     }
-    await queryClient.invalidateQueries({ queryKey: qk.session() });
+    // Seed the authenticated session immediately before navigation. Waiting for
+    // an invalidation round-trip left the resumed booking flow seeing the stale
+    // signed-out value, so customers had to press "Confirm" a second time.
+    queryClient.setQueryData(qk.session(), { user: data.user });
     router.push(redirectTo);
     router.refresh();
   }

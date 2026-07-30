@@ -4,6 +4,7 @@ import { RequirementSheet } from "@/components/customer/booking/RequirementSheet
 import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { ProductAddOns, type ProductSelections } from "./ProductAddOns";
 import type { FlowService, ServiceConfig } from "./types";
+import { durationOptions, formatDuration } from "@/lib/bookings/commercials";
 
 const SECTION_TITLE = "mb-4 text-[0.8rem] font-bold tracking-[0.05em] text-gray-600";
 
@@ -20,6 +21,8 @@ export function DetailsStep({
   onPhotoUpload,
   productSelections,
   onProductChange,
+  durationMinutes,
+  onDurationChange,
   submitting,
   onSubmit,
 }: {
@@ -35,9 +38,16 @@ export function DetailsStep({
   onPhotoUpload: (files: FileList | null) => void;
   productSelections: ProductSelections;
   onProductChange: (v: ProductSelections) => void;
+  durationMinutes: number;
+  onDurationChange: (minutes: number) => void;
   submitting: boolean;
   onSubmit: () => void;
 }) {
+  const availableDurations = durationOptions();
+  const durationIndex = availableDurations.indexOf(durationMinutes);
+  const canDecrease = durationIndex > 0;
+  const canIncrease = durationIndex >= 0 && durationIndex < availableDurations.length - 1;
+
   return (
     <div className="rounded-[16px] bg-white p-6 sm:p-8 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
       {/* Title Header with Step 3 of 3 badge */}
@@ -47,6 +57,59 @@ export function DetailsStep({
           Step 3 of 3
         </span>
       </div>
+
+      <section className="mb-7 rounded-2xl border border-orange-200 bg-gradient-to-br from-[#fffaf5] to-[#fff7ed] p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ea580c] text-white shadow-sm">
+            <FlaticonIcon name="clock" size={20} />
+          </div>
+          <div>
+            <h3 className="font-heading text-lg font-extrabold leading-tight text-[#0b1c30]">
+              How much service time do you need?
+            </h3>
+            <p className="mt-1.5 text-sm font-medium leading-5 text-slate-700">
+              One hour is selected by default. Your estimate updates instantly.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-700">Service duration</p>
+          <div
+            className="mt-2 flex min-h-16 items-center justify-between gap-3 rounded-xl border border-orange-200 bg-white p-2 shadow-sm"
+            role="group"
+            aria-label="Service duration"
+          >
+            <button
+              type="button"
+              onClick={() => canDecrease && onDurationChange(availableDurations[durationIndex - 1])}
+              disabled={!canDecrease}
+              aria-label="Reduce service duration by 30 minutes"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-[#0b1c30] transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <span className="text-2xl font-bold leading-none" aria-hidden="true">−</span>
+            </button>
+
+            <div className="min-w-0 text-center">
+              <p className="text-xl font-black text-[#0b1c30]">{formatDuration(durationMinutes)}</p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">Selected time</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => canIncrease && onDurationChange(availableDurations[durationIndex + 1])}
+              disabled={!canIncrease}
+              aria-label="Increase service duration by 30 minutes"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#ea580c] text-white shadow-sm transition hover:bg-[#c2410c] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+            >
+              <span className="text-2xl font-bold leading-none" aria-hidden="true">+</span>
+            </button>
+          </div>
+          <p className="mt-2 text-xs font-medium text-slate-600">
+            Use − or + to adjust in 30-minute steps.
+          </p>
+        </div>
+      </section>
 
       {config.detailFields.length > 0 && service && (
         <RequirementSheet

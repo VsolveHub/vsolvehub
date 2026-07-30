@@ -7,6 +7,7 @@ import { resolveServiceArchetype, usesPushDispatch } from "@/lib/bookings/archet
 import { coerceSelections, priceBooking } from "@/lib/catalog/price-service";
 import { createBooking } from "@/lib/bookings/queries";
 import type { CartItem, CartLineItem } from "@/lib/cart/types";
+import { calculateServiceCommercials } from "@/lib/bookings/commercials";
 
 function parseLineItems(raw: string): CartLineItem[] {
   try {
@@ -25,6 +26,11 @@ type CartBooking = {
   scheduleType: string;
   addressId: string;
   quotedAmount: number;
+  baseChargePaise: number;
+  platformFeePaise: number;
+  taxPaise: number;
+  durationMinutes: number;
+  preferredPartnerId: string | null;
   lineItems: string;
   archetypeDetails: string;
   service: { name: string; slug: string; category: { slug: string } };
@@ -32,9 +38,10 @@ type CartBooking = {
 };
 
 function toCartItem(b: CartBooking): CartItem {
-  let detailsParsed = {};
+  let detailsParsed: Record<string, unknown> = {};
   try {
-    detailsParsed = JSON.parse(b.archetypeDetails || "{}");
+    const parsed = JSON.parse(b.archetypeDetails || "{}");
+    detailsParsed = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {}
   return {
     id: b.id,
@@ -45,10 +52,16 @@ function toCartItem(b: CartBooking): CartItem {
     categorySlug: b.service.category.slug,
     slot: b.slot,
     scheduleType: b.scheduleType,
+    slotConfirmed: detailsParsed.slotConfirmed === true,
     addressId: b.addressId,
     addressLabel: b.address?.label ?? "",
     addressFull: b.address?.fullAddress ?? "",
     quotedAmount: b.quotedAmount,
+    baseChargePaise: b.baseChargePaise,
+    platformFeePaise: b.platformFeePaise,
+    taxPaise: b.taxPaise,
+    durationMinutes: b.durationMinutes,
+    preferredPartnerId: b.preferredPartnerId,
     lineItems: parseLineItems(b.lineItems),
     archetypeDetails: detailsParsed,
   };
@@ -92,7 +105,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Resolve scheduleType and slot placeholder
+  // Draft cart rows keep a technical slot because the Booking model requires it,
+  // but checkout treats it as unselected until the customer saves a slot.
   const scheduleType = data.scheduleType ?? "scheduled";
   let slot = data.slot;
   if (!slot) {
@@ -118,7 +132,8 @@ export async function POST(req: NextRequest) {
       data.selections ?? (data.archetypeDetails as { fieldValues?: unknown } | undefined)?.fieldValues,
     ),
   });
-  const serviceAmount = estimate.totalPaise > 0 ? estimate.totalPaise : service.pricePaise;
+  const hourlyRatePaise = estimate.totalPaise > 0 ? estimate.totalPaise : service.pricePaise;
+  const commercials = calculateServiceCommercials(hourlyRatePaise, data.durationMinutes);
 
   // Product add-ons: only products mapped to THIS service are accepted, and
   // every line is priced from the catalog — client-sent prices don't exist.
@@ -149,7 +164,7 @@ export async function POST(req: NextRequest) {
     }
   }
   const productsTotal = productLines.reduce((s, l) => s + l.totalPaise, 0);
-  const quotedAmount = serviceAmount + productsTotal;
+  const quotedAmount = commercials.totalPaise + productsTotal;
 
   const booking = await createBooking({
     userId: session.id,
@@ -157,7 +172,10 @@ export async function POST(req: NextRequest) {
     addressId: address.id,
     slot,
     quotedAmount,
-    baseChargePaise: estimate.basePaise > 0 ? estimate.basePaise : service.pricePaise,
+    baseChargePaise: commercials.serviceSubtotalPaise,
+    platformFeePaise: commercials.platformFeePaise,
+    taxPaise: commercials.platformFeeGstPaise,
+    durationMinutes: commercials.durationMinutes,
     lineItems: [
       ...estimate.lineItems,
       // Product lines ride along in the display snapshot so the cart and the
@@ -181,7 +199,7 @@ export async function POST(req: NextRequest) {
     paymentMethod: null,
     scheduleType,
     vendorAssignmentMode: "auto",
-    archetypeDetails: data.archetypeDetails ?? {},
+    archetypeDetails: { ...(data.archetypeDetails ?? {}), slotConfirmed: Boolean(data.slot) },
   });
 
   if (productLines.length > 0) {
@@ -205,7 +223,10 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession();
-  if (!session) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (!session) {
+    if (req.nextUrl.searchParams.has("count")) return NextResponse.json({ count: 0 });
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
 
   // The header CartBadge needs only the count, on every page. Serve it from a
   // cheap COUNT instead of the full findMany + joins + per-item JSON parse.

@@ -5,13 +5,13 @@ export default function ServicesLoading() {
       aria-busy="true"
       aria-label="Loading service catalog"
     >
-      {/* Dark Hero Header */}
-      <div className="bg-slate-900 px-4 md:px-8 py-10 md:py-12 flex flex-col justify-center">
+      {/* Warm hero placeholder matching the service catalog palette */}
+      <div className="border-b border-orange-100 bg-gradient-to-br from-[#fffaf5] via-[#fff7ed] to-[#ffedd5] px-4 py-10 md:px-8 md:py-12">
         <div className="max-w-[1280px] w-full mx-auto">
           {/* Header Title Skeleton */}
-          <div className="h-9 w-60 max-w-[60%] bg-slate-800 animate-pulse rounded-lg mb-3"></div>
+          <div className="mb-3 h-9 w-60 max-w-[60%] animate-pulse rounded-lg bg-orange-200/80"></div>
           {/* Header Description Skeleton */}
-          <div className="h-4 w-96 max-w-[80%] bg-slate-800/80 animate-pulse rounded-md"></div>
+          <div className="h-4 w-96 max-w-[80%] animate-pulse rounded-md bg-orange-100"></div>
         </div>
       </div>
 

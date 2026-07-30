@@ -12,12 +12,14 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
+const PHOTON_URL = "https://photon.komoot.io/reverse";
 const CONTACT = process.env.GEOCODE_CONTACT_EMAIL || "support@vsolvehub.com";
 const USER_AGENT = `VSolveHub/1.0 (${CONTACT})`;
 
-// Upstream can hang; without a ceiling a stalled Nominatim would tie up the
-// route until the platform's own request timeout fires.
-const FETCH_TIMEOUT_MS = 8_000;
+// Public geocoders occasionally stall or throttle. Keep each attempt short and
+// fall back to a second OSM-backed provider instead of making the location UI
+// wait for the platform timeout.
+const FETCH_TIMEOUT_MS = 3_500;
 
 // Per-IP fixed-window limiter so this open proxy can't be scripted into a free
 // geocoding relay (which would also breach Nominatim's usage policy and get the
@@ -107,9 +109,31 @@ async function fetchNominatim(lat: number, lng: number): Promise<unknown> {
   return res.json();
 }
 
+type PhotonFeature = {
+  properties?: Record<string, string | undefined>;
+};
+
+type PhotonResponse = {
+  features?: PhotonFeature[];
+};
+
+async function fetchPhoton(lat: number, lng: number): Promise<unknown> {
+  const url = `${PHOTON_URL}?lat=${lat}&lon=${lng}&lang=en`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+    next: { revalidate: 86400 },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Photon responded ${res.status}`);
+  return res.json();
+}
+
 // Map Nominatim's loose `address` object onto our stable shape, falling back
 // through the many tags OSM uses for the same real-world concept.
-function normalizeAddress(data: unknown, lat: number, lng: number): NormalizedLocation {
+function normalizeNominatim(data: unknown, lat: number, lng: number): NormalizedLocation {
   const d = (data ?? {}) as { address?: Record<string, string | undefined>; display_name?: string };
   const a = d.address ?? {};
 
@@ -152,6 +176,47 @@ function normalizeAddress(data: unknown, lat: number, lng: number): NormalizedLo
   };
 }
 
+function normalizePhoton(data: unknown, lat: number, lng: number): NormalizedLocation {
+  const response = (data ?? {}) as PhotonResponse;
+  const p = response.features?.[0]?.properties ?? {};
+  const houseNumber = pick(p.housenumber);
+  const road = pick(p.street);
+  const area = pick(p.district, p.locality, p.suburb, p.name);
+  const city = pick(p.city, p.county, p.state);
+  const pincode = pick(p.postcode);
+  const fullAddress = [
+    [houseNumber, road].filter(Boolean).join(" "),
+    area && area !== road ? area : "",
+    city && city !== area ? city : "",
+    pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  if (!fullAddress) throw new Error("Photon returned no address");
+
+  return {
+    houseNumber,
+    road,
+    area,
+    city,
+    state: pick(p.state),
+    pincode,
+    fullAddress,
+    displayName: fullAddress,
+    lat,
+    lng,
+  };
+}
+
+async function resolveAddress(lat: number, lng: number): Promise<NormalizedLocation> {
+  try {
+    return normalizeNominatim(await fetchNominatim(lat, lng), lat, lng);
+  } catch {
+    return normalizePhoton(await fetchPhoton(lat, lng), lat, lng);
+  }
+}
+
 export async function GET(req: NextRequest) {
   if (rateLimited(clientIp(req))) {
     return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 });
@@ -163,8 +228,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const data = await fetchNominatim(coords.lat, coords.lng);
-    return NextResponse.json(normalizeAddress(data, coords.lat, coords.lng));
+    return NextResponse.json(await resolveAddress(coords.lat, coords.lng));
   } catch {
     return NextResponse.json({ error: "Geocoding service unavailable" }, { status: 502 });
   }

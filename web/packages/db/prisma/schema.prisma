@@ -680,6 +680,12 @@ model Booking {
   taxPaise             Int       @default(0)
   quotedAmount         Int
   finalAmountPaise     Int?
+  // Customer-selected service time. The catalog price is the one-hour minimum.
+  durationMinutes      Int       @default(60)
+  extensionMinutes     Int       @default(0)
+  // Optional customer preference captured before payment. Assignment still
+  // falls back to the next eligible professional if a race takes this partner.
+  preferredPartnerId   String?
   durationDays         Int       @default(1)
   assignmentMode       String    @default("quotes")
   startOtp             String?

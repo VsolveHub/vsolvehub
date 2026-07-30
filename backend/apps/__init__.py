@@ -1,0 +1,1 @@
+"""Vsolve Hub domain applications."""

@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
-import { ElectricianTracker } from "./ElectricianTracker";
-import { BeauticianTracker } from "./BeauticianTracker";
+import { FixedPriceBookingStatus } from "./FixedPriceBookingStatus";
 import { ConstructionTracker } from "./ConstructionTracker";
 import { CrewBookingTracker, type CrewTrackingData } from "./CrewBookingTracker";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -134,20 +133,12 @@ export function BookingTracker({ bookingRef }: { bookingRef: string }) {
     );
   }
 
-  if (categorySlug === "beauty-wellness") {
-    return (
-      <>
-        {actionPanel}
-        <BeauticianTracker booking={data} onRefresh={fetchStatus} />
-      </>
-    );
-  }
-
-  // Default (Electrician/Technician/etc. Archetype A)
+  // Milestone 1 fixed-price services deliberately use a status/timer view. Live
+  // maps and location tracking are not part of these service workflows.
   return (
     <>
       {actionPanel}
-      <ElectricianTracker booking={data} onRefresh={fetchStatus} />
+      <FixedPriceBookingStatus booking={data} />
     </>
   );
 }

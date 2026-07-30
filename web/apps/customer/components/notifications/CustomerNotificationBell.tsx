@@ -6,13 +6,18 @@ import { BellIcon } from "@/components/ui/AppIcons";
 import { countUnread, useNotificationReadState } from "@/components/notifications/useNotificationReadState";
 import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
+import { useSessionQuery } from "@/lib/query/hooks";
 
 export function CustomerNotificationBell() {
   const { readIds } = useNotificationReadState("customer");
+  const { data: sessionData } = useSessionQuery();
+  const isLoggedIn = Boolean(sessionData?.user);
   const { data } = useQuery({
     queryKey: qk.notifications("customer"),
     queryFn: () => api.notifications("customer"),
+    enabled: isLoggedIn,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     staleTime: 15_000,
   });
 

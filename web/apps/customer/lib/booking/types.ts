@@ -33,6 +33,11 @@ export type Booking = {
   revisedAmountPaise?: number;
   revisedReason?: string;
   baseChargePaise?: number;
+  platformFeePaise?: number;
+  taxPaise?: number;
+  durationMinutes?: number;
+  extensionMinutes?: number;
+  startConfirmedAt?: string | null;
   lineItems?: any[];
   productItems?: any[];
 };

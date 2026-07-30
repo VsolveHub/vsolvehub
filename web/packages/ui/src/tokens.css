@@ -1,34 +1,255 @@
-/* VSolveHub design tokens — extracted from the Figma partner portal.
-   Imported by each app's globals.css; Tailwind v4 @theme exposes them as utilities. */
+/* ============================================================================
+   V Solve Hub design tokens
+   ----------------------------------------------------------------------------
+   Direction: "job card, not boutique."
+
+   The brand palette is taken from the logo itself (public/logo-mark.png): a
+   saturated orange roof inside a navy structure. The previous tokens used an
+   indigo/violet brand extracted from a Figma partner portal that had drifted
+   from the actual mark — those hues appear nowhere in the logo. This file
+   corrects that.
+
+   In Indian trades — electrical, plumbing, appliance work — amber is a *signal*
+   colour: utility marking, hazard, warning. So orange is used as signal at high
+   saturation over small decisive areas, never as a soft background wash.
+   Surfaces stay near-white so the signal still means something. Navy carries
+   all structure, text and links.
+
+   MEASURED CONTRAST (why the tokens are shaped this way)
+     orange #f87000  ->   2.9:1 on white  ->  FILL ONLY, never text on white
+     navy   #002870  ->  13.7:1 on white  ->  text, links, headings
+
+   Because brand orange fails 4.5:1 as text, the primary action is an orange
+   fill with near-black navy text (6.5:1) rather than the conventional
+   white-on-orange (2.9:1). Every pairing below is verified by
+   `src/tokens.contrast.test.ts` — that test is the acceptance evidence for the
+   WCAG criterion, not a claim in a comment.
+
+   Milestone 1 is light theme only (plan 09 §15). There is deliberately no dark
+   variant: a half-built dark mode is worse than none.
+   ============================================================================ */
+
 @theme {
-  /* Brand — indigo/violet primary, amber accent */
-  --color-brand-50: #eef0ff;
-  --color-brand-100: #e0e3ff;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #5b50e6;
-  --color-brand-700: #4f46e5;
-  --color-brand-900: #1e1b4b;
+  /* ---------------------------------------------------------------------
+     LAYER 1 — raw ramps. Prefer the semantic roles in layer 2; reach for a
+     ramp step directly only when no role fits.
+     --------------------------------------------------------------------- */
 
-  --color-accent-400: #fbbf24;
-  --color-accent-500: #f59e0b;
-  --color-accent-600: #d97706;
+  /* Signal orange — the logo roof and upper ring arc. */
+  --color-signal-50: #fff4ec;
+  --color-signal-100: #ffe3d1;
+  --color-signal-200: #ffc4a0;
+  --color-signal-300: #ff9e63;
+  --color-signal-400: #fb8130;
+  --color-signal-500: #f87000; /* brand orange, as sampled from the logo */
+  --color-signal-600: #d65e00;
+  --color-signal-700: #a94900; /* lowest step readable as text on white */
+  --color-signal-800: #8a3a00;
+  --color-signal-900: #5c2600;
 
-  /* Aurora background colors */
+  /* Navy — the logo H and lower ring arc. */
+  --color-navy-50: #eef2fb;
+  --color-navy-100: #d9e2f5;
+  --color-navy-200: #b0c2e8;
+  --color-navy-300: #7d9ad6;
+  --color-navy-400: #4a70bf;
+  --color-navy-500: #2551a3;
+  --color-navy-600: #0f3a87;
+  --color-navy-700: #00246b; /* body text and links */
+  --color-navy-800: #001a4e;
+  --color-navy-900: #00112e;
+
+  /* Warm neutrals, tinted toward the signal colour so greys never read
+     cold-blue beside it — but far lighter than a cream wash. */
+  --color-warm-0: #ffffff;
+  --color-warm-25: #fdfcfa;
+  --color-warm-50: #faf8f5;
+  --color-warm-100: #f4f1ec;
+  --color-warm-200: #e7e2da;
+  --color-warm-300: #d3ccc0;
+  --color-warm-400: #a89f90;
+  --color-warm-500: #756c5e;
+  --color-warm-600: #5f584d;
+  --color-warm-700: #453f37;
+
+  /* ---------------------------------------------------------------------
+     LAYER 2 — semantic roles. Components use these. A role says what a colour
+     is for, so a palette change never means a component rewrite.
+     --------------------------------------------------------------------- */
+
+  /* Surfaces */
+  --color-canvas: var(--color-warm-50);
+  --color-surface: var(--color-warm-0);
+  --color-surface-sunken: var(--color-warm-100);
+  --color-surface-hover: var(--color-warm-50);
+
+  /* Borders. `line` is a decorative hairline; `line-strong` is what form
+     controls use, and it must clear 3:1 as a non-text UI boundary (WCAG 1.4.11).
+     warm-400 measured only 2.62:1, so controls use warm-500 (4.6:1). Heavier
+     than fashionable, and deliberately so: this product is used in sunlight on
+     inexpensive screens, where a faint input edge disappears entirely. */
+  --color-line: var(--color-warm-200);
+  --color-line-strong: var(--color-warm-500);
+
+  /* Text */
+  --color-text: var(--color-navy-900);
+  --color-text-secondary: var(--color-warm-700);
+  --color-text-muted: var(--color-warm-500);
+  --color-text-inverse: var(--color-warm-0);
+  --color-text-link: var(--color-navy-700);
+
+  /* Primary action — orange fill, dark text. See the contrast note above.
+     The state progression brightens on hover and darkens on press, which is the
+     opposite of the usual darken-on-hover convention. That is forced by the
+     contrast maths: with dark text on orange, darkening the fill *reduces*
+     contrast. signal-700 as a pressed state measured 3.25:1 and failed, so press
+     stops at signal-600 (4.85:1). Brighten-then-depress also reads more like a
+     physical control lighting up and being pushed in, which suits the direction.
+       rest  signal-500  6.5:1
+       hover signal-400  7.3:1
+       press signal-600  4.85:1 */
+  --color-action: var(--color-signal-500);
+  --color-action-hover: var(--color-signal-400);
+  --color-action-active: var(--color-signal-600);
+  --color-action-text: var(--color-navy-900);
+
+  /* Secondary action — navy fill, light text. */
+  --color-action-secondary: var(--color-navy-700);
+  --color-action-secondary-hover: var(--color-navy-800);
+  --color-action-secondary-text: var(--color-warm-0);
+
+  /* Selection and focus. Plan 03 reserves blue for selected and informational
+     states "where contrast is strong"; navy is 13.7:1, so it qualifies. */
+  --color-selected: var(--color-navy-700);
+  --color-selected-surface: var(--color-navy-50);
+  --color-focus-ring: var(--color-navy-600);
+
+  /* Status. Each role has surface / line / text so state is never colour alone:
+     components pair these with an icon and a text label. */
+  --color-info-surface: var(--color-navy-50);
+  --color-info-line: var(--color-navy-200);
+  --color-info-text: var(--color-navy-700);
+
+  --color-success-surface: #e8f6ed;
+  --color-success-line: #a8ddbc;
+  --color-success-text: #0e7c3a;
+
+  --color-warning-surface: var(--color-signal-50);
+  --color-warning-line: var(--color-signal-200);
+  --color-warning-text: #8a5200;
+
+  --color-danger-surface: #fdecea;
+  --color-danger-line: #f4b8b3;
+  --color-danger-text: #b3261e;
+
+  /* ---------------------------------------------------------------------
+     Type
+     --------------------------------------------------------------------- */
+
+  /* One family, deliberately. The direction's personality comes from numeral
+     treatment (see `Readout`), not a second display face — and every extra
+     webfont costs LCP on the mid-range Android this product runs on.
+
+     Localisation: Plus Jakarta Sans has no Devanagari or Telugu coverage. When
+     those ship, add the script family to this stack rather than swapping the
+     Latin face, so Latin rendering does not shift.
+       Devanagari -> Mukta          Telugu -> Hind Guntur
+     --font-app is injected by next/font in each app's root layout. */
+  --font-sans: var(--font-app), "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-devanagari: "Mukta", var(--font-sans);
+  --font-telugu: "Hind Guntur", var(--font-sans);
+
+  /* ---------------------------------------------------------------------
+     Shape, elevation, motion
+     --------------------------------------------------------------------- */
+
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --radius-plate: 0.25rem; /* readout plates stay near-square, like a meter face */
+
+  /* Warm-tinted shadows; a neutral grey shadow reads dirty over warm surfaces. */
+  --shadow-card: 0 1px 2px rgb(69 63 55 / 0.06), 0 1px 3px rgb(69 63 55 / 0.08);
+  --shadow-raised: 0 4px 12px rgb(69 63 55 / 0.1);
+  --shadow-overlay: 0 16px 48px rgb(0 17 46 / 0.22);
+
+  /* Plan 03: purposeful transitions, 150-300ms. */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Plan 03 requires 44x44px minimum touch targets. */
+  --size-touch-min: 2.75rem;
+
+  /* ---------------------------------------------------------------------
+     LEGACY ALIASES — deprecated. Retained so existing screens keep compiling,
+     and remapped to the corrected brand so they inherit the fix instead of
+     breaking.
+
+     `brand-*` maps to navy, not orange: existing markup pairs `bg-brand-600`
+     with `text-white`, which passes on navy (14:1) and would fail on orange
+     (2.9:1). Migrate to the semantic roles above, then delete this block.
+     --------------------------------------------------------------------- */
+  --color-brand-50: var(--color-navy-50);
+  --color-brand-100: var(--color-navy-100);
+  --color-brand-500: var(--color-navy-600);
+  --color-brand-600: var(--color-navy-700);
+  --color-brand-700: var(--color-navy-800);
+  --color-brand-900: var(--color-navy-900);
+
+  --color-accent-400: var(--color-signal-400);
+  --color-accent-500: var(--color-signal-500);
+  --color-accent-600: var(--color-signal-600);
+
+  --color-ink-900: var(--color-navy-900);
+  --color-ink-800: var(--color-navy-800);
+
+  --color-surface-muted: var(--color-surface-sunken);
+  --color-border: var(--color-line);
+  --color-success: var(--color-success-text);
+  --color-danger: var(--color-danger-text);
+
+  /* The "aurora" teal/green gradients belong to the superseded Figma direction
+     and are not part of this palette. Kept only so existing markup compiles;
+     remove the markup, then remove these. */
   --color-aurora-1: #2dd4bf;
   --color-aurora-2: #34d399;
+}
 
-  /* Sidebar / footer dark navy */
-  --color-ink-900: #14122e;
-  --color-ink-800: #1e1b4b;
+/* ============================================================================
+   Base layer
+   ============================================================================ */
 
-  --color-surface: #ffffff;
-  --color-surface-muted: #f8f7fc;
-  --color-border: #e8e6f0;
+@layer base {
+  :root {
+    color-scheme: light;
+  }
 
-  --color-success: #16a34a;
-  --color-danger: #dc2626;
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    /* Money and timers must not jitter as digits change. Locale-aware lakh
+       grouping (Rs 1,23,456) is the formatter's job; this keeps widths even. */
+    font-variant-numeric: tabular-nums;
+  }
 
-  --radius-card: 0.875rem;
-  /* --font-app is injected by next/font (Plus Jakarta Sans) in the root layout. */
-  --font-sans: var(--font-app), "Inter", system-ui, -apple-system, sans-serif;
+  /* One focus treatment across every app. Never remove it without a
+     replacement — keyboard operation is an acceptance criterion. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }

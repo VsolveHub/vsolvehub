@@ -79,6 +79,9 @@ export type ActiveJob = {
   customerName: string;
   customerPhone: string;
   amountPaise: number;
+  durationMinutes: number;
+  extensionMinutes: number;
+  startConfirmedAt: string | null;
   /** Structured intake the customer submitted (e.g. Switch type: Modular). */
   details: { label: string; value: string }[];
   /** Optional free-text note from the customer. */

@@ -1,14 +1,29 @@
-import { CheckCircle2, Circle, Camera } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import { CheckCircle2, Circle, Camera, Clock3 } from "lucide-react";
 import { cn } from "@vsolve/ui";
 import { inr } from "@/lib/format";
 import { AddPartsPanel } from "./AddPartsPanel";
 import type { HomeProps } from "./homeShared";
 
 export function WorkingScreen(p: HomeProps) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const done = p.tasks.filter(Boolean).length;
   const total = p.tasks.length;
   const pct = Math.round((done / total) * 100);
   const allDone = done === total;
+  const startAt = p.activeJob?.startConfirmedAt ? new Date(p.activeJob.startConfirmedAt).getTime() : null;
+  const bookedSeconds =
+    ((p.activeJob?.durationMinutes ?? 60) + (p.activeJob?.extensionMinutes ?? 0)) * 60;
+  const elapsedSeconds = startAt ? Math.max(0, Math.floor((now - startAt) / 1_000)) : 0;
+  const deltaSeconds = bookedSeconds - elapsedSeconds;
+  const timerLabel = formatTimer(Math.abs(deltaSeconds));
   return (
     <div className="vsh-rise">
       <div className="mb-3 flex items-center justify-between">
@@ -30,6 +45,25 @@ export function WorkingScreen(p: HomeProps) {
           <div className="h-full rounded-full bg-accent-400 transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
+
+      {startAt ? (
+        <div
+          className={cn(
+            "mt-3 flex items-center gap-3 rounded-2xl border p-4",
+            deltaSeconds >= 0 ? "border-blue-200 bg-blue-50" : "border-red-200 bg-red-50",
+          )}
+        >
+          <div className={cn("grid h-10 w-10 place-items-center rounded-full", deltaSeconds >= 0 ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700")}>
+            <Clock3 className="h-5 w-5" />
+          </div>
+          <div>
+            <p className={cn("text-xs font-bold uppercase tracking-wide", deltaSeconds >= 0 ? "text-blue-700" : "text-red-700")}>
+              {deltaSeconds >= 0 ? "Booked time remaining" : "Work exceeded by"}
+            </p>
+            <p className="font-mono text-2xl font-black text-ink-900">{timerLabel}</p>
+          </div>
+        </div>
+      ) : null}
 
       <p className="mb-2 mt-4 text-xs font-bold uppercase tracking-wide text-gray-400">Checklist</p>
       <div className="space-y-2">
@@ -91,4 +125,11 @@ export function WorkingScreen(p: HomeProps) {
       {p.workError ? <p className="mt-3 text-center text-sm font-medium text-red-600">{p.workError}</p> : null}
     </div>
   );
+}
+
+function formatTimer(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
 }

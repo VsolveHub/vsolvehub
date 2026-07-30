@@ -27,6 +27,10 @@ export async function createBooking(input: {
   slot: string;
   quotedAmount: number;
   baseChargePaise: number;
+  platformFeePaise?: number;
+  taxPaise?: number;
+  durationMinutes?: number;
+  preferredPartnerId?: string | null;
   archetype?: string;
   archetypeDetails?: Record<string, unknown>;
   vendorId?: string;
@@ -57,6 +61,10 @@ export async function createBooking(input: {
       slot: input.slot,
       quotedAmount: input.quotedAmount,
       baseChargePaise: input.baseChargePaise,
+      platformFeePaise: input.platformFeePaise ?? 0,
+      taxPaise: input.taxPaise ?? 0,
+      durationMinutes: input.durationMinutes ?? 60,
+      preferredPartnerId: input.preferredPartnerId,
       finalAmountPaise: input.quotedAmount,
       archetype: input.archetype ?? "A",
       archetypeDetails: JSON.stringify(input.archetypeDetails ?? {}),

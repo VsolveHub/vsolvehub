@@ -32,6 +32,10 @@ export async function GET(req: NextRequest) {
   const slot = params.get("slot");
   const scheduleType: "instant" | "scheduled" =
     params.get("scheduleType") === "instant" ? "instant" : "scheduled";
+  const durationMinutes = Math.min(
+    480,
+    Math.max(60, Number(params.get("durationMinutes")) || 60),
+  );
   if (!serviceId || !addressId || !slot) {
     return NextResponse.json({ error: "serviceId, addressId and slot are required" }, { status: 400 });
   }
@@ -49,6 +53,7 @@ export async function GET(req: NextRequest) {
     addrLng: address.lng ?? DEFAULT_LNG,
     slot,
     scheduleType,
+    durationMinutes,
     service,
   };
   const { ranked, pool } = await findAvailablePartners({
@@ -62,7 +67,22 @@ export async function GET(req: NextRequest) {
   // The choose-your-professional list: top few real, assignable pros as
   // profiles. Cap before enriching, then one scoped query for the PII the
   // matcher deliberately omits — display always equals who can be assigned.
-  const top = ranked.slice(0, MAX_CHOICES);
+  const previous = await prisma.booking.findMany({
+    where: {
+      userId: session.id,
+      serviceId,
+      assignedPartnerId: { not: null },
+      status: "COMPLETED",
+      rating: { gte: 4 },
+    },
+    select: { assignedPartnerId: true },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  const previousIds = new Set(previous.map((booking) => booking.assignedPartnerId!));
+  const top = [...ranked]
+    .sort((a, b) => Number(previousIds.has(b.id)) - Number(previousIds.has(a.id)))
+    .slice(0, MAX_CHOICES);
   const identityRows = top.length
     ? await prisma.partner.findMany({
         where: { id: { in: top.map((p) => p.id) } },
@@ -73,9 +93,12 @@ export async function GET(req: NextRequest) {
     identityRows.map((r) => [r.id, { name: r.fullName ?? "V Solve Professional", jobsCompleted: r.jobsCompleted }]),
   );
 
+  const profiles = toPublicProfiles(top, { addrLat: ctx.addrLat, addrLng: ctx.addrLng }, identities)
+    .map((profile) => ({ ...profile, isPreviouslyBooked: previousIds.has(profile.id) }));
+
   return NextResponse.json({
     count: ranked.length,
-    professionals: toPublicProfiles(top, { addrLat: ctx.addrLat, addrLng: ctx.addrLng }, identities),
+    professionals: profiles,
     suggestedSlots: ranked.length === 0 ? suggestSlots(pool, ctx) : [],
   });
 }
