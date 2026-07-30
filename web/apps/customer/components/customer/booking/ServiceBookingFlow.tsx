@@ -27,6 +27,10 @@ import {
   toDetailPairs,
 } from "@/lib/catalog/service-config";
 import { estimatePrice, startingPricePaise, type Selections } from "@/lib/catalog/pricing";
+import {
+  calculateServiceCommercials,
+  DEFAULT_DURATION_MINUTES,
+} from "@/lib/bookings/commercials";
 import { FlowHeader } from "./serviceBookingFlow/FlowHeader";
 import { BookingSummary } from "./serviceBookingFlow/BookingSummary";
 import { ServiceStep } from "./serviceBookingFlow/ServiceStep";
@@ -47,6 +51,7 @@ type BookingResumeState = {
   photos: string[];
   /** Product add-on picks: productId → qty. */
   products?: Record<string, number>;
+  durationMinutes?: number;
   autoSubmit?: boolean;
 };
 
@@ -103,6 +108,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [productSelections, setProductSelections] = useState<Record<string, number>>({});
+  const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION_MINUTES);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [pendingSubmit, setPendingSubmit] = useState(false);
@@ -153,6 +159,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
           if (typeof saved.note === "string") setNote(saved.note);
           if (Array.isArray(saved.photos)) setPhotos(saved.photos);
           if (saved.products && typeof saved.products === "object") setProductSelections(saved.products);
+          if (saved.durationMinutes) setDurationMinutes(saved.durationMinutes);
           if (saved.step) setStep(saved.step);
         }
       }
@@ -178,15 +185,31 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     try {
       sessionStorage.setItem(
         persistKey,
-        JSON.stringify({ step, selectedServiceId, detailValues, note, photos, products: productSelections }),
+        JSON.stringify({
+          step,
+          selectedServiceId,
+          detailValues,
+          note,
+          photos,
+          products: productSelections,
+          durationMinutes,
+        }),
       );
     } catch {
       /* ignore quota / private-mode errors */
     }
-  }, [hydrated, persistKey, step, selectedServiceId, detailValues, note, photos, productSelections]);
+  }, [hydrated, persistKey, step, selectedServiceId, detailValues, note, photos, productSelections, durationMinutes]);
 
   function buildResumeState(overrides: Partial<BookingResumeState> & { step: Step }): BookingResumeState {
-    return { selectedServiceId, detailValues, note, photos, products: productSelections, ...overrides };
+    return {
+      selectedServiceId,
+      detailValues,
+      note,
+      photos,
+      products: productSelections,
+      durationMinutes,
+      ...overrides,
+    };
   }
 
   async function requireLoginThen(next: () => void, resume: BookingResumeState) {
@@ -225,6 +248,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
       setNote(saved.note);
       setPhotos(saved.photos);
       if (saved.products) setProductSelections(saved.products);
+      if (saved.durationMinutes) setDurationMinutes(saved.durationMinutes);
       if (saved.autoSubmit) setPendingSubmit(true);
     } catch {
       /* corrupt resume payload */
@@ -268,6 +292,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
         note: note || undefined,
         mediaUrls: photos,
         products: Object.entries(productSelections).map(([productId, qty]) => ({ productId, qty })),
+        durationMinutes,
         archetypeDetails: {
           bookingType: "individual",
           fieldValues: detailValues,
@@ -285,6 +310,15 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not add to cart"),
   });
+
+  const commercials = useMemo(
+    () =>
+      calculateServiceCommercials(
+        estimate.totalPaise || startsAtPaise,
+        durationMinutes,
+      ),
+    [estimate.totalPaise, startsAtPaise, durationMinutes],
+  );
 
   function addCurrentToCart() {
     if (!service) return;
@@ -329,6 +363,7 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
             config={config}
             startsAtPaise={startsAtPaise}
             estimate={estimate}
+            commercials={commercials}
             onProceed={step === "guidelines" ? () => setStep("details") : addCurrentToCart}
             submitting={addToCart.isPending}
           />
@@ -366,6 +401,8 @@ export function ServiceBookingFlow({ services, categorySlug, categoryName, initi
           onPhotoUpload={handlePhotoUpload}
           productSelections={productSelections}
           onProductChange={setProductSelections}
+          durationMinutes={durationMinutes}
+          onDurationChange={setDurationMinutes}
           submitting={addToCart.isPending}
           onSubmit={addCurrentToCart}
         />

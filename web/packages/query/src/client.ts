@@ -1,26 +1,37 @@
 import { QueryClient, defaultShouldDehydrateQuery, isServer } from "@tanstack/react-query";
 
+import { SESSION_STATE } from "./freshness";
+import { queryRetryDelay, shouldRetryMutation, shouldRetryQuery } from "./retry";
+
 /**
  * One place that configures TanStack Query for every V Solve Hub app.
  *
- * Defaults are tuned for a mobile marketplace:
- *  - staleTime 60s   → revisiting a screen serves from cache instantly, then
- *                      background-revalidates; no spinner on navigation.
- *  - gcTime 5m       → cache survives short detours between screens.
- *  - refetchOnWindowFocus off → avoid surprise refetches on a mobile web app.
- *  - retry 1         → fail fast on a flaky network instead of hanging.
+ * These defaults suit session-scoped reads. Any query touching catalog,
+ * availability, quotes, capacity holds or live offers must pick a tier from
+ * `freshness.ts` explicitly — the correct staleness for expiry-bearing state is
+ * a correctness decision, not a default. A cached availability result is a
+ * fabricated capacity claim.
  *
- * Per-query needs (e.g. a tracker that polls every 4s) override these locally
- * with `staleTime`/`refetchInterval`.
+ * Retry behaviour lives in `retry.ts`: only transport failures are retried, and
+ * mutations are never retried unless the caller opts in with a stable
+ * idempotency key.
  */
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60_000,
-        gcTime: 5 * 60_000,
-        refetchOnWindowFocus: false,
-        retry: 1,
+        staleTime: SESSION_STATE.staleTime,
+        gcTime: SESSION_STATE.gcTime,
+        refetchOnWindowFocus: SESSION_STATE.refetchOnWindowFocus,
+        refetchOnReconnect: SESSION_STATE.refetchOnReconnect,
+        retry: shouldRetryQuery,
+        retryDelay: queryRetryDelay,
+      },
+      mutations: {
+        // Default no-retry. A mutation that is provably safe to retry opts in
+        // per call with `shouldRetryMutation(count, error, { idempotent: true })`
+        // and a stable idempotency key.
+        retry: (failureCount, error) => shouldRetryMutation(failureCount, error),
       },
       dehydrate: {
         // Also ship still-pending queries so server-started fetches continue

@@ -36,3 +36,16 @@ Thumbs.db
 **/GoogleService-Info.plist
 **/firebase_options.dart
 demo/**
+
+# Python / Django backend
+backend/.venv/
+backend/.env
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/staticfiles/
+backend/media/

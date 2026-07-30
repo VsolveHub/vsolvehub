@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getServerSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
@@ -5,6 +6,7 @@ import { getBookingByRef } from "@/lib/bookings/queries";
 import { formatPrice, formatDate } from "@/lib/format";
 import { normalizeBookingStatus } from "@/lib/constants";
 import { InvoicePrintButton } from "@/components/customer/booking/InvoicePrintButton";
+import logo from "@/public/logo.jpeg";
 
 export const metadata = { title: "Invoice — V Solve Hub", robots: { index: false } };
 
@@ -33,7 +35,10 @@ export default async function InvoicePage({ params }: PageProps) {
   });
   const productsTotalPaise = productItems.reduce((s, i) => s + i.totalPaise, 0);
   const productsGstPaise = productItems.reduce((s, i) => s + i.gstPaise, 0);
-  const serviceAmountPaise = Math.max(0, amountPaise - productsTotalPaise);
+  const platformFeePaise = b.platformFeePaise ?? 0;
+  const platformFeeGstPaise = b.taxPaise ?? 0;
+  const serviceAmountPaise = b.baseChargePaise
+    ?? Math.max(0, amountPaise - productsTotalPaise - platformFeePaise - platformFeeGstPaise);
 
   const professional = b.assignedPartner?.fullName ?? b.vendor?.name ?? "Assigned professional";
   const status = normalizeBookingStatus(b.status);
@@ -49,12 +54,20 @@ export default async function InvoicePage({ params }: PageProps) {
       <style>{`@media print { .no-print { display: none !important; } body { background: #fff; } }`}</style>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #5b1a8a", paddingBottom: "1rem" }}>
-        <div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: "1.25rem", color: "#5b1a8a" }}>
-            <span style={{ color: "#f5b800" }}>V</span> SOLVE HUB
-          </p>
-          <p style={{ margin: "0.25rem 0 0", color: "#6b7280", fontSize: "0.75rem" }}>One app, all solutions</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", borderBottom: "2px solid #ea580c", paddingBottom: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <Image
+            src={logo}
+            alt="Vsolve Hub"
+            width={76}
+            height={76}
+            priority
+            style={{ width: 76, height: 76, objectFit: "contain", borderRadius: 12 }}
+          />
+          <div>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: "1.05rem", color: "#0b1c30" }}>VSOLVE HUB</p>
+            <p style={{ margin: "0.2rem 0 0", color: "#6b7280", fontSize: "0.75rem" }}>One app, all solutions</p>
+          </div>
         </div>
         <div style={{ textAlign: "right" }}>
           <p style={{ margin: 0, fontWeight: 700 }}>Tax Invoice</p>
@@ -94,6 +107,26 @@ export default async function InvoicePage({ params }: PageProps) {
             </td>
             <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(serviceAmountPaise)}</td>
           </tr>
+          {platformFeePaise > 0 ? (
+            <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+              <td style={{ padding: "0.75rem" }}>
+                Platform convenience fee
+                <span style={{ display: "block", color: "#6b7280", fontSize: "0.75rem" }}>
+                  Booking, support and platform services
+                </span>
+              </td>
+              <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(platformFeePaise)}</td>
+            </tr>
+          ) : null}
+          {platformFeeGstPaise > 0 ? (
+            <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+              <td style={{ padding: "0.75rem" }}>
+                GST on platform fee
+                <span style={{ display: "block", color: "#6b7280", fontSize: "0.75rem" }}>18% GST</span>
+              </td>
+              <td style={{ padding: "0.75rem", textAlign: "right" }}>{formatPrice(platformFeeGstPaise)}</td>
+            </tr>
+          ) : null}
           {productItems.map((item) => (
             <tr key={item.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
               <td style={{ padding: "0.75rem" }}>

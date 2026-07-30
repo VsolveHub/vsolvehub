@@ -6,6 +6,7 @@ const draft = (id: string, ref: string, amount: number, name: string) => ({
   bookingRef: ref,
   quotedAmount: amount,
   serviceName: name,
+  slotConfirmed: true,
 });
 
 function deps(over: Partial<CheckoutDeps>): CheckoutDeps {
@@ -56,7 +57,24 @@ describe("checkoutCart", () => {
     });
   });
 
-  it("voids an item with no provider and still books the rest", async () => {
+  it("requires every draft item to have an explicitly saved slot", async () => {
+    const reserveStock = vi.fn();
+    const authorize = vi.fn();
+    const res = await checkoutCart(
+      "u1",
+      "upi",
+      deps({
+        loadDrafts: async () => [{ ...draft("b1", "VSH-1", 50000, "Deep Clean"), slotConfirmed: false }],
+        reserveStock,
+        authorize,
+      }),
+    );
+    expect(res).toEqual({ ok: false, error: "Choose a slot for every service before paying." });
+    expect(reserveStock).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+  });
+
+  it("never shows an order as placed when a provider is lost during checkout", async () => {
     const fail = vi.fn(async () => ({ refunded: true }));
     const assign = vi
       .fn()
@@ -72,8 +90,34 @@ describe("checkoutCart", () => {
       }),
     );
     expect(fail).toHaveBeenCalledWith("b2");
-    if (!res.ok) throw new Error("expected ok");
-    expect(res.items[1]).toEqual({ bookingRef: "VSH-2", serviceName: "Wiring", outcome: "no_provider", refunded: true });
+    expect(res).toEqual({
+      ok: false,
+      error: "A professional became unavailable during checkout. You were not charged.",
+    });
+  });
+
+  it("checks every slot before reserving stock or authorizing payment", async () => {
+    const authorize = vi.fn();
+    const reserveStock = vi.fn();
+    const res = await checkoutCart(
+      "u1",
+      "upi",
+      deps({
+        loadDrafts: async () => [
+          draft("b1", "VSH-1", 50000, "Deep Clean"),
+          draft("b2", "VSH-2", 12000, "Wiring"),
+        ],
+        preflight: async (bookingId) => bookingId !== "b2",
+        reserveStock,
+        authorize,
+      }),
+    );
+    expect(res).toEqual({
+      ok: false,
+      error: "A selected slot is no longer available. Choose another time before paying.",
+    });
+    expect(reserveStock).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
   });
 
   it("fails cleanly (no authorization) when product stock can't be reserved", async () => {

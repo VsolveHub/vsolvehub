@@ -8,16 +8,11 @@ import { api } from "@/lib/query/api";
 import { qk } from "@/lib/query/keys";
 import { formatPrice } from "@/lib/format";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { FlaticonIcon } from "@/components/ui/FlaticonIcon";
 import { BookSlotModal } from "@/components/customer/cart/BookSlotModal";
 import { CheckoutResultView } from "@/components/customer/cart/CheckoutResultView";
 import { AddressPicker } from "@/components/customer/address/AddressPicker";
 import type { CheckoutResult, CheckoutItemOutcome, CartItem } from "@/lib/cart/types";
-
-const AVAILABLE_OFFERS = [
-  { code: "WELCOME50", discount: 50, isPercent: false, description: "Flat ₹50 off on your first booking" },
-  { code: "VSOLVE100", discount: 100, isPercent: false, description: "Flat ₹100 off on orders above ₹500" },
-  { code: "SAVER10", discount: 10, isPercent: true, description: "10% instant discount up to ₹150" },
-];
 
 export function CheckoutClient() {
   const router = useRouter();
@@ -38,11 +33,6 @@ export function CheckoutClient() {
   const [scheduledMap, setScheduledMap] = useState<Record<string, string>>({});
   const [showSlotModal, setShowSlotModal] = useState(false);
 
-  // Coupon State
-  const [couponInput, setCouponInput] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPaise: number } | null>(null);
-  const [showOffersModal, setShowOffersModal] = useState(false);
-
   // Cart Data Query
   const { data, isLoading } = useQuery({ queryKey: qk.cart(), queryFn: api.cart });
   const items = data?.items ?? [];
@@ -50,9 +40,10 @@ export function CheckoutClient() {
   // Mutations
   const updateAllAddresses = useMutation({
     mutationFn: async (addrId: string) => {
-      await Promise.all(items.map((it) => api.updateCartItem(it.id, { addressId: addrId })));
+      await Promise.all(items.map((it) => api.updateCartItem(it.id, { addressId: addrId, slotConfirmed: false })));
     },
     onSuccess: () => {
+      setScheduledMap({});
       queryClient.invalidateQueries({ queryKey: qk.cart() });
     },
     onError: (e) => setError(e instanceof Error ? e.message : "Could not update address"),
@@ -72,14 +63,14 @@ export function CheckoutClient() {
     onError: (e) => setError(e instanceof Error ? e.message : "Checkout failed"),
   });
 
-  // Synchronize scheduledMap with items loaded from cart
+  // Synchronize scheduledMap only with slots explicitly saved by the customer.
   useEffect(() => {
     if (items.length > 0) {
       setScheduledMap((prev) => {
         let changed = false;
         const next = { ...prev };
         for (const item of items) {
-          if (!next[item.id] && item.slot) {
+          if (!next[item.id] && item.slotConfirmed && item.slot) {
             const formatted =
               item.scheduleType === "instant"
                 ? "Instant (Within 1 hour)"
@@ -90,6 +81,12 @@ export function CheckoutClient() {
                     minute: "2-digit",
                   })}`;
             next[item.id] = formatted;
+            changed = true;
+          }
+        }
+        for (const id of Object.keys(next)) {
+          if (!items.some((item) => item.id === id)) {
+            delete next[id];
             changed = true;
           }
         }
@@ -120,36 +117,6 @@ export function CheckoutClient() {
     }
   };
 
-  // Coupon Application Logic
-  const handleApplyCoupon = (codeToApply?: string) => {
-    const code = (codeToApply || couponInput).trim().toUpperCase();
-    if (!code) return;
-
-    const offer = AVAILABLE_OFFERS.find((o) => o.code === code);
-    const subtotalPaise = data?.totalPaise ?? 0;
-
-    if (!offer) {
-      setError(`Invalid coupon code '${code}'`);
-      return;
-    }
-
-    let discountPaise = 0;
-    if (offer.isPercent) {
-      discountPaise = Math.min(15000, Math.round((subtotalPaise * offer.discount) / 100));
-    } else {
-      discountPaise = offer.discount * 100;
-    }
-
-    setAppliedCoupon({ code: offer.code, discountPaise });
-    setCouponInput("");
-    setError("");
-    setShowOffersModal(false);
-  };
-
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-  };
-
   if (placed) return <CheckoutResultView orderRef={placed.orderRef} items={placed.items} />;
   if (isLoading) return <LoadingState label="Loading checkout…" variant="inline" />;
 
@@ -162,8 +129,14 @@ export function CheckoutClient() {
   const selectedAddress = addresses.find((a) => a.id === globalAddressId);
   const allScheduled = items.length > 0 && items.every((it) => scheduledMap[it.id]);
   const subtotalPaise = data?.totalPaise ?? 0;
-  const discountPaise = appliedCoupon?.discountPaise ?? 0;
-  const finalPayablePaise = Math.max(0, subtotalPaise - discountPaise);
+  const finalPayablePaise = subtotalPaise;
+  const serviceSubtotalPaise = items.reduce((sum, item) => sum + item.baseChargePaise, 0);
+  const platformFeePaise = items.reduce((sum, item) => sum + item.platformFeePaise, 0);
+  const platformFeeGstPaise = items.reduce((sum, item) => sum + item.taxPaise, 0);
+  const addOnsPaise = Math.max(
+    0,
+    subtotalPaise - serviceSubtotalPaise - platformFeePaise - platformFeeGstPaise,
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -342,9 +315,35 @@ export function CheckoutClient() {
             </div>
           </div>
 
+          {items.length === 1 ? (
+            <div
+              className={`rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)] transition-all ${
+                !allScheduled ? "border-l-4 border-l-amber-500" : ""
+              }`}
+            >
+              <div className="mb-4">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-[#45464d]">
+                  SCHEDULING SLOTS
+                </h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  Book a slot for this service before payment.
+                </p>
+              </div>
+              <BookSlotModal
+                open
+                embedded
+                items={items}
+                scheduledMap={scheduledMap}
+                setScheduledMap={setScheduledMap}
+                onClose={() => undefined}
+                onSuccess={() => undefined}
+              />
+            </div>
+          ) : null}
+
           {/* Section 3: Scheduling Slots */}
           <div
-            className={`rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)] transition-all ${
+            className={`${items.length === 1 ? "hidden" : ""} rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)] transition-all ${
               !allScheduled ? "border-l-4 border-l-amber-500" : ""
             }`}
           >
@@ -396,52 +395,33 @@ export function CheckoutClient() {
 
           {/* Section 4: Coupon / Promo Code (NEW) */}
           <div className="rounded-[16px] bg-white p-6 shadow-[0_4px_16px_rgba(15,23,42,0.08)]">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[#45464d]">
-                COUPON / PROMO CODE
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowOffersModal(true)}
-                className="text-xs font-bold text-[#ea580c] hover:underline cursor-pointer"
-              >
-                Available offers ({AVAILABLE_OFFERS.length})
-              </button>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#45464d]">
+              PAYMENT METHOD
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">Choose how you want to pay for this order.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {[
+                { id: "upi" as const, label: "UPI", detail: "Any UPI app" },
+                { id: "card" as const, label: "Card", detail: "Credit or debit" },
+                { id: "cod" as const, label: "Pay after service", detail: "Cash / on-site" },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setMethod(option.id)}
+                  className={`min-h-[76px] cursor-pointer rounded-xl border p-4 text-left transition ${
+                    method === option.id
+                      ? "border-[#ea580c] bg-[#fff7ed] ring-2 ring-orange-100"
+                      : "border-slate-200 hover:border-blue-200"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-[#0b1c30]">{option.label}</span>
+                  <span className="mt-1 block text-xs font-medium text-slate-500">{option.detail}</span>
+                </button>
+              ))}
             </div>
-
-            {appliedCoupon ? (
-              <div className="rounded-[12px] bg-[#fff7ed] p-3.5 border border-[#ffedd5] flex items-center justify-between text-xs text-[#9a3412]">
-                <div>
-                  <strong className="font-bold block text-sm">Coupon '{appliedCoupon.code}' applied!</strong>
-                  <span>Saved {formatPrice(appliedCoupon.discountPaise)} on this booking</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRemoveCoupon}
-                  className="rounded-full bg-white px-3 py-1 font-bold text-red-600 border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="Enter promo code (e.g. WELCOME50)"
-                  className="h-12 flex-1 rounded-[8px] border border-[#c6c6cd] bg-white px-4 text-sm font-semibold uppercase text-[#0b1c30] placeholder:lowercase outline-none focus:border-[#ea580c]"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleApplyCoupon()}
-                  className="h-12 rounded-[8px] bg-[#ea580c] hover:bg-[#c2410c] px-6 text-sm font-bold text-white transition-all cursor-pointer"
-                >
-                  Apply
-                </button>
-              </div>
-            )}
           </div>
+
         </div>
 
         {/* Right Column: Sticky Payment Summary */}
@@ -458,25 +438,24 @@ export function CheckoutClient() {
             {/* White Body */}
             <div className="p-6 bg-white space-y-4">
               <div className="space-y-2.5 text-xs sm:text-sm">
-                {items.map((it) => (
-                  <div key={it.id} className="flex justify-between font-medium text-[#45464d]">
-                    <span>{it.serviceName}</span>
-                    <strong className="font-bold text-[#0b1c30]">{formatPrice(it.quotedAmount)}</strong>
+                <div className="flex justify-between font-medium text-[#45464d]">
+                  <span>Service charges</span>
+                  <strong className="font-bold text-[#0b1c30]">{formatPrice(serviceSubtotalPaise)}</strong>
+                </div>
+                {addOnsPaise > 0 ? (
+                  <div className="flex justify-between font-medium text-[#45464d]">
+                    <span>Parts & add-ons</span>
+                    <strong className="font-bold text-[#0b1c30]">{formatPrice(addOnsPaise)}</strong>
                   </div>
-                ))}
-
-                {appliedCoupon && (
-                  <div className="flex justify-between font-bold text-[#ea580c]">
-                    <span>Discount ('{appliedCoupon.code}')</span>
-                    <span>-{formatPrice(appliedCoupon.discountPaise)}</span>
-                  </div>
-                )}
+                ) : null}
 
                 <div className="flex justify-between items-center pt-1">
-                  <span className="font-medium text-[#45464d]">Platform Convenience Fee</span>
-                  <span className="rounded-md bg-[#fff7ed] px-2.5 py-0.5 text-[11px] font-bold text-[#ea580c]">
-                    FREE / WAIVED
-                  </span>
+                  <span className="font-medium text-[#45464d]">Platform convenience fee</span>
+                  <strong className="font-bold text-[#0b1c30]">{formatPrice(platformFeePaise)}</strong>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-[#45464d]">GST on platform fee (18%)</span>
+                  <strong className="font-bold text-[#0b1c30]">{formatPrice(platformFeeGstPaise)}</strong>
                 </div>
               </div>
 
@@ -551,34 +530,6 @@ export function CheckoutClient() {
         />
       )}
 
-      {/* Available Offers Modal */}
-      {showOffersModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-[16px] bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-heading text-lg font-bold text-[#0b1c30]">Available Offers</h3>
-              <button type="button" onClick={() => setShowOffersModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
-            </div>
-            <div className="space-y-3">
-              {AVAILABLE_OFFERS.map((offer) => (
-                <div key={offer.code} className="rounded-[12px] border border-slate-200 p-4 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-[#ea580c] text-sm block">{offer.code}</span>
-                    <span className="text-xs text-[#45464d]">{offer.description}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyCoupon(offer.code)}
-                    className="rounded-full bg-[#ea580c] px-3 py-1 text-xs font-bold text-white hover:bg-[#c2410c]"
-                  >
-                    Apply
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

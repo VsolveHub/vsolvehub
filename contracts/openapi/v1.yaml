@@ -1,0 +1,1336 @@
+openapi: 3.0.3
+info:
+  title: Vsolve Hub API
+  version: 1.1.0
+  description: Authoritative API for Vsolve Hub customer, partner and operations clients.
+paths:
+  /api/v1/addresses/:
+    get:
+      operationId: addresses_list
+      tags:
+      - Addresses
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Address'
+          description: ''
+    post:
+      operationId: addresses_create
+      tags:
+      - Addresses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddressRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/addresses/{address_id}/:
+    get:
+      operationId: addresses_retrieve
+      parameters:
+      - in: path
+        name: address_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Addresses
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    patch:
+      operationId: addresses_partial_update
+      parameters:
+      - in: path
+        name: address_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Addresses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAddressRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Address'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: addresses_destroy
+      parameters:
+      - in: path
+        name: address_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Addresses
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: Address archived.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/auth/csrf/:
+    get:
+      operationId: auth_csrf_retrieve
+      tags:
+      - Authentication
+      security:
+      - {}
+      responses:
+        '200':
+          description: A CSRF cookie has been set.
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - Authentication
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: The current session was revoked.
+  /api/v1/auth/otp/request/:
+    post:
+      operationId: auth_otp_request_create
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OtpRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OtpRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpIssued'
+          description: ''
+  /api/v1/auth/otp/verify/:
+    post:
+      operationId: auth_otp_verify_create
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedSession'
+          description: ''
+  /api/v1/auth/session/:
+    get:
+      operationId: auth_session_retrieve
+      tags:
+      - Authentication
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/auth/sessions/:
+    get:
+      operationId: auth_sessions_list
+      tags:
+      - Authentication
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSession'
+          description: ''
+  /api/v1/auth/sessions/{session_id}/:
+    delete:
+      operationId: auth_sessions_destroy
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Authentication
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: The selected session was revoked.
+  /api/v1/categories/:
+    get:
+      operationId: categories_list
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/categories/{category_slug}/services/:
+    get:
+      operationId: categories_services_list
+      parameters:
+      - in: path
+        name: category_slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceCard'
+          description: ''
+  /api/v1/geocoding/reverse/:
+    post:
+      operationId: geocoding_reverse_create
+      tags:
+      - Locations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseGeocodeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReverseGeocodeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReverseGeocodeRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseGeocodeResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/health/live/:
+    get:
+      operationId: health_live_retrieve
+      tags:
+      - Health
+      security:
+      - {}
+      responses:
+        '200':
+          description: The API process is running.
+  /api/v1/health/ready/:
+    get:
+      operationId: health_ready_retrieve
+      tags:
+      - Health
+      security:
+      - {}
+      responses:
+        '200':
+          description: Required dependencies are reachable.
+        '503':
+          description: One or more required dependencies are unavailable.
+  /api/v1/serviceability/check/:
+    post:
+      operationId: serviceability_check_create
+      tags:
+      - Locations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceabilityRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ServiceabilityRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ServiceabilityRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceabilityResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/services/{service_slug}/:
+    get:
+      operationId: services_retrieve
+      parameters:
+      - in: path
+        name: service_slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDetail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/services/{service_slug}/configuration/:
+    get:
+      operationId: services_configuration_retrieve
+      description: Stable configuration endpoint retained separately for booking-workspace
+        caching.
+      parameters:
+      - in: path
+        name: service_slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDetail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        label:
+          type: string
+          maxLength: 60
+        line1:
+          type: string
+          maxLength: 200
+        line2:
+          type: string
+          maxLength: 200
+        landmark:
+          type: string
+          maxLength: 160
+        locality:
+          type: string
+          maxLength: 160
+        city:
+          type: string
+          maxLength: 120
+        state:
+          type: string
+          maxLength: 120
+        postal_code:
+          type: string
+          maxLength: 12
+        country_code:
+          type: string
+          maxLength: 2
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - city
+      - confirmed_at
+      - created_at
+      - id
+      - label
+      - latitude
+      - line1
+      - locality
+      - longitude
+      - postal_code
+      - state
+      - updated_at
+    AddressRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 60
+        line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        line2:
+          type: string
+          maxLength: 200
+        landmark:
+          type: string
+          maxLength: 160
+        locality:
+          type: string
+          minLength: 1
+          maxLength: 160
+        city:
+          type: string
+          minLength: 1
+          maxLength: 120
+        state:
+          type: string
+          minLength: 1
+          maxLength: 120
+        postal_code:
+          type: string
+          minLength: 1
+          maxLength: 12
+        country_code:
+          type: string
+          minLength: 1
+          maxLength: 2
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        is_default:
+          type: boolean
+      required:
+      - city
+      - label
+      - latitude
+      - line1
+      - locality
+      - longitude
+      - postal_code
+      - state
+    ApiError:
+      type: object
+      properties:
+        error:
+          allOf:
+          - $ref: '#/components/schemas/ApiErrorDetail'
+          readOnly: true
+      required:
+      - error
+    ApiErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        details:
+          readOnly: true
+          nullable: true
+        request_id:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - code
+      - details
+      - message
+      - request_id
+    AuthenticatedSession:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        session_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - session_expires_at
+      - user
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        icon_key:
+          type: string
+          readOnly: true
+        subcategories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subcategory'
+          readOnly: true
+      required:
+      - description
+      - icon_key
+      - id
+      - name
+      - slug
+      - subcategories
+    Money:
+      type: object
+      properties:
+        amount_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+      required:
+      - amount_paise
+      - currency
+    OtpIssued:
+      type: object
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+          readOnly: true
+        expires_in_seconds:
+          type: integer
+          readOnly: true
+        resend_after_seconds:
+          type: integer
+          readOnly: true
+        development_code:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - challenge_id
+      - development_code
+      - expires_in_seconds
+      - resend_after_seconds
+    OtpRequestRequest:
+      type: object
+      properties:
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 32
+        device_identifier:
+          type: string
+          writeOnly: true
+          maxLength: 128
+      required:
+      - phone_number
+    OtpVerifyRequest:
+      type: object
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        phone_number:
+          type: string
+          minLength: 1
+          maxLength: 32
+        code:
+          type: string
+          writeOnly: true
+          minLength: 6
+          maxLength: 6
+          pattern: ^\d{6}$
+        device_identifier:
+          type: string
+          writeOnly: true
+          maxLength: 128
+        device_label:
+          type: string
+          writeOnly: true
+          maxLength: 100
+      required:
+      - challenge_id
+      - code
+      - phone_number
+    PatchedAddressRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 60
+        line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        line2:
+          type: string
+          maxLength: 200
+        landmark:
+          type: string
+          maxLength: 160
+        locality:
+          type: string
+          minLength: 1
+          maxLength: 160
+        city:
+          type: string
+          minLength: 1
+          maxLength: 120
+        state:
+          type: string
+          minLength: 1
+          maxLength: 120
+        postal_code:
+          type: string
+          minLength: 1
+          maxLength: 12
+        country_code:
+          type: string
+          minLength: 1
+          maxLength: 2
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        is_default:
+          type: boolean
+    PricingStrategyEnum:
+      enum:
+      - FIXED
+      - DURATION
+      - INSPECTION
+      type: string
+      description: |-
+        * `FIXED` - Fixed
+        * `DURATION` - Duration based
+        * `INSPECTION` - Inspection first
+    ReverseGeocodeRequestRequest:
+      type: object
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+      required:
+      - latitude
+      - longitude
+    ReverseGeocodeResponse:
+      type: object
+      properties:
+        formatted_address:
+          type: string
+          readOnly: true
+        line1:
+          type: string
+          readOnly: true
+        locality:
+          type: string
+          readOnly: true
+        city:
+          type: string
+          readOnly: true
+        state:
+          type: string
+          readOnly: true
+        postal_code:
+          type: string
+          readOnly: true
+        country_code:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+          readOnly: true
+        provider:
+          type: string
+          readOnly: true
+      required:
+      - city
+      - country_code
+      - formatted_address
+      - latitude
+      - line1
+      - locality
+      - longitude
+      - postal_code
+      - provider
+      - state
+    ServiceArea:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - name
+      - slug
+      - timezone
+    ServiceCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        short_description:
+          type: string
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+        subcategory_slug:
+          type: string
+          readOnly: true
+        starting_price:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        recommended_duration_minutes:
+          type: integer
+          readOnly: true
+        cover:
+          allOf:
+          - $ref: '#/components/schemas/ServiceMedia'
+          nullable: true
+          readOnly: true
+      required:
+      - category_slug
+      - cover
+      - id
+      - name
+      - recommended_duration_minutes
+      - short_description
+      - slug
+      - starting_price
+      - subcategory_slug
+    ServiceDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        short_description:
+          type: string
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+        subcategory_slug:
+          type: string
+          readOnly: true
+        starting_price:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        recommended_duration_minutes:
+          type: integer
+          readOnly: true
+        cover:
+          allOf:
+          - $ref: '#/components/schemas/ServiceMedia'
+          nullable: true
+          readOnly: true
+        description:
+          type: string
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceVariantConfiguration'
+          readOnly: true
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServicePolicy'
+          readOnly: true
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceMedia'
+          readOnly: true
+      required:
+      - category_slug
+      - cover
+      - id
+      - media
+      - name
+      - policies
+      - recommended_duration_minutes
+      - short_description
+      - slug
+      - starting_price
+      - subcategory_slug
+      - variants
+    ServiceMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ServiceMediaKindEnum'
+          readOnly: true
+        url:
+          type: string
+          format: uri
+          readOnly: true
+        alt_text:
+          type: string
+          readOnly: true
+      required:
+      - alt_text
+      - id
+      - kind
+      - url
+    ServiceMediaKindEnum:
+      enum:
+      - COVER
+      - GALLERY
+      type: string
+      description: |-
+        * `COVER` - Cover
+        * `GALLERY` - Gallery
+    ServicePolicy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ServicePolicyKindEnum'
+          readOnly: true
+        text:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - kind
+      - text
+    ServicePolicyKindEnum:
+      enum:
+      - INCLUDED
+      - EXCLUDED
+      - GOOD_TO_KNOW
+      type: string
+      description: |-
+        * `INCLUDED` - Included
+        * `EXCLUDED` - Not included
+        * `GOOD_TO_KNOW` - Good to know
+    ServiceQuestion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        prompt:
+          type: string
+          readOnly: true
+        help_text:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ServiceQuestionKindEnum'
+          readOnly: true
+        is_required:
+          type: boolean
+          readOnly: true
+        validation_rules:
+          readOnly: true
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceQuestionOption'
+          readOnly: true
+      required:
+      - code
+      - help_text
+      - id
+      - is_required
+      - kind
+      - options
+      - prompt
+      - validation_rules
+    ServiceQuestionKindEnum:
+      enum:
+      - SINGLE_CHOICE
+      - MULTIPLE_CHOICE
+      - BOOLEAN
+      - NUMBER
+      - TEXT
+      type: string
+      description: |-
+        * `SINGLE_CHOICE` - Single choice
+        * `MULTIPLE_CHOICE` - Multiple choice
+        * `BOOLEAN` - Yes or no
+        * `NUMBER` - Number
+        * `TEXT` - Text
+    ServiceQuestionOption:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        label:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - description
+      - id
+      - label
+    ServiceVariantConfiguration:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        pricing_strategy:
+          allOf:
+          - $ref: '#/components/schemas/PricingStrategyEnum'
+          readOnly: true
+        starting_price:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        minimum_duration_minutes:
+          type: integer
+          readOnly: true
+        recommended_duration_minutes:
+          type: integer
+          readOnly: true
+        duration_increment_minutes:
+          type: integer
+          readOnly: true
+        maximum_duration_minutes:
+          type: integer
+          readOnly: true
+        required_skill_code:
+          type: string
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceQuestion'
+          readOnly: true
+      required:
+      - code
+      - description
+      - duration_increment_minutes
+      - id
+      - maximum_duration_minutes
+      - minimum_duration_minutes
+      - name
+      - pricing_strategy
+      - questions
+      - recommended_duration_minutes
+      - required_skill_code
+      - starting_price
+    ServiceabilityRequestRequest:
+      type: object
+      properties:
+        postal_code:
+          type: string
+          minLength: 1
+          maxLength: 12
+        service_variant_id:
+          type: string
+          format: uuid
+        requested_start:
+          type: string
+          format: date-time
+        duration_minutes:
+          type: integer
+          maximum: 1440
+          minimum: 1
+      required:
+      - postal_code
+    ServiceabilityResponse:
+      type: object
+      properties:
+        is_serviceable:
+          type: boolean
+          readOnly: true
+        reason_code:
+          type: string
+          readOnly: true
+          nullable: true
+        service_area:
+          allOf:
+          - $ref: '#/components/schemas/ServiceArea'
+          readOnly: true
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - is_serviceable
+      - reason_code
+      - server_now
+      - service_area
+    SourceEnum:
+      enum:
+      - MANUAL
+      - REVERSE_GEOCODED
+      type: string
+      description: |-
+        * `MANUAL` - Manual
+        * `REVERSE_GEOCODED` - Reverse geocoded
+    Subcategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+      required:
+      - description
+      - id
+      - name
+      - slug
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        phone_number:
+          type: string
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - email
+      - full_name
+      - id
+      - phone_number
+      - roles
+    UserSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        device_label:
+          type: string
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_seen_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_current:
+          type: boolean
+          readOnly: true
+      required:
+      - created_at
+      - device_label
+      - expires_at
+      - id
+      - is_current
+      - last_seen_at
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: vsolve_session
+      description: Revocable Django session cookie. Mutations also require a CSRF
+        token.

@@ -1,0 +1,14 @@
+-r base.in
+
+django-stubs[compatible-mypy]>=5.2,<6
+djangorestframework-stubs[compatible-mypy]>=3.16,<4
+factory-boy>=3.3,<4
+faker>=37,<40
+freezegun>=1.5,<2
+mypy>=1.17,<2
+pip-audit>=2.9,<3
+pytest>=8.4,<9
+pytest-cov>=6,<8
+pytest-django>=4.11,<5
+pytest-xdist>=3.8,<4
+ruff>=0.12,<1

@@ -5,5 +5,8 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   esbuild: true
+  # msw's postinstall only prints a CLI notice. The browser service worker is
+  # created per-app with `msw init <app>/public`, so no build step is needed.
+  msw: false
   prisma: true
   sharp: true

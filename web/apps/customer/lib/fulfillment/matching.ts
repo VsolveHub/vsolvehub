@@ -75,6 +75,7 @@ export type MatchContext = {
   addrLng: number;
   slot: string;
   scheduleType: "instant" | "scheduled";
+  durationMinutes?: number;
   service: { slug: string; subCategory: { slug: string } | null };
 };
 
@@ -173,6 +174,7 @@ export type FindAvailableInput = {
   addrLng: number;
   slot: string;
   scheduleType: "instant" | "scheduled";
+  durationMinutes?: number;
   excludePartnerIds?: string[];
 };
 
@@ -196,16 +198,47 @@ async function busyRightNow(excludePartnerIds: string[]): Promise<Set<string>> {
 }
 
 /** Partners already holding an active booking at this exact slot (scheduled conflict). */
-async function busyAtSlot(slot: string, excludePartnerIds: string[]): Promise<Set<string>> {
+export function intervalsOverlap(
+  startA: Date,
+  durationMinutesA: number,
+  startB: Date,
+  durationMinutesB: number,
+): boolean {
+  const endA = startA.getTime() + durationMinutesA * 60_000;
+  const endB = startB.getTime() + durationMinutesB * 60_000;
+  return startA.getTime() < endB && startB.getTime() < endA;
+}
+
+async function busyAtSlot(
+  slot: string,
+  durationMinutes: number,
+  excludePartnerIds: string[],
+): Promise<Set<string>> {
   const rows = await prisma.booking.findMany({
     where: {
       assignedPartnerId: { not: null, notIn: excludePartnerIds },
-      slot,
       status: { in: ["ASSIGNED", "PROVIDER_ARRIVING", "STARTED"] },
     },
-    select: { assignedPartnerId: true },
+    select: {
+      assignedPartnerId: true,
+      slot: true,
+      durationMinutes: true,
+      extensionMinutes: true,
+    },
   });
-  return new Set(rows.map((r) => r.assignedPartnerId!));
+  const requestedStart = new Date(slot);
+  return new Set(
+    rows
+      .filter((row) =>
+        intervalsOverlap(
+          requestedStart,
+          durationMinutes,
+          new Date(row.slot),
+          row.durationMinutes + row.extensionMinutes,
+        ),
+      )
+      .map((row) => row.assignedPartnerId!),
+  );
 }
 
 async function recentAssignmentCounts(): Promise<Map<string, number>> {
@@ -239,7 +272,9 @@ export async function findAvailablePartners(input: FindAvailableInput): Promise<
       include: candidatePartnerInclude,
       take: 200,
     }),
-    input.scheduleType === "instant" ? busyRightNow(exclude) : busyAtSlot(input.slot, exclude),
+    input.scheduleType === "instant"
+      ? busyRightNow(exclude)
+      : busyAtSlot(input.slot, input.durationMinutes ?? 60, exclude),
     recentAssignmentCounts(),
   ]);
 
@@ -248,6 +283,7 @@ export async function findAvailablePartners(input: FindAvailableInput): Promise<
     addrLng: input.addrLng,
     slot: input.slot,
     scheduleType: input.scheduleType,
+    durationMinutes: input.durationMinutes,
     service: input.service,
   };
 

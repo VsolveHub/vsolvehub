@@ -59,6 +59,7 @@ export type ProfessionalChoice = {
   jobsCompleted: number;
   distanceKm: number;
   etaMins: number;
+  isPreviouslyBooked?: boolean;
 };
 /** The professional revealed at checkout by direct assignment. */
 export type AssignedPartner = { name: string; rating: number; jobsCompleted: number };
@@ -195,10 +196,17 @@ export const api = {
     }),
   reverseGeocode: (lat: number, lng: number) =>
     jsonFetch<Record<string, unknown>>(`/api/geocode/reverse?lat=${lat}&lng=${lng}`),
-  availability: (input: { serviceId: string; addressId: string; slot: string; scheduleType: string }) =>
+  availability: (input: {
+    serviceId: string;
+    addressId: string;
+    slot: string;
+    scheduleType: string;
+    durationMinutes?: number;
+  }) =>
     jsonFetch<{ count: number; professionals: ProfessionalChoice[]; suggestedSlots: SlotSuggestion[] }>(
       `/api/providers/availability?serviceId=${input.serviceId}&addressId=${input.addressId}` +
-        `&slot=${encodeURIComponent(input.slot)}&scheduleType=${input.scheduleType}`,
+        `&slot=${encodeURIComponent(input.slot)}&scheduleType=${input.scheduleType}` +
+        `&durationMinutes=${input.durationMinutes ?? 60}`,
     ),
   createBooking: (input: Record<string, unknown>) =>
     jsonPost<CreateBookingResult>("/api/bookings", input),
@@ -226,6 +234,14 @@ export const api = {
   reviseBooking: (ref: string, action: "approve" | "decline") =>
     jsonPost<{ success?: boolean }>(`/api/bookings/${ref}/revise`, { action }),
   retryBooking: (ref: string) => jsonPost<{ ok?: boolean }>(`/api/bookings/${ref}/retry`),
+  extendBooking: (ref: string, minutes: number) =>
+    jsonPost<{
+      ok: boolean;
+      extensionMinutes: number;
+      totalDurationMinutes: number;
+      deltaPaise: number;
+      finalAmountPaise: number;
+    }>(`/api/bookings/${ref}/extend`, { minutes }),
   cancelCrewBooking: (ref: string) => jsonPost<{ success?: boolean }>(`/api/crew/bookings/${ref}/cancel`),
   payCrewBooking: (ref: string, paymentMethod: string) => jsonPost<{ success?: boolean }>(`/api/crew/bookings/${ref}/pay`, { paymentMethod }),
   postCrewAction: (ref: string, path: string, body?: any) => jsonPost<{ success?: boolean }>(`/api/crew/bookings/${ref}/${path}`, body),

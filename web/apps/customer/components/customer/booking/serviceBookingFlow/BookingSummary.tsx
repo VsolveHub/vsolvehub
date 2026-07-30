@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import type { FlowService, PriceEstimate, ServiceConfig } from "./types";
+import type { ServiceCommercials } from "@/lib/bookings/commercials";
+import { formatDuration } from "@/lib/bookings/commercials";
 
 export function BookingSummary({
   service,
   startsAtPaise,
   estimate,
+  commercials,
   onProceed,
   submitting = false,
 }: {
@@ -13,6 +16,7 @@ export function BookingSummary({
   config: ServiceConfig;
   startsAtPaise: number;
   estimate: PriceEstimate;
+  commercials: ServiceCommercials;
   onProceed?: () => void;
   submitting?: boolean;
 }) {
@@ -38,18 +42,14 @@ export function BookingSummary({
             </div>
             <div>
               <div className="font-bold text-[#0b1c30] text-sm">Verified professional</div>
-              {service.duration > 0 && (
-                <div className="mt-0.5 text-xs font-medium text-[#45464d] flex items-center gap-1">
+              <div className="mt-0.5 text-xs font-medium text-[#45464d] flex items-center gap-1">
                   <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span>
-                    {service.duration >= 60
-                      ? `~${Math.round(service.duration / 60)} hr est. duration`
-                      : `~${service.duration} mins est. duration`}
+                    {formatDuration(commercials.durationMinutes)} selected
                   </span>
                 </div>
-              )}
             </div>
           </div>
 
@@ -59,7 +59,9 @@ export function BookingSummary({
               <span className="font-medium text-[#45464d]">
                 {estimate.lineItems.find((li) => li.kind === "variant")?.value || "Inspection & Diagnosis"}
               </span>
-              <strong className="font-bold text-[#0b1c30]">{formatPrice(estimate.basePaise || startsAtPaise)}</strong>
+              <strong className="font-bold text-[#0b1c30]">
+                {formatPrice(commercials.serviceSubtotalPaise)}
+              </strong>
             </div>
 
             {estimate.lineItems
@@ -75,10 +77,16 @@ export function BookingSummary({
               ))}
 
             <div className="flex items-center justify-between pt-1">
-              <span className="font-medium text-[#45464d]">Platform Convenience Fee</span>
-              <span className="rounded-md bg-[#fff7ed] px-2.5 py-0.5 text-[11px] font-bold text-[#ea580c]">
-                WAIVED
-              </span>
+              <span className="font-medium text-[#45464d]">Platform convenience fee</span>
+              <strong className="font-bold text-[#0b1c30]">
+                {formatPrice(commercials.platformFeePaise)}
+              </strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-[#45464d]">GST on platform fee (18%)</span>
+              <strong className="font-bold text-[#0b1c30]">
+                {formatPrice(commercials.platformFeeGstPaise)}
+              </strong>
             </div>
           </div>
 
@@ -89,10 +97,10 @@ export function BookingSummary({
             <span className="text-sm font-semibold text-[#45464d]">Total Payable</span>
             <div className="text-right">
               <span className="font-heading text-3xl font-extrabold text-[#0b1c30]">
-                {formatPrice(estimate.totalPaise || startsAtPaise)}
+                {formatPrice(commercials.totalPaise)}
               </span>
               <span className="mt-0.5 block text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                TAX INCLUSIVE
+                SERVICE GST INCLUDED
               </span>
             </div>
           </div>
@@ -103,7 +111,7 @@ export function BookingSummary({
               ✓
             </div>
             <div className="font-medium leading-normal">
-              <strong className="font-bold">No hidden costs.</strong> Final price will be confirmed by the professional based on your specific requirements.
+              <strong className="font-bold">Transparent estimate.</strong> Extra time is added only when you approve an extension.
             </div>
           </div>
 

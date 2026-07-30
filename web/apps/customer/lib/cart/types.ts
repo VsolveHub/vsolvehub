@@ -15,10 +15,16 @@ export type CartItem = {
   categorySlug: string;
   slot: string;
   scheduleType: string;
+  slotConfirmed: boolean;
   addressId: string;
   addressLabel: string;
   addressFull: string;
   quotedAmount: number;
+  baseChargePaise: number;
+  platformFeePaise: number;
+  taxPaise: number;
+  durationMinutes: number;
+  preferredPartnerId?: string | null;
   lineItems: CartLineItem[];
   archetypeDetails?: any;
 };

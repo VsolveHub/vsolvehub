@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2022"],
+    // src/timing.ts uses `performance` and `console`, which live in the DOM lib.
+    // Without this the package's own typecheck fails.
+    "lib": ["ES2022", "DOM"],
     "noEmit": true
   },
   "include": ["src"]

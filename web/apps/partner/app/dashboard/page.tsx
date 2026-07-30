@@ -162,6 +162,9 @@ export default async function LivePage() {
         customerName: jobRow.user.name ?? "Customer",
         customerPhone: jobRow.user.phone,
         amountPaise: jobRow.quotedAmount,
+        durationMinutes: jobRow.durationMinutes,
+        extensionMinutes: jobRow.extensionMinutes,
+        startConfirmedAt: jobRow.startConfirmedAt?.toISOString() ?? null,
         details: parseJobDetails(jobRow.archetypeDetails),
         note: jobRow.issueDescription ?? "",
       }

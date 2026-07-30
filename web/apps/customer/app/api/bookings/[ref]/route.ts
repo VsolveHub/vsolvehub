@@ -248,6 +248,11 @@ function serializeMarketplaceBooking(booking: Booking, marketplace: boolean) {
     // Shown to the customer once a partner is assigned; read aloud to start the job.
     startOtp: paidForMobilization && ["ASSIGNED", "PROVIDER_ARRIVING"].includes(normalized) ? booking.startOtp : null,
     baseChargePaise: booking.baseChargePaise,
+    platformFeePaise: booking.platformFeePaise,
+    taxPaise: booking.taxPaise,
+    durationMinutes: booking.durationMinutes,
+    extensionMinutes: booking.extensionMinutes,
+    startConfirmedAt: booking.startConfirmedAt,
     quotedAmount: booking.quotedAmount,
     finalAmountPaise: booking.finalAmountPaise ?? booking.quotedAmount,
     lineItems: getDetailedLineItems(booking),
