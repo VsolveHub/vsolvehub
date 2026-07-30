@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "apps.catalog",
     "apps.pricing",
     "apps.locations",
+    "apps.partners",
 ]
 
 MIDDLEWARE = [
@@ -142,11 +143,14 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.1.0",
+    "VERSION": "1.2.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": True,
+    "ENUM_NAME_OVERRIDES": {
+        "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
+    },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
 
@@ -179,6 +183,21 @@ GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
     default=5,
 )
 
+PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
+PARTNER_REQUIRED_CONSENT_PURPOSES = ("partner_terms", "privacy_notice")
+PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
+PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
+    "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
+    default=300,
+)
+PARTNER_LOCATION_MAX_ACCURACY_METERS = env.int(
+    "PARTNER_LOCATION_MAX_ACCURACY_METERS",
+    default=500,
+)
+PARTNER_LOCATION_STALE_SECONDS = env.int(
+    "PARTNER_LOCATION_STALE_SECONDS",
+    default=30 * 60,
+)
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://127.0.0.1:56379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://127.0.0.1:56379/2")
@@ -190,6 +209,12 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULE = {
+    "reconcile-partner-presence-sessions": {
+        "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
+        "schedule": 60.0,
+    },
+}
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"

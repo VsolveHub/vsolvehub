@@ -19,15 +19,16 @@ Copy-Item .env.example .env
 docker compose --env-file ..\infra\.env.example -f ..\infra\compose.yaml up -d
 .\.venv\Scripts\python.exe manage.py migrate
 .\.venv\Scripts\python.exe manage.py seed_technician_catalog --with-development-area
+.\.venv\Scripts\python.exe manage.py seed_partner_reference_data
 .\scripts\server.cmd
 ```
 
 The bootstrap script always installs into `backend\.venv`; it never changes global Python
 packages.
 
-The seed command is idempotent. It creates 19 explicitly priced Technician services and a
-development-only West Hyderabad service area for PIN `500032`; it is configuration, never a hidden
-location fallback.
+The seed commands are idempotent. They create 19 explicitly priced Technician services, normalized
+Partner skills, and a development-only West Hyderabad service area for PIN `500032`; this is
+configuration, never a hidden location fallback.
 
 ## Location lookup
 

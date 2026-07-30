@@ -20,6 +20,7 @@ def test_validation_error_uses_stable_envelope() -> None:
                     },
                 ],
             },
+            "retryable": False,
             "request_id": "validation-123",
         },
     }
@@ -37,6 +38,7 @@ def test_expected_api_error_does_not_expose_internal_shape() -> None:
         "message": "Booking was not found.",
         "code": "not_found",
     }
+    assert payload["retryable"] is False
 
 
 @override_settings(ROOT_URLCONF="tests.urls", ALLOWED_HOSTS=["testserver"])
@@ -47,4 +49,5 @@ def test_unexpected_error_is_sanitised() -> None:
     assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert payload["code"] == "internal_error"
     assert payload["message"] == "An unexpected error occurred."
+    assert payload["retryable"] is False
     assert "sensitive implementation detail" not in response.content.decode()

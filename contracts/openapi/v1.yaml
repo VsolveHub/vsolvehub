@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.1.0
+  version: 1.2.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -372,6 +372,433 @@ paths:
           description: Required dependencies are reachable.
         '503':
           description: One or more required dependencies are unavailable.
+  /api/v1/operations/partner-applications/{application_id}/transition/:
+    post:
+      operationId: operations_partner_applications_transition_create
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsTransitionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsTransitionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsTransitionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partner-documents/{document_id}/review/:
+    post:
+      operationId: operations_partner_documents_review_create
+      parameters:
+      - in: path
+        name: document_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsDocumentReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsDocumentReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsDocumentReviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDocument'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/application/:
+    get:
+      operationId: partner_application_retrieve
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    patch:
+      operationId: partner_application_partial_update
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPartnerApplicationUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPartnerApplicationUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPartnerApplicationUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/application/documents/:
+    post:
+      operationId: partner_application_documents_create
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerDocumentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerDocumentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerDocumentCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/application/submit/:
+    post:
+      operationId: partner_application_submit_create
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/availability/:
+    get:
+      operationId: partner_availability_retrieve
+      tags:
+      - Partner availability
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerSchedule'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    put:
+      operationId: partner_availability_update
+      tags:
+      - Partner availability
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerScheduleUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerScheduleUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerScheduleUpdateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerSchedule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/me/:
+    get:
+      operationId: partner_me_retrieve
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/presence/heartbeat/:
+    post:
+      operationId: partner_presence_heartbeat_create
+      tags:
+      - Partner presence
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPresenceHeartbeatRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPresenceHeartbeatRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPresenceHeartbeatRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPresence'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/presence/offline/:
+    post:
+      operationId: partner_presence_offline_create
+      tags:
+      - Partner presence
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerPresenceSessionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerPresenceSessionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerPresenceSessionRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: The Partner is offline.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/presence/online/:
+    post:
+      operationId: partner_presence_online_create
+      tags:
+      - Partner presence
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerGoOnlineRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerGoOnlineRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerGoOnlineRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPresence'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/serviceability/check/:
     post:
       operationId: serviceability_check_create
@@ -616,6 +1043,9 @@ components:
         details:
           readOnly: true
           nullable: true
+        retryable:
+          type: boolean
+          readOnly: true
         request_id:
           type: string
           readOnly: true
@@ -625,6 +1055,7 @@ components:
       - details
       - message
       - request_id
+      - retryable
     AuthenticatedSession:
       type: object
       properties:
@@ -671,6 +1102,22 @@ components:
       - name
       - slug
       - subcategories
+    DecisionEnum:
+      enum:
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `APPROVED` - APPROVED
+        * `REJECTED` - REJECTED
+    ExpectedVersionRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - expected_version
     Money:
       type: object
       properties:
@@ -683,6 +1130,30 @@ components:
       required:
       - amount_paise
       - currency
+    OperationsDocumentReviewRequest:
+      type: object
+      properties:
+        decision:
+          $ref: '#/components/schemas/DecisionEnum'
+        reason:
+          type: string
+          maxLength: 2000
+      required:
+      - decision
+    OperationsTransitionRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        target_status:
+          $ref: '#/components/schemas/TargetStatusEnum'
+        reason:
+          type: string
+          maxLength: 2000
+      required:
+      - expected_version
+      - target_status
     OtpIssued:
       type: object
       properties:
@@ -746,6 +1217,562 @@ components:
       - challenge_id
       - code
       - phone_number
+    PartnerApplication:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        biography:
+          type: string
+          readOnly: true
+        experience_years:
+          type: integer
+          readOnly: true
+        skill_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_variant_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_area_ids:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        change_request_message:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerConsent'
+          readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDocument'
+          readOnly: true
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationTransition'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - biography
+      - change_request_message
+      - consents
+      - created_at
+      - display_name
+      - documents
+      - experience_years
+      - id
+      - partner_id
+      - reviewed_at
+      - service_area_ids
+      - service_variant_ids
+      - skill_codes
+      - status
+      - submitted_at
+      - transitions
+      - updated_at
+      - version
+    PartnerApplicationStatusEnum:
+      enum:
+      - DRAFT
+      - SUBMITTED
+      - UNDER_REVIEW
+      - CHANGES_REQUIRED
+      - APPROVED
+      - SUSPENDED
+      - OFFBOARDED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `SUBMITTED` - Submitted
+        * `UNDER_REVIEW` - Under review
+        * `CHANGES_REQUIRED` - Changes required
+        * `APPROVED` - Approved
+        * `SUSPENDED` - Suspended
+        * `OFFBOARDED` - Offboarded
+    PartnerApplicationTransition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        from_status:
+          type: string
+          readOnly: true
+        to_status:
+          type: string
+          readOnly: true
+        reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        reason:
+          type: string
+          readOnly: true
+        application_version:
+          type: integer
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application_version
+      - from_status
+      - id
+      - occurred_at
+      - reason
+      - reason_code
+      - to_status
+    PartnerAvailabilityException:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+        is_available:
+          type: boolean
+          readOnly: true
+        starts_at:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        ends_at:
+          type: string
+          format: time
+          readOnly: true
+          nullable: true
+        ends_next_day:
+          type: boolean
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+      required:
+      - date
+      - ends_at
+      - ends_next_day
+      - id
+      - is_available
+      - reason
+      - service_area_id
+      - starts_at
+    PartnerAvailabilityExceptionInputRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        is_available:
+          type: boolean
+        starts_at:
+          type: string
+          format: time
+          nullable: true
+        ends_at:
+          type: string
+          format: time
+          nullable: true
+        ends_next_day:
+          type: boolean
+          default: false
+        reason:
+          type: string
+          maxLength: 200
+      required:
+      - date
+      - is_available
+      - service_area_id
+    PartnerAvailabilityRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        weekday:
+          type: integer
+          readOnly: true
+          description: Monday is 0 and Sunday is 6.
+        starts_at:
+          type: string
+          format: time
+          readOnly: true
+        ends_at:
+          type: string
+          format: time
+          readOnly: true
+        ends_next_day:
+          type: boolean
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+      required:
+      - ends_at
+      - ends_next_day
+      - id
+      - is_active
+      - service_area_id
+      - starts_at
+      - weekday
+    PartnerAvailabilityRuleInputRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        weekday:
+          type: integer
+          maximum: 6
+          minimum: 0
+        starts_at:
+          type: string
+          format: time
+        ends_at:
+          type: string
+          format: time
+        ends_next_day:
+          type: boolean
+          default: false
+      required:
+      - ends_at
+      - service_area_id
+      - starts_at
+      - weekday
+    PartnerConsent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        purpose:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        document_version:
+          type: string
+          readOnly: true
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        withdrawn_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - accepted_at
+      - document_version
+      - id
+      - purpose
+      - withdrawn_at
+    PartnerConsentInputRequest:
+      type: object
+      properties:
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        document_version:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+      - document_version
+      - purpose
+    PartnerDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        sha256:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
+          readOnly: true
+        review_reason:
+          type: string
+          readOnly: true
+        uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - content_type
+      - id
+      - kind
+      - review_reason
+      - reviewed_at
+      - sha256
+      - size_bytes
+      - status
+      - uploaded_at
+      - version
+    PartnerDocumentCreateRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        kind:
+          $ref: '#/components/schemas/PartnerDocumentKindEnum'
+        object_key:
+          type: string
+          minLength: 1
+          maxLength: 500
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 120
+        size_bytes:
+          type: integer
+          maximum: 20971520
+          minimum: 1
+        sha256:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[0-9a-f]{64}$
+      required:
+      - content_type
+      - expected_version
+      - kind
+      - object_key
+      - sha256
+      - size_bytes
+    PartnerDocumentKindEnum:
+      enum:
+      - GOVERNMENT_ID
+      - ADDRESS_PROOF
+      - TAX
+      - BANK
+      - BACKGROUND_CHECK
+      - OTHER
+      type: string
+      description: |-
+        * `GOVERNMENT_ID` - Government identity
+        * `ADDRESS_PROOF` - Address proof
+        * `TAX` - Tax document
+        * `BANK` - Bank document
+        * `BACKGROUND_CHECK` - Background check
+        * `OTHER` - Other
+    PartnerDocumentStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - SUPERSEDED
+      type: string
+      description: |-
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `SUPERSEDED` - Superseded
+    PartnerGoOnlineRequest:
+      type: object
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        accuracy_m:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        consent_version:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+      - accuracy_m
+      - consent_version
+      - latitude
+      - longitude
+      - service_area_id
+    PartnerPresence:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area_id:
+          type: string
+          format: uuid
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_persisted_heartbeat_at:
+          type: string
+          format: date-time
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - last_persisted_heartbeat_at
+      - server_now
+      - service_area_id
+      - started_at
+    PartnerPresenceHeartbeatRequest:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,6})?$
+        accuracy_m:
+          type: integer
+          maximum: 10000
+          minimum: 1
+        consent_version:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+      - session_id
+    PartnerPresenceSessionRequestRequest:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+      required:
+      - session_id
+    PartnerSchedule:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityRule'
+          readOnly: true
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityException'
+          readOnly: true
+      required:
+      - exceptions
+      - rules
+    PartnerScheduleUpdateRequest:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityRuleInputRequest'
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityExceptionInputRequest'
+      required:
+      - exceptions
+      - rules
     PatchedAddressRequest:
       type: object
       properties:
@@ -795,6 +1822,48 @@ components:
           $ref: '#/components/schemas/SourceEnum'
         is_default:
           type: boolean
+    PatchedPartnerApplicationUpdateRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        biography:
+          type: string
+          maxLength: 2000
+        experience_years:
+          type: integer
+          maximum: 80
+          minimum: 0
+        skill_codes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: ^[-a-zA-Z0-9_]+$
+        service_variant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        service_area_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        consents:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerConsentInputRequest'
+        device_identifier:
+          type: string
+          writeOnly: true
+          maxLength: 128
     PricingStrategyEnum:
       enum:
       - FIXED
@@ -1266,6 +2335,20 @@ components:
       - id
       - name
       - slug
+    TargetStatusEnum:
+      enum:
+      - UNDER_REVIEW
+      - CHANGES_REQUIRED
+      - APPROVED
+      - SUSPENDED
+      - OFFBOARDED
+      type: string
+      description: |-
+        * `UNDER_REVIEW` - UNDER_REVIEW
+        * `CHANGES_REQUIRED` - CHANGES_REQUIRED
+        * `APPROVED` - APPROVED
+        * `SUSPENDED` - SUSPENDED
+        * `OFFBOARDED` - OFFBOARDED
     User:
       type: object
       properties:

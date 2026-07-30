@@ -1,5 +1,13 @@
 # API Contract Changelog
 
+## 1.2.0 — Partner onboarding, eligibility and presence
+
+- Added Partner application create/update/read and optimistic-version submission endpoints.
+- Added versioned KYC document upload metadata and Operations review/state-transition commands.
+- Added normalized Partner skill, service and service-area eligibility.
+- Added weekly schedules, date exceptions and Redis-first online/heartbeat/offline presence.
+- Added `retryable` to the standard API error envelope.
+
 ## 1.1.0 — Catalog and locations
 
 - Added public Category, Service list/detail and booking-configuration endpoints.

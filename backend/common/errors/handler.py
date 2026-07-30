@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 
 ErrorValue = ErrorDetail | str | int | float | bool | None
 ErrorData = ErrorValue | Mapping[str, "ErrorData"] | Sequence["ErrorData"]
+RETRYABLE_HTTP_STATUSES = {
+    status.HTTP_408_REQUEST_TIMEOUT,
+    status.HTTP_425_TOO_EARLY,
+    status.HTTP_429_TOO_MANY_REQUESTS,
+    status.HTTP_502_BAD_GATEWAY,
+    status.HTTP_503_SERVICE_UNAVAILABLE,
+    status.HTTP_504_GATEWAY_TIMEOUT,
+}
 
 
 def _serialise_details(value: object) -> object:
@@ -26,6 +34,13 @@ def _serialise_details(value: object) -> object:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [_serialise_details(item) for item in value]
     return value
+
+
+def _is_retryable(exc: Exception, response_status: int) -> bool:
+    explicit = getattr(exc, "retryable", None)
+    if isinstance(explicit, bool):
+        return explicit
+    return response_status in RETRYABLE_HTTP_STATUSES
 
 
 def api_exception_handler(exc: Exception, context: dict[str, object]) -> Response:
@@ -46,6 +61,7 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
                     "code": "internal_error",
                     "message": "An unexpected error occurred.",
                     "details": None,
+                    "retryable": False,
                     "request_id": request_id,
                 },
             },
@@ -73,6 +89,7 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
             "code": code,
             "message": message,
             "details": details,
+            "retryable": _is_retryable(exc, response_status),
             "request_id": request_id,
         },
     }

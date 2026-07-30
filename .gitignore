@@ -2,6 +2,7 @@ VSolveHub/
 
 # IDE / editor
 .cursor/
+.claude/settings.local.json
 .idea/
 .vscode/
 *.iml

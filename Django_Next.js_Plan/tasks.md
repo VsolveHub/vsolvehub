@@ -228,43 +228,43 @@ If it does not match this architecture, create a repository-owned `vsolve-django
 - [ ] Preserve the legacy repository and create the Codex worktree.
 - [ ] Add `backend/`, `infra/`, `contracts/openapi/`, `docs/adr/` and `docs/runbooks/`.
 - [ ] Create root development commands without breaking the legacy app.
-- [ ] Configure Python formatting, linting, typing and tests.
+- [x] Configure Python formatting, linting, typing and tests.
 - [ ] Configure pre-commit checks.
-- [ ] Provide `.env.example` with names only—no secrets.
-- [ ] Create Docker Compose services for PostgreSQL and Redis.
-- [ ] Add health checks and deterministic startup.
+- [x] Provide `.env.example` with names only—no secrets.
+- [x] Create Docker Compose services for PostgreSQL and Redis.
+- [x] Add health checks and deterministic startup.
 
 Acceptance:
 
-- [ ] A new developer can start dependencies with one documented command.
-- [ ] Backend lint, typecheck and tests run with one command.
-- [ ] No credential is committed.
+- [x] A new developer can start dependencies with one documented command.
+- [x] Backend lint, typecheck and tests run with one command.
+- [x] No credential is committed.
 - [ ] Existing frontend still starts unchanged.
 
 ### A1 — Django architecture and API contract
 
-- [ ] Scaffold Django settings for local, test, staging and production.
-- [ ] Add DRF, OpenAPI generation and the standard error envelope.
-- [ ] Implement request IDs, structured logs and health/readiness endpoints.
-- [ ] Define service-layer and selector conventions.
+- [x] Scaffold Django settings for local, test, staging and production.
+- [x] Add DRF, OpenAPI generation and the standard error envelope.
+- [x] Implement request IDs, structured logs and health/readiness endpoints.
+- [x] Define service-layer and selector conventions.
 - [ ] Define transaction and idempotency conventions.
 - [ ] Publish the initial `v1` OpenAPI contract with examples.
 
 Acceptance:
 
-- [ ] Domain apps do not import frontend or Prisma code.
-- [ ] Views remain thin; business transitions live in domain services.
+- [x] Domain apps do not import frontend or Prisma code.
+- [x] Views remain thin; business transitions live in domain services.
 - [ ] OpenAPI validates and generated TypeScript types compile.
 
 ### A2 — Identity, sessions and authorization
 
 - [ ] Implement custom `User`, roles and Customer/Partner/Operations profiles.
-- [ ] Implement hashed, expiring, single-use OTP challenges.
-- [ ] Add phone/IP/device rate limits and resend cooldown.
-- [ ] Implement revocable, rotated secure sessions.
-- [ ] Implement CSRF protection and deny-by-default permissions.
-- [ ] Add device/session listing and revocation.
-- [ ] Ensure production never returns or logs OTP codes.
+- [x] Implement hashed, expiring, single-use OTP challenges.
+- [x] Add phone/IP/device rate limits and resend cooldown.
+- [x] Implement revocable, rotated secure sessions.
+- [x] Implement CSRF protection and deny-by-default permissions.
+- [x] Add device/session listing and revocation.
+- [x] Ensure production never returns or logs OTP codes.
 - [ ] Add dual-role switching, self-assignment exclusion and step-up recovery for phone/device risk.
 - [ ] Add consent receipts, privacy requests and audited support-view authorization.
 
@@ -293,19 +293,19 @@ Acceptance:
 
 ### A4 — Partner application, eligibility and presence
 
-- [ ] Implement PartnerApplication and explicit review states.
-- [ ] Add versioned PartnerDocument and PartnerConsent.
-- [ ] Implement normalized skills, services and service areas.
-- [ ] Add weekly availability and date exceptions.
-- [ ] Add online sessions, heartbeat and automatic presence expiry.
-- [ ] Add Operations review/change-request/approve/suspend commands.
-- [ ] Audit every transition.
+- [x] Implement PartnerApplication and explicit review states.
+- [x] Add versioned PartnerDocument and PartnerConsent.
+- [x] Implement normalized skills, services and service areas.
+- [x] Add weekly availability and date exceptions.
+- [x] Add online sessions, heartbeat and automatic presence expiry.
+- [x] Add Operations review/change-request/approve/suspend commands.
+- [x] Audit every transition.
 
 Acceptance:
 
 - [ ] Unapproved Partners cannot publish presence or receive work.
-- [ ] Missing/stale coordinates never create availability.
-- [ ] KYC replacement preserves prior versions and decisions.
+- [x] Missing/stale coordinates never create availability.
+- [x] KYC replacement preserves prior versions and decisions.
 
 ### A5 — Pricing, cart and checkout
 
@@ -531,14 +531,14 @@ Acceptance:
 ### B0 — Frontend foundation and contract mocks
 
 - [ ] Create Claude worktree without modifying Codex-owned paths.
-- [ ] Establish customer, partner and operations application boundaries.
+- [x] Establish customer, partner and operations application boundaries.
 - [ ] Configure strict TypeScript and shared lint/test commands.
 - [ ] Generate the API client from `contracts/openapi/v1.yaml`.
-- [ ] Submit missing use-case proposals under `contracts/proposals/**`; never invent runtime DTOs.
-- [ ] Configure TanStack Query keys, retry policy and error mapping.
+- [x] Submit missing use-case proposals under `contracts/proposals/**`; never invent runtime DTOs.
+- [x] Configure TanStack Query keys, retry policy and error mapping.
 - [ ] Configure Mock Service Worker from contract examples.
 - [ ] Add frontend error boundary and application-level recovery.
-- [ ] Add cross-tab logout/checkout coordination and server-time offset utility.
+- [x] Add cross-tab logout/checkout coordination and server-time offset utility.
 
 Acceptance:
 
@@ -548,8 +548,8 @@ Acceptance:
 
 ### B1 — Vsolve Hub design system
 
-- [ ] Inventory approved logo, colors, typography and icons.
-- [ ] Define semantic tokens for background, surface, text, brand, success, warning and danger.
+- [x] Inventory approved logo, colors, typography and icons.
+- [x] Define semantic tokens for background, surface, text, brand, success, warning and danger.
 - [ ] Replace inaccessible blue/loading combinations.
 - [ ] Build accessible Button, Input, Select, Dialog, Sheet, Card, Stepper, Toast, Skeleton and EmptyState.
 - [ ] Standardize focus, loading, pressed, disabled, success and error states.
@@ -560,7 +560,7 @@ Acceptance:
 
 Acceptance:
 
-- [ ] Normal text meets WCAG 4.5:1 contrast.
+- [x] Normal text meets WCAG 4.5:1 contrast.
 - [ ] Touch targets are at least 44×44px.
 - [ ] Native/custom selects remain readable in every state.
 - [ ] No emoji is used as a structural icon.

@@ -48,7 +48,7 @@ ignore = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-line-ending = "lf"
+line-ending = "auto"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
@@ -103,3 +103,8 @@ disable_error_code = ["import-untyped"]
 [[tool.mypy.overrides]]
 module = "apps.*.admin"
 disable_error_code = ["type-arg"]
+
+[[tool.mypy.overrides]]
+module = "apps.*.tasks"
+# Celery's shared_task decorator is not fully typed.
+disable_error_code = ["untyped-decorator"]
