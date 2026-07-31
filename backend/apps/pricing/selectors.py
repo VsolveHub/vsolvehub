@@ -7,7 +7,7 @@ from django.db.models import OuterRef, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
-from apps.pricing.models import ServiceRate
+from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
 
 
 def variants_with_current_rate() -> QuerySet[ServiceVariant]:
@@ -30,3 +30,30 @@ def variants_with_current_rate() -> QuerySet[ServiceVariant]:
 def effective_to_predicate(now: datetime) -> models.Q:
     """Return the active upper-bound predicate without duplicating it at call sites."""
     return models.Q(effective_to__isnull=True) | models.Q(effective_to__gt=now)
+
+
+def current_task_rate(
+    *, variant: ServiceVariant, task_code: str, at: datetime | None = None
+) -> TaskRate | None:
+    now = at or timezone.now()
+    return (
+        TaskRate.objects.filter(
+            variant=variant,
+            task_code=task_code,
+            is_active=True,
+            effective_from__lte=now,
+        )
+        .filter(effective_to_predicate(now))
+        .order_by("-effective_from", "-created_at")
+        .first()
+    )
+
+
+def current_pricing_policy(*, code: str, at: datetime | None = None) -> PricingPolicy | None:
+    now = at or timezone.now()
+    return (
+        PricingPolicy.objects.filter(code=code, is_active=True, effective_from__lte=now)
+        .filter(effective_to_predicate(now))
+        .order_by("-effective_from", "-created_at")
+        .first()
+    )

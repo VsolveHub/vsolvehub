@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from apps.catalog.models import (
+    A1VariantConfiguration,
     Category,
     Service,
     ServiceMedia,
@@ -19,3 +20,4 @@ admin.site.register(ServiceQuestion)
 admin.site.register(ServiceQuestionOption)
 admin.site.register(ServicePolicy)
 admin.site.register(ServiceMedia)
+admin.site.register(A1VariantConfiguration)

@@ -2,9 +2,16 @@ from datetime import date
 from http import HTTPStatus
 
 import pytest
+from rest_framework.test import APIClient
 
+from apps.identity.models import User
 from apps.locations.models import ServiceArea
-from apps.partners.models import PartnerAvailabilityException, PartnerAvailabilityRule
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerAvailabilityException,
+    PartnerAvailabilityRule,
+    PartnerScheduleChangeAudit,
+)
 from tests.partners.conftest import PartnerSetup, application_payload
 
 pytestmark = pytest.mark.django_db
@@ -132,3 +139,47 @@ def test_overnight_window_must_be_explicit(partner_setup: PartnerSetup) -> None:
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_operations_schedule_change_requires_partner_consent_and_is_audited(
+    partner_setup: PartnerSetup,
+    operations_user: User,
+) -> None:
+    _create_application(partner_setup)
+    application = PartnerApplication.objects.get(partner__user=partner_setup.user)
+    client = APIClient()
+    client.force_authenticate(user=operations_user)
+    payload = {
+        "consent_purpose": "partner_terms",
+        "consent_document_version": "2026-07",
+        "rules": [
+            {
+                "service_area_id": str(partner_setup.service_area.id),
+                "weekday": 0,
+                "starts_at": "09:00",
+                "ends_at": "17:00",
+            },
+        ],
+        "exceptions": [],
+    }
+
+    response = client.put(
+        f"/api/v1/operations/partners/{application.partner_id}/availability/",
+        payload,
+        format="json",
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["rules"][0]["starts_at"] == "09:00:00"
+    audit = PartnerScheduleChangeAudit.objects.get(partner_id=application.partner_id)
+    assert audit.actor == operations_user
+    assert audit.consent.purpose == "partner_terms"
+    assert audit.previous_schedule == {"rules": [], "exceptions": []}
+
+    payload["consent_document_version"] = "not-accepted"
+    denied = client.put(
+        f"/api/v1/operations/partners/{application.partner_id}/availability/",
+        payload,
+        format="json",
+    )
+    assert denied.status_code == HTTPStatus.BAD_REQUEST

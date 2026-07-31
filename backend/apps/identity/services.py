@@ -16,9 +16,13 @@ from django.utils import timezone
 from apps.identity.delivery import OtpDeliveryError, get_otp_sender, mark_delivery_failed
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import (
+    AccessAuditEvent,
+    CommunicationPreference,
+    ConsentReceipt,
     CustomerProfile,
     Device,
     OtpChallenge,
+    PrivacyRequest,
     Role,
     User,
     UserRole,
@@ -192,9 +196,17 @@ def create_authenticated_session(
             },
         )
 
+    active_role = (
+        UserRole.objects.filter(user=user, revoked_at__isnull=True)
+        .select_related("role")
+        .order_by("role__code")
+        .values_list("role", flat=True)
+        .first()
+    )
     session = UserSession.objects.create(
         user=user,
         device=device,
+        active_role_id=active_role,
         session_key_hash=keyed_hash(session_key),
         expires_at=request.session.get_expiry_date(),
     )
@@ -210,3 +222,132 @@ def revoke_current_session(request: HttpRequest) -> None:
             revoked_at__isnull=True,
         ).update(revoked_at=timezone.now())
     logout(request)
+
+
+@transaction.atomic
+def switch_active_role(*, user: User, session_key: str, role_code: str) -> UserSession:
+    """Switch one session to an already granted role; role grants are never implicit."""
+    role = Role.objects.filter(code=role_code).first()
+    if (
+        role is None
+        or not UserRole.objects.filter(
+            user=user,
+            role=role,
+            revoked_at__isnull=True,
+        ).exists()
+    ):
+        raise PermissionError("The requested role has not been granted.")
+    session = UserSession.objects.select_for_update().get(
+        user=user,
+        session_key_hash=keyed_hash(session_key),
+        revoked_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    )
+    session.active_role = role
+    session.save(update_fields=("active_role",))
+    record_access_event(
+        actor=user,
+        subject_user=user,
+        action="identity.role_switched",
+        object_type="role",
+        object_id=role.id,
+    )
+    return session
+
+
+@transaction.atomic
+def grant_role(*, actor: User, user: User, role: Role) -> UserRole:
+    """Grant a role with attribution; no actor may grant their own privilege."""
+    if actor.pk == user.pk:
+        raise PermissionError("Users cannot grant themselves a role.")
+    grant, _created = UserRole.objects.get_or_create(
+        user=user,
+        role=role,
+        revoked_at__isnull=True,
+        defaults={"granted_by": actor},
+    )
+    record_access_event(
+        actor=actor,
+        subject_user=user,
+        action="identity.role_granted",
+        object_type="role",
+        object_id=role.id,
+    )
+    return grant
+
+
+def mark_session_step_up(*, user: User, session_key: str) -> UserSession:
+    session = UserSession.objects.get(
+        user=user,
+        session_key_hash=keyed_hash(session_key),
+        revoked_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    )
+    session.stepped_up_at = timezone.now()
+    session.save(update_fields=("stepped_up_at",))
+    record_access_event(actor=user, subject_user=user, action="identity.finance_step_up")
+    return session
+
+
+def record_consent(
+    *, user: User, purpose: str, policy_version: str, source: str = "api"
+) -> ConsentReceipt:
+    receipt, _created = ConsentReceipt.objects.get_or_create(
+        user=user,
+        purpose=purpose,
+        policy_version=policy_version,
+        defaults={"source": source},
+    )
+    return receipt
+
+
+def set_communication_preference(
+    *,
+    user: User,
+    channel: str,
+    purpose: str,
+    is_enabled: bool,
+) -> CommunicationPreference:
+    preference, _created = CommunicationPreference.objects.update_or_create(
+        user=user,
+        channel=channel,
+        purpose=purpose,
+        defaults={"is_enabled": is_enabled},
+    )
+    return preference
+
+
+def create_privacy_request(*, user: User, kind: str) -> PrivacyRequest:
+    request = PrivacyRequest.objects.create(user=user, kind=kind)
+    record_access_event(
+        actor=user,
+        subject_user=user,
+        action="identity.privacy_request_created",
+        object_type="privacy_request",
+        object_id=request.id,
+    )
+    return request
+
+
+def record_access_event(
+    *,
+    actor: User | None,
+    subject_user: User | None,
+    action: str,
+    object_type: str = "",
+    object_id: uuid.UUID | None = None,
+    decision: str = AccessAuditEvent.Decision.ALLOWED,
+    request_id: str = "",
+    metadata: dict[str, object] | None = None,
+) -> AccessAuditEvent:
+    """Persist minimal, non-secret authorization evidence for sensitive actions."""
+    return AccessAuditEvent.objects.create(
+        actor=actor,
+        subject_user=subject_user,
+        action=action,
+        object_type=object_type,
+        object_id=object_id,
+        decision=decision,
+        request_id=request_id,
+        metadata=metadata or {},
+    )

@@ -159,6 +159,32 @@ paths:
       responses:
         '200':
           description: A CSRF cookie has been set.
+  /api/v1/auth/finance/step-up/:
+    post:
+      operationId: auth_finance_step_up_create
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepUpSession'
+          description: ''
   /api/v1/auth/logout/:
     post:
       operationId: auth_logout_create
@@ -221,6 +247,140 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthenticatedSession'
           description: ''
+  /api/v1/auth/privacy/consents/:
+    post:
+      operationId: auth_privacy_consents_create
+      tags:
+      - Privacy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentReceiptCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConsentReceiptCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConsentReceiptCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentReceipt'
+          description: ''
+  /api/v1/auth/privacy/preferences/:
+    get:
+      operationId: auth_privacy_preferences_list
+      tags:
+      - Privacy
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommunicationPreference'
+          description: ''
+    put:
+      operationId: auth_privacy_preferences_update
+      tags:
+      - Privacy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunicationPreferenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommunicationPreferenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommunicationPreferenceRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunicationPreference'
+          description: ''
+  /api/v1/auth/privacy/requests/:
+    get:
+      operationId: auth_privacy_requests_list
+      tags:
+      - Privacy
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PrivacyRequest'
+          description: ''
+    post:
+      operationId: auth_privacy_requests_create
+      tags:
+      - Privacy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequestCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivacyRequest'
+          description: ''
+  /api/v1/auth/roles/switch/:
+    post:
+      operationId: auth_roles_switch_create
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleSwitchRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoleSwitchRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoleSwitchRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveRole'
+          description: ''
   /api/v1/auth/session/:
     get:
       operationId: auth_session_retrieve
@@ -268,6 +428,47 @@ paths:
       responses:
         '204':
           description: The selected session was revoked.
+  /api/v1/cart/:
+    get:
+      operationId: cart_retrieve
+      tags:
+      - Cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartItem'
+          description: ''
+    put:
+      operationId: cart_update
+      tags:
+      - Cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartItemInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CartItemInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CartItemInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartItem'
+          description: ''
   /api/v1/categories/:
     get:
       operationId: categories_list
@@ -305,6 +506,74 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ServiceCard'
+          description: ''
+  /api/v1/checkouts/:
+    post:
+      operationId: checkouts_create
+      tags:
+      - Checkout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CheckoutCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CheckoutCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Checkout'
+          description: ''
+  /api/v1/checkouts/{checkout_id}/search/:
+    post:
+      operationId: checkouts_search_create
+      parameters:
+      - in: path
+        name: checkout_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Checkout
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/v1/checkouts/{checkout_id}/search/advance/:
+    post:
+      operationId: checkouts_search_advance_create
+      parameters:
+      - in: path
+        name: checkout_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Checkout
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
           description: ''
   /api/v1/geocoding/reverse/:
     post:
@@ -372,6 +641,65 @@ paths:
           description: Required dependencies are reachable.
         '503':
           description: One or more required dependencies are unavailable.
+  /api/v1/operations/assisted-checkouts/:
+    post:
+      operationId: operations_assisted_checkouts_create
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistedCheckoutCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistedCheckoutCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistedCheckoutCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Checkout'
+          description: ''
+  /api/v1/operations/checkouts/{checkout_id}/offers/:
+    post:
+      operationId: operations_checkouts_offers_create
+      parameters:
+      - in: path
+        name: checkout_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualOfferRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ManualOfferRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ManualOfferRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
   /api/v1/operations/partner-applications/{application_id}/transition/:
     post:
       operationId: operations_partner_applications_transition_create
@@ -455,6 +783,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PartnerDocument'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partners/{partner_id}/availability/:
+    put:
+      operationId: operations_partners_availability_update
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Partners
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerScheduleUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerScheduleUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsPartnerScheduleUpdateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerSchedule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -683,6 +1068,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/offers/:
+    get:
+      operationId: partner_offers_list
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/v1/partner/offers/{offer_id}/{action}/:
+    post:
+      operationId: partner_offers_create
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
   /api/v1/partner/presence/heartbeat/:
     post:
       operationId: partner_presence_heartbeat_create
@@ -799,6 +1226,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/quotes/:
+    post:
+      operationId: quotes_create
+      tags:
+      - Checkout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuoteCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuoteCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+          description: ''
   /api/v1/serviceability/check/:
     post:
       operationId: serviceability_check_create
@@ -893,6 +1346,15 @@ paths:
           description: ''
 components:
   schemas:
+    ActiveRole:
+      type: object
+      properties:
+        active_role:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - active_role
     Address:
       type: object
       properties:
@@ -1056,6 +1518,29 @@ components:
       - message
       - request_id
       - retryable
+    AssistedCheckoutCreateRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        quote_id:
+          type: string
+          format: uuid
+        consent_purpose:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        consent_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+      - consent_purpose
+      - consent_version
+      - customer_id
+      - quote_id
     AuthenticatedSession:
       type: object
       properties:
@@ -1070,6 +1555,42 @@ components:
       required:
       - session_expires_at
       - user
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        variant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        scope_schema_snapshot:
+          readOnly: true
+      required:
+      - id
+      - quantity
+      - scope_schema_snapshot
+      - variant_id
+    CartItemInputRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        scope:
+          type: object
+          additionalProperties: {}
+      required:
+      - quantity
+      - variant_id
     Category:
       type: object
       properties:
@@ -1102,6 +1623,142 @@ components:
       - name
       - slug
       - subcategories
+    ChannelEnum:
+      enum:
+      - SMS
+      - EMAIL
+      type: string
+      description: |-
+        * `SMS` - SMS
+        * `EMAIL` - Email
+    Checkout:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CheckoutStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - expires_at
+      - id
+      - status
+      - version
+    CheckoutCreateRequest:
+      type: object
+      properties:
+        quote_id:
+          type: string
+          format: uuid
+      required:
+      - quote_id
+    CheckoutStatusEnum:
+      enum:
+      - CREATED
+      - FINDING_PARTNER
+      - PARTNER_COMMITTED
+      - PAYMENT_PENDING
+      - EXPIRED
+      type: string
+      description: |-
+        * `CREATED` - Created
+        * `FINDING_PARTNER` - Finding partner
+        * `PARTNER_COMMITTED` - Partner committed
+        * `PAYMENT_PENDING` - Payment pending
+        * `EXPIRED` - Expired
+    CommunicationPreference:
+      type: object
+      properties:
+        channel:
+          $ref: '#/components/schemas/ChannelEnum'
+        purpose:
+          type: string
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        is_enabled:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - channel
+      - purpose
+      - updated_at
+    CommunicationPreferenceRequest:
+      type: object
+      properties:
+        channel:
+          $ref: '#/components/schemas/ChannelEnum'
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        is_enabled:
+          type: boolean
+      required:
+      - channel
+      - purpose
+    ConsentReceipt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        purpose:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        policy_version:
+          type: string
+          readOnly: true
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        withdrawn_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - accepted_at
+      - id
+      - policy_version
+      - purpose
+      - withdrawn_at
+    ConsentReceiptCreateRequest:
+      type: object
+      properties:
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        policy_version:
+          type: string
+          minLength: 1
+          maxLength: 100
+      required:
+      - policy_version
+      - purpose
     DecisionEnum:
       enum:
       - APPROVED
@@ -1118,6 +1775,14 @@ components:
           minimum: 1
       required:
       - expected_version
+    ManualOfferRequest:
+      type: object
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+      required:
+      - partner_id
     Money:
       type: object
       properties:
@@ -1130,6 +1795,59 @@ components:
       required:
       - amount_paise
       - currency
+    Offer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        checkout_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OfferStatusEnum'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        undo_deadline:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - checkout_id
+      - created_at
+      - expires_at
+      - id
+      - status
+      - undo_deadline
+    OfferStatusEnum:
+      enum:
+      - OFFERED
+      - ACCEPTED_PENDING_UNDO
+      - COMMITTED
+      - UNDONE
+      - DECLINED
+      - EXPIRED
+      - REVOKED
+      type: string
+      description: |-
+        * `OFFERED` - Offered
+        * `ACCEPTED_PENDING_UNDO` - Accepted pending undo
+        * `COMMITTED` - Committed
+        * `UNDONE` - Undone
+        * `DECLINED` - Declined
+        * `EXPIRED` - Expired
+        * `REVOKED` - Revoked
     OperationsDocumentReviewRequest:
       type: object
       properties:
@@ -1140,6 +1858,31 @@ components:
           maxLength: 2000
       required:
       - decision
+    OperationsPartnerScheduleUpdateRequest:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityRuleInputRequest'
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerAvailabilityExceptionInputRequest'
+        consent_purpose:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[-a-zA-Z0-9_]+$
+        consent_document_version:
+          type: string
+          minLength: 1
+          maxLength: 80
+      required:
+      - consent_document_version
+      - consent_purpose
+      - exceptions
+      - rules
     OperationsTransitionRequest:
       type: object
       properties:
@@ -1874,6 +2617,121 @@ components:
         * `FIXED` - Fixed
         * `DURATION` - Duration based
         * `INSPECTION` - Inspection first
+    PrivacyRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PrivacyRequestKindEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PrivacyStatusEnum'
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - completed_at
+      - id
+      - kind
+      - requested_at
+      - status
+    PrivacyRequestCreateRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/PrivacyRequestKindEnum'
+      required:
+      - kind
+    PrivacyRequestKindEnum:
+      enum:
+      - ACCESS
+      - ERASURE
+      type: string
+      description: |-
+        * `ACCESS` - Access
+        * `ERASURE` - Erasure
+    PrivacyStatusEnum:
+      enum:
+      - RECEIVED
+      - IN_REVIEW
+      - COMPLETED
+      - REJECTED
+      type: string
+      description: |-
+        * `RECEIVED` - Received
+        * `IN_REVIEW` - In review
+        * `COMPLETED` - Completed
+        * `REJECTED` - Rejected
+    Quote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        task_subtotal_paise:
+          type: integer
+          readOnly: true
+        minimum_visit_adjustment_paise:
+          type: integer
+          readOnly: true
+        platform_fee_paise:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+        arrival_window_minutes:
+          type: integer
+          readOnly: true
+        quote_inputs_snapshot:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - arrival_window_minutes
+      - created_at
+      - estimated_duration_minutes
+      - id
+      - minimum_visit_adjustment_paise
+      - platform_fee_paise
+      - quote_inputs_snapshot
+      - requested_start
+      - task_subtotal_paise
+      - total_paise
+    QuoteCreateRequest:
+      type: object
+      properties:
+        address_id:
+          type: string
+          format: uuid
+        requested_start:
+          type: string
+          format: date-time
+      required:
+      - address_id
+      - requested_start
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -1936,6 +2794,16 @@ components:
       - postal_code
       - provider
       - state
+    RoleSwitchRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - role
     ServiceArea:
       type: object
       properties:
@@ -2313,6 +3181,15 @@ components:
       description: |-
         * `MANUAL` - Manual
         * `REVERSE_GEOCODED` - Reverse geocoded
+    StepUpSession:
+      type: object
+      properties:
+        stepped_up_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - stepped_up_at
     Subcategory:
       type: object
       properties:
@@ -2388,6 +3265,10 @@ components:
           type: string
           readOnly: true
           nullable: true
+        active_role:
+          type: string
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -2404,6 +3285,7 @@ components:
           type: boolean
           readOnly: true
       required:
+      - active_role
       - created_at
       - device_label
       - expires_at

@@ -3,6 +3,7 @@ from django.urls import path
 from apps.partners.views import (
     OperationsPartnerApplicationTransitionView,
     OperationsPartnerDocumentReviewView,
+    OperationsPartnerScheduleView,
     PartnerApplicationSubmitView,
     PartnerApplicationView,
     PartnerDocumentCreateView,
@@ -51,5 +52,10 @@ urlpatterns = [
         "operations/partner-documents/<uuid:document_id>/review/",
         OperationsPartnerDocumentReviewView.as_view(),
         name="operations-partner-document-review",
+    ),
+    path(
+        "operations/partners/<uuid:partner_id>/availability/",
+        OperationsPartnerScheduleView.as_view(),
+        name="operations-partner-schedule",
     ),
 ]

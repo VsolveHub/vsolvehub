@@ -1,4 +1,4 @@
-"""Create deterministic Technician catalog and local serviceability configuration."""
+"""Create the reviewed, task-priced M1 Technician catalog configuration."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
@@ -6,7 +6,14 @@ from datetime import UTC, datetime, time
 from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
-from apps.catalog.models import Category, Service, ServicePolicy, ServiceVariant, Subcategory
+from apps.catalog.models import (
+    A1VariantConfiguration,
+    Category,
+    Service,
+    ServicePolicy,
+    ServiceVariant,
+    Subcategory,
+)
 from apps.locations.models import (
     PostalCode,
     ServiceArea,
@@ -14,7 +21,7 @@ from apps.locations.models import (
     ServiceAreaPostalCode,
     ServiceAreaService,
 )
-from apps.pricing.models import ServiceRate
+from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,31 +42,21 @@ TECHNICIAN_CATALOG: dict[str, tuple[str, tuple[ServiceSeed, ...]]] = {
                 "switch-socket-repair",
                 "Repair faulty switches, modular boards, or sparking sockets.",
                 12_900,
+                30,
             ),
             ServiceSeed(
                 "Fan Installation",
                 "fan-installation",
                 "Assembly, mounting and wiring of a new ceiling or wall fan.",
                 24_900,
+                60,
             ),
             ServiceSeed(
                 "Light / LED Installation",
                 "light-led-installation",
                 "Install LED bulbs, tube lights or decorative panel lights.",
                 12_900,
-            ),
-            ServiceSeed(
-                "Power Issue Check",
-                "power-issue-check",
-                "Diagnose partial power failure, MCB tripping or fuse issues.",
-                19_900,
-            ),
-            ServiceSeed(
-                "Short Circuit Fix",
-                "short-circuit-fix",
-                "Identify and resolve short circuits and burned wiring.",
-                34_900,
-                90,
+                30,
             ),
         ),
     ),
@@ -71,24 +68,14 @@ TECHNICIAN_CATALOG: dict[str, tuple[str, tuple[ServiceSeed, ...]]] = {
                 "tap-repair",
                 "Fix leaking taps, pipe joints or spindle replacements.",
                 19_900,
-            ),
-            ServiceSeed(
-                "Drain Block Removal",
-                "drain-block-removal",
-                "Clear blocked drains, sinks and bathroom outlets.",
-                29_900,
+                45,
             ),
             ServiceSeed(
                 "WC / Flush Repair",
                 "wc-flush-repair",
                 "Repair faulty flush valves, syphons or wall-hung flush units.",
                 24_900,
-            ),
-            ServiceSeed(
-                "Basin / Sink Installation",
-                "basin-sink-installation",
-                "Install or replace wash basins and kitchen sinks.",
-                39_900,
+                45,
             ),
         ),
     ),
@@ -96,83 +83,51 @@ TECHNICIAN_CATALOG: dict[str, tuple[str, tuple[ServiceSeed, ...]]] = {
         "Carpenter",
         (
             ServiceSeed(
-                "Door / Lock Repair",
-                "door-lock-repair",
-                "Fix handle locks, latches or key-rotation issues on doors.",
-                24_900,
-            ),
-            ServiceSeed(
-                "Furniture Assembly",
-                "furniture-assembly",
-                "Assemble beds, tables, wardrobes and flat-pack furniture.",
-                39_900,
-            ),
-            ServiceSeed(
                 "Cupboard / Hinge Repair",
                 "cupboard-hinge-repair",
                 "Repair cupboard shutters, hinges and drawer channels.",
                 29_900,
-            ),
-        ),
-    ),
-    "ac-technician": (
-        "AC Technician",
-        (
-            ServiceSeed(
-                "AC General Service",
-                "ac-general-service",
-                "Standard service with coil cleaning, filter wash and gas-pressure check.",
-                59_900,
-            ),
-            ServiceSeed(
-                "AC Deep Cleaning",
-                "ac-deep-cleaning",
-                "Jet-wash deep cleaning of indoor and outdoor AC units.",
-                99_900,
-                90,
-            ),
-            ServiceSeed(
-                "Split AC Installation",
-                "split-ac-installation",
-                "Mounting, piping and commissioning of a split AC.",
-                199_900,
-                120,
-            ),
-            ServiceSeed(
-                "AC Gas Filling",
-                "ac-gas-filling",
-                "Top-up or full refill of AC refrigerant gas.",
-                299_900,
-                90,
-            ),
-        ),
-    ),
-    "ro-technician": (
-        "RO Technician",
-        (
-            ServiceSeed(
-                "RO Service",
-                "ro-service",
-                "Periodic RO service with filter check, sanitisation and TDS calibration.",
-                39_900,
-            ),
-            ServiceSeed(
-                "RO Filter Replacement",
-                "ro-filter-replacement",
-                "Replace sediment, carbon or membrane filters.",
-                49_900,
-            ),
-            ServiceSeed(
-                "RO Installation",
-                "ro-installation",
-                "Wall-mount installation and commissioning of a new RO unit.",
-                59_900,
+                60,
             ),
         ),
     ),
 }
 
 SEED_RATE_EFFECTIVE_FROM = datetime(2026, 1, 1, tzinfo=UTC)
+M1_BASE_DURATION_MINUTES = {
+    "switch-socket-repair": 10,
+    "fan-installation": 20,
+    "light-led-installation": 10,
+    "tap-repair": 15,
+    "wc-flush-repair": 15,
+    "cupboard-hinge-repair": 20,
+}
+M1_VARIANT_OPERATIONAL_POLICIES: dict[str, dict[str, object]] = {
+    "switch-socket-repair": {
+        "equipment": ["insulated screwdriver set", "voltage tester", "electrical tape"],
+        "unsafe": ["live exposed conductors", "signs of fire damage", "water ingress"],
+    },
+    "fan-installation": {
+        "equipment": ["drill", "ladder", "screwdriver set", "voltage tester"],
+        "unsafe": ["unstable ceiling mount", "live exposed conductors", "unsafe access"],
+    },
+    "light-led-installation": {
+        "equipment": ["screwdriver set", "voltage tester", "ladder"],
+        "unsafe": ["live exposed conductors", "damaged fitting", "unsafe access"],
+    },
+    "tap-repair": {
+        "equipment": ["adjustable wrench", "pliers", "plumber tape"],
+        "unsafe": ["uncontrolled water flow", "corroded pipe failure", "sewage exposure"],
+    },
+    "wc-flush-repair": {
+        "equipment": ["screwdriver set", "adjustable wrench", "pliers"],
+        "unsafe": ["sewage exposure", "cracked cistern", "uncontrolled water flow"],
+    },
+    "cupboard-hinge-repair": {
+        "equipment": ["screwdriver set", "drill", "measuring tape"],
+        "unsafe": ["structural cabinet instability", "sharp broken hardware", "unsafe access"],
+    },
+}
 
 
 class Command(BaseCommand):
@@ -180,11 +135,27 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *_args: object, **_options: object) -> None:
+        PricingPolicy.objects.update_or_create(
+            code="m1-technician",
+            version=1,
+            defaults={
+                "minimum_service_subtotal_paise": 19_900,
+                "gst_rate_basis_points": 1_800,
+                "platform_fee_mode": PricingPolicy.PlatformFeeMode.FIXED,
+                "platform_fee_value": 2_900,
+                "commission_basis_points": 1_800,
+                "commission_floor_paise": 3_000,
+                "commission_cap_paise": 50_000,
+                "effective_from": SEED_RATE_EFFECTIVE_FROM,
+                "effective_to": None,
+                "is_active": True,
+            },
+        )
         category, _ = Category.objects.update_or_create(
             slug="technician",
             defaults={
                 "name": "Technician",
-                "description": "Electricians, plumbers, AC, RO and repair professionals.",
+                "description": "Reviewed one-person Technician task visits.",
                 "icon_key": "wrench",
                 "display_order": 1,
                 "is_active": True,
@@ -223,11 +194,12 @@ class Command(BaseCommand):
                     defaults={
                         "name": "Standard service",
                         "description": seed.description,
-                        "pricing_strategy": ServiceVariant.PricingStrategy.DURATION,
-                        "minimum_duration_minutes": 60,
+                        "pricing_strategy": ServiceVariant.PricingStrategy.FIXED,
+                        "booking_archetype": ServiceVariant.BookingArchetype.A1_TASK_VISIT,
+                        "minimum_duration_minutes": seed.recommended_duration_minutes,
                         "recommended_duration_minutes": seed.recommended_duration_minutes,
-                        "duration_increment_minutes": 30,
-                        "maximum_duration_minutes": 480,
+                        "duration_increment_minutes": seed.recommended_duration_minutes,
+                        "maximum_duration_minutes": seed.recommended_duration_minutes,
                         "required_skill_code": subcategory_slug,
                         "tax_category_code": "technician-home-service",
                         "is_active": True,
@@ -243,6 +215,45 @@ class Command(BaseCommand):
                         "is_active": True,
                     },
                 )
+                TaskRate.objects.update_or_create(
+                    variant=variant,
+                    task_code=seed.slug,
+                    effective_from=SEED_RATE_EFFECTIVE_FROM,
+                    defaults={
+                        "unit_price_paise": seed.price_paise,
+                        "base_duration_minutes": M1_BASE_DURATION_MINUTES[seed.slug],
+                        "marginal_duration_minutes": seed.recommended_duration_minutes,
+                        "currency": "INR",
+                        "effective_to": None,
+                        "is_active": True,
+                    },
+                )
+                operational_policy = M1_VARIANT_OPERATIONAL_POLICIES[seed.slug]
+                A1VariantConfiguration.objects.update_or_create(
+                    variant=variant,
+                    version=1,
+                    defaults={
+                        "status": A1VariantConfiguration.Status.ACTIVE,
+                        "scope_schema": {
+                            "version": 1,
+                            "questions": [
+                                {
+                                    "code": "quantity",
+                                    "kind": "INTEGER",
+                                    "required": True,
+                                    "minimum": 1,
+                                },
+                            ],
+                        },
+                        "required_equipment": operational_policy["equipment"],
+                        "out_of_scope_rules": operational_policy["unsafe"],
+                        "evidence_policy": {
+                            "before_photos_required": True,
+                            "after_photos_required": True,
+                            "completion_checklist_required": True,
+                        },
+                    },
+                )
                 ServicePolicy.objects.update_or_create(
                     service=service,
                     kind=ServicePolicy.Kind.GOOD_TO_KNOW,
@@ -254,8 +265,11 @@ class Command(BaseCommand):
                 )
                 variants.append(variant)
 
-        if bool(_options["with_development_area"]):
-            self._seed_local_service_area(variants)
+        active_slugs = {
+            seed.slug for _, services in TECHNICIAN_CATALOG.values() for seed in services
+        }
+        self._deactivate_out_of_scope_catalog(active_slugs=active_slugs)
+        self._seed_m1_service_area(variants)
         self.stdout.write(
             self.style.SUCCESS(f"Seeded {len(variants)} Technician services deterministically."),
         )
@@ -264,11 +278,17 @@ class Command(BaseCommand):
         parser.add_argument(
             "--with-development-area",
             action="store_true",
-            help="Also create the explicit local PIN 500032 serviceability configuration.",
+            help="Deprecated compatibility flag; M1 always seeds the reviewed Hyderabad area.",
         )
 
     @staticmethod
-    def _seed_local_service_area(variants: list[ServiceVariant]) -> None:
+    def _deactivate_out_of_scope_catalog(*, active_slugs: set[str]) -> None:
+        ServiceVariant.objects.exclude(service__slug__in=active_slugs).update(is_active=False)
+        Service.objects.exclude(slug__in=active_slugs).update(status=Service.Status.PAUSED)
+        ServiceArea.objects.filter(slug="west-hyderabad-development").update(is_active=False)
+
+    @staticmethod
+    def _seed_m1_service_area(variants: list[ServiceVariant]) -> None:
         postal_code, _ = PostalCode.objects.update_or_create(
             code="500032",
             defaults={
@@ -279,9 +299,9 @@ class Command(BaseCommand):
             },
         )
         area, _ = ServiceArea.objects.update_or_create(
-            slug="west-hyderabad-development",
+            slug="hyderabad-500032",
             defaults={
-                "name": "West Hyderabad (Development)",
+                "name": "Hyderabad 500032",
                 "timezone": "Asia/Kolkata",
                 "is_active": True,
             },

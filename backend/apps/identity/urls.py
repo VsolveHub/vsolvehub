@@ -1,11 +1,16 @@
 from django.urls import path
 
 from apps.identity.views import (
+    CommunicationPreferenceView,
+    ConsentReceiptView,
     CsrfCookieView,
     CurrentSessionView,
+    FinanceStepUpView,
     LogoutView,
     OtpRequestView,
     OtpVerifyView,
+    PrivacyRequestView,
+    RoleSwitchView,
     SessionListView,
     SessionRevokeView,
 )
@@ -20,4 +25,9 @@ urlpatterns = [
     path("sessions/", SessionListView.as_view(), name="session-list"),
     path("sessions/<uuid:session_id>/", SessionRevokeView.as_view(), name="session-revoke"),
     path("logout/", LogoutView.as_view(), name="logout"),
+    path("roles/switch/", RoleSwitchView.as_view(), name="role-switch"),
+    path("finance/step-up/", FinanceStepUpView.as_view(), name="finance-step-up"),
+    path("privacy/consents/", ConsentReceiptView.as_view(), name="consent-receipts"),
+    path("privacy/preferences/", CommunicationPreferenceView.as_view(), name="preferences"),
+    path("privacy/requests/", PrivacyRequestView.as_view(), name="privacy-requests"),
 ]

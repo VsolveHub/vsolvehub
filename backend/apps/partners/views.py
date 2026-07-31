@@ -23,6 +23,7 @@ from apps.partners.selectors import (
 from apps.partners.serializers import (
     ExpectedVersionSerializer,
     OperationsDocumentReviewSerializer,
+    OperationsPartnerScheduleUpdateSerializer,
     OperationsTransitionSerializer,
     PartnerApplicationSerializer,
     PartnerApplicationUpdateSerializer,
@@ -43,6 +44,7 @@ from apps.partners.services import (
     heartbeat_presence,
     register_partner_document,
     replace_partner_schedule,
+    replace_partner_schedule_for_operations,
     review_partner_document,
     submit_partner_application,
     transition_partner_application,
@@ -361,3 +363,35 @@ class OperationsPartnerDocumentReviewView(APIView):
         except PartnerDomainError as exc:
             _raise_api_error(exc)
         return Response(PartnerDocumentSerializer(document).data)
+
+
+class OperationsPartnerScheduleView(APIView):
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["Operations - Partners"],
+        request=OperationsPartnerScheduleUpdateSerializer,
+        responses={
+            200: PartnerScheduleSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def put(self, request: Request, partner_id: uuid.UUID) -> Response:
+        serializer = OperationsPartnerScheduleUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            rules, exceptions = replace_partner_schedule_for_operations(
+                actor=cast(User, request.user),
+                partner_id=partner_id,
+                consent_purpose=data["consent_purpose"],
+                consent_document_version=data["consent_document_version"],
+                rules=cast(list[ScheduleRuleInput], data["rules"]),
+                exceptions=cast(list[ScheduleExceptionInput], data["exceptions"]),
+            )
+        except PartnerDomainError as exc:
+            _raise_api_error(exc)
+        return Response(PartnerScheduleSerializer({"rules": rules, "exceptions": exceptions}).data)

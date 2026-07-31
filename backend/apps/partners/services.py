@@ -36,6 +36,7 @@ from apps.partners.models import (
     PartnerLocation,
     PartnerOnlineSession,
     PartnerProfile,
+    PartnerScheduleChangeAudit,
     PartnerService,
     PartnerServiceArea,
     PartnerSkill,
@@ -603,6 +604,19 @@ def replace_partner_schedule(
     exceptions: Sequence[ScheduleExceptionInput],
 ) -> tuple[list[PartnerAvailabilityRule], list[PartnerAvailabilityException]]:
     application = _application_for_update(user)
+    return _replace_schedule_for_application(
+        application=application,
+        rules=rules,
+        exceptions=exceptions,
+    )
+
+
+def _replace_schedule_for_application(
+    *,
+    application: PartnerApplication,
+    rules: Sequence[ScheduleRuleInput],
+    exceptions: Sequence[ScheduleExceptionInput],
+) -> tuple[list[PartnerAvailabilityRule], list[PartnerAvailabilityException]]:
     if application.status == PartnerApplication.Status.OFFBOARDED:
         raise PartnerTransitionError("An offboarded Partner cannot publish availability.")
     _validate_schedule_rules(rules)
@@ -645,6 +659,82 @@ def replace_partner_schedule(
             )
             for item in exceptions
         ],
+    )
+    return created_rules, created_exceptions
+
+
+def _schedule_snapshot(*, partner: PartnerProfile) -> dict[str, list[dict[str, object]]]:
+    rules: list[dict[str, object]] = [
+        {
+            "service_area_id": str(rule.service_area_id),
+            "weekday": rule.weekday,
+            "starts_at": rule.starts_at.isoformat(),
+            "ends_at": rule.ends_at.isoformat(),
+            "ends_next_day": rule.ends_next_day,
+        }
+        for rule in PartnerAvailabilityRule.objects.filter(partner=partner).order_by(
+            "service_area_id",
+            "weekday",
+            "starts_at",
+        )
+    ]
+    exceptions: list[dict[str, object]] = [
+        {
+            "service_area_id": str(exception.service_area_id),
+            "date": exception.date.isoformat(),
+            "is_available": exception.is_available,
+            "starts_at": exception.starts_at.isoformat() if exception.starts_at else None,
+            "ends_at": exception.ends_at.isoformat() if exception.ends_at else None,
+            "ends_next_day": exception.ends_next_day,
+            "reason": exception.reason,
+        }
+        for exception in PartnerAvailabilityException.objects.filter(partner=partner).order_by(
+            "service_area_id",
+            "date",
+        )
+    ]
+    return {"rules": rules, "exceptions": exceptions}
+
+
+@transaction.atomic
+def replace_partner_schedule_for_operations(
+    *,
+    actor: User,
+    partner_id: uuid.UUID,
+    consent_purpose: str,
+    consent_document_version: str,
+    rules: Sequence[ScheduleRuleInput],
+    exceptions: Sequence[ScheduleExceptionInput],
+) -> tuple[list[PartnerAvailabilityRule], list[PartnerAvailabilityException]]:
+    """Change a Partner schedule only with a persisted, active Partner consent receipt."""
+    application = (
+        PartnerApplication.objects.select_for_update()
+        .select_related("partner")
+        .filter(partner_id=partner_id)
+        .first()
+    )
+    if application is None:
+        raise PartnerApplicationNotFoundError
+    consent = PartnerConsent.objects.filter(
+        partner=application.partner,
+        purpose=consent_purpose,
+        document_version=consent_document_version,
+        withdrawn_at__isnull=True,
+    ).first()
+    if consent is None:
+        raise PartnerScheduleError("An active Partner consent receipt is required.")
+    previous_schedule = _schedule_snapshot(partner=application.partner)
+    created_rules, created_exceptions = _replace_schedule_for_application(
+        application=application,
+        rules=rules,
+        exceptions=exceptions,
+    )
+    PartnerScheduleChangeAudit.objects.create(
+        partner=application.partner,
+        actor=actor,
+        consent=consent,
+        previous_schedule=previous_schedule,
+        updated_schedule=_schedule_snapshot(partner=application.partner),
     )
     return created_rules, created_exceptions
 

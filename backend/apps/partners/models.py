@@ -376,6 +376,37 @@ class PartnerAvailabilityException(models.Model):
         return f"{self.partner_id}:{self.date}"
 
 
+class PartnerScheduleChangeAudit(models.Model):
+    """Immutable audit evidence for Operations-assisted schedule changes."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="schedule_change_audits",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="partner_schedule_changes_made",
+    )
+    consent = models.ForeignKey(
+        PartnerConsent,
+        on_delete=models.PROTECT,
+        related_name="schedule_change_audits",
+    )
+    previous_schedule = models.JSONField(default=dict)
+    updated_schedule = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("partner", "created_at"))]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.actor_id}:{self.created_at.isoformat()}"
+
+
 class PartnerLocation(models.Model):
     class Purpose(models.TextChoices):
         INSTANT_MATCHING = "INSTANT_MATCHING", "Instant matching"

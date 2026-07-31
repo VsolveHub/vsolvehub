@@ -2,7 +2,13 @@
 
 from rest_framework import serializers
 
-from apps.identity.models import User, UserSession
+from apps.identity.models import (
+    CommunicationPreference,
+    ConsentReceipt,
+    PrivacyRequest,
+    User,
+    UserSession,
+)
 from apps.identity.phone import InvalidPhoneNumberError, normalize_phone_number
 
 
@@ -77,6 +83,7 @@ class AuthenticatedSessionSerializer(serializers.Serializer[dict[str, object]]):
 
 class UserSessionSerializer(serializers.ModelSerializer[UserSession]):
     device_label = serializers.CharField(source="device.label", allow_null=True, read_only=True)
+    active_role = serializers.CharField(source="active_role.code", allow_null=True, read_only=True)
     is_current = serializers.SerializerMethodField()
 
     class Meta:
@@ -84,6 +91,7 @@ class UserSessionSerializer(serializers.ModelSerializer[UserSession]):
         fields = (
             "id",
             "device_label",
+            "active_role",
             "created_at",
             "last_seen_at",
             "expires_at",
@@ -94,3 +102,45 @@ class UserSessionSerializer(serializers.ModelSerializer[UserSession]):
     def get_is_current(self, session: UserSession) -> bool:
         current_session_hash = self.context.get("current_session_hash")
         return bool(current_session_hash and session.session_key_hash == current_session_hash)
+
+
+class RoleSwitchSerializer(serializers.Serializer[dict[str, object]]):
+    role = serializers.SlugField(max_length=50)
+
+
+class ActiveRoleSerializer(serializers.Serializer[dict[str, object]]):
+    active_role = serializers.CharField(read_only=True, allow_null=True)
+
+
+class StepUpSessionSerializer(serializers.Serializer[dict[str, object]]):
+    stepped_up_at = serializers.DateTimeField(read_only=True)
+
+
+class ConsentReceiptCreateSerializer(serializers.Serializer[dict[str, object]]):
+    purpose = serializers.SlugField(max_length=100)
+    policy_version = serializers.CharField(max_length=100)
+
+
+class ConsentReceiptSerializer(serializers.ModelSerializer[ConsentReceipt]):
+    class Meta:
+        model = ConsentReceipt
+        fields = ("id", "purpose", "policy_version", "accepted_at", "withdrawn_at")
+        read_only_fields = fields
+
+
+class CommunicationPreferenceSerializer(serializers.ModelSerializer[CommunicationPreference]):
+    class Meta:
+        model = CommunicationPreference
+        fields = ("channel", "purpose", "is_enabled", "updated_at")
+        read_only_fields = ("updated_at",)
+
+
+class PrivacyRequestCreateSerializer(serializers.Serializer[dict[str, object]]):
+    kind = serializers.ChoiceField(choices=PrivacyRequest.Kind.choices)
+
+
+class PrivacyRequestSerializer(serializers.ModelSerializer[PrivacyRequest]):
+    class Meta:
+        model = PrivacyRequest
+        fields = ("id", "kind", "status", "requested_at", "completed_at")
+        read_only_fields = fields

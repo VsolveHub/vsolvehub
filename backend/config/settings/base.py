@@ -30,7 +30,11 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "rest_framework",
     "apps.health",
+    "apps.foundation",
     "apps.identity",
+    "apps.carts",
+    "apps.assignments",
+    "apps.commerce",
     "apps.catalog",
     "apps.pricing",
     "apps.locations",
@@ -140,6 +144,17 @@ REST_FRAMEWORK = {
     },
 }
 
+# M1 operational limits.  These are server-authoritative and deliberately
+# separate from editable commercial configuration such as tax and platform fee.
+M1_PARTNER_SEARCH_TIMEOUT_SECONDS = 180
+M1_PAYMENT_WINDOW_SECONDS = 300
+M1_TODAY_LEAD_TIME_MINUTES = 120
+M1_SCHEDULED_MAX_DAYS = 7
+M1_ARRIVAL_WINDOW_MINUTES = 60
+M1_PARTNER_OFFER_TIMEOUT_SECONDS = 45
+M1_PARTNER_SEARCH_CANDIDATE_LIMIT = 3
+M1_PARTNER_UNDO_TIMEOUT_SECONDS = 120
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
@@ -150,6 +165,7 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": True,
     "ENUM_NAME_OVERRIDES": {
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
+        "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -166,6 +182,7 @@ OTP_PHONE_RATE_LIMIT = 5
 OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
+FINANCE_STEP_UP_TTL_SECONDS = env.int("FINANCE_STEP_UP_TTL_SECONDS", default=10 * 60)
 
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GEOCODING_NOMINATIM_URL = env(
@@ -209,6 +226,9 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT_SECONDS", default=60)
+CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", default=45)
 CELERY_BEAT_SCHEDULE = {
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",

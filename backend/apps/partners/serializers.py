@@ -219,6 +219,11 @@ class PartnerScheduleUpdateSerializer(serializers.Serializer[dict[str, object]])
     exceptions = PartnerAvailabilityExceptionInputSerializer(many=True)
 
 
+class OperationsPartnerScheduleUpdateSerializer(PartnerScheduleUpdateSerializer):
+    consent_purpose = serializers.SlugField(max_length=100)
+    consent_document_version = serializers.CharField(max_length=80)
+
+
 class PartnerAvailabilityRuleSerializer(
     serializers.ModelSerializer[PartnerAvailabilityRule],
 ):

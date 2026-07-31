@@ -9,6 +9,8 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 urlpatterns: list[URLPattern | URLResolver] = [
     path("admin/", admin.site.urls),
     path("api/v1/auth/", include("apps.identity.urls")),
+    path("api/v1/", include("apps.carts.urls")),
+    path("api/v1/", include("apps.assignments.urls")),
     path("api/v1/", include("apps.catalog.urls")),
     path("api/v1/", include("apps.locations.urls")),
     path("api/v1/", include("apps.partners.urls")),

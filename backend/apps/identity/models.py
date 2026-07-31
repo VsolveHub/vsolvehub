@@ -200,9 +200,17 @@ class UserSession(models.Model):
         on_delete=models.SET_NULL,
         related_name="sessions",
     )
+    active_role = models.ForeignKey(
+        Role,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="active_sessions",
+    )
     session_key_hash = models.CharField(max_length=64, unique=True)
     expires_at = models.DateTimeField()
     last_seen_at = models.DateTimeField(default=timezone.now)
+    stepped_up_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -214,3 +222,130 @@ class UserSession(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user_id}:{self.id}"
+
+
+class ConsentReceipt(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="consent_receipts",
+    )
+    purpose = models.SlugField(max_length=100)
+    policy_version = models.CharField(max_length=100)
+    accepted_at = models.DateTimeField(default=timezone.now)
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=64, default="api")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-accepted_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "purpose", "policy_version"),
+                name="identity_unique_consent_receipt_version",
+            ),
+        ]
+        indexes = [models.Index(fields=("user", "purpose", "withdrawn_at"))]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.purpose}:{self.policy_version}"
+
+
+class CommunicationPreference(models.Model):
+    class Channel(models.TextChoices):
+        SMS = "SMS", "SMS"
+        EMAIL = "EMAIL", "Email"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="communication_preferences",
+    )
+    channel = models.CharField(max_length=16, choices=Channel.choices)
+    purpose = models.SlugField(max_length=100)
+    is_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "channel", "purpose"),
+                name="identity_unique_communication_preference",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.channel}:{self.purpose}"
+
+
+class PrivacyRequest(models.Model):
+    class Kind(models.TextChoices):
+        ACCESS = "ACCESS", "Access"
+        ERASURE = "ERASURE", "Erasure"
+
+    class Status(models.TextChoices):
+        RECEIVED = "RECEIVED", "Received"
+        IN_REVIEW = "IN_REVIEW", "In review"
+        COMPLETED = "COMPLETED", "Completed"
+        REJECTED = "REJECTED", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="privacy_requests",
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.RECEIVED)
+    requested_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ("-requested_at",)
+        indexes = [models.Index(fields=("status", "requested_at"))]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.kind}:{self.status}"
+
+
+class AccessAuditEvent(models.Model):
+    class Decision(models.TextChoices):
+        ALLOWED = "ALLOWED", "Allowed"
+        DENIED = "DENIED", "Denied"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="access_audit_events",
+    )
+    subject_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="access_events_about",
+    )
+    action = models.CharField(max_length=120)
+    object_type = models.CharField(max_length=100, blank=True)
+    object_id = models.UUIDField(null=True, blank=True)
+    decision = models.CharField(max_length=16, choices=Decision.choices)
+    request_id = models.CharField(max_length=64, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("actor", "created_at")),
+            models.Index(fields=("subject_user", "created_at")),
+            models.Index(fields=("action", "created_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.action}:{self.decision}:{self.id}"

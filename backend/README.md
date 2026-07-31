@@ -18,7 +18,7 @@ From `C:\dev\vsolve\backend`:
 Copy-Item .env.example .env
 docker compose --env-file ..\infra\.env.example -f ..\infra\compose.yaml up -d
 .\.venv\Scripts\python.exe manage.py migrate
-.\.venv\Scripts\python.exe manage.py seed_technician_catalog --with-development-area
+.\.venv\Scripts\python.exe manage.py seed_technician_catalog
 .\.venv\Scripts\python.exe manage.py seed_partner_reference_data
 .\scripts\server.cmd
 ```
@@ -26,9 +26,10 @@ docker compose --env-file ..\infra\.env.example -f ..\infra\compose.yaml up -d
 The bootstrap script always installs into `backend\.venv`; it never changes global Python
 packages.
 
-The seed commands are idempotent. They create 19 explicitly priced Technician services, normalized
-Partner skills, and a development-only West Hyderabad service area for PIN `500032`; this is
-configuration, never a hidden location fallback.
+The seed commands are idempotent. The M1 Technician seed activates only the six reviewed one-person,
+task-priced variants and the `hyderabad-500032` service area for PIN `500032`. Legacy catalog rows
+are retained but paused/inactive; the development-only West Hyderabad fixture is never activated as a
+fallback.
 
 ## Location lookup
 

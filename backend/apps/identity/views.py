@@ -9,7 +9,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound, Throttled
+from rest_framework.exceptions import NotFound, PermissionDenied, Throttled
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -20,10 +20,18 @@ from apps.identity.exceptions import InvalidOtpApiError, OtpUnavailableApiError
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
 from apps.identity.serializers import (
+    ActiveRoleSerializer,
     AuthenticatedSessionSerializer,
+    CommunicationPreferenceSerializer,
+    ConsentReceiptCreateSerializer,
+    ConsentReceiptSerializer,
     OtpIssuedSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
+    PrivacyRequestCreateSerializer,
+    PrivacyRequestSerializer,
+    RoleSwitchSerializer,
+    StepUpSessionSerializer,
     UserSerializer,
     UserSessionSerializer,
 )
@@ -31,8 +39,13 @@ from apps.identity.services import (
     OtpRateLimitError,
     OtpVerificationError,
     create_authenticated_session,
+    create_privacy_request,
     issue_login_otp,
+    mark_session_step_up,
+    record_consent,
     revoke_current_session,
+    set_communication_preference,
+    switch_active_role,
     verify_login_otp,
 )
 
@@ -200,3 +213,121 @@ class SessionRevokeView(APIView):
             session.revoked_at = timezone.now()
             session.save(update_fields=("revoked_at",))
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RoleSwitchView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=RoleSwitchSerializer,
+        responses={200: ActiveRoleSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = RoleSwitchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        session_key = request.session.session_key
+        if not session_key:
+            raise PermissionDenied("Session is no longer active.")
+        try:
+            session = switch_active_role(
+                user=cast(User, request.user),
+                session_key=session_key,
+                role_code=serializer.validated_data["role"],
+            )
+        except (PermissionError, UserSession.DoesNotExist) as exc:
+            raise PermissionDenied("The requested role is unavailable.") from exc
+        return Response({"active_role": session.active_role.code if session.active_role else None})
+
+
+class FinanceStepUpView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=OtpVerifySerializer,
+        responses={200: StepUpSessionSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = OtpVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            verified_user = verify_login_otp(
+                challenge_id=data["challenge_id"],
+                phone_number=data["phone_number"],
+                code=data["code"],
+            )
+        except OtpVerificationError as exc:
+            raise InvalidOtpApiError from exc
+        user = cast(User, request.user)
+        session_key = request.session.session_key
+        if verified_user.pk != user.pk or not session_key:
+            raise PermissionDenied("Step-up verification did not match the current session.")
+        session = mark_session_step_up(user=user, session_key=session_key)
+        return Response({"stepped_up_at": session.stepped_up_at})
+
+
+class ConsentReceiptView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Privacy"],
+        request=ConsentReceiptCreateSerializer,
+        responses={201: ConsentReceiptSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ConsentReceiptCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        receipt = record_consent(user=cast(User, request.user), **serializer.validated_data)
+        return Response(ConsentReceiptSerializer(receipt).data, status=status.HTTP_201_CREATED)
+
+
+class CommunicationPreferenceView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(tags=["Privacy"], responses={200: CommunicationPreferenceSerializer(many=True)})
+    def get(self, request: Request) -> Response:
+        preferences = cast(User, request.user).communication_preferences.order_by(
+            "channel", "purpose"
+        )
+        return Response(CommunicationPreferenceSerializer(preferences, many=True).data)
+
+    @extend_schema(
+        tags=["Privacy"],
+        request=CommunicationPreferenceSerializer,
+        responses={200: CommunicationPreferenceSerializer},
+    )
+    def put(self, request: Request) -> Response:
+        serializer = CommunicationPreferenceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        preference = set_communication_preference(
+            user=cast(User, request.user),
+            **serializer.validated_data,
+        )
+        return Response(CommunicationPreferenceSerializer(preference).data)
+
+
+class PrivacyRequestView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(tags=["Privacy"], responses={200: PrivacyRequestSerializer(many=True)})
+    def get(self, request: Request) -> Response:
+        requests = cast(User, request.user).privacy_requests.all()
+        return Response(PrivacyRequestSerializer(requests, many=True).data)
+
+    @extend_schema(
+        tags=["Privacy"],
+        request=PrivacyRequestCreateSerializer,
+        responses={201: PrivacyRequestSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PrivacyRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        privacy_request = create_privacy_request(
+            user=cast(User, request.user),
+            kind=serializer.validated_data["kind"],
+        )
+        return Response(
+            PrivacyRequestSerializer(privacy_request).data, status=status.HTTP_201_CREATED
+        )

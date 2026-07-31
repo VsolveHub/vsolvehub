@@ -2,6 +2,7 @@
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -82,6 +83,10 @@ class Service(models.Model):
 
 
 class ServiceVariant(models.Model):
+    class BookingArchetype(models.TextChoices):
+        LEGACY = "LEGACY", "Legacy"
+        A1_TASK_VISIT = "A1_TASK_VISIT", "A1 task visit"
+
     class PricingStrategy(models.TextChoices):
         FIXED = "FIXED", "Fixed"
         DURATION = "DURATION", "Duration based"
@@ -93,6 +98,11 @@ class ServiceVariant(models.Model):
     name = models.CharField(max_length=160)
     description = models.TextField(blank=True)
     pricing_strategy = models.CharField(max_length=24, choices=PricingStrategy.choices)
+    booking_archetype = models.CharField(
+        max_length=24,
+        choices=BookingArchetype.choices,
+        default=BookingArchetype.LEGACY,
+    )
     minimum_duration_minutes = models.PositiveSmallIntegerField(default=60)
     recommended_duration_minutes = models.PositiveSmallIntegerField(default=60)
     duration_increment_minutes = models.PositiveSmallIntegerField(default=30)
@@ -138,6 +148,53 @@ class ServiceVariant(models.Model):
 
     def __str__(self) -> str:
         return f"{self.service.name}: {self.name}"
+
+
+class A1VariantConfiguration(models.Model):
+    """Versioned Operations-owned scope and fulfilment configuration for one A1 variant."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="a1_configurations",
+    )
+    version = models.PositiveIntegerField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    scope_schema = models.JSONField(default=dict)
+    required_equipment = models.JSONField(default=list)
+    out_of_scope_rules = models.JSONField(default=list)
+    evidence_policy = models.JSONField(default=dict)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="a1_variant_configurations_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_a1_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_a1_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant_id}:v{self.version}:{self.status}"
 
 
 class ServiceQuestion(models.Model):
