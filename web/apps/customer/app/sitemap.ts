@@ -1,0 +1,55 @@
+import type { MetadataRoute } from "next";
+
+import { getCategories, getCategoryServices } from "@/features/catalog/queries";
+
+/**
+ * Sitemap for the public catalog.
+ *
+ * Generated from the API rather than a hand-maintained list, so a service
+ * published in Operations is discoverable without a code change — and a service
+ * that is withdrawn stops being advertised.
+ *
+ * If the API is unreachable the sitemap degrades to the static routes instead of
+ * failing the request. A 500 here teaches a crawler the sitemap is unreliable;
+ * a short sitemap just means less was discovered on that fetch.
+ */
+
+export const revalidate = 3600;
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vsolvehub.com";
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const now = new Date();
+
+  const staticRoutes: MetadataRoute.Sitemap = [
+    { url: `${SITE_URL}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
+    { url: `${SITE_URL}/catalog`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
+  ];
+
+  try {
+    const categories = await getCategories();
+
+    const categoryRoutes: MetadataRoute.Sitemap = categories.map((category) => ({
+      url: `${SITE_URL}/catalog/${category.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.8,
+    }));
+
+    const serviceLists = await Promise.all(
+      categories.map(async (category) => {
+        const services = (await getCategoryServices(category.slug)) ?? [];
+        return services.map((service) => ({
+          url: `${SITE_URL}/catalog/${category.slug}/${service.slug}`,
+          lastModified: now,
+          changeFrequency: "weekly" as const,
+          priority: 0.7,
+        }));
+      }),
+    );
+
+    return [...staticRoutes, ...categoryRoutes, ...serviceLists.flat()];
+  } catch {
+    return staticRoutes;
+  }
+}

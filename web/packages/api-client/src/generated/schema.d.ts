@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.1.0)
- * Checksum: 200641fa86f4b43b
+ * Source:   contracts/openapi/v1.yaml (version 1.2.0)
+ * Checksum: 845f5523c371c7b1
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -231,6 +231,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/partner-applications/{application_id}/transition/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_partner_applications_transition_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/partner-documents/{document_id}/review/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_partner_documents_review_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/application/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_application_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["partner_application_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/application/documents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_application_documents_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/application/submit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_application_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/availability/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_availability_retrieve"];
+        put: operations["partner_availability_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/presence/heartbeat/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_presence_heartbeat_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/presence/offline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_presence_offline_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/presence/online/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_presence_online_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/serviceability/check/": {
         parameters: {
             query?: never;
@@ -333,6 +493,7 @@ export interface components {
             readonly code: string;
             readonly message: string;
             readonly details: unknown;
+            readonly retryable: boolean;
             readonly request_id: string | null;
         };
         AuthenticatedSession: {
@@ -349,9 +510,27 @@ export interface components {
             readonly icon_key: string;
             readonly subcategories: components["schemas"]["Subcategory"][];
         };
+        /**
+         * @description * `APPROVED` - APPROVED
+         *     * `REJECTED` - REJECTED
+         * @enum {string}
+         */
+        DecisionEnum: "APPROVED" | "REJECTED";
+        ExpectedVersionRequest: {
+            expected_version: number;
+        };
         Money: {
             readonly amount_paise: number;
             readonly currency: string;
+        };
+        OperationsDocumentReviewRequest: {
+            decision: components["schemas"]["DecisionEnum"];
+            reason?: string;
+        };
+        OperationsTransitionRequest: {
+            expected_version: number;
+            target_status: components["schemas"]["TargetStatusEnum"];
+            reason?: string;
         };
         OtpIssued: {
             /** Format: uuid */
@@ -372,6 +551,207 @@ export interface components {
             device_identifier?: string;
             device_label?: string;
         };
+        PartnerApplication: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly status: components["schemas"]["PartnerApplicationStatusEnum"];
+            readonly version: number;
+            readonly display_name: string;
+            readonly biography: string;
+            readonly experience_years: number;
+            readonly skill_codes: string[];
+            readonly service_variant_ids: string[];
+            readonly service_area_ids: string[];
+            readonly change_request_message: string;
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+            readonly consents: components["schemas"]["PartnerConsent"][];
+            readonly documents: components["schemas"]["PartnerDocument"][];
+            readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `SUBMITTED` - Submitted
+         *     * `UNDER_REVIEW` - Under review
+         *     * `CHANGES_REQUIRED` - Changes required
+         *     * `APPROVED` - Approved
+         *     * `SUSPENDED` - Suspended
+         *     * `OFFBOARDED` - Offboarded
+         * @enum {string}
+         */
+        PartnerApplicationStatusEnum: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "SUSPENDED" | "OFFBOARDED";
+        PartnerApplicationTransition: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly from_status: string;
+            readonly to_status: string;
+            readonly reason_code: string;
+            readonly reason: string;
+            readonly application_version: number;
+            /** Format: date-time */
+            readonly occurred_at: string;
+        };
+        PartnerAvailabilityException: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly service_area_id: string;
+            /** Format: date */
+            readonly date: string;
+            readonly is_available: boolean;
+            /** Format: time */
+            readonly starts_at: string | null;
+            /** Format: time */
+            readonly ends_at: string | null;
+            readonly ends_next_day: boolean;
+            readonly reason: string;
+        };
+        PartnerAvailabilityExceptionInputRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            /** Format: date */
+            date: string;
+            is_available: boolean;
+            /** Format: time */
+            starts_at?: string | null;
+            /** Format: time */
+            ends_at?: string | null;
+            /** @default false */
+            ends_next_day: boolean;
+            reason?: string;
+        };
+        PartnerAvailabilityRule: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly service_area_id: string;
+            /** @description Monday is 0 and Sunday is 6. */
+            readonly weekday: number;
+            /** Format: time */
+            readonly starts_at: string;
+            /** Format: time */
+            readonly ends_at: string;
+            readonly ends_next_day: boolean;
+            readonly is_active: boolean;
+        };
+        PartnerAvailabilityRuleInputRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            weekday: number;
+            /** Format: time */
+            starts_at: string;
+            /** Format: time */
+            ends_at: string;
+            /** @default false */
+            ends_next_day: boolean;
+        };
+        PartnerConsent: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly purpose: string;
+            readonly document_version: string;
+            /** Format: date-time */
+            readonly accepted_at: string;
+            /** Format: date-time */
+            readonly withdrawn_at: string | null;
+        };
+        PartnerConsentInputRequest: {
+            purpose: string;
+            document_version: string;
+        };
+        PartnerDocument: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["PartnerDocumentKindEnum"];
+            readonly version: number;
+            readonly content_type: string;
+            readonly size_bytes: number;
+            readonly sha256: string;
+            readonly status: components["schemas"]["PartnerDocumentStatusEnum"];
+            readonly review_reason: string;
+            /** Format: date-time */
+            readonly uploaded_at: string;
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+        };
+        PartnerDocumentCreateRequest: {
+            expected_version: number;
+            kind: components["schemas"]["PartnerDocumentKindEnum"];
+            object_key: string;
+            content_type: string;
+            size_bytes: number;
+            sha256: string;
+        };
+        /**
+         * @description * `GOVERNMENT_ID` - Government identity
+         *     * `ADDRESS_PROOF` - Address proof
+         *     * `TAX` - Tax document
+         *     * `BANK` - Bank document
+         *     * `BACKGROUND_CHECK` - Background check
+         *     * `OTHER` - Other
+         * @enum {string}
+         */
+        PartnerDocumentKindEnum: "GOVERNMENT_ID" | "ADDRESS_PROOF" | "TAX" | "BANK" | "BACKGROUND_CHECK" | "OTHER";
+        /**
+         * @description * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `SUPERSEDED` - Superseded
+         * @enum {string}
+         */
+        PartnerDocumentStatusEnum: "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
+        PartnerGoOnlineRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            /** Format: decimal */
+            latitude: string;
+            /** Format: decimal */
+            longitude: string;
+            accuracy_m: number;
+            consent_version: string;
+        };
+        PartnerPresence: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly service_area_id: string;
+            /** Format: date-time */
+            readonly started_at: string;
+            /** Format: date-time */
+            readonly last_persisted_heartbeat_at: string;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        PartnerPresenceHeartbeatRequest: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: decimal */
+            latitude?: string;
+            /** Format: decimal */
+            longitude?: string;
+            accuracy_m?: number;
+            consent_version?: string;
+        };
+        PartnerPresenceSessionRequestRequest: {
+            /** Format: uuid */
+            session_id: string;
+        };
+        PartnerSchedule: {
+            readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
+            readonly exceptions: components["schemas"]["PartnerAvailabilityException"][];
+        };
+        PartnerScheduleUpdateRequest: {
+            rules: components["schemas"]["PartnerAvailabilityRuleInputRequest"][];
+            exceptions: components["schemas"]["PartnerAvailabilityExceptionInputRequest"][];
+        };
         PatchedAddressRequest: {
             label?: string;
             line1?: string;
@@ -388,6 +768,17 @@ export interface components {
             longitude?: string;
             source?: components["schemas"]["SourceEnum"];
             is_default?: boolean;
+        };
+        PatchedPartnerApplicationUpdateRequest: {
+            expected_version?: number;
+            display_name?: string;
+            biography?: string;
+            experience_years?: number;
+            skill_codes?: string[];
+            service_variant_ids?: string[];
+            service_area_ids?: string[];
+            consents?: components["schemas"]["PartnerConsentInputRequest"][];
+            device_identifier?: string;
         };
         /**
          * @description * `FIXED` - Fixed
@@ -548,6 +939,15 @@ export interface components {
             readonly name: string;
             readonly description: string;
         };
+        /**
+         * @description * `UNDER_REVIEW` - UNDER_REVIEW
+         *     * `CHANGES_REQUIRED` - CHANGES_REQUIRED
+         *     * `APPROVED` - APPROVED
+         *     * `SUSPENDED` - SUSPENDED
+         *     * `OFFBOARDED` - OFFBOARDED
+         * @enum {string}
+         */
+        TargetStatusEnum: "UNDER_REVIEW" | "CHANGES_REQUIRED" | "APPROVED" | "SUSPENDED" | "OFFBOARDED";
         User: {
             /** Format: uuid */
             readonly id: string;
@@ -1011,6 +1411,483 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    operations_partner_applications_transition_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsTransitionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsTransitionRequest"];
+                "multipart/form-data": components["schemas"]["OperationsTransitionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_documents_review_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsDocumentReviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsDocumentReviewRequest"];
+                "multipart/form-data": components["schemas"]["OperationsDocumentReviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerDocument"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPartnerApplicationUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPartnerApplicationUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPartnerApplicationUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_documents_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerDocumentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerDocumentCreateRequest"];
+                "multipart/form-data": components["schemas"]["PartnerDocumentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerDocument"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_application_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpectedVersionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ExpectedVersionRequest"];
+                "multipart/form-data": components["schemas"]["ExpectedVersionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_availability_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerSchedule"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_availability_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerScheduleUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerScheduleUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PartnerScheduleUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerSchedule"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerApplication"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_presence_heartbeat_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerPresenceHeartbeatRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerPresenceHeartbeatRequest"];
+                "multipart/form-data": components["schemas"]["PartnerPresenceHeartbeatRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerPresence"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_presence_offline_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerPresenceSessionRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerPresenceSessionRequestRequest"];
+                "multipart/form-data": components["schemas"]["PartnerPresenceSessionRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description The Partner is offline. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_presence_online_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerGoOnlineRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerGoOnlineRequest"];
+                "multipart/form-data": components["schemas"]["PartnerGoOnlineRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerPresence"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
             };
         };
     };

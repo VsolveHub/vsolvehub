@@ -1,0 +1,74 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { createTranslator, type Catalog } from "./i18n";
+
+const catalog: Catalog = {
+  "booking.confirmed": "Booking confirmed",
+  "booking.greeting": "Hello {name}, your {service} is booked.",
+  "booking.slotsLeft": {
+    one: "{count} slot left today",
+    other: "{count} slots left today",
+  },
+  "cart.items": { other: "{count} items" },
+};
+
+describe("createTranslator", () => {
+  it("resolves a plain message", () => {
+    const { t } = createTranslator("en-IN", catalog);
+    expect(t("booking.confirmed")).toBe("Booking confirmed");
+  });
+
+  it("interpolates named parameters", () => {
+    const { t } = createTranslator("en-IN", catalog);
+    expect(t("booking.greeting", { name: "Anitha", service: "Switch repair" })).toBe(
+      "Hello Anitha, your Switch repair is booked.",
+    );
+  });
+
+  it("leaves an unsupplied placeholder visible rather than printing undefined", () => {
+    const { t } = createTranslator("en-IN", catalog);
+    expect(t("booking.greeting", { name: "Anitha" })).toBe(
+      "Hello Anitha, your {service} is booked.",
+    );
+  });
+
+  it("selects plural forms using the locale's rules", () => {
+    const { t } = createTranslator("en-IN", catalog);
+    expect(t("booking.slotsLeft", { count: 1 })).toBe("1 slot left today");
+    expect(t("booking.slotsLeft", { count: 4 })).toBe("4 slots left today");
+    expect(t("booking.slotsLeft", { count: 0 })).toBe("0 slots left today");
+  });
+
+  it("falls back to `other` when a plural message is used without a count", () => {
+    const { t } = createTranslator("en-IN", catalog);
+    expect(t("cart.items")).toBe("{count} items");
+  });
+
+  it("returns the key for a missing message instead of blank or a crash", () => {
+    // A visible key gets reported and fixed; an empty string hides the bug.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { t } = createTranslator("en-IN", catalog);
+    expect(t("does.not.exist")).toBe("does.not.exist");
+    warn.mockRestore();
+  });
+
+  it("formats numbers with Indian grouping", () => {
+    const { n } = createTranslator("en-IN", catalog);
+    expect(n(123456)).toBe("1,23,456");
+  });
+});
+
+describe("locale-specific plural rules", () => {
+  it("uses the target language's categories, not an English n===1 check", () => {
+    // Hindi treats 0 and 1 as the "one" category, unlike English. Hardcoding
+    // `count === 1 ? singular : plural` would be wrong here, which is the whole
+    // reason this goes through Intl.PluralRules now rather than later.
+    const hindi = new Intl.PluralRules("hi-IN");
+    expect(hindi.select(0)).toBe("one");
+    expect(hindi.select(1)).toBe("one");
+    expect(hindi.select(2)).toBe("other");
+
+    const english = new Intl.PluralRules("en-IN");
+    expect(english.select(0)).toBe("other");
+  });
+});

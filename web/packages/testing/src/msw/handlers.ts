@@ -6,7 +6,9 @@ import {
   authenticatedSession,
   category,
   otpIssued,
+  reverseGeocodeResponse,
   serviceCard,
+  serviceDetail,
   serviceabilityResponse,
   userSession,
 } from "../fixtures";
@@ -105,22 +107,12 @@ export function createHandlers(options: HandlerOptions = {}): HttpHandler[] {
       HttpResponse.json([serviceCard({ category_slug: String(params.categorySlug) })]),
     ),
 
-    http.get(url("/api/v1/services/:serviceSlug/"), ({ params }) => {
-      const slug = String(params.serviceSlug);
-      // Detail extends the card; the contract's ServiceDetail adds fields the
-      // fixture layer does not yet model, so return the card shape plus the
-      // required detail additions only when a test needs them.
-      return HttpResponse.json(serviceCard({ slug }));
-    }),
+    http.get(url("/api/v1/services/:serviceSlug/"), ({ params }) =>
+      HttpResponse.json(serviceDetail({ slug: String(params.serviceSlug) })),
+    ),
 
-    http.get(url("/api/v1/services/:serviceSlug/configuration/"), () =>
-      HttpResponse.json(
-        apiError(
-          "NOT_IMPLEMENTED_IN_MOCK",
-          "Service configuration has no fixture yet. Add one when B3 needs it.",
-        ),
-        { status: 501 },
-      ),
+    http.get(url("/api/v1/services/:serviceSlug/configuration/"), ({ params }) =>
+      HttpResponse.json(serviceDetail({ slug: String(params.serviceSlug) })),
     ),
 
     // ---- Locations ------------------------------------------------------
@@ -129,13 +121,7 @@ export function createHandlers(options: HandlerOptions = {}): HttpHandler[] {
     ),
 
     http.post(url("/api/v1/geocoding/reverse/"), () =>
-      HttpResponse.json(
-        apiError(
-          "NOT_IMPLEMENTED_IN_MOCK",
-          "Reverse geocode has no fixture yet. Add one when the address step needs it.",
-        ),
-        { status: 501 },
-      ),
+      HttpResponse.json(reverseGeocodeResponse()),
     ),
 
     // ---- Health ---------------------------------------------------------

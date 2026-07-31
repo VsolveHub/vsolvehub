@@ -3,7 +3,10 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "noEmit": true
+    "noEmit": true,
+    // Component tests use jest-dom's matchers. Without this, tsc reports them as
+    // missing properties on Assertion even though they resolve fine at runtime.
+    "types": ["node", "@testing-library/jest-dom"]
   },
   "include": ["src"]
 }

@@ -148,6 +148,93 @@ export function serviceabilityResponse(
   };
 }
 
+export function serviceQuestionOption(
+  overrides: Partial<Schemas["ServiceQuestionOption"]> = {},
+): Schemas["ServiceQuestionOption"] {
+  return {
+    id: "88888888-8888-4888-8888-888888888888",
+    code: "one-point",
+    label: "One point",
+    description: "",
+    ...overrides,
+  };
+}
+
+export function serviceQuestion(
+  overrides: Partial<Schemas["ServiceQuestion"]> = {},
+): Schemas["ServiceQuestion"] {
+  return {
+    id: "99999999-9999-4999-8999-999999999999",
+    code: "socket-count",
+    prompt: "How many switches or sockets need work?",
+    help_text: "Count every point that needs repair or replacement.",
+    kind: "NUMBER",
+    is_required: true,
+    validation_rules: null,
+    options: [],
+    ...overrides,
+  };
+}
+
+export function serviceVariantConfiguration(
+  overrides: Partial<Schemas["ServiceVariantConfiguration"]> = {},
+): Schemas["ServiceVariantConfiguration"] {
+  return {
+    id: "8a1f0c22-6d3e-4b71-9f52-1c0d7e4a9b83",
+    code: "standard",
+    name: "Standard",
+    description: "A verified electrician diagnoses and repairs the fault.",
+    pricing_strategy: "DURATION",
+    starting_price: money(19900),
+    minimum_duration_minutes: 60,
+    recommended_duration_minutes: 90,
+    duration_increment_minutes: 30,
+    maximum_duration_minutes: 240,
+    required_skill_code: "electrical-general",
+    questions: [serviceQuestion()],
+    ...overrides,
+  };
+}
+
+/**
+ * Full service detail, as the booking-configuration endpoint returns it.
+ *
+ * Note the empty `policies` and `media`: most catalogue rows carry neither yet,
+ * and a fixture that always has them produces a page built around content the
+ * real catalogue does not have. Same reasoning as `cover: null` above.
+ */
+export function serviceDetail(
+  overrides: Partial<Schemas["ServiceDetail"]> = {},
+): Schemas["ServiceDetail"] {
+  const card = serviceCard();
+  return {
+    ...card,
+    description: "",
+    variants: [serviceVariantConfiguration()],
+    policies: [],
+    media: [],
+    ...overrides,
+  };
+}
+
+export function reverseGeocodeResponse(
+  overrides: Partial<Schemas["ReverseGeocodeResponse"]> = {},
+): Schemas["ReverseGeocodeResponse"] {
+  return {
+    formatted_address: "Flat 402, Sai Residency, Kukatpally, Hyderabad 500072",
+    line1: "Flat 402, Sai Residency",
+    locality: "Kukatpally",
+    city: "Hyderabad",
+    state: "Telangana",
+    postal_code: "500072",
+    country_code: "IN",
+    latitude: "17.494700",
+    longitude: "78.399500",
+    provider: "test",
+    ...overrides,
+  };
+}
+
 /**
  * Builds a contract-shaped error envelope.
  *
@@ -158,13 +245,16 @@ export function serviceabilityResponse(
 export function apiError(
   code: string,
   message: string,
-  options: { details?: unknown; requestId?: string | null } = {},
+  options: { details?: unknown; retryable?: boolean; requestId?: string | null } = {},
 ): Schemas["ApiError"] {
   return {
     error: {
       code,
       message,
       details: options.details ?? null,
+      // The server's semantic hint: could retrying this operation ever succeed?
+      // Defaults to false so a fixture never implies a retry is safe by accident.
+      retryable: options.retryable ?? false,
       request_id: options.requestId ?? "req_01J000000000000000000000",
     },
   };

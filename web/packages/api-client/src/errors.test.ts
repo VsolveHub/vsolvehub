@@ -13,6 +13,9 @@ const detail = (code: string, overrides: Record<string, unknown> = {}) => ({
   code,
   message: "Something the customer can read.",
   details: null,
+  // Defaults to true so a test that cares about status-based classification is
+  // not silently vetoed by the server flag.
+  retryable: true,
   request_id: "req_abc123",
   ...overrides,
 });
@@ -20,14 +23,30 @@ const detail = (code: string, overrides: Record<string, unknown> = {}) => ({
 describe("parseErrorEnvelope", () => {
   it("accepts a contract-shaped envelope", () => {
     const parsed = parseErrorEnvelope({
-      error: { code: "QUOTE_EXPIRED", message: "Price changed.", details: null, request_id: "r1" },
+      error: {
+        code: "QUOTE_EXPIRED",
+        message: "Price changed.",
+        details: null,
+        retryable: true,
+        request_id: "r1",
+      },
     });
     expect(parsed).toEqual({
       code: "QUOTE_EXPIRED",
       message: "Price changed.",
       details: null,
+      retryable: true,
       request_id: "r1",
     });
+  });
+
+  it("defaults retryable to false when the field is absent", () => {
+    // An older deployment predating the field must not have its errors treated
+    // as retryable by omission.
+    const parsed = parseErrorEnvelope({
+      error: { code: "X", message: "y", details: null, request_id: "r1" },
+    });
+    expect(parsed?.retryable).toBe(false);
   });
 
   it("rejects bodies that are not the envelope", () => {
@@ -52,6 +71,20 @@ describe("ApiRequestError transport retryability", () => {
     for (const status of [408, 425, 429, 500, 502, 503, 504]) {
       expect(new ApiRequestError(status, detail("UPSTREAM")).isTransportRetryable).toBe(true);
     }
+  });
+
+  it("lets the server veto an automatic retry", () => {
+    const error = new ApiRequestError(503, detail("UPSTREAM", { retryable: false }));
+    expect(error.isTransportRetryable).toBe(false);
+  });
+
+  it("does not treat the server's semantic hint as permission to auto-retry", () => {
+    // SLOT_NO_LONGER_AVAILABLE is retryable:true because booking again after
+    // choosing another slot works — not because resending this request would.
+    // Conflating the two would resend a payment on a 409.
+    const error = new ApiRequestError(409, detail("SLOT_NO_LONGER_AVAILABLE", { retryable: true }));
+    expect(error.retryable).toBe(true);
+    expect(error.isTransportRetryable).toBe(false);
   });
 
   it("never retries a conflict, because the world changed", () => {

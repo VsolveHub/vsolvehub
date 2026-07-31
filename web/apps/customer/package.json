@@ -13,6 +13,7 @@
     "@flaticon/flaticon-uicons": "^3.3.1",
     "@prisma/client": "^6.2.1",
     "@tanstack/react-query": "^5.62.7",
+    "@vsolve/api-client": "workspace:*",
     "@vsolve/crypto": "workspace:*",
     "@vsolve/db": "workspace:*",
     "@vsolve/query": "workspace:*",
@@ -22,6 +23,7 @@
     "next": "^15.1.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "server-only": "^0.0.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -31,6 +33,8 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@vsolve/testing": "workspace:*",
+    "msw": "^2.15.0",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.7.2"
   }

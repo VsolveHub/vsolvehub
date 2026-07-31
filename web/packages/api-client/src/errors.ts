@@ -31,11 +31,14 @@ export type RecoveryIntent =
   | "contact_support";
 
 /**
- * HTTP statuses that are safe to retry at the transport layer.
+ * HTTP statuses that are safe to retry automatically at the transport layer.
  *
  * 409 is excluded on purpose: a conflict means the world changed (a slot was
  * taken, a hold expired), so retrying the identical request just fails again.
  * The user has to choose again.
+ *
+ * This is a narrower question than the envelope's `retryable` flag — see
+ * {@link ApiRequestError.isTransportRetryable}.
  */
 const TRANSPORT_RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
@@ -93,15 +96,35 @@ export class ApiRequestError extends ApiClientError {
   readonly status: number;
   readonly code: string;
   readonly details: unknown;
-  readonly isTransportRetryable: boolean;
   readonly recovery: RecoveryIntent;
+
+  /**
+   * The server's own judgement: could a retry of this operation ever succeed?
+   *
+   * Semantic, not mechanical. `SLOT_NO_LONGER_AVAILABLE` is `retryable: true`
+   * because booking again *after picking another slot* will work — not because
+   * resending the same request would. Use it to decide whether to offer a "Try
+   * again" affordance at all.
+   */
+  readonly retryable: boolean;
+
+  /**
+   * Whether the query layer may silently resend the identical request.
+   *
+   * Deliberately stricter than {@link retryable}, and the two must not be
+   * conflated: treating the server's semantic hint as permission to auto-retry
+   * would resend a payment on a 409. Both have to agree — the status must be a
+   * transport-level failure class, and the server must not have vetoed a retry.
+   */
+  readonly isTransportRetryable: boolean;
 
   constructor(status: number, detail: ApiErrorDetail) {
     super(detail.message, detail.request_id ?? null);
     this.status = status;
     this.code = detail.code;
     this.details = detail.details ?? null;
-    this.isTransportRetryable = TRANSPORT_RETRYABLE_STATUSES.has(status);
+    this.retryable = detail.retryable;
+    this.isTransportRetryable = detail.retryable && TRANSPORT_RETRYABLE_STATUSES.has(status);
     this.recovery = RECOVERY_BY_CODE[detail.code] ?? defaultRecoveryForStatus(status);
   }
 
@@ -188,6 +211,9 @@ export function parseErrorEnvelope(body: unknown): ApiErrorDetail | null {
     code: detail.code,
     message: detail.message,
     details: detail.details ?? null,
+    // Defaults to false when absent. An older deployment that predates the field
+    // should not have its errors treated as retryable by omission.
+    retryable: detail.retryable === true,
     request_id: typeof detail.request_id === "string" ? detail.request_id : null,
   };
 }

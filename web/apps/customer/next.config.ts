@@ -8,7 +8,9 @@ import { PrismaPlugin } from "@prisma/nextjs-monorepo-workaround-plugin";
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@vsolve/ui"],
+  // Workspace packages ship TypeScript source rather than a build step, so Next
+  // has to compile them alongside the app.
+  transpilePackages: ["@vsolve/ui", "@vsolve/api-client", "@vsolve/query"],
   // `next dev --turbopack` reads this; `next build` still goes through the
   // webpack config below. Declaring it also silences Next's "Webpack is
   // configured while Turbopack is not" warning.

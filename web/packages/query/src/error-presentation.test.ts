@@ -7,6 +7,7 @@ const detail = (code: string, message = "Readable message.", details: unknown = 
   code,
   message,
   details,
+  retryable: false,
   request_id: "req_abc123",
 });
 
