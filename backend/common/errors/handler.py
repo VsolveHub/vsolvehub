@@ -1,12 +1,13 @@
 """Django REST Framework exception envelope."""
 
 import logging
+import math
 from collections.abc import Mapping, Sequence
 from http import HTTPStatus
 from typing import cast
 
 from rest_framework import status
-from rest_framework.exceptions import ErrorDetail, ValidationError
+from rest_framework.exceptions import ErrorDetail, PermissionDenied, Throttled, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -43,6 +44,22 @@ def _is_retryable(exc: Exception, response_status: int) -> bool:
     return response_status in RETRYABLE_HTTP_STATUSES
 
 
+def _safe_message(exc: Exception, response_status: int) -> str:
+    explicit = getattr(exc, "safe_message", None)
+    if isinstance(explicit, str):
+        return explicit
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, (ErrorDetail, str)):
+        message = str(detail)
+        if message.startswith("CSRF Failed:"):
+            return "Your security token expired. Refresh and try again."
+        return message
+    try:
+        return HTTPStatus(response_status).phrase
+    except ValueError:
+        return "Request failed."
+
+
 def api_exception_handler(exc: Exception, context: dict[str, object]) -> Response:
     """Return one stable envelope for expected and unexpected API errors."""
 
@@ -75,14 +92,21 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
     else:
         codes = getattr(exc, "get_codes", lambda: "request_error")()
         code = codes if isinstance(codes, str) else "request_error"
-        try:
-            message = HTTPStatus(response_status).phrase
-        except ValueError:
-            message = "Request failed."
+        message = _safe_message(exc, response_status)
+        if isinstance(exc, PermissionDenied) and str(getattr(exc, "detail", "")).startswith(
+            "CSRF Failed:"
+        ):
+            code = "csrf_failed"
 
     details = _serialise_details(cast(object, response.data))
     if isinstance(details, dict) and set(details) == {"detail"}:
         details = details["detail"]
+    if isinstance(exc, Throttled):
+        wait = getattr(exc, "wait", 0)
+        wait_seconds = wait if isinstance(wait, (int, float)) else 0
+        details = {
+            "retry_after_seconds": max(1, math.ceil(wait_seconds)),
+        }
 
     response.data = {
         "error": {

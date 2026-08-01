@@ -273,3 +273,80 @@ describe("navigation", () => {
     expect(blocked.stage).toBe("address");
   });
 });
+
+describe("login interrupt", () => {
+  it("raises login from wherever it was needed and remembers where to go back", () => {
+    const anonymous = run(initialState("fan-installation"), {
+      type: "REQUIRE_LOGIN",
+      returnTo: "address",
+    });
+
+    expect(anonymous.stage).toBe("login");
+    expect(anonymous.resumeStage).toBe("address");
+  });
+
+  it("keeps everything the customer configured", () => {
+    // The whole point of the interrupt: being asked to log in must not cost
+    // someone the form they have already filled in.
+    const before = atScopeComplete();
+    const after = run(before, { type: "REQUIRE_LOGIN", returnTo: "scope" });
+
+    expect(after.taskLines).toEqual(before.taskLines);
+    expect(after.answers).toEqual(before.answers);
+    expect(after.notes).toBe(before.notes);
+    expect(after.address).toEqual(before.address);
+    expect(after.rules).toEqual(before.rules);
+  });
+
+  it("returns to the origin stage once Django issues a session", () => {
+    const resumed = run(
+      atScopeComplete(),
+      { type: "REQUIRE_LOGIN", returnTo: "scope" },
+      { type: "LOGIN_COMPLETED" },
+    );
+
+    expect(resumed.stage).toBe("scope");
+    expect(resumed.resumeStage).toBeNull();
+    expect(totalTaskQuantity(resumed)).toBe(1);
+  });
+
+  it("returns to the origin stage when login is cancelled, not to the previous stage", () => {
+    // `login` sits after `review` in the sequence, so an ordinary BACK would
+    // send someone who was interrupted at `address` forward to `review`.
+    const cancelled = run(
+      initialState("fan-installation"),
+      { type: "REQUIRE_LOGIN", returnTo: "address" },
+      { type: "BACK" },
+    );
+
+    expect(cancelled.stage).toBe("address");
+    expect(cancelled.resumeStage).toBeNull();
+  });
+
+  it("ignores a second interrupt while already logging in", () => {
+    const once = run(atReview(), { type: "REQUIRE_LOGIN", returnTo: "review" });
+    expect(run(once, { type: "REQUIRE_LOGIN", returnTo: "address" })).toBe(once);
+  });
+
+  it("ignores a completion that no login raised", () => {
+    const configured = atScopeComplete();
+    expect(run(configured, { type: "LOGIN_COMPLETED" })).toBe(configured);
+  });
+
+  it("refuses to advance out of login with the ordinary Continue", () => {
+    // Advancing from `login` lands on `finding`, where a Partner is offered real
+    // work. Only an established session may move the customer past this point.
+    const waiting = run(atReview(), { type: "REQUIRE_LOGIN", returnTo: "review" });
+    expect(run(waiting, { type: "ADVANCE" })).toBe(waiting);
+  });
+
+  it("remembers the interrupted stage as visited, so back navigation still works", () => {
+    const resumed = run(
+      atReview(),
+      { type: "REQUIRE_LOGIN", returnTo: "review" },
+      { type: "LOGIN_COMPLETED" },
+    );
+
+    expect(canNavigateTo(resumed, "scope")).toBe(true);
+  });
+});

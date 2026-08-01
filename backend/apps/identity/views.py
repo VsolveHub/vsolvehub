@@ -4,19 +4,20 @@ import uuid
 from typing import cast
 
 from django.conf import settings
+from django.middleware.csrf import get_token
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound, PermissionDenied, Throttled
+from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.identity.delivery import OtpDeliveryError
-from apps.identity.exceptions import InvalidOtpApiError, OtpUnavailableApiError
+from apps.identity.exceptions import InvalidOtpApiError, OtpThrottled, OtpUnavailableApiError
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
 from apps.identity.serializers import (
@@ -25,12 +26,14 @@ from apps.identity.serializers import (
     CommunicationPreferenceSerializer,
     ConsentReceiptCreateSerializer,
     ConsentReceiptSerializer,
+    CsrfTokenSerializer,
     OtpIssuedSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
     PrivacyRequestCreateSerializer,
     PrivacyRequestSerializer,
     RoleSwitchSerializer,
+    SessionStateSerializer,
     StepUpSessionSerializer,
     UserSerializer,
     UserSessionSerializer,
@@ -48,6 +51,8 @@ from apps.identity.services import (
     switch_active_role,
     verify_login_otp,
 )
+from common.errors.serializers import ApiErrorSerializer
+from common.schema import OTP_RATE_LIMIT_EXAMPLE, SESSION_EXPIRED_EXAMPLE
 
 
 def _request_ip(request: Request) -> str:
@@ -62,10 +67,10 @@ class CsrfCookieView(APIView):
 
     @extend_schema(
         tags=["Authentication"],
-        responses={200: OpenApiResponse(description="A CSRF cookie has been set.")},
+        responses={200: CsrfTokenSerializer},
     )
-    def get(self, _request: Request) -> Response:
-        return Response({"status": "ok"})
+    def get(self, request: Request) -> Response:
+        return Response({"csrf_token": get_token(request._request)})
 
 
 class OtpRequestView(APIView):
@@ -75,7 +80,14 @@ class OtpRequestView(APIView):
     @extend_schema(
         tags=["Authentication"],
         request=OtpRequestSerializer,
-        responses={202: OtpIssuedSerializer},
+        responses={
+            202: OtpIssuedSerializer,
+            429: OpenApiResponse(
+                response=ApiErrorSerializer,
+                examples=[OTP_RATE_LIMIT_EXAMPLE],
+            ),
+            503: ApiErrorSerializer,
+        },
     )
     def post(self, request: Request) -> Response:
         serializer = OtpRequestSerializer(data=request.data)
@@ -89,7 +101,7 @@ class OtpRequestView(APIView):
                 device_identifier=data.get("device_identifier", ""),
             )
         except OtpRateLimitError as exc:
-            raise Throttled(wait=exc.retry_after_seconds) from exc
+            raise OtpThrottled(wait=exc.retry_after_seconds) from exc
         except OtpDeliveryError as exc:
             raise OtpUnavailableApiError from exc
 
@@ -97,9 +109,9 @@ class OtpRequestView(APIView):
             "challenge_id": issued.challenge.id,
             "expires_in_seconds": settings.OTP_TTL_SECONDS,
             "resend_after_seconds": settings.OTP_RESEND_COOLDOWN_SECONDS,
+            "code_length": settings.OTP_CODE_LENGTH,
+            "development_code": issued.development_code,
         }
-        if issued.development_code is not None:
-            payload["development_code"] = issued.development_code
 
         return Response(payload, status=status.HTTP_202_ACCEPTED)
 
@@ -111,7 +123,7 @@ class OtpVerifyView(APIView):
     @extend_schema(
         tags=["Authentication"],
         request=OtpVerifySerializer,
-        responses={200: AuthenticatedSessionSerializer},
+        responses={200: AuthenticatedSessionSerializer, 400: ApiErrorSerializer},
     )
     def post(self, request: Request) -> Response:
         serializer = OtpVerifySerializer(data=request.data)
@@ -135,18 +147,67 @@ class OtpVerifyView(APIView):
         )
         response_data = {
             "user": UserSerializer(user).data,
+            "active_role": session.active_role.code if session.active_role else None,
             "session_expires_at": session.expires_at,
         }
         return Response(response_data)
 
 
 class CurrentSessionView(APIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (AllowAny,)
 
-    @extend_schema(tags=["Authentication"], responses={200: UserSerializer})
+    @extend_schema(
+        tags=["Authentication"],
+        responses={
+            200: SessionStateSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                examples=[SESSION_EXPIRED_EXAMPLE],
+            ),
+        },
+    )
     def get(self, request: Request) -> Response:
-        user = cast(User, request.user)
-        return Response(UserSerializer(user).data)
+        if not isinstance(request.user, User) or not request.user.is_authenticated:
+            return Response(
+                {
+                    "user": None,
+                    "active_role": None,
+                    "session_expires_at": None,
+                }
+            )
+
+        user = request.user
+        session_key = request.session.session_key
+        if not session_key:
+            return Response(
+                {
+                    "user": None,
+                    "active_role": None,
+                    "session_expires_at": None,
+                }
+            )
+        session = (
+            UserSession.objects.select_related("active_role")
+            .filter(
+                user=user,
+                session_key_hash=keyed_hash(session_key),
+                revoked_at__isnull=True,
+                expires_at__gt=timezone.now(),
+            )
+            .first()
+        )
+        if session is None:
+            raise AuthenticationFailed(
+                "Session is no longer active.",
+                code="session_expired",
+            )
+        return Response(
+            {
+                "user": UserSerializer(user).data,
+                "active_role": session.active_role.code if session.active_role else None,
+                "session_expires_at": session.expires_at,
+            }
+        )
 
 
 class LogoutView(APIView):

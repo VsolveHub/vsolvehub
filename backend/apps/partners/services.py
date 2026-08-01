@@ -3,6 +3,7 @@
 import re
 import uuid
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import date, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from itertools import pairwise
@@ -11,6 +12,7 @@ from typing import NotRequired, TypedDict, cast
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.catalog.models import Service, ServiceVariant
@@ -20,9 +22,12 @@ from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.partners.exceptions import (
     PartnerApplicationIncompleteError,
     PartnerApplicationNotFoundError,
+    PartnerDocumentUploadError,
     PartnerEligibilityError,
     PartnerPresenceError,
+    PartnerReviewOwnershipError,
     PartnerScheduleError,
+    PartnerSelfReviewError,
     PartnerTransitionError,
     PartnerVersionConflictError,
 )
@@ -32,7 +37,9 @@ from apps.partners.models import (
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerConsent,
+    PartnerConsentDocument,
     PartnerDocument,
+    PartnerDocumentUpload,
     PartnerLocation,
     PartnerOnlineSession,
     PartnerProfile,
@@ -43,10 +50,23 @@ from apps.partners.models import (
     Skill,
 )
 from apps.partners.selectors import presence_cache_key
+from apps.partners.storage import (
+    DocumentStorage,
+    DocumentStorageError,
+    SignedReview,
+    SignedUpload,
+    get_document_storage,
+)
 
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COORDINATE_QUANTUM = Decimal("0.001")
 MINUTES_PER_DAY = 24 * 60
+MAX_PARTNER_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024
+DOCUMENT_CONTENT_TYPE_SUFFIXES = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+}
 
 
 class ScheduleRuleInput(TypedDict):
@@ -65,6 +85,12 @@ class ScheduleExceptionInput(TypedDict):
     ends_at: NotRequired[time | None]
     ends_next_day: NotRequired[bool]
     reason: NotRequired[str]
+
+
+@dataclass(frozen=True, slots=True)
+class PartnerDocumentUploadGrant:
+    upload: PartnerDocumentUpload
+    signed: SignedUpload
 
 
 def _application_for_update(user: User) -> PartnerApplication:
@@ -163,18 +189,34 @@ def _validate_service_configuration(
     skills: Sequence[Skill],
     variants: Sequence[ServiceVariant],
     service_areas: Sequence[ServiceArea],
+    require_complete: bool = False,
 ) -> None:
+    if require_complete and (
+        not skills
+        or not variants
+        or not service_areas
+        or any(not skill.is_active for skill in skills)
+        or any(
+            not variant.is_active or variant.service.status != Service.Status.ACTIVE
+            for variant in variants
+        )
+        or any(not area.is_active for area in service_areas)
+    ):
+        raise PartnerApplicationIncompleteError(
+            "Select active skills, services, and service areas before submitting.",
+        )
+
     skill_codes = {skill.code for skill in skills}
     missing_skills = sorted(
         {variant.required_skill_code for variant in variants} - skill_codes,
     )
-    if missing_skills:
+    if missing_skills and (skills or require_complete):
         raise PartnerApplicationIncompleteError(
             f"Select the required skills for: {', '.join(missing_skills)}.",
         )
 
     area_ids = {area.id for area in service_areas}
-    for variant in variants:
+    for variant in variants if service_areas or require_complete else ():
         if not ServiceAreaService.objects.filter(
             variant=variant,
             service_area_id__in=area_ids,
@@ -186,30 +228,23 @@ def _validate_service_configuration(
             )
 
 
-@transaction.atomic
-def update_partner_application(
+def _draft_application_for_update(
     *,
     user: User,
     expected_version: int | None,
-    display_name: str,
-    biography: str,
-    experience_years: int,
-    skill_codes: Sequence[str],
-    service_variant_ids: Sequence[uuid.UUID],
-    service_area_ids: Sequence[uuid.UUID],
-    consents: Sequence[dict[str, str]],
-    request_ip: str,
-    device_identifier: str,
-) -> PartnerApplication:
+    display_name: str | None,
+    biography: str | None,
+    experience_years: int | None,
+) -> tuple[PartnerProfile, PartnerApplication]:
     partner = PartnerProfile.objects.select_for_update().filter(user=user).first()
     if partner is None:
         if expected_version is not None:
             raise PartnerVersionConflictError
         partner = PartnerProfile.objects.create(
             user=user,
-            display_name=display_name,
-            biography=biography,
-            experience_years=experience_years,
+            display_name=display_name or "",
+            biography=biography or "",
+            experience_years=experience_years if experience_years is not None else 0,
         )
         application = PartnerApplication.objects.create(partner=partner)
         _ensure_partner_role(user)
@@ -219,84 +254,201 @@ def update_partner_application(
             actor=user,
             reason_code="application_created",
         )
-    else:
-        application = PartnerApplication.objects.select_for_update().get(partner=partner)
-        if expected_version is None:
-            raise PartnerVersionConflictError
-        _assert_version(application, expected_version)
-        if application.status not in {
-            PartnerApplication.Status.DRAFT,
-            PartnerApplication.Status.CHANGES_REQUIRED,
-        }:
-            raise PartnerTransitionError("This application cannot be edited in its current state.")
+        return partner, application
 
+    application = PartnerApplication.objects.select_for_update().get(partner=partner)
+    if expected_version is None:
+        raise PartnerVersionConflictError
+    _assert_version(application, expected_version)
+    if application.status not in {
+        PartnerApplication.Status.DRAFT,
+        PartnerApplication.Status.CHANGES_REQUIRED,
+    }:
+        raise PartnerTransitionError("This application cannot be edited in its current state.")
+    return partner, application
+
+
+def _resolve_application_skills(
+    *, partner: PartnerProfile, skill_codes: Sequence[str] | None
+) -> list[Skill]:
+    if skill_codes is None:
+        return list(
+            Skill.objects.filter(
+                partner_links__partner=partner,
+                partner_links__is_active=True,
+            ).order_by("code"),
+        )
     skills = list(Skill.objects.filter(code__in=skill_codes, is_active=True).order_by("code"))
     if len(skills) != len(set(skill_codes)):
         raise PartnerApplicationIncompleteError("One or more selected skills are unavailable.")
+    return skills
+
+
+def _resolve_application_variants(
+    *, partner: PartnerProfile, variant_ids: Sequence[uuid.UUID] | None
+) -> list[ServiceVariant]:
+    if variant_ids is None:
+        return list(
+            ServiceVariant.objects.filter(
+                partner_links__partner=partner,
+                partner_links__is_active=True,
+            ).select_related("service"),
+        )
     variants = list(
         ServiceVariant.objects.filter(
-            id__in=service_variant_ids,
+            id__in=variant_ids,
             is_active=True,
             service__status=Service.Status.ACTIVE,
         ).select_related("service"),
     )
-    if len(variants) != len(set(service_variant_ids)):
+    if len(variants) != len(set(variant_ids)):
         raise PartnerApplicationIncompleteError("One or more selected services are unavailable.")
+    return variants
+
+
+def _resolve_application_service_areas(
+    *, partner: PartnerProfile, service_area_ids: Sequence[uuid.UUID] | None
+) -> list[ServiceArea]:
+    if service_area_ids is None:
+        return list(
+            ServiceArea.objects.filter(
+                partner_links__partner=partner,
+                partner_links__is_active=True,
+            ),
+        )
     service_areas = list(
-        ServiceArea.objects.filter(id__in=service_area_ids, is_active=True),
+        ServiceArea.objects.filter(
+            id__in=service_area_ids,
+            is_active=True,
+            is_accepting_partners=True,
+        ),
     )
     if len(service_areas) != len(set(service_area_ids)):
         raise PartnerApplicationIncompleteError(
-            "One or more selected service areas are unavailable."
+            "One or more selected service areas are unavailable.",
         )
+    return service_areas
+
+
+def _update_partner_profile(
+    *,
+    partner: PartnerProfile,
+    display_name: str | None,
+    biography: str | None,
+    experience_years: int | None,
+) -> None:
+    updated_fields: list[str] = []
+    for field, value in (
+        ("display_name", display_name),
+        ("biography", biography),
+        ("experience_years", experience_years),
+    ):
+        if value is not None:
+            setattr(partner, field, value)
+            updated_fields.append(field)
+    if updated_fields:
+        partner.save(update_fields=(*updated_fields, "updated_at"))
+
+
+def _record_partner_consents(
+    *,
+    partner: PartnerProfile,
+    consents: Sequence[dict[str, str]] | None,
+    request_ip: str,
+    device_identifier: str,
+) -> None:
+    request_ip_hash = keyed_hash(request_ip)
+    device_hash = keyed_hash(device_identifier) if device_identifier else ""
+    for consent in consents or ():
+        document = PartnerConsentDocument.objects.filter(
+            purpose=consent["purpose"],
+            document_version=consent["document_version"],
+            is_current=True,
+            published_at__lte=timezone.now(),
+            retired_at__isnull=True,
+        ).first()
+        if document is None:
+            raise PartnerApplicationIncompleteError(
+                "One or more consent documents are unavailable or out of date.",
+            )
+        receipt, _created = PartnerConsent.objects.get_or_create(
+            partner=partner,
+            purpose=consent["purpose"],
+            document_version=consent["document_version"],
+            defaults={
+                "document": document,
+                "request_ip_hash": request_ip_hash,
+                "device_hash": device_hash,
+            },
+        )
+        if receipt.document_id is None:
+            receipt.document = document
+            receipt.save(update_fields=("document",))
+
+
+@transaction.atomic
+def update_partner_application(
+    *,
+    user: User,
+    expected_version: int | None,
+    display_name: str | None,
+    biography: str | None,
+    experience_years: int | None,
+    skill_codes: Sequence[str] | None,
+    service_variant_ids: Sequence[uuid.UUID] | None,
+    service_area_ids: Sequence[uuid.UUID] | None,
+    consents: Sequence[dict[str, str]] | None,
+    request_ip: str,
+    device_identifier: str,
+) -> PartnerApplication:
+    partner, application = _draft_application_for_update(
+        user=user,
+        expected_version=expected_version,
+        display_name=display_name,
+        biography=biography,
+        experience_years=experience_years,
+    )
+    skills = _resolve_application_skills(partner=partner, skill_codes=skill_codes)
+    variants = _resolve_application_variants(
+        partner=partner,
+        variant_ids=service_variant_ids,
+    )
+    service_areas = _resolve_application_service_areas(
+        partner=partner,
+        service_area_ids=service_area_ids,
+    )
     _validate_service_configuration(
         skills=skills,
         variants=variants,
         service_areas=service_areas,
     )
 
-    partner.display_name = display_name
-    partner.biography = biography
-    partner.experience_years = experience_years
-    partner.save(
-        update_fields=("display_name", "biography", "experience_years", "updated_at"),
+    _update_partner_profile(
+        partner=partner,
+        display_name=display_name,
+        biography=biography,
+        experience_years=experience_years,
     )
-    _set_active_skills(partner=partner, skills=skills)
-    _set_active_services(partner=partner, variants=variants)
-    _set_active_service_areas(partner=partner, service_areas=service_areas)
+    if skill_codes is not None:
+        _set_active_skills(partner=partner, skills=skills)
+    if service_variant_ids is not None:
+        _set_active_services(partner=partner, variants=variants)
+    if service_area_ids is not None:
+        _set_active_service_areas(partner=partner, service_areas=service_areas)
 
-    request_ip_hash = keyed_hash(request_ip)
-    device_hash = keyed_hash(device_identifier) if device_identifier else ""
-    for consent in consents:
-        PartnerConsent.objects.get_or_create(
-            partner=partner,
-            purpose=consent["purpose"],
-            document_version=consent["document_version"],
-            defaults={
-                "request_ip_hash": request_ip_hash,
-                "device_hash": device_hash,
-            },
-        )
+    _record_partner_consents(
+        partner=partner,
+        consents=consents,
+        request_ip=request_ip,
+        device_identifier=device_identifier,
+    )
 
-    if application.pk:
-        application.version += 1
-        application.save(update_fields=("version", "updated_at"))
+    application.version += 1
+    application.save(update_fields=("version", "updated_at"))
     return application
 
 
-@transaction.atomic
-def register_partner_document(
-    *,
-    user: User,
-    expected_version: int,
-    kind: str,
-    object_key: str,
-    content_type: str,
-    size_bytes: int,
-    sha256: str,
-) -> PartnerDocument:
-    application = _application_for_update(user)
-    _assert_version(application, expected_version)
+def _assert_application_editable(application: PartnerApplication) -> None:
     if application.status not in {
         PartnerApplication.Status.DRAFT,
         PartnerApplication.Status.CHANGES_REQUIRED,
@@ -304,34 +456,265 @@ def register_partner_document(
         raise PartnerTransitionError(
             "Documents cannot be changed in the current application state."
         )
-    expected_prefix = f"partners/{application.partner_id}/"
-    if not object_key.startswith(expected_prefix):
-        raise PartnerApplicationIncompleteError(
-            "The uploaded document does not belong to this Partner."
-        )
-    if not SHA256_PATTERN.fullmatch(sha256):
-        raise PartnerApplicationIncompleteError("The document checksum is invalid.")
 
-    previous = (
-        PartnerDocument.objects.select_for_update()
-        .filter(application=application, kind=kind)
-        .order_by("-version")
-        .first()
-    )
-    next_version = (previous.version if previous else 0) + 1
-    document = PartnerDocument.objects.create(
+
+@transaction.atomic
+def _create_document_upload_intent(
+    *,
+    user: User,
+    expected_version: int,
+    kind: str,
+    content_type: str,
+    size_bytes: int,
+    sha256: str,
+) -> PartnerDocumentUpload:
+    application = _application_for_update(user)
+    _assert_version(application, expected_version)
+    _assert_application_editable(application)
+    normalized_content_type = content_type.lower()
+    suffix = DOCUMENT_CONTENT_TYPE_SUFFIXES.get(normalized_content_type)
+    if suffix is None:
+        raise PartnerDocumentUploadError("Choose a supported document file type.")
+    if size_bytes > MAX_PARTNER_DOCUMENT_SIZE_BYTES:
+        raise PartnerDocumentUploadError("The document exceeds the allowed size.")
+    if not SHA256_PATTERN.fullmatch(sha256):
+        raise PartnerDocumentUploadError("The document checksum is invalid.")
+    object_key = f"partners/{application.partner_id}/{kind.lower()}/{uuid.uuid4().hex}{suffix}"
+    return PartnerDocumentUpload.objects.create(
         application=application,
         kind=kind,
-        version=next_version,
         object_key=object_key,
+        content_type=normalized_content_type,
+        size_bytes=size_bytes,
+        sha256=sha256,
+        expires_at=timezone.now() + timedelta(hours=2),
+    )
+
+
+def issue_partner_document_upload(
+    *,
+    user: User,
+    expected_version: int,
+    kind: str,
+    content_type: str,
+    size_bytes: int,
+    sha256: str,
+    storage: DocumentStorage | None = None,
+) -> PartnerDocumentUploadGrant:
+    upload = _create_document_upload_intent(
+        user=user,
+        expected_version=expected_version,
+        kind=kind,
         content_type=content_type,
         size_bytes=size_bytes,
         sha256=sha256,
-        replaces=previous,
     )
-    application.version += 1
-    application.save(update_fields=("version", "updated_at"))
+    provider = storage or get_document_storage()
+    try:
+        signed = provider.create_signed_upload(object_key=upload.object_key)
+    except DocumentStorageError as exc:
+        PartnerDocumentUpload.objects.filter(id=upload.id).update(
+            status=PartnerDocumentUpload.Status.FAILED,
+            failure_code="provider_unavailable",
+        )
+        raise PartnerDocumentUploadError(
+            "Document upload is temporarily unavailable. Try again.",
+            retryable=True,
+        ) from exc
+    upload.expires_at = signed.expires_at
+    upload.save(update_fields=("expires_at", "updated_at"))
+    return PartnerDocumentUploadGrant(upload=upload, signed=signed)
+
+
+def _document_upload_for_finalization(
+    *,
+    user: User,
+    upload_id: uuid.UUID,
+    expected_version: int,
+) -> PartnerDocumentUpload:
+    upload = (
+        PartnerDocumentUpload.objects.select_related("application__partner")
+        .filter(id=upload_id, application__partner__user=user)
+        .first()
+    )
+    if upload is None:
+        raise PartnerApplicationNotFoundError
+    if upload.status != PartnerDocumentUpload.Status.ISSUED:
+        raise PartnerDocumentUploadError("This upload cannot be finalized again.")
+    if upload.expires_at <= timezone.now():
+        PartnerDocumentUpload.objects.filter(id=upload.id).update(
+            status=PartnerDocumentUpload.Status.EXPIRED,
+            failure_code="upload_expired",
+        )
+        raise PartnerDocumentUploadError("The upload expired. Start a new upload.")
+    _assert_version(upload.application, expected_version)
+    return upload
+
+
+def finalize_partner_document_upload(
+    *,
+    user: User,
+    expected_version: int,
+    upload_id: uuid.UUID,
+    storage: DocumentStorage | None = None,
+) -> PartnerDocument:
+    upload = _document_upload_for_finalization(
+        user=user,
+        upload_id=upload_id,
+        expected_version=expected_version,
+    )
+    provider = storage or get_document_storage()
+    try:
+        verified = provider.verify_object(
+            object_key=upload.object_key,
+            maximum_size_bytes=MAX_PARTNER_DOCUMENT_SIZE_BYTES,
+        )
+    except DocumentStorageError as exc:
+        raise PartnerDocumentUploadError(
+            "The uploaded document could not be verified. Try again.",
+            retryable=True,
+        ) from exc
+
+    mismatch = (
+        verified.size_bytes != upload.size_bytes
+        or verified.content_type != upload.content_type
+        or verified.sha256 != upload.sha256
+    )
+    failure_message: str | None = None
+    document: PartnerDocument | None = None
+    with transaction.atomic():
+        locked_upload = PartnerDocumentUpload.objects.select_for_update().get(id=upload.id)
+        application = PartnerApplication.objects.select_for_update().get(
+            id=locked_upload.application_id,
+        )
+        _assert_version(application, expected_version)
+        _assert_application_editable(application)
+        if locked_upload.status != PartnerDocumentUpload.Status.ISSUED:
+            raise PartnerDocumentUploadError("This upload cannot be finalized again.")
+        if locked_upload.expires_at <= timezone.now():
+            locked_upload.status = PartnerDocumentUpload.Status.EXPIRED
+            locked_upload.failure_code = "upload_expired"
+            locked_upload.save(update_fields=("status", "failure_code", "updated_at"))
+            failure_message = "The upload expired. Start a new upload."
+        elif mismatch:
+            locked_upload.status = PartnerDocumentUpload.Status.FAILED
+            locked_upload.failure_code = "metadata_mismatch"
+            locked_upload.save(update_fields=("status", "failure_code", "updated_at"))
+            failure_message = (
+                "The uploaded document did not match the selected file. Start a new upload."
+            )
+        else:
+            previous = (
+                PartnerDocument.objects.select_for_update()
+                .filter(application=application, kind=locked_upload.kind)
+                .order_by("-version")
+                .first()
+            )
+            next_version = (previous.version if previous else 0) + 1
+            document = PartnerDocument.objects.create(
+                application=application,
+                kind=locked_upload.kind,
+                version=next_version,
+                object_key=locked_upload.object_key,
+                content_type=locked_upload.content_type,
+                size_bytes=locked_upload.size_bytes,
+                sha256=locked_upload.sha256,
+                replaces=previous,
+            )
+            if previous is not None and previous.status != PartnerDocument.Status.APPROVED:
+                previous.status = PartnerDocument.Status.SUPERSEDED
+                previous.save(update_fields=("status",))
+            locked_upload.status = PartnerDocumentUpload.Status.VERIFIED
+            locked_upload.finalized_at = timezone.now()
+            locked_upload.failure_code = ""
+            locked_upload.save(
+                update_fields=("status", "finalized_at", "failure_code", "updated_at"),
+            )
+            application.version += 1
+            application.save(update_fields=("version", "updated_at"))
+    if failure_message is not None:
+        raise PartnerDocumentUploadError(failure_message)
+    if document is None:
+        raise PartnerDocumentUploadError("The uploaded document could not be finalized.")
     return document
+
+
+@transaction.atomic
+def record_partner_document_scan_result(
+    *,
+    document_id: uuid.UUID,
+    is_clean: bool,
+    failure_code: str = "",
+) -> PartnerDocument:
+    document = PartnerDocument.objects.select_for_update().get(id=document_id)
+    document.scan_status = (
+        PartnerDocument.ScanStatus.CLEAN if is_clean else PartnerDocument.ScanStatus.REJECTED
+    )
+    document.scanned_at = timezone.now()
+    document.scan_failure_code = "" if is_clean else failure_code[:64]
+    document.save(
+        update_fields=("scan_status", "scanned_at", "scan_failure_code"),
+    )
+    return document
+
+
+def cleanup_stale_partner_document_uploads(
+    *,
+    storage: DocumentStorage | None = None,
+    batch_size: int = 100,
+) -> int:
+    """Delete only unaccepted upload objects after the configured recovery window.
+
+    Verified uploads are intentionally excluded because the legal retention policy for accepted
+    KYC records must be approved separately. Missing objects are treated as already deleted by the
+    storage adapter, making retries safe after a worker crash.
+    """
+
+    now = timezone.now()
+    cutoff = now - timedelta(hours=settings.PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS)
+    candidate_ids = list(
+        PartnerDocumentUpload.objects.filter(object_deleted_at__isnull=True)
+        .filter(
+            Q(
+                status__in=(
+                    PartnerDocumentUpload.Status.ISSUED,
+                    PartnerDocumentUpload.Status.EXPIRED,
+                ),
+                expires_at__lte=cutoff,
+            )
+            | Q(
+                status=PartnerDocumentUpload.Status.FAILED,
+                updated_at__lte=cutoff,
+            ),
+        )
+        .order_by("expires_at", "id")
+        .values_list("id", flat=True)[:batch_size]
+    )
+    provider = storage or get_document_storage()
+    deleted_count = 0
+    for upload_id in candidate_ids:
+        upload = PartnerDocumentUpload.objects.get(id=upload_id)
+        if upload.status == PartnerDocumentUpload.Status.ISSUED:
+            PartnerDocumentUpload.objects.filter(
+                id=upload.id,
+                status=PartnerDocumentUpload.Status.ISSUED,
+            ).update(
+                status=PartnerDocumentUpload.Status.EXPIRED,
+                failure_code="upload_expired",
+            )
+        provider.delete_object(object_key=upload.object_key)
+        updated = (
+            PartnerDocumentUpload.objects.filter(
+                id=upload.id,
+                object_deleted_at__isnull=True,
+            )
+            .exclude(status=PartnerDocumentUpload.Status.VERIFIED)
+            .update(
+                object_deleted_at=timezone.now(),
+            )
+        )
+        deleted_count += updated
+    return deleted_count
 
 
 def _latest_required_documents_are_approved(application: PartnerApplication) -> bool:
@@ -348,13 +731,24 @@ def _latest_required_documents_are_approved(application: PartnerApplication) -> 
 
 
 def _required_consents_exist(partner: PartnerProfile) -> bool:
-    active_purposes = set(
-        PartnerConsent.objects.filter(partner=partner, withdrawn_at__isnull=True).values_list(
-            "purpose",
-            flat=True,
-        ),
+    required_document_ids = set(
+        PartnerConsentDocument.objects.filter(
+            is_current=True,
+            is_required_for_submission=True,
+            published_at__lte=timezone.now(),
+            retired_at__isnull=True,
+        ).values_list("id", flat=True),
     )
-    return set(settings.PARTNER_REQUIRED_CONSENT_PURPOSES).issubset(active_purposes)
+    if not required_document_ids:
+        return False
+    accepted_document_ids = set(
+        PartnerConsent.objects.filter(
+            partner=partner,
+            document_id__in=required_document_ids,
+            withdrawn_at__isnull=True,
+        ).values_list("document_id", flat=True),
+    )
+    return required_document_ids.issubset(accepted_document_ids)
 
 
 def _base_application_is_complete(application: PartnerApplication) -> bool:
@@ -383,6 +777,31 @@ def submit_partner_application(
         PartnerApplication.Status.CHANGES_REQUIRED,
     }:
         raise PartnerTransitionError("This application cannot be submitted in its current state.")
+    partner = application.partner
+    skills = list(
+        Skill.objects.filter(
+            partner_links__partner=partner,
+            partner_links__is_active=True,
+        ),
+    )
+    variants = list(
+        ServiceVariant.objects.filter(
+            partner_links__partner=partner,
+            partner_links__is_active=True,
+        ).select_related("service"),
+    )
+    service_areas = list(
+        ServiceArea.objects.filter(
+            partner_links__partner=partner,
+            partner_links__is_active=True,
+        ),
+    )
+    _validate_service_configuration(
+        skills=skills,
+        variants=variants,
+        service_areas=service_areas,
+        require_complete=True,
+    )
     if not _base_application_is_complete(application):
         raise PartnerApplicationIncompleteError(
             "Complete your profile, services, areas, skills, and required consents "
@@ -421,6 +840,104 @@ def submit_partner_application(
 
 
 @transaction.atomic
+def claim_partner_application(
+    *,
+    reviewer: User,
+    application_id: uuid.UUID,
+    expected_version: int,
+) -> PartnerApplication:
+    application = (
+        PartnerApplication.objects.select_for_update(of=("self",))
+        .select_related("partner", "review_assigned_to")
+        .filter(id=application_id)
+        .first()
+    )
+    if application is None:
+        raise PartnerApplicationNotFoundError
+    if application.partner.user_id == reviewer.id:
+        raise PartnerSelfReviewError(
+            object_type="partner_application",
+            object_id=application.id,
+        )
+    _assert_version(application, expected_version)
+    if application.status not in {
+        PartnerApplication.Status.SUBMITTED,
+        PartnerApplication.Status.UNDER_REVIEW,
+    }:
+        raise PartnerTransitionError("This application is not available for review.")
+    if application.review_assigned_to_id not in {None, reviewer.id}:
+        raise PartnerReviewOwnershipError(
+            "This application is already assigned to another reviewer.",
+        )
+    if (
+        application.review_assigned_to_id == reviewer.id
+        and application.status == PartnerApplication.Status.UNDER_REVIEW
+    ):
+        return application
+
+    previous_status = application.status
+    application.review_assigned_to = reviewer
+    application.review_assigned_at = timezone.now()
+    application.status = PartnerApplication.Status.UNDER_REVIEW
+    application.version += 1
+    application.save(
+        update_fields=(
+            "review_assigned_to",
+            "review_assigned_at",
+            "status",
+            "version",
+            "updated_at",
+        ),
+    )
+    _record_transition(
+        application=application,
+        from_status=previous_status,
+        actor=reviewer,
+        reason_code="application_review_claimed",
+    )
+    return application
+
+
+def create_partner_document_review_access(
+    *,
+    reviewer: User,
+    document_id: uuid.UUID,
+    storage: DocumentStorage | None = None,
+) -> SignedReview:
+    document = (
+        PartnerDocument.objects.select_related(
+            "application__partner",
+            "application__review_assigned_to",
+        )
+        .filter(id=document_id)
+        .first()
+    )
+    if document is None:
+        raise PartnerApplicationNotFoundError
+    if document.application.partner.user_id == reviewer.id:
+        raise PartnerSelfReviewError(object_type="partner_document", object_id=document.id)
+    if document.application.review_assigned_to_id != reviewer.id:
+        raise PartnerReviewOwnershipError(
+            "Claim this Partner application before reviewing its documents.",
+        )
+    if document.status != PartnerDocument.Status.PENDING:
+        raise PartnerTransitionError("This document is not pending review.")
+    if document.scan_status != PartnerDocument.ScanStatus.CLEAN:
+        raise PartnerTransitionError("This document is not available until safety scanning passes.")
+    provider = storage or get_document_storage()
+    try:
+        return provider.create_signed_review(
+            object_key=document.object_key,
+            expires_in_seconds=settings.PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS,
+        )
+    except DocumentStorageError as exc:
+        raise PartnerDocumentUploadError(
+            "Document review access is temporarily unavailable. Try again.",
+            retryable=True,
+        ) from exc
+
+
+@transaction.atomic
 def review_partner_document(
     *,
     reviewer: User,
@@ -429,13 +946,21 @@ def review_partner_document(
     reason: str,
 ) -> PartnerDocument:
     document = (
-        PartnerDocument.objects.select_for_update()
-        .select_related("application")
+        PartnerDocument.objects.select_for_update(of=("self",))
+        .select_related("application__partner", "application__review_assigned_to")
         .filter(id=document_id)
         .first()
     )
     if document is None:
         raise PartnerApplicationNotFoundError
+    if document.application.partner.user_id == reviewer.id:
+        raise PartnerSelfReviewError(object_type="partner_document", object_id=document.id)
+    if document.application.review_assigned_to_id != reviewer.id:
+        raise PartnerReviewOwnershipError(
+            "Claim this Partner application before reviewing its documents.",
+        )
+    if document.scan_status != PartnerDocument.ScanStatus.CLEAN:
+        raise PartnerTransitionError("This document is not available until safety scanning passes.")
     if document.status != PartnerDocument.Status.PENDING:
         raise PartnerTransitionError("This document has already been reviewed.")
     if decision not in {PartnerDocument.Status.APPROVED, PartnerDocument.Status.REJECTED}:
@@ -480,6 +1005,11 @@ def transition_partner_application(
     )
     if application is None:
         raise PartnerApplicationNotFoundError
+    if application.partner.user_id == reviewer.id:
+        raise PartnerSelfReviewError(
+            object_type="partner_application",
+            object_id=application.id,
+        )
     _assert_version(application, expected_version)
     allowed: dict[str, set[str]] = {
         PartnerApplication.Status.SUBMITTED: {PartnerApplication.Status.UNDER_REVIEW},
@@ -499,6 +1029,20 @@ def transition_partner_application(
     if target_status not in allowed.get(application.status, set()):
         raise PartnerTransitionError(
             f"Cannot move an application from {application.status} to {target_status}.",
+        )
+    if application.status == PartnerApplication.Status.SUBMITTED:
+        if application.review_assigned_to_id not in {None, reviewer.id}:
+            raise PartnerReviewOwnershipError(
+                "This application is already assigned to another reviewer.",
+            )
+        application.review_assigned_to = reviewer
+        application.review_assigned_at = timezone.now()
+    elif (
+        application.status == PartnerApplication.Status.UNDER_REVIEW
+        and application.review_assigned_to_id != reviewer.id
+    ):
+        raise PartnerReviewOwnershipError(
+            "Claim this Partner application before completing its review.",
         )
     if target_status == PartnerApplication.Status.CHANGES_REQUIRED and not reason.strip():
         raise PartnerTransitionError("Explain which changes the Partner must make.")
@@ -533,6 +1077,8 @@ def transition_partner_application(
             "reviewed_by",
             "reviewed_at",
             "change_request_message",
+            "review_assigned_to",
+            "review_assigned_at",
             "version",
             "updated_at",
         ),

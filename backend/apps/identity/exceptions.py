@@ -1,7 +1,11 @@
 """Identity API errors with stable machine-readable codes."""
 
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, Throttled
+
+
+class OtpThrottled(Throttled):
+    safe_message = "Too many code requests. Try again when the countdown ends."
 
 
 class OtpUnavailableApiError(APIException):

@@ -101,7 +101,7 @@ export function requirements(application: Application): Requirement[] {
     {
       code: "CONSENTS",
       label: "Agreements",
-      href: "/apply/review",
+      href: "/apply/consent",
       isMet: application.consents.length > 0,
     },
   ];

@@ -2,7 +2,6 @@ from datetime import date
 from http import HTTPStatus
 
 import pytest
-from rest_framework.test import APIClient
 
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
@@ -12,6 +11,7 @@ from apps.partners.models import (
     PartnerAvailabilityRule,
     PartnerScheduleChangeAudit,
 )
+from tests.helpers import force_role_client
 from tests.partners.conftest import PartnerSetup, application_payload
 
 pytestmark = pytest.mark.django_db
@@ -147,8 +147,7 @@ def test_operations_schedule_change_requires_partner_consent_and_is_audited(
 ) -> None:
     _create_application(partner_setup)
     application = PartnerApplication.objects.get(partner__user=partner_setup.user)
-    client = APIClient()
-    client.force_authenticate(user=operations_user)
+    client = force_role_client(user=operations_user, role_code="operations")
     payload = {
         "consent_purpose": "partner_terms",
         "consent_document_version": "2026-07",

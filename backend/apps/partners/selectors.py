@@ -11,13 +11,16 @@ from django.db.models import Prefetch, QuerySet
 from django.utils import timezone
 
 from apps.identity.models import User
+from apps.locations.models import ServiceArea
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
+    PartnerConsentDocument,
     PartnerDocument,
     PartnerLocation,
     PartnerProfile,
+    Skill,
 )
 
 
@@ -36,6 +39,33 @@ class InstantMatchingPresence:
     accuracy_m: int
     captured_at: datetime
     age_seconds: int
+
+
+def applicant_service_areas() -> QuerySet[ServiceArea]:
+    return ServiceArea.objects.filter(
+        is_active=True,
+        is_accepting_partners=True,
+    ).only("id", "slug", "name", "timezone", "is_accepting_partners")
+
+
+def applicant_skills() -> QuerySet[Skill]:
+    return Skill.objects.filter(is_active=True).only("code", "name", "description")
+
+
+def required_partner_consent_documents() -> QuerySet[PartnerConsentDocument]:
+    return PartnerConsentDocument.objects.filter(
+        is_current=True,
+        is_required_for_submission=True,
+        published_at__lte=timezone.now(),
+        retired_at__isnull=True,
+    ).only(
+        "purpose",
+        "title",
+        "document_version",
+        "document_url",
+        "is_required_for_submission",
+        "published_at",
+    )
 
 
 def partner_application_for_user(user: User) -> PartnerApplication | None:
@@ -59,6 +89,55 @@ def partner_application_for_user(user: User) -> PartnerApplication | None:
 
 def partner_profile_for_user(user: User) -> PartnerProfile | None:
     return PartnerProfile.objects.filter(user=user).select_related("application").first()
+
+
+def operations_partner_application_queue(
+    *,
+    actor: User,
+    status: str | None,
+    assigned_to_me: bool,
+    unassigned: bool,
+) -> QuerySet[PartnerApplication]:
+    queryset = PartnerApplication.objects.select_related(
+        "partner",
+        "review_assigned_to",
+    )
+    if status is None:
+        queryset = queryset.filter(
+            status__in=(
+                PartnerApplication.Status.SUBMITTED,
+                PartnerApplication.Status.UNDER_REVIEW,
+                PartnerApplication.Status.CHANGES_REQUIRED,
+            ),
+        )
+    else:
+        queryset = queryset.filter(status=status)
+    if assigned_to_me:
+        queryset = queryset.filter(review_assigned_to=actor)
+    if unassigned:
+        queryset = queryset.filter(review_assigned_to__isnull=True)
+    return queryset.order_by("submitted_at", "id")
+
+
+def operations_partner_application_detail(
+    application_id: uuid.UUID,
+) -> PartnerApplication | None:
+    return (
+        PartnerApplication.objects.filter(id=application_id)
+        .select_related("partner", "reviewed_by", "review_assigned_to")
+        .prefetch_related(
+            "partner__skill_links__skill",
+            "partner__service_links__variant",
+            "partner__service_area_links__service_area",
+            "partner__consents",
+            Prefetch(
+                "documents",
+                queryset=PartnerDocument.objects.order_by("kind", "-version"),
+            ),
+            "transitions",
+        )
+        .first()
+    )
 
 
 def partner_schedule(

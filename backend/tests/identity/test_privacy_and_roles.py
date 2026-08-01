@@ -51,6 +51,52 @@ def test_session_role_switch_requires_an_existing_grant() -> None:
     assert unavailable.status_code == HTTPStatus.FORBIDDEN
 
 
+def test_operations_api_requires_selected_unrevoked_role_and_audits_decisions() -> None:
+    client, user = _authenticated_client()
+    operations_role = Role.objects.create(code="operations", name="Operations", is_system=True)
+    grant = UserRole.objects.create(user=user, role=operations_role)
+
+    inactive_role = client.post(
+        "/api/v1/operations/assisted-checkouts/",
+        {},
+        format="json",
+    )
+    assert inactive_role.status_code == HTTPStatus.FORBIDDEN
+
+    switched = client.post(
+        "/api/v1/auth/roles/switch/",
+        {"role": "operations"},
+        format="json",
+    )
+    assert switched.status_code == HTTPStatus.OK
+    authorized_boundary = client.post(
+        "/api/v1/operations/assisted-checkouts/",
+        {},
+        format="json",
+    )
+    assert authorized_boundary.status_code == HTTPStatus.BAD_REQUEST
+
+    grant.revoked_at = grant.granted_at
+    grant.save(update_fields=("revoked_at",))
+    revoked_grant = client.post(
+        "/api/v1/operations/assisted-checkouts/",
+        {},
+        format="json",
+    )
+    assert revoked_grant.status_code == HTTPStatus.FORBIDDEN
+
+    decisions = list(
+        AccessAuditEvent.objects.filter(action="authorization.operations_api")
+        .order_by("created_at")
+        .values_list("decision", flat=True)
+    )
+    assert decisions == [
+        AccessAuditEvent.Decision.DENIED,
+        AccessAuditEvent.Decision.ALLOWED,
+        AccessAuditEvent.Decision.DENIED,
+    ]
+
+
 def test_role_grant_rejects_self_assignment() -> None:
     user = User.objects.create_user(phone_number="9876543210")
     role = Role.objects.create(code="operations", name="Operations", is_system=True)

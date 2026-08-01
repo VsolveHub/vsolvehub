@@ -2,6 +2,8 @@
 
 **Decision date:** 31 July 2026
 
+**Last reviewed:** 2 August 2026
+
 **Status:** Frozen implementation baseline for M1
 
 These values remove implementation ambiguity; they do not weaken the production gates. Runtime
@@ -59,6 +61,11 @@ expanding the radius. Today bookings need 120 minutes lead time; Scheduled booki
 A permanent offer-delivery failure advances immediately instead of waiting 45 seconds. The whole
 search deadline always wins over a per-offer deadline. Server time is authoritative and every API
 response that exposes a deadline includes it as an absolute timestamp.
+
+The M1 Partner inbox observes a replayable server projection through bounded short polling. Polling
+backs off or pauses when hidden/offline and refreshes from authoritative state after reconnect; it
+never expires an offer, advances a candidate or commits an acceptance. Celery/beat owns those clocks
+and transitions even when every browser is closed.
 
 ## Arrival, lateness and unavailable Customer
 
@@ -120,6 +127,7 @@ service subtotal. If payment has not settled, the system never represents a refu
 | Customer payment/refund | Razorpay Orders/Checkout, automatic capture and normal full/partial refunds | Verify signatures, persist webhooks, deduplicate, fetch/reconcile ambiguous state and never trust redirect success |
 | SMS delivery | MSG91 Flow API with DLT-approved templates | Django generates, hashes, expires and verifies OTPs; MSG91 is delivery only |
 | Private evidence/document storage | Supabase Storage private buckets | Signed direct/resumable upload, backend-owned metadata/access audit and server-only credentials |
+| Malware scanning for private documents | **Open release decision — no provider approved** | Keep every new document fail-closed until a trusted authenticated scan result is reconciled; never infer clean on timeout/failure |
 | Partner payout | RazorpayX Current Account Payout API | Idempotency key, IP allowlist, webhook-driven state and reconciliation are mandatory |
 
 Implementation uses the providers' official references for
@@ -135,9 +143,9 @@ explicit decision, configuration migration and rollback plan.
 
 Local development and CI use deterministic fake adapters. Staging uses provider test modes where
 available. Production activation is blocked until merchant/current-account onboarding, approved DLT
-templates and sender, private-bucket/RLS policy, webhook secrets, IP allowlist, refund/payout drill and
-kill-switch drill all pass. Provider credentials and personal data never appear in this document or
-Git.
+templates and sender, private-bucket/RLS policy, approved malware scanning, verified-KYC legal
+retention/deletion, webhook secrets, IP allowlist, refund/payout drill and kill-switch drill all pass.
+Provider credentials and personal data never appear in this document or Git.
 
 Voice OTP, COD, wallet credit, instant payout, storage bucket versioning and automatic provider
 failover are not M1 configuration. An outage preserves server truth, stops unsafe new actions and

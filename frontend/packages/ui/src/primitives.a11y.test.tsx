@@ -8,6 +8,7 @@ import { Field } from "./field";
 import { Input } from "./input";
 import { Readout } from "./readout";
 import { Select } from "./select";
+import { Stepper } from "./stepper";
 
 /**
  * Accessibility acceptance for B1.
@@ -194,5 +195,48 @@ describe("EmptyState", () => {
     );
     expect(screen.getByText("No bookings yet")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Browse services" })).toBeInTheDocument();
+  });
+});
+
+
+describe("Stepper", () => {
+  const steps = [
+    { id: "address", title: "Where" },
+    { id: "scope", title: "What you need" },
+    { id: "window", title: "When" },
+    { id: "review", title: "Review" },
+  ];
+
+  it("names the progress list", () => {
+    render(<Stepper steps={steps} current={1} />);
+    expect(screen.getByRole("list", { name: "Progress" })).toBeInTheDocument();
+  });
+
+  it("marks the active step so assistive technology can jump to it", () => {
+    render(<Stepper steps={steps} current={1} />);
+    const items = screen.getAllByRole("listitem");
+    expect(items[1]).toHaveAttribute("aria-current", "step");
+    expect(items[0]).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps every step title readable on a phone, where the labels are hidden", () => {
+    // `hidden sm:inline` removes the visible label from the accessibility tree
+    // too, so without the visually-hidden copy a screen reader hears "1 2 3 4"
+    // on the one device where the flow matters most.
+    render(<Stepper steps={steps} current={1} />);
+    expect(screen.getByText("Step 1 of 4: Where, completed")).toBeInTheDocument();
+    expect(screen.getByText("Step 2 of 4: What you need, current step")).toBeInTheDocument();
+    expect(screen.getByText("Step 4 of 4: Review")).toBeInTheDocument();
+  });
+
+  it("does not announce the tick glyph as content", () => {
+    render(<Stepper steps={steps} current={2} />);
+    // The check mark is a shape, not a status; the status is in the sr-only text.
+    expect(screen.queryByText("✓", { ignore: "[aria-hidden='true']" })).toBeNull();
+  });
+
+  it("carries state in text, not colour alone", () => {
+    render(<Stepper steps={steps} current={0} />);
+    expect(screen.getByText("Step 1 of 4: Where, current step")).toBeInTheDocument();
   });
 });

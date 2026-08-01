@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useActionState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Phone,
-  Loader2,
   MapPin,
   Navigation,
   Clock,
@@ -15,7 +14,8 @@ import {
   Star,
   type LucideIcon,
 } from "lucide-react";
-import { requestOtp } from "@/app/(auth)/actions";
+import { useRouter } from "next/navigation";
+
 import { inr } from "@/lib/format";
 
 /**
@@ -89,7 +89,7 @@ function StatPill({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
 }
 
 export function PartnerHero() {
-  const [state, action, isPending] = useActionState(requestOtp, {});
+  const router = useRouter();
   const [index, setIndex] = useState(0);
   const [left, setLeft] = useState(OFFER_WINDOW);
   const [isPaused, setIsPaused] = useState(false);
@@ -175,8 +175,15 @@ export function PartnerHero() {
             </p>
           </div>
 
+          {/* Sends people to the real signup rather than authenticating here.
+              Login is one screen, inside `/apply`, where the code, the resend
+              cooldown and the session all live — a second OTP entry point on a
+              marketing page is a second thing to keep correct. */}
           <form
-            action={action}
+            onSubmit={(event) => {
+              event.preventDefault();
+              router.push("/apply");
+            }}
             className="vsh-hero-slideup flex w-full max-w-[440px] flex-col gap-2"
             style={{ animationDelay: "320ms" }}
           >
@@ -195,21 +202,16 @@ export function PartnerHero() {
                   maxLength={10}
                   placeholder="Mobile number"
                   required
-                  disabled={isPending}
                   className="h-[52px] w-full rounded-[10px] bg-white pl-[44px] pr-4 font-sans text-ink-900 transition-all placeholder:text-gray-400 focus:shadow-[0_0_12px_rgba(249,115,22,0.3)] focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:opacity-50"
                 />
               </div>
               <button
                 type="submit"
-                disabled={isPending}
-                className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accent-500 px-6 font-semibold text-white transition-all hover:-translate-y-[1px] hover:bg-accent-600 disabled:pointer-events-none disabled:opacity-50 md:w-auto"
+                className="flex h-[52px] w-full items-center justify-center gap-2 rounded-[10px] bg-accent-500 px-6 font-semibold text-white transition-all hover:-translate-y-[1px] hover:bg-accent-600 md:w-auto"
               >
-                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
                 Start signup
               </button>
             </div>
-
-            {state?.error && <p className="text-[13px] text-danger">{state.error}</p>}
 
             <p
               className="vsh-hero-slideup text-[13px] text-white/50"

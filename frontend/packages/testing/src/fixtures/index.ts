@@ -46,9 +46,48 @@ export function authenticatedSession(
 ): Schemas["AuthenticatedSession"] {
   return {
     user: user(),
+    // Django selects a role at login. Defaulting to the one the fixture user
+    // holds keeps the fixture internally consistent: a session whose active
+    // role is not in `user.roles` is a state the server cannot produce.
+    active_role: "customer",
     session_expires_at: iso(60 * 60 * 24 * 14),
     ...overrides,
   };
+}
+
+/**
+ * The anonymous-safe session projection (contract 1.3.0).
+ *
+ * Defaults to signed out, because that is what a screen has to handle first and
+ * the state most likely to be skipped when the fixture makes the other one free.
+ */
+export function sessionState(
+  overrides: Partial<Schemas["SessionState"]> = {},
+): Schemas["SessionState"] {
+  return {
+    user: null,
+    active_role: null,
+    session_expires_at: null,
+    ...overrides,
+  };
+}
+
+/** A signed-in projection, for the cases that need one. */
+export function signedInSessionState(
+  overrides: Partial<Schemas["SessionState"]> = {},
+): Schemas["SessionState"] {
+  return sessionState({
+    user: user(),
+    active_role: "customer",
+    session_expires_at: iso(60 * 60 * 24 * 14),
+    ...overrides,
+  });
+}
+
+export function csrfToken(
+  overrides: Partial<Schemas["CsrfToken"]> = {},
+): Schemas["CsrfToken"] {
+  return { csrf_token: "test-csrf-token", ...overrides };
 }
 
 export function userSession(
@@ -57,6 +96,7 @@ export function userSession(
   return {
     id: "22222222-2222-4222-8222-222222222222",
     device_label: "Chrome on Android",
+    active_role: "customer",
     created_at: iso(-60 * 60 * 24),
     last_seen_at: iso(-60),
     expires_at: iso(60 * 60 * 24 * 13),
@@ -70,6 +110,8 @@ export function otpIssued(overrides: Partial<Schemas["OtpIssued"]> = {}): Schema
     challenge_id: "33333333-3333-4333-8333-333333333333",
     expires_in_seconds: 300,
     resend_after_seconds: 30,
+    // Published in 1.3.0, so the client no longer defaults it locally.
+    code_length: 6,
     // Null by default because production must never return an OTP code. A test
     // exercising the local-development shortcut sets it explicitly.
     development_code: null,

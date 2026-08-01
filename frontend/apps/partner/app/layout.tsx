@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
-import { QueryProvider } from "@vsolve/query";
+import { QueryProvider, SessionSync } from "@vsolve/query";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -41,7 +41,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={appFont.variable}>
       <body className="antialiased">
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <SessionSync />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

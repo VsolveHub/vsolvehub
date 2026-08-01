@@ -12,6 +12,18 @@ if SECRET_KEY.startswith("unsafe-") or len(SECRET_KEY) < MINIMUM_SECRET_KEY_LENG
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be a strong production secret.")
 if not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be configured.")
+if not CORS_ALLOWED_ORIGINS:
+    raise ImproperlyConfigured("CORS_ALLOWED_ORIGINS must list every deployed frontend origin.")
+if not CSRF_TRUSTED_ORIGINS:
+    raise ImproperlyConfigured(
+        "DJANGO_CSRF_TRUSTED_ORIGINS must list every deployed frontend origin."
+    )
+if not set(CORS_ALLOWED_ORIGINS).issubset(CSRF_TRUSTED_ORIGINS):
+    raise ImproperlyConfigured(
+        "Every credentialed CORS origin must also be present in DJANGO_CSRF_TRUSTED_ORIGINS."
+    )
+if any(not origin.startswith("https://") for origin in CORS_ALLOWED_ORIGINS):
+    raise ImproperlyConfigured("Production CORS origins must use HTTPS.")
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -29,3 +41,15 @@ if GEOCODING_PROVIDER == "unconfigured":
     raise ImproperlyConfigured("GEOCODING_PROVIDER must be configured in production.")
 if "configure-production-contact" in GEOCODING_USER_AGENT:
     raise ImproperlyConfigured("GEOCODING_USER_AGENT must identify a production contact.")
+if DOCUMENT_STORAGE_PROVIDER != "supabase":
+    raise ImproperlyConfigured("DOCUMENT_STORAGE_PROVIDER must be supabase in production.")
+if not SUPABASE_STORAGE_URL.startswith("https://"):
+    raise ImproperlyConfigured("SUPABASE_STORAGE_URL must be an HTTPS Storage API URL.")
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise ImproperlyConfigured("SUPABASE_SERVICE_ROLE_KEY must be configured in production.")
+if not PARTNER_DOCUMENT_BUCKET:
+    raise ImproperlyConfigured("PARTNER_DOCUMENT_BUCKET must be configured in production.")
+if PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS <= 0:
+    raise ImproperlyConfigured("PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS must be positive.")
+if PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS <= 0:
+    raise ImproperlyConfigured("PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS must be positive.")

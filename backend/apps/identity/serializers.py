@@ -1,5 +1,7 @@
 """Identity request and response contracts."""
 
+from django.conf import settings
+from drf_spectacular.utils import OpenApiExample, extend_schema_serializer
 from rest_framework import serializers
 
 from apps.identity.models import (
@@ -31,10 +33,27 @@ class OtpRequestSerializer(serializers.Serializer[dict[str, object]]):
     )
 
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "OTP issued",
+            value={
+                "challenge_id": "6d8cd4d8-c50a-4cb2-85e8-0357ee735cc6",
+                "expires_in_seconds": 300,
+                "resend_after_seconds": 60,
+                "code_length": 6,
+                "development_code": None,
+            },
+            response_only=True,
+            status_codes=["202"],
+        )
+    ]
+)
 class OtpIssuedSerializer(serializers.Serializer[dict[str, object]]):
     challenge_id = serializers.UUIDField(read_only=True)
     expires_in_seconds = serializers.IntegerField(read_only=True)
     resend_after_seconds = serializers.IntegerField(read_only=True)
+    code_length = serializers.IntegerField(read_only=True)
     development_code = serializers.CharField(
         read_only=True,
         allow_null=True,
@@ -45,7 +64,12 @@ class OtpIssuedSerializer(serializers.Serializer[dict[str, object]]):
 class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
     challenge_id = serializers.UUIDField()
     phone_number = PhoneNumberField(max_length=32, trim_whitespace=True)
-    code = serializers.RegexField(regex=r"^\d{6}$", min_length=6, max_length=6, write_only=True)
+    code = serializers.CharField(
+        min_length=settings.OTP_CODE_LENGTH,
+        max_length=settings.OTP_CODE_LENGTH,
+        trim_whitespace=False,
+        write_only=True,
+    )
     device_identifier = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -58,6 +82,14 @@ class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
         max_length=100,
         write_only=True,
     )
+
+    def validate_code(self, value: str) -> str:
+        if len(value) != settings.OTP_CODE_LENGTH or not value.isascii() or not value.isdigit():
+            raise serializers.ValidationError(
+                "Enter the complete numeric code.",
+                code="invalid_otp_format",
+            )
+        return value
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
@@ -76,9 +108,76 @@ class UserSerializer(serializers.ModelSerializer[User]):
         )
 
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Signed out",
+            value={"user": None, "active_role": None, "session_expires_at": None},
+            response_only=True,
+            status_codes=["200"],
+        ),
+        OpenApiExample(
+            "Authenticated customer",
+            value={
+                "user": {
+                    "id": "f26419bd-c768-4ddb-bff3-4cc405fdbf52",
+                    "phone_number": "+919876543210",
+                    "full_name": "",
+                    "email": "",
+                    "roles": ["customer"],
+                },
+                "active_role": "customer",
+                "session_expires_at": "2026-09-01T12:00:00Z",
+            },
+            response_only=True,
+            status_codes=["200"],
+        ),
+    ]
+)
+class SessionStateSerializer(serializers.Serializer[dict[str, object]]):
+    user = UserSerializer(read_only=True, allow_null=True)
+    active_role = serializers.CharField(read_only=True, allow_null=True)
+    session_expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Authenticated customer",
+            value={
+                "user": {
+                    "id": "f26419bd-c768-4ddb-bff3-4cc405fdbf52",
+                    "phone_number": "+919876543210",
+                    "full_name": "",
+                    "email": "",
+                    "roles": ["customer"],
+                },
+                "active_role": "customer",
+                "session_expires_at": "2026-09-01T12:00:00Z",
+            },
+            response_only=True,
+            status_codes=["200"],
+        )
+    ]
+)
 class AuthenticatedSessionSerializer(serializers.Serializer[dict[str, object]]):
     user = UserSerializer(read_only=True)
+    active_role = serializers.CharField(read_only=True)
     session_expires_at = serializers.DateTimeField(read_only=True)
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "CSRF bootstrap",
+            value={"csrf_token": "masked-csrf-token"},
+            response_only=True,
+            status_codes=["200"],
+        )
+    ]
+)
+class CsrfTokenSerializer(serializers.Serializer[dict[str, object]]):
+    csrf_token = serializers.CharField(read_only=True)
 
 
 class UserSessionSerializer(serializers.ModelSerializer[UserSession]):

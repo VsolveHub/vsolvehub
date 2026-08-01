@@ -103,42 +103,16 @@ export function useUpdateApplication() {
   });
 }
 
-export interface DocumentUpload {
-  kind: Schemas["PartnerDocumentKindEnum"];
-  /** Storage key returned by the signed upload, not a browser blob URL. */
-  objectKey: string;
-  contentType: string;
-  sizeBytes: number;
-  /** Hex SHA-256 of the uploaded bytes, so the server can verify what landed. */
-  sha256: string;
-}
-
-export function useUploadDocumentMetadata() {
-  const queryClient = useQueryClient();
-  const currentVersion = useCurrentVersion();
-
-  return useMutation({
-    mutationFn: (upload: DocumentUpload) =>
-      request(() =>
-        getApiClient().POST("/api/v1/partner/application/documents/", {
-          body: {
-            expected_version: currentVersion() as number,
-            kind: upload.kind,
-            object_key: upload.objectKey,
-            content_type: upload.contentType,
-            size_bytes: upload.sizeBytes,
-            sha256: upload.sha256,
-          },
-        }),
-      ),
-    // Returns the document, not the application, so the application is refetched
-    // to pick up its new version and the document in its list.
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.partner.application() });
-    },
-    retry: false,
-  });
-}
+/*
+ * Document upload intentionally has no hook yet.
+ *
+ * Contract 1.5.0 replaced single-shot metadata registration with a server-owned
+ * signed upload: request an upload, PUT the bytes to storage, then finalize with
+ * `{expected_version, upload_id}`. The previous hook posted `object_key`,
+ * `content_type`, `size_bytes` and `sha256` directly — a request shape that no
+ * longer exists — so it was removed rather than half-migrated. Building the real
+ * two-step flow, with retry, progress and expired-URL recovery, is FE-07.
+ */
 
 export function useSubmitApplication() {
   const queryClient = useQueryClient();

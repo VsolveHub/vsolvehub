@@ -73,3 +73,9 @@ export function useTabSync(options: TabSyncOptions = {}): void {
 export function publishToTabs(message: TabMessage): void {
   getTabChannel().publish(message);
 }
+
+/** Mount once inside QueryProvider so every app listens for cross-tab session events. */
+export function SessionSync() {
+  useTabSync();
+  return null;
+}

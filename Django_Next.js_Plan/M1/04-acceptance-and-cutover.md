@@ -43,6 +43,16 @@
 31. A maker proposes a refund, Partner-ledger adjustment or payout correction and a different
     authorized checker approves it; self-approval is denied, duplicate approval is idempotent and the
     full before/after audit remains immutable.
+32. Customer, Partner and Operations run credentialed browser sessions from their deployed origins:
+    CSRF bootstrap and rotation work without JavaScript-readable session cookies, allowed origins
+    succeed, an unapproved origin fails, session revoke prevents further mutation and no token enters
+    browser storage or logs.
+33. A production build contains no runtime request to a proposal-only endpoint or locally invented
+    DTO; every Django request path and payload is generated from the published OpenAPI contract.
+34. Partner KYC upload uses a server-owned private key and short-lived grant; size/type/checksum
+    mismatch, expiry and replay fail closed, malware-pending content cannot be revealed or approved,
+    only the assigned non-self reviewer gets an audited expiring reveal URL, and failed/expired
+    orphan objects are deleted after the configured recovery window.
 
 ## Concurrency acceptance
 
@@ -69,6 +79,10 @@ Exactly one valid transition wins. Losers receive current state and a safe recov
 - Case teams, ownership and on-call contacts are named.
 - No critical/high security or data-integrity finding remains.
 - Customer/Partner copy has content and accessibility review.
+- Generated OpenAPI and TypeScript clients are current, and real-browser authentication/mutation
+  smoke tests run against Django rather than only MSW or route-boundary mocks.
+- The malware scanner integration and verified-KYC legal retention/deletion schedule are approved,
+  tested and monitored; no manual database update is accepted as a production scanning workflow.
 
 ## Cutover
 

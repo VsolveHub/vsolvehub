@@ -1,6 +1,6 @@
 "use client";
 
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { InputHTMLAttributes, Ref, TextareaHTMLAttributes } from "react";
 
 import { cn } from "./cn";
 import { controlChrome, useFieldContext } from "./field";
@@ -15,13 +15,20 @@ import { controlChrome, useFieldContext } from "./field";
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
   /** Overrides the id from Field. Only needed for a control outside a Field. */
   id?: string;
+  /**
+   * React 19 passes `ref` as an ordinary prop, so no `forwardRef` wrapper is
+   * needed — but it still has to be declared, because it is not part of
+   * `InputHTMLAttributes`. Used to move focus between steps of a flow.
+   */
+  ref?: Ref<HTMLInputElement>;
 }
 
-export function Input({ className, id, ...props }: InputProps) {
+export function Input({ className, id, ref, ...props }: InputProps) {
   const field = useFieldContext();
 
   return (
     <input
+      ref={ref}
       id={id ?? field?.controlId}
       aria-invalid={field?.invalid || undefined}
       aria-describedby={

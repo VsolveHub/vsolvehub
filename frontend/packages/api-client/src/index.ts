@@ -10,6 +10,8 @@
  */
 
 export { createApiClient, unwrap, request, calibrateFromPayload } from "./client";
+export { createCsrfStore, resetCsrfStateForTests } from "./csrf";
+export type { CsrfStore } from "./csrf";
 export type { ApiClient, CreateApiClientOptions } from "./client";
 
 export {

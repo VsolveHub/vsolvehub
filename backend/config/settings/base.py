@@ -17,6 +17,8 @@ DEBUG = env.bool("DJANGO_DEBUG")
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_CREDENTIALS = True
+CORS_URLS_REGEX = r"^/api/.*$"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -158,12 +160,13 @@ M1_PARTNER_UNDO_TIMEOUT_SECONDS = 120
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.2.0",
+    "VERSION": "1.5.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": True,
     "ENUM_NAME_OVERRIDES": {
+        "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
     },
@@ -201,7 +204,26 @@ GEOCODING_CACHE_COORDINATE_PRECISION = env.int(
 )
 
 PARTNER_REQUIRED_DOCUMENT_KINDS = ("GOVERNMENT_ID",)
-PARTNER_REQUIRED_CONSENT_PURPOSES = ("partner_terms", "privacy_notice")
+DOCUMENT_STORAGE_PROVIDER = env("DOCUMENT_STORAGE_PROVIDER", default="unconfigured")
+SUPABASE_STORAGE_URL = env("SUPABASE_STORAGE_URL", default="")
+SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY", default="")
+PARTNER_DOCUMENT_BUCKET = env("PARTNER_DOCUMENT_BUCKET", default="partner-kyc")
+DOCUMENT_STORAGE_CONNECT_TIMEOUT_SECONDS = env.float(
+    "DOCUMENT_STORAGE_CONNECT_TIMEOUT_SECONDS",
+    default=3.0,
+)
+DOCUMENT_STORAGE_READ_TIMEOUT_SECONDS = env.float(
+    "DOCUMENT_STORAGE_READ_TIMEOUT_SECONDS",
+    default=15.0,
+)
+PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS = env.int(
+    "PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS",
+    default=300,
+)
+PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS = env.int(
+    "PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS",
+    default=24,
+)
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
@@ -230,6 +252,10 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT_SECONDS", default=60)
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", default=45)
 CELERY_BEAT_SCHEDULE = {
+    "cleanup-partner-document-uploads": {
+        "task": "apps.partners.tasks.cleanup_partner_document_uploads",
+        "schedule": 60.0 * 60,
+    },
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
         "schedule": 60.0,

@@ -30,6 +30,7 @@ from apps.foundation.services import CommandResult, execute_idempotent
 from apps.identity.models import User
 from apps.locations.models import Address
 from apps.partners.permissions import IsOperationsUser
+from common.schema import IDEMPOTENCY_KEY_HEADER
 
 
 def _session_key(request: Request) -> str:
@@ -124,7 +125,10 @@ class CheckoutView(APIView):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
-        tags=["Checkout"], request=CheckoutCreateSerializer, responses={201: CheckoutSerializer}
+        tags=["Checkout"],
+        request=CheckoutCreateSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        responses={201: CheckoutSerializer},
     )
     def post(self, request: Request) -> Response:
         serializer = CheckoutCreateSerializer(data=request.data)
@@ -189,6 +193,7 @@ class AssistedCheckoutView(APIView):
     @extend_schema(
         tags=["Operations"],
         request=AssistedCheckoutCreateSerializer,
+        parameters=[IDEMPOTENCY_KEY_HEADER],
         responses={201: CheckoutSerializer},
     )
     def post(self, request: Request) -> Response:

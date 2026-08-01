@@ -13,14 +13,11 @@ const nextConfig: NextConfig = {
   turbopack: { root: workspaceRoot },
   logging: {
     fetches: {
-      fullUrl: true,
-    },
-  },
-  experimental: {
-    // KYC uploads carry document images. The default 1 MB Server Action body
-    // cap rejects them before our own validation runs.
-    serverActions: {
-      bodySizeLimit: "10mb",
+      // Development only. A full URL carries the query string, which on this
+      // API means address ids, service-area ids and phone-number-derived paths.
+      // Those belong in a developer's terminal, never in a production log line
+      // that ships to an aggregator.
+      fullUrl: process.env.NODE_ENV !== "production",
     },
   },
 };

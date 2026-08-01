@@ -67,6 +67,21 @@ export const queryKeys = {
       [...queryKeys.locations.all, "serviceability", input] as const,
   },
 
+  /**
+   * Applicant-visible reference data published in contract 1.4.0.
+   *
+   * Separate from `partner` because it is not the caller's own record: the same
+   * areas, skills and consent documents are served to every applicant, so they
+   * carry `STATIC_CONTENT` freshness and must not be invalidated when one
+   * Partner saves their application.
+   */
+  reference: {
+    all: ["reference"] as const,
+    serviceAreas: () => [...queryKeys.reference.all, "service-areas"] as const,
+    partnerSkills: () => [...queryKeys.reference.all, "partner-skills"] as const,
+    requiredConsents: () => [...queryKeys.reference.all, "required-consents"] as const,
+  },
+
   /** The signed-in Partner's own application, eligibility and schedule. */
   partner: {
     all: ["partner"] as const,

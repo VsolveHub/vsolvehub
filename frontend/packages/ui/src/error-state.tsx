@@ -39,18 +39,26 @@ export interface ErrorStateProps {
   className?: string;
 }
 
+/**
+ * Status roles rather than raw palette steps.
+ *
+ * These four pairings — text on its own tinted surface, and the line against
+ * that surface — are the ones `tokens.contrast.test.ts` verifies. The previous
+ * values were Tailwind's default red/amber/blue, which nothing measured and
+ * which read as a different product from everything around them.
+ */
 const SEVERITY_STYLES: Record<ErrorSeverity, { container: string; icon: string }> = {
   error: {
-    container: "border-red-200 bg-red-50 text-red-900",
-    icon: "text-red-600",
+    container: "border-danger-line bg-danger-surface text-danger-text",
+    icon: "text-danger-text",
   },
   warning: {
-    container: "border-amber-200 bg-amber-50 text-amber-900",
-    icon: "text-amber-600",
+    container: "border-warning-line bg-warning-surface text-warning-text",
+    icon: "text-warning-text",
   },
   info: {
-    container: "border-blue-200 bg-blue-50 text-blue-900",
-    icon: "text-blue-700",
+    container: "border-info-line bg-info-surface text-info-text",
+    icon: "text-info-text",
   },
 };
 
@@ -160,8 +168,10 @@ export function ErrorState({
         ) : null}
 
         {reference ? (
+          // `break-all`: a Next error digest is 64 unbroken hex characters, which
+          // is wider than a 375px viewport and pushes the whole page sideways.
           <p className="mt-3 font-mono text-xs opacity-70">
-            Reference: <span className="select-all">{reference}</span>
+            Reference: <span className="select-all break-all">{reference}</span>
           </p>
         ) : null}
       </div>

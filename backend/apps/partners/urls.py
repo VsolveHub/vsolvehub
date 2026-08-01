@@ -1,22 +1,42 @@
 from django.urls import path
 
 from apps.partners.views import (
+    ApplicantServiceAreaListView,
+    OperationsPartnerApplicationClaimView,
+    OperationsPartnerApplicationDetailView,
+    OperationsPartnerApplicationQueueView,
     OperationsPartnerApplicationTransitionView,
+    OperationsPartnerDocumentAccessView,
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
     PartnerApplicationSubmitView,
     PartnerApplicationView,
     PartnerDocumentCreateView,
+    PartnerDocumentUploadView,
     PartnerMeView,
     PartnerPresenceHeartbeatView,
     PartnerPresenceOfflineView,
     PartnerPresenceOnlineView,
     PartnerScheduleView,
+    PartnerSkillListView,
+    RequiredPartnerConsentListView,
 )
 
 urlpatterns = [
+    path("service-areas/", ApplicantServiceAreaListView.as_view(), name="partner-service-areas"),
     path("partner/me/", PartnerMeView.as_view(), name="partner-me"),
+    path("partner/skills/", PartnerSkillListView.as_view(), name="partner-skills"),
+    path(
+        "partner/required-consents/",
+        RequiredPartnerConsentListView.as_view(),
+        name="partner-required-consents",
+    ),
     path("partner/application/", PartnerApplicationView.as_view(), name="partner-application"),
+    path(
+        "partner/application/documents/uploads/",
+        PartnerDocumentUploadView.as_view(),
+        name="partner-application-document-upload",
+    ),
     path(
         "partner/application/documents/",
         PartnerDocumentCreateView.as_view(),
@@ -44,9 +64,29 @@ urlpatterns = [
         name="partner-presence-offline",
     ),
     path(
+        "operations/partner-applications/",
+        OperationsPartnerApplicationQueueView.as_view(),
+        name="operations-partner-application-queue",
+    ),
+    path(
+        "operations/partner-applications/<uuid:application_id>/",
+        OperationsPartnerApplicationDetailView.as_view(),
+        name="operations-partner-application-detail",
+    ),
+    path(
+        "operations/partner-applications/<uuid:application_id>/claim/",
+        OperationsPartnerApplicationClaimView.as_view(),
+        name="operations-partner-application-claim",
+    ),
+    path(
         "operations/partner-applications/<uuid:application_id>/transition/",
         OperationsPartnerApplicationTransitionView.as_view(),
         name="operations-partner-application-transition",
+    ),
+    path(
+        "operations/partner-documents/<uuid:document_id>/access/",
+        OperationsPartnerDocumentAccessView.as_view(),
+        name="operations-partner-document-access",
     ),
     path(
         "operations/partner-documents/<uuid:document_id>/review/",

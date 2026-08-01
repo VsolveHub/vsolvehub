@@ -49,6 +49,7 @@ class ServiceArea(models.Model):
         validators=(validate_iana_timezone,),
     )
     is_active = models.BooleanField(default=True)
+    is_accepting_partners = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

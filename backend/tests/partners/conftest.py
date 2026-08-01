@@ -1,12 +1,18 @@
 from dataclasses import dataclass
+from datetime import timedelta
+from http import HTTPStatus
+from secrets import token_urlsafe
+from typing import Any
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.catalog.models import Category, Service, ServiceVariant, Subcategory
 from apps.identity.models import Role, User, UserRole
 from apps.locations.models import ServiceArea, ServiceAreaService
-from apps.partners.models import Skill
+from apps.partners.models import PartnerConsentDocument, PartnerDocumentUpload, Skill
+from apps.partners.storage import SignedReview, SignedUpload, VerifiedObject
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +22,50 @@ class PartnerSetup:
     skill: Skill
     variant: ServiceVariant
     service_area: ServiceArea
+
+
+class FakeDocumentStorage:
+    def __init__(self) -> None:
+        self.verification_overrides: dict[str, VerifiedObject] = {}
+        self.reviewed_keys: list[str] = []
+        self.deleted_keys: list[str] = []
+        self.upload_token = token_urlsafe(16)
+
+    def create_signed_upload(self, *, object_key: str) -> SignedUpload:
+        return SignedUpload(
+            upload_url=f"https://storage.test/upload/{object_key}?token={self.upload_token}",
+            upload_token=self.upload_token,
+            resumable_url="https://storage.test/upload/resumable",
+            expires_at=timezone.now() + timedelta(hours=2),
+        )
+
+    def verify_object(self, *, object_key: str, maximum_size_bytes: int) -> VerifiedObject:
+        del maximum_size_bytes
+        if object_key in self.verification_overrides:
+            return self.verification_overrides[object_key]
+        upload = PartnerDocumentUpload.objects.get(object_key=object_key)
+        return VerifiedObject(
+            size_bytes=upload.size_bytes,
+            content_type=upload.content_type,
+            sha256=upload.sha256,
+        )
+
+    def create_signed_review(self, *, object_key: str, expires_in_seconds: int) -> SignedReview:
+        self.reviewed_keys.append(object_key)
+        return SignedReview(
+            review_url=f"https://storage.test/review/{object_key}?token=review-token",
+            expires_at=timezone.now() + timedelta(seconds=expires_in_seconds),
+        )
+
+    def delete_object(self, *, object_key: str) -> None:
+        self.deleted_keys.append(object_key)
+
+
+@pytest.fixture(autouse=True)
+def document_storage(monkeypatch: pytest.MonkeyPatch) -> FakeDocumentStorage:
+    storage = FakeDocumentStorage()
+    monkeypatch.setattr("apps.partners.services.get_document_storage", lambda: storage)
+    return storage
 
 
 @pytest.fixture
@@ -45,6 +95,18 @@ def partner_setup() -> PartnerSetup:
         tax_category_code="technician-repair",
     )
     skill = Skill.objects.create(code="electrician", name="Electrician")
+    PartnerConsentDocument.objects.create(
+        purpose="partner_terms",
+        title="Partner terms",
+        document_version="2026-07",
+        document_url="https://legal.vsolvehub.test/partner-terms/2026-07",
+    )
+    PartnerConsentDocument.objects.create(
+        purpose="privacy_notice",
+        title="Partner privacy notice",
+        document_version="2026-07",
+        document_url="https://legal.vsolvehub.test/partner-privacy/2026-07",
+    )
     service_area = ServiceArea.objects.create(
         slug="west-hyderabad",
         name="West Hyderabad",
@@ -84,3 +146,31 @@ def application_payload(setup: PartnerSetup, *, expected_version: int | None = N
     if expected_version is not None:
         payload["expected_version"] = expected_version
     return payload
+
+
+def upload_partner_document(
+    client: APIClient,
+    *,
+    expected_version: int,
+    kind: str = "GOVERNMENT_ID",
+    content_type: str = "image/jpeg",
+    size_bytes: int = 1024,
+    sha256: str = "a" * 64,
+) -> Any:
+    issued = client.post(
+        "/api/v1/partner/application/documents/uploads/",
+        {
+            "expected_version": expected_version,
+            "kind": kind,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+        },
+        format="json",
+    )
+    assert issued.status_code == HTTPStatus.CREATED
+    return client.post(
+        "/api/v1/partner/application/documents/",
+        {"expected_version": expected_version, "upload_id": issued.json()["id"]},
+        format="json",
+    )

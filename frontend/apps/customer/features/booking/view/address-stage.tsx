@@ -1,7 +1,8 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { Badge, EmptyState, Spinner } from "@vsolve/ui";
+import { Badge, Button, EmptyState, Field, Input, Spinner } from "@vsolve/ui";
+import { useState, type FormEvent } from "react";
 
 import { ChoiceCard } from "./choice-card";
 import { useWorkspace } from "./workspace-context";
@@ -20,6 +21,7 @@ import { useWorkspace } from "./workspace-context";
  */
 
 type Address = Schemas["Address"];
+type AddressPatch = Schemas["PatchedAddressRequest"];
 
 /** An address is geocoded when the server stored coordinates for it. */
 export function isGeocoded(address: Address): boolean {
@@ -33,7 +35,12 @@ export interface AddressStageProps {
   serviceability: Schemas["ServiceabilityResponse"] | null;
   isCheckingServiceability: boolean;
   onSelect: (address: Address) => void;
-  onAddAddress: () => void;
+  onUseCurrentLocation: () => void;
+  isUsingCurrentLocation: boolean;
+  locationError?: string | null;
+  onUpdateAddress: (addressId: string, patch: AddressPatch) => void;
+  isUpdatingAddress: boolean;
+  updateError?: string | null;
 }
 
 function formatAddress(address: Address): string {
@@ -42,16 +49,81 @@ function formatAddress(address: Address): string {
     .join(", ");
 }
 
+function toEditableAddress(address: Address | null): AddressPatch {
+  if (!address) return {};
+
+  return {
+    label: address.label,
+    line1: address.line1,
+    line2: address.line2 ?? "",
+    landmark: address.landmark ?? "",
+    locality: address.locality,
+    city: address.city,
+    state: address.state,
+    postal_code: address.postal_code,
+  };
+}
+
 export function AddressStage({
   addresses,
   isLoading,
   serviceability,
   isCheckingServiceability,
   onSelect,
-  onAddAddress,
+  onUseCurrentLocation,
+  isUsingCurrentLocation,
+  locationError = null,
+  onUpdateAddress,
+  isUpdatingAddress,
+  updateError = null,
 }: AddressStageProps) {
   const { state } = useWorkspace();
   const selectedId = state.address?.id ?? null;
+  const selectedAddress = addresses.find((address) => address.id === selectedId) ?? null;
+  const [editedDraft, setEditedDraft] = useState<{
+    addressId: string | null;
+    value: AddressPatch;
+  }>({ addressId: null, value: {} });
+  const draft =
+    editedDraft.addressId === selectedId ? editedDraft.value : toEditableAddress(selectedAddress);
+
+  function updateDraft(field: keyof AddressPatch, value: string) {
+    setEditedDraft((current) => ({
+      addressId: selectedId,
+      value: {
+        ...(current.addressId === selectedId ? current.value : draft),
+        [field]: value,
+      },
+    }));
+  }
+
+  function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAddress) return;
+    onUpdateAddress(selectedAddress.id, draft);
+  }
+
+  const locationAction = (
+    <div>
+      <Button
+        type="button"
+        onClick={onUseCurrentLocation}
+        loading={isUsingCurrentLocation}
+        loadingLabel="Finding your location"
+      >
+        Use my current location
+      </Button>
+      <p className="mt-2 text-sm text-text-secondary">
+        Your browser will ask for permission. We save the address only after the
+        server reverse-geocodes the pinned location.
+      </p>
+      {locationError ? (
+        <p role="alert" className="mt-2 text-sm font-medium text-danger-text">
+          {locationError}
+        </p>
+      ) : null}
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -67,15 +139,7 @@ export function AddressStage({
       <EmptyState
         title="Add the address for this job"
         description="We need it to check that we cover your area and to send someone to the right place."
-        action={
-          <button
-            type="button"
-            onClick={onAddAddress}
-            className="min-h-11 rounded-control bg-action px-4 font-semibold text-on-action"
-          >
-            Add an address
-          </button>
-        }
+        action={locationAction}
       />
     );
   }
@@ -108,13 +172,10 @@ export function AddressStage({
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={onAddAddress}
-        className="mt-3 min-h-11 rounded-control border border-line-strong px-4 font-semibold text-text hover:border-warm-600"
-      >
-        Use a different address
-      </button>
+      <div className="mt-4 rounded-card border border-line bg-surface p-4">
+        <h3 className="text-sm font-semibold text-text">Add another pinned address</h3>
+        <div className="mt-3">{locationAction}</div>
+      </div>
 
       <div className="mt-5" aria-live="polite">
         {isCheckingServiceability ? (
@@ -138,6 +199,94 @@ export function AddressStage({
           </div>
         )}
       </div>
+
+      {selectedAddress ? (
+        <form onSubmit={submitEdit} className="mt-6 rounded-card border border-line bg-surface p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-text">Edit selected address</h3>
+              <p className="mt-1 text-sm text-text-secondary">
+                Text changes keep the existing pin. Use current location again
+                if the pin itself is wrong.
+              </p>
+            </div>
+            {isGeocoded(selectedAddress) ? (
+              <Badge tone="success">Pinned</Badge>
+            ) : (
+              <Badge tone="warning">Pin missing</Badge>
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Label" required>
+              <Input
+                value={draft.label ?? ""}
+                onChange={(event) => updateDraft("label", event.target.value)}
+              />
+            </Field>
+            <Field label="House, flat or building" required>
+              <Input
+                value={draft.line1 ?? ""}
+                onChange={(event) => updateDraft("line1", event.target.value)}
+              />
+            </Field>
+            <Field label="Locality" required>
+              <Input
+                value={draft.locality ?? ""}
+                onChange={(event) => updateDraft("locality", event.target.value)}
+              />
+            </Field>
+            <Field label="City" required>
+              <Input
+                value={draft.city ?? ""}
+                onChange={(event) => updateDraft("city", event.target.value)}
+              />
+            </Field>
+            <Field label="State" required>
+              <Input
+                value={draft.state ?? ""}
+                onChange={(event) => updateDraft("state", event.target.value)}
+              />
+            </Field>
+            <Field label="PIN code" required>
+              <Input
+                inputMode="numeric"
+                value={draft.postal_code ?? ""}
+                onChange={(event) => updateDraft("postal_code", event.target.value)}
+              />
+            </Field>
+            <Field label="Line 2">
+              <Input
+                value={draft.line2 ?? ""}
+                onChange={(event) => updateDraft("line2", event.target.value)}
+              />
+            </Field>
+            <Field label="Landmark">
+              <Input
+                value={draft.landmark ?? ""}
+                onChange={(event) => updateDraft("landmark", event.target.value)}
+              />
+            </Field>
+          </div>
+
+          {updateError ? (
+            <p role="alert" className="mt-4 text-sm font-medium text-danger-text">
+              {updateError}
+            </p>
+          ) : null}
+
+          <div className="mt-4">
+            <Button
+              type="submit"
+              variant="secondary"
+              loading={isUpdatingAddress}
+              loadingLabel="Saving address"
+            >
+              Save address
+            </Button>
+          </div>
+        </form>
+      ) : null}
     </fieldset>
   );
 }

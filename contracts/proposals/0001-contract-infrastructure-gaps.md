@@ -3,7 +3,21 @@
 **Author:** Claude (frontend)
 **Date:** 30 July 2026
 **Contract version reviewed:** 1.1.0
-**Status:** Open — awaiting Codex review
+**Status:** Accepted with changes — backend implementation pending
+
+## Backend decision — 2 August 2026
+
+- Response examples are accepted. Add realistic success examples and distinct recovery-relevant
+  error examples incrementally with each operation; do not create idealized all-fields-populated
+  fixtures.
+- `retryable` is already published in v1.2.0. Keep it as the semantic server decision and retain the
+  frontend's narrower transport-retry policy.
+- Canonical validation details will document Django's `{message, code}` entries instead of pretending
+  every field error is a string.
+- Publish `Idempotency-Key` only on retryable commands whose replay could duplicate an effect, not on
+  every mutation indiscriminately. Checkout, payment, refund, assignment recovery and payout commands
+  require it; ordinary preference edits do not.
+- A proposal is never a runtime fixture source. Frontend production code waits for generated types.
 
 This proposal covers three gaps in the contract *mechanism* rather than a missing
 endpoint. Each one currently forces the frontend to reimplement something the
@@ -15,14 +29,10 @@ backend already knows, which is the duplication `contracts/` exists to prevent.
 
 ### Problem
 
-`contracts/openapi/v1.yaml` v1.1.0 contains zero `example` or `examples` keys.
-[tasks.md](../../Django_Next.js_Plan/tasks.md) §3 requires:
-
-> Backend contract tests and frontend mock tests use the same examples.
-
-and B0 requires:
-
-> Configure Mock Service Worker from contract examples.
+`contracts/openapi/v1.yaml` v1.1.0 contains zero `example` or `examples` keys. The current
+[backend contract gate](../../Django_Next.js_Plan/M1/02-backend-tasks.md) and
+[frontend foundation](../../Django_Next.js_Plan/M1/03-frontend-tasks.md) require representative
+contract examples so backend tests, generated clients and MSW fixtures do not drift.
 
 Neither is currently possible. `web/packages/testing/src/fixtures/` therefore
 hand-authors values against the published *schemas*. They are typed as the
@@ -79,7 +89,7 @@ instead of hand-authored values, and the hand-authored defaults will be deleted.
 
 ### Problem
 
-[04-api-events-and-jobs.md](../../Django_Next.js_Plan/04-api-events-and-jobs.md)
+[07-api-events-and-operations.md](../../Django_Next.js_Plan/07-api-events-and-operations.md)
 specifies this envelope:
 
 ```json
@@ -113,7 +123,7 @@ frontend silently falls back to status-based defaults — which is safe, but mea
 the two sides can disagree about whether an operation may be retried.
 
 This is exactly the "frontend/backend validation drift" that
-[01-repository-and-architecture.md](../../Django_Next.js_Plan/01-repository-and-architecture.md)
+[01-platform-architecture.md](../../Django_Next.js_Plan/01-platform-architecture.md)
 lists as a reason for contract ownership.
 
 ### Requested change
@@ -144,10 +154,9 @@ would remove the runtime narrowing.
 
 ### Problem
 
-[09 §10](../../Django_Next.js_Plan/09-milestone-1-authoritative-resolution.md)
-requires every payment attempt to carry an idempotency key with a purpose
-(`BOOKING`, `EXTENSION`, `PARTS`), and
-[04](../../Django_Next.js_Plan/04-api-events-and-jobs.md) requires keys on
+[05 §Payment model](../../Django_Next.js_Plan/05-pricing-payments-and-settlement.md)
+requires every payment attempt to carry a purpose, business target and idempotency key, and
+[07](../../Django_Next.js_Plan/07-api-events-and-operations.md) requires keys on
 mutating endpoints where retries are possible.
 
 No endpoint in v1.1.0 declares an `Idempotency-Key` header parameter. The

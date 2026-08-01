@@ -43,38 +43,81 @@ export type RecoveryIntent =
 const TRANSPORT_RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 /**
- * Domain error codes whose recovery is known from the contract and plan.
- * Unknown codes fall back to status-based classification, so a newly added
- * backend code degrades to a sensible default instead of breaking the client.
+ * Recovery for the error codes Django actually emits.
+ *
+ * ## Casing is the contract
+ *
+ * Every key is lowercase `snake_case`, because that is what
+ * `common/errors/handler.py` produces: DRF's own `get_codes()` for built-in
+ * failures, `validation_error` for any `ValidationError`, and the `default_code`
+ * of each domain exception. The table was previously keyed `SCREAMING_CASE`, so
+ * **no key ever matched** and every domain error silently fell through to
+ * status-based classification. Nothing looked broken, which is what made it
+ * worth fixing before more entries were added on top.
+ *
+ * ## Only codes that exist
+ *
+ * Entries for unbuilt domains — slots, quotes, capacity holds, payment — were
+ * removed rather than re-cased. A mapping for a code no server sends is a guess
+ * about a contract nobody has published, and it would have to be re-checked
+ * against the real code set anyway. They come back one at a time as BE-06 to
+ * BE-08 publish them.
+ *
+ * ## Unknown codes
+ *
+ * `defaultRecoveryForStatus` handles anything absent, so a code added by a newer
+ * deployment degrades to a sensible action rather than breaking the client. That
+ * is the fallback, not an excuse to leave the table empty: status alone cannot
+ * tell `invalid_otp` (fix the code you typed) from `throttled` (wait).
  */
 const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
-  // Identity
-  AUTHENTICATION_REQUIRED: "reauthenticate",
-  SESSION_EXPIRED: "reauthenticate",
-  PERMISSION_DENIED: "contact_support",
-  OTP_INVALID: "fix_input",
-  OTP_EXPIRED: "retry",
-  OTP_RATE_LIMITED: "retry",
+  // Identity and session — apps/identity
+  not_authenticated: "reauthenticate",
+  authentication_failed: "reauthenticate",
+  session_expired: "reauthenticate",
+  permission_denied: "contact_support",
+  invalid_otp: "fix_input",
+  otp_unavailable: "retry",
+  throttled: "retry",
 
-  // Capacity and scheduling
-  SLOT_NO_LONGER_AVAILABLE: "choose_again",
-  CAPACITY_HOLD_EXPIRED: "choose_again",
-  NO_PARTNER_ACCEPTED: "choose_again",
-  ELIGIBLE_POOL_EXHAUSTED: "choose_again",
-  INSTANT_UNAVAILABLE: "choose_again",
-  NOT_SERVICEABLE: "choose_again",
+  // Validation. Django collapses every DRF ValidationError to this one code and
+  // keeps the specific code inside `details`, so field errors are read from
+  // `fieldErrors` rather than from the envelope code.
+  validation_error: "fix_input",
 
-  // Pricing and checkout
-  QUOTE_EXPIRED: "retry",
-  CHECKOUT_SESSION_EXPIRED: "retry",
-  PAYMENT_METHOD_REQUIRED: "add_payment_method",
-  PAYMENT_PENDING: "await_confirmation",
-  PAYMENT_FAILED: "retry",
+  // Retry-safe command infrastructure — apps/foundation
+  idempotency_in_progress: "await_confirmation",
+  idempotency_key_reused: "contact_support",
 
-  // Validation
-  VALIDATION_ERROR: "fix_input",
-  INVALID_INPUT: "fix_input",
+  // Location — apps/locations
+  geocoding_unavailable: "retry",
+  address_archived: "choose_again",
+
+  // Partner application — apps/partners
+  partner_application_version_conflict: "retry",
+  partner_application_incomplete: "fix_input",
+  partner_schedule_invalid: "fix_input",
+  partner_transition_not_allowed: "contact_support",
+  partner_self_review_forbidden: "contact_support",
+  partner_not_operationally_eligible: "contact_support",
+  partner_presence_unavailable: "retry",
 };
+
+/**
+ * Reads one field message out of a `details` entry.
+ *
+ * Accepts a bare string and the `{message, code}` object Django's exception
+ * handler produces. Returns null for anything else so a number, a null or a
+ * nested structure never reaches a form field as text.
+ */
+function readFieldMessage(entry: unknown): string | null {
+  if (typeof entry === "string") return entry;
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const message = (entry as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return null;
+}
 
 /** Base class so callers can catch every failure this package produces. */
 export abstract class ApiClientError extends Error {
@@ -101,10 +144,10 @@ export class ApiRequestError extends ApiClientError {
   /**
    * The server's own judgement: could a retry of this operation ever succeed?
    *
-   * Semantic, not mechanical. `SLOT_NO_LONGER_AVAILABLE` is `retryable: true`
-   * because booking again *after picking another slot* will work — not because
-   * resending the same request would. Use it to decide whether to offer a "Try
-   * again" affordance at all.
+   * Semantic, not mechanical. `partner_application_version_conflict` is
+   * `retryable: true` because saving again *after refetching the new version*
+   * will work — not because resending the same request would. Use it to decide
+   * whether to offer a "Try again" affordance at all.
    */
   readonly retryable: boolean;
 
@@ -133,6 +176,12 @@ export class ApiRequestError extends ApiClientError {
    *
    * The published contract types `details` as unknown, so this narrows
    * defensively rather than asserting a shape the contract does not promise.
+   *
+   * Django's envelope serialises each DRF `ErrorDetail` as `{message, code}`,
+   * so a validation failure arrives as `{phone_number: [{message, code}]}` and
+   * not as a list of strings. Both are read here; anything else is dropped
+   * rather than stringified, because `[object Object]` under a form field is
+   * worse than no message at all.
    */
   get fieldErrors(): Record<string, string[]> {
     if (!this.details || typeof this.details !== "object" || Array.isArray(this.details)) {
@@ -140,8 +189,11 @@ export class ApiRequestError extends ApiClientError {
     }
     const result: Record<string, string[]> = {};
     for (const [field, value] of Object.entries(this.details as Record<string, unknown>)) {
-      if (typeof value === "string") result[field] = [value];
-      else if (Array.isArray(value)) result[field] = value.filter((v) => typeof v === "string");
+      const entries = Array.isArray(value) ? value : [value];
+      const messages = entries
+        .map((entry) => readFieldMessage(entry))
+        .filter((entry): entry is string => entry !== null);
+      if (messages.length > 0) result[field] = messages;
     }
     return result;
   }

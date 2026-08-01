@@ -41,8 +41,10 @@ complete product plan; it does not define or limit the final product.
 4. [Acceptance and cutover](./04-acceptance-and-cutover.md)
 5. [Frozen initial configuration](./05-initial-configuration.md)
 
-Implementation progress is tracked in the project work system, not by checkmarks in these planning
-files. This prevents documentation from falsely claiming that a capability is complete.
+Implementation evidence is reconciled in the dated audit snapshots and status markers in the backend
+and frontend task files. `Done` requires implementation, integration and verification; a model,
+screen, fixture or accepted proposal alone remains `Partial` or `Blocked`. The current cross-agent
+execution order is maintained in [task.md](./task.md).
 
 ## Release statement
 

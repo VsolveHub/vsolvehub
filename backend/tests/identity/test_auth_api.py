@@ -2,6 +2,7 @@ import uuid
 from http import HTTPStatus
 
 import pytest
+from django.conf import settings
 from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APIClient
@@ -48,12 +49,16 @@ def test_customer_can_request_verify_and_revoke_session() -> None:
     assert verify_response.status_code == HTTPStatus.OK
     assert verify_response.json()["user"]["phone_number"] == "+919876543210"
     assert verify_response.json()["user"]["roles"] == ["customer"]
+    assert verify_response.json()["active_role"] == "customer"
+    assert verify_response.json()["session_expires_at"]
     assert User.objects.filter(phone_number="+919876543210").exists()
     assert UserSession.objects.filter(revoked_at__isnull=True).count() == 1
 
     session_response = client.get("/api/v1/auth/session/")
     assert session_response.status_code == HTTPStatus.OK
-    assert session_response.json()["phone_number"] == "+919876543210"
+    assert session_response.json()["user"]["phone_number"] == "+919876543210"
+    assert session_response.json()["active_role"] == "customer"
+    assert session_response.json()["session_expires_at"]
 
     sessions_response = client.get("/api/v1/auth/sessions/")
     assert sessions_response.status_code == HTTPStatus.OK
@@ -69,7 +74,23 @@ def test_customer_can_request_verify_and_revoke_session() -> None:
     assert UserSession.objects.filter(revoked_at__isnull=False).count() == 1
 
     expired_response = client.get("/api/v1/auth/session/")
-    assert expired_response.status_code in {HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED}
+    assert expired_response.status_code == HTTPStatus.OK
+    assert expired_response.json() == {
+        "user": None,
+        "active_role": None,
+        "session_expires_at": None,
+    }
+
+
+def test_anonymous_session_read_is_explicit_and_side_effect_free() -> None:
+    response = APIClient().get("/api/v1/auth/session/")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {
+        "user": None,
+        "active_role": None,
+        "session_expires_at": None,
+    }
 
 
 def test_wrong_code_increments_attempts_and_does_not_create_user() -> None:
@@ -124,7 +145,12 @@ def test_resend_cooldown_returns_retryable_error() -> None:
 
     assert response.status_code == HTTPStatus.TOO_MANY_REQUESTS
     assert response.json()["error"]["code"] == "throttled"
-    assert int(response.headers["Retry-After"]) > 0
+    retry_after = int(response.headers["Retry-After"])
+    assert retry_after > 0
+    assert response.json()["error"]["message"] == (
+        "Too many code requests. Try again when the countdown ends."
+    )
+    assert response.json()["error"]["details"] == {"retry_after_seconds": retry_after}
 
 
 @override_settings(OTP_DEVELOPMENT_CODE_ENABLED=False)
@@ -136,7 +162,8 @@ def test_code_is_not_exposed_when_development_flag_is_disabled() -> None:
     )
 
     assert response.status_code == HTTPStatus.ACCEPTED
-    assert "development_code" not in response.json()
+    assert response.json()["development_code"] is None
+    assert response.json()["code_length"] == settings.OTP_CODE_LENGTH
 
 
 def test_invalid_phone_uses_validation_error_envelope() -> None:
@@ -148,3 +175,105 @@ def test_invalid_phone_uses_validation_error_envelope() -> None:
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert response.json()["error"]["code"] == "validation_error"
+
+
+@override_settings(
+    CORS_ALLOWED_ORIGINS=["https://customer.example.test"],
+    CSRF_TRUSTED_ORIGINS=["https://customer.example.test"],
+    CSRF_COOKIE_SECURE=True,
+    SESSION_COOKIE_SECURE=True,
+)
+def test_credentialed_browser_csrf_bootstrap_rotation_and_revoke() -> None:
+    origin = "https://customer.example.test"
+    client = APIClient(enforce_csrf_checks=True)
+
+    bootstrap = client.get("/api/v1/auth/csrf/", HTTP_ORIGIN=origin)
+    assert bootstrap.status_code == HTTPStatus.OK
+    initial_token = bootstrap.json()["csrf_token"]
+    assert initial_token
+    assert bootstrap.headers["Access-Control-Allow-Origin"] == origin
+    assert bootstrap.headers["Access-Control-Allow-Credentials"] == "true"
+    csrf_cookie = client.cookies[settings.CSRF_COOKIE_NAME]
+    assert csrf_cookie["httponly"] is True
+    assert csrf_cookie["secure"] is True
+    assert csrf_cookie["samesite"] == "Lax"
+
+    issued = _issue_otp(client)
+    verified = client.post(
+        "/api/v1/auth/otp/verify/",
+        {
+            "challenge_id": issued["challenge_id"],
+            "phone_number": "+919876543210",
+            "code": issued["development_code"],
+        },
+        format="json",
+        HTTP_ORIGIN=origin,
+    )
+    assert verified.status_code == HTTPStatus.OK
+    session_cookie = client.cookies[settings.SESSION_COOKIE_NAME]
+    assert session_cookie["httponly"] is True
+    assert session_cookie["secure"] is True
+
+    stale_token = client.post(
+        "/api/v1/auth/privacy/consents/",
+        {"purpose": "privacy-notice", "policy_version": "v1"},
+        format="json",
+        HTTP_ORIGIN=origin,
+        HTTP_X_CSRFTOKEN=initial_token,
+    )
+    assert stale_token.status_code == HTTPStatus.FORBIDDEN
+    assert stale_token.json()["error"]["code"] == "csrf_failed"
+
+    refreshed = client.get("/api/v1/auth/csrf/", HTTP_ORIGIN=origin)
+    refreshed_token = refreshed.json()["csrf_token"]
+    assert refreshed_token != initial_token
+    created = client.post(
+        "/api/v1/auth/privacy/consents/",
+        {"purpose": "privacy-notice", "policy_version": "v1"},
+        format="json",
+        HTTP_ORIGIN=origin,
+        HTTP_X_CSRFTOKEN=refreshed_token,
+    )
+    assert created.status_code == HTTPStatus.CREATED
+
+    logged_out = client.post(
+        "/api/v1/auth/logout/",
+        format="json",
+        HTTP_ORIGIN=origin,
+        HTTP_X_CSRFTOKEN=refreshed_token,
+    )
+    assert logged_out.status_code == HTTPStatus.NO_CONTENT
+    rejected = client.post(
+        "/api/v1/auth/privacy/consents/",
+        {"purpose": "privacy-notice", "policy_version": "v2"},
+        format="json",
+        HTTP_ORIGIN=origin,
+        HTTP_X_CSRFTOKEN=refreshed_token,
+    )
+    assert rejected.status_code in {HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED}
+
+
+@override_settings(
+    CORS_ALLOWED_ORIGINS=["https://customer.example.test"],
+    CSRF_TRUSTED_ORIGINS=["https://customer.example.test"],
+)
+def test_cors_preflight_allows_only_configured_credentialed_origin() -> None:
+    client = APIClient()
+    allowed = client.options(
+        "/api/v1/auth/logout/",
+        HTTP_ORIGIN="https://customer.example.test",
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type,x-csrftoken",
+    )
+    rejected = client.options(
+        "/api/v1/auth/logout/",
+        HTTP_ORIGIN="https://attacker.example.test",
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type,x-csrftoken",
+    )
+
+    assert allowed.status_code == HTTPStatus.OK
+    assert allowed.headers["Access-Control-Allow-Origin"] == "https://customer.example.test"
+    assert allowed.headers["Access-Control-Allow-Credentials"] == "true"
+    assert "x-csrftoken" in allowed.headers["Access-Control-Allow-Headers"]
+    assert "Access-Control-Allow-Origin" not in rejected.headers

@@ -16,6 +16,8 @@ VSolveHub/
 .pnpm-store/
 **/.next/
 **/.turbo/
+**/playwright-report/
+**/test-results/
 *.tsbuildinfo
 
 # OS

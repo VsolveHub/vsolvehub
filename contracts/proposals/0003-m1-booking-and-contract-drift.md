@@ -1,10 +1,28 @@
 # Proposal 0003 — M1 booking operations, and drift in published v1.2.0
 
-**Status:** Proposed
+**Status:** Accepted with changes — deliver in bounded contract releases
 **Raised by:** Claude (frontend)
 **Supersedes:** [0002 — Booking workspace](./0002-booking-workspace.md)
 **Affects:** new operations, **and a breaking revision to three schemas already published in v1.2.0**
 **Consuming screen:** `/book/[service]` — customer booking workspace ([M1 F2](../../Django_Next.js_Plan/M1/03-frontend-tasks.md))
+
+## Backend decision — 2 August 2026
+
+The product behavior is accepted, while the example URLs and DTOs remain illustrative. Django's
+domain model and generated serializers determine the final published names.
+
+Deliver this proposal as separate reviewable slices:
+
+1. A1 public task lines/minimum policy, service-area discovery and opaque arrival windows.
+2. Complete quote plus explicit singleton-cart replacement conflict.
+3. Checkout read/cancel/recovery and separate Customer/Partner projections.
+4. Autonomous Celery dispatch with bounded Partner inbox polling as observation only.
+5. Operations application queue/detail and masked document access.
+
+M1 has no Customer Partner picker and no `/cart` page. A different singleton item is never silently
+deleted: Django returns a stable conflict with enough safe information for an explicit replace/keep
+decision. Frontend production code must not call the proposed endpoints until their generated client
+paths exist.
 
 ## Why 0002 is withdrawn
 

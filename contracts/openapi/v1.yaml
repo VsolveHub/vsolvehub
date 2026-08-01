@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.2.0
+  version: 1.5.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -158,7 +158,16 @@ paths:
       - {}
       responses:
         '200':
-          description: A CSRF cookie has been set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfToken'
+              examples:
+                CSRFBootstrap:
+                  value:
+                    csrf_token: masked-csrf-token
+                  summary: CSRF bootstrap
+          description: ''
   /api/v1/auth/finance/step-up/:
     post:
       operationId: auth_finance_step_up_create
@@ -220,6 +229,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OtpIssued'
+              examples:
+                OTPIssued:
+                  value:
+                    challenge_id: 6d8cd4d8-c50a-4cb2-85e8-0357ee735cc6
+                    expires_in_seconds: 300
+                    resend_after_seconds: 60
+                    code_length: 6
+                    development_code: null
+                  summary: OTP issued
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                OTPRateLimited:
+                  value:
+                    error:
+                      code: throttled
+                      message: Too many code requests. Try again when the countdown
+                        ends.
+                      details:
+                        retry_after_seconds: 47
+                      retryable: true
+                      request_id: req_example
+                  summary: OTP rate limited
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/auth/otp/verify/:
     post:
@@ -246,6 +288,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthenticatedSession'
+              examples:
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      full_name: ''
+                      email: ''
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/auth/privacy/consents/:
     post:
@@ -388,12 +449,50 @@ paths:
       - Authentication
       security:
       - cookieAuth: []
+      - {}
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/SessionState'
+              examples:
+                SignedOut:
+                  value:
+                    user: null
+                    active_role: null
+                    session_expires_at: null
+                  summary: Signed out
+                AuthenticatedCustomer:
+                  value:
+                    user:
+                      id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
+                      phone_number: '+919876543210'
+                      full_name: ''
+                      email: ''
+                      roles:
+                      - customer
+                    active_role: customer
+                    session_expires_at: '2026-09-01T12:00:00Z'
+                  summary: Authenticated customer
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                SessionExpired:
+                  value:
+                    error:
+                      code: session_expired
+                      message: Session is no longer active.
+                      details:
+                        message: Session is no longer active.
+                        code: session_expired
+                      retryable: false
+                      request_id: req_example
+                  summary: Session expired
           description: ''
   /api/v1/auth/sessions/:
     get:
@@ -510,6 +609,15 @@ paths:
   /api/v1/checkouts/:
     post:
       operationId: checkouts_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
       tags:
       - Checkout
       requestBody:
@@ -644,6 +752,15 @@ paths:
   /api/v1/operations/assisted-checkouts/:
     post:
       operationId: operations_assisted_checkouts_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
       tags:
       - Operations
       requestBody:
@@ -700,6 +817,159 @@ paths:
               schema:
                 $ref: '#/components/schemas/Offer'
           description: ''
+  /api/v1/operations/partner-applications/:
+    get:
+      operationId: operations_partner_application_queue_list
+      parameters:
+      - in: query
+        name: assigned_to_me
+        schema:
+          type: boolean
+          default: false
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
+      - in: query
+        name: status
+        schema:
+          enum:
+          - SUBMITTED
+          - UNDER_REVIEW
+          - CHANGES_REQUIRED
+          type: string
+          minLength: 1
+        description: |-
+          * `SUBMITTED` - SUBMITTED
+          * `UNDER_REVIEW` - UNDER_REVIEW
+          * `CHANGES_REQUIRED` - CHANGES_REQUIRED
+      - in: query
+        name: unassigned
+        schema:
+          type: boolean
+          default: false
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsApplicationQueuePage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partner-applications/{application_id}/:
+    get:
+      operationId: operations_partner_application_detail_retrieve
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partner-applications/{application_id}/claim/:
+    post:
+      operationId: operations_partner_applications_claim_create
+      parameters:
+      - in: path
+        name: application_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpectedVersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerApplication'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
+          description: ''
   /api/v1/operations/partner-applications/{application_id}/transition/:
     post:
       operationId: operations_partner_applications_transition_create
@@ -746,6 +1016,51 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partner-documents/{document_id}/access/:
+    post:
+      operationId: operations_partner_documents_access_create
+      parameters:
+      - in: path
+        name: document_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDocumentReviewAccess'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -920,6 +1235,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
           description: ''
   /api/v1/partner/application/documents/:
     post:
@@ -930,13 +1259,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PartnerDocumentCreateRequest'
+              $ref: '#/components/schemas/PartnerDocumentFinalizeRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PartnerDocumentCreateRequest'
+              $ref: '#/components/schemas/PartnerDocumentFinalizeRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PartnerDocumentCreateRequest'
+              $ref: '#/components/schemas/PartnerDocumentFinalizeRequest'
         required: true
       security:
       - cookieAuth: []
@@ -954,6 +1283,84 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/application/documents/uploads/:
+    post:
+      operationId: partner_application_documents_uploads_create
+      tags:
+      - Partner application
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerDocumentUploadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerDocumentUploadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerDocumentUploadRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerDocumentUpload'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                PartnerApplicationVersionConflict:
+                  value:
+                    error:
+                      code: partner_application_version_conflict
+                      message: This application changed in another session. Refresh
+                        and try again.
+                      details:
+                        message: This application changed in another session. Refresh
+                          and try again.
+                        code: partner_application_version_conflict
+                      retryable: true
+                      request_id: req_example
+                  summary: Partner application version conflict
+          description: ''
+        '503':
           content:
             application/json:
               schema:
@@ -1226,6 +1633,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/required-consents/:
+    get:
+      operationId: partner_required_consents_list
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerConsentDocument'
+          description: ''
+  /api/v1/partner/skills/:
+    get:
+      operationId: partner_skills_list
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerSkillOption'
+          description: ''
   /api/v1/quotes/:
     post:
       operationId: quotes_create
@@ -1251,6 +1690,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Quote'
+          description: ''
+  /api/v1/service-areas/:
+    get:
+      operationId: service_areas_list
+      tags:
+      - Partner application
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerServiceAreaOption'
           description: ''
   /api/v1/serviceability/check/:
     post:
@@ -1548,11 +2003,15 @@ components:
           allOf:
           - $ref: '#/components/schemas/User'
           readOnly: true
+        active_role:
+          type: string
+          readOnly: true
         session_expires_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - active_role
       - session_expires_at
       - user
     CartItem:
@@ -1761,6 +2220,24 @@ components:
       required:
       - policy_version
       - purpose
+    ContentTypeEnum:
+      enum:
+      - image/jpeg
+      - image/png
+      - application/pdf
+      type: string
+      description: |-
+        * `image/jpeg` - image/jpeg
+        * `image/png` - image/png
+        * `application/pdf` - application/pdf
+    CsrfToken:
+      type: object
+      properties:
+        csrf_token:
+          type: string
+          readOnly: true
+      required:
+      - csrf_token
     DecisionEnum:
       enum:
       - APPROVED
@@ -1850,6 +2327,73 @@ components:
         * `DECLINED` - Declined
         * `EXPIRED` - Expired
         * `REVOKED` - Revoked
+    OperationsApplicationQueueItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PartnerApplicationStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        review_assigned_to_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - display_name
+      - id
+      - review_assigned_at
+      - review_assigned_to_id
+      - status
+      - submitted_at
+      - updated_at
+      - version
+    OperationsApplicationQueuePage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsApplicationQueueItem'
+          readOnly: true
+      required:
+      - next
+      - previous
+      - results
     OperationsDocumentReviewRequest:
       type: object
       properties:
@@ -1912,12 +2456,16 @@ components:
         resend_after_seconds:
           type: integer
           readOnly: true
+        code_length:
+          type: integer
+          readOnly: true
         development_code:
           type: string
           readOnly: true
           nullable: true
       required:
       - challenge_id
+      - code_length
       - development_code
       - expires_in_seconds
       - resend_after_seconds
@@ -1949,7 +2497,6 @@ components:
           writeOnly: true
           minLength: 6
           maxLength: 6
-          pattern: ^\d{6}$
         device_identifier:
           type: string
           writeOnly: true
@@ -2012,6 +2559,16 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        review_assigned_to_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        review_assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         reviewed_at:
           type: string
           format: date-time
@@ -2050,6 +2607,8 @@ components:
       - experience_years
       - id
       - partner_id
+      - review_assigned_at
+      - review_assigned_to_id
       - reviewed_at
       - service_area_ids
       - service_variant_ids
@@ -2274,6 +2833,37 @@ components:
       - id
       - purpose
       - withdrawn_at
+    PartnerConsentDocument:
+      type: object
+      properties:
+        purpose:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        title:
+          type: string
+          readOnly: true
+        document_version:
+          type: string
+          readOnly: true
+        document_url:
+          type: string
+          format: uri
+          readOnly: true
+        is_required_for_submission:
+          type: boolean
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - document_url
+      - document_version
+      - is_required_for_submission
+      - published_at
+      - purpose
+      - title
     PartnerConsentInputRequest:
       type: object
       properties:
@@ -2312,6 +2902,15 @@ components:
         sha256:
           type: string
           readOnly: true
+        scan_status:
+          allOf:
+          - $ref: '#/components/schemas/ScanStatusEnum'
+          readOnly: true
+        scanned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         status:
           allOf:
           - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
@@ -2334,43 +2933,25 @@ components:
       - kind
       - review_reason
       - reviewed_at
+      - scan_status
+      - scanned_at
       - sha256
       - size_bytes
       - status
       - uploaded_at
       - version
-    PartnerDocumentCreateRequest:
+    PartnerDocumentFinalizeRequest:
       type: object
       properties:
         expected_version:
           type: integer
           minimum: 1
-        kind:
-          $ref: '#/components/schemas/PartnerDocumentKindEnum'
-        object_key:
+        upload_id:
           type: string
-          minLength: 1
-          maxLength: 500
-        content_type:
-          type: string
-          minLength: 1
-          maxLength: 120
-        size_bytes:
-          type: integer
-          maximum: 20971520
-          minimum: 1
-        sha256:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[0-9a-f]{64}$
+          format: uuid
       required:
-      - content_type
       - expected_version
-      - kind
-      - object_key
-      - sha256
-      - size_bytes
+      - upload_id
     PartnerDocumentKindEnum:
       enum:
       - GOVERNMENT_ID
@@ -2387,6 +2968,20 @@ components:
         * `BANK` - Bank document
         * `BACKGROUND_CHECK` - Background check
         * `OTHER` - Other
+    PartnerDocumentReviewAccess:
+      type: object
+      properties:
+        review_url:
+          type: string
+          format: uri
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - expires_at
+      - review_url
     PartnerDocumentStatusEnum:
       enum:
       - PENDING
@@ -2399,6 +2994,80 @@ components:
         * `APPROVED` - Approved
         * `REJECTED` - Rejected
         * `SUPERSEDED` - Superseded
+    PartnerDocumentUpload:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        object_key:
+          type: string
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        sha256:
+          type: string
+          readOnly: true
+        upload_url:
+          type: string
+          format: uri
+          readOnly: true
+        upload_token:
+          type: string
+          readOnly: true
+        resumable_url:
+          type: string
+          format: uri
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - content_type
+      - expires_at
+      - id
+      - kind
+      - object_key
+      - resumable_url
+      - sha256
+      - size_bytes
+      - upload_token
+      - upload_url
+    PartnerDocumentUploadRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        kind:
+          $ref: '#/components/schemas/PartnerDocumentKindEnum'
+        content_type:
+          $ref: '#/components/schemas/ContentTypeEnum'
+        size_bytes:
+          type: integer
+          maximum: 20971520
+          minimum: 1
+        sha256:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[0-9a-f]{64}$
+      required:
+      - content_type
+      - expected_version
+      - kind
+      - sha256
+      - size_bytes
     PartnerGoOnlineRequest:
       type: object
       properties:
@@ -2518,6 +3187,49 @@ components:
       required:
       - exceptions
       - rules
+    PartnerServiceAreaOption:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        is_accepting_partners:
+          type: boolean
+          readOnly: true
+      required:
+      - id
+      - is_accepting_partners
+      - name
+      - slug
+      - timezone
+    PartnerSkillOption:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - description
+      - name
     PatchedAddressRequest:
       type: object
       properties:
@@ -2806,6 +3518,18 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
       required:
       - role
+    ScanStatusEnum:
+      enum:
+      - PENDING
+      - CLEAN
+      - REJECTED
+      - FAILED
+      type: string
+      description: |-
+        * `PENDING` - Pending scan
+        * `CLEAN` - Clean
+        * `REJECTED` - Rejected
+        * `FAILED` - Scan failed
     ServiceArea:
       type: object
       properties:
@@ -3175,6 +3899,27 @@ components:
       - reason_code
       - server_now
       - service_area
+    SessionState:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+          nullable: true
+        active_role:
+          type: string
+          readOnly: true
+          nullable: true
+        session_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - active_role
+      - session_expires_at
+      - user
     SourceEnum:
       enum:
       - MANUAL

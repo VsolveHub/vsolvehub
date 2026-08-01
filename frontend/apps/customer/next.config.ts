@@ -14,7 +14,11 @@ const nextConfig: NextConfig = {
   turbopack: { root: workspaceRoot },
   logging: {
     fetches: {
-      fullUrl: true,
+      // Development only. A full URL carries the query string, which on this
+      // API means address ids, service-area ids and phone-number-derived paths.
+      // Those belong in a developer's terminal, never in a production log line
+      // that ships to an aggregator.
+      fullUrl: process.env.NODE_ENV !== "production",
     },
   },
   // Strip console.* from production bundles (keep warnings/errors for triage).

@@ -1,5 +1,7 @@
 """Partner domain failures with stable API-facing codes."""
 
+import uuid
+
 
 class PartnerDomainError(RuntimeError):
     def __init__(
@@ -52,6 +54,38 @@ class PartnerApplicationIncompleteError(PartnerDomainError):
             message=message,
             status_code=409,
         )
+
+
+class PartnerDocumentUploadError(PartnerDomainError):
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(
+            code="partner_document_upload_unavailable"
+            if retryable
+            else "partner_document_upload_invalid",
+            message=message,
+            status_code=503 if retryable else 409,
+            retryable=retryable,
+        )
+
+
+class PartnerReviewOwnershipError(PartnerDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="partner_review_ownership_conflict",
+            message=message,
+            status_code=409,
+        )
+
+
+class PartnerSelfReviewError(PartnerDomainError):
+    def __init__(self, *, object_type: str, object_id: uuid.UUID) -> None:
+        super().__init__(
+            code="partner_self_review_forbidden",
+            message="You cannot review your own Partner record.",
+            status_code=403,
+        )
+        self.object_type = object_type
+        self.object_id = object_id
 
 
 class PartnerEligibilityError(PartnerDomainError):

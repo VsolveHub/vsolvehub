@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import type { Schemas } from "@vsolve/api-client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   committedSessionFixture,
@@ -10,12 +11,13 @@ import {
   twoBandQuoteViewFixture,
   windowsViewFixture,
 } from "../adapters/view-fixtures";
+import { AddressStage, isGeocoded } from "./address-stage";
 import { CancellationLadder } from "./cancellation-ladder";
 import { FindingStage } from "./finding-stage";
 import { PriceSummary } from "./price-summary";
 import { TaskPicker } from "./task-picker";
 import { WindowStage } from "./window-stage";
-import { WorkspaceProvider } from "./workspace-context";
+import { useWorkspace, WorkspaceProvider } from "./workspace-context";
 
 /**
  * Component-level checks for the rules a reducer test cannot see: what is
@@ -39,6 +41,121 @@ const TASKS = [
   { code: "fan-installation", label: "Fan installation", unitPricePaise: 24900 },
   { code: "light-led-installation", label: "LED light installation", unitPricePaise: 12900 },
 ];
+
+const ADDRESS = {
+  id: "addr_1",
+  label: "Home",
+  line1: "Flat 402",
+  locality: "Kukatpally",
+  city: "Hyderabad",
+  state: "Telangana",
+  postal_code: "500072",
+  country_code: "IN",
+  latitude: "17.494700",
+  longitude: "78.399500",
+  source: "REVERSE_GEOCODED",
+  confirmed_at: "2026-07-30T09:00:00Z",
+  created_at: "2026-07-30T09:00:00Z",
+  updated_at: "2026-07-30T09:00:00Z",
+} as Schemas["Address"];
+
+function AddressStageHarness({
+  addresses,
+  onUseCurrentLocation = () => undefined,
+  onUpdateAddress = () => undefined,
+  locationError = null,
+  updateError = null,
+}: {
+  addresses: readonly Schemas["Address"][];
+  onUseCurrentLocation?: () => void;
+  onUpdateAddress?: (
+    addressId: string,
+    patch: Schemas["PatchedAddressRequest"],
+  ) => void;
+  locationError?: string | null;
+  updateError?: string | null;
+}) {
+  const { dispatch } = useWorkspace();
+
+  return (
+    <AddressStage
+      addresses={addresses}
+      isLoading={false}
+      serviceability={null}
+      isCheckingServiceability={false}
+      onSelect={(address) =>
+        dispatch({
+          type: "SET_ADDRESS",
+          address: {
+            id: address.id,
+            postalCode: address.postal_code,
+            isGeocoded: isGeocoded(address),
+            isServiceable: false,
+          },
+        })
+      }
+      onUseCurrentLocation={onUseCurrentLocation}
+      isUsingCurrentLocation={false}
+      locationError={locationError}
+      onUpdateAddress={onUpdateAddress}
+      isUpdatingAddress={false}
+      updateError={updateError}
+    />
+  );
+}
+
+describe("address stage", () => {
+  it("asks for a pinned location when no saved addresses exist", () => {
+    const onUseCurrentLocation = vi.fn();
+    renderInWorkspace(
+      <AddressStageHarness addresses={[]} onUseCurrentLocation={onUseCurrentLocation} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /use my current location/i }));
+    expect(onUseCurrentLocation).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/server reverse-geocodes/i)).toBeInTheDocument();
+  });
+
+  it("selects a saved address and checks serviceability separately", () => {
+    renderInWorkspace(<AddressStageHarness addresses={[ADDRESS]} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
+    expect(screen.getByRole("radio", { name: /home/i })).toBeChecked();
+    expect(screen.queryByText(/we cover this area/i)).not.toBeInTheDocument();
+  });
+
+  it("edits the selected address without changing its pin", () => {
+    const onUpdateAddress = vi.fn();
+    renderInWorkspace(
+      <AddressStageHarness addresses={[ADDRESS]} onUpdateAddress={onUpdateAddress} />,
+    );
+
+    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
+    fireEvent.change(screen.getByLabelText(/house, flat or building/i), {
+      target: { value: "Flat 501" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save address/i }));
+
+    expect(onUpdateAddress).toHaveBeenCalledWith(
+      "addr_1",
+      expect.objectContaining({ line1: "Flat 501" }),
+    );
+  });
+
+  it("shows address mutation errors beside the relevant action", () => {
+    renderInWorkspace(
+      <AddressStageHarness
+        addresses={[ADDRESS]}
+        locationError="Location permission was denied."
+        updateError="This PIN code is invalid."
+      />,
+    );
+
+    expect(screen.getByText(/location permission was denied/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
+    expect(screen.getByText(/this pin code is invalid/i)).toBeInTheDocument();
+  });
+});
 
 describe("task picker", () => {
   it("selects nothing by default", () => {

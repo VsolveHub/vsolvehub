@@ -35,6 +35,13 @@ export type WorkspaceAction =
   | { type: "SELECT_WINDOW"; windowId: string; isAvailable: boolean }
   /** The window was taken before checkout could claim it. Returns to selection. */
   | { type: "WINDOW_LOST" }
+  /**
+   * A signed-in action was reached while anonymous, or the session ended
+   * mid-booking. `returnTo` is where the customer is put back afterwards.
+   */
+  | { type: "REQUIRE_LOGIN"; returnTo: Stage }
+  /** Django established a session. Hands control back to the origin stage. */
+  | { type: "LOGIN_COMPLETED" }
   | { type: "ADVANCE" }
   | { type: "BACK" }
   | { type: "GO_TO_STAGE"; stage: Stage };
@@ -143,7 +150,28 @@ export function workspaceReducer(
         visited: forgetVisitedFrom(state, ["window", "review"]),
       };
 
+    case "REQUIRE_LOGIN": {
+      if (state.stage === "login") return state;
+      // Nothing the customer has configured is touched. That is the whole point
+      // of the action: an interruption must not cost them the form.
+      return {
+        ...state,
+        stage: "login",
+        resumeStage: action.returnTo,
+        visited: remember(state.visited, state.stage),
+      };
+    }
+
+    case "LOGIN_COMPLETED": {
+      if (state.stage !== "login" || state.resumeStage === null) return state;
+      return { ...state, stage: state.resumeStage, resumeStage: null };
+    }
+
     case "ADVANCE": {
+      // Login is left by LOGIN_COMPLETED and by nothing else. Letting the
+      // ordinary Continue advance past it would walk an unauthenticated
+      // customer straight into the Partner search.
+      if (state.stage === "login") return state;
       if (!canAdvance(state)) return state;
       const target = nextStage(state.stage);
       if (target === null) return state;
@@ -151,10 +179,18 @@ export function workspaceReducer(
     }
 
     case "BACK": {
-      const target = previousStage(state.stage);
-      if (target === null) return state;
       // Symmetric with `canNavigateTo`: no way back out of a committed stage.
       if (isCommitted(state.stage)) return state;
+
+      // Backing out of login is cancelling it, so it returns to where the
+      // interrupt was raised — which is rarely the stage that precedes login in
+      // the sequence.
+      if (state.stage === "login" && state.resumeStage !== null) {
+        return { ...state, stage: state.resumeStage, resumeStage: null };
+      }
+
+      const target = previousStage(state.stage);
+      if (target === null) return state;
       return { ...state, stage: target };
     }
 

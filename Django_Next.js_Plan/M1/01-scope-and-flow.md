@@ -21,12 +21,12 @@ owning milestone.
 
 ```text
 service detail
+  → OTP login/resume
   → confirmed address and serviceability
   → task scope/quantity
   → estimated duration (display only)
   → Today or Scheduled window
   → itemized quote and cancellation policy
-  → OTP login/resume
   → Finding a professional
   → Partner accepts and the no-fault undo window closes
   → Customer pays within reservation expiry
@@ -39,8 +39,14 @@ service detail
   → invoice/refund and closure
 ```
 
-No stage auto-selects timing or claims availability before the server response. Back/login/refresh
-preserve safe intent. The Customer may cancel Partner search without charge.
+M1 is login-first at the address boundary: Django does not persist anonymous address PII. The login
+remains a resumable interrupt, so catalog intent survives. No stage auto-selects timing or claims
+availability before the server response. Back/login/refresh preserve safe intent. The Customer may
+cancel Partner search without charge.
+
+The one-item M1 cart is continuity infrastructure, not a separate `/cart` product route. Replacing a
+different configured item requires an explicit server conflict and Customer confirmation; it never
+silently deletes prior intent.
 
 ## Partner journey
 
@@ -58,6 +64,10 @@ OTP → application/KYC/skills/area/availability → Operations approval
 
 Declining an offer has no automatic consequence. Accepted-job release remains available with reason.
 M1 records late release/stall/no-show for manual Operations review only.
+
+The M1 Partner inbox uses bounded short polling against a replayable server projection. Polling only
+observes offers; Celery owns candidate advance, offer/undo/payment expiry and every state transition,
+so closing or backgrounding a browser cannot stop dispatch.
 
 ## Operations journey
 

@@ -89,6 +89,13 @@ class ServiceAreaSerializer(serializers.ModelSerializer[ServiceArea]):
         read_only_fields = fields
 
 
+class PartnerServiceAreaOptionSerializer(serializers.ModelSerializer[ServiceArea]):
+    class Meta:
+        model = ServiceArea
+        fields = ("id", "slug", "name", "timezone", "is_accepting_partners")
+        read_only_fields = fields
+
+
 class ServiceabilityResponseSerializer(serializers.Serializer[dict[str, object]]):
     is_serviceable = serializers.BooleanField(read_only=True)
     reason_code = serializers.CharField(read_only=True, allow_null=True)

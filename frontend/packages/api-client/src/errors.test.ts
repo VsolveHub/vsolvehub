@@ -24,16 +24,16 @@ describe("parseErrorEnvelope", () => {
   it("accepts a contract-shaped envelope", () => {
     const parsed = parseErrorEnvelope({
       error: {
-        code: "QUOTE_EXPIRED",
-        message: "Price changed.",
+        code: "invalid_otp",
+        message: "The code is invalid or expired.",
         details: null,
         retryable: true,
         request_id: "r1",
       },
     });
     expect(parsed).toEqual({
-      code: "QUOTE_EXPIRED",
-      message: "Price changed.",
+      code: "invalid_otp",
+      message: "The code is invalid or expired.",
       details: null,
       retryable: true,
       request_id: "r1",
@@ -79,47 +79,70 @@ describe("ApiRequestError transport retryability", () => {
   });
 
   it("does not treat the server's semantic hint as permission to auto-retry", () => {
-    // SLOT_NO_LONGER_AVAILABLE is retryable:true because booking again after
-    // choosing another slot works — not because resending this request would.
-    // Conflating the two would resend a payment on a 409.
-    const error = new ApiRequestError(409, detail("SLOT_NO_LONGER_AVAILABLE", { retryable: true }));
+    // Django marks partner_application_version_conflict retryable:true because
+    // saving again *after refetching the new version* works — not because
+    // resending this exact request would. Conflating the two would overwrite a
+    // reviewer's decision with a stale version.
+    const error = new ApiRequestError(
+      409,
+      detail("partner_application_version_conflict", { retryable: true }),
+    );
     expect(error.retryable).toBe(true);
     expect(error.isTransportRetryable).toBe(false);
   });
 
   it("never retries a conflict, because the world changed", () => {
-    // Retrying an identical request after 409 just fails again. The user has to
-    // choose a different slot or provider.
-    const error = new ApiRequestError(409, detail("SLOT_NO_LONGER_AVAILABLE"));
+    // Retrying an identical request after 409 just fails again. The caller has
+    // to read the new server state first.
+    const error = new ApiRequestError(409, detail("address_archived"));
     expect(error.isTransportRetryable).toBe(false);
     expect(error.recovery).toBe("choose_again");
   });
 
   it("never retries validation or authorization failures", () => {
-    expect(new ApiRequestError(422, detail("VALIDATION_ERROR")).isTransportRetryable).toBe(false);
-    expect(new ApiRequestError(401, detail("SESSION_EXPIRED")).isTransportRetryable).toBe(false);
-    expect(new ApiRequestError(403, detail("PERMISSION_DENIED")).isTransportRetryable).toBe(false);
+    expect(new ApiRequestError(422, detail("validation_error")).isTransportRetryable).toBe(false);
+    expect(new ApiRequestError(401, detail("session_expired")).isTransportRetryable).toBe(false);
+    expect(new ApiRequestError(403, detail("permission_denied")).isTransportRetryable).toBe(false);
   });
 });
 
 describe("ApiRequestError recovery mapping", () => {
-  it("maps known domain codes to their recovery intent", () => {
-    expect(new ApiRequestError(409, detail("CAPACITY_HOLD_EXPIRED")).recovery).toBe("choose_again");
-    expect(new ApiRequestError(400, detail("PAYMENT_METHOD_REQUIRED")).recovery).toBe(
-      "add_payment_method",
+  it("maps the lowercase codes Django actually emits", () => {
+    // Every code here is a real `default_code` or DRF code from the backend.
+    // The table was previously keyed SCREAMING_CASE, so none of them matched and
+    // the whole mapping was dead. These assertions fail if that regresses.
+    expect(new ApiRequestError(400, detail("invalid_otp")).recovery).toBe("fix_input");
+    expect(new ApiRequestError(429, detail("throttled")).recovery).toBe("retry");
+    expect(new ApiRequestError(503, detail("otp_unavailable")).recovery).toBe("retry");
+    expect(new ApiRequestError(401, detail("session_expired")).recovery).toBe("reauthenticate");
+    expect(new ApiRequestError(401, detail("not_authenticated")).recovery).toBe("reauthenticate");
+    expect(new ApiRequestError(400, detail("validation_error")).recovery).toBe("fix_input");
+    expect(new ApiRequestError(409, detail("idempotency_in_progress")).recovery).toBe(
+      "await_confirmation",
     );
-    expect(new ApiRequestError(402, detail("PAYMENT_PENDING")).recovery).toBe("await_confirmation");
-    expect(new ApiRequestError(401, detail("AUTHENTICATION_REQUIRED")).recovery).toBe(
-      "reauthenticate",
-    );
+    expect(new ApiRequestError(409, detail("address_archived")).recovery).toBe("choose_again");
+    expect(
+      new ApiRequestError(403, detail("partner_self_review_forbidden")).recovery,
+    ).toBe("contact_support");
+  });
+
+  it("does not match a code that only differs by casing", () => {
+    // The regression that made the old table dead code. An uppercase variant is
+    // not a Django code, so it must take the status fallback rather than a
+    // lucky match.
+    expect(new ApiRequestError(400, detail("INVALID_OTP")).recovery).toBe("fix_input");
+    expect(new ApiRequestError(409, detail("ADDRESS_ARCHIVED")).recovery).toBe("choose_again");
+    expect(new ApiRequestError(503, detail("OTP_UNAVAILABLE")).recovery).toBe("retry");
   });
 
   it("falls back to status-based recovery for an unknown code", () => {
-    // A newly added backend code must degrade sensibly, not crash the screen.
-    expect(new ApiRequestError(401, detail("SOME_FUTURE_CODE")).recovery).toBe("reauthenticate");
-    expect(new ApiRequestError(409, detail("SOME_FUTURE_CODE")).recovery).toBe("choose_again");
-    expect(new ApiRequestError(503, detail("SOME_FUTURE_CODE")).recovery).toBe("retry");
-    expect(new ApiRequestError(418, detail("SOME_FUTURE_CODE")).recovery).toBe("contact_support");
+    // A code added by a newer deployment must degrade sensibly, not crash the
+    // screen — codes for unbuilt domains are deliberately absent from the table.
+    expect(new ApiRequestError(401, detail("some_future_code")).recovery).toBe("reauthenticate");
+    expect(new ApiRequestError(409, detail("some_future_code")).recovery).toBe("choose_again");
+    expect(new ApiRequestError(503, detail("some_future_code")).recovery).toBe("retry");
+    expect(new ApiRequestError(418, detail("some_future_code")).recovery).toBe("contact_support");
+    expect(new ApiRequestError(400, detail("quote_expired")).recovery).toBe("fix_input");
   });
 });
 
@@ -127,13 +150,31 @@ describe("ApiRequestError.fieldErrors", () => {
   it("normalises string and array field details", () => {
     const error = new ApiRequestError(
       422,
-      detail("VALIDATION_ERROR", {
+      detail("validation_error", {
         details: { postal_code: "Not serviceable.", phone_number: ["Too short.", "Invalid."] },
       }),
     );
     expect(error.fieldErrors).toEqual({
       postal_code: ["Not serviceable."],
       phone_number: ["Too short.", "Invalid."],
+    });
+  });
+
+  it("reads the {message, code} objects Django's envelope actually emits", () => {
+    // `common/errors/handler.py` serialises every DRF ErrorDetail this way, so
+    // a validation failure never arrives as a list of plain strings.
+    const error = new ApiRequestError(
+      400,
+      detail("validation_error", {
+        details: {
+          phone_number: [{ message: "Enter a valid phone number.", code: "invalid" }],
+          code: { message: "This field is required.", code: "required" },
+        },
+      }),
+    );
+    expect(error.fieldErrors).toEqual({
+      phone_number: ["Enter a valid phone number."],
+      code: ["This field is required."],
     });
   });
 

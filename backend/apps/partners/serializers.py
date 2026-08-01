@@ -11,8 +11,10 @@ from apps.partners.models import (
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerConsent,
+    PartnerConsentDocument,
     PartnerDocument,
     PartnerOnlineSession,
+    Skill,
 )
 
 
@@ -23,22 +25,22 @@ class PartnerConsentInputSerializer(serializers.Serializer[dict[str, object]]):
 
 class PartnerApplicationUpdateSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(required=False, min_value=1)
-    display_name = serializers.CharField(max_length=120, trim_whitespace=True)
+    display_name = serializers.CharField(required=False, max_length=120, trim_whitespace=True)
     biography = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     experience_years = serializers.IntegerField(required=False, min_value=0, max_value=80)
     skill_codes = serializers.ListField(
         child=serializers.SlugField(max_length=100),
-        allow_empty=False,
+        required=False,
     )
     service_variant_ids = serializers.ListField(
         child=serializers.UUIDField(),
-        allow_empty=False,
+        required=False,
     )
     service_area_ids = serializers.ListField(
         child=serializers.UUIDField(),
-        allow_empty=False,
+        required=False,
     )
-    consents = PartnerConsentInputSerializer(many=True)
+    consents = PartnerConsentInputSerializer(many=True, required=False)
     device_identifier = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -48,19 +50,50 @@ class PartnerApplicationUpdateSerializer(serializers.Serializer[dict[str, object
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         for field in ("skill_codes", "service_variant_ids", "service_area_ids"):
-            values = attrs[field]
+            values = attrs.get(field)
             if isinstance(values, list) and len(values) != len(set(values)):
                 raise serializers.ValidationError({field: "Duplicate values are not allowed."})
+        consents = attrs.get("consents")
+        if isinstance(consents, list):
+            purposes = [consent["purpose"] for consent in consents]
+            if len(purposes) != len(set(purposes)):
+                raise serializers.ValidationError(
+                    {"consents": "Only one acceptance per consent purpose is allowed."},
+                )
+        mutable_fields = set(attrs) - {"expected_version", "device_identifier"}
+        if not mutable_fields:
+            raise serializers.ValidationError(
+                "Supply at least one application field to update.",
+            )
         return attrs
 
 
-class PartnerDocumentCreateSerializer(serializers.Serializer[dict[str, object]]):
+class PartnerDocumentUploadRequestSerializer(serializers.Serializer[dict[str, object]]):
     expected_version = serializers.IntegerField(min_value=1)
     kind = serializers.ChoiceField(choices=PartnerDocument.Kind.choices)
-    object_key = serializers.CharField(max_length=500)
-    content_type = serializers.CharField(max_length=120)
+    content_type = serializers.ChoiceField(
+        choices=("image/jpeg", "image/png", "application/pdf"),
+    )
     size_bytes = serializers.IntegerField(min_value=1, max_value=20 * 1024 * 1024)
     sha256 = serializers.RegexField(regex=r"^[0-9a-f]{64}$", max_length=64)
+
+
+class PartnerDocumentUploadSerializer(serializers.Serializer[dict[str, object]]):
+    id = serializers.UUIDField(read_only=True)
+    kind = serializers.ChoiceField(choices=PartnerDocument.Kind.choices, read_only=True)
+    object_key = serializers.CharField(read_only=True)
+    content_type = serializers.CharField(read_only=True)
+    size_bytes = serializers.IntegerField(read_only=True)
+    sha256 = serializers.CharField(read_only=True)
+    upload_url = serializers.URLField(read_only=True)
+    upload_token = serializers.CharField(read_only=True)
+    resumable_url = serializers.URLField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+
+
+class PartnerDocumentFinalizeSerializer(serializers.Serializer[dict[str, object]]):
+    expected_version = serializers.IntegerField(min_value=1)
+    upload_id = serializers.UUIDField()
 
 
 class ExpectedVersionSerializer(serializers.Serializer[dict[str, object]]):
@@ -88,10 +121,57 @@ class OperationsDocumentReviewSerializer(serializers.Serializer[dict[str, object
     reason = serializers.CharField(required=False, allow_blank=True, max_length=2000)
 
 
+class OperationsApplicationQueueQuerySerializer(serializers.Serializer[dict[str, object]]):
+    status = serializers.ChoiceField(
+        choices=(
+            PartnerApplication.Status.SUBMITTED,
+            PartnerApplication.Status.UNDER_REVIEW,
+            PartnerApplication.Status.CHANGES_REQUIRED,
+        ),
+        required=False,
+    )
+    assigned_to_me = serializers.BooleanField(required=False, default=False)
+    unassigned = serializers.BooleanField(required=False, default=False)
+    cursor = serializers.CharField(required=False, write_only=True)
+
+    def validate(self, attrs: dict[str, object]) -> dict[str, object]:
+        if attrs.get("assigned_to_me") and attrs.get("unassigned"):
+            raise serializers.ValidationError(
+                "Choose either assigned_to_me or unassigned, not both.",
+            )
+        return attrs
+
+
+class PartnerDocumentReviewAccessSerializer(serializers.Serializer[dict[str, object]]):
+    review_url = serializers.URLField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+
+
 class PartnerConsentSerializer(serializers.ModelSerializer[PartnerConsent]):
     class Meta:
         model = PartnerConsent
         fields = ("id", "purpose", "document_version", "accepted_at", "withdrawn_at")
+        read_only_fields = fields
+
+
+class PartnerConsentDocumentSerializer(serializers.ModelSerializer[PartnerConsentDocument]):
+    class Meta:
+        model = PartnerConsentDocument
+        fields = (
+            "purpose",
+            "title",
+            "document_version",
+            "document_url",
+            "is_required_for_submission",
+            "published_at",
+        )
+        read_only_fields = fields
+
+
+class PartnerSkillOptionSerializer(serializers.ModelSerializer[Skill]):
+    class Meta:
+        model = Skill
+        fields = ("code", "name", "description")
         read_only_fields = fields
 
 
@@ -105,12 +185,41 @@ class PartnerDocumentSerializer(serializers.ModelSerializer[PartnerDocument]):
             "content_type",
             "size_bytes",
             "sha256",
+            "scan_status",
+            "scanned_at",
             "status",
             "review_reason",
             "uploaded_at",
             "reviewed_at",
         )
         read_only_fields = fields
+
+
+class OperationsApplicationQueueItemSerializer(
+    serializers.ModelSerializer[PartnerApplication],
+):
+    display_name = serializers.CharField(source="partner.display_name", read_only=True)
+    review_assigned_to_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = PartnerApplication
+        fields = (
+            "id",
+            "status",
+            "version",
+            "display_name",
+            "submitted_at",
+            "review_assigned_to_id",
+            "review_assigned_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class OperationsApplicationQueuePageSerializer(serializers.Serializer[dict[str, object]]):
+    next = serializers.URLField(read_only=True, allow_null=True)
+    previous = serializers.URLField(read_only=True, allow_null=True)
+    results = OperationsApplicationQueueItemSerializer(many=True, read_only=True)
 
 
 class PartnerApplicationTransitionSerializer(
@@ -132,6 +241,7 @@ class PartnerApplicationTransitionSerializer(
 
 class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplication]):
     partner_id = serializers.UUIDField(source="partner.id", read_only=True)
+    review_assigned_to_id = serializers.UUIDField(read_only=True, allow_null=True)
     display_name = serializers.CharField(source="partner.display_name", read_only=True)
     biography = serializers.CharField(source="partner.biography", read_only=True)
     experience_years = serializers.IntegerField(
@@ -160,6 +270,8 @@ class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplicatio
             "service_area_ids",
             "change_request_message",
             "submitted_at",
+            "review_assigned_to_id",
+            "review_assigned_at",
             "reviewed_at",
             "consents",
             "documents",

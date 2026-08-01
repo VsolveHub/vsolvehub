@@ -65,6 +65,16 @@ export interface WorkspaceState {
   taskLines: readonly TaskLine[];
   /** Null until chosen. No window is ever auto-selected — F2 criterion. */
   windowId: string | null;
+  /**
+   * Where to return once the customer has logged in.
+   *
+   * Login is an interrupt, not a step the customer walks through: it is raised
+   * from whichever stage first needs a session, and it hands control straight
+   * back. Recording the origin is what makes "resume without losing anything"
+   * a property of the machine rather than of whichever component happened to
+   * trigger it.
+   */
+  resumeStage: Stage | null;
 }
 
 export function initialState(serviceSlug: string): WorkspaceState {
@@ -78,6 +88,7 @@ export function initialState(serviceSlug: string): WorkspaceState {
     notes: "",
     taskLines: [],
     windowId: null,
+    resumeStage: null,
   };
 }
 

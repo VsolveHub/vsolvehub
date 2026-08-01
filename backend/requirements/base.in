@@ -8,4 +8,5 @@ djangorestframework>=3.17.1,<3.18
 drf-spectacular>=0.28,<0.29
 phonenumbers>=9,<10
 psycopg[binary,pool]>=3.2,<4
+requests>=2.34,<3
 structlog>=25,<26

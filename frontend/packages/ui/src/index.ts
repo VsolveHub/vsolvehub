@@ -31,6 +31,10 @@ export { ToastProvider, useToast } from "./toast";
 // Navigation
 export { Stepper } from "./stepper";
 
+// Authentication. Presentational only — pair with `useOtpFlow` from @vsolve/query.
+export { OtpForm } from "./otp-form";
+export type { OtpFormProps } from "./otp-form";
+
 // Brand
 export { Logo } from "./logo";
 

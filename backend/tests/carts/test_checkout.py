@@ -8,7 +8,8 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ServiceVariant
-from apps.identity.models import ConsentReceipt, User
+from apps.identity.models import ConsentReceipt, Role, User, UserRole
+from tests.helpers import force_role_client
 
 pytestmark = pytest.mark.django_db
 
@@ -95,8 +96,9 @@ def test_assisted_checkout_requires_customer_consent_and_uses_same_quote() -> No
     customer = User.objects.create_user(phone_number="+919876543210")
     _, quote_id = _customer_quote(customer=customer)
     operations = User.objects.create_user(phone_number="+919876543211", is_staff=True)
-    client = APIClient()
-    client.force_authenticate(operations)
+    operations_role = Role.objects.create(code="operations", name="Operations", is_system=True)
+    UserRole.objects.create(user=operations, role=operations_role)
+    client = force_role_client(user=operations, role_code="operations")
     payload = {
         "customer_id": str(customer.id),
         "quote_id": quote_id,

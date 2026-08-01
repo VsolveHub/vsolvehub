@@ -13,10 +13,10 @@ Operations Next.js┘                         │
                                             └── payment, messaging, maps and verification adapters
 ```
 
-- `web/apps/admin` remains the physical application and is labelled Operations.
+- `frontend/apps/admin` remains the physical application and is labelled Operations.
 - Public pages may use Server Components; authenticated workspaces use React client components and
   TanStack Query.
-- Django publishes OpenAPI. `web/packages/api-client` is generated and never hand-edited.
+- Django publishes OpenAPI. `frontend/packages/api-client` is generated and never hand-edited.
 - The system remains a modular monolith until scale or organization boundaries justify an ADR.
 
 ## Stable domain boundaries
@@ -79,10 +79,10 @@ bounded.
 ```text
 backend/                 Django, Celery and migrations
 contracts/openapi/       generated public API contract
-web/apps/customer/       Customer Next.js
-web/apps/partner/        Partner Next.js
-web/apps/admin/          Operations Next.js
-web/packages/            UI, query, generated client and testing
+frontend/apps/customer/  Customer Next.js
+frontend/apps/partner/   Partner Next.js
+frontend/apps/admin/     Operations Next.js
+frontend/packages/       UI, query, generated client and testing
 infra/                   local and deployment infrastructure
 docs/adr/                accepted architecture decisions
 docs/runbooks/           production recovery
@@ -110,4 +110,3 @@ complete vertical slice. Prisma and Django must never write the same production 
 - Cross-tab session and checkout coordination improves UX; backend idempotency remains authoritative.
 - Bounded polling is acceptable as transport recovery. Browser activity never drives dispatch or
   expiry.
-

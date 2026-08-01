@@ -9,7 +9,9 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.identity.hashing import keyed_hash
-from apps.identity.models import User, UserSession
+from apps.identity.models import AccessAuditEvent, User, UserRole, UserSession
+from apps.identity.services import record_access_event
+from common.observability.context import get_request_id
 
 
 def has_active_session_role(*, request: Request, role_code: str) -> bool:
@@ -18,6 +20,12 @@ def has_active_session_role(*, request: Request, role_code: str) -> bool:
         return False
     session_key = request.session.session_key
     if not session_key:
+        return False
+    if not UserRole.objects.filter(
+        user=user,
+        role__code=role_code,
+        revoked_at__isnull=True,
+    ).exists():
         return False
     return UserSession.objects.filter(
         user=user,
@@ -35,12 +43,19 @@ class IsOperationsUser(BasePermission):
         user = request.user
         if not isinstance(user, User) or not user.is_authenticated or not user.is_active:
             return False
-        if user.is_staff or user.is_superuser:
-            return True
-        return user.userrole_set.filter(
-            role__code="operations",
-            revoked_at__isnull=True,
-        ).exists()
+        allowed = has_active_session_role(request=request, role_code="operations")
+        record_access_event(
+            actor=user,
+            subject_user=user,
+            action="authorization.operations_api",
+            object_type=_view.__class__.__name__,
+            decision=(
+                AccessAuditEvent.Decision.ALLOWED if allowed else AccessAuditEvent.Decision.DENIED
+            ),
+            request_id=get_request_id() or "",
+            metadata={"method": request.method},
+        )
+        return allowed
 
 
 class IsPartnerUser(BasePermission):

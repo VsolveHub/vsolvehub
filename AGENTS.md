@@ -6,8 +6,8 @@
 - PostgreSQL is the system of record; Redis is ephemeral coordination/cache infrastructure.
 - Customer, Partner and the existing `admin` application use Next.js App Router in Milestone 1.
 - Interactive authenticated workspaces use React client components and TanStack Query.
-- `web/apps/admin` is the physical application name; its product label is Operations. Do not
-  create `web/apps/operations` or perform a Vite/framework migration in Milestone 1.
+- `frontend/apps/admin` is the physical application name; its product label is Operations. Do not
+  create `frontend/apps/operations` or perform a Vite/framework migration in Milestone 1.
 - Frontends consume `contracts/openapi/v1.yaml` through generated clients.
 - No frontend application may connect directly to PostgreSQL. Prisma is forbidden in the new
   implementation; legacy Prisma files are read-only migration reference until removal.
@@ -25,11 +25,11 @@ Codex owns:
 
 Claude owns:
 
-- `web/apps/**`
-- `web/packages/ui/**`
-- `web/packages/query/**`
-- `web/packages/api-client/**`
-- `web/packages/testing/**`
+- `frontend/apps/**`
+- `frontend/packages/ui/**`
+- `frontend/packages/query/**`
+- `frontend/packages/api-client/**`
+- `frontend/packages/testing/**`
 - `contracts/proposals/**`
 
 Claude may document a required endpoint, example payload and user-visible error in

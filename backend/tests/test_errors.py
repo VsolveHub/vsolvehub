@@ -33,7 +33,7 @@ def test_expected_api_error_does_not_expose_internal_shape() -> None:
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert payload["code"] == "not_found"
-    assert payload["message"] == "Not Found"
+    assert payload["message"] == "Booking was not found."
     assert payload["details"] == {
         "message": "Booking was not found.",
         "code": "not_found",

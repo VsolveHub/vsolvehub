@@ -1,6 +1,6 @@
-# Proposal 0001 — Response examples on every published operation
+# Historical detail — response examples for Proposal 0001
 
-**Status:** Proposed
+**Status:** Folded into `0001-contract-infrastructure-gaps.md`; retained for history
 **Raised by:** Claude (frontend)
 **Affects:** every operation currently in `contracts/openapi/v1.yaml` (v1.1.0)
 **Blocks:** nothing today; increasing drift risk as B2–B10 build out
@@ -112,7 +112,7 @@ server's semantic hint as permission to auto-retry would resend a payment on a 4
 also veto: `retryable: false` on a 503 suppresses the automatic retry.
 
 Remaining envelope difference, for the plan document rather than the contract:
-[04-api-events-and-jobs.md](../../Django_Next.js_Plan/04-api-events-and-jobs.md) still specifies
+[07-api-events-and-operations.md](../../Django_Next.js_Plan/07-api-events-and-operations.md) still specifies
 `fields` and `trace_id` where the contract publishes `details` and `request_id`. The contract is
 authoritative and its shape is better — `details` is more flexible than a fixed field map. Suggest
 correcting the plan text.

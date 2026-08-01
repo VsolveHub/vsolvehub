@@ -6,15 +6,32 @@
       "persistent": true
     },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ]
     },
     "lint": {},
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build",
+        "generate:check"
+      ]
     },
     "generate": {
       "cache": false
+    },
+    "generate:check": {
+      "inputs": [
+        "../contracts/openapi/v1.yaml",
+        "src/generated/**",
+        "scripts/**"
+      ],
+      "outputs": []
     }
   }
 }

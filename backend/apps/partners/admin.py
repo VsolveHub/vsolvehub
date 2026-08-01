@@ -6,7 +6,9 @@ from apps.partners.models import (
     PartnerAvailabilityException,
     PartnerAvailabilityRule,
     PartnerConsent,
+    PartnerConsentDocument,
     PartnerDocument,
+    PartnerDocumentUpload,
     PartnerLocation,
     PartnerOnlineSession,
     PartnerProfile,
@@ -24,7 +26,9 @@ admin.site.register(PartnerSkill)
 admin.site.register(PartnerService)
 admin.site.register(PartnerServiceArea)
 admin.site.register(PartnerConsent)
+admin.site.register(PartnerConsentDocument)
 admin.site.register(PartnerDocument)
+admin.site.register(PartnerDocumentUpload)
 admin.site.register(PartnerAvailabilityRule)
 admin.site.register(PartnerAvailabilityException)
 admin.site.register(PartnerLocation)

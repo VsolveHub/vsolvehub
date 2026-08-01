@@ -57,7 +57,7 @@ export function capacityHoldExpired(path: string, options: ScenarioOptions = {})
 export function slotNoLongerAvailable(path: string, options: ScenarioOptions = {}): HttpHandler {
   return respondsWithApiError(
     path,
-    "SLOT_NO_LONGER_AVAILABLE",
+    "address_archived",
     "That time is no longer available.",
     409,
     { method: "post", ...options },
@@ -68,7 +68,7 @@ export function slotNoLongerAvailable(path: string, options: ScenarioOptions = {
 export function sessionExpired(path: string, options: ScenarioOptions = {}): HttpHandler {
   return respondsWithApiError(
     path,
-    "SESSION_EXPIRED",
+    "session_expired",
     "Your session expired. Log in to continue.",
     401,
     options,
@@ -84,7 +84,7 @@ export function validationFailed(
   const method = options.method ?? "post";
   return http[method](route(path, options), () =>
     HttpResponse.json(
-      apiError("VALIDATION_ERROR", "Check the highlighted fields.", { details: fields }),
+      apiError("validation_error", "Check the highlighted fields.", { details: fields }),
       { status: 422 },
     ),
   );
