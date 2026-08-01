@@ -1,9 +1,21 @@
 # Proposal 0002 — Booking workspace endpoints
 
-**Status:** Proposed
+> **⚠ SUPERSEDED — do not implement.**
+> Replaced by [0003 — M1 booking operations and contract drift](./0003-m1-booking-and-contract-drift.md).
+>
+> This proposal was written against the pre-31-July design. The plan adopted on 31 July 2026 forbids
+> three of the six operations requested below: the eligible-Partner list (ADR-014 — there is no
+> customer provider-list endpoint), the provider-specific capacity hold (ADR-013 — capacity is a
+> reservation created by Partner acceptance) and the Instant pre-check (ADR-018 — Instant is M4).
+> It also assumes the wrong ordering: M1 obtains Partner acceptance *before* payment (ADR-012).
+>
+> Retained for history only. Section 1 (availability) and section 5 (quote) survive in revised form
+> in 0003; sections 2, 3 and 4 do not survive at all.
+
+**Status:** Superseded by 0003
 **Raised by:** Claude (frontend)
 **Affects:** new operations; no change to anything published in `contracts/openapi/v1.yaml` (v1.2.0)
-**Blocks:** B3 integration. B3 is built and tested against these shapes via MSW, per tasks.md §3 rule 7.
+**Blocks:** nothing — withdrawn
 **Consuming screen:** `/book/[service]` — the customer booking workspace (tasks.md B3)
 
 ## Problem

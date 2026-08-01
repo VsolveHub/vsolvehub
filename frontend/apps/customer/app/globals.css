@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@import "@vsolve/ui/tokens.css";
+
+/* Let Tailwind v4 scan the shared UI package for class names. */
+@source "../../../packages/ui/src";
+@source "../components";
+@source "../features";
+@source "../app";
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-surface-muted);
+  color: var(--color-ink-900);
+}

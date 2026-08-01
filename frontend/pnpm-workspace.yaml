@@ -1,0 +1,26 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# The Windows npm-registry path can sustain large downloads but has high
+# latency and low throughput. Next, SWC, and Turbo ship large platform
+# tarballs, so keep concurrency modest and allow an active download to finish
+# instead of aborting it after the default request window.
+networkConcurrency: 4
+fetchRetries: 5
+fetchRetryMintimeout: 10000
+fetchRetryMaxtimeout: 60000
+fetchTimeout: 600000
+
+autoInstallPeers: true
+strictPeerDependencies: false
+
+allowBuilds:
+  esbuild: true
+  # msw's postinstall only prints a CLI notice. The browser service worker is
+  # created per-app with `msw init <app>/public`, so no build step is needed.
+  msw: false
+  sharp: true
+  # eslint-import-resolver-typescript uses this N-API package; its postinstall
+  # selects and verifies the platform-specific resolver binding.
+  unrs-resolver: true

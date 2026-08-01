@@ -7,6 +7,17 @@ VSolveHub/
 .vscode/
 *.iml
 
+# Node / pnpm / Next / Turbo — repo-wide.
+# `.pnpm-store/` is a package-manager cache. It is machine-local and
+# regenerable, and pnpm mirrors the workspace into it, so committing it
+# duplicates the source tree. Keep the store outside the repo entirely:
+#   pnpm config set store-dir ~/.pnpm-store --global
+**/node_modules/
+.pnpm-store/
+**/.next/
+**/.turbo/
+*.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
@@ -53,3 +64,6 @@ backend/media/
 
 # Local, non-authoritative planning history
 Django_Next.js_Plan/archive/
+
+web/
+archive/

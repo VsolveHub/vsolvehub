@@ -41,12 +41,21 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.110.0
         version: 2.110.0
+      '@tanstack/react-query':
+        specifier: ^5.62.7
+        version: 5.101.2(react@19.2.7)
+      '@vsolve/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@vsolve/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@vsolve/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@vsolve/query':
+        specifier: workspace:*
+        version: link:../../packages/query
       '@vsolve/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -178,6 +187,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.62.7
         version: 5.101.2(react@19.2.7)
+      '@vsolve/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@vsolve/config':
         specifier: workspace:*
         version: link:../../packages/config

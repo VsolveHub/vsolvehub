@@ -14,6 +14,7 @@
     "@prisma/client": "^6.2.1",
     "@supabase/supabase-js": "^2.110.0",
     "@tanstack/react-query": "^5.62.7",
+    "@vsolve/api-client": "workspace:*",
     "@vsolve/config": "workspace:*",
     "@vsolve/crypto": "workspace:*",
     "@vsolve/db": "workspace:*",

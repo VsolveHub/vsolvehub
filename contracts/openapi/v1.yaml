@@ -1673,6 +1673,7 @@ components:
       - FINDING_PARTNER
       - PARTNER_COMMITTED
       - PAYMENT_PENDING
+      - COMPLETED
       - EXPIRED
       type: string
       description: |-
@@ -1680,6 +1681,7 @@ components:
         * `FINDING_PARTNER` - Finding partner
         * `PARTNER_COMMITTED` - Partner committed
         * `PAYMENT_PENDING` - Payment pending
+        * `COMPLETED` - Completed
         * `EXPIRED` - Expired
     CommunicationPreference:
       type: object

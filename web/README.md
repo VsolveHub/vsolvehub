@@ -1,3 +1,15 @@
+> **FROZEN — reference only, do not build on this.** The M1 (Django-backed)
+> frontend now lives in `frontend/` at the repo root. Everything genuinely
+> reusable from this tree — the shared packages, the booking workspace, the
+> catalog pages, `features/application`, `features/partner-review`, the
+> partner marketing site, and every app-level layout/error boundary that
+> didn't depend on Prisma or Supabase — has already moved there with its git
+> history intact. What remains here is what M1 excludes: other verticals
+> (vehicle, accommodation, store, crew), the Prisma/Supabase data layer, and
+> screens built against a domain model the current backend doesn't implement.
+> Kept as design/UX reference for later milestones, not as a codebase to
+> extend. See `Django_Next.js_Plan/M1/03-frontend-tasks.md`.
+
 # VSolveHub — Web Monorepo
 
 Partner portal (`partner.vsolvehub.com`) and customer marketplace (`vsolvehub.com`)
