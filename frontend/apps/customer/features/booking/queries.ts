@@ -149,3 +149,22 @@ export function useServiceability(input: {
 }
 
 export type ServiceabilityResult = Schemas["ServiceabilityResponse"];
+
+/* -------------------------------------------------------------------------
+   Cart, plans, quotes and checkout
+   ------------------------------------------------------------------------- */
+
+/**
+ * They live in `./group/queries.ts`, against the published contract.
+ *
+ * The singleton hooks that used to sit here — `useCart` returning one item,
+ * `usePutCart` with its `replace_existing` confirmation, and `useQuote` priced
+ * from one cart item and one signed window — are gone rather than adapted. They
+ * modelled a cardinality the product no longer has: adding a second service is
+ * an append, so a dialog whose whole purpose was to confirm discarding the first
+ * one has nothing left to ask.
+ *
+ * `POST /quotes/` and `PUT /cart/` remain in the contract as an expand-phase
+ * compatibility surface. Nothing in this app calls them, and
+ * `contract-pending/boundary.test.ts` fails the build if that changes.
+ */

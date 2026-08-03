@@ -12,9 +12,7 @@ export default function ConsentPage() {
       description="The terms you are agreeing to as a Partner. We record which version you accepted and when."
       saveLabel="Accept and continue"
     >
-      {({ draft, update, isReadOnly }) => (
-        <ConsentStep draft={draft} update={update} isReadOnly={isReadOnly} />
-      )}
+      <ConsentStep />
     </ApplicationEditor>
   );
 }

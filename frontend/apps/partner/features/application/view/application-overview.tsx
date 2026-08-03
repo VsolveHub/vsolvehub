@@ -66,6 +66,17 @@ export function ApplicationOverview() {
 
   return (
     <section className="flex flex-col gap-6">
+      {/*
+        The route's level-one heading.
+
+        It was missing entirely once an application existed: the page opened at
+        `h2`, so a screen-reader user navigating by heading landed inside a
+        status banner with no idea what page they were on. The "start your
+        application" branch above had an `h1` and this one did not, which is why
+        it was easy to miss — the empty state looked correct.
+      */}
+      <h1 className="text-xl font-bold text-text sm:text-2xl">Your application</h1>
+
       <ApplicationStatusBanner application={application} />
 
       <ReadinessChecklist application={application} />

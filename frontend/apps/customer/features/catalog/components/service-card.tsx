@@ -1,15 +1,20 @@
 import Link from "next/link";
-import { Badge, formatMoney } from "@vsolve/ui";
+import { formatMoney } from "@vsolve/ui";
 
 import type { ServiceCard as ServiceCardData } from "../queries";
 
 /**
  * A service in a list.
  *
- * Shows only what helps someone decide (plan 03): what it is, what it starts at,
- * how long it usually takes. No rating unless real review data exists — an
- * invented "4.8 ★" on a catalogue with no completed bookings is exactly the
- * fabricated-trust signal plan 08 recorded as a defect in the partner app.
+ * Shows only what helps someone decide (plan 03): what it is and what it starts
+ * at. The "typical duration" badge is gone — contract 1.6.0 removed
+ * `recommended_duration_minutes` from the card because A1 is task-priced and the
+ * server derives an estimate from the tasks a customer actually picks. A single
+ * number here would have been a guess about work nobody has described yet.
+ *
+ * No rating unless real review data exists — an invented "4.8 ★" on a catalogue
+ * with no completed bookings is exactly the fabricated-trust signal plan 08
+ * recorded as a defect in the partner app.
  *
  * The price comes from `starting_price`, which Django derives from the same
  * active `ServiceRate` the quote engine uses. The card cannot compute or round
@@ -23,12 +28,6 @@ export function ServiceCard({
   service: ServiceCardData;
   categorySlug: string;
 }) {
-  const hours = service.recommended_duration_minutes / 60;
-  const duration =
-    service.recommended_duration_minutes >= 60 && Number.isInteger(hours)
-      ? `${hours} hr`
-      : `${service.recommended_duration_minutes} min`;
-
   return (
     <Link
       href={`/catalog/${categorySlug}/${service.slug}`}
@@ -48,7 +47,6 @@ export function ServiceCard({
         <span data-numeric className="text-lg font-bold text-text">
           {formatMoney(service.starting_price.amount_paise)}
         </span>
-        <Badge tone="neutral">{duration} typical</Badge>
       </div>
     </Link>
   );

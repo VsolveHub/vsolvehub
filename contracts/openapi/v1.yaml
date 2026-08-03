@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.5.0
+  version: 1.10.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -527,6 +527,162 @@ paths:
       responses:
         '204':
           description: The selected session was revoked.
+  /api/v1/booking-groups/:
+    get:
+      operationId: booking_group_list
+      tags:
+      - Booking Groups
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingGroupPage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/booking-groups/{group_id}/:
+    get:
+      operationId: booking_group_retrieve
+      parameters:
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Booking Groups
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingGroup'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/booking-groups/{group_id}/cancel/:
+    post:
+      operationId: booking_group_cancel
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Booking Groups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingGroupCancelRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BookingGroupCancelRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BookingGroupCancelRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingGroup'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/booking/windows/:
+    post:
+      operationId: booking_windows_create
+      tags:
+      - Checkout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingWindowsRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BookingWindowsRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BookingWindowsRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingWindows'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/cart/:
     get:
       operationId: cart_retrieve
@@ -540,7 +696,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CartItem'
+                $ref: '#/components/schemas/Cart'
           description: ''
     put:
       operationId: cart_update
@@ -567,6 +723,143 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CartItem'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/cart/items/:
+    post:
+      operationId: cart_items_create
+      tags:
+      - Cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartItemCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CartItemCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CartItemCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/cart/items/{item_id}/:
+    patch:
+      operationId: cart_items_partial_update
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCartItemUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCartItemUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCartItemUpdateRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    delete:
+      operationId: cart_items_destroy
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/cart/merge/:
+    post:
+      operationId: cart_merge_create
+      tags:
+      - Cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartMergeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CartMergeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CartMergeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/categories/:
     get:
@@ -641,6 +934,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/Checkout'
           description: ''
+  /api/v1/checkouts/{checkout_id}/payment/:
+    get:
+      operationId: checkouts_payment_retrieve
+      parameters:
+      - in: path
+        name: checkout_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
   /api/v1/checkouts/{checkout_id}/search/:
     post:
       operationId: checkouts_search_create
@@ -682,6 +996,144 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/v1/finance/refunds/:
+    post:
+      operationId: finance_refunds_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Finance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefundCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefundCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/finance/refunds/{refund_id}/reconcile/:
+    post:
+      operationId: finance_refunds_reconcile_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: refund_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Finance
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/fulfilment-plan-sets/:
+    post:
+      operationId: fulfilment_plan_sets_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Fulfilment Planning
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FulfilmentPlanSetCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FulfilmentPlanSetCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FulfilmentPlanSetCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FulfilmentPlanSet'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/fulfilment-plan-sets/{plan_set_id}/:
+    get:
+      operationId: fulfilment_plan_sets_retrieve
+      parameters:
+      - in: path
+        name: plan_set_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment Planning
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FulfilmentPlanSet'
           description: ''
   /api/v1/geocoding/reverse/:
     post:
@@ -790,6 +1242,327 @@ paths:
       parameters:
       - in: path
         name: checkout_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualOfferRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ManualOfferRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ManualOfferRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/v1/operations/compatibility-rules/:
+    get:
+      operationId: operations_compatibility_rule_list
+      parameters:
+      - in: query
+        name: lifecycle_status
+        schema:
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          - REJECTED
+          type: string
+          minLength: 1
+        description: |-
+          * `DRAFT` - Draft
+          * `ACTIVE` - Active
+          * `RETIRED` - Retired
+          * `REJECTED` - Rejected
+      - in: query
+        name: variant_id
+        schema:
+          type: string
+          format: uuid
+      tags:
+      - Operations - Compatibility
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityRulePage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: operations_compatibility_rule_create_draft
+      tags:
+      - Operations - Compatibility
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleDraftRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleDraftRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleDraftRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityRule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/compatibility-rules/{rule_id}/:
+    get:
+      operationId: operations_compatibility_rule_retrieve
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Compatibility
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityRule'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/compatibility-rules/{rule_id}/activate/:
+    post:
+      operationId: operations_compatibility_rule_activate
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Compatibility
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleReviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityRule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/compatibility-rules/{rule_id}/reject/:
+    post:
+      operationId: operations_compatibility_rule_reject
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Compatibility
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleReviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityRule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/compatibility-rules/{rule_id}/retire/:
+    post:
+      operationId: operations_compatibility_rule_retire
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations - Compatibility
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleRetireRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleRetireRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompatibilityRuleRetireRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompatibilityRule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/fulfilment-units/{unit_id}/offers/:
+    post:
+      operationId: operations_fulfilment_unit_offer_create
+      parameters:
+      - in: path
+        name: unit_id
         schema:
           type: string
           format: uuid
@@ -1174,6 +1947,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/orders/{order_id}/:
+    get:
+      operationId: orders_retrieve
+      parameters:
+      - in: path
+        name: order_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Orders
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
   /api/v1/partner/application/:
     get:
       operationId: partner_application_retrieve
@@ -1477,7 +2271,7 @@ paths:
           description: ''
   /api/v1/partner/offers/:
     get:
-      operationId: partner_offers_list
+      operationId: partner_offer_list
       tags:
       - Partner
       security:
@@ -1487,9 +2281,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Offer'
+                $ref: '#/components/schemas/OfferPage'
           description: ''
   /api/v1/partner/offers/{offer_id}/{action}/:
     post:
@@ -1665,6 +2457,208 @@ paths:
                 items:
                   $ref: '#/components/schemas/PartnerSkillOption'
           description: ''
+  /api/v1/payment-attempts/:
+    post:
+      operationId: payment_attempts_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentAttemptCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentAttemptCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentAttemptCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/payment-attempts/{attempt_id}/:
+    get:
+      operationId: payment_attempts_retrieve
+      parameters:
+      - in: path
+        name: attempt_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
+  /api/v1/payment-attempts/{attempt_id}/reconcile/:
+    post:
+      operationId: payment_attempts_reconcile_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: attempt_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/payment-webhooks/razorpay/:
+    post:
+      operationId: payment_webhooks_razorpay_create
+      parameters:
+      - in: header
+        name: X-Razorpay-Event-Id
+        schema:
+          type: string
+        required: true
+      - in: header
+        name: X-Razorpay-Signature
+        schema:
+          type: string
+        required: true
+      tags:
+      - Payment Webhooks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {}
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: {}
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: {}
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAccepted'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/plan-quotes/:
+    post:
+      operationId: plan_quotes_create
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Fulfilment Planning
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanQuoteCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PlanQuoteCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PlanQuoteCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupQuote'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/plan-quotes/{quote_id}/:
+    get:
+      operationId: plan_quotes_retrieve
+      parameters:
+      - in: path
+        name: quote_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment Planning
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupQuote'
+          description: ''
   /api/v1/quotes/:
     post:
       operationId: quotes_create
@@ -1690,6 +2684,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Quote'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/refunds/{refund_id}/:
+    get:
+      operationId: refunds_retrieve
+      parameters:
+      - in: path
+        name: refund_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
           description: ''
   /api/v1/service-areas/:
     get:
@@ -1799,8 +2820,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/tax-documents/{document_id}/:
+    get:
+      operationId: tax_documents_retrieve
+      parameters:
+      - in: path
+        name: document_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Orders
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxDocument'
+          description: ''
 components:
   schemas:
+    A1TaskLine:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        label:
+          type: string
+          readOnly: true
+        unit_price:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        marginal_duration_minutes:
+          type: integer
+          readOnly: true
+      required:
+      - code
+      - label
+      - marginal_duration_minutes
+      - unit_price
+    ActionEnum:
+      enum:
+      - KEEP_CUSTOMER
+      - KEEP_SESSION
+      - KEEP_BOTH
+      type: string
+      description: |-
+        * `KEEP_CUSTOMER` - KEEP_CUSTOMER
+        * `KEEP_SESSION` - KEEP_SESSION
+        * `KEEP_BOTH` - KEEP_BOTH
     ActiveRole:
       type: object
       properties:
@@ -2014,6 +3088,294 @@ components:
       - active_role
       - session_expires_at
       - user
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        reservation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - estimated_duration_minutes
+      - fulfilment_unit_id
+      - id
+      - partner_id
+      - reservation_id
+      - scheduled_start
+    BookingGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingGroupStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        confirmation_policy:
+          allOf:
+          - $ref: '#/components/schemas/ConfirmationPolicyEnum'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+        recovery_action:
+          allOf:
+          - $ref: '#/components/schemas/RecoveryActionEnum'
+          readOnly: true
+        next_transition_at:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/FulfilmentUnit'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - confirmation_policy
+      - created_at
+      - expires_at
+      - id
+      - next_transition_at
+      - recovery_action
+      - server_now
+      - status
+      - units
+      - updated_at
+      - version
+    BookingGroupCancelRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - expected_version
+    BookingGroupPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingGroup'
+      required:
+      - next
+      - previous
+      - results
+    BookingGroupStatusEnum:
+      enum:
+      - CONFIRMED
+      - MATCHING
+      - PARTIALLY_HELD
+      - ALL_UNITS_HELD
+      - PAYMENT_PENDING
+      - BOOKED
+      - REPLAN_REQUIRED
+      - CANCELLED
+      - EXPIRED
+      - FAILED
+      type: string
+      description: |-
+        * `CONFIRMED` - Confirmed
+        * `MATCHING` - Matching
+        * `PARTIALLY_HELD` - Partially held
+        * `ALL_UNITS_HELD` - All units held
+        * `PAYMENT_PENDING` - Payment pending
+        * `BOOKED` - Booked
+        * `REPLAN_REQUIRED` - Replan required
+        * `CANCELLED` - Cancelled
+        * `EXPIRED` - Expired
+        * `FAILED` - Failed
+    BookingWindow:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_available:
+          type: boolean
+          readOnly: true
+        unavailable_reason:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/UnavailableReasonEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - ends_at
+      - id
+      - is_available
+      - starts_at
+      - unavailable_reason
+    BookingWindowDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          readOnly: true
+        is_today:
+          type: boolean
+          readOnly: true
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingWindow'
+          readOnly: true
+      required:
+      - date
+      - is_today
+      - windows
+    BookingWindows:
+      type: object
+      properties:
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        availability_is_preliminary:
+          type: boolean
+          readOnly: true
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingWindowDay'
+          readOnly: true
+      required:
+      - availability_is_preliminary
+      - days
+      - estimated_duration_minutes
+      - server_now
+    BookingWindowsRequestRequest:
+      type: object
+      properties:
+        address_id:
+          type: string
+          format: uuid
+      required:
+      - address_id
+    CancellationBand:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+        condition_text:
+          type: string
+          readOnly: true
+        fee:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - code
+      - condition_text
+      - fee
+    CancellationPolicy:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        bands:
+          type: array
+          items:
+            $ref: '#/components/schemas/CancellationBand'
+          readOnly: true
+      required:
+      - bands
+      - code
+      - version
+    Cart:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItemDetail'
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - items
+      - updated_at
+      - version
     CartItem:
       type: object
       properties:
@@ -2035,6 +3397,77 @@ components:
       - quantity
       - scope_schema_snapshot
       - variant_id
+    CartItemCreateRequest:
+      type: object
+      properties:
+        expected_cart_version:
+          type: integer
+          minimum: 1
+        variant_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        scope:
+          type: object
+          additionalProperties: {}
+      required:
+      - expected_cart_version
+      - quantity
+      - variant_id
+    CartItemDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        variant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_slug:
+          type: string
+          readOnly: true
+        service_name:
+          type: string
+          readOnly: true
+        variant_name:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        scope:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        scope_schema_snapshot:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - quantity
+      - scope
+      - scope_schema_snapshot
+      - service_name
+      - service_slug
+      - updated_at
+      - variant_id
+      - variant_name
+      - version
     CartItemInputRequest:
       type: object
       properties:
@@ -2047,9 +3480,40 @@ components:
         scope:
           type: object
           additionalProperties: {}
+        replace_existing:
+          type: boolean
+          default: false
       required:
       - quantity
       - variant_id
+    CartMergeDecisionRequest:
+      type: object
+      properties:
+        session_item_id:
+          type: string
+          format: uuid
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+      required:
+      - action
+      - session_item_id
+    CartMergeRequest:
+      type: object
+      properties:
+        expected_customer_cart_version:
+          type: integer
+          minimum: 1
+        expected_session_cart_version:
+          type: integer
+          minimum: 1
+        decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartMergeDecisionRequest'
+      required:
+      - decisions
+      - expected_customer_cart_version
+      - expected_session_cart_version
     Category:
       type: object
       properties:
@@ -2108,11 +3572,17 @@ components:
           type: string
           format: date-time
           readOnly: true
+        booking_group:
+          allOf:
+          - $ref: '#/components/schemas/BookingGroup'
+          readOnly: true
+          nullable: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - booking_group
       - created_at
       - expires_at
       - id
@@ -2133,6 +3603,8 @@ components:
       - PARTNER_COMMITTED
       - PAYMENT_PENDING
       - COMPLETED
+      - REPLAN_REQUIRED
+      - CANCELLED
       - EXPIRED
       type: string
       description: |-
@@ -2141,6 +3613,8 @@ components:
         * `PARTNER_COMMITTED` - Partner committed
         * `PAYMENT_PENDING` - Payment pending
         * `COMPLETED` - Completed
+        * `REPLAN_REQUIRED` - Replan required
+        * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
     CommunicationPreference:
       type: object
@@ -2176,6 +3650,190 @@ components:
       required:
       - channel
       - purpose
+    CompatibilityRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        left_variant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        left_service_name:
+          type: string
+          readOnly: true
+        left_variant_name:
+          type: string
+          readOnly: true
+        right_variant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        right_service_name:
+          type: string
+          readOnly: true
+        right_variant_name:
+          type: string
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        mode:
+          allOf:
+          - $ref: '#/components/schemas/ModeEnum'
+          readOnly: true
+        dependency:
+          allOf:
+          - $ref: '#/components/schemas/DependencyEnum'
+          readOnly: true
+        conditions:
+          readOnly: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+        effective_to:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        lifecycle_status:
+          allOf:
+          - $ref: '#/components/schemas/LifecycleStatusEnum'
+          readOnly: true
+        change_reason:
+          type: string
+          readOnly: true
+        created_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        reviewed_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        review_reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - change_reason
+      - conditions
+      - created_at
+      - created_by_id
+      - dependency
+      - effective_from
+      - effective_to
+      - id
+      - left_service_name
+      - left_variant_id
+      - left_variant_name
+      - lifecycle_status
+      - mode
+      - review_reason
+      - reviewed_at
+      - reviewed_by_id
+      - right_service_name
+      - right_variant_id
+      - right_variant_name
+      - version
+    CompatibilityRuleDraftRequest:
+      type: object
+      properties:
+        left_variant_id:
+          type: string
+          format: uuid
+        right_variant_id:
+          type: string
+          format: uuid
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        dependency:
+          allOf:
+          - $ref: '#/components/schemas/DependencyEnum'
+          default: NONE
+        conditions:
+          type: object
+          additionalProperties: {}
+        effective_from:
+          type: string
+          format: date-time
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+        change_reason:
+          type: string
+          minLength: 10
+          maxLength: 500
+      required:
+      - change_reason
+      - effective_from
+      - left_variant_id
+      - mode
+      - right_variant_id
+    CompatibilityRulePage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompatibilityRule'
+      required:
+      - next
+      - previous
+      - results
+    CompatibilityRuleRetireRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 500
+      required:
+      - expected_version
+      - reason
+    CompatibilityRuleReviewRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        review_reason:
+          type: string
+          minLength: 10
+          maxLength: 500
+      required:
+      - expected_version
+      - review_reason
+    ConfirmationPolicyEnum:
+      enum:
+      - ALL_OR_NOTHING
+      type: string
+      description: '* `ALL_OR_NOTHING` - All or nothing'
     ConsentReceipt:
       type: object
       properties:
@@ -2246,6 +3904,16 @@ components:
       description: |-
         * `APPROVED` - APPROVED
         * `REJECTED` - REJECTED
+    DependencyEnum:
+      enum:
+      - NONE
+      - LEFT_BEFORE_RIGHT
+      - RIGHT_BEFORE_LEFT
+      type: string
+      description: |-
+        * `NONE` - No ordering dependency
+        * `LEFT_BEFORE_RIGHT` - Left before right
+        * `RIGHT_BEFORE_LEFT` - Right before left
     ExpectedVersionRequest:
       type: object
       properties:
@@ -2254,6 +3922,419 @@ components:
           minimum: 1
       required:
       - expected_version
+    FulfilmentPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        rank:
+          type: integer
+          readOnly: true
+        structure:
+          allOf:
+          - $ref: '#/components/schemas/StructureEnum'
+          readOnly: true
+        confirmation_policy:
+          allOf:
+          - $ref: '#/components/schemas/ConfirmationPolicyEnum'
+          readOnly: true
+        is_recommended:
+          type: boolean
+          readOnly: true
+        professional_count:
+          type: integer
+          readOnly: true
+        visit_count:
+          type: integer
+          readOnly: true
+        decisive_reasons:
+          readOnly: true
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanUnit'
+          readOnly: true
+        subtotal:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        platform_fee:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        tax:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - confirmation_policy
+      - decisive_reasons
+      - id
+      - is_recommended
+      - platform_fee
+      - professional_count
+      - rank
+      - structure
+      - subtotal
+      - tax
+      - total
+      - units
+      - visit_count
+    FulfilmentPlanSet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        cart_version:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FulfilmentPlanSetStatusEnum'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/FulfilmentPlan'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - cart_version
+      - created_at
+      - expires_at
+      - id
+      - plans
+      - server_now
+      - status
+    FulfilmentPlanSetCreateRequest:
+      type: object
+      properties:
+        address_id:
+          type: string
+          format: uuid
+        expected_cart_version:
+          type: integer
+          minimum: 1
+        preferred_start:
+          type: string
+          format: date-time
+      required:
+      - address_id
+      - expected_cart_version
+      - preferred_start
+    FulfilmentPlanSetStatusEnum:
+      enum:
+      - ACTIVE
+      - INVALIDATED
+      - EXPIRED
+      - SELECTED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `INVALIDATED` - Invalidated
+        * `EXPIRED` - Expired
+        * `SELECTED` - Selected
+    FulfilmentUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FulfilmentUnitStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        arrival_window_minutes:
+          type: integer
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        state_deadline:
+          type: string
+          format: date-time
+          nullable: true
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/FulfilmentUnitLine'
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - arrival_window_minutes
+      - estimated_duration_minutes
+      - id
+      - lines
+      - position
+      - starts_at
+      - state_deadline
+      - status
+      - total
+      - version
+    FulfilmentUnitLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/QuoteLineKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - amount
+      - code
+      - id
+      - kind
+      - label
+      - position
+      - quantity
+    FulfilmentUnitStatusEnum:
+      enum:
+      - PLANNED
+      - MATCHING
+      - HELD
+      - PAYMENT_PENDING
+      - BOOKED
+      - CANCELLED
+      - FAILED
+      - COMPLETED
+      type: string
+      description: |-
+        * `PLANNED` - Planned
+        * `MATCHING` - Matching
+        * `HELD` - Held
+        * `PAYMENT_PENDING` - Payment pending
+        * `BOOKED` - Booked
+        * `CANCELLED` - Cancelled
+        * `FAILED` - Failed
+        * `COMPLETED` - Completed
+    GroupQuote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/GroupQuoteStatusEnum'
+          readOnly: true
+        cart_version:
+          type: integer
+          readOnly: true
+        plan_set_id:
+          type: string
+          format: uuid
+          readOnly: true
+        plan_id:
+          type: string
+          format: uuid
+          readOnly: true
+        structure:
+          type: string
+          readOnly: true
+        confirmation_policy:
+          type: string
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupQuoteUnit'
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - cart_version
+      - confirmation_policy
+      - created_at
+      - expires_at
+      - id
+      - plan_id
+      - plan_set_id
+      - server_now
+      - status
+      - structure
+      - total
+      - units
+      - version
+    GroupQuoteLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/QuoteLineKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        cart_item_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - amount
+      - cart_item_id
+      - code
+      - id
+      - kind
+      - label
+      - position
+      - quantity
+    GroupQuoteStatusEnum:
+      enum:
+      - ACTIVE
+      - INVALIDATED
+      - EXPIRED
+      - CONSUMED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `INVALIDATED` - Invalidated
+        * `EXPIRED` - Expired
+        * `CONSUMED` - Consumed
+    GroupQuoteUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+        arrival_window_minutes:
+          type: integer
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupQuoteLine'
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        cancellation_policy_snapshot:
+          readOnly: true
+      required:
+      - arrival_window_minutes
+      - cancellation_policy_snapshot
+      - ends_at
+      - estimated_duration_minutes
+      - id
+      - lines
+      - position
+      - starts_at
+      - total
+    LifecycleStatusEnum:
+      enum:
+      - DRAFT
+      - ACTIVE
+      - RETIRED
+      - REJECTED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `ACTIVE` - Active
+        * `RETIRED` - Retired
+        * `REJECTED` - Rejected
     ManualOfferRequest:
       type: object
       properties:
@@ -2262,6 +4343,16 @@ components:
           format: uuid
       required:
       - partner_id
+    ModeEnum:
+      enum:
+      - SAME_PARTNER_SEQUENTIAL
+      - PARALLEL_ALLOWED
+      - MUST_BE_SEPARATE
+      type: string
+      description: |-
+        * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
+        * `PARALLEL_ALLOWED` - Parallel allowed
+        * `MUST_BE_SEPARATE` - Must be separate
     Money:
       type: object
       properties:
@@ -2274,6 +4365,9 @@ components:
       required:
       - amount_paise
       - currency
+    NullEnum:
+      enum:
+      - null
     Offer:
       type: object
       properties:
@@ -2284,6 +4378,54 @@ components:
         checkout_id:
           type: string
           format: uuid
+          nullable: true
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        unit_position:
+          type: integer
+          readOnly: true
+          nullable: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+          nullable: true
+        approximate_area:
+          type: string
+          nullable: true
+          readOnly: true
+        service_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OfferServiceLine'
+          readOnly: true
+        requirements:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        estimated_gross:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          nullable: true
+          readOnly: true
+        commission:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          nullable: true
+          readOnly: true
+        estimated_net:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          nullable: true
           readOnly: true
         status:
           allOf:
@@ -2303,12 +4445,60 @@ components:
           format: date-time
           readOnly: true
       required:
+      - approximate_area
       - checkout_id
+      - commission
       - created_at
+      - estimated_duration_minutes
+      - estimated_gross
+      - estimated_net
       - expires_at
+      - fulfilment_unit_id
       - id
+      - requirements
+      - service_lines
+      - starts_at
       - status
       - undo_deadline
+      - unit_position
+    OfferPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Offer'
+      required:
+      - next
+      - previous
+      - results
+    OfferServiceLine:
+      type: object
+      properties:
+        line_id:
+          type: string
+          format: uuid
+        service_label:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        scope:
+          type: object
+          additionalProperties: {}
+      required:
+      - line_id
+      - quantity
+      - scope
+      - service_label
     OfferStatusEnum:
       enum:
       - OFFERED
@@ -2443,6 +4633,79 @@ components:
       required:
       - expected_version
       - target_status
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        checkout_id:
+          type: string
+          format: uuid
+          readOnly: true
+        booking_group_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        quote_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OrderStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        bookings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+          readOnly: true
+        tax_documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxDocument'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - booking_group_id
+      - bookings
+      - checkout_id
+      - created_at
+      - id
+      - quote_id
+      - status
+      - tax_documents
+      - total
+      - updated_at
+      - version
+    OrderStatusEnum:
+      enum:
+      - CONFIRMED
+      - CANCELLED
+      - REFUNDING
+      - REFUNDED
+      type: string
+      description: |-
+        * `CONFIRMED` - Confirmed
+        * `CANCELLED` - Cancelled
+        * `REFUNDING` - Refunding
+        * `REFUNDED` - Refunded
     OtpIssued:
       type: object
       properties:
@@ -3279,6 +5542,21 @@ components:
           $ref: '#/components/schemas/SourceEnum'
         is_default:
           type: boolean
+    PatchedCartItemUpdateRequest:
+      type: object
+      properties:
+        expected_cart_version:
+          type: integer
+          minimum: 1
+        expected_item_version:
+          type: integer
+          minimum: 1
+        quantity:
+          type: integer
+          minimum: 1
+        scope:
+          type: object
+          additionalProperties: {}
     PatchedPartnerApplicationUpdateRequest:
       type: object
       properties:
@@ -3321,16 +5599,271 @@ components:
           type: string
           writeOnly: true
           maxLength: 128
-    PricingStrategyEnum:
+    PaymentAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_line_id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        refunded:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - amount
+      - fulfilment_line_id
+      - fulfilment_unit_id
+      - id
+      - position
+      - refunded
+    PaymentAttempt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        checkout_id:
+          type: string
+          format: uuid
+          readOnly: true
+        booking_group_id:
+          type: string
+          format: uuid
+          readOnly: true
+        quote_id:
+          type: string
+          format: uuid
+          readOnly: true
+        purpose:
+          allOf:
+          - $ref: '#/components/schemas/PurposeEnum'
+          readOnly: true
+        provider:
+          type: string
+          readOnly: true
+        provider_public_key:
+          type: string
+          nullable: true
+          readOnly: true
+        provider_order_id:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentAttemptStatusEnum'
+          readOnly: true
+        reconciliation_state:
+          allOf:
+          - $ref: '#/components/schemas/ReconciliationStateEnum'
+          readOnly: true
+        failure_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        version:
+          type: integer
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAllocation'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - allocations
+      - amount
+      - booking_group_id
+      - checkout_id
+      - created_at
+      - expires_at
+      - failure_code
+      - id
+      - provider
+      - provider_order_id
+      - provider_public_key
+      - purpose
+      - quote_id
+      - reconciliation_state
+      - status
+      - updated_at
+      - version
+    PaymentAttemptCreateRequest:
+      type: object
+      properties:
+        checkout_id:
+          type: string
+          format: uuid
+        expected_checkout_version:
+          type: integer
+          minimum: 1
+      required:
+      - checkout_id
+      - expected_checkout_version
+    PaymentAttemptStatusEnum:
       enum:
-      - FIXED
-      - DURATION
-      - INSPECTION
+      - PROVIDER_PENDING
+      - CREATED
+      - AUTHORIZED
+      - CAPTURED
+      - FAILED
+      - EXPIRED
+      - PARTIALLY_REFUNDED
+      - REFUNDED
       type: string
       description: |-
-        * `FIXED` - Fixed
-        * `DURATION` - Duration based
-        * `INSPECTION` - Inspection first
+        * `PROVIDER_PENDING` - Provider pending
+        * `CREATED` - Created
+        * `AUTHORIZED` - Authorized
+        * `CAPTURED` - Captured
+        * `FAILED` - Failed
+        * `EXPIRED` - Expired
+        * `PARTIALLY_REFUNDED` - Partially refunded
+        * `REFUNDED` - Refunded
+    PlanQuoteCreateRequest:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+      required:
+      - plan_id
+    PlanUnit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+        arrival_window_minutes:
+          type: integer
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanUnitItem'
+          readOnly: true
+        reason_codes:
+          readOnly: true
+        subtotal:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        minimum_visit_adjustment:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        platform_fee_allocation:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        tax:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - arrival_window_minutes
+      - ends_at
+      - estimated_duration_minutes
+      - id
+      - items
+      - minimum_visit_adjustment
+      - platform_fee_allocation
+      - position
+      - reason_codes
+      - starts_at
+      - subtotal
+      - tax
+      - total
+    PlanUnitItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        cart_item_id:
+          type: string
+          format: uuid
+          readOnly: true
+        cart_item_version:
+          type: integer
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        variant_snapshot:
+          readOnly: true
+        scope_snapshot:
+          readOnly: true
+        configuration_snapshot:
+          readOnly: true
+      required:
+      - cart_item_id
+      - cart_item_version
+      - configuration_snapshot
+      - estimated_duration_minutes
+      - id
+      - position
+      - quantity
+      - scope_snapshot
+      - variant_snapshot
     PrivacyRequest:
       type: object
       properties:
@@ -3388,6 +5921,11 @@ components:
         * `IN_REVIEW` - In review
         * `COMPLETED` - Completed
         * `REJECTED` - Rejected
+    PurposeEnum:
+      enum:
+      - BOOKING_GROUP
+      type: string
+      description: '* `BOOKING_GROUP` - Booking group'
     Quote:
       type: object
       properties:
@@ -3395,57 +5933,302 @@ components:
           type: string
           format: uuid
           readOnly: true
-        task_subtotal_paise:
+        version:
           type: integer
           readOnly: true
-        minimum_visit_adjustment_paise:
-          type: integer
+        server_now:
+          type: string
+          format: date-time
           readOnly: true
-        platform_fee_paise:
-          type: integer
-          readOnly: true
-        total_paise:
-          type: integer
+        expires_at:
+          type: string
+          format: date-time
           readOnly: true
         estimated_duration_minutes:
           type: integer
           readOnly: true
-        requested_start:
-          type: string
-          format: date-time
+        arrival_window:
+          allOf:
+          - $ref: '#/components/schemas/QuoteArrivalWindow'
           readOnly: true
-        arrival_window_minutes:
-          type: integer
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteLine'
           readOnly: true
-        quote_inputs_snapshot:
+        subtotal:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        platform_fee:
+          allOf:
+          - $ref: '#/components/schemas/QuoteLine'
+          readOnly: true
+        tax:
+          allOf:
+          - $ref: '#/components/schemas/QuoteTax'
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        cancellation_policy:
+          allOf:
+          - $ref: '#/components/schemas/CancellationPolicy'
           readOnly: true
         created_at:
           type: string
           format: date-time
           readOnly: true
       required:
-      - arrival_window_minutes
+      - arrival_window
+      - cancellation_policy
       - created_at
       - estimated_duration_minutes
+      - expires_at
       - id
-      - minimum_visit_adjustment_paise
-      - platform_fee_paise
-      - quote_inputs_snapshot
-      - requested_start
-      - task_subtotal_paise
-      - total_paise
+      - lines
+      - platform_fee
+      - server_now
+      - subtotal
+      - tax
+      - total
+      - version
+    QuoteArrivalWindow:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - ends_at
+      - id
+      - starts_at
     QuoteCreateRequest:
       type: object
       properties:
         address_id:
           type: string
           format: uuid
-        requested_start:
+        window_id:
           type: string
-          format: date-time
+          minLength: 1
+          maxLength: 1000
       required:
       - address_id
-      - requested_start
+      - window_id
+    QuoteLine:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - amount
+      - code
+      - label
+    QuoteLineKindEnum:
+      enum:
+      - SERVICE
+      - MINIMUM_VISIT_ADJUSTMENT
+      - PLATFORM_FEE_ALLOCATION
+      type: string
+      description: |-
+        * `SERVICE` - Service
+        * `MINIMUM_VISIT_ADJUSTMENT` - Minimum visit adjustment
+        * `PLATFORM_FEE_ALLOCATION` - Platform fee allocation
+    QuoteTax:
+      type: object
+      properties:
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        included_in_total:
+          type: boolean
+          readOnly: true
+      required:
+      - amount
+      - code
+      - included_in_total
+      - label
+    ReconciliationStateEnum:
+      enum:
+      - PENDING
+      - IN_SYNC
+      - NEEDS_ATTENTION
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `IN_SYNC` - In sync
+        * `NEEDS_ATTENTION` - Needs attention
+    RecoveryActionEnum:
+      enum:
+      - WAIT
+      - PAYMENT_REQUIRED
+      - REPLAN
+      - NONE
+      type: string
+      description: |-
+        * `WAIT` - WAIT
+        * `PAYMENT_REQUIRED` - PAYMENT_REQUIRED
+        * `REPLAN` - REPLAN
+        * `NONE` - NONE
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        order_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        payment_attempt_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RefundStatusEnum'
+          readOnly: true
+        reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        reconciliation_state:
+          allOf:
+          - $ref: '#/components/schemas/ReconciliationStateEnum'
+          readOnly: true
+        failure_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        provider_refund_id:
+          type: string
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RefundAllocation'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - allocations
+      - amount
+      - completed_at
+      - created_at
+      - failure_code
+      - id
+      - order_id
+      - payment_attempt_id
+      - provider_refund_id
+      - reason_code
+      - reconciliation_state
+      - status
+      - submitted_at
+    RefundAllocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        payment_allocation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - amount
+      - fulfilment_unit_id
+      - id
+      - payment_allocation_id
+    RefundCreateRequest:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        fulfilment_unit_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 20
+        reason_code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - fulfilment_unit_ids
+      - order_id
+      - reason_code
+    RefundStatusEnum:
+      enum:
+      - REQUESTED
+      - SUBMITTED
+      - PROCESSING
+      - SUCCEEDED
+      - FAILED
+      - UNDER_REVIEW
+      type: string
+      description: |-
+        * `REQUESTED` - Requested
+        * `SUBMITTED` - Submitted
+        * `PROCESSING` - Processing
+        * `SUCCEEDED` - Succeeded
+        * `FAILED` - Failed
+        * `UNDER_REVIEW` - Under review
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -3579,9 +6362,6 @@ components:
           allOf:
           - $ref: '#/components/schemas/Money'
           readOnly: true
-        recommended_duration_minutes:
-          type: integer
-          readOnly: true
         cover:
           allOf:
           - $ref: '#/components/schemas/ServiceMedia'
@@ -3592,7 +6372,6 @@ components:
       - cover
       - id
       - name
-      - recommended_duration_minutes
       - short_description
       - slug
       - starting_price
@@ -3624,9 +6403,6 @@ components:
           allOf:
           - $ref: '#/components/schemas/Money'
           readOnly: true
-        recommended_duration_minutes:
-          type: integer
-          readOnly: true
         cover:
           allOf:
           - $ref: '#/components/schemas/ServiceMedia'
@@ -3656,7 +6432,6 @@ components:
       - media
       - name
       - policies
-      - recommended_duration_minutes
       - short_description
       - slug
       - starting_price
@@ -3814,25 +6589,21 @@ components:
         description:
           type: string
           readOnly: true
-        pricing_strategy:
-          allOf:
-          - $ref: '#/components/schemas/PricingStrategyEnum'
+        fulfilment_archetype:
+          type: string
           readOnly: true
         starting_price:
           allOf:
           - $ref: '#/components/schemas/Money'
           readOnly: true
-        minimum_duration_minutes:
-          type: integer
+        minimum_service_subtotal:
+          allOf:
+          - $ref: '#/components/schemas/Money'
           readOnly: true
-        recommended_duration_minutes:
-          type: integer
-          readOnly: true
-        duration_increment_minutes:
-          type: integer
-          readOnly: true
-        maximum_duration_minutes:
-          type: integer
+        task_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/A1TaskLine'
           readOnly: true
         required_skill_code:
           type: string
@@ -3846,16 +6617,14 @@ components:
       required:
       - code
       - description
-      - duration_increment_minutes
+      - fulfilment_archetype
       - id
-      - maximum_duration_minutes
-      - minimum_duration_minutes
+      - minimum_service_subtotal
       - name
-      - pricing_strategy
       - questions
-      - recommended_duration_minutes
       - required_skill_code
       - starting_price
+      - task_lines
     ServiceabilityRequestRequest:
       type: object
       properties:
@@ -3937,6 +6706,18 @@ components:
           readOnly: true
       required:
       - stepped_up_at
+    StructureEnum:
+      enum:
+      - SINGLE_PARTNER_SEQUENTIAL
+      - COORDINATED_PARALLEL
+      - INDEPENDENT_VISITS
+      - MIXED
+      type: string
+      description: |-
+        * `SINGLE_PARTNER_SEQUENTIAL` - Single Partner sequential
+        * `COORDINATED_PARALLEL` - Coordinated parallel
+        * `INDEPENDENT_VISITS` - Independent visits
+        * `MIXED` - Mixed
     Subcategory:
       type: object
       properties:
@@ -3973,6 +6754,112 @@ components:
         * `APPROVED` - APPROVED
         * `SUSPENDED` - SUSPENDED
         * `OFFBOARDED` - OFFBOARDED
+    TaxDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/TaxDocumentKindEnum'
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        legal_entity_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        financial_year:
+          type: string
+          readOnly: true
+        is_test:
+          type: boolean
+          readOnly: true
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        tax_snapshot:
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxDocumentLine'
+          readOnly: true
+      required:
+      - financial_year
+      - id
+      - is_test
+      - issued_at
+      - kind
+      - legal_entity_code
+      - lines
+      - number
+      - tax_snapshot
+      - total
+    TaxDocumentKindEnum:
+      enum:
+      - INVOICE
+      - CREDIT_NOTE
+      type: string
+      description: |-
+        * `INVOICE` - Invoice
+        * `CREDIT_NOTE` - Credit note
+    TaxDocumentLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        total:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+        tax:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          readOnly: true
+      required:
+      - code
+      - id
+      - label
+      - position
+      - quantity
+      - tax
+      - total
+    UnavailableReasonEnum:
+      enum:
+      - PAST
+      - TOO_SOON
+      - OUTSIDE_OPERATING_WINDOW
+      - NO_CAPACITY
+      type: string
+      description: |-
+        * `PAST` - PAST
+        * `TOO_SOON` - TOO_SOON
+        * `OUTSIDE_OPERATING_WINDOW` - OUTSIDE_OPERATING_WINDOW
+        * `NO_CAPACITY` - NO_CAPACITY
     User:
       type: object
       properties:
@@ -4039,6 +6926,18 @@ components:
       - id
       - is_current
       - last_seen_at
+    WebhookAccepted:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+          readOnly: true
+        duplicate:
+          type: boolean
+          readOnly: true
+      required:
+      - accepted
+      - duplicate
   securitySchemes:
     cookieAuth:
       type: apiKey

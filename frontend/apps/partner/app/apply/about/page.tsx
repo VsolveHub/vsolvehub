@@ -11,9 +11,7 @@ export default function AboutPage() {
       title="About you"
       description="This is what a customer sees before they let you into their home."
     >
-      {({ draft, update, isReadOnly }) => (
-        <AboutStep draft={draft} update={update} isReadOnly={isReadOnly} />
-      )}
+      <AboutStep />
     </ApplicationEditor>
   );
 }

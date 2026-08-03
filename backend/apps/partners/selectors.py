@@ -2,8 +2,9 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.cache import cache
@@ -151,6 +152,65 @@ def partner_schedule(
         "service_area",
     )
     return rules, exceptions
+
+
+def partner_available_during(
+    *,
+    partner: PartnerProfile,
+    service_area: ServiceArea,
+    starts_at: datetime,
+    duration_minutes: int,
+) -> bool:
+    """Return explicit schedule availability for one occupied range; empty means unavailable."""
+
+    zone = ZoneInfo(service_area.timezone)
+    local_start = starts_at.astimezone(zone)
+    local_end = local_start + timedelta(minutes=duration_minutes)
+    exception = PartnerAvailabilityException.objects.filter(
+        partner=partner,
+        service_area=service_area,
+        date=local_start.date(),
+    ).first()
+    if exception is not None:
+        if not exception.is_available or exception.starts_at is None or exception.ends_at is None:
+            return False
+        return _availability_window_contains(
+            local_start,
+            local_end,
+            starts_at=exception.starts_at,
+            ends_at=exception.ends_at,
+            ends_next_day=exception.ends_next_day,
+        )
+    rules = PartnerAvailabilityRule.objects.filter(
+        partner=partner,
+        service_area=service_area,
+        weekday=local_start.weekday(),
+        is_active=True,
+    )
+    return any(
+        _availability_window_contains(
+            local_start,
+            local_end,
+            starts_at=rule.starts_at,
+            ends_at=rule.ends_at,
+            ends_next_day=rule.ends_next_day,
+        )
+        for rule in rules
+    )
+
+
+def _availability_window_contains(
+    local_start: datetime,
+    local_end: datetime,
+    *,
+    starts_at: time,
+    ends_at: time,
+    ends_next_day: bool,
+) -> bool:
+    opens = datetime.combine(local_start.date(), starts_at, tzinfo=local_start.tzinfo)
+    closes_date = local_start.date() + timedelta(days=1) if ends_next_day else local_start.date()
+    closes = datetime.combine(closes_date, ends_at, tzinfo=local_start.tzinfo)
+    return opens <= local_start and local_end <= closes
 
 
 def presence_cache_key(partner_id: uuid.UUID) -> str:

@@ -15,11 +15,18 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.pricing.models import TaskRate
+from common.serializers import MoneySerializer
 
 
 class _RatedVariant(Protocol):
     current_rate_amount_paise: int
     current_rate_currency: str
+    minimum_service_subtotal_paise: int
+
+
+class _A1Variant(_RatedVariant, Protocol):
+    current_task_rates: list[TaskRate]
 
 
 class _PublicService(Protocol):
@@ -46,9 +53,11 @@ class CategorySerializer(serializers.ModelSerializer[Category]):
         read_only_fields = fields
 
 
-class MoneySerializer(serializers.Serializer[dict[str, object]]):
-    amount_paise = serializers.IntegerField(read_only=True)
-    currency = serializers.CharField(read_only=True)
+class A1TaskLineSerializer(serializers.Serializer[dict[str, object]]):
+    code = serializers.SlugField(read_only=True)
+    label = serializers.CharField(read_only=True)  # type: ignore[assignment]
+    unit_price = MoneySerializer(read_only=True)
+    marginal_duration_minutes = serializers.IntegerField(read_only=True)
 
 
 class ServiceMediaSerializer(serializers.ModelSerializer[ServiceMedia]):
@@ -60,6 +69,9 @@ class ServiceMediaSerializer(serializers.ModelSerializer[ServiceMedia]):
 
 class ServiceVariantSummarySerializer(serializers.ModelSerializer[ServiceVariant]):
     starting_price = serializers.SerializerMethodField()
+    fulfilment_archetype = serializers.CharField(source="booking_archetype", read_only=True)
+    minimum_service_subtotal = serializers.SerializerMethodField()
+    task_lines = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceVariant
@@ -68,12 +80,10 @@ class ServiceVariantSummarySerializer(serializers.ModelSerializer[ServiceVariant
             "code",
             "name",
             "description",
-            "pricing_strategy",
+            "fulfilment_archetype",
             "starting_price",
-            "minimum_duration_minutes",
-            "recommended_duration_minutes",
-            "duration_increment_minutes",
-            "maximum_duration_minutes",
+            "minimum_service_subtotal",
+            "task_lines",
         )
         read_only_fields = fields
 
@@ -82,16 +92,44 @@ class ServiceVariantSummarySerializer(serializers.ModelSerializer[ServiceVariant
     def get_starting_price(variant: ServiceVariant) -> dict[str, object]:
         rated = cast(_RatedVariant, cast(object, variant))
         return {
-            "amount_paise": rated.current_rate_amount_paise,
+            "amount_paise": max(
+                rated.current_rate_amount_paise,
+                rated.minimum_service_subtotal_paise,
+            ),
             "currency": rated.current_rate_currency,
         }
+
+    @staticmethod
+    @extend_schema_field(MoneySerializer)
+    def get_minimum_service_subtotal(variant: ServiceVariant) -> dict[str, object]:
+        rated = cast(_RatedVariant, cast(object, variant))
+        return {
+            "amount_paise": rated.minimum_service_subtotal_paise,
+            "currency": rated.current_rate_currency,
+        }
+
+    @staticmethod
+    @extend_schema_field(A1TaskLineSerializer(many=True))
+    def get_task_lines(variant: ServiceVariant) -> list[dict[str, object]]:
+        rated = cast(_A1Variant, cast(object, variant))
+        return [
+            {
+                "code": rate.task_code,
+                "label": variant.service.name,
+                "unit_price": {
+                    "amount_paise": rate.unit_price_paise,
+                    "currency": rate.currency,
+                },
+                "marginal_duration_minutes": rate.marginal_duration_minutes,
+            }
+            for rate in rated.current_task_rates
+        ]
 
 
 class ServiceCardSerializer(serializers.ModelSerializer[Service]):
     category_slug = serializers.CharField(source="subcategory.category.slug", read_only=True)
     subcategory_slug = serializers.CharField(source="subcategory.slug", read_only=True)
     starting_price = serializers.SerializerMethodField()
-    recommended_duration_minutes = serializers.SerializerMethodField()
     cover = serializers.SerializerMethodField()
 
     class Meta:
@@ -104,7 +142,6 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
             "category_slug",
             "subcategory_slug",
             "starting_price",
-            "recommended_duration_minutes",
             "cover",
         )
         read_only_fields = fields
@@ -114,22 +151,19 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
     def get_starting_price(service: Service) -> dict[str, object]:
         variant = min(
             _public_variants(service),
-            key=lambda item: (
-                cast(
-                    _RatedVariant,
-                    cast(object, item),
-                ).current_rate_amount_paise
+            key=lambda item: max(
+                cast(_RatedVariant, cast(object, item)).current_rate_amount_paise,
+                cast(_RatedVariant, cast(object, item)).minimum_service_subtotal_paise,
             ),
         )
         rated = cast(_RatedVariant, cast(object, variant))
         return {
-            "amount_paise": rated.current_rate_amount_paise,
+            "amount_paise": max(
+                rated.current_rate_amount_paise,
+                rated.minimum_service_subtotal_paise,
+            ),
             "currency": rated.current_rate_currency,
         }
-
-    @staticmethod
-    def get_recommended_duration_minutes(service: Service) -> int:
-        return _public_variants(service)[0].recommended_duration_minutes
 
     @staticmethod
     @extend_schema_field(ServiceMediaSerializer(allow_null=True))

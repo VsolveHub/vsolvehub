@@ -23,9 +23,7 @@ export default async function WorkPage() {
       title="Your work"
       description="Pick the trades you are qualified for and the jobs you are willing to take."
     >
-      {({ draft, update, isReadOnly }) => (
-        <WorkStep draft={draft} update={update} isReadOnly={isReadOnly} services={services} />
-      )}
+      <WorkStep services={services} />
     </ApplicationEditor>
   );
 }

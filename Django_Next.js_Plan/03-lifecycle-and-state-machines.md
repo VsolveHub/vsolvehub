@@ -3,8 +3,8 @@
 ## Common customer journey
 
 ```text
-discover → scope → address/serviceability → timing → quote/policy
-         → login/resume → Partner commitment or inventory hold
+discover → multi-item cart/scope → address/serviceability → plan alternatives/timing → quote/policy
+         → login/resume → all required unit commitments or inventory holds
          → payment policy → authoritative confirmation
          → fulfilment → outcome confirmation/dispute → settlement/documents
 ```
@@ -33,6 +33,12 @@ Rules:
 - Payment success received after expiry attempts one atomic capacity reacquire. If that fails, the
   payment is voided/refunded and an Operations case is created.
 - No `Booking` is used as cart or checkout state.
+
+For multi-service visit work, the checkout lifecycle is group-level. Each proposed unit owns its own
+matching/offer/reservation substate, while the group derives `PARTIALLY_HELD` or `ALL_UNITS_HELD`.
+Payment cannot start until every unit required by the accepted all-or-nothing plan is held. Failure of
+one required unit releases the other tentative holds and enters `REPLAN_REQUIRED`; it never silently
+changes the confirmed structure.
 
 ## Booking fulfilment lifecycle for A1-A4
 

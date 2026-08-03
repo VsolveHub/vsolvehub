@@ -38,6 +38,18 @@ function sourceFilesUnder(directory: string): string[] {
 const PENDING_IMPORT = /from\s+["'][^"']*contract-pending[^"']*["']/;
 
 /**
+ * Removes block and line comments so a rule can look at code rather than prose.
+ *
+ * Deliberately naive — it does not understand strings containing `//`, which is
+ * fine here because it is only ever used to make a check *less* likely to fire.
+ * A false negative from this would need a URL path hidden inside a string that
+ * also contains a comment marker, and the checks below would still see the call.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
+/**
  * Paths `contracts/openapi/v1.yaml` does not publish.
  *
  * Listed literally rather than derived, because the point is to notice when
@@ -46,11 +58,11 @@ const PENDING_IMPORT = /from\s+["'][^"']*contract-pending[^"']*["']/;
  * the literal never appears in source anyway.
  */
 const UNPUBLISHED_PATHS = [
-  "/api/v1/booking/windows/",
-  "/api/v1/quotes/",
+  // Contract 1.6.0 published windows, the cart and the quote, so those came off
+  // this list when the integration landed. What remains is the checkout
+  // projection, which BE-07 has not published: `GET /checkouts/{id}/` and the
+  // recovery/cancel commands the finding screen needs.
   "/api/v1/checkout-sessions/",
-  "/api/v1/checkouts/",
-  "/api/v1/carts/",
 ];
 
 /**
@@ -147,6 +159,42 @@ describe("unpublished endpoints stay out of production", () => {
       "A production module names an endpoint that contracts/openapi/v1.yaml does not " +
         "publish. Render an honest unavailable boundary instead, and integrate only " +
         "after the generated client contains the operation.",
+    ).toEqual([]);
+  });
+
+  /**
+   * The FE-09 rule that a type cannot express.
+   *
+   * `POST /checkouts/{checkout_id}/search/advance/` **is** published, so it
+   * cannot go on the unpublished list above — the generated client will happily
+   * type a call to it. It is the legacy singleton progression path, and under the
+   * Booking Group model dispatch starts from a transactional outbox event and is
+   * reconciled by Celery.
+   *
+   * Calling it from a browser would put progress back under the control of
+   * whoever has a tab open: a customer who closes the page would stall their own
+   * booking, and one who leaves it open would advance it faster than a Partner
+   * can answer. Polling observes; it never drives. This is the assertion that
+   * keeps that true after the person who knew it has moved on.
+   */
+  it("never advances dispatch from the browser", () => {
+    const ADVANCE_PATH = "/search/advance/";
+
+    // Comments are stripped first, unlike the unpublished-path check above. The
+    // rule there is "do not even write it down", because naming an endpoint
+    // Django cannot answer is how a raw fetch to it gets added later. The rule
+    // here is narrower and the opposite in one respect: this path *is*
+    // published, and the modules that must not call it are exactly the ones
+    // that should explain why. Scanning their prose would punish the
+    // documentation that keeps the rule alive.
+    const offenders = productionSources
+      .filter((path) => stripComments(readFileSync(path, "utf8")).includes(ADVANCE_PATH))
+      .map((path) => path.replace(CUSTOMER_ROOT, "apps/customer"));
+
+    expect(
+      offenders,
+      "Dispatch is owned by Celery. A browser may observe a Booking Group's " +
+        "progress but must never invoke a state-advance command.",
     ).toEqual([]);
   });
 

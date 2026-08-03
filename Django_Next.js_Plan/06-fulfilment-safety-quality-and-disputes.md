@@ -11,7 +11,7 @@
 
 ## Before departure
 
-Partner job detail includes confirmed scope, exact address when disclosure is allowed, access notes,
+Partner job detail includes only that Partner's confirmed Fulfilment Unit scope, exact address when disclosure is allowed, access notes,
 Customer contact relay, timing, equipment/safety requirements and earnings. The Partner may report:
 
 - address or access information appears inconsistent;
@@ -138,6 +138,10 @@ For partial/aborted work:
 - separately account platform-funded recovery credit;
 - send unpriced/contested work to maker-checker Operations resolution.
 
+In a Booking Group these results are unit-specific. A failed, partial or disputed unit cannot rewrite
+another unit's work state. The group projection derives Customer-facing progress and financial totals
+from unit facts and exposes group-wide recovery only through an explicit domain command.
+
 ## Quality, review and warranty
 
 Only completed or partially completed work may receive a service review. Cancelled/no-show experiences
@@ -191,4 +195,3 @@ At minimum:
 | Warranty/quality | Quality support | callback, deny with reason, or settlement |
 
 Cases may escalate, but they may not close merely because a notification was sent.
-

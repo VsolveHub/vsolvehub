@@ -1,12 +1,6 @@
-import {
-  bookingWindow,
-  cancellationPolicy,
-  checkoutSession,
-  committedCheckoutSession,
-  quote,
-  windowDay,
-  windows,
-} from "../contract-pending/fixtures";
+import { fixtures } from "@vsolve/testing";
+
+import { checkoutSession, committedCheckoutSession } from "../contract-pending/fixtures";
 import { toCheckoutSessionView, type CheckoutSessionView } from "./checkout-session";
 import { toQuoteView, type QuoteView } from "./quote";
 import { toWindowsView, type WindowsView } from "./windows";
@@ -14,28 +8,26 @@ import { toWindowsView, type WindowsView } from "./windows";
 /**
  * View-model fixtures for component tests.
  *
- * Component tests need realistic data, but importing the pending fixtures
- * directly would put them on the wrong side of the quarantine boundary — and
- * then publishing the real contract would force every component test to change,
- * which is exactly what the boundary exists to prevent.
+ * Windows and quotes now come from `@vsolve/testing`, built on the published
+ * 1.6.0 schemas — the boundary did its job: this file changed and no component
+ * test did.
  *
- * So the fixtures are converted here, inside the adapter layer, where knowing
- * the pending shapes is the job. On integration this file is rewritten with
- * everything else in `../adapters/`, and the component tests are untouched.
+ * Checkout fixtures still come from `../contract-pending/`, because BE-07 has
+ * not published that projection. They move the same way when it does.
  */
 
 export function windowsViewFixture(): WindowsView {
-  return toWindowsView(windows());
+  return toWindowsView(fixtures.bookingWindows());
 }
 
 /** A range where every returned window is unavailable. */
 export function fullyBookedWindowsFixture(): WindowsView {
   return toWindowsView(
-    windows({
+    fixtures.bookingWindows({
       days: [
-        windowDay({
+        fixtures.bookingWindowDay({
           windows: [
-            bookingWindow({ is_available: false, unavailable_reason: "NO_CAPACITY" }),
+            fixtures.bookingWindow({ is_available: false, unavailable_reason: "NO_CAPACITY" }),
           ],
         }),
       ],
@@ -44,7 +36,7 @@ export function fullyBookedWindowsFixture(): WindowsView {
 }
 
 export function quoteViewFixture(): QuoteView {
-  return toQuoteView(quote());
+  return toQuoteView(fixtures.quote());
 }
 
 /**
@@ -55,11 +47,12 @@ export function quoteViewFixture(): QuoteView {
  * goes stale the first time Operations changes a fee.
  */
 export function twoBandQuoteViewFixture(): QuoteView {
-  const policy = cancellationPolicy();
+  const policy = fixtures.cancellationPolicy();
   return toQuoteView(
-    quote({
+    fixtures.quote({
       cancellation_policy: {
-        policy_version: "test-two-band",
+        code: "test-two-band",
+        version: 99,
         bands: policy.bands.slice(0, 2),
       },
     }),

@@ -7,6 +7,7 @@ from config.settings.base import *
 DEBUG = False
 
 MINIMUM_SECRET_KEY_LENGTH = 50
+MINIMUM_WEBHOOK_SECRET_LENGTH = 32
 
 if SECRET_KEY.startswith("unsafe-") or len(SECRET_KEY) < MINIMUM_SECRET_KEY_LENGTH:
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be a strong production secret.")
@@ -53,3 +54,15 @@ if PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS <= 0:
     raise ImproperlyConfigured("PARTNER_DOCUMENT_REVIEW_URL_TTL_SECONDS must be positive.")
 if PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS <= 0:
     raise ImproperlyConfigured("PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS must be positive.")
+if PAYMENT_PROVIDER != "razorpay":
+    raise ImproperlyConfigured("PAYMENT_PROVIDER must be razorpay in production.")
+if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+    raise ImproperlyConfigured("Razorpay server credentials must be configured in production.")
+if len(PAYMENT_WEBHOOK_SECRET) < MINIMUM_WEBHOOK_SECRET_LENGTH:
+    raise ImproperlyConfigured("PAYMENT_WEBHOOK_SECRET must contain at least 32 characters.")
+if not RAZORPAY_API_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured("RAZORPAY_API_BASE_URL must use HTTPS.")
+if not PAYMENT_LIVE_COLLECTIONS_APPROVED:
+    raise ImproperlyConfigured(
+        "PAYMENT_LIVE_COLLECTIONS_APPROVED requires CA/legal approval before live collection."
+    )

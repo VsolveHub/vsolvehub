@@ -2,8 +2,10 @@
 
 import { ErrorState, Spinner } from "@vsolve/ui";
 
+import { useApplicationEditor } from "./application-editor";
+
 import { useApplicationReference } from "../reference-queries";
-import { toggle, type ApplicationDraft } from "../model/draft";
+import { toggle } from "../model/draft";
 import { SelectableRow } from "./selectable-row";
 
 /**
@@ -19,13 +21,9 @@ import { SelectableRow } from "./selectable-row";
  * Partner to an area nobody chose.
  */
 
-export interface AreasStepProps {
-  draft: ApplicationDraft;
-  update: (patch: Partial<ApplicationDraft>) => void;
-  isReadOnly: boolean;
-}
+export function AreasStep() {
+  const { draft, update, isReadOnly } = useApplicationEditor();
 
-export function AreasStep({ draft, update, isReadOnly }: AreasStepProps) {
   const reference = useApplicationReference();
 
   if (reference.isPending) {

@@ -2,7 +2,7 @@
 
 import { Field, Input, Textarea } from "@vsolve/ui";
 
-import type { ApplicationDraft } from "../model/draft";
+import { useApplicationEditor } from "./application-editor";
 
 /**
  * Who the customer is letting into their home.
@@ -14,13 +14,9 @@ import type { ApplicationDraft } from "../model/draft";
  * way.
  */
 
-export interface AboutStepProps {
-  draft: ApplicationDraft;
-  update: (patch: Partial<ApplicationDraft>) => void;
-  isReadOnly: boolean;
-}
+export function AboutStep() {
+  const { draft, update, isReadOnly } = useApplicationEditor();
 
-export function AboutStep({ draft, update, isReadOnly }: AboutStepProps) {
   return (
     <div className="flex flex-col gap-5">
       <Field

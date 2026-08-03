@@ -53,18 +53,19 @@ export type Stage = (typeof STAGES)[number];
 const SEQUENCE: readonly Stage[] = STAGES;
 
 /**
- * Stages F2 implements.
+ * Stages the per-service workspace still implements.
  *
- * `login` is F2's own resume handling; `finding`, `pay` and `confirmed` are
- * modelled here so the ordering rule is enforced and testable, and are built
- * once `POST /checkout-sessions/` is published (proposal 0003 §B3).
+ * Only `scope`. Under the Booking Group model a service page configures one
+ * request and appends it to the cart; the address, the timing and the review are
+ * confirmed once for the whole group, so they moved to `/cart` where they can
+ * see every item rather than one.
+ *
+ * The full sequence above is deliberately left intact. It encodes the ordering
+ * that still has to hold — payment cannot precede a committed Partner — and
+ * shortening the list to match today's screens would delete the rule along with
+ * the stages.
  */
-export const STAGES_IMPLEMENTED: readonly Stage[] = [
-  "address",
-  "scope",
-  "window",
-  "review",
-] as const;
+export const STAGES_IMPLEMENTED: readonly Stage[] = ["scope"] as const;
 
 export function sequence(): readonly Stage[] {
   return SEQUENCE;

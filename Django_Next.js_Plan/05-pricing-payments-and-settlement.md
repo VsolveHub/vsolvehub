@@ -9,6 +9,8 @@
 - Duration is a price input only when the archetype sells time.
 - Taxes, commissions and cancellation treatment are configuration approved for the relevant legal
   entity and effective period.
+- Multi-service quotes reconcile group totals to unit and line allocations. A minimum-visit rule is
+  applied per Fulfilment Unit, while a group-level fee is charged once only when its policy says so.
 
 ## Archetype pricing
 
@@ -87,6 +89,10 @@ Every `PaymentAttempt` has:
 - monotonic domain state;
 - expiry and reconciliation state.
 
+A group payment also owns immutable `PaymentAllocation` rows for every affected unit/quote line.
+Capture, refund, chargeback, tax documents, Partner earnings and Operations exposure can therefore be
+reconciled when only one unit is cancelled, fails, completes partially or is disputed.
+
 Duplicate and out-of-order webhooks are safe. Provider success plus database ambiguity triggers
 reconciliation. If the system cannot converge to a valid booking/financial target, it voids/refunds and
 opens an Operations case.
@@ -157,4 +163,3 @@ reconciliation are proven.
 - Supplier of record, place of supply, GST treatment and statutory deductions require qualified Indian
   tax/legal approval before live money.
 - A rounding adjustment is explicit; totals are never silently altered.
-

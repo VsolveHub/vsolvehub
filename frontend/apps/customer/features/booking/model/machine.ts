@@ -32,6 +32,28 @@ export type WorkspaceAction =
   | { type: "ANSWER"; questionCode: string; value: unknown }
   | { type: "SET_TASK_QUANTITY"; taskCode: string; quantity: number }
   | { type: "SET_NOTES"; notes: string }
+  /**
+   * Persisted customer intent, replayed once after the client has mounted.
+   *
+   * Restoration is an action rather than a reducer initializer because the
+   * initializer runs during render, and on the server there is no
+   * `sessionStorage` to run it against. An initializer that reads storage
+   * therefore produces one tree on the server and a different one on the first
+   * client render — the classic hydration mismatch, which React resolves by
+   * silently discarding the client tree. Making it a transition means both
+   * renders start from `initialState` and the restore is a second, deliberate
+   * commit that React is expecting.
+   *
+   * Only customer intent travels. No address, window, price or deadline: those
+   * are server verdicts with an expiry, and replaying one would put a claim on
+   * screen that the server has already withdrawn.
+   */
+  | {
+      type: "RESTORE_INTENT";
+      answers: Readonly<Record<string, unknown>>;
+      notes: string;
+      taskLines: readonly TaskLine[];
+    }
   | { type: "SELECT_WINDOW"; windowId: string; isAvailable: boolean }
   /** The window was taken before checkout could claim it. Returns to selection. */
   | { type: "WINDOW_LOST" }
@@ -128,6 +150,19 @@ export function workspaceReducer(
 
     case "SET_NOTES":
       return { ...state, notes: action.notes };
+
+    case "RESTORE_INTENT":
+      // Restoring what the customer already chose is not a change to it, so
+      // nothing availability-derived is cleared here: there is nothing derived
+      // yet. It is refused once anything has been answered, because a late
+      // restore would then overwrite live work with a stale snapshot.
+      if (Object.keys(state.answers).length > 0 || state.taskLines.length > 0) return state;
+      return {
+        ...state,
+        answers: action.answers,
+        notes: action.notes,
+        taskLines: [...action.taskLines],
+      };
 
     case "SELECT_WINDOW": {
       // The refusal that makes the acceptance criterion structural.

@@ -45,8 +45,9 @@ but it may not be forced through another archetype's booking state machine.
 |---|---|---|---|
 | Catalog | Describe what can actually be bought | Effective-dated variants and scope questions | An incomplete variant cannot activate |
 | Serviceability | Prevent impossible demand | Confirmed address plus area/variant rules | Never invent a city, coordinate or fallback |
-| Cart | Preserve editable intent and login continuity | One active cart; one item per intended visit | Conflict is explicit; local state is not truth |
-| Quote | Keep every displayed amount consistent | Immutable server-calculated lines | Expired quote requires visible reconfirmation |
+| Cart | Preserve editable intent and login continuity | One active versioned cart with independently scoped items | Concurrent merge/edit is explicit; local state is not truth |
+| Planning | Turn multiple requests into executable work | Server-authored Booking Group alternatives and Fulfilment Units | Never guess compatibility, capacity or silent splitting |
+| Quote | Keep every displayed amount consistent | Immutable group, unit and line calculations | Expired/invalidated quote requires visible reconfirmation |
 | Availability | Avoid promising unavailable service | Explicit Partner working periods plus reservations | False availability fails closed before charge |
 | Assignment | Obtain informed Partner commitment | Explicit offer/accept with a deadline | Decline/expiry moves to the next candidate |
 | Payment | Collect and reconcile money | Provider adapter, webhook, idempotency | Ambiguous state is reconciled, never guessed |
@@ -67,8 +68,9 @@ but it may not be forced through another archetype's booking state machine.
   incidents separately; introduce an approved risk policy only with sufficient volume and appeal.
 - Do not silently move work that a Partner has accepted. Reassignment after commitment is visible to
   the Partner and, once identity was disclosed, to the Customer.
-- Do not build scheduling optimizers, repacking, surge pricing, tiers or personalized incentives before
-  ordinary assignment produces measured constraints.
+- Keep fulfilment planning deterministic, bounded and explainable. Do not add continuous repacking,
+  statistical scheduling, surge pricing, tiers or personalized incentives before ordinary planning
+  and assignment produce measured constraints.
 - Do not add nullable foreign keys to nonexistent future models. Future schema belongs to the
   milestone that builds the feature.
 - Do not expose toggles, statuses, payment modes or languages that do not function end to end.
@@ -79,4 +81,3 @@ A feature is ready only when its happy path, authorization, idempotency, concurr
 timeouts, dependency failure, user cancellation, Operations recovery, customer/Partner copy,
 observability and regression tests are all defined. A support escalation is a valid outcome only when
 the case type, evidence, settlement rule, owner and SLA are specified.
-

@@ -11,7 +11,7 @@ from apps.catalog.models import (
     Subcategory,
 )
 from apps.locations.models import ServiceArea, ServiceAreaService
-from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
+from apps.pricing.models import CancellationPolicy, PricingPolicy, ServiceRate, TaskRate
 
 pytestmark = pytest.mark.django_db
 TECHNICIAN_SERVICE_COUNT = 6
@@ -50,6 +50,16 @@ def test_technician_seed_is_complete_and_idempotent() -> None:
     assert policy.gst_rate_basis_points == GST_RATE_BASIS_POINTS
     assert policy.platform_fee_value == PLATFORM_FEE_PAISE
     assert policy.commission_basis_points == GST_RATE_BASIS_POINTS
+    cancellation_policy = CancellationPolicy.objects.get(
+        code="m1-scheduled-today",
+        version=1,
+    )
+    assert list(cancellation_policy.bands.values_list("fee_paise", flat=True)) == [
+        0,
+        4_900,
+        9_900,
+        14_900,
+    ]
     assert (
         A1VariantConfiguration.objects.filter(
             status=A1VariantConfiguration.Status.ACTIVE,

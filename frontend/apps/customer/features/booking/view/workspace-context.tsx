@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   type ReactNode,
 } from "react";
 
@@ -118,32 +119,70 @@ export function clearPersistedIntent(serviceSlug: string): void {
   }
 }
 
-function restore(serviceSlug: string): WorkspaceState {
-  const base = initialState(serviceSlug);
-  const intent = readIntent(serviceSlug);
-  if (intent === null) return base;
-
-  return {
-    ...base,
-    answers: intent.answers,
-    notes: intent.notes,
-    taskLines: intent.taskLines ?? [],
-    // Address is intentionally not restored from the id alone: serviceability
-    // is a server verdict with an expiry, and restoring the id without
-    // rechecking would let a stale "serviceable" survive. The address stage
-    // refetches and reconfirms it.
-  };
+/**
+ * The reducer's initializer. Deliberately storage-free.
+ *
+ * `sessionStorage` is not readable during server rendering, so an initializer
+ * that consults it renders one tree on the server and a different one on the
+ * client's first pass. React resolves that mismatch by throwing the client tree
+ * away and re-rendering from scratch, which is both a real performance cost and
+ * a source of the "my answers flashed and vanished" class of bug. Both renders
+ * therefore start from the same empty state, and the restore happens afterwards
+ * through `RESTORE_INTENT` — see `useRestorePersistedIntent`.
+ */
+function start(input: { serviceSlug: string; initialStage: Stage }): WorkspaceState {
+  return initialState(input.serviceSlug, input.initialStage);
 }
 
 export interface WorkspaceProviderProps {
   serviceSlug: string;
+  /** Which stage the workspace opens on. See `initialState`. */
+  initialStage?: Stage;
   children: ReactNode;
 }
 
-export function WorkspaceProvider({ serviceSlug, children }: WorkspaceProviderProps) {
-  const [state, dispatch] = useReducer(workspaceReducer, serviceSlug, restore);
+export function WorkspaceProvider({
+  serviceSlug,
+  initialStage = "address",
+  children,
+}: WorkspaceProviderProps) {
+  const [state, dispatch] = useReducer(workspaceReducer, { serviceSlug, initialStage }, start);
 
   useEffect(() => {
+    const intent = readIntent(serviceSlug);
+    if (intent === null) return;
+    dispatch({
+      type: "RESTORE_INTENT",
+      answers: intent.answers,
+      notes: intent.notes,
+      // Address is intentionally not restored from the id alone: serviceability
+      // is a server verdict with an expiry, and restoring the id without
+      // rechecking would let a stale "serviceable" survive. The address stage
+      // refetches and reconfirms it.
+      taskLines: intent.taskLines ?? [],
+    });
+  }, [serviceSlug]);
+
+  /**
+   * Persists customer intent — but never on the mount commit.
+   *
+   * The restore effect above is declared first, so within a single commit it
+   * runs first; this one then runs with the state React has *already rendered*,
+   * which on mount is still the empty initial state. Writing that would
+   * serialise emptiness over the very intent the restore is about to apply, and
+   * a customer who reloaded twice would lose their answers on the second one.
+   *
+   * Skipping the first run costs nothing: an initial state has nothing worth
+   * saving, and the restore's own re-render is what triggers the first real
+   * write.
+   */
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
     writeIntent(state);
   }, [state]);
 

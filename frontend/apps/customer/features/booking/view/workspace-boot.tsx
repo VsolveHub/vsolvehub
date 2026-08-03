@@ -73,7 +73,7 @@ export function BookingWorkspaceBoot({
   minimumSubtotalPaise,
 }: BookingWorkspacePageProps) {
   return (
-    <WorkspaceProvider serviceSlug={service.slug}>
+    <WorkspaceProvider serviceSlug={service.slug} initialStage="scope">
       <Configure variant={variant} tasks={tasks} />
       <BookingWorkspace
         service={service}

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { EmptyState, Skeleton } from "@vsolve/ui";
 
-import { getCategories, getCategory, getCategoryServices } from "@/features/catalog/queries";
+import { getCategory, getCategoryServices } from "@/features/catalog/queries";
 import { ServiceCard } from "@/features/catalog/components/service-card";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
 
@@ -14,26 +14,26 @@ type PageProps = { params: Promise<{ category: string }> };
 export const revalidate = 300;
 
 /**
- * Pre-renders every category at build time. The set is small and changes rarely,
- * so the whole category tier can be static; `revalidate` keeps it current.
+ * Deliberately prerenders nothing.
+ *
+ * Returning the category list here made `next build` depend on a reachable
+ * Django: when the API blipped, the build failed part-way through prerendering
+ * with a fetch stack trace that reads like a frontend defect. That happened
+ * three times in one working session.
+ *
+ * `catalog/page.tsx` already states the rule this follows — a frontend build
+ * must not require a live backend — and enforces it with `connection()`. The
+ * same rule applies here; the mechanism differs only because this route opts
+ * into prerendering through `generateStaticParams`, so opting out means
+ * returning nothing.
+ *
+ * Nothing is lost in steady state. `dynamicParams` defaults to true, so every
+ * category still renders on demand and is then cached for `revalidate`
+ * seconds — the same five minutes a prerendered page would have used. The only
+ * cost is the first request after a deploy.
  */
-export async function generateStaticParams() {
-  try {
-    const categories = await getCategories();
-    return categories.map((category) => ({ category: category.slug }));
-  } catch (error) {
-    // A build must not fail because the API was briefly unreachable — returning
-    // nothing falls back to on-demand rendering, which still serves correct
-    // pages. But it silently loses every prerendered category, so it is logged
-    // loudly: a deploy that quietly stopped prerendering is exactly the kind of
-    // regression nobody notices until the latency graph moves.
-    console.error(
-      "[catalog] Could not reach the API during build; no categories were prerendered. " +
-        "All category pages will render on demand.",
-      error,
-    );
-    return [];
-  }
+export function generateStaticParams(): { category: string }[] {
+  return [];
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {

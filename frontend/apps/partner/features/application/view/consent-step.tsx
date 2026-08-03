@@ -3,7 +3,7 @@
 import { ErrorState, Spinner } from "@vsolve/ui";
 
 import { useApplicationReference } from "../reference-queries";
-import type { ApplicationDraft } from "../model/draft";
+import { useApplicationEditor } from "./application-editor";
 
 /**
  * The agreements an applicant accepts before review.
@@ -24,13 +24,9 @@ import type { ApplicationDraft } from "../model/draft";
  * its own audit, not the absence of a tick.
  */
 
-export interface ConsentStepProps {
-  draft: ApplicationDraft;
-  update: (patch: Partial<ApplicationDraft>) => void;
-  isReadOnly: boolean;
-}
+export function ConsentStep() {
+  const { draft, update, isReadOnly } = useApplicationEditor();
 
-export function ConsentStep({ draft, update, isReadOnly }: ConsentStepProps) {
   const reference = useApplicationReference();
 
   if (reference.isPending) {

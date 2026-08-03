@@ -13,6 +13,12 @@ export {
 } from "./freshness";
 export type { FreshnessTier } from "./freshness";
 
+export { boundedPoll, nextPollDelay } from "./polling";
+export type { BoundedPollOptions, PollPolicyInput } from "./polling";
+
+export { useServerCountdown, describeCountdown } from "./countdown";
+export type { Countdown } from "./countdown";
+
 export { shouldRetryQuery, shouldRetryMutation, queryRetryDelay } from "./retry";
 
 export { describeError, isFieldError } from "./error-presentation";

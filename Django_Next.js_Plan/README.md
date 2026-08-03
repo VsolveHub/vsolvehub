@@ -22,7 +22,8 @@ design into executable scope without redefining global policy.
 10. [Delivery roadmap](./09-delivery-roadmap.md)
 11. [Decision register](./10-decision-register.md)
 12. [Feature and edge-case register](./11-feature-and-edge-case-register.md)
-13. [Milestone 1](./M1/README.md)
+13. [Booking groups and fulfilment planning](./12-booking-groups-and-fulfilment-planning.md)
+14. [Milestone 1](./M1/README.md)
 
 There is no document-precedence chain. If two active documents disagree, the plan is defective and
 must be corrected in the same change. The decision register explains *why* a rule exists; the domain
@@ -53,6 +54,9 @@ capability is scheduled, before production data depends on it.
   Acknowledge.
 - A booking is never described as confirmed until payment policy and Partner commitment both support
   that statement.
+- A multi-service confirmation is a `BookingGroup` composed of independently recoverable
+  `FulfilmentUnit` records; each unit has one lead Partner and every cart line appears in exactly one
+  confirmed unit.
 - Customer and Partner failures are attributed separately from platform failures.
 - A Partner can release before work and abort during work; neither path may trap a person or silently
   abandon the customer.

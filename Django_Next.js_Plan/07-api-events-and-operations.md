@@ -45,14 +45,20 @@ GET  /cart
 POST /cart/items
 PATCH|DELETE /cart/items/{id}
 PUT  /cart/items/{id}/scope
-POST /quotes
-POST /availability/windows
+POST /fulfilment-plan-sets
+GET  /fulfilment-plan-sets/{reference}
+POST /fulfilment-plans/{reference}/quotes
 POST /checkout-sessions
 GET  /checkout-sessions/{reference}
 POST /checkout-sessions/{reference}/find-partner
 POST /checkout-sessions/{reference}/cancel
 POST /checkout-sessions/{reference}/payments
 ```
+
+Cart mutations carry expected cart version. Plan alternatives publish unit membership, visit and
+professional counts, unit windows, prices, compatibility/separation reasons and expiry. The selected
+quote snapshots one plan; checkout never accepts client-authored grouping, Partner IDs, time, duration
+or money.
 
 There is no Customer provider-list endpoint. Partner identity appears only after accepted assignment
 and disclosure policy allow it.
@@ -127,6 +133,8 @@ Events describe committed facts, for example:
 
 ```text
 checkout.partner_search_started
+booking_group.planned|confirmed|replan_required|cancelled
+fulfilment_unit.matching_started|held|released|booked|recovery_required
 partner.offer_created|accepted_provisional|committed|undone|declined|expired
 reservation.tentative|confirmed|released
 payment.captured|failed|ambiguous|refunded
@@ -149,6 +157,7 @@ Required families:
 - notification delivery and retry;
 - payment/refund/payout reconciliation;
 - assignment recovery and lateness watchdogs;
+- Booking Group planning expiry, all-unit hold coordination and idempotent compensation;
 - completion-response and dispute-window deadlines;
 - series visit materialization, milestone reminders and archetype jobs when those features launch;
 - invoice/credit-note generation;

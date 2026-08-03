@@ -13,7 +13,7 @@ give consent on a Partner's behalf.
 
 ## Eligibility gates
 
-For visit work, every candidate must satisfy:
+For visit work, every candidate for a Fulfilment Unit must satisfy:
 
 - approved and not suspended/offboarded;
 - required service, skill, equipment and any background-check policy;
@@ -24,6 +24,10 @@ For visit work, every candidate must satisfy:
 - no Customer/Partner block and no self-assignment;
 - archetype-specific gender/safety rules where legally and product-appropriate;
 - for Instant: fresh online presence, delivery-capable device and fresh consented location.
+
+For a multi-line unit, eligibility is the intersection across every exact service variant, skill,
+equipment and safety requirement in that unit. Same category or a general skill label is insufficient.
+Parallel plans require distinct eligible capacity per concurrent unit.
 
 The occupied range includes the service estimate and minimum travel/setup buffers. Pairwise travel may
 increase required gaps. A routing adapter may replace the initial conservative estimator without
@@ -63,8 +67,14 @@ PostgreSQL protects active reservation overlap using an exclusion constraint on 
 8. Payment fail/expiry → release reservation; no booking and no Partner penalty.
 ```
 
-The customer sees a bounded finding state before payment and can cancel at any time. If the full pool
-is exhausted, alternatives are returned without charging the Customer.
+For a Booking Group, ranking and offers run independently for each unit under one durable coordinator.
+Payment opens only after all required units have committed tentative reservations. If any pool is
+exhausted, all other tentative group holds are released and revised plan alternatives are returned
+without charging the Customer.
+
+The customer sees a bounded group finding state before payment and can cancel at any time. They see
+unit count, professional count, coordinated/separate windows and any replanning reason, but not Partner
+identity before disclosure policy permits it.
 
 At pilot density, Operations may assign using the same offer/accept command. Operations cannot force an
 accepted state.

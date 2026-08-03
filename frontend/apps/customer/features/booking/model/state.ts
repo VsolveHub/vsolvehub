@@ -77,11 +77,23 @@ export interface WorkspaceState {
   resumeStage: Stage | null;
 }
 
-export function initialState(serviceSlug: string): WorkspaceState {
+/**
+ * @param initialStage Where the workspace opens.
+ *
+ * Configurable because the workspace no longer owns the whole journey. Address
+ * and timing are confirmed once for a Booking Group rather than once per
+ * service, so this reducer's job on `/book/[service]` is scope alone; the stage
+ * list and its guards stay intact because they still describe the ordering that
+ * has to hold.
+ */
+export function initialState(
+  serviceSlug: string,
+  initialStage: Stage = "address",
+): WorkspaceState {
   return {
     serviceSlug,
     rules: null,
-    stage: "address",
+    stage: initialStage,
     visited: [],
     address: null,
     answers: {},

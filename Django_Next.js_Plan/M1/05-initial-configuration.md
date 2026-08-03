@@ -47,20 +47,47 @@ density is not met, the area/category stays unavailable rather than using a hidd
 expanding the radius. Today bookings need 120 minutes lead time; Scheduled bookings may be made up to
 7 calendar days ahead. Customer arrival windows are 60 minutes.
 
+## Cart and fulfilment-planning limits
+
+These are launch safety limits and effective-dated configuration, not schema cardinalities or final
+product exclusions:
+
+| Setting | M1 value | Behaviour at limit |
+|---|---:|---|
+| Active cart items | 5 | Reject another add with the current cart and a remove/edit action |
+| Fulfilment Units in one Booking Group | 5 | Return no plan and explain that the Customer must reduce/split intent |
+| Concurrent Partners at one address | 2 | Offer sequential or separate-visit alternatives |
+| Combined occupied duration for one sequential unit | 240 minutes | Split into separate units/visits |
+| Planning alternatives returned | 3 | Rank deterministically and retain the decisive reasons |
+| Plan/quote lifetime | 15 minutes | Invalidate and require visible replanning/requote |
+
+M1 Booking Groups use one confirmed address and `ALL_OR_NOTHING` confirmation. Cross-category
+combination is allowed only through explicit compatibility configuration and a non-empty intersection
+of Partners eligible for every exact variant. Missing compatibility defaults to separate units.
+
+The initial compatibility matrix must be Operations-owned seed/configuration reviewed before launch.
+It explicitly identifies same-Partner sequential pairs, parallel-safe pairs, must-separate pairs and
+dependencies. Category membership never creates a rule automatically.
+
+The minimum service subtotal is applied per Fulfilment Unit. The initial ₹29 platform fee is charged
+once per Booking Group and allocated proportionally across unit service subtotals, with any paise
+remainder assigned by stable unit order. Quotes show both group and unit totals before confirmation.
+
 ## Assignment, reservation and payment clocks
 
 | Setting | Initial value | Expiry behaviour |
 |---|---:|---|
-| One Partner offer | 45 seconds | Expire and offer the next eligible candidate |
-| Candidates per search | 3 | End with honest no-Partner alternatives |
-| Whole search | 180 seconds | Stop search; Customer is not charged |
+| One Partner offer per unit | 45 seconds | Expire and offer the next eligible candidate for that unit |
+| Candidates per unit search | 3 | Mark the unit exhausted and trigger group compensation/replan |
+| Whole Booking Group search | 180 seconds | Release all tentative unit holds; Customer is not charged |
 | Provisional acceptance undo | 120 seconds | Commit when the deadline passes unless undone |
 | Customer payment window | 5 minutes | Expire checkout and release tentative reservation |
 | Payment-start safety margin | 30 seconds | Disable starting payment this close to reservation expiry |
 
 A permanent offer-delivery failure advances immediately instead of waiting 45 seconds. The whole
-search deadline always wins over a per-offer deadline. Server time is authoritative and every API
-response that exposes a deadline includes it as an absolute timestamp.
+group-search deadline always wins over unit/offer deadlines. Server time is authoritative and every
+API response that exposes a deadline includes it as an absolute timestamp. Payment opens only when
+every required unit has a committed tentative reservation; one exhausted unit releases the others.
 
 The M1 Partner inbox observes a replayable server projection through bounded short polling. Polling
 backs off or pauses when hidden/offline and refreshes from authoritative state after reconnect; it
@@ -104,6 +131,9 @@ rewriting a paid ledger entry.
 
 The backend returns a cancellation quote before confirmation. No fee exceeds the unpaid/refundable
 service subtotal. If payment has not settled, the system never represents a refund as completed.
+For a Booking Group, the policy is evaluated independently for every affected unit using that unit's
+window and state, then reconciled to a group cancellation total. Cancelling one unit does not reset or
+rewrite the cancellation ladder of another unit.
 
 ## Commission and payout
 

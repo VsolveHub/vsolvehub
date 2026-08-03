@@ -10,24 +10,32 @@ Every milestone includes backend, Customer, Partner, Operations, contract, data 
 observability, runbooks and acceptance. A backend engine without a real fulfilment and recovery path is
 not complete.
 
+A milestone may limit activated categories, areas, policies or operating modes, but it may not encode
+a contradictory cardinality or ownership model that a later milestone must replace. Shared durable
+relationships—multi-item cart, Booking Group, Fulfilment Unit, unit money allocation and archetype
+ownership—are introduced with their first use and extended compatibly.
+
 ## M1 — Scheduled A1 Technician foundation
 
-Purpose: prove one honest task-priced visit from discovery through settlement.
+Purpose: prove honest multi-service task-priced planning and one-or-more A1 visits from discovery
+through allocated settlement.
 
 Scope:
 
 - Django platform, identity, catalog, address/serviceability and Partner onboarding foundations;
 - a deliberately small set of one-person Technician `A1_TASK_VISIT` variants;
+- a versioned multi-item cart and server-authored alternatives for one-Partner sequential,
+  coordinated parallel or separate-visit fulfilment;
 - Scheduled and Today windows only;
 - explicit Partner availability and offer/accept before Customer payment;
-- single service and single visit per checkout;
-- task quote, minimum visit charge, payment/webhook/refund and invoice;
+- Booking Group coordination with one Partner/reservation/booking per Fulfilment Unit;
+- group/unit task quote, minimum visit charge, payment allocation, webhook/refund and invoice;
 - arrival, start OTP, task outcomes, evidence, amendment, partial/abort/completion-dispute flow;
 - cancellation, late/no-show and Partner recovery;
 - Partner pending earnings and Operations-reviewed payout batch;
 - Operations case workspace and production controls.
 
-Excluded: Instant, A2, crews, grouped checkout, Partner-procured materials, recurring work, automatic
+Excluded: Instant, A2, crews, Partner-procured materials, recurring work, automatic
 reliability penalties, provider picker, live tracking and on-demand payout.
 
 Detailed execution is in [M1](./M1/README.md).
@@ -43,7 +51,8 @@ Scope:
 - catalog/platform materials and capped Partner-procured reimbursement with receipt/return controls;
 - warranty/callback product, quality metrics and dispute refinement;
 - preferred prior Partner request;
-- multi-service cart/order grouping after single-booking reconciliation is proven;
+- inspection-aware grouping rules and same-visit A2-to-A1 conversion using the existing Booking Group
+  and Fulfilment Unit architecture;
 - automated payout provider/reconciliation, with account-change cooling and maker-checker.
 
 Gate: inspection outcomes, delayed quote acceptance, material fraud/return and callback funding must pass
@@ -157,4 +166,3 @@ and the roadmap must name it.
 - Production-like performance and accessibility gates pass.
 - No critical/high defect remains unresolved.
 - Rollback/cutover is rehearsed.
-

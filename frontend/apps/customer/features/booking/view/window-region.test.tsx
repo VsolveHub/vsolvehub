@@ -7,12 +7,13 @@ import { WindowRegion, type WindowAvailability } from "./window-region";
 import { WorkspaceProvider } from "./workspace-context";
 
 /**
- * Five answers, five different screens.
+ * Four answers, four different screens.
  *
- * The one that matters most today is `unpublished`. Django serves no arrival
- * windows yet, so the honest screen is "this step is not open", not a request
- * that can only fail — and certainly not the failure copy, which a customer
- * reads as "there is no availability".
+ * The `unpublished` state these tests used to cover is gone: contract 1.6.0
+ * published the operation, so the step calls it. What remains is the distinction
+ * that still matters — a failed search and an empty one must never look alike,
+ * because "we could not load arrival windows" reads to a customer as "there is
+ * nothing available".
  */
 
 function renderRegion(availability: WindowAvailability) {
@@ -23,41 +24,7 @@ function renderRegion(availability: WindowAvailability) {
   );
 }
 
-describe("before the endpoint is published", () => {
-  it("says the step is not open rather than claiming a failure", () => {
-    renderRegion({ status: "unpublished" });
-
-    expect(screen.getByRole("status")).toHaveTextContent(/not open yet/i);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("never implies there is no availability", () => {
-    // The specific misreading: "we could not load arrival windows" and "every
-    // window is taken" look identical to someone deciding whether to book here.
-    renderRegion({ status: "unpublished" });
-    const copy = screen.getByRole("status").textContent ?? "";
-
-    expect(copy).not.toMatch(/no windows|none available|fully booked|could not load/i);
-  });
-
-  it("confirms nothing was booked and nothing was lost", () => {
-    renderRegion({ status: "unpublished" });
-    const copy = screen.getByRole("status").textContent ?? "";
-
-    expect(copy).toMatch(/nothing has been booked/i);
-    expect(copy).toMatch(/not been charged/i);
-    expect(copy).toMatch(/saved/i);
-  });
-
-  it("offers no control that would send a request", () => {
-    renderRegion({ status: "unpublished" });
-
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
-  });
-});
-
-describe("while a published search is running", () => {
+describe("while the search is running", () => {
   it("announces loading once rather than leaving a screen reader in silence", () => {
     renderRegion({ status: "loading" });
 
@@ -71,7 +38,7 @@ describe("while a published search is running", () => {
   });
 });
 
-describe("when a published search fails", () => {
+describe("when the search fails", () => {
   it("says so instead of loading for ever", () => {
     renderRegion({ status: "error", onRetry: vi.fn() });
 
@@ -95,5 +62,24 @@ describe("when windows arrive", () => {
 
     expect(screen.getByRole("radiogroup", { name: /choose a date/i })).toBeInTheDocument();
     expect(screen.queryByText(/loading available arrival windows/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("an empty result", () => {
+  it("says every window is taken, not that something failed", () => {
+    // The distinction the whole component exists for. An empty answer is the
+    // server telling the truth; a failure is us being unable to ask.
+    renderRegion({
+      status: "ready",
+      windows: {
+        days: [],
+        estimatedDurationMinutes: 60,
+        isEmpty: true,
+        isPreliminary: false,
+      },
+    });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/no arrival windows available/i)).toBeInTheDocument();
   });
 });

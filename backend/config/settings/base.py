@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import environ
+from corsheaders.defaults import default_headers
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -18,6 +19,7 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
 CORS_URLS_REGEX = r"^/api/.*$"
 
 INSTALLED_APPS = [
@@ -78,7 +80,7 @@ ASGI_APPLICATION = "config.asgi.application"
 DATABASES = {
     "default": env.db(
         "DATABASE_URL",
-        default="postgresql://vsolve:vsolve-local-only@127.0.0.1:55432/vsolve",
+        default="postgresql://vsolve:vsolve-local-only@127.0.0.1:15432/vsolve",
     ),
 }
 DATABASES["default"]["CONN_MAX_AGE"] = 60
@@ -153,14 +155,22 @@ M1_PAYMENT_WINDOW_SECONDS = 300
 M1_TODAY_LEAD_TIME_MINUTES = 120
 M1_SCHEDULED_MAX_DAYS = 7
 M1_ARRIVAL_WINDOW_MINUTES = 60
+M1_WINDOW_TOKEN_TTL_SECONDS = 15 * 60
+M1_QUOTE_TTL_SECONDS = 15 * 60
 M1_PARTNER_OFFER_TIMEOUT_SECONDS = 45
 M1_PARTNER_SEARCH_CANDIDATE_LIMIT = 3
 M1_PARTNER_UNDO_TIMEOUT_SECONDS = 120
+M1_CART_ITEM_LIMIT = 5
+M1_FULFILMENT_UNIT_LIMIT = 5
+M1_CONCURRENT_PARTNER_LIMIT = 2
+M1_SEQUENTIAL_UNIT_MAX_MINUTES = 240
+M1_FULFILMENT_PLAN_LIMIT = 3
+M1_FULFILMENT_PLAN_TTL_SECONDS = 15 * 60
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.5.0",
+    "VERSION": "1.10.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -168,6 +178,7 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
+        "QuoteLineKindEnum": "apps.carts.models.QuoteLine.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
     },
 }
@@ -186,6 +197,20 @@ OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
 FINANCE_STEP_UP_TTL_SECONDS = env.int("FINANCE_STEP_UP_TTL_SECONDS", default=10 * 60)
+
+PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
+PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
+RAZORPAY_API_BASE_URL = env("RAZORPAY_API_BASE_URL", default="https://api.razorpay.com/v1")
+RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
+RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
+PAYMENT_PROVIDER_CONNECT_TIMEOUT_SECONDS = env.float(
+    "PAYMENT_PROVIDER_CONNECT_TIMEOUT_SECONDS", default=3.0
+)
+PAYMENT_PROVIDER_READ_TIMEOUT_SECONDS = env.float(
+    "PAYMENT_PROVIDER_READ_TIMEOUT_SECONDS", default=10.0
+)
+PAYMENT_LEGAL_ENTITY_CODE = env("PAYMENT_LEGAL_ENTITY_CODE", default="vsolve")
+PAYMENT_LIVE_COLLECTIONS_APPROVED = env.bool("PAYMENT_LIVE_COLLECTIONS_APPROVED", default=False)
 
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GEOCODING_NOMINATIM_URL = env(
@@ -252,12 +277,24 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT_SECONDS", default=60)
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", default=45)
 CELERY_BEAT_SCHEDULE = {
+    "reconcile-booking-group-dispatch": {
+        "task": "apps.assignments.tasks.reconcile_booking_group_dispatch",
+        "schedule": 10.0,
+    },
     "cleanup-partner-document-uploads": {
         "task": "apps.partners.tasks.cleanup_partner_document_uploads",
         "schedule": 60.0 * 60,
     },
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",
+        "schedule": 60.0,
+    },
+    "reconcile-payments": {
+        "task": "apps.commerce.tasks.reconcile_payments",
+        "schedule": 30.0,
+    },
+    "reconcile-refunds": {
+        "task": "apps.commerce.tasks.reconcile_refunds",
         "schedule": 60.0,
     },
 }

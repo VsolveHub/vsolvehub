@@ -36,7 +36,12 @@ exploration, not as crossed-out active policy.
 | ADR-029 | Future models ship with their capability | Avoid unusable nullable seams and speculative migrations |
 | ADR-030 | Automatic Partner/customer risk restrictions require evidence and appeal | Capability decisions must be attributable, explainable and reversible |
 | ADR-031 | Tax, privacy and regulated business rules are reviewed configuration | Laws and provider obligations change independently of deployments |
-| ADR-032 | M1 is a complete Scheduled/Today A1 Technician slice | Prove ordinary fulfilment before Instant and future archetypes |
+| ADR-032 | M1 is a complete Scheduled/Today A1 Technician slice on the product-wide group/unit model | Prove ordinary fulfilment before Instant and future archetypes without shipping singleton architecture |
+| ADR-033 | One active Cart contains multiple independently scoped items | Customer intent must not be destroyed merely because fulfilment is planned later |
+| ADR-034 | The server publishes immutable Fulfilment Plan alternatives before confirmation | Compatibility, capacity, visit count, Partner count, time and money are business decisions, not frontend arithmetic |
+| ADR-035 | A Booking Group contains one or more Fulfilment Units; one unit has one lead Partner and one booking | Preserve Customer grouping while assignment, work, cancellation and settlement remain operationally recoverable |
+| ADR-036 | Group confirmation is all-or-nothing unless the Customer explicitly accepts a published partial policy | Never turn one confirmed structure into hidden partial success |
+| ADR-037 | Same category never proves combination; a multi-line unit requires exact compatibility and common Partner eligibility | Prevent unsafe or impossible work from category-level assumptions |
 
 ## Decision change process
 
@@ -49,4 +54,3 @@ A changed decision requires:
 5. tests that prove the new invariant.
 
 Adding another higher-precedence planning document is not an acceptable change process.
-

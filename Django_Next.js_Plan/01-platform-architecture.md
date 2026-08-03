@@ -54,6 +54,9 @@ folder names match this list; enforce ownership through services, selectors and 
 - Transactional outbox rows are committed with business state and published afterward.
 - Provider webhooks are stored before reduction and deduplicated by provider event identity.
 - Public references are high-entropy and never substitute for object authorization.
+- Multi-unit confirmation uses a durable group coordinator and idempotent compensations. Database
+  transactions protect each local transition; asynchronous Partner decisions are never described as
+  one distributed atomic transaction.
 
 Redis locks may reduce duplicate work, but correctness must survive their expiry or loss.
 

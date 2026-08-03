@@ -90,15 +90,27 @@ def api_exception_handler(exc: Exception, context: dict[str, object]) -> Respons
         code = "validation_error"
         message = "Request validation failed."
     else:
+        explicit_code = getattr(exc, "error_code", None)
         codes = getattr(exc, "get_codes", lambda: "request_error")()
-        code = codes if isinstance(codes, str) else "request_error"
+        code = (
+            explicit_code
+            if isinstance(explicit_code, str)
+            else codes
+            if isinstance(codes, str)
+            else "request_error"
+        )
         message = _safe_message(exc, response_status)
         if isinstance(exc, PermissionDenied) and str(getattr(exc, "detail", "")).startswith(
             "CSRF Failed:"
         ):
             code = "csrf_failed"
 
-    details = _serialise_details(cast(object, response.data))
+    explicit_details = getattr(exc, "api_details", None)
+    details = (
+        explicit_details
+        if isinstance(explicit_details, Mapping)
+        else _serialise_details(cast(object, response.data))
+    )
     if isinstance(details, dict) and set(details) == {"detail"}:
         details = details["detail"]
     if isinstance(exc, Throttled):

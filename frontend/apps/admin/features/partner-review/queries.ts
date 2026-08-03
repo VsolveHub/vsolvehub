@@ -1,8 +1,13 @@
 "use client";
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
-import { queryKeys } from "@vsolve/query";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { SESSION_STATE, VOLATILE_STATE, queryKeys } from "@vsolve/query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -13,12 +18,9 @@ import { getApiClient } from "@/lib/api/browser";
  * status by naming the transition they intend and the version they saw. There is
  * no endpoint that writes a status field directly, and there should not be.
  *
- * ## What is missing
- *
- * The contract publishes both *actions* but no way to **find** an application:
- * there is no `GET /operations/partner-applications/`. A reviewer can therefore
- * act on an application whose id they already have and cannot discover the queue
- * they are supposed to work through. Raised in proposal 0003 §C.
+ * Contract 1.5.0 added the reads a reviewer needs to *find* work — a cursor-
+ * paginated queue, an application detail, and ownership through claim — so the
+ * console is no longer limited to acting on an id somebody handed over.
  */
 
 type Application = Schemas["PartnerApplication"];
@@ -30,6 +32,151 @@ export function isVersionConflict(error: unknown): boolean {
 /** A reviewer's decision has been refused because they lack the permission. */
 export function isForbidden(error: unknown): boolean {
   return error instanceof ApiRequestError && error.status === 403;
+}
+
+/**
+ * The reviewer is the applicant.
+ *
+ * Distinct from an ordinary permission denial because the recovery is different
+ * and the wording must be too: nobody can grant you the right to approve your
+ * own Partner record, so "ask your team lead" would be wrong advice.
+ */
+export function isSelfReview(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError && error.code === "partner_self_review_forbidden"
+  );
+}
+
+export interface QueueFilters {
+  status?: "SUBMITTED" | "UNDER_REVIEW" | "CHANGES_REQUIRED";
+  assignedToMe?: boolean;
+  unassigned?: boolean;
+}
+
+/**
+ * The review queue, page by page.
+ *
+ * Cursor pagination rather than offsets, which is what the contract publishes
+ * and what a queue needs: applications are submitted while a reviewer is
+ * working, and an offset would silently skip or repeat rows as the list shifts
+ * underneath them.
+ *
+ * `VOLATILE_STATE` because another reviewer claiming an item changes who should
+ * be looking at it. A stale queue is how two people open the same application.
+ */
+export function useApplicationQueue(filters: QueueFilters = {}) {
+  return useInfiniteQuery({
+    queryKey: queryKeys.operations.partnerApplicationQueue(filters),
+    queryFn: ({ pageParam }) =>
+      request(() =>
+        getApiClient().GET("/api/v1/operations/partner-applications/", {
+          params: {
+            query: {
+              ...(filters.status ? { status: filters.status } : {}),
+              ...(filters.assignedToMe ? { assigned_to_me: true } : {}),
+              ...(filters.unassigned ? { unassigned: true } : {}),
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
+        }),
+      ),
+    initialPageParam: "",
+    getNextPageParam: (lastPage) => cursorOf(lastPage.next),
+    ...VOLATILE_STATE,
+  });
+}
+
+/** Django returns a full URL; only its `cursor` parameter is ours to resend. */
+function cursorOf(nextUrl: string | null): string | undefined {
+  if (!nextUrl) return undefined;
+  try {
+    return new URL(nextUrl).searchParams.get("cursor") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function useApplicationDetail(applicationId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.operations.partnerApplication(applicationId ?? ""),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/operations/partner-applications/{application_id}/", {
+          params: { path: { application_id: applicationId as string } },
+        }),
+      ),
+    enabled: applicationId !== null,
+    ...SESSION_STATE,
+  });
+}
+
+export interface ClaimInput {
+  applicationId: string;
+  /** The version the reviewer saw in the queue when they clicked. */
+  expectedVersion: number;
+}
+
+/**
+ * Takes ownership of an application.
+ *
+ * Carries `expected_version` like every other command here, and for the same
+ * reason: two reviewers clicking Claim on the same row is precisely the race
+ * ownership exists to settle, so the loser must be told rather than silently
+ * overwrite the winner.
+ *
+ * A failed claim must never look like a successful one, so the queue and the
+ * detail are refetched on either outcome — the reviewer then sees who actually
+ * holds it.
+ */
+export function useClaimApplication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ClaimInput) =>
+      request(() =>
+        getApiClient().POST(
+          "/api/v1/operations/partner-applications/{application_id}/claim/",
+          {
+            params: { path: { application_id: input.applicationId } },
+            body: { expected_version: input.expectedVersion },
+          },
+        ),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.operations.partnerApplication(input.applicationId),
+      });
+      // Ownership is what the queue displays, so every filtered view of it is
+      // now out of date.
+      void queryClient.invalidateQueries({
+        queryKey: [...queryKeys.operations.all, "partner-application-queue"],
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
+ * Requests a short-lived URL for one KYC document.
+ *
+ * A **mutation**, not a query, and deliberately so. Every call is an audited
+ * disclosure of someone's identity document, and the URL expires. Caching it
+ * would both hide reveals from the audit trail and hand out a link after it
+ * stopped working.
+ *
+ * The returned URL is never persisted anywhere — it goes straight to an
+ * `<img>`/`<iframe>` in component state and dies with the component.
+ */
+export function useRevealDocument() {
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      request(() =>
+        getApiClient().POST("/api/v1/operations/partner-documents/{document_id}/access/", {
+          params: { path: { document_id: documentId } },
+        }),
+      ),
+    retry: false,
+  });
 }
 
 export interface TransitionInput {

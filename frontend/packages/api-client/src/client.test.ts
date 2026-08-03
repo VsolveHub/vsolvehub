@@ -25,11 +25,25 @@ function stubFetch(responder: (call: StubCall) => Response | Promise<Response>) 
   return { fetchImpl, calls };
 }
 
-function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+/**
+ * @param omitDate Simulates what a browser actually sees cross-origin. `Date` is
+ *   not a CORS-safelisted response header, so unless Django exposes it the
+ *   header is absent from the response object regardless of what the server
+ *   sent. Several tests below depend on reproducing that.
+ */
+function jsonResponse(
+  body: unknown,
+  init: ResponseInit & { omitDate?: boolean } = {},
+): Response {
+  const { omitDate = false, ...responseInit } = init;
   return new Response(JSON.stringify(body), {
     status: 200,
-    ...init,
-    headers: { "content-type": "application/json", date: SERVER_DATE, ...(init.headers ?? {}) },
+    ...responseInit,
+    headers: {
+      "content-type": "application/json",
+      ...(omitDate ? {} : { date: SERVER_DATE }),
+      ...(responseInit.headers ?? {}),
+    },
   });
 }
 
@@ -275,6 +289,52 @@ describe("server-clock calibration", () => {
   it("ignores calibration for a response it never timed", async () => {
     const orphan = jsonResponse({ server_now: new Date().toISOString() });
     calibrateFromPayload({ server_now: new Date().toISOString() }, orphan);
+    expect(serverClock.isCalibrated).toBe(false);
+  });
+
+  it("calibrates from server_now without the caller remembering to ask", async () => {
+    // The regression that matters. `Date` is not a CORS-safelisted response
+    // header, so in a real browser the header path above reads `null` on every
+    // cross-origin call and the clock is never calibrated — silently, because a
+    // countdown on the device clock still renders a plausible number.
+    //
+    // `unwrap` therefore calibrates from any body carrying `server_now`, which
+    // is readable cross-origin because it is in the JSON. Relying on call sites
+    // to invoke `calibrateFromPayload` did not work: it was exported for months
+    // and never called once.
+    //
+    // See contracts/proposals/0010-server-clock-calibration.md.
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse(SERVER_DATE) + 240_000);
+
+    const serverNowIso = new Date(Date.parse(SERVER_DATE) + 750).toISOString();
+    const { fetchImpl } = stubFetch(() =>
+      // No `date` header at all, exactly as a browser sees a cross-origin
+      // response today.
+      jsonResponse({ is_serviceable: true, server_now: serverNowIso }, { omitDate: true }),
+    );
+    const api = createApiClient({ baseUrl: BASE_URL, fetch: fetchImpl });
+
+    expect(serverClock.isCalibrated).toBe(false);
+    await request(() =>
+      api.POST("/api/v1/serviceability/check/", { body: { postal_code: "500072" } }),
+    );
+
+    expect(serverClock.isCalibrated).toBe(true);
+    expect(serverClock.offsetMs).toBe(-240_000 + 750);
+  });
+
+  it("leaves the clock alone for a payload with no server_now", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse(SERVER_DATE) + 240_000);
+
+    const { fetchImpl } = stubFetch(() => jsonResponse([], { omitDate: true }));
+    const api = createApiClient({ baseUrl: BASE_URL, fetch: fetchImpl });
+
+    await request(() => api.GET("/api/v1/categories/"));
+
+    // Nothing to calibrate from, and inventing an offset would be worse than
+    // having none. This is the state proposal 0010 exists to remove.
     expect(serverClock.isCalibrated).toBe(false);
   });
 });

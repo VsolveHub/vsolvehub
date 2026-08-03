@@ -1,17 +1,21 @@
-import type {
-  ProposedWindow,
-  ProposedWindowDay,
-  ProposedWindows,
-  WindowUnavailableReason,
-} from "../contract-pending/types";
+import type { Schemas } from "@vsolve/api-client";
 
 /**
  * Window responses become something a component can render.
  *
- * The view models below are the contract as far as `../view/` is concerned. When
- * the real endpoint is published, this file is rewritten and the components are
- * not.
+ * The view models below are the contract as far as `../view/` is concerned, and
+ * that boundary paid off: contract 1.6.0 published the real operation, this file
+ * was repointed at the generated types, and no component changed.
+ *
+ * Every window `id` is opaque and server-signed. The frontend never composes one
+ * from a date and a time — that is how a UI offers a slot the backend never
+ * published, and it is why the id is a string here rather than a parsed value.
  */
+
+type PublishedWindow = Schemas["BookingWindow"];
+type PublishedWindowDay = Schemas["BookingWindowDay"];
+type PublishedWindows = Schemas["BookingWindows"];
+type WindowUnavailableReason = NonNullable<Schemas["UnavailableReasonEnum"]>;
 
 /**
  * Window times are formatted in the service area's timezone, not the browser's.
@@ -27,6 +31,15 @@ export const BOOKING_TIME_ZONE = "Asia/Kolkata";
 
 export interface WindowView {
   id: string;
+  /**
+   * The server's own `starts_at` instant, carried through untouched.
+   *
+   * This is what the group flow sends as `preferred_start`, so it is passed on
+   * exactly as received rather than reformatted and reparsed. The client never
+   * composes an instant: every start time it can request is one the server
+   * published for this cart and address.
+   */
+  startsAt: string;
   /** "11:00 am – 12:00 pm" */
   label: string;
   /** Start time alone, for compact layouts. */
@@ -53,6 +66,14 @@ export interface WindowsView {
   estimatedDurationMinutes: number;
   /** True when no day in the range has a bookable window. */
   isEmpty: boolean;
+  /**
+   * The server is still settling capacity, so what is shown may change.
+   *
+   * Surfaced rather than hidden: a customer told a window is free and then
+   * refused it at checkout has been misled, and the honest version is to say
+   * the answer is provisional while it is.
+   */
+  isPreliminary: boolean;
 }
 
 const timeFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -88,9 +109,10 @@ const UNAVAILABLE_LABELS: Record<WindowUnavailableReason, string> = {
   PAST: "Passed",
 };
 
-export function toWindowView(window: ProposedWindow): WindowView {
+export function toWindowView(window: PublishedWindow): WindowView {
   return {
     id: window.id,
+    startsAt: window.starts_at,
     label: `${formatTime(window.starts_at)} – ${formatTime(window.ends_at)}`,
     startLabel: formatTime(window.starts_at),
     isAvailable: window.is_available,
@@ -129,26 +151,30 @@ function isoDateIn(instant: Date): string {
   }).format(instant);
 }
 
-function toDayView(day: ProposedWindowDay, serverNow: string): WindowDayView {
+function toDayView(day: PublishedWindowDay, serverNow: string): WindowDayView {
+  const windows = day.windows.map(toWindowView);
+
   return {
     date: day.date,
     label: dayLabel(day.date, serverNow),
     dayOfMonth: dayNumberFormatter.format(new Date(`${day.date}T12:00:00Z`)),
-    hasAvailability: day.has_availability,
-    windows: day.windows.map(toWindowView),
+    // Derived from the windows themselves. The published day carries no
+    // `has_availability` flag, and deriving it is more truthful anyway: a day
+    // is bookable exactly when one of its windows is.
+    hasAvailability: windows.some((window) => window.isAvailable),
+    windows,
   };
 }
 
-export function toWindowsView(response: ProposedWindows): WindowsView {
+export function toWindowsView(response: PublishedWindows): WindowsView {
   const days = response.days.map((day) => toDayView(day, response.server_now));
 
   return {
     days,
     estimatedDurationMinutes: response.estimated_duration_minutes,
-    // Derived from bookable windows rather than from `has_availability` alone,
-    // so a day flagged available but carrying only unavailable windows still
-    // counts as empty. An empty result is a real answer and renders an empty
-    // state — never conflated with the endpoint being unreachable, which throws.
-    isEmpty: days.every((day) => day.windows.every((window) => !window.isAvailable)),
+    // An empty result is a real answer and renders an empty state — never
+    // conflated with the endpoint being unreachable, which throws.
+    isEmpty: days.every((day) => !day.hasAvailability),
+    isPreliminary: response.availability_is_preliminary,
   };
 }

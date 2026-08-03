@@ -30,7 +30,11 @@ export default defineConfig({
           name: "jsdom",
           environment: "jsdom",
           globals: true,
-          setupFiles: ["apps/customer/vitest.setup.ts"],
+          // One list for every jsdom test, regardless of which app it belongs
+          // to. Each app keeps its own file because the import is what augments
+          // the `Assertion` type inside that app's `tsconfig` — a shared setup
+          // would run fine and still fail `typecheck` in the app without one.
+          setupFiles: ["apps/customer/vitest.setup.ts", "apps/partner/vitest.setup.ts"],
           include: ["{apps,packages}/**/*.{test,spec}.tsx"],
           exclude: ["**/node_modules/**", "**/.next/**"],
         },

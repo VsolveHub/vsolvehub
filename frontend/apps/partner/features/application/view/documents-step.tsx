@@ -5,20 +5,19 @@ import { Badge, ErrorState, Spinner } from "@vsolve/ui";
 import Link from "next/link";
 
 import { usePartnerApplication } from "../queries";
+import { DocumentUpload } from "./document-upload";
 
 /**
  * The documents a reviewer will look at.
  *
- * Read-only for now, and that is a contract boundary rather than a design
- * choice. `POST /api/v1/partner/application/documents/` registers *metadata* —
- * `object_key`, `content_type`, `size_bytes`, `sha256` — for a file that some
- * other mechanism has already put in storage. Nothing issues the signed upload
- * URL that would produce those values, so a file picker here could only invent
- * an object key, and a Partner would be told their ID was uploaded when no
- * bytes exist.
+ * Contract 1.5.0 publishes the server-owned signed upload, so this is now the
+ * whole flow: what is on file, what a reviewer said about it, and a picker that
+ * requests an upload, sends the bytes to private storage and finalizes against
+ * a checksum Django recomputes.
  *
- * So this shows what is on file, what a reviewer said about it, and says plainly
- * that uploading is not open. The upload itself is FE-CLAUDE-04, behind D6/G10.
+ * Two waits are shown separately because they are separate. A scan runs before
+ * a reviewer can open the file; review happens after. Collapsing them into
+ * "uploaded" is how a Partner stops chasing the one that was rejected.
  */
 
 type Application = Schemas["PartnerApplication"];
@@ -45,6 +44,22 @@ const STATUS_TONE: Record<
   APPROVED: { tone: "success", label: "Approved" },
   REJECTED: { tone: "danger", label: "Needs replacing" },
   SUPERSEDED: { tone: "neutral", label: "Replaced" },
+};
+
+/**
+ * The scan gate, which comes before review.
+ *
+ * `FAILED` is not `REJECTED`: the file was never readable, so the Partner should
+ * send it again rather than believe a reviewer looked at it and said no.
+ */
+const SCAN_TONE: Record<
+  Schemas["ScanStatusEnum"],
+  { tone: "neutral" | "info" | "success" | "warning" | "danger"; label: string } | null
+> = {
+  PENDING: { tone: "info", label: "Being checked" },
+  CLEAN: null,
+  REJECTED: { tone: "danger", label: "File refused" },
+  FAILED: { tone: "warning", label: "Check failed" },
 };
 
 /** The document that currently counts for a kind: the newest non-superseded one. */
@@ -83,6 +98,12 @@ export function DocumentsStep() {
   }
 
   const application = query.data ?? null;
+  // Uploading into an application a reviewer is holding would change what they
+  // are looking at mid-decision.
+  const isEditable =
+    application === null ||
+    application.status === "DRAFT" ||
+    application.status === "CHANGES_REQUIRED";
 
   return (
     <section>
@@ -91,16 +112,6 @@ export function DocumentsStep() {
         Two documents are needed before a reviewer can approve you. They are
         stored privately and are only ever seen by a reviewer.
       </p>
-
-      <div
-        role="status"
-        className="mt-4 rounded-card border border-warning-line bg-warning-surface p-4"
-      >
-        <p className="text-sm text-text">
-          Uploading is not open yet. We are finishing the secure upload, and we
-          will not ask you for a document until it is ready.
-        </p>
-      </div>
 
       <ul className="mt-6 flex list-none flex-col gap-3 p-0">
         {REQUIRED.map((required) => {
@@ -128,15 +139,41 @@ export function DocumentsStep() {
               ) : null}
 
               {document ? (
-                <p className="mt-2 text-sm text-text-muted">
-                  Version {document.version}, uploaded{" "}
-                  <time dateTime={document.uploaded_at}>
-                    {new Intl.DateTimeFormat("en-IN", {
-                      dateStyle: "medium",
-                      timeZone: "Asia/Kolkata",
-                    }).format(new Date(document.uploaded_at))}
-                  </time>
-                </p>
+                <>
+                  {SCAN_TONE[document.scan_status] ? (
+                    <p className="mt-2 flex items-center gap-2 text-sm">
+                      <Badge tone={SCAN_TONE[document.scan_status]!.tone}>
+                        {SCAN_TONE[document.scan_status]!.label}
+                      </Badge>
+                      <span className="text-text-secondary">
+                        {document.scan_status === "PENDING"
+                          ? "A reviewer sees this once the check finishes."
+                          : "This file could not be checked. Please upload it again."}
+                      </span>
+                    </p>
+                  ) : null}
+
+                  <p className="mt-2 text-sm text-text-muted">
+                    Version {document.version}, uploaded{" "}
+                    <time dateTime={document.uploaded_at}>
+                      {new Intl.DateTimeFormat("en-IN", {
+                        dateStyle: "medium",
+                        timeZone: "Asia/Kolkata",
+                      }).format(new Date(document.uploaded_at))}
+                    </time>
+                  </p>
+                </>
+              ) : null}
+
+              {isEditable ? (
+                <DocumentUpload
+                  kind={required.kind}
+                  label={required.label}
+                  expectedVersion={application?.version ?? null}
+                  replacing={
+                    document?.status === "REJECTED" || document?.scan_status === "REJECTED"
+                  }
+                />
               ) : null}
             </li>
           );

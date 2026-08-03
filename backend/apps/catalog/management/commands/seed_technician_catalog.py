@@ -2,10 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
+from itertools import combinations
+from uuid import UUID
 
 from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
+from apps.carts.models import ServiceCompatibilityRule
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
@@ -21,7 +24,13 @@ from apps.locations.models import (
     ServiceAreaPostalCode,
     ServiceAreaService,
 )
-from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
+from apps.pricing.models import (
+    CancellationPolicy,
+    CancellationPolicyBand,
+    PricingPolicy,
+    ServiceRate,
+    TaskRate,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +160,50 @@ class Command(BaseCommand):
                 "is_active": True,
             },
         )
+        cancellation_policy, _ = CancellationPolicy.objects.update_or_create(
+            code="m1-scheduled-today",
+            version=1,
+            defaults={
+                "effective_from": SEED_RATE_EFFECTIVE_FROM,
+                "effective_to": None,
+                "is_active": True,
+            },
+        )
+        cancellation_bands = (
+            (
+                "more-than-24-hours",
+                "More than 24 hours before your arrival window",
+                0,
+            ),
+            (
+                "24-to-2-hours",
+                "Between 24 hours and 2 hours before your arrival window",
+                4_900,
+            ),
+            (
+                "less-than-2-hours",
+                "Less than 2 hours before your arrival window and before verified arrival",
+                9_900,
+            ),
+            (
+                "verified-arrival",
+                "After verified arrival and the required wait and contact evidence",
+                14_900,
+            ),
+        )
+        for order, (code, condition_text, fee_paise) in enumerate(
+            cancellation_bands,
+            start=1,
+        ):
+            CancellationPolicyBand.objects.update_or_create(
+                policy=cancellation_policy,
+                code=code,
+                defaults={
+                    "condition_text": condition_text,
+                    "fee_paise": fee_paise,
+                    "display_order": order,
+                },
+            )
         category, _ = Category.objects.update_or_create(
             slug="technician",
             defaults={
@@ -270,6 +323,7 @@ class Command(BaseCommand):
         }
         self._deactivate_out_of_scope_catalog(active_slugs=active_slugs)
         self._seed_m1_service_area(variants)
+        self._seed_m1_compatibility(variants)
         self.stdout.write(
             self.style.SUCCESS(f"Seeded {len(variants)} Technician services deterministically."),
         )
@@ -323,3 +377,42 @@ class Command(BaseCommand):
                 variant=variant,
                 defaults={"is_active": True},
             )
+
+    @staticmethod
+    def _seed_m1_compatibility(variants: list[ServiceVariant]) -> None:
+        configured = list(
+            ServiceVariant.objects.filter(
+                id__in=(variant.id for variant in variants)
+            ).select_related("service__subcategory")
+        )
+        active_pairs: set[tuple[UUID, UUID]] = set()
+        for first, second in combinations(configured, 2):
+            left, right = sorted((first, second), key=lambda variant: str(variant.id))
+            same_trade = left.service.subcategory_id == right.service.subcategory_id
+            mode = (
+                ServiceCompatibilityRule.Mode.SAME_PARTNER_SEQUENTIAL
+                if same_trade
+                else ServiceCompatibilityRule.Mode.PARALLEL_ALLOWED
+            )
+            ServiceCompatibilityRule.objects.update_or_create(
+                left_variant=left,
+                right_variant=right,
+                version=1,
+                defaults={
+                    "mode": mode,
+                    "dependency": ServiceCompatibilityRule.Dependency.NONE,
+                    "conditions": {},
+                    "effective_from": SEED_RATE_EFFECTIVE_FROM,
+                    "effective_to": None,
+                    "is_active": True,
+                    "lifecycle_status": (ServiceCompatibilityRule.LifecycleStatus.ACTIVE),
+                    "change_reason": "Reviewed M1 exact-variant compatibility matrix.",
+                    "review_reason": "Approved seed configuration.",
+                },
+            )
+            active_pairs.add((left.id, right.id))
+        for rule in ServiceCompatibilityRule.objects.filter(is_active=True):
+            if (rule.left_variant_id, rule.right_variant_id) not in active_pairs:
+                rule.is_active = False
+                rule.lifecycle_status = ServiceCompatibilityRule.LifecycleStatus.RETIRED
+                rule.save(update_fields=("is_active", "lifecycle_status"))

@@ -5,13 +5,24 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.assignments.group_services import (
+    accept_unit_offer,
+    commit_unit_offer,
+    create_manual_unit_offer,
+    decline_or_undo_unit_offer,
+)
 from apps.assignments.models import PartnerOffer
-from apps.assignments.serializers import ManualOfferSerializer, OfferSerializer
+from apps.assignments.serializers import (
+    ManualOfferSerializer,
+    OfferPageSerializer,
+    OfferSerializer,
+)
 from apps.assignments.services import (
     accept_offer,
     advance_search,
@@ -24,6 +35,11 @@ from apps.carts.models import CheckoutSession
 from apps.identity.models import User
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
+
+
+class PartnerOfferCursorPagination(CursorPagination):
+    page_size = 50
+    ordering = ("-created_at", "-id")
 
 
 class StartSearchView(APIView):
@@ -44,19 +60,31 @@ class StartSearchView(APIView):
 class PartnerOfferListView(APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
 
-    @extend_schema(tags=["Partner"], responses={200: OfferSerializer(many=True)})
+    @extend_schema(
+        tags=["Partner"],
+        operation_id="partner_offer_list",
+        responses={200: OfferPageSerializer},
+    )
     def get(self, request: Request) -> Response:
         profile = partner_profile_for_user(cast(User, request.user))
         if profile is None:
-            return Response([])
-        offers = PartnerOffer.objects.filter(partner=profile).exclude(
-            status__in=(
-                PartnerOffer.Status.DECLINED,
-                PartnerOffer.Status.UNDONE,
-                PartnerOffer.Status.EXPIRED,
+            return Response({"next": None, "previous": None, "results": []})
+        offers = (
+            PartnerOffer.objects.filter(partner=profile)
+            .exclude(
+                status__in=(
+                    PartnerOffer.Status.DECLINED,
+                    PartnerOffer.Status.UNDONE,
+                    PartnerOffer.Status.EXPIRED,
+                    PartnerOffer.Status.REVOKED,
+                )
             )
+            .select_related("fulfilment_unit")
+            .prefetch_related("fulfilment_unit__lines")
         )
-        return Response(OfferSerializer(offers, many=True).data)
+        paginator = PartnerOfferCursorPagination()
+        page = paginator.paginate_queryset(offers, request, view=self)
+        return paginator.get_paginated_response(OfferSerializer(page, many=True).data)
 
 
 class PartnerOfferCommandView(APIView):
@@ -69,11 +97,22 @@ class PartnerOfferCommandView(APIView):
         profile = partner_profile_for_user(cast(User, request.user))
         if profile is None:
             raise ValidationError("No Partner profile exists.")
+        offer = get_object_or_404(PartnerOffer, id=offer_id, partner=profile)
+        result: PartnerOffer | None
         try:
-            if action == "accept":
-                result: PartnerOffer | None = accept_offer(offer_id=UUID(offer_id), partner=profile)
+            if offer.fulfilment_unit_id is not None and action == "accept":
+                result = accept_unit_offer(offer_id=offer.id, partner=profile)
+            elif offer.fulfilment_unit_id is not None and action == "commit":
+                result = commit_unit_offer(offer_id=offer.id, partner=profile)
+            elif offer.fulfilment_unit_id is not None and action in {"decline", "undo"}:
+                result = decline_or_undo_unit_offer(
+                    offer_id=offer.id,
+                    partner=profile,
+                    undo=action == "undo",
+                )
+            elif action == "accept":
+                result = accept_offer(offer_id=UUID(offer_id), partner=profile)
             elif action == "commit":
-                offer = get_object_or_404(PartnerOffer, id=offer_id, partner=profile)
                 result = commit_offer(offer_id=offer.id)
             elif action in {"decline", "undo"}:
                 result = decline_or_undo_offer(
@@ -98,6 +137,28 @@ class ManualOfferView(APIView):
         try:
             offer = create_manual_offer(
                 checkout_id=UUID(checkout_id), partner_id=serializer.validated_data["partner_id"]
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="offer_invalid") from exc
+        return Response(OfferSerializer(offer).data, status=status.HTTP_201_CREATED)
+
+
+class ManualUnitOfferView(APIView):
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["Operations"],
+        operation_id="operations_fulfilment_unit_offer_create",
+        request=ManualOfferSerializer,
+        responses={201: OfferSerializer},
+    )
+    def post(self, request: Request, unit_id: str) -> Response:
+        serializer = ManualOfferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            offer = create_manual_unit_offer(
+                unit_id=UUID(unit_id),
+                partner_id=serializer.validated_data["partner_id"],
             )
         except ValueError as exc:
             raise ValidationError(str(exc), code="offer_invalid") from exc

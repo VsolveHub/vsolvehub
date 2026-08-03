@@ -154,7 +154,6 @@ export function serviceCard(
     category_slug: "technician",
     subcategory_slug: "electrical",
     starting_price: money(19900),
-    recommended_duration_minutes: 60,
     cover: null,
     ...overrides,
   };
@@ -226,12 +225,19 @@ export function serviceVariantConfiguration(
     code: "standard",
     name: "Standard",
     description: "A verified electrician diagnoses and repairs the fault.",
-    pricing_strategy: "DURATION",
+    // A1 is task-priced (contract 1.6.0). The duration-picker fields are gone:
+    // the customer buys task units and the server derives the estimate.
+    fulfilment_archetype: "A1",
     starting_price: money(19900),
-    minimum_duration_minutes: 60,
-    recommended_duration_minutes: 90,
-    duration_increment_minutes: 30,
-    maximum_duration_minutes: 240,
+    minimum_service_subtotal: money(19900),
+    task_lines: [
+      {
+        code: "switch-replace",
+        label: "Replace one switch",
+        unit_price: money(12900),
+        marginal_duration_minutes: 20,
+      },
+    ],
     required_skill_code: "electrical-general",
     questions: [serviceQuestion()],
     ...overrides,
@@ -299,5 +305,176 @@ export function apiError(
       retryable: options.retryable ?? false,
       request_id: options.requestId ?? "req_01J000000000000000000000",
     },
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Booking: windows and quote (contract 1.6.0)
+   ------------------------------------------------------------------------- */
+
+/**
+ * A window id is opaque and server-signed, so the fixture uses a value no
+ * frontend could have composed. A readable `2026-08-03T11:00` here would quietly
+ * teach the next person that ids are derivable.
+ */
+export function bookingWindow(
+  overrides: Partial<Schemas["BookingWindow"]> = {},
+): Schemas["BookingWindow"] {
+  return {
+    id: "win_9f2c41ba6d",
+    starts_at: iso(60 * 60 * 4),
+    ends_at: iso(60 * 60 * 5),
+    is_available: true,
+    unavailable_reason: null,
+    ...overrides,
+  };
+}
+
+/** The calendar date of `FIXED_NOW` in the booking timezone, so "Today" holds. */
+const FIXED_TODAY = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "Asia/Kolkata",
+}).format(new Date(FIXED_NOW));
+
+export function bookingWindowDay(
+  overrides: Partial<Schemas["BookingWindowDay"]> = {},
+): Schemas["BookingWindowDay"] {
+  return {
+    // Derived from `FIXED_NOW` rather than written out: the adapter labels a day
+    // "Today" by comparing it with the server clock, so a hardcoded date would
+    // silently stop being today and take every window test's anchor with it.
+    date: FIXED_TODAY,
+    is_today: true,
+    // A realistic mix. A day of nothing but bookable windows would let a screen
+    // that hides unavailable ones pass, and hiding them is the specific defect
+    // the window stage was built to avoid — a gap reads as a broken platform,
+    // where "Too soon to book" is something a customer can act on.
+    windows: [
+      bookingWindow({
+        id: "win_toosoon",
+        starts_at: iso(60 * 30),
+        ends_at: iso(60 * 90),
+        is_available: false,
+        unavailable_reason: "TOO_SOON",
+      }),
+      bookingWindow(),
+      bookingWindow({
+        id: "win_evening",
+        starts_at: iso(60 * 60 * 8),
+        ends_at: iso(60 * 60 * 9),
+      }),
+    ],
+    ...overrides,
+  };
+}
+
+export function bookingWindows(
+  overrides: Partial<Schemas["BookingWindows"]> = {},
+): Schemas["BookingWindows"] {
+  return {
+    server_now: iso(0),
+    estimated_duration_minutes: 60,
+    availability_is_preliminary: false,
+    days: [bookingWindowDay()],
+    ...overrides,
+  };
+}
+
+export function quoteLine(
+  overrides: Partial<Schemas["QuoteLine"]> = {},
+): Schemas["QuoteLine"] {
+  return {
+    code: "fan-installation",
+    label: "Fan installation × 1",
+    amount: money(24900),
+    ...overrides,
+  };
+}
+
+/**
+ * The cancellation ladder, in rupees, as the server computed it.
+ *
+ * Fixed fees rather than percentages, matching the frozen M1 configuration, and
+ * pre-computed because deriving a fee client-side would be the frontend
+ * computing a price.
+ */
+export function cancellationPolicy(
+  overrides: Partial<Schemas["CancellationPolicy"]> = {},
+): Schemas["CancellationPolicy"] {
+  return {
+    code: "a1-standard",
+    version: 3,
+    // The frozen M1 ladder: four fixed fees, not percentages, and visible
+    // before search and payment.
+    bands: [
+      {
+        code: "free",
+        condition_text: "More than 24 hours before your arrival window",
+        fee: money(0),
+      },
+      {
+        code: "standard",
+        condition_text: "Between 24 and 2 hours before your arrival window",
+        fee: money(4900),
+      },
+      {
+        code: "late",
+        condition_text: "Less than 2 hours before your arrival window",
+        fee: money(9900),
+      },
+      {
+        code: "arrived",
+        condition_text: "After the professional has arrived",
+        fee: money(14900),
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function quote(overrides: Partial<Schemas["Quote"]> = {}): Schemas["Quote"] {
+  return {
+    id: "99999999-9999-4999-8999-999999999999",
+    version: 1,
+    server_now: iso(0),
+    expires_at: iso(15 * 60),
+    estimated_duration_minutes: 60,
+    arrival_window: {
+      id: "w_9f2c41ba6d",
+      starts_at: iso(60 * 60 * 4),
+      ends_at: iso(60 * 60 * 5),
+    },
+    lines: [
+      quoteLine(),
+      // Kept at zero rather than omitted: the minimum visit charge is a rule the
+      // customer is held to, and a line that only appears when it bites is a
+      // rule they discover at the worst moment.
+      {
+        code: "minimum_visit_topup",
+        label: "Minimum visit charge",
+        amount: money(0),
+      },
+    ],
+    subtotal: money(24900),
+    platform_fee: { code: "platform_fee", label: "Platform fee", amount: money(2900) },
+    tax: { code: "gst", label: "GST 18%", amount: money(1582), included_in_total: true },
+    total: money(29382),
+    cancellation_policy: cancellationPolicy(),
+    created_at: iso(0),
+    ...overrides,
+  };
+}
+
+export function cartItem(
+  overrides: Partial<Schemas["CartItem"]> = {},
+): Schemas["CartItem"] {
+  return {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    variant_id: "8a1f0c22-6d3e-4b71-9f52-1c0d7e4a9b83",
+    quantity: 1,
+    scope_schema_snapshot: {},
+    ...overrides,
   };
 }

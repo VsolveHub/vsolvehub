@@ -1,8 +1,7 @@
 """Transactional B6 matching, offer and reservation commands."""
 
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -10,73 +9,41 @@ from django.utils import timezone
 from psycopg.types.range import Range
 
 from apps.assignments.models import AssignmentAttempt, PartnerOffer, Reservation
-from apps.carts.models import CheckoutSession
+from apps.carts.models import CartItem, CheckoutSession
 from apps.partners.models import (
     PartnerApplication,
-    PartnerAvailabilityException,
-    PartnerAvailabilityRule,
     PartnerProfile,
 )
+from apps.partners.selectors import partner_available_during
+
+
+def _legacy_checkout_item(checkout: CheckoutSession) -> CartItem:
+    item = checkout.quote.cart_item
+    if item is None:
+        raise ValueError("Group assignment must run through the Fulfilment Unit coordinator.")
+    return item
 
 
 def _partner_available(*, partner: PartnerProfile, checkout: CheckoutSession) -> bool:
     quote = checkout.quote
-    area = quote.service_area
-    zone = ZoneInfo(area.timezone)
-    local_start = quote.requested_start.astimezone(zone)
-    local_end = local_start + timedelta(minutes=quote.estimated_duration_minutes)
-    exception = PartnerAvailabilityException.objects.filter(
-        partner=partner, service_area=area, date=local_start.date()
-    ).first()
-    if exception is not None:
-        if not exception.is_available or exception.starts_at is None or exception.ends_at is None:
-            return False
-        starts_at, ends_at, next_day = (
-            exception.starts_at,
-            exception.ends_at,
-            exception.ends_next_day,
-        )
-        return _window_contains(
-            local_start, local_end, starts_at=starts_at, ends_at=ends_at, ends_next_day=next_day
-        )
-    rules = PartnerAvailabilityRule.objects.filter(
-        partner=partner, service_area=area, weekday=local_start.weekday(), is_active=True
+    return partner_available_during(
+        partner=partner,
+        service_area=quote.service_area,
+        starts_at=quote.requested_start,
+        duration_minutes=quote.estimated_duration_minutes,
     )
-    return any(
-        _window_contains(
-            local_start,
-            local_end,
-            starts_at=rule.starts_at,
-            ends_at=rule.ends_at,
-            ends_next_day=rule.ends_next_day,
-        )
-        for rule in rules
-    )
-
-
-def _window_contains(
-    local_start: datetime,
-    local_end: datetime,
-    *,
-    starts_at: time,
-    ends_at: time,
-    ends_next_day: bool,
-) -> bool:
-    opens = datetime.combine(local_start.date(), starts_at, tzinfo=local_start.tzinfo)
-    closes_date = local_start.date() + timedelta(days=1) if ends_next_day else local_start.date()
-    closes = datetime.combine(closes_date, ends_at, tzinfo=local_start.tzinfo)
-    return opens <= local_start and local_end <= closes
 
 
 def _eligible_candidates(checkout: CheckoutSession) -> list[PartnerProfile]:
     quote = checkout.quote
+    item = _legacy_checkout_item(checkout)
     attempted = AssignmentAttempt.objects.filter(checkout=checkout).values_list(
         "candidate_id", flat=True
     )
     candidates = (
         PartnerProfile.objects.filter(
             application__status=PartnerApplication.Status.APPROVED,
-            service_links__variant=quote.cart_item.variant,
+            service_links__variant=item.variant,
             service_links__is_active=True,
             service_area_links__service_area=quote.service_area,
             service_area_links__is_active=True,
@@ -110,13 +77,14 @@ def _create_next_offer(*, checkout: CheckoutSession) -> PartnerOffer | None:
 
 
 def _create_offer(*, checkout: CheckoutSession, candidate: PartnerProfile) -> PartnerOffer:
+    item = _legacy_checkout_item(checkout)
     attempt = AssignmentAttempt.objects.create(
         checkout=checkout,
         candidate=candidate,
         rank=AssignmentAttempt.objects.filter(checkout=checkout).count() + 1,
         eligibility_snapshot={
             "service_area_id": str(checkout.quote.service_area_id),
-            "variant_id": str(checkout.quote.cart_item.variant_id),
+            "variant_id": str(item.variant_id),
             "requested_start": checkout.quote.requested_start.isoformat(),
             "estimated_duration_minutes": checkout.quote.estimated_duration_minutes,
         },
@@ -133,7 +101,7 @@ def _create_offer(*, checkout: CheckoutSession, candidate: PartnerProfile) -> Pa
 @transaction.atomic
 def create_manual_offer(*, checkout_id: UUID, partner_id: UUID) -> PartnerOffer:
     checkout = (
-        CheckoutSession.objects.select_for_update()
+        CheckoutSession.objects.select_for_update(of=("self",))
         .select_related("quote__cart_item__variant", "quote__service_area")
         .get(id=checkout_id)
     )
@@ -152,7 +120,7 @@ def create_manual_offer(*, checkout_id: UUID, partner_id: UUID) -> PartnerOffer:
 @transaction.atomic
 def start_partner_search(*, checkout: CheckoutSession) -> PartnerOffer | None:
     locked = (
-        CheckoutSession.objects.select_for_update()
+        CheckoutSession.objects.select_for_update(of=("self",))
         .select_related("quote__cart_item__variant", "quote__service_area")
         .get(id=checkout.id)
     )
@@ -166,7 +134,7 @@ def start_partner_search(*, checkout: CheckoutSession) -> PartnerOffer | None:
 @transaction.atomic
 def advance_search(*, checkout_id: UUID) -> PartnerOffer | None:
     checkout = (
-        CheckoutSession.objects.select_for_update()
+        CheckoutSession.objects.select_for_update(of=("self",))
         .select_related("quote__cart_item__variant", "quote__service_area")
         .get(id=checkout_id)
     )
@@ -179,7 +147,7 @@ def advance_search(*, checkout_id: UUID) -> PartnerOffer | None:
             checkout.save(update_fields=("status", "version"))
         return None
     current = (
-        PartnerOffer.objects.select_for_update()
+        PartnerOffer.objects.select_for_update(of=("self",))
         .filter(checkout=checkout, status=PartnerOffer.Status.OFFERED)
         .first()
     )
@@ -188,7 +156,7 @@ def advance_search(*, checkout_id: UUID) -> PartnerOffer | None:
         current.responded_at = timezone.now()
         current.save(update_fields=("status", "responded_at"))
     pending = (
-        PartnerOffer.objects.select_for_update()
+        PartnerOffer.objects.select_for_update(of=("self",))
         .filter(checkout=checkout, status=PartnerOffer.Status.ACCEPTED_PENDING_UNDO)
         .first()
     )
@@ -209,15 +177,18 @@ def advance_search(*, checkout_id: UUID) -> PartnerOffer | None:
 @transaction.atomic
 def accept_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffer:
     offer = (
-        PartnerOffer.objects.select_for_update()
+        PartnerOffer.objects.select_for_update(of=("self",))
         .select_related("checkout__quote__cart_item__variant", "checkout__quote__service_area")
         .get(id=offer_id, partner=partner)
     )
     if offer.status != PartnerOffer.Status.OFFERED or offer.expires_at <= timezone.now():
         raise ValueError("This offer is no longer available to accept.")
-    if not _partner_available(partner=partner, checkout=offer.checkout):
+    checkout = offer.checkout
+    if checkout is None:
+        raise ValueError("This is not a legacy Checkout offer.")
+    if not _partner_available(partner=partner, checkout=checkout):
         raise ValueError("You are no longer available for this offer.")
-    quote = offer.checkout.quote
+    quote = checkout.quote
     occupied = Range(
         quote.requested_start,
         quote.requested_start + timedelta(minutes=quote.estimated_duration_minutes),
@@ -225,7 +196,7 @@ def accept_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffer:
     )
     try:
         reservation = Reservation.objects.create(
-            checkout=offer.checkout,
+            checkout=checkout,
             partner=partner,
             occupied_range=occupied,
             expires_at=timezone.now() + timedelta(seconds=settings.M1_PARTNER_UNDO_TIMEOUT_SECONDS),
@@ -242,7 +213,11 @@ def accept_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffer:
 
 @transaction.atomic
 def commit_offer(*, offer_id: UUID) -> PartnerOffer:
-    offer = PartnerOffer.objects.select_for_update().select_related("checkout").get(id=offer_id)
+    offer = (
+        PartnerOffer.objects.select_for_update(of=("self",))
+        .select_related("checkout")
+        .get(id=offer_id)
+    )
     if offer.status != PartnerOffer.Status.ACCEPTED_PENDING_UNDO or offer.reservation is None:
         raise ValueError("This offer cannot be committed.")
     offer.status = PartnerOffer.Status.COMMITTED
@@ -254,6 +229,8 @@ def commit_offer(*, offer_id: UUID) -> PartnerOffer:
     reservation.expires_at = timezone.now() + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS)
     reservation.save(update_fields=("expires_at",))
     checkout = offer.checkout
+    if checkout is None:
+        raise ValueError("This is not a legacy Checkout offer.")
     checkout.status = CheckoutSession.Status.PARTNER_COMMITTED
     checkout.expires_at = reservation.expires_at
     checkout.version += 1
@@ -266,7 +243,7 @@ def decline_or_undo_offer(
     *, offer_id: UUID, partner: PartnerProfile, undo: bool
 ) -> PartnerOffer | None:
     offer = (
-        PartnerOffer.objects.select_for_update()
+        PartnerOffer.objects.select_for_update(of=("self",))
         .select_related("checkout")
         .get(id=offer_id, partner=partner)
     )
@@ -278,4 +255,7 @@ def decline_or_undo_offer(
     offer.save(update_fields=("status", "responded_at"))
     if offer.reservation_id is not None:
         Reservation.objects.select_for_update().get(id=offer.reservation_id).release()
-    return _create_next_offer(checkout=offer.checkout)
+    checkout = offer.checkout
+    if checkout is None:
+        raise ValueError("This is not a legacy Checkout offer.")
+    return _create_next_offer(checkout=checkout)

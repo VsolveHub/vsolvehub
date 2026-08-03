@@ -14,7 +14,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.pricing.models import ServiceRate
+from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
 
 pytestmark = pytest.mark.django_db
 CURRENT_RATE_PAISE = 19_900
@@ -44,8 +44,27 @@ def _service(*, slug: str = "switch-socket-repair") -> tuple[Service, ServiceVar
         code="standard",
         name="Standard repair",
         pricing_strategy=ServiceVariant.PricingStrategy.DURATION,
+        booking_archetype=ServiceVariant.BookingArchetype.A1_TASK_VISIT,
         required_skill_code="electrician",
         tax_category_code="technician-repair",
+    )
+    TaskRate.objects.create(
+        variant=variant,
+        task_code=slug,
+        unit_price_paise=CURRENT_RATE_PAISE,
+        base_duration_minutes=10,
+        marginal_duration_minutes=30,
+    )
+    PricingPolicy.objects.create(
+        code="m1-technician",
+        version=1,
+        minimum_service_subtotal_paise=CURRENT_RATE_PAISE,
+        gst_rate_basis_points=1_800,
+        platform_fee_mode=PricingPolicy.PlatformFeeMode.FIXED,
+        platform_fee_value=2_900,
+        commission_basis_points=1_800,
+        commission_floor_paise=0,
+        commission_cap_paise=100_000,
     )
     return service, variant
 
@@ -77,7 +96,20 @@ def test_public_catalog_uses_current_effective_rate() -> None:
         "currency": "INR",
     }
     assert detail.status_code == HTTPStatus.OK
-    assert detail.json()["variants"][0]["starting_price"]["amount_paise"] == CURRENT_RATE_PAISE
+    variant_payload = detail.json()["variants"][0]
+    assert variant_payload["starting_price"]["amount_paise"] == CURRENT_RATE_PAISE
+    assert variant_payload["fulfilment_archetype"] == "A1_TASK_VISIT"
+    assert variant_payload["minimum_service_subtotal"]["amount_paise"] == CURRENT_RATE_PAISE
+    assert variant_payload["task_lines"] == [
+        {
+            "code": "switch-socket-repair",
+            "label": "Switch / Socket Repair",
+            "unit_price": {"amount_paise": CURRENT_RATE_PAISE, "currency": "INR"},
+            "marginal_duration_minutes": 30,
+        }
+    ]
+    assert "pricing_strategy" not in variant_payload
+    assert "recommended_duration_minutes" not in variant_payload
 
 
 def test_configuration_contains_questions_options_and_policies() -> None:

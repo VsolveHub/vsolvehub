@@ -22,16 +22,16 @@ owning milestone.
 ```text
 service detail
   → OTP login/resume
+  → add one or more independently scoped services to Cart
   → confirmed address and serviceability
-  → task scope/quantity
-  → estimated duration (display only)
-  → Today or Scheduled window
-  → itemized quote and cancellation policy
-  → Finding a professional
-  → Partner accepts and the no-fault undo window closes
+  → server-authored fulfilment alternatives
+  → Customer reviews grouping, visits, professional count, windows and itemized policy
+  → select immutable plan/quote
+  → Finding professionals for every Fulfilment Unit
+  → all required Partners accept and their no-fault undo windows close
   → Customer pays within reservation expiry
-  → webhook confirms Booking
-  → status, Partner and appointment details
+  → webhook confirms Booking Group and unit Bookings
+  → group status plus Partner and appointment details per unit
   → En route / Arrived / start OTP
   → work and any approved amendment
   → completion submission
@@ -44,15 +44,28 @@ remains a resumable interrupt, so catalog intent survives. No stage auto-selects
 availability before the server response. Back/login/refresh preserve safe intent. The Customer may
 cancel Partner search without charge.
 
-The one-item M1 cart is continuity infrastructure, not a separate `/cart` product route. Replacing a
-different configured item requires an explicit server conflict and Customer confirmation; it never
-silently deletes prior intent.
+The Cart is a real Customer surface and continuity aggregate. Adding another service creates another
+item; it never replaces existing intent. Every edit increments the cart version and invalidates older
+plans/quotes visibly. Login merge preserves non-duplicate items and requires an explicit Customer
+decision for an exact duplicate or incompatible draft; no side silently wins.
+
+The planner evaluates each item independently, then returns bounded alternatives:
+
+- one Partner performing compatible lines sequentially in one unit;
+- multiple Partners performing independent units in coordinated parallel windows;
+- independent units in separate visits when compatibility, eligibility, dependencies or capacity
+  require separation.
+
+The Customer sees the final unit membership, visit/professional count, price difference and reason for
+separation before confirmation. Same category alone never proves combination. M1 uses all-or-nothing
+group confirmation: if one required unit cannot be held, every tentative group hold is released and
+the Customer reviews a new plan before payment.
 
 ## Partner journey
 
 ```text
 OTP → application/KYC/skills/area/availability → Operations approval
-    → offer with scope, area, time and net earning
+    → unit-scoped offer with only that Partner's service lines, area, time and net earning
     → Accept/Decline confirmation
     → 120-second undo
     → exact address after disclosure gate
@@ -75,6 +88,7 @@ so closing or backgrounding a browser cannot stop dispatch.
 - Configure approved variants/rates/areas/hours and see validation failures.
 - Create an assisted Customer booking and send payment link using the ordinary domain flow.
 - View Partner search, offers, reservations, booking timeline and notification delivery.
+- View Booking Group structure, unit dependencies, unit Partner searches/holds and allocated money.
 - Offer/reoffer a Partner through the same explicit acceptance path.
 - Resolve delay, release, Customer unavailable, partial work and quality cases.
 - Reconcile ambiguous payment/refund/payout.
@@ -84,8 +98,14 @@ so closing or backgrounding a browser cannot stop dispatch.
 ## M1 state path
 
 ```text
-Checkout: CREATED → FINDING_PARTNER → PARTNER_COMMITTED
-                   → PAYMENT_PENDING → COMPLETED
+Plan:     ACTIVE → QUOTED → CONFIRMED | INVALIDATED | EXPIRED
+
+Group:    CREATED → MATCHING → PARTIALLY_HELD → ALL_UNITS_HELD
+                  → PAYMENT_PENDING → COMPLETED
+                  → REPLAN_REQUIRED | EXPIRED | CANCELLED | FAILED
+
+Unit:     PLANNED → MATCHING → HELD → BOOKED
+                  → RELEASED | RECOVERY_REQUIRED | CANCELLED
 
 Offer:    OFFERED → ACCEPTED_PENDING_UNDO → COMMITTED | UNDONE
                   → DECLINED | EXPIRED | REVOKED
@@ -120,6 +140,9 @@ and are snapshotted on the quote and booking so a later configuration change can
 | Failure | Required result |
 |---|---|
 | No eligible/accepting Partner | Alternatives; Customer not charged |
+| One required unit cannot be held | Release every tentative group hold; replan before payment |
+| Cart changes after planning | Invalidate plan/quote; retain readable history and requote |
+| Parallel plan loses one Partner | Do not silently continue partially; release/replan or follow an explicitly accepted partial policy |
 | Partner accepts, Customer does not pay | Tentative reservation expires; Partner not penalized |
 | Payment succeeds, booking conversion fails | Retry to convergence or refund plus Finance case |
 | Partner releases before start | Recovery, reschedule or full refund |

@@ -138,14 +138,16 @@ def _area_is_open(*, area: ServiceArea, start: datetime, duration_minutes: int) 
     local_end = local_start + timedelta(minutes=duration_minutes)
     candidate_dates = (local_start.date() - timedelta(days=1), local_start.date())
     for window_date in candidate_dates:
-        ranges = _operating_ranges(area=area, local_date=window_date)
+        ranges = operating_ranges_for_date(area=area, local_date=window_date)
         for opens_at, closes_at in ranges:
             if opens_at <= local_start and local_end <= closes_at:
                 return True
     return False
 
 
-def _operating_ranges(*, area: ServiceArea, local_date: date) -> list[tuple[datetime, datetime]]:
+def operating_ranges_for_date(
+    *, area: ServiceArea, local_date: date
+) -> list[tuple[datetime, datetime]]:
     exception = _exception_for_date(area.operating_exceptions.all(), local_date)
     if exception is not None:
         if exception.is_closed or exception.opens_at is None or exception.closes_at is None:

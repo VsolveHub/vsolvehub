@@ -2,8 +2,9 @@
 
 ## Required end-to-end scenarios
 
-1. Logged-out Customer completes a Scheduled A1 booking without losing state through OTP.
-2. Same task quantity two remains one visit, Partner and OTP.
+1. Logged-out Customer completes a multi-service Scheduled A1 Booking Group without losing cart,
+   selected plan or safe scope intent through OTP.
+2. Same task quantity two remains one service line in one Fulfilment Unit, Partner and OTP.
 3. Client price/duration tampering is ignored and the quote remains correct.
 4. No serviceability, no eligible Partner and all Partners declining prevent payment.
 5. Two customers compete for the last Partner; only one tentative reservation succeeds.
@@ -53,11 +54,34 @@
     mismatch, expiry and replay fail closed, malware-pending content cannot be revealed or approved,
     only the assigned non-self reviewer gets an audited expiring reveal URL, and failed/expired
     orphan objects are deleted after the configured recovery window.
+35. Two explicitly compatible services with a common eligible Partner become one sequential unit;
+    the Partner receives both lines and the Customer sees one professional before confirmation.
+36. Two services in the same category without a common eligible Partner never combine merely because
+    their category matches.
+37. Independent services become coordinated parallel units only when distinct eligible Partners and
+    overlapping capacity exist; each Partner receives only their own unit.
+38. A dependency, safety conflict, excessive duration or incompatible window produces separate visits
+    with a server-authored reason and unit-level price/cancellation details.
+39. Every cart item appears exactly once in every complete plan alternative and exactly once in the
+    confirmed Booking Group.
+40. Cart mutation or login merge racing plan/quote confirmation invalidates the stale plan and
+    preserves readable non-actionable quote history.
+41. One required unit exhausting its Partner pool releases every other tentative group reservation,
+    collects no payment and returns explicit replanning choices.
+42. Duplicate group confirmation, Partner acceptance, Celery coordination and payment webhook create
+    one Booking Group, one unit per plan unit and one booking per unit.
+43. Cancelling, disputing or partially completing one unit reconciles its allocated payment, refund,
+    tax, commission and ledger without changing unaffected unit outcomes.
+44. Customer, Partner and Operations projections enforce scope: Customers see the group, each Partner
+    sees only their unit, and Operations receives audited cross-unit recovery context.
 
 ## Concurrency acceptance
 
 - Offer accept versus expiry/revoke/undo.
 - Reservation insertion versus another checkout.
+- Cart edit/login merge versus plan or quote confirmation.
+- Parallel unit reservation versus another group and versus the group hold deadline.
+- Partial group hold versus compensation/replan and late Partner commit.
 - Payment capture versus checkout cancellation/reservation expiry.
 - Partner release versus En route/Arrived/start.
 - Customer cancellation versus arrival/start.
@@ -91,7 +115,8 @@ Exactly one valid transition wins. Losers receive current state and a safe recov
 3. Seed/activate only approved M1 areas and variants.
 4. Stop legacy writes for the M1 domain.
 5. Enable M1 through a controlled service/area flag.
-6. Execute smoke booking, refund, case and payout reconciliation.
+6. Execute sequential-group, parallel-group, separated-visit, refund, case and payout reconciliation
+   smoke scenarios.
 7. Monitor conversion, assignment, late/no-show, money ambiguity and case SLA.
 8. Expand only after the pilot gate; rollback by disabling new entry while preserving recovery access.
 

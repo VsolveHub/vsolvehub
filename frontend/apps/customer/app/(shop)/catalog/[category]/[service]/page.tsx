@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, buttonStyles, formatMoney } from "@vsolve/ui";
+import { buttonStyles, formatMoney } from "@vsolve/ui";
 
 import { getCategory, getService } from "@/features/catalog/queries";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
@@ -47,12 +47,6 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   // the same content. 404 rather than render it twice.
   if (service.category_slug !== categorySlug) notFound();
 
-  const hours = service.recommended_duration_minutes / 60;
-  const duration =
-    service.recommended_duration_minutes >= 60 && Number.isInteger(hours)
-      ? `${hours} hour${hours === 1 ? "" : "s"}`
-      : `${service.recommended_duration_minutes} minutes`;
-
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <ServiceJsonLd service={service} categorySlug={categorySlug} />
@@ -78,7 +72,6 @@ export default async function ServiceDetailPage({ params }: PageProps) {
               {formatMoney(service.starting_price.amount_paise)}
             </span>
           </div>
-          <Badge tone="neutral">{duration} typical</Badge>
         </div>
 
         <p className="mt-2 text-sm text-text-secondary">

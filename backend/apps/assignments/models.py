@@ -6,28 +6,56 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.carts.models import CheckoutSession
+from apps.carts.models import CheckoutSession, FulfilmentUnit
 from apps.partners.models import PartnerProfile
 
 
 class AssignmentAttempt(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    checkout = models.ForeignKey(CheckoutSession, on_delete=models.PROTECT, related_name="attempts")
+    checkout = models.ForeignKey(
+        CheckoutSession,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="attempts",
+    )
+    fulfilment_unit = models.ForeignKey(
+        FulfilmentUnit,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="assignment_attempts",
+    )
     candidate = models.ForeignKey(PartnerProfile, on_delete=models.PROTECT)
     rank = models.PositiveSmallIntegerField()
     eligibility_snapshot = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ("checkout", "rank")
+        ordering = ("checkout", "fulfilment_unit", "rank")
         constraints = [
             models.UniqueConstraint(
-                fields=("checkout", "candidate"), name="assignments_unique_checkout_candidate"
-            )
+                fields=("checkout", "candidate"),
+                condition=Q(checkout__isnull=False),
+                name="assignments_unique_checkout_candidate",
+            ),
+            models.UniqueConstraint(
+                fields=("fulfilment_unit", "candidate"),
+                condition=Q(fulfilment_unit__isnull=False),
+                name="assignments_unique_unit_candidate",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(checkout__isnull=False, fulfilment_unit__isnull=True)
+                    | Q(checkout__isnull=True, fulfilment_unit__isnull=False)
+                ),
+                name="assignments_attempt_exactly_one_scope",
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.checkout_id}:{self.rank}"
+        scope_id = self.fulfilment_unit_id or self.checkout_id
+        return f"{scope_id}:{self.rank}"
 
 
 class Reservation(models.Model):
@@ -38,7 +66,18 @@ class Reservation(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     checkout = models.OneToOneField(
-        CheckoutSession, on_delete=models.PROTECT, related_name="reservation"
+        CheckoutSession,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reservation",
+    )
+    fulfilment_unit = models.OneToOneField(
+        FulfilmentUnit,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reservation",
     )
     partner = models.ForeignKey(
         PartnerProfile, on_delete=models.PROTECT, related_name="reservations"
@@ -58,11 +97,19 @@ class Reservation(models.Model):
                     ("occupied_range", RangeOperators.OVERLAPS),
                 ],
                 condition=Q(status__in=("TENTATIVE", "CONFIRMED")),
-            )
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(checkout__isnull=False, fulfilment_unit__isnull=True)
+                    | Q(checkout__isnull=True, fulfilment_unit__isnull=False)
+                ),
+                name="assignments_reservation_exactly_one_scope",
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.checkout_id}:{self.partner_id}:{self.status}"
+        scope_id = self.fulfilment_unit_id or self.checkout_id
+        return f"{scope_id}:{self.partner_id}:{self.status}"
 
     def release(self) -> None:
         self.status = self.Status.RELEASED
@@ -81,7 +128,20 @@ class PartnerOffer(models.Model):
         REVOKED = "REVOKED", "Revoked"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    checkout = models.ForeignKey(CheckoutSession, on_delete=models.PROTECT, related_name="offers")
+    checkout = models.ForeignKey(
+        CheckoutSession,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="offers",
+    )
+    fulfilment_unit = models.ForeignKey(
+        FulfilmentUnit,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="offers",
+    )
     partner = models.ForeignKey(PartnerProfile, on_delete=models.PROTECT, related_name="offers")
     attempt = models.OneToOneField(
         AssignmentAttempt, on_delete=models.PROTECT, related_name="offer"
@@ -92,6 +152,7 @@ class PartnerOffer(models.Model):
     reservation = models.OneToOneField(
         Reservation, null=True, blank=True, on_delete=models.PROTECT, related_name="offer"
     )
+    partner_projection_snapshot = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     responded_at = models.DateTimeField(null=True, blank=True)
 
@@ -100,10 +161,29 @@ class PartnerOffer(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=("checkout",),
-                condition=Q(status__in=("OFFERED", "ACCEPTED_PENDING_UNDO")),
+                condition=Q(
+                    checkout__isnull=False,
+                    status__in=("OFFERED", "ACCEPTED_PENDING_UNDO"),
+                ),
                 name="assignments_one_live_offer_per_checkout",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=("fulfilment_unit",),
+                condition=Q(
+                    fulfilment_unit__isnull=False,
+                    status__in=("OFFERED", "ACCEPTED_PENDING_UNDO"),
+                ),
+                name="assignments_one_live_offer_per_unit",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(checkout__isnull=False, fulfilment_unit__isnull=True)
+                    | Q(checkout__isnull=True, fulfilment_unit__isnull=False)
+                ),
+                name="assignments_offer_exactly_one_scope",
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.checkout_id}:{self.partner_id}:{self.status}"
+        scope_id = self.fulfilment_unit_id or self.checkout_id
+        return f"{scope_id}:{self.partner_id}:{self.status}"

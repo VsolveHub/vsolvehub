@@ -277,3 +277,27 @@ def test_cors_preflight_allows_only_configured_credentialed_origin() -> None:
     assert allowed.headers["Access-Control-Allow-Credentials"] == "true"
     assert "x-csrftoken" in allowed.headers["Access-Control-Allow-Headers"]
     assert "Access-Control-Allow-Origin" not in rejected.headers
+
+
+@override_settings(
+    CORS_ALLOWED_ORIGINS=["https://customer.example.test"],
+    CSRF_TRUSTED_ORIGINS=["https://customer.example.test"],
+)
+def test_cors_preflight_allows_idempotency_header_for_browser_commands() -> None:
+    origin = "https://customer.example.test"
+
+    response = APIClient().options(
+        "/api/v1/fulfilment-plan-sets/",
+        HTTP_ORIGIN=origin,
+        HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="content-type,idempotency-key,x-csrftoken",
+    )
+
+    allowed_headers = {
+        header.strip().lower()
+        for header in response.headers["Access-Control-Allow-Headers"].split(",")
+    }
+    assert response.status_code == HTTPStatus.OK
+    assert response.headers["Access-Control-Allow-Origin"] == origin
+    assert response.headers["Access-Control-Allow-Credentials"] == "true"
+    assert {"content-type", "idempotency-key", "x-csrftoken"}.issubset(allowed_headers)

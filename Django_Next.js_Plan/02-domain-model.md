@@ -62,21 +62,26 @@ behaviour never silently creates future availability.
 Core records:
 
 - `Cart`, `CartItem`, `CartItemScope`
-- `PriceQuote`, `PriceQuoteLine`
-- `CheckoutSession`
+- `FulfilmentPlanSet`, `FulfilmentPlan`, `PlanUnit`, `PlanUnitItem`
+- `PriceQuote`, `QuoteUnit`, `PriceQuoteLine`
+- `CheckoutSession`, `BookingGroup`, `FulfilmentUnit`, `FulfilmentUnitLine`
 
-The cart owns editable intent. One cart item represents one intended operational unit: a visit,
-series, project, shift request, rental, trip, stay or listing action depending on archetype.
+The cart owns versioned editable intent and contains multiple independently scoped items. A cart item
+is a Customer request, not an assignment or guaranteed visit. The server planner partitions compatible
+visit requests into proposed units and returns the final visit/professional structure before
+confirmation. Category equality never substitutes for variant compatibility or Partner eligibility.
 
-`CheckoutSession` snapshots item versions, quote, address and policy acceptance. It may own an active
-Partner offer/reservation for visit archetypes. Editing a snapped input invalidates checkout; it never
-mutates an accepted quote in place.
+`CheckoutSession` snapshots the selected plan, cart version, quote, address and policy acceptance.
+`BookingGroup` is the Customer-facing confirmed aggregate. Each `FulfilmentUnit` owns exactly one
+operational window and lead-Partner assignment lifecycle and may contain multiple lines only when one
+Partner is eligible for all of them. Editing a snapped input invalidates the plan/quote; it never
+mutates accepted terms in place. See [Booking groups and fulfilment planning](./12-booking-groups-and-fulfilment-planning.md).
 
 ## Availability and assignment
 
 Visit-archetype records:
 
-- `PartnerOffer`: one bounded request for an informed Partner decision
+- `PartnerOffer`: one bounded request for an informed Partner decision for one Fulfilment Unit
 - `PartnerReservation`: occupied calendar range after acceptance
 - `JobAssignment`: the accepted Partner/role linked to a booking
 - `AssignmentAttempt`: audit of candidate selection and outcome
@@ -100,8 +105,9 @@ Both active states participate in the PostgreSQL overlap exclusion constraint. A
 future calendar reservation merely because the system assumes they are available.
 
 `JobAssignment` keeps history when a Partner releases and a replacement is found. A partial unique
-constraint permits at most one active lead assignment for a booking. Crew archetypes add named members
-only when their milestone builds the workforce domain.
+constraint permits at most one active lead assignment for a Fulfilment Unit/booking. Group coordination
+does not weaken the Partner-specific reservation constraint. Crew archetypes add named members only
+when their milestone builds the workforce domain.
 
 ## Orders and booking
 
@@ -113,9 +119,10 @@ Core records:
 - `PriceRevision`, `ScopeAmendment`, `TimeExtension`
 - `Invoice`, `InvoiceLine`, `CreditNote`, `DocumentSeries`
 
-`Booking` is the operational aggregate. `Order` groups collections. A quote/revision chain records
-what was agreed; invoice lines record the issued legal document. Do not introduce a redundant mutable
-order-line copy of the same amount.
+`Booking` is one operational Fulfilment Unit after confirmation. `BookingGroup` is the Customer-facing
+aggregate and `Order` groups collection. One Order may contain several bookings with explicit payment,
+refund, tax and ledger allocation. A quote/revision chain records what was agreed; invoice lines record
+the issued legal document. Do not introduce a redundant mutable order-line copy of the same amount.
 
 The booking stores separate dimensions:
 

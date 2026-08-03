@@ -286,7 +286,28 @@ interface FetchResult<TData> {
 export function unwrap<TData>(result: FetchResult<TData>): TData {
   const { data, error, response } = result;
 
-  if (response.ok && data !== undefined) return data;
+  if (response.ok && data !== undefined) {
+    // Calibrate from the body before returning it.
+    //
+    // This is not an optimisation — for a browser it is the *only* calibration
+    // that works. `Date` is not a CORS-safelisted response header, so unless
+    // Django sends `Access-Control-Expose-Headers: Date` the header path in the
+    // middleware reads `null` on every cross-origin call and `serverClock`
+    // silently falls back to the device clock. That is the exact failure the
+    // clock exists to prevent, and it is invisible: a countdown on a device
+    // running ten minutes fast simply shows the wrong number.
+    //
+    // Doing it here rather than at each call site means an endpoint that
+    // publishes `server_now` calibrates every screen, including the ones whose
+    // payloads carry no timestamp of their own. Costs nothing: `data` is already
+    // parsed, and `readServerNow` returns null for payloads without the field.
+    //
+    // See `contracts/proposals/0010-server-clock-calibration.md` for the header
+    // fix, which is still worth having — it covers the endpoints that publish no
+    // `server_now` at all.
+    calibrateFromPayload(data, response);
+    return data;
+  }
   if (
     response.ok &&
     error === undefined &&

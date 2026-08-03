@@ -51,29 +51,6 @@ function WindowStageSkeleton() {
 }
 
 export function WindowRegion({ availability }: { availability: WindowAvailability }) {
-  if (availability.status === "unpublished") {
-    return (
-      <div>
-        <h2 className="text-lg font-semibold text-text">Choose an arrival window</h2>
-
-        <div
-          role="status"
-          className="mt-4 rounded-card border border-warning-line bg-warning-surface p-4"
-        >
-          <p className="text-sm text-text">
-            Picking an arrival time is not open yet. We are finishing the part
-            that checks which professionals are genuinely free, and we would
-            rather show you nothing than a time nobody can keep.
-          </p>
-          <p className="mt-2 text-sm text-text-secondary">
-            Nothing has been booked and you have not been charged. What you have
-            chosen so far is saved.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (availability.status === "error") {
     return (
       <ErrorState

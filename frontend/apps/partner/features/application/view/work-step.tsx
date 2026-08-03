@@ -2,9 +2,11 @@
 
 import { Badge, ErrorState, Spinner } from "@vsolve/ui";
 
+import { useApplicationEditor } from "./application-editor";
+
 import type { OfferableService } from "@/features/catalog/queries";
 
-import { toggle, type ApplicationDraft } from "../model/draft";
+import { toggle } from "../model/draft";
 import { useApplicationReference } from "../reference-queries";
 import { SelectableRow } from "./selectable-row";
 
@@ -27,13 +29,20 @@ import { SelectableRow } from "./selectable-row";
  */
 
 export interface WorkStepProps {
-  draft: ApplicationDraft;
-  update: (patch: Partial<ApplicationDraft>) => void;
-  isReadOnly: boolean;
+  /**
+   * Bookable services, read from the public catalog during server rendering.
+   *
+   * A prop rather than a context read because it is the one input here that is
+   * genuinely not per-applicant: it is identical for everyone, needs no session,
+   * and is therefore cheaper fetched once on the server than once per browser.
+   * The applicant's own answers come from `useApplicationEditor`.
+   */
   services: readonly OfferableService[];
 }
 
-export function WorkStep({ draft, update, isReadOnly, services }: WorkStepProps) {
+export function WorkStep({ services }: WorkStepProps) {
+  const { draft, update, isReadOnly } = useApplicationEditor();
+
   const reference = useApplicationReference();
 
   const byCategory = new Map<string, OfferableService[]>();

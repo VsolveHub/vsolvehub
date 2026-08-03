@@ -1,10 +1,7 @@
-from datetime import datetime, time, timedelta
 from http import HTTPStatus
-from zoneinfo import ZoneInfo
 
 import pytest
 from django.core.management import call_command
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ServiceVariant
@@ -32,11 +29,6 @@ def _address_payload() -> dict[str, object]:
     }
 
 
-def _requested_start() -> datetime:
-    local_date = timezone.now().astimezone(ZoneInfo("Asia/Kolkata")).date() + timedelta(days=1)
-    return datetime.combine(local_date, time(10, 0), tzinfo=ZoneInfo("Asia/Kolkata"))
-
-
 def _customer_quote(*, customer: User) -> tuple[APIClient, str]:
     client = APIClient()
     client.force_authenticate(customer)
@@ -49,9 +41,21 @@ def _customer_quote(*, customer: User) -> tuple[APIClient, str]:
     assert cart.status_code == HTTPStatus.OK
     address = client.post("/api/v1/addresses/", _address_payload(), format="json")
     assert address.status_code == HTTPStatus.CREATED
+    windows = client.post(
+        "/api/v1/booking/windows/",
+        {"address_id": address.json()["id"]},
+        format="json",
+    )
+    assert windows.status_code == HTTPStatus.OK
+    available_window = next(
+        window
+        for day in windows.json()["days"]
+        for window in day["windows"]
+        if window["is_available"]
+    )
     quote = client.post(
         "/api/v1/quotes/",
-        {"address_id": address.json()["id"], "requested_start": _requested_start().isoformat()},
+        {"address_id": address.json()["id"], "window_id": available_window["id"]},
         format="json",
     )
     assert quote.status_code == HTTPStatus.CREATED

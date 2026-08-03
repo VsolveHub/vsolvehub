@@ -34,6 +34,15 @@ export interface ReviewStageProps {
   service: Schemas["ServiceDetail"];
   addressLine: string | null;
   windowLabel: string | null;
+  /**
+   * The chosen window was taken before the quote could be priced.
+   *
+   * Its own prop rather than a generic error, because the recovery is specific:
+   * the customer picks another time, and nothing they configured is lost. A
+   * generic "something went wrong" would send them back to the start.
+   */
+  windowLost?: boolean;
+  onChooseAnotherWindow?: () => void;
   /** Owned by the checkout stage — this stage only reports that it is ready. */
   onContinue?: () => void;
   continueLabel?: string;
@@ -44,6 +53,8 @@ export function ReviewStage({
   service,
   addressLine,
   windowLabel,
+  windowLost = false,
+  onChooseAnotherWindow,
   onContinue,
   continueLabel = "Find a professional",
 }: ReviewStageProps) {
@@ -67,6 +78,24 @@ export function ReviewStage({
   return (
     <div>
       <h2 className="text-lg font-semibold text-text">Check the details</h2>
+
+      {windowLost ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-card border border-warning-line bg-warning-surface p-4"
+        >
+          <p className="text-sm font-semibold text-text">That time was just taken</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Someone booked it while you were checking. Nothing has been booked or
+            charged, and everything else you chose is still here.
+          </p>
+          {onChooseAnotherWindow ? (
+            <Button className="mt-3" onClick={onChooseAnotherWindow}>
+              Choose another time
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 rounded-card border border-line bg-surface">
         <div className="border-b border-line p-4">

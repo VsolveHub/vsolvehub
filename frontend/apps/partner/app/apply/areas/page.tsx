@@ -11,9 +11,7 @@ export default function AreasPage() {
       title="Where you work"
       description="Pick the areas you are willing to travel to. You will only be offered jobs inside them."
     >
-      {({ draft, update, isReadOnly }) => (
-        <AreasStep draft={draft} update={update} isReadOnly={isReadOnly} />
-      )}
+      <AreasStep />
     </ApplicationEditor>
   );
 }

@@ -3,7 +3,8 @@
 import { ApiRequestError, type Schemas } from "@vsolve/api-client";
 import { Button, ErrorState, Spinner } from "@vsolve/ui";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 import {
   changedFields,
@@ -12,6 +13,7 @@ import {
   type ApplicationDraft,
 } from "../model/draft";
 import { isEditable } from "../model/readiness";
+import { nextStep } from "../model/steps";
 import { isVersionConflict, usePartnerApplication, useUpdateApplication } from "../queries";
 
 /**
@@ -37,15 +39,50 @@ export interface ApplicationEditorRenderProps {
   isReadOnly: boolean;
 }
 
+/**
+ * The draft, handed to steps through context rather than as a render prop.
+ *
+ * This was `children: (props) => ReactNode`, and every step page is a **Server**
+ * Component — so each one was passing a function across the server/client
+ * boundary. Functions are not serialisable into the RSC payload, and React
+ * refused the whole tree with *"Functions are not valid as a child of Client
+ * Components"*. Every render-prop step page threw at runtime; only the pages
+ * that happened not to use one still worked.
+ *
+ * Context fixes it without pushing `"use client"` up into the pages, which would
+ * have been the other obvious move and would have cost them their `metadata`
+ * export. A step is now an ordinary element the server can serialise, and the
+ * data reaches it inside the client boundary where it was always meant to live.
+ */
+const EditorContext = createContext<ApplicationEditorRenderProps | null>(null);
+
+export function useApplicationEditor(): ApplicationEditorRenderProps {
+  const value = useContext(EditorContext);
+  if (value === null) {
+    throw new Error("useApplicationEditor must be used inside <ApplicationEditor>");
+  }
+  return value;
+}
+
 export interface ApplicationEditorProps {
   title: string;
   description?: string;
-  children: (props: ApplicationEditorRenderProps) => ReactNode;
+  /** The step's own element. Serialisable, so a Server Component may pass it. */
+  children: ReactNode;
   /**
    * Blockers this step cannot resolve, named so the save button explains itself
    * instead of being mysteriously disabled.
    */
   saveLabel?: string;
+  /**
+   * Whether a successful save moves to the next step.
+   *
+   * Default `true`, because every label this component ships with says
+   * "continue". Set it false only for a step that genuinely ends somewhere else,
+   * and change the label to match — a button that says continue and does not is
+   * the bug this option exists to make deliberate rather than accidental.
+   */
+  continueOnSave?: boolean;
 }
 
 export function ApplicationEditor(props: ApplicationEditorProps) {
@@ -92,10 +129,17 @@ function Editor({
   title,
   description,
   saveLabel = "Save and continue",
+  continueOnSave = true,
   children,
 }: ApplicationEditorProps & { application: Application | null }) {
   const [draft, setDraft] = useState(() => draftFromApplication(application));
   const save = useUpdateApplication();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Resolved from the shared sequence rather than passed in per page, so the
+  // navigation and this button cannot disagree about what comes next.
+  const following = continueOnSave ? nextStep(pathname) : null;
 
   const isReadOnly = application !== null && !isEditable(application);
   const dirty = isDirty(draft, application);
@@ -110,6 +154,15 @@ function Editor({
     setDraft((current) => ({ ...current, ...patch }));
     save.reset();
   }
+
+  const editor = useMemo<ApplicationEditorRenderProps>(
+    () => ({ draft, update, application, isReadOnly }),
+    // `update` is stable enough in practice — it only closes over `setDraft` and
+    // `save.reset` — and is recreated with the component anyway, which is keyed
+    // on the application version above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft, application, isReadOnly],
+  );
 
   return (
     <section>
@@ -128,7 +181,9 @@ function Editor({
         </p>
       ) : null}
 
-      <div className="mt-6">{children({ draft, update, application, isReadOnly })}</div>
+      <div className="mt-6">
+        <EditorContext.Provider value={editor}>{children}</EditorContext.Provider>
+      </div>
 
       {isReadOnly ? null : (
         <div className="mt-8 border-t border-line pt-4">
@@ -174,7 +229,17 @@ function Editor({
               disabled={!dirty}
               loading={save.isPending}
               loadingLabel="Saving"
-              onClick={() => save.mutate(changedFields(draft, application))}
+              onClick={() =>
+                save.mutate(changedFields(draft, application), {
+                  // Only on success. A save that was refused — a version
+                  // conflict, a validation failure — must leave the applicant on
+                  // the step that still needs them, with the message explaining
+                  // why, rather than moving them on from work that was not kept.
+                  onSuccess: () => {
+                    if (following !== null) router.push(following.href);
+                  },
+                })
+              }
             >
               {saveLabel}
             </Button>

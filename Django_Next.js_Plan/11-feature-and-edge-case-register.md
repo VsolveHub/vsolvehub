@@ -11,7 +11,7 @@ does not redefine the domain documents. A milestone may add detail but cannot we
 | Consent/privacy | M1, evolved always | notice version change, withdrawn marketing consent, access/correction/erasure, legal-retention conflict |
 | Catalog/configuration | M1, extended per archetype | missing rate/policy, concurrent edit, effective-date boundary, deactivated option with active checkout |
 | Address/geocoding | M1 | provider outage, low-confidence result, pin/text mismatch, outside area, access notes and address change |
-| Cart/quote | M1 | login merge, duplicate add, expired/repriced quote, stale scope schema, client tampering |
+| Cart/planning/quote | M1 | login merge, duplicate add, concurrent edit, plan invalidation, incompatible/dependent lines, expired/repriced quote, stale scope schema, client tampering |
 | Offers/reservations | M1 | decline, expiry, delivery failure, accidental undo, overlap race, payment abandonment |
 | Booking lifecycle | M1 | duplicate commands, invalid order, Partner recovery, partial/abort, dispute and timeout |
 | Payment/refund | M1 | duplicate/out-of-order webhook, redirect loss, capture/DB ambiguity, failed/stale refund, chargeback |
@@ -26,7 +26,7 @@ does not redefine the domain documents. A milestone may add detail but cannot we
 |---|---|---|
 | Public discovery | M1 onward | empty category, inactive area, honest starting price, recoverable API/media error |
 | Scheduled/Today booking | M1 | no window/Partner, search cancellation, reservation/payment expiry, refresh/login resume |
-| Multi-service order | M2 | one item unavailable, one booking cancelled, per-booking refunds/documents, no hidden partial success |
+| Multi-service Booking Group | M1 onward | common-Partner intersection, parallel capacity, required separation, one unit unavailable/cancelled, allocated refunds/documents, no hidden partial success |
 | Instant | M4 | pool empties, no acceptance after capture/auth, refund latency, background delivery and location expiry |
 | Active booking | M1 | Partner change, late/no-show, contact failure, cancellation race, server-time drift |
 | Amendment | M1 | evidence upload failure, decline, payment failure, next-booking capacity risk, required work cannot continue |
@@ -91,4 +91,3 @@ Before a feature enters a milestone, its specification must answer:
 10. Which Operations case owns failures, with what SLA and terminal result?
 11. Which metrics show harm or failure without turning the metric into an automatic punishment?
 12. Which unit, integration, concurrency, browser and recovery tests prove it?
-

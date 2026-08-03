@@ -79,8 +79,13 @@ describe("sequence", () => {
     }
   });
 
-  it("implements the four pre-login stages", () => {
-    expect(STAGES_IMPLEMENTED).toEqual(["address", "scope", "window", "review"]);
+  it("implements only the scope stage, because the rest belong to the group", () => {
+    // Under the Booking Group model a service page configures one request and
+    // appends it to the cart. Address, timing and review are settled once for
+    // the whole group at `/cart`, where they can see every item rather than one.
+    // The full `sequence()` above is deliberately unchanged: it still encodes
+    // the ordering rule that payment cannot precede a committed Partner.
+    expect(STAGES_IMPLEMENTED).toEqual(["scope"]);
   });
 
   it("treats everything from the search onward as committed", () => {

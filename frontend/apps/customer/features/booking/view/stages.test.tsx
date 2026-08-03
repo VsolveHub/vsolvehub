@@ -75,11 +75,12 @@ function AddressStageHarness({
   locationError?: string | null;
   updateError?: string | null;
 }) {
-  const { dispatch } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
 
   return (
     <AddressStage
       addresses={addresses}
+      selectedAddressId={state.address?.id ?? null}
       isLoading={false}
       serviceability={null}
       isCheckingServiceability={false}

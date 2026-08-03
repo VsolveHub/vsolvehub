@@ -1,11 +1,14 @@
 "use client";
 
 import { useAuthGuard, useLogout, useOtpFlow } from "@vsolve/query";
-import { Button, ErrorState, OtpForm, Spinner } from "@vsolve/ui";
+import { Button, ErrorState, OtpForm, Spinner, cn } from "@vsolve/ui";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+
+import { APPLICATION_STEPS, stepIndexOf } from "../model/steps";
 
 /**
  * The signed-in shell for `/apply/*`.
@@ -19,17 +22,6 @@ import { getApiClient } from "@/lib/api/browser";
  * have the Partner role yet, and demanding it here would lock out every new
  * applicant.
  */
-
-const STEPS = [
-  { href: "/apply", label: "Overview" },
-  { href: "/apply/about", label: "About you" },
-  { href: "/apply/work", label: "Your work" },
-  { href: "/apply/areas", label: "Where you work" },
-  { href: "/apply/consent", label: "Agreements" },
-  { href: "/apply/documents", label: "Documents" },
-  { href: "/apply/schedule", label: "Your hours" },
-  { href: "/apply/review", label: "Review and send" },
-] as const;
 
 function ApplyLogin() {
   const flow = useOtpFlow(getApiClient());
@@ -115,24 +107,54 @@ export function ApplyShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {/* Horizontal on a phone, so the whole path stays visible without the
-          steps shrinking to unreadable. */}
-      <nav aria-label="Application steps" className="-mx-4 mt-4 overflow-x-auto px-4">
-        <ul className="flex list-none gap-1 p-0">
-          {STEPS.map((step) => (
+      <ApplySteps />
+
+      <main className="mt-6">{children}</main>
+    </div>
+  );
+}
+
+/**
+ * The step navigation.
+ *
+ * Marks where the applicant is, which the previous version did not: every step
+ * looked identical, so after a save there was no way to tell you had moved —
+ * and no way to tell you had not. `aria-current="page"` carries that to a screen
+ * reader; the fill and weight carry it visually.
+ *
+ * Kept as its own component so `usePathname` re-renders the strip and not the
+ * whole shell on every navigation.
+ */
+function ApplySteps() {
+  const pathname = usePathname();
+  const currentIndex = stepIndexOf(pathname);
+
+  return (
+    /* Horizontal on a phone, so the whole path stays visible without the steps
+       shrinking to unreadable. */
+    <nav aria-label="Application steps" className="-mx-4 mt-4 overflow-x-auto px-4">
+      <ul className="flex list-none gap-1 p-0">
+        {APPLICATION_STEPS.map((step, index) => {
+          const isCurrent = index === currentIndex;
+          return (
             <li key={step.href}>
               <Link
                 href={step.href}
-                className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-control px-3 text-sm font-semibold text-text-secondary hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+                aria-current={isCurrent ? "page" : undefined}
+                className={cn(
+                  "inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-control px-3 text-sm font-semibold",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+                  isCurrent
+                    ? "bg-selected-surface text-text"
+                    : "text-text-secondary hover:bg-surface-hover hover:text-text",
+                )}
               >
                 {step.label}
               </Link>
             </li>
-          ))}
-        </ul>
-      </nav>
-
-      <main className="mt-6">{children}</main>
-    </div>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

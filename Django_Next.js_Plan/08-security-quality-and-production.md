@@ -76,6 +76,8 @@ Configuration is effective-dated. The plan does not freeze legal rates or interp
 - archetype configuration validation;
 - cancellation and partial-work outcomes;
 - idempotency and retry decisions.
+- fulfilment-plan partition completeness, dependency ordering, unit price allocation and deterministic
+  ranking properties.
 
 ### PostgreSQL/Redis integration
 
@@ -87,6 +89,8 @@ Configuration is effective-dated. The plan does not freeze legal rates or interp
 - payout reservation concurrency;
 - outbox and task redelivery;
 - Redis loss without database invariant loss.
+- cart edit versus plan/quote confirmation, multi-unit holds versus expiry, and all-or-nothing group
+  compensation after partial Partner acceptance.
 
 ### Contract and frontend
 
@@ -111,6 +115,8 @@ Every milestone tests happy paths and at least:
 - partial work, abort, completion dispute and silence timeout;
 - duplicate actions and racing transitions;
 - Operations recovery and audit.
+- compatible sequential grouping, parallel capacity, required separation, one-unit failure and
+  Partner/customer projection isolation for Booking Groups.
 
 ## Quality gates
 
@@ -158,4 +164,3 @@ Critical alerts include:
 - Dead-letter/outbox replay and payment/refund/payout reconciliation runbooks.
 - Service/area/provider kill-switch rehearsal.
 - Legacy cutover only after a complete vertical slice passes acceptance and data export exists.
-

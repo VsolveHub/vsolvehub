@@ -18,7 +18,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.pricing.models import ServiceRate
+from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
 from apps.pricing.selectors import variants_with_current_rate
 
 
@@ -27,16 +27,43 @@ class _PublicService(Protocol):
 
 
 def _public_variants() -> QuerySet[ServiceVariant]:
+    now = timezone.now()
     questions = ServiceQuestion.objects.filter(is_active=True).prefetch_related(
         Prefetch("options", queryset=ServiceQuestionOption.objects.filter(is_active=True)),
     )
+    task_rates = (
+        TaskRate.objects.filter(is_active=True, effective_from__lte=now)
+        .filter(models.Q(effective_to__isnull=True) | models.Q(effective_to__gt=now))
+        .order_by("task_code", "-effective_from", "-created_at")
+        .distinct("task_code")
+    )
+    pricing_policy = (
+        PricingPolicy.objects.filter(
+            code="m1-technician",
+            is_active=True,
+            effective_from__lte=now,
+        )
+        .filter(models.Q(effective_to__isnull=True) | models.Q(effective_to__gt=now))
+        .order_by("-effective_from", "-created_at")
+    )
     return (
         variants_with_current_rate()
+        .select_related("service")
+        .annotate(
+            minimum_service_subtotal_paise=models.Subquery(
+                pricing_policy.values("minimum_service_subtotal_paise")[:1],
+            ),
+        )
         .filter(  # type: ignore[misc]  # Dynamic Subquery annotation.
             is_active=True,
+            booking_archetype=ServiceVariant.BookingArchetype.A1_TASK_VISIT,
             current_rate_amount_paise__isnull=False,
+            minimum_service_subtotal_paise__isnull=False,
         )
-        .prefetch_related(Prefetch("questions", queryset=questions))
+        .prefetch_related(
+            Prefetch("questions", queryset=questions),
+            Prefetch("task_rates", queryset=task_rates, to_attr="current_task_rates"),
+        )
         .order_by("display_order", "name")
     )
 

@@ -145,3 +145,60 @@ class PricingPolicy(models.Model):
 
     def __str__(self) -> str:
         return f"{self.code}:v{self.version}"
+
+
+class CancellationPolicy(models.Model):
+    """Effective-dated, server-authored cancellation copy and fixed fee bands."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.SlugField(max_length=100)
+    version = models.PositiveIntegerField()
+    effective_from = models.DateTimeField(default=timezone.now)
+    effective_to = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-effective_from", "-created_at")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("code", "version"),
+                name="pricing_unique_cancellation_policy_version",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(effective_to__isnull=True)
+                | models.Q(effective_to__gt=models.F("effective_from")),
+                name="pricing_cancellation_policy_valid_window",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code}:v{self.version}"
+
+
+class CancellationPolicyBand(models.Model):
+    policy = models.ForeignKey(
+        CancellationPolicy,
+        on_delete=models.PROTECT,
+        related_name="bands",
+    )
+    code = models.SlugField(max_length=80)
+    condition_text = models.CharField(max_length=240)
+    fee_paise = models.PositiveBigIntegerField()
+    display_order = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ("display_order", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("policy", "code"),
+                name="pricing_unique_cancellation_band_code",
+            ),
+            models.UniqueConstraint(
+                fields=("policy", "display_order"),
+                name="pricing_unique_cancellation_band_order",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.policy_id}:{self.code}"

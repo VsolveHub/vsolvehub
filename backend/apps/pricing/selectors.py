@@ -7,7 +7,7 @@ from django.db.models import OuterRef, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
-from apps.pricing.models import PricingPolicy, ServiceRate, TaskRate
+from apps.pricing.models import CancellationPolicy, PricingPolicy, ServiceRate, TaskRate
 
 
 def variants_with_current_rate() -> QuerySet[ServiceVariant]:
@@ -54,6 +54,19 @@ def current_pricing_policy(*, code: str, at: datetime | None = None) -> PricingP
     return (
         PricingPolicy.objects.filter(code=code, is_active=True, effective_from__lte=now)
         .filter(effective_to_predicate(now))
+        .order_by("-effective_from", "-created_at")
+        .first()
+    )
+
+
+def current_cancellation_policy(
+    *, code: str, at: datetime | None = None
+) -> CancellationPolicy | None:
+    now = at or timezone.now()
+    return (
+        CancellationPolicy.objects.filter(code=code, is_active=True, effective_from__lte=now)
+        .filter(effective_to_predicate(now))
+        .prefetch_related("bands")
         .order_by("-effective_from", "-created_at")
         .first()
     )

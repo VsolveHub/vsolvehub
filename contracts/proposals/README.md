@@ -39,3 +39,7 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0004 | OTP, session and error-contract gaps | Accepted with changes |
 | 0005 | Partner onboarding discovery and partial update | Accepted with changes |
 | 0006 | Credentialed browser session, CORS and CSRF contract | Accepted |
+| 0007 | Cart-item removal request body missing from the published DELETE | Proposed |
+| 0008 | `cursor` parameter missing on the Booking Group and Partner offer lists | Proposed |
+| 0009 | Partner offer commands: idempotency, typed action and declared refusals | Proposed |
+| 0010 | Expose the `Date` header so browser countdowns use the server clock | Proposed |

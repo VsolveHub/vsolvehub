@@ -5,7 +5,6 @@ import { Badge, Button, EmptyState, Field, Input, Spinner } from "@vsolve/ui";
 import { useState, type FormEvent } from "react";
 
 import { ChoiceCard } from "./choice-card";
-import { useWorkspace } from "./workspace-context";
 
 /**
  * Where the work happens, and whether Vsolve Hub covers it.
@@ -41,6 +40,15 @@ export interface AddressStageProps {
   onUpdateAddress: (addressId: string, patch: AddressPatch) => void;
   isUpdatingAddress: boolean;
   updateError?: string | null;
+  /**
+   * The chosen address, or null.
+   *
+   * A prop rather than a reducer read. The address is now confirmed once for a
+   * whole Booking Group instead of once per configured service, so this
+   * component is used from two places with different owners of that state — and
+   * reading one of them from context would have quietly limited it to the other.
+   */
+  selectedAddressId: string | null;
 }
 
 function formatAddress(address: Address): string {
@@ -76,9 +84,9 @@ export function AddressStage({
   onUpdateAddress,
   isUpdatingAddress,
   updateError = null,
+  selectedAddressId,
 }: AddressStageProps) {
-  const { state } = useWorkspace();
-  const selectedId = state.address?.id ?? null;
+  const selectedId = selectedAddressId;
   const selectedAddress = addresses.find((address) => address.id === selectedId) ?? null;
   const [editedDraft, setEditedDraft] = useState<{
     addressId: string | null;
