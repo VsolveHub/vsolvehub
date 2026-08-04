@@ -3,6 +3,7 @@ from http import HTTPStatus
 
 import pytest
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.test import APIClient
 
 from apps.assignments.group_services import accept_unit_offer, reconcile_group_dispatch
@@ -10,14 +11,15 @@ from apps.assignments.models import PartnerOffer, Reservation
 from apps.assignments.serializers import OfferSerializer
 from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.foundation.models import OutboxEvent
-from apps.identity.models import User
-from apps.partners.models import PartnerService
+from apps.identity.models import Role, User, UserRole
+from apps.partners.models import PartnerProfile, PartnerService
 from tests.carts.test_fulfilment_planning import (
     _add_item,
     _customer_context,
     _partner,
     _plan,
 )
+from tests.helpers import force_role_client
 
 pytestmark = pytest.mark.django_db(transaction=True)
 EXPECTED_SERVICE_LINES = 2
@@ -169,6 +171,73 @@ def test_one_unassignable_unit_compensates_every_partial_group_hold() -> None:
         fulfilment_unit__booking_group=group,
         status__in=(PartnerOffer.Status.OFFERED, PartnerOffer.Status.ACCEPTED_PENDING_UNDO),
     ).exists()
+
+
+def _partner_client(partner: PartnerProfile) -> APIClient:
+    role, _created = Role.objects.get_or_create(
+        code="partner",
+        defaults={"name": "Partner", "is_system": True},
+    )
+    UserRole.objects.get_or_create(user=partner.user, role=role)
+    return force_role_client(user=partner.user, role_code="partner")
+
+
+def test_partner_offer_projection_publishes_server_now_for_clock_calibration() -> None:
+    """Proposal 0010 defense in depth for the offer-first Partner session.
+
+    A Partner who opens straight to their inbox touches no endpoint that used to
+    publish `server_now`, so the offer's own 45-second expiry and 120-second undo
+    window are the shortest deadlines in the product with the least calibration.
+    """
+    client, _customer, address_id, version = _customer_context()
+    cart = _add_item(client, slug="switch-socket-repair", cart_version=version)
+    partner = _partner(suffix="47", variant_slugs=("switch-socket-repair",))
+    plan = _plan(client, address_id=address_id, cart_version=int(cart["version"]))["plans"][0]
+    quote = _quote(client, plan["id"], key="server-clock-quote")
+    checkout = _checkout(client, quote["id"], key="server-clock-checkout")
+    group = BookingGroup.objects.get(id=checkout["booking_group"]["id"])
+    assert PartnerOffer.objects.filter(fulfilment_unit__booking_group=group).exists()
+
+    partner_client = _partner_client(partner)
+    inbox = partner_client.get("/api/v1/partner/offers/")
+    assert inbox.status_code == HTTPStatus.OK
+    page = inbox.json()
+    page_server_now = parse_datetime(page["server_now"])
+    assert page_server_now is not None
+
+    offer_payload = page["results"][0]
+    offer_server_now = parse_datetime(offer_payload["server_now"])
+    expires_at = parse_datetime(offer_payload["expires_at"])
+    assert offer_server_now is not None
+    assert expires_at is not None
+    assert offer_server_now < expires_at
+
+    accepted = partner_client.post(
+        f"/api/v1/partner/offers/{offer_payload['id']}/accept/",
+        HTTP_IDEMPOTENCY_KEY="server-clock-accept",
+    )
+    assert accepted.status_code == HTTPStatus.OK
+    accepted_server_now = parse_datetime(accepted.json()["server_now"])
+    undo_deadline = parse_datetime(accepted.json()["undo_deadline"])
+    assert accepted_server_now is not None
+    assert undo_deadline is not None
+    assert accepted_server_now < undo_deadline
+
+
+def test_empty_partner_inbox_still_publishes_a_calibration_instant() -> None:
+    """An empty inbox carries no offer, and it is exactly the offer-first session."""
+    role, _created = Role.objects.get_or_create(
+        code="partner",
+        defaults={"name": "Partner", "is_system": True},
+    )
+    user = User.objects.create_user(phone_number="+919876540077")
+    UserRole.objects.create(user=user, role=role)
+
+    response = force_role_client(user=user, role_code="partner").get("/api/v1/partner/offers/")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["results"] == []
+    assert parse_datetime(response.json()["server_now"]) is not None
 
 
 def test_customer_cancel_is_versioned_idempotent_and_releases_every_hold() -> None:

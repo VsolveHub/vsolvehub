@@ -1,3 +1,6 @@
+from typing import cast
+
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -31,6 +34,7 @@ class OfferSerializer(serializers.ModelSerializer[PartnerOffer]):
     estimated_gross = serializers.SerializerMethodField()
     commission = serializers.SerializerMethodField()
     estimated_net = serializers.SerializerMethodField()
+    server_now = serializers.SerializerMethodField()
 
     class Meta:
         model = PartnerOffer
@@ -51,6 +55,7 @@ class OfferSerializer(serializers.ModelSerializer[PartnerOffer]):
             "expires_at",
             "undo_deadline",
             "created_at",
+            "server_now",
         )
         read_only_fields = fields
 
@@ -102,6 +107,22 @@ class OfferSerializer(serializers.ModelSerializer[PartnerOffer]):
     def get_estimated_net(self, offer: PartnerOffer) -> dict[str, object] | None:
         return self._money(offer, "estimated_net")
 
+    @staticmethod
+    @extend_schema_field(serializers.DateTimeField())
+    def get_server_now(_offer: PartnerOffer) -> str:
+        """Millisecond-precise calibration source for `expires_at`/`undo_deadline`.
+
+        The exposed `Date` response header already calibrates every response, but it
+        is second-granular and can be rewritten by an intermediary. Publishing the
+        instant that produced these deadlines keeps the shortest countdown in the
+        product — the 120-second undo window — measurable from its own response.
+
+        The instant is rendered here rather than handed back as a `datetime`, so this
+        projection is plain JSON in every context — including the idempotency record
+        that a replayed Partner command is read back from.
+        """
+        return cast(str, serializers.DateTimeField().to_representation(timezone.now()))
+
 
 class ManualOfferSerializer(serializers.Serializer[dict[str, object]]):
     partner_id = serializers.UUIDField()
@@ -111,3 +132,7 @@ class OfferPageSerializer(serializers.Serializer[dict[str, object]]):
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = OfferSerializer(many=True)
+    # An empty inbox carries no offer to calibrate from, so the page publishes the
+    # server instant too. A Partner who opens straight to an empty inbox is exactly
+    # the offer-first session that has no other calibration source.
+    server_now = serializers.DateTimeField(read_only=True)

@@ -3,7 +3,9 @@
 **Author:** Claude (FE-08G frontend integration)
 **Date:** 3 August 2026
 **Verified against:** OpenAPI 1.9.0 and 1.10.0 — unchanged in both
-**Status:** Proposed
+**Status:** Implemented in the backend — published in OpenAPI 1.13.0 as the `POST … /remove/`
+sibling. Frontend regeneration, the Remove control and browser acceptance (§Acceptance criteria 2–4
+and 8) remain outstanding.
 **Consuming application:** Customer
 **Consuming route / action:** `/cart` — "Remove" on a cart item row
 **Required authorization:** Same as the rest of the Cart surface — `cookieAuth` or an anonymous
@@ -190,3 +192,55 @@ a new record and has no version to check against.
 
 Until item 1 lands, the Customer cart keeps removal absent with the stated explanation rather than
 shipping a control that cannot work.
+
+## Backend resolution — published in OpenAPI 1.13.0
+
+The `POST` sibling was chosen over describing a DELETE body. The generator's omission is not a bug
+we can annotate around — `@extend_schema(request=…)` was already present and still produced
+`requestBody?: never` — so a DELETE body would have remained undescribable no matter what the
+document claimed.
+
+`POST /api/v1/cart/items/{item_id}/remove/` → `cart_items_remove`, `security: [{cookieAuth: []}, {}]`,
+required `CartItemRemoveRequest` body, `200` with the complete `Cart`. `DELETE
+/api/v1/cart/items/{item_id}/` is retained for callers already sending a body; both methods call
+`_remove_cart_item_response`, which validates one serializer and calls one `remove_cart_item`. There
+is no second removal implementation to drift.
+
+### What the guards answer
+
+| Condition | Status | Code | `details` |
+| --- | --- | --- | --- |
+| `expected_cart_version` ≠ current | 409 | `cart_version_conflict` | `{current_version, conflicting_field: "expected_cart_version"}` |
+| `expected_item_version` ≠ current | 409 | `cart_version_conflict` | `{current_version, conflicting_field: "expected_item_version"}` |
+| Item removed, unknown, or another Customer's | 409 | `cart_item_not_found` | — |
+
+`conflicting_field` is the cheap distinction the proposal invited. Both guards keep one code because
+both recover by refetching, so a client that only keys on the code stays correct.
+
+The item is located before either version is compared, which is a deliberate refinement of what the
+proposal predicted. A removal replayed after it already succeeded therefore answers
+`cart_item_not_found` — what actually happened — rather than `cart_version_conflict`, which would
+send the customer to reload a cart that is already what they wanted. The command is still refused in
+either ordering, so acceptance criterion 7 holds and a double submission still cannot remove a
+second item.
+
+### Unauthorized cart access
+
+There is no separate code for it, and that is the intended answer rather than an omission. Every
+cart command resolves the caller's own cart first, so another Customer's item id is not a row this
+request can reach. It answers `cart_item_not_found`, byte-identical to a random UUID, asserted as
+such in `test_another_customer_cannot_remove_an_item_and_learns_nothing_about_it`. A distinguishable
+`403` would confirm that the id exists in someone else's cart. Session loss keeps answering through
+the shared `403` path, exactly as the proposal's user-visible error table describes.
+
+### Regressions
+
+`backend/tests/carts/test_cart_item_removal.py` — one of two removed with the complete cart
+returned; no sibling `id`, `version`, `quantity`, `scope` or `variant_id` mutated; both stale-version
+paths refusing and mutating nothing; already-removed; accepted-removal replay; cross-customer denial
+with no existence oracle; anonymous session cart; missing-field rejection; DELETE/POST parity; a
+service-level pass with no HTTP; and a `transaction=True` PostgreSQL race where a concurrent
+`update_cart_item` and `remove_cart_item` claim the same cart version and exactly one commits.
+`backend/tests/test_schema.py` asserts the published operation id, required body, `minimum: 1` on
+both integers, `Cart`/`ApiError` responses, the anonymous-or-cookie security pair and the absence of
+an `Idempotency-Key` parameter.

@@ -1,5 +1,50 @@
 # API Contract Changelog
 
+## 1.13.0 - Typed cart-item removal
+
+- Added `POST /api/v1/cart/items/{item_id}/remove/` (`cart_items_remove`) with a required
+  `CartItemRemoveRequest` body carrying `expected_cart_version` and `expected_item_version`, and a
+  `200` response returning the complete updated `Cart`. Authorization is unchanged from the rest of
+  the Cart surface: `cookieAuth` or an anonymous session cart.
+- No `Idempotency-Key` is required or accepted. The optimistic-version pair is the replay
+  protection — a repeat of an accepted removal can no longer match a live row, so a double
+  submission cannot remove a second item. This is deliberately unlike checkout, which mints a new
+  record and has no version to check against.
+- `DELETE /api/v1/cart/items/{item_id}/` is retained for callers already sending a DELETE body and
+  runs the identical domain command. Its request shape is still absent from this document, because
+  the schema generator does not emit a `requestBody` for DELETE — that omission is the reason the
+  POST sibling exists, and generated clients must use the POST.
+- Added `cart_item_not_found` as a `409`. A removed, unknown or another Customer's item id all
+  answer with it, identically, so the command cannot be used to discover whether an id exists in
+  someone else's cart. It replaces the previous `400 validation_error` on the DELETE route; no
+  published client called that path, since the request body it required was never publishable.
+- `cart_version_conflict` details now carry `conflicting_field`, naming which expectation moved
+  (`expected_cart_version` or `expected_item_version`). Both guards keep the same code because both
+  recover by refetching the cart. This is an additive key on `add`, `update` and `remove`; existing
+  `current_version` handling is unchanged.
+
+Migration note: regenerate clients at 1.13.0. Removal becomes callable through the generated client
+for the first time; no existing call site requires changes.
+
+## 1.11.0 - Browser-readable server clock
+
+- Added `server_now` to the Partner `Offer` projection and to the Partner offer page envelope.
+  A Partner session that opens straight to the offer inbox previously touched no endpoint
+  publishing a server instant, so the 45-second offer expiry and the 120-second undo window were
+  the only deadlines in the product with no calibration source of their own. The page-level field
+  covers an empty inbox, which carries no offer to read a timestamp from.
+- No request shape, authorization rule, status code or money field changed. Every added field is
+  read-only and server-authored.
+
+Operational change published alongside this version, with no schema effect: `Date` is now named in
+`Access-Control-Expose-Headers` for allowed credentialed origins, and production start-up fails if a
+deployment removes it. `Date` is not CORS-safelisted, so browser clients previously read `null` from
+`response.headers.get("date")` and every countdown silently fell back to the device clock. Clients
+should keep the header as their primary calibration source — it refreshes on every response and
+tracks drift — and treat `server_now` as the more precise reading where an endpoint publishes it.
+
+Migration note: regenerate clients at 1.11.0. No existing call site requires changes.
+
 ## 1.10.0 - Booking Group payments, unit refunds and financial documents
 
 - Added idempotent Customer payment-attempt creation after all required Fulfilment Units have live

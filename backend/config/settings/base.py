@@ -20,6 +20,11 @@ CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
+# A browser hides every response header outside the CORS safelist from JavaScript,
+# and `Date` is not on that safelist.  Shared countdown calibration reads it on every
+# response, so leaving it unexposed makes each offer, undo, hold and OTP deadline
+# measure against the device clock with no error state to reveal it.
+CORS_EXPOSE_HEADERS = env.list("CORS_EXPOSE_HEADERS", default=["Date"])
 CORS_URLS_REGEX = r"^/api/.*$"
 
 INSTALLED_APPS = [
@@ -170,11 +175,15 @@ M1_FULFILMENT_PLAN_TTL_SECONDS = 15 * 60
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.10.0",
+    "VERSION": "1.13.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": True,
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "common.schema.publish_parameter_enum_components",
+    ],
     "ENUM_NAME_OVERRIDES": {
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",

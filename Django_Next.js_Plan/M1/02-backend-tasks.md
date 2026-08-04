@@ -8,11 +8,28 @@ implemented, with the missing production behaviour named · `[ ]` not implemente
 path alone never makes a business capability complete; its authorized HTTP contract, idempotency,
 failure recovery, audit and concurrency behaviour must also exist.
 
-## Audit snapshot — 2026-08-03
+## Audit snapshot — 2026-08-04 (WIP review)
 
-- Django system checks, Ruff formatting/lint, strict MyPy and all **154 backend tests** pass on the
-  current audit run.
-- Branch-aware coverage is **85.17%** and `makemigrations --check --dry-run` reports no model drift.
+- Focused proposal suites on the dirty tree: **0007 cart removal** and **0010 server clock** pass;
+  **0009 offer commands** 17/18 pass (one fixture `Role.DoesNotExist`); **0008 cursors** 8/14 pass.
+- Combined focused run excluding known gaps: **43 passed**.
+- Combined focused run including gaps: **7 failed** (6×0008 contract/refusal + 1×0009 fixture).
+- `.\scripts\quality.cmd` **fails before the test suite** on strict MyPy:
+  `apps/assignments/serializers.py:124` redundant cast to `str` in `OfferSerializer.get_server_now`.
+- OpenAPI working copy is version **1.13.0** and includes `cart_items_remove`, `OfferActionEnum`,
+  offer `Idempotency-Key`, and `server_now`. It still **omits** typed `cursor` on
+  `/booking-groups/` and `/partner/offers/`. Changelog 1.13.0 documents 0007 only — 0009 is published
+  in the YAML without a matching changelog entry.
+- Branch-aware coverage was not re-established by a green full suite in this review (focused runs
+  alone sit under the 85% gate by design).
+- External blockers unchanged: MSG91/DLT, malware scan approval, KYC retention, Razorpay live,
+  CA/Finance/legal, real Redis/Celery crash recovery.
+
+## Prior audit snapshot — 2026-08-03
+
+- Django system checks, Ruff formatting/lint, strict MyPy and all **164 backend tests** pass on the
+  current run, which includes proposal 0010's server-clock work.
+- Branch-aware coverage is **85.42%** and `makemigrations --check --dry-run` reports no model drift.
 - A freshly generated OpenAPI document validates when written to a temporary audit file, and its
   SHA-256 hash matches the committed `contracts/openapi/v1.yaml`. The locked base requirements have
   no known vulnerabilities according to `pip-audit`.
@@ -21,14 +38,17 @@ failure recovery, audit and concurrency behaviour must also exist.
   unverified.
 - The test suite exercises PostgreSQL, but test settings replace Redis with locmem and run Celery
   eagerly. Real Redis, worker/beat, provider, concurrency and crash-recovery tests are still missing.
-- `contracts/openapi/v1.yaml` is published as `1.10.0`. It retains the 1.6 A1 primitives and adds the
+- `contracts/openapi/v1.yaml` is published as `1.11.0`. It retains the 1.6 A1 primitives and adds the
   versioned multi-item Cart, explicit login-merge decisions, idempotent Plan Sets, selected-plan
-  group/unit quotes, Booking Group/Fulfilment Unit checkout, autonomous dispatch and group-aware
-  payment/refund/document projections. The frontend-generated schema is current at 1.10.0.
+  group/unit quotes, Booking Group/Fulfilment Unit checkout, autonomous dispatch, group-aware
+  payment/refund/document projections and `server_now` on the Partner offer projection. The
+  frontend-generated schema is current at 1.10.0 and must be regenerated at 1.11.0.
 - Credentialed CORS, JSON CSRF bootstrap, token rotation/recovery semantics and explicit production
   origin validation are implemented and covered at Django/middleware level. FE-05's real
   Django-backed Playwright mutation, HttpOnly-cookie and browser-storage assertions also pass.
-  FE-09 discovered that `Date` is not exposed cross-origin; proposal 0010 is now a release blocker.
+  FE-09's finding that `Date` was hidden cross-origin is fixed: the header is exposed to allowed
+  credentialed origins, production fails closed if a deployment removes it, and a `live_server`
+  test proves a real cross-origin response carries a readable `Date` (proposal 0010).
 
 ## Cross-cutting blockers discovered by the audit
 
@@ -59,15 +79,20 @@ Celery configuration and one presence reconciliation job exist, but local infras
 PostgreSQL and Redis. Add worker/beat commands or services, an outbox recovery sweep for events left
 `PENDING`/`PROCESSING`/`FAILED`, and runbooks for queue outage, replay and stuck commands.
 
-### R5 — Browser session/CSRF is proven; server-clock header exposure remains
+### R5 — Browser session/CSRF and server-clock exposure are both proven
 
 Django now enables credentialed CORS only for explicit origins and returns the masked token from the
 typed CSRF bootstrap while keeping the cookie HttpOnly/Secure in production. Middleware tests cover
 allow/reject headers, stale-token rejection, refresh, mutation and revoke. FE-05 proves the same flow
 against real Django and confirms no token reaches browser storage.
 
-The separate `Date` response header used by shared countdown calibration is not CORS-safelisted and
-is currently hidden from browser JavaScript; proposal 0010 must expose and test it.
+The `Date` response header used by shared countdown calibration is now named in
+`CORS_EXPOSE_HEADERS`, so an allowed credentialed origin can read it. Production start-up raises
+`ImproperlyConfigured` if a deployment removes it, because losing it degrades silently: every
+countdown falls back to the device clock with no error, no log and no visual difference. Regressions
+live in `backend/tests/test_server_clock_calibration.py`, including a `live_server` test that proves
+the header exists on the wire — something the Django test client cannot show, since it never passes
+through a WSGI server. The remaining acceptance item is FE-09's skewed-device browser proof.
 
 ### R6 — Identity/error projection is published in the current OpenAPI contract
 
@@ -101,7 +126,7 @@ shapes and do not use the deprecated singleton path.
 - [~] Retry-safe command convention. Checkout creation uses it; most other state-changing endpoints
       rely only on optimistic locking or have no retry contract. Define which commands are retryable
       and apply the convention consistently.
-- [x] Generate and validate `/api/v1` OpenAPI. Version 1.10.0 validates, has a migration changelog,
+- [x] Generate and validate `/api/v1` OpenAPI. Version 1.11.0 validates, has a migration changelog,
       representative examples and typed planning/quote/checkout idempotency headers, matches Django, and is enforced
       by the backend quality command (R1).
 - [ ] Recover stranded outbox/idempotency records and prove crash/retry behaviour with a real worker
@@ -110,9 +135,12 @@ shapes and do not use the deprecated singleton path.
       frontend client, dependency and real-infrastructure/concurrency gates remain.
 - [x] Implement the credentialed CORS/CSRF contract in R5. Django/middleware regression tests and
       FE-05's real Django-backed Playwright mutation/storage assertions pass.
-- [ ] Expose the HTTP `Date` response header through credentialed CORS and validate it in production
+- [x] Expose the HTTP `Date` response header through credentialed CORS and validate it in production
       configuration, with a real cross-origin regression proving browser-readable server-clock
-      calibration (proposal 0010). This is a release blocker for every deadline/countdown UI.
+      calibration (proposal 0010). `CORS_EXPOSE_HEADERS` defaults to `["Date"]` and stays
+      environment-overridable so the production guard is a real check; a rejected origin still
+      receives no CORS access at all. FE-09's skewed-device browser proof is the remaining
+      acceptance item and belongs to the frontend lane.
 
 **Status: partial.** The foundation is usable for development, but it is not yet a production-complete
 contract and asynchronous execution platform.
@@ -191,10 +219,15 @@ in R7; the API fails closed until those integrations exist.
       correctness properties while replacing singleton cardinality.
 - [x] Change `CartItem.cart` from one-to-one to many-to-one; add `Cart.version`, item version and
       explicit add/update/remove commands with expected-version conflicts and bounded item count.
-- [ ] Publish a generated-client-compatible cart removal command carrying
+- [x] Publish a generated-client-compatible cart removal command carrying
       `expected_cart_version` and `expected_item_version`; use a typed POST `/remove/` sibling if the
       schema generator cannot describe a DELETE body. Add success, both stale-version, already-gone
       and unaffected-sibling regressions (proposal 0007).
+      Published in 1.13.0 as `POST /cart/items/{item_id}/remove/`; DELETE is retained for existing
+      callers and both run one `remove_cart_item`. `cart_version_conflict` now names its
+      `conflicting_field`, and removed/unknown/another-Customer ids all answer `cart_item_not_found`
+      so the command is not an existence oracle. Regressions add cross-customer denial, an
+      accepted-removal replay and a PostgreSQL edit-versus-removal race.
 - [x] Replace singleton replacement with a versioned login-merge result that preserves non-duplicate
       items and returns explicit decisions for exact duplicate/incompatible drafts.
 - [x] Add effective-dated `ServiceCompatibilityRule` and dependency configuration with activation
@@ -225,10 +258,10 @@ in R7; the API fails closed until those integrations exist.
       invalidation, idempotency and materialization; 100-case deterministic randomized partition and
       allocation properties plus a true cart-edit/checkout race protect the invariants.
 
-**Status: runtime complete; proposal 0007 reopens contract integration.** OpenAPI 1.8.0 closed
-BE-06G and OpenAPI 1.9.0 adds BE-07 recovery without changing server-owned Cart/Plan/Quote grouping
-and money semantics. Cart removal works in Django but is not callable through the generated client
-until its required optimistic-version input is published.
+**Status: complete for Cart/Plan/Quote/Group money semantics; proposal 0007 backend half is
+implemented with focused evidence, pending a green full quality gate.** OpenAPI 1.13.0 publishes
+`cart_items_remove`. FE-08G's removal integration is Ready. Do not treat the proposal as fully Done
+until `quality.cmd` is green on the integrated tree.
 
 ## B6 — Availability, offer and reservation
 
@@ -256,24 +289,34 @@ until its required optimistic-version input is published.
 - [x] Implement the approved M1 delivery transport: bounded short polling of a replayable Partner
       inbox projection, with reconnect/freshness semantics and no assumption that a browser tab stays
       open. Polling observes state only; Celery owns every deadline and transition.
-- [ ] Publish the existing `cursor` query parameter on Customer Booking Group and Partner offer list
+- [~] Publish the existing `cursor` query parameter on Customer Booking Group and Partner offer list
       operations, then prove cursor traversal has no duplicates/skips while rows are inserted
       concurrently (proposal 0008).
-- [ ] Make Partner accept/decline/undo/commit commands idempotent under a required stable key; publish
+      Runtime traversal, ownership, ordering and mid-walk insert tests already pass. Still missing:
+      Operations-style query serializer / OpenAPI `cursor` on both list operations, `400 cursor_invalid`
+      for mangled cursors (today: `not_found` or `internal_error`), blank-cursor refusal, and the
+      schema regression asserting the published parameter.
+- [~] Make Partner accept/decline/undo/commit commands idempotent under a required stable key; publish
       a closed action enum, all reachable error responses and a distinct reservation-conflict code.
       Same-key replay must return the authoritative successful projection and create exactly one
       Reservation (proposal 0009).
-- [ ] Publish reliable server-clock calibration for Partner offers: proposal 0010's exposed `Date`
-      header is required globally; adding `server_now` to `Offer` is recommended defense in depth for
-      the 120-second undo window.
+      Implemented in views/services and present in OpenAPI 1.13.0 (`OfferActionEnum`, required
+      `Idempotency-Key`, 400/403/404/409, `offer_reservation_conflict`). Focused suite mostly green;
+      remaining: profile-less Partner fixture (`Role.DoesNotExist`), changelog entry for 0009, and a
+      green full quality gate (currently blocked by MyPy + 0008).
+- [x] Publish reliable server-clock calibration for Partner offers. `Date` is exposed globally
+      through credentialed CORS, and `server_now` is published on both the `Offer` projection and the
+      offer page envelope as defense in depth for the 45-second expiry and 120-second undo window.
+      The page-level field covers an empty inbox, which carries no offer to read a timestamp from
+      (proposal 0010, OpenAPI 1.11.0 / bundled in 1.13.0). Focused live_server suite passes; MyPy
+      still fails on a redundant cast in `get_server_now`.
 - [ ] Complete revoke/release/manual-recovery commands with authorization, idempotency and audit, and
       add real concurrent-accept/expiry/payment-hold tests.
 
-**Status: BE-07 runtime exists, but contract hardening is reopened by FE-09.** OpenAPI 1.9.0
-publishes autonomous unit dispatch, Customer recovery/cancel and bounded Partner polling. Proposals
-0008–0010 must close typed pagination, retry-safe Partner commands and browser server-clock
-calibration before production; travel/presence/ranking, explainability and manual recovery remain
-additional B6 hardening.
+**Status: BE-07 runtime exists; contract hardening is in progress on the dirty tree (reviewed
+2026-08-04).** 0007 and 0010 have passing focused evidence. 0009 is implemented and schema-published
+but not gate-closed. 0008 still lacks published `cursor` + invalid-cursor contract. Travel/presence/
+ranking, explainability and manual recovery remain additional B6 hardening.
 
 ## B7 — Orders, payment, refund and documents
 
@@ -355,7 +398,7 @@ documented in `docs/runbooks/payment-reconciliation.md`.
 ## Backend completion gate
 
 - [x] Ruff format/check, strict MyPy and current unit/API tests pass.
-- [x] Current branch-aware coverage threshold passes: **85.17%**.
+- [x] Current branch-aware coverage threshold passes: **85.42%**.
 - [x] Migration model-drift check and generated OpenAPI validation pass.
 - [x] Locked base dependencies currently pass `pip-audit`.
 - [~] PostgreSQL is exercised by the current suite and the historical singleton cart has a

@@ -9,6 +9,19 @@ Task markers: `[x]` implemented and integrated against the published contract ·
 exists but is not end-to-end integrable, with the blocker named · `[ ]` not implemented. Fixture-only
 or quarantined proposal behaviour is never marked complete.
 
+## Audit snapshot — 2026-08-04 (backend WIP review)
+
+- Backend dirty tree reviewed against proposals 0007–0010. Frontend code was not re-run in this pass.
+- **G21 / 0007:** backend removal command present in OpenAPI 1.13.0 with focused tests green → FE-08G
+  removal remains Ready (regenerate + Remove UI still outstanding).
+- **G24 / 0010:** backend Date exposure + `server_now` focused tests green; MyPy blocks full quality →
+  FE-09C remains Ready but should regenerate only after a green backend gate if regenerating 1.13.0.
+- **G22 / 0008:** still blocked for frontend infinite-query work — OpenAPI still omits `cursor` on
+  booking-groups/offers; invalid-cursor contract unfinished.
+- **G23 / 0009:** backend implementation + schema largely present; not Ready for FE key adoption until
+  fixture/MyPy/0008 are cleared and `quality.cmd` is green. Keep current no-auto-retry mitigation.
+- Prior frontend evidence below is unchanged from 2026-08-03.
+
 ## Audit snapshot — 2026-08-03
 
 - The active workspace is `frontend/`: three Next.js 16 apps plus shared API client, query, UI,
@@ -31,19 +44,25 @@ or quarantined proposal behaviour is never marked complete.
   are complete through FE-06/FE-07.
 - FE-09 now provides Customer `/bookings` list/detail recovery and the approved Partner `/offers`
   inbox with bounded, visibility-aware, failure-backed-off polling. The integration exposed proposals
-  0008–0010; frontend mitigations are honest, but the backend contracts still require correction.
+  0008–0010; frontend mitigations are honest. Proposal 0010 backend half has focused evidence; 0008
+  and 0009 remain incomplete for FE adoption until the backend quality gate is green.
 - The generated OpenAPI TypeScript client is current with Django `1.10.0`; it was regenerated through
-  the package script and remains protected by `generate:check` rather than hand edits.
+  the package script and remains protected by `generate:check` rather than hand edits. **Django WIP
+  is at `1.13.0`**, so regeneration should wait for a green backend gate that includes 0008 if the
+  FE wave intends to consume cursors and offer commands together.
 - Django's `1.10.0` schema and changelog retain typed CSRF, stable session/active role, OTP metadata,
   hardened Operations authorization, Partner onboarding reference data/PATCH, private document
   transport and Operations review, multi-item Cart/Plan/Quote, Booking Group recovery and autonomous
   unit dispatch, and add group payment/refund/invoice/reconciliation APIs.
-- PostgreSQL/Redis are healthy and local migrations are applied. The last backend gate passed 154
-  tests with 85.17% branch-aware coverage.
+- PostgreSQL/Redis are healthy and local migrations are applied. The last committed backend gate
+  passed 164 tests with 85.42% branch-aware coverage; the current dirty tree's `quality.cmd` is not
+  green (see 02-backend-tasks.md 2026-08-04 audit).
 - Credentialed CORS, JSON masked-CSRF, HttpOnly session cookies and rotation/revoke behavior are
-  proven by backend tests and FE-05's real-browser Django flow.
+  proven by backend tests and FE-05's real-browser Django flow. The `Date` response header is now
+  exposed to allowed credentialed origins, so `serverClock` can calibrate from any response.
 - Customer production code no longer calls proposal-only paths. FE-08G uses the generated multi-item
-  contract and keeps cart-item removal visibly unavailable until G21 is published.
+  contract and still shows cart-item removal as unavailable; G21 is now published in OpenAPI 1.13.0,
+  so that copy is outstanding work rather than an accurate statement of the contract.
 - Shared role/recovery tables use Django's lowercase `snake_case`, and the Operations workspace has
   the selected-role guard published in FE-05.
 
@@ -188,39 +207,64 @@ The generated frontend client is current with Django 1.10.0. FE-08G uses its mul
 Cart/Plan/Quote operations; FE-09 and FE-10 must continue using generated group-dispatch and payment
 types without local additive projections.
 
-### G21 — Cart-item removal request is not publishable through the generated client
+### G21 — Cart-item removal is published; the frontend half is Ready, not Done
 
-`DELETE /api/v1/cart/items/{item_id}/` is published without a request body, while Django requires
-`expected_cart_version` and `expected_item_version`. Proposal 0007 documents the verified mismatch
-and accepts either a correctly described DELETE body or a typed POST `/remove/` command. Until the
-backend republishes one of those shapes and the client is regenerated, FE-08G must not use raw
-`fetch`, a local DTO or an unsafe cast. The Remove control remains absent with honest explanatory
-copy; add/edit/merge/plan/quote/confirm are unaffected.
+**Backend implementation present in OpenAPI 1.13.0 with focused tests green; full backend quality
+gate not yet green on the dirty tree. Frontend work has not started.**
+
+`DELETE /api/v1/cart/items/{item_id}/` was published without a request body, while Django required
+`expected_cart_version` and `expected_item_version`. The generator drops DELETE bodies regardless of
+annotation, so the backend published the typed sibling proposal 0007 offered:
+
+- `POST /api/v1/cart/items/{item_id}/remove/` → `cart_items_remove`, required
+  `CartItemRemoveRequest` body of both integers, `200` returning the complete `Cart`, and the same
+  `cookieAuth`-or-anonymous security as the rest of the Cart surface.
+- No `Idempotency-Key`. The version pair is the replay protection.
+- `409 cart_version_conflict` carries `details.conflicting_field`
+  (`expected_cart_version` | `expected_item_version`); both recover by refetching, so keying on the
+  code alone stays correct.
+- `409 cart_item_not_found` for removed, unknown and other-Customer ids alike. Show it as "That
+  service is no longer in your booking", refetch, and do not style it as an error — the outcome the
+  customer wanted has happened.
+- DELETE still works for hand-written callers but is still undescribed. Generated clients use POST.
+
+Outstanding frontend work: regenerate at 1.13.0, render the Remove control, apply the returned
+`Cart` with a targeted `setQueryData` and invalidate only plan sets and quotes, then add the
+two-service browser acceptance (remove the first, assert the second's `id`, `version`, `quantity`
+and `scope` are unchanged and the version note shows the returned version) and the stale-version
+conflict-copy-plus-refetch case. Raw `fetch`, a local DTO and unsafe casts remain forbidden — none
+is needed now.
 
 ### G22 — Booking Group and Partner offer pagination parameters are not published
 
-Both list endpoints return cursor-paginated envelopes and accept `cursor` at runtime, but OpenAPI
-1.10.0 exposes no typed query parameter. Proposal 0008 requests the same cursor annotation already
-used by the Operations review queue. FE-09 renders page one and an explicit truncation notice when
-`next` is non-null; after publication it must use `useInfiniteQuery`, retain one hierarchical cache
-entry, reset invalid cursors to page one and remove the notice only after all pages are reachable.
+Both list endpoints return cursor-paginated envelopes and accept `cursor` at runtime. Backend WIP
+adds traversal tests that pass, but OpenAPI **1.13.0 still omits** the typed `cursor` query parameter
+on `/booking-groups/` and `/partner/offers/`, and mangled cursors still surface as `not_found` /
+`internal_error` rather than `cursor_invalid`. Proposal 0008 remains Partial. FE-09 must keep
+page-one + truncation notice until publication.
 
-### G23 — Partner offer commands are not idempotent or fully typed
+### G23 — Partner offer commands — backend Partial; FE adoption not Ready
 
-Accept/decline/undo/commit have no `Idempotency-Key`, use an unconstrained action string and omit
-reachable refusal/race responses. A lost successful Accept response can therefore look identical to
-losing the offer. Proposal 0009 requires same-key replay, a closed action enum and a distinct
-reservation-conflict code. FE-09 correctly disables in-flight controls, never auto-retries and
-re-reads server truth after ambiguity, but cannot guarantee replay correctness until this lands.
+Backend WIP implements required `Idempotency-Key`, closed `OfferActionEnum`, reachable 400/403/404/409
+responses and `offer_reservation_conflict`, and those shapes are present in OpenAPI 1.13.0. Focused
+suite is almost green (one fixture bug). Full quality is not green. FE-09 must keep disable /
+no-auto-retry / re-read mitigations until a green backend gate; then regenerate and adopt one stable
+key per logical action with a lost-Accept replay browser proof.
 
-### G24 — Cross-origin browser responses hide the server `Date` header
+### G24 — Cross-origin browser responses hide the server `Date` header — **backend focused evidence green**
 
-`Date` is not CORS-safelisted and Django exposes no response headers, so `serverClock` cannot
-calibrate from ordinary API responses in a browser. FE-09 now calibrates from payload `server_now`
-where present, fixing Customer Booking Group countdowns; Partner `Offer` publishes no `server_now`,
-so offer expiry and the 120-second undo window can still use a skewed device clock. Proposal 0010
-requires `CORS_EXPOSE_HEADERS = ["Date"]`, production validation and a real cross-origin regression.
-This is a release blocker for every countdown, not a cosmetic enhancement.
+`Date` is not CORS-safelisted, and Django previously exposed no response headers, so `serverClock`
+could not calibrate from ordinary API responses in a browser. FE-09 mitigated this by calibrating
+from payload `server_now` where present, which fixed Customer Booking Group countdowns but left
+Partner offer expiry and the 120-second undo window on the device clock.
+
+The backend exposes `Date` in `Access-Control-Expose-Headers`, production fails closed without it,
+and `Offer` / offer page publish `server_now`. Focused `live_server` tests pass. Full `quality.cmd`
+is still blocked by an unrelated MyPy issue on the dirty tree.
+
+**FE-09C is Ready once regenerating against a green backend contract.** Regenerate, remove the mocked
+`Date`-header dependency from offer countdown tests, and prove in Playwright — with the page `Date`
+overridden an hour fast — that a Partner offer expiring in two minutes still reads about two minutes.
 
 ## F1 — Shared foundation and authentication
 
@@ -229,8 +273,9 @@ This is a release blocker for every countdown, not a cosmetic enhancement.
 - [x] TanStack Query provider, cache keys, retry/error presentation, mounted cross-tab session sync
       and freshness policies.
 - [~] Shared `serverClock` calibrates from exposed `Date` headers and, after FE-09, any generated
-      response body carrying `server_now`. Customer Booking Group reads now calibrate reliably, but
-      Partner-offer-first sessions remain unsafe until G24 is fixed by the backend.
+      response body carrying `server_now`. The backend now exposes `Date` cross-origin and publishes
+      `Offer.server_now` (1.11.0), so both sources are available to every session. Remaining work is
+      FE-09C: regenerate at 1.11.0 and prove calibration in a real browser with a skewed device clock.
 - [x] Accessible shared primitives, brand tokens, locale-aware money/readout helpers, error/loading
       boundaries and MSW contract fixtures.
 - [x] Generated OpenAPI is current with backend 1.10.0 and protected by the package freshness check;
@@ -252,8 +297,8 @@ This is a release blocker for every countdown, not a cosmetic enhancement.
       generated client freshness are ready.
 
 **Status: foundation implemented against OpenAPI 1.10.0.** Authentication, role, query,
-accessibility and real-browser session foundations are reusable; G24 must close before any
-deadline/countdown UI is production-trustworthy across origins.
+accessibility and real-browser session foundations are reusable. G24's backend half is published in
+1.11.0; the FE-09C regeneration and skewed-clock browser proof close it.
 
 ## F2 — Customer discovery and booking
 
@@ -262,7 +307,8 @@ deadline/countdown UI is production-trustworthy across origins.
       hardcoded arithmetic. BE-06G preserves these generated catalog fields.
 - [~] Build a real `/cart` Customer surface with multiple independently scoped items, add/edit/remove,
       cart version, bounded limit copy and per-item validation. Add/edit and append semantics are
-      implemented; removal remains unavailable solely because of G21.
+      implemented; removal is still unbuilt, but it is now Ready — `cart_items_remove` is published
+      in OpenAPI 1.13.0 and G21 is no longer a block.
 - [x] Integrate login/cart merge as a server-authored result: preserve non-duplicates, present exact
       duplicate/incompatible decisions, refetch the winning cart version and never merge in local
       storage.
@@ -304,8 +350,9 @@ deadline/countdown UI is production-trustworthy across origins.
 - [ ] Add real-Django cart/plan/quote/confirmation acceptance plus FE-09 offline/reconnect and
       one-unit matching failure, and FE-10 redirect-loss/duplicate-payment browser acceptance.
 
-**Status: FE-08G is integrated except contract-blocked item removal (G21), and FE-09 Customer group
-recovery is complete.** Generated queries, App Router boundaries, hydration, accessibility and
+**Status: FE-08G is integrated except item removal (G21), which is now Ready rather than blocked —
+the command is published in OpenAPI 1.13.0 and no frontend integration exists yet. FE-09 Customer
+group recovery is complete.** Generated queries, App Router boundaries, hydration, accessibility and
 contract-shaped browser gates pass. FE-10 is ready against OpenAPI 1.10.0; authoritative
 Django-backed booking/dispatch acceptance remains a milestone gate rather than being implied by
 intercepted E2E payloads.
@@ -363,9 +410,10 @@ acceptance and the production scanner/retention release decisions remain complet
       and are labelled unconfirmed rather than guessed as a loss.
 - [~] Add stable-key replay and typed refusal/race handling after G23 publishes idempotent offer
       commands. Until then, mutations never auto-retry and never mint a new key after ambiguity.
-- [~] Drive offer-expiry and undo countdowns from calibrated server time. The hook is implemented,
-      but Partner-offer-first sessions remain device-clock based until G24 exposes `Date` or the
-      Offer projection adds `server_now`.
+- [~] Drive offer-expiry and undo countdowns from calibrated server time. The hook is implemented and
+      the backend now supplies both calibration sources (1.11.0 exposes `Date` cross-origin and adds
+      `Offer.server_now`). FE-09C must regenerate the client and prove a skewed-device countdown in a
+      real browser before this is complete.
 - [x] Hide exact address/contact until the server disclosure projection permits it; FE-09 renders
       only the unit-scoped fields carried by the generated Offer projection.
 - [ ] Build release with reason; no threat or opaque score.
@@ -377,10 +425,12 @@ acceptance and the production scanner/retention release decisions remain complet
 - [x] Prove the Partner offer UI cannot query or render a sibling unit, Partner identity, scope or
       earnings from the same Booking Group.
 
-**Status: FE-09 frontend implementation complete; backend contract corrections remain.** Customer
+**Status: FE-09 frontend implementation complete; FE-09C is the next ready frontend task.** Customer
 group recovery and the Partner offer inbox pass unit/component and contract-shaped Playwright gates.
-G22 limits both lists to page one, G23 prevents safe command replay and G24 is a countdown release
-blocker. Partner fulfilment work, ledger and payout remain blocked by BE-09/BE-10.
+G22 still limits both lists to page one and G23 still prevents safe command replay. G24's backend
+half is published in 1.11.0, so FE-09C — regenerate the client, drop the mocked `Date` dependency and
+prove a skewed-device countdown — is now unblocked and outstanding. Partner fulfilment work, ledger
+and payout remain blocked by BE-09/BE-10.
 
 ## F6 — Operations
 
@@ -410,9 +460,10 @@ backend contracts.
    client; then prove login and one mutation in every app against real Django.
 3. Integrate Partner application/presence/discovery and Operations review only as each generated
    contract slice lands.
-4. OpenAPI 1.10.0 and its generated client publish BE-06G/BE-07/BE-08. FE-09 is implemented; close
-   G21–G24 and their generated-client follow-ups while FE-10 Customer payment integration proceeds
-   on its independent published surface.
+4. OpenAPI 1.10.0 and its generated client publish BE-06G/BE-07/BE-08. FE-09 is implemented. G24's
+   backend half is now published in 1.11.0, so regenerate the client and close FE-09C first; G21–G23
+   follow as their proposals land, while FE-10 Customer payment integration proceeds on its
+   independent published surface.
 5. Keep polling bounded and observational; Celery owns offer/search deadlines and state transitions.
 6. Do not build F3, Partner jobs or money/ledger Operations screens against guessed DTOs.
 
@@ -436,12 +487,15 @@ backend contracts.
 - [x] The latest Claude handoff records passing contract freshness, lint, typecheck, unit/component,
       build, E2E and composite gates: **646 component/unit tests across 43 files** and **153
       Playwright tests**.
-- [x] Generated client is current with versioned OpenAPI 1.10.0.
+- [~] Generated client is current with versioned OpenAPI 1.10.0. Django published 1.11.0, so
+      `generate:check` now fails until FE-09C regenerates it.
 - [x] Real-browser Django credential, CSRF refresh and authenticated mutation tests pass for Customer,
       Partner and Operations.
 - [x] No production module imports proposal/`contract-pending` DTOs or calls unpublished paths;
       G21 is an absent control, G22 is honest page-one truncation and G23 uses no automatic retry or
-      invented success state rather than unsafe runtime workarounds.
+      invented success state rather than unsafe runtime workarounds. G21's absent control is now a
+      gap to close rather than a mitigation to keep: 1.13.0 publishes `cart_items_remove`, so the
+      Remove control must be built against the generated client.
 - [ ] Browser E2E covers every routable M1 acceptance flow against authoritative backend state.
 - [~] `/cart` keyboard/focus-dialog behavior, landmarks, live announcements, 200% zoom, reduced
       motion and responsive checks pass; complete the same gate for FE-09–FE-12 routes.
@@ -450,7 +504,8 @@ backend contracts.
 - [~] FE-08G covers held responses, unreadable cart, stale versions, expired/withdrawn server state
       and duplicate confirmation. FE-09 covers empty-inbox arrival, polling pause/backoff/recovery and
       ambiguous offer commands. Redirect loss, upload failure and remaining permission-denial flows
-      stay with FE-10 and onboarding acceptance; G24 still blocks trustworthy Partner countdowns.
+      stay with FE-10 and onboarding acceptance. G24's backend half is published in 1.11.0; FE-09C
+      must still prove a skewed-device Partner countdown in a real browser.
 - [x] No UI claims payment, assignment, arrival, start, completion or refund before backend truth.
 - [ ] Browser console is clean and production bundle/per-route budgets pass.
 - [x] No frontend route handler, Server Action or package implements Django-owned business logic or

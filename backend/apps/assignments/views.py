@@ -1,16 +1,18 @@
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.assignments.exceptions import OfferCommandInvalidApiError
 from apps.assignments.group_services import (
     accept_unit_offer,
     commit_unit_offer,
@@ -32,14 +34,30 @@ from apps.assignments.services import (
     start_partner_search,
 )
 from apps.carts.models import CheckoutSession
+from apps.foundation.services import ResponseBody, execute_idempotent
 from apps.identity.models import User
+from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
+from common.errors.serializers import ApiErrorSerializer
+from common.schema import IDEMPOTENCY_KEY_HEADER, OFFER_ACTION_PATH_PARAMETER, OFFER_ACTIONS
+
+PARTNER_OFFER_COMMAND_OPERATION = "partner_offer.command"
 
 
 class PartnerOfferCursorPagination(CursorPagination):
     page_size = 50
     ordering = ("-created_at", "-id")
+
+    def get_paginated_response(self, data: Any) -> Response:
+        return Response(
+            {
+                "next": self.get_next_link(),
+                "previous": self.get_previous_link(),
+                "results": data,
+                "server_now": timezone.now(),
+            }
+        )
 
 
 class StartSearchView(APIView):
@@ -68,7 +86,14 @@ class PartnerOfferListView(APIView):
     def get(self, request: Request) -> Response:
         profile = partner_profile_for_user(cast(User, request.user))
         if profile is None:
-            return Response({"next": None, "previous": None, "results": []})
+            return Response(
+                {
+                    "next": None,
+                    "previous": None,
+                    "results": [],
+                    "server_now": timezone.now(),
+                }
+            )
         offers = (
             PartnerOffer.objects.filter(partner=profile)
             .exclude(
@@ -87,42 +112,100 @@ class PartnerOfferListView(APIView):
         return paginator.get_paginated_response(OfferSerializer(page, many=True).data)
 
 
+def _offer_projection(offer_id: UUID) -> dict[str, Any]:
+    """Read the commanded offer back as the answer to the command.
+
+    Every command answers with the same offer the Partner acted on, so a replay and a
+    first call are the same projection of the same row. A decline still advances
+    dispatch to the next candidate, but that candidate's offer belongs to them.
+    """
+    offer = (
+        PartnerOffer.objects.select_related("fulfilment_unit")
+        .prefetch_related("fulfilment_unit__lines")
+        .get(id=offer_id)
+    )
+    return cast(dict[str, Any], OfferSerializer(offer).data)
+
+
+def _run_offer_command(*, offer: PartnerOffer, partner: PartnerProfile, action: str) -> None:
+    try:
+        if offer.fulfilment_unit_id is not None:
+            if action == "accept":
+                accept_unit_offer(offer_id=offer.id, partner=partner)
+            elif action == "commit":
+                commit_unit_offer(offer_id=offer.id, partner=partner)
+            else:
+                decline_or_undo_unit_offer(
+                    offer_id=offer.id, partner=partner, undo=action == "undo"
+                )
+        elif action == "accept":
+            accept_offer(offer_id=offer.id, partner=partner)
+        elif action == "commit":
+            commit_offer(offer_id=offer.id)
+        else:
+            decline_or_undo_offer(offer_id=offer.id, partner=partner, undo=action == "undo")
+    except PermissionError as exc:
+        raise PermissionDenied(str(exc)) from exc
+    except ValueError as exc:
+        raise OfferCommandInvalidApiError(reason=str(exc)) from exc
+
+
 class PartnerOfferCommandView(APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
 
     @extend_schema(
-        tags=["Partner"], request=None, responses={200: OfferSerializer(allow_null=True)}
+        tags=["Partner"],
+        operation_id="partner_offers_create",
+        parameters=[OFFER_ACTION_PATH_PARAMETER, IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        responses={
+            200: OfferSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
     )
-    def post(self, request: Request, offer_id: str, action: str) -> Response:
-        profile = partner_profile_for_user(cast(User, request.user))
+    def post(self, request: Request, offer_id: UUID, action: str) -> Response:
+        user = cast(User, request.user)
+        profile = partner_profile_for_user(user)
         if profile is None:
-            raise ValidationError("No Partner profile exists.")
+            raise PermissionDenied("No Partner profile exists.")
+        # Scoping the read to the caller's Partner is the authorization boundary: another
+        # Partner's offer is never visible, let alone commandable.
         offer = get_object_or_404(PartnerOffer, id=offer_id, partner=profile)
-        result: PartnerOffer | None
-        try:
-            if offer.fulfilment_unit_id is not None and action == "accept":
-                result = accept_unit_offer(offer_id=offer.id, partner=profile)
-            elif offer.fulfilment_unit_id is not None and action == "commit":
-                result = commit_unit_offer(offer_id=offer.id, partner=profile)
-            elif offer.fulfilment_unit_id is not None and action in {"decline", "undo"}:
-                result = decline_or_undo_unit_offer(
-                    offer_id=offer.id,
-                    partner=profile,
-                    undo=action == "undo",
-                )
-            elif action == "accept":
-                result = accept_offer(offer_id=UUID(offer_id), partner=profile)
-            elif action == "commit":
-                result = commit_offer(offer_id=offer.id)
-            elif action in {"decline", "undo"}:
-                result = decline_or_undo_offer(
-                    offer_id=UUID(offer_id), partner=profile, undo=action == "undo"
-                )
-            else:
-                raise ValidationError("Unknown offer action.")
-        except ValueError as exc:
-            raise ValidationError(str(exc), code="offer_invalid") from exc
-        return Response(OfferSerializer(result).data)
+        if action not in OFFER_ACTIONS:
+            raise ValidationError({"action": "Unknown offer action."}, code="offer_action_invalid")
+        key = request.headers.get("Idempotency-Key")
+        if not key:
+            raise ValidationError(
+                {"Idempotency-Key": "This header is required."},
+                code="idempotency_key_required",
+            )
+
+        def command() -> tuple[int, ResponseBody]:
+            _run_offer_command(offer=offer, partner=profile, action=action)
+            return status.HTTP_200_OK, _offer_projection(offer.id)
+
+        result = execute_idempotent(
+            actor=user,
+            operation=PARTNER_OFFER_COMMAND_OPERATION,
+            key=key,
+            request_payload={
+                "partner_id": str(profile.id),
+                "offer_id": str(offer.id),
+                "action": action,
+            },
+            command=command,
+        )
+        if not result.replayed:
+            return Response(result.body, status=result.status_code)
+        # A replay answers with the offer's current truth rather than the frozen body:
+        # `expires_at`, `undo_deadline` and `server_now` drive live countdowns, and a
+        # stale `server_now` would silently overstate how much of the undo window is left.
+        response = Response(_offer_projection(offer.id), status=result.status_code)
+        response["Idempotent-Replay"] = "true"
+        return response
 
 
 class ManualOfferView(APIView):

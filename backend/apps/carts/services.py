@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from apps.carts.exceptions import (
     CartItemLimitReachedApiError,
+    CartItemNotFoundApiError,
     CartMergeConflictApiError,
     CartVersionConflictApiError,
     DuplicateCartItemApiError,
@@ -265,7 +266,10 @@ def _invalidate_cart_outputs(*, cart: Cart) -> None:
 
 def _assert_cart_version(*, cart: Cart, expected_version: int) -> None:
     if cart.version != expected_version:
-        raise CartVersionConflictApiError(current_version=cart.version)
+        raise CartVersionConflictApiError(
+            current_version=cart.version,
+            conflicting_field="expected_cart_version",
+        )
 
 
 def _validated_variant_inputs(
@@ -375,7 +379,10 @@ def update_cart_item(
         .get(id=item_id, cart=locked_cart, removed_at__isnull=True)
     )
     if item.version != expected_item_version:
-        raise CartVersionConflictApiError(current_version=locked_cart.version)
+        raise CartVersionConflictApiError(
+            current_version=locked_cart.version,
+            conflicting_field="expected_item_version",
+        )
     _variant, configuration, task_rate, normalized_scope = _validated_variant_inputs(
         variant_id=item.variant_id,
         quantity=quantity,
@@ -417,15 +424,35 @@ def remove_cart_item(
     expected_cart_version: int,
     expected_item_version: int,
 ) -> Cart:
+    """Soft-remove one item of the caller's cart under an optimistic version pair.
+
+    The two row locks are taken cart-then-item, matching `update_cart_item`, so a
+    concurrent edit and a removal serialize instead of deadlocking.  Both expected
+    versions are compared while both rows are held, so a caller can never observe
+    one guard pass and the other race.
+
+    The item is located before either version is compared.  A removal replayed
+    after it already succeeded then answers `cart_item_not_found` — what actually
+    happened — instead of `cart_version_conflict`, which would send the caller
+    back to reload a cart that is already exactly what they wanted.  The command
+    is still refused in both orderings, so a double submission can never remove a
+    second item.
+    """
     locked_cart = Cart.objects.select_for_update().get(id=cart.id)
+    try:
+        item = CartItem.objects.select_for_update().get(
+            id=item_id,
+            cart=locked_cart,
+            removed_at__isnull=True,
+        )
+    except CartItem.DoesNotExist as exc:
+        raise CartItemNotFoundApiError from exc
     _assert_cart_version(cart=locked_cart, expected_version=expected_cart_version)
-    item = CartItem.objects.select_for_update().get(
-        id=item_id,
-        cart=locked_cart,
-        removed_at__isnull=True,
-    )
     if item.version != expected_item_version:
-        raise CartVersionConflictApiError(current_version=locked_cart.version)
+        raise CartVersionConflictApiError(
+            current_version=locked_cart.version,
+            conflicting_field="expected_item_version",
+        )
     item.version += 1
     item.removed_at = timezone.now()
     item.save(update_fields=("version", "removed_at", "updated_at"))

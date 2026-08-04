@@ -441,22 +441,72 @@ class CartMergeView(APIView):
         return Response(CartSerializer(cart).data)
 
 
+def _caller_cart(request: Request) -> Cart:
+    """Resolve the caller's own cart, authenticated or anonymous.
+
+    Every cart command starts here, so an item id is only ever addressed against
+    the cart the caller already owns.  Another Customer's item id is therefore not
+    a row this request can reach, rather than a row it is refused.
+    """
+    user = (
+        request.user if isinstance(request.user, User) and request.user.is_authenticated else None
+    )
+    try:
+        if user is not None:
+            return merge_session_cart(user=user, session_key=_session_key(request))
+        return _cart_for(user=None, session_key=_session_key(request))
+    except ValueError as exc:
+        raise ValidationError(str(exc), code="cart_merge_conflict") from exc
+
+
+def _remove_cart_item_response(*, request: Request, item_id: UUID) -> Response:
+    """The single removal path behind both the POST command and the legacy DELETE."""
+    serializer = CartItemRemoveSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    cart = remove_cart_item(
+        cart=_caller_cart(request),
+        item_id=item_id,
+        **serializer.validated_data,
+    )
+    return Response(CartSerializer(cart).data)
+
+
+CART_ITEM_REMOVE_RESPONSES = {
+    200: CartSerializer,
+    400: ApiErrorSerializer,
+    409: ApiErrorSerializer,
+}
+
+
+class CartItemRemoveView(APIView):
+    """`POST /cart/items/{item_id}/remove/` — the publishable removal command.
+
+    drf-spectacular does not emit a `requestBody` for DELETE, so the optimistic
+    version pair Django requires was unreachable from a generated client.  This
+    sibling publishes the same body, calls the same domain service and returns the
+    same complete Cart.  No `Idempotency-Key` is required: the version pair is the
+    replay protection, because a repeat of an accepted removal can no longer match
+    a live row.
+    """
+
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Cart"],
+        operation_id="cart_items_remove",
+        request=CartItemRemoveSerializer,
+        responses=CART_ITEM_REMOVE_RESPONSES,
+    )
+    def post(self, request: Request, item_id: UUID) -> Response:
+        return _remove_cart_item_response(request=request, item_id=item_id)
+
+
 class CartItemDetailView(APIView):
     permission_classes = (AllowAny,)
 
     @staticmethod
     def _cart(request: Request) -> Cart:
-        user = (
-            request.user
-            if isinstance(request.user, User) and request.user.is_authenticated
-            else None
-        )
-        try:
-            if user is not None:
-                return merge_session_cart(user=user, session_key=_session_key(request))
-            return _cart_for(user=None, session_key=_session_key(request))
-        except ValueError as exc:
-            raise ValidationError(str(exc), code="cart_merge_conflict") from exc
+        return _caller_cart(request)
 
     @extend_schema(
         tags=["Cart"],
@@ -482,21 +532,17 @@ class CartItemDetailView(APIView):
     @extend_schema(
         tags=["Cart"],
         request=CartItemRemoveSerializer,
-        responses={200: CartSerializer, 409: ApiErrorSerializer},
+        responses=CART_ITEM_REMOVE_RESPONSES,
     )
     def delete(self, request: Request, item_id: UUID) -> Response:
-        serializer = CartItemRemoveSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        cart = self._cart(request)
-        try:
-            cart = remove_cart_item(
-                cart=cart,
-                item_id=item_id,
-                **serializer.validated_data,
-            )
-        except CartItem.DoesNotExist as exc:
-            raise ValidationError("Cart item not found.", code="cart_item_not_found") from exc
-        return Response(CartSerializer(cart).data)
+        """Retained for callers already sending a DELETE body.
+
+        The request shape is still dropped from the published document by the
+        schema generator, so generated clients must use the POST sibling.  This
+        method exists only so existing hand-written callers keep working, and it
+        runs the same `remove_cart_item` command with no removal logic of its own.
+        """
+        return _remove_cart_item_response(request=request, item_id=item_id)
 
 
 class BookingWindowsView(APIView):

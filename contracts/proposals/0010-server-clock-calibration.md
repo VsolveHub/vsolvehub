@@ -3,7 +3,8 @@
 **Author:** Claude (FE-09 frontend integration)
 **Date:** 3 August 2026
 **Verified against:** OpenAPI 1.10.0 and `backend/config/settings/base.py`
-**Status:** Proposed
+**Status:** Implemented in the backend — published in OpenAPI 1.11.0. Frontend acceptance (§4) is the
+one remaining item and belongs to the FE-09 follow-up.
 **Consuming applications:** Customer, Partner, Operations — every countdown in the product
 **Severity:** This is a live defect, not a gap. It affects deployed behaviour today.
 
@@ -117,6 +118,45 @@ exposed, that request drops from "needed" to "nice, for millisecond precision".
    in two minutes shows about two minutes — not a negative or a wildly wrong value. This is
    assertable in Playwright today by overriding `Date` in the page context.
 5. `serverClock.isCalibrated` is `true` after the first API response in a real browser session.
+
+## Backend resolution — 3 August 2026
+
+Implemented by Claude in the reassigned backend lane. Published as OpenAPI **1.11.0**.
+
+### What changed
+
+| Change | File |
+| --- | --- |
+| `CORS_EXPOSE_HEADERS = env.list("CORS_EXPOSE_HEADERS", default=["Date"])` | `backend/config/settings/base.py` |
+| Production start-up fails when a deployment drops `Date` from the exposed list | `backend/config/settings/production.py` |
+| `Date` documented as an exposed header for local/deployed environments | `backend/.env.example` |
+| `server_now` added to the `Offer` projection and the offer page envelope | `backend/apps/assignments/serializers.py`, `backend/apps/assignments/views.py` |
+
+The setting is environment-overridable rather than hard-coded so a deployment may expose additional
+headers, and so the production guard is a real check instead of a restatement of a literal. Removing
+`Date` is a fail-closed configuration error, not a silent degradation — which is precisely the
+failure mode this proposal was filed about.
+
+### Acceptance evidence
+
+| Criterion | Evidence |
+| --- | --- |
+| 1. `CORS_EXPOSE_HEADERS` includes `Date`; production validates it | `test_production_requires_date_to_stay_exposed` loads production settings with `CORS_EXPOSE_HEADERS=X-Request-Id` and asserts `ImproperlyConfigured`. `test_production_accepts_additional_exposed_headers_alongside_date` proves the guard does not forbid other headers. |
+| 2. A cross-origin `fetch` can read `response.headers.get("date")` | `test_real_cross_origin_response_carries_a_readable_date_header` runs a real WSGI server via `live_server`, issues an HTTP request from `https://partner.example.test` and asserts both a parseable `Date` on the wire and `date` in the expose list. The Django test client cannot prove this: it never passes through a WSGI server, so it never writes a `Date` header at all. |
+| 3. Backend test asserts `Access-Control-Expose-Headers` contains `Date` on a credentialed cross-origin response | `test_allowed_credentialed_origin_may_read_the_date_header` and `test_exposed_header_list_matches_date_case_insensitively`. `test_rejected_origin_receives_no_credentialed_cors_access` proves origin validation stays fail-closed on both the simple request and the preflight. |
+| 4. Skewed-device-clock Partner countdown renders correctly in a browser | **Not backend-assertable.** This is the FE-09 follow-up and must be run as Playwright evidence against real Django. |
+| 5. `serverClock.isCalibrated` is `true` after the first API response | Backend half is complete: the header is on the wire and readable. Frontend confirmation belongs with criterion 4. |
+
+### On the `server_now` question
+
+The proposal argued the header makes `Offer.server_now` "nice, rather than needed". It is published
+anyway, for the reason the proposal itself gives: a Partner opening straight to their inbox is the
+one session with no other calibration source, and it carries the two shortest deadlines in the
+product. An empty inbox has no offer object to read a timestamp from, so the page envelope publishes
+it too. It is defense in depth, not a substitute — the header remains the primary source because it
+refreshes on every response and so tracks drift, which a per-endpoint field cannot.
+
+Proposal 0009 §4 can now treat its `server_now` request as satisfied.
 
 ## Interim frontend behaviour
 

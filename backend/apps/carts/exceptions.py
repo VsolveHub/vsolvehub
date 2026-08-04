@@ -45,9 +45,33 @@ class CartVersionConflictApiError(APIException):
     error_code = "cart_version_conflict"
     safe_message = "Your cart changed. Review the latest cart before trying again."
 
-    def __init__(self, *, current_version: int) -> None:
-        self.api_details = {"current_version": current_version}
+    def __init__(self, *, current_version: int, conflicting_field: str | None = None) -> None:
+        # The recovery for both optimistic guards is the same refetch, so they share one
+        # code.  `conflicting_field` still names which expectation moved, so a surface
+        # can say whether the cart or that one row changed instead of guessing.
+        self.api_details = {
+            "current_version": current_version,
+            "conflicting_field": conflicting_field,
+        }
         super().__init__(detail=self.safe_message, code=self.default_code)
+
+
+class CartItemNotFoundApiError(APIException):
+    """The addressed cart row is not an active row of the caller's own cart.
+
+    Removed, never-existing and someone else's item ids answer identically on
+    purpose.  Distinguishing them would turn the removal command into an oracle
+    for whether an id exists in another Customer's cart, and the caller's
+    recovery — refetch the cart and show the service as already gone — is the
+    same in every case.  It is a 409 rather than a 404 because the caller sent an
+    `expected_item_version` that no live row can satisfy.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "cart_item_not_found"
+    error_code = "cart_item_not_found"
+    safe_message = "That service is no longer in your booking."
+    retryable = False
 
 
 class DuplicateCartItemApiError(APIException):

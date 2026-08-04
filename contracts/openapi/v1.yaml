@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.10.0
+  version: 1.13.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -804,6 +804,13 @@ paths:
           description: ''
     delete:
       operationId: cart_items_destroy
+      description: |-
+        Retained for callers already sending a DELETE body.
+
+        The request shape is still dropped from the published document by the
+        schema generator, so generated clients must use the POST sibling.  This
+        method exists only so existing hand-written callers keep working, and it
+        runs the same `remove_cart_item` command with no removal logic of its own.
       parameters:
       - in: path
         name: item_id
@@ -822,6 +829,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Cart'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/cart/items/{item_id}/remove/:
+    post:
+      operationId: cart_items_remove
+      description: |-
+        `POST /cart/items/{item_id}/remove/` — the publishable removal command.
+
+        drf-spectacular does not emit a `requestBody` for DELETE, so the optimistic
+        version pair Django requires was unreachable from a generated client.  This
+        sibling publishes the same body, calls the same domain service and returns the
+        same complete Cart.  No `Idempotency-Key` is required: the version pair is the
+        replay protection, because a repeat of an accepted removal can no longer match
+        a live row.
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartItemRemoveRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CartItemRemoveRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CartItemRemoveRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
           content:
@@ -2287,10 +2355,21 @@ paths:
     post:
       operationId: partner_offers_create
       parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
       - in: path
         name: action
         schema:
-          type: string
+          $ref: '#/components/schemas/OfferActionEnum'
+        description: The Partner offer command to run. The set is closed, so an unknown
+          action is a client bug caught by the generated type rather than a runtime
+          refusal shown to a Partner.
         required: true
       - in: path
         name: offer_id
@@ -2308,6 +2387,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Offer'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/partner/presence/heartbeat/:
     post:
@@ -3486,6 +3589,18 @@ components:
       required:
       - quantity
       - variant_id
+    CartItemRemoveRequest:
+      type: object
+      properties:
+        expected_cart_version:
+          type: integer
+          minimum: 1
+        expected_item_version:
+          type: integer
+          minimum: 1
+      required:
+      - expected_cart_version
+      - expected_item_version
     CartMergeDecisionRequest:
       type: object
       properties:
@@ -4444,6 +4559,10 @@ components:
           type: string
           format: date-time
           readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - approximate_area
       - checkout_id
@@ -4456,11 +4575,19 @@ components:
       - fulfilment_unit_id
       - id
       - requirements
+      - server_now
       - service_lines
       - starts_at
       - status
       - undo_deadline
       - unit_position
+    OfferActionEnum:
+      enum:
+      - accept
+      - commit
+      - decline
+      - undo
+      type: string
     OfferPage:
       type: object
       properties:
@@ -4476,10 +4603,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Offer'
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
       required:
       - next
       - previous
       - results
+      - server_now
     OfferServiceLine:
       type: object
       properties:

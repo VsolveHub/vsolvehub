@@ -25,6 +25,11 @@ if not set(CORS_ALLOWED_ORIGINS).issubset(CSRF_TRUSTED_ORIGINS):
     )
 if any(not origin.startswith("https://") for origin in CORS_ALLOWED_ORIGINS):
     raise ImproperlyConfigured("Production CORS origins must use HTTPS.")
+if "date" not in {header.strip().lower() for header in CORS_EXPOSE_HEADERS}:
+    raise ImproperlyConfigured(
+        "CORS_EXPOSE_HEADERS must include Date so browser clients can calibrate the server "
+        "clock. Without it every deadline countdown silently uses the device clock."
+    )
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True

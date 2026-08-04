@@ -8,6 +8,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from psycopg.types.range import Range
 
+from apps.assignments.exceptions import OfferReservationConflictApiError
 from apps.assignments.models import AssignmentAttempt, PartnerOffer, Reservation
 from apps.carts.models import CartItem, CheckoutSession
 from apps.partners.models import (
@@ -202,7 +203,8 @@ def accept_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffer:
             expires_at=timezone.now() + timedelta(seconds=settings.M1_PARTNER_UNDO_TIMEOUT_SECONDS),
         )
     except IntegrityError as exc:
-        raise ValueError("That appointment was just reserved by another Customer.") from exc
+        # A distinct refusal: the capacity was taken, the offer did not expire.
+        raise OfferReservationConflictApiError from exc
     offer.status = PartnerOffer.Status.ACCEPTED_PENDING_UNDO
     offer.reservation = reservation
     offer.undo_deadline = reservation.expires_at
