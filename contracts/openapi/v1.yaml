@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.13.0
+  version: 1.14.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -3295,6 +3295,20 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        checkout_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        checkout_version:
+          type: integer
+          nullable: true
+          readOnly: true
+        order_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
         units:
           type: array
           items:
@@ -3309,11 +3323,14 @@ components:
           format: date-time
           readOnly: true
       required:
+      - checkout_id
+      - checkout_version
       - confirmation_policy
       - created_at
       - expires_at
       - id
       - next_transition_at
+      - order_id
       - recovery_action
       - server_now
       - status

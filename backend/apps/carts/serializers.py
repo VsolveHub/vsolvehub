@@ -718,6 +718,9 @@ class BookingGroupSerializer(serializers.ModelSerializer[BookingGroup]):
     server_now = serializers.SerializerMethodField()
     recovery_action = serializers.SerializerMethodField()
     next_transition_at = serializers.SerializerMethodField()
+    checkout_id = serializers.SerializerMethodField()
+    checkout_version = serializers.SerializerMethodField()
+    order_id = serializers.SerializerMethodField()
 
     class Meta:
         model = BookingGroup
@@ -730,6 +733,9 @@ class BookingGroupSerializer(serializers.ModelSerializer[BookingGroup]):
             "server_now",
             "recovery_action",
             "next_transition_at",
+            "checkout_id",
+            "checkout_version",
+            "order_id",
             "units",
             "created_at",
             "updated_at",
@@ -758,6 +764,48 @@ class BookingGroupSerializer(serializers.ModelSerializer[BookingGroup]):
         if group.status == BookingGroup.Status.REPLAN_REQUIRED:
             return "REPLAN"
         return "NONE"
+
+    @staticmethod
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_checkout_id(group: BookingGroup) -> str | None:
+        """The CheckoutSession to pay against (proposal 0011).
+
+        `recovery_action` can say `PAYMENT_REQUIRED`, but the command it points at
+        needs a checkout id and there is no `GET /checkouts/{id}/` to look one up.
+        Without this the instruction is unexecutable outside the tab that created
+        the checkout, and the reservation expires while the client holds nothing.
+
+        Django's reverse one-to-one descriptor raises a `DoesNotExist` that also
+        subclasses `AttributeError`, so `getattr(..., None)` is the supported way
+        to say "there may not be one" without a try/except.
+        """
+        checkout = getattr(group, "checkout", None)
+        return None if checkout is None else str(checkout.id)
+
+    @staticmethod
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_checkout_version(group: BookingGroup) -> int | None:
+        """Sent back as `expected_checkout_version`.
+
+        Travels with the id deliberately. Publishing one without the other would
+        force clients to guess a version, which defeats the guard that stops a
+        payment being raised against a checkout that has since moved.
+        """
+        checkout = getattr(group, "checkout", None)
+        return None if checkout is None else int(checkout.version)
+
+    @staticmethod
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_order_id(group: BookingGroup) -> str | None:
+        """The Order created at capture, or null before it.
+
+        A pointer only — `GET /orders/{id}/` remains the read and keeps its own
+        ownership check. Without it a Customer who has paid cannot reach their own
+        allocations, invoice or credit note, because orders are retrievable by id
+        alone with no list and no filter.
+        """
+        order = getattr(group, "order", None)
+        return None if order is None else str(order.id)
 
     @staticmethod
     @extend_schema_field(serializers.DateTimeField(allow_null=True))

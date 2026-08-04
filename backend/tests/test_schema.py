@@ -11,7 +11,7 @@ def _operation(schema: dict[str, Any], path: str, method: str) -> dict[str, Any]
 def test_browser_session_and_idempotency_contract_is_published() -> None:
     schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
 
-    assert schema["info"]["version"] == "1.13.0"
+    assert schema["info"]["version"] == "1.14.0"
     csrf = _operation(schema, "/api/v1/auth/csrf/", "get")
     assert csrf["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/CsrfToken"

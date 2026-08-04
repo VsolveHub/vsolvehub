@@ -172,7 +172,7 @@ runtime endpoint, DTO, price, deadline, role, identifier or success state may be
 | FE-08S | Done, superseded contract | — | Singleton 1.6.0 integration. Reusable primitives retained; the replacement dialog and one-item path are not the product target. | Historical evidence only. |
 | FE-08G | Done | — | Multi-item `/cart`, login merge, server plan comparison, group/unit quote, versioned cart-item removal against 1.13.0. | G21 Remove uses `POST …/remove/` with both versions, authoritative `setQueryData`, targeted invalidation, two-item and stale-version browser cases. |
 | FE-09 | Done | — | Customer `/bookings` list/detail recovery, unit-scoped Partner `/offers`, bounded visibility-aware polling, cursor `useInfiniteQuery`, stable offer-command idempotency, skewed-device clock proof. | G22 traversal, G23 lost-Accept same-key replay, G24/FE-09C server-clock proofs green under 1.13.0. |
-| **FE-10** | **Not started** | **Yes — OpenAPI 1.13.0. Start here.** | **The missing "Continue to Payment".** Group payment attempt from a confirmed Booking Group, per-unit allocations, Razorpay redirect/SDK boundary, return/ambiguity recovery, receipt/refund/invoice retrieval. | Stable idempotency keys; no mutation auto-retry; redirect-loss, duplicate-submission, unit-refund and ambiguous-outcome tests pass. No amount, fee or deadline is computed client-side. |
+| **FE-10** | **Implemented; browser gate outstanding** | — | **The missing "Continue to Payment" — built 2026-08-05 against OpenAPI 1.14.0.** Required a backend contract fix first (proposal 0011, below). Routes `/bookings/[groupId]/pay` and `/receipt`; `features/payment/` with `model/outcome.ts` (phase machine), `model/provider-handoff.ts` (Razorpay SDK boundary), `queries.ts`. CTAs added to `group-detail.tsx` (gated on `recovery_action === "PAYMENT_REQUIRED"`) and `group-result.tsx` (whose stale "payment does not exist" comment is gone). | **34 new unit tests green**; typecheck 9/9, lint clean, customer build passes with both routes `ƒ` dynamic. Stable key per `checkout:version`; no mutation auto-retry; server-clock deadlines; SDK callbacks trigger a re-read and never a success claim. **Remaining: `e2e/payment.e2e.ts` browser acceptance (redirect loss, duplicate submission, expired reservation, ambiguous outcome) and `/security-review`.** |
 | **FE-13** | **Built, unverified, uncommitted** | — | **Partner signed-in shell** (`FE-11-partner-shell-brief.md`, mislabelled FE-11 there). `/login` route, `/dashboard` home, one `useAuthGuard` shell over offers/availability/apply, marketing→product entry, approved-Partner dead-end fixed. | Unit tests (`session/model/redirect.test.ts`, `presence-panel.test.tsx`), typecheck and lint are green in this audit. **`e2e/partner-shell.e2e.ts` has not been run here, and none of it is committed.** Run Playwright, then commit. |
 | **FE-14** | **Not started** | **Yes — no new contract needed** | **Customer signed-in shell, root page and `/login`** — the exact defect FE-13 just fixed for Partner. Today `/` 404s, there is no `/login`, `app/layout.tsx` still says "No signed-in shell here yet", and **nothing in the app links to `/bookings`**. Copy `apps/partner/features/session/partner-shell.tsx`; do not invent a second pattern. | Every signed-in destination is reachable by clicking. One session decision, not one per screen. Unauthenticated visits to `/cart`/`/bookings` redirect to `/login?next=`. Booking-workspace login-interrupt behaviour is preserved, not duplicated. |
 | **FE-15** | **Not started** | **Yes — `/addresses/`, `/auth/privacy/*` published** | **Customer account surfaces**: saved address book (list/add/edit/delete, reused by checkout), communication preferences, consent receipts, privacy requests. | Exact address text never reaches browser storage, logs or analytics. Deletion is confirmed against server truth, never optimistic. |
@@ -190,6 +190,24 @@ runtime endpoint, DTO, price, deadline, role, identifier or success state may be
 | 0008 bounded list cursors | Typed `cursor` on booking-groups and partner offers; `400 cursor_invalid` on blank/malformed/poison | Both lists cursor-aware `useInfiniteQuery`; truncation copy removed | **Fully complete** (1.13.0) |
 | 0009 typed offer commands | Required `Idempotency-Key`, `OfferActionEnum`, same-key replay, reservation conflict, concurrent accept | One stable key per logical action; lost-Accept replay never reports a won offer as lost | **Fully complete** (1.13.0) |
 | 0010 server clock | `Date` CORS exposure, production fail-closed, `live_server` proof, `server_now` | Mocked Date dependency removed; skewed-device countdown proofs | **Fully complete** (1.11.0) |
+| **0011 group payment entry** | `BookingGroup` now carries `checkout_id`, `checkout_version`, `order_id`; both list and detail `select_related` them | FE-10 reads them to start payment and reach the receipt | **Backend complete** (1.14.0), 2026-08-05 |
+
+### Why proposal 0011 was needed before FE-10 could exist
+
+`recovery_action` has returned `PAYMENT_REQUIRED` since 1.9.0. The command it points at —
+`POST /payment-attempts/` — requires `checkout_id` and `expected_checkout_version`. The group
+published **neither**, and there is no `GET /checkouts/{checkout_id}/` to resolve one. The only
+`Checkout` a client ever held was the `201` body of the `POST /checkouts/` that created it.
+
+So payment was reachable **only from inside the tab that confirmed the booking**. A reload, a second
+device or a notification link all hit a dead end while Django held the reservation, and it expired.
+The same break existed after capture: `Order` is retrievable by id alone — no list, no filter — so a
+customer who had paid could not reach their own invoice.
+
+Both relations already existed in Django (`CheckoutSession.booking_group`, `Order.booking_group`,
+both `related_name`'d one-to-ones). Only the projection withheld them. Fix: three read-only nullable
+fields, no new endpoint, no migration. 5 regression tests, including one asserting a
+`PAYMENT_PENDING` group can **never** publish `PAYMENT_REQUIRED` with a null checkout pair.
 
 ---
 

@@ -18,13 +18,14 @@ from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 SETTING_NAME = "DJANGO_SETTINGS_MODULE"
+SETDEFAULT_ARG_COUNT = 2
 
 
 def _default_settings_module(path: Path) -> str | None:
     """Extracts the literal from `os.environ.setdefault(SETTING_NAME, "…")`."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or len(node.args) != 2:
+        if not isinstance(node, ast.Call) or len(node.args) != SETDEFAULT_ARG_COUNT:
             continue
         function = node.func
         if not isinstance(function, ast.Attribute) or function.attr != "setdefault":

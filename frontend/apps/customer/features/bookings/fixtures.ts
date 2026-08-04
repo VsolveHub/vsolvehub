@@ -51,6 +51,11 @@ export function group(overrides: Partial<Schemas["BookingGroup"]> = {}) {
     server_now: "2026-08-03T09:00:00Z",
     recovery_action: "WAIT",
     next_transition_at: "2026-08-03T09:05:00Z",
+    // Contract 1.14.0. A group carries its own checkout so payment is reachable
+    // after a reload or from another device; `order_id` is null until capture.
+    checkout_id: "checkout-1",
+    checkout_version: 1,
+    order_id: null,
     units: [unit()],
     created_at: "2026-08-03T09:00:00Z",
     updated_at: "2026-08-03T09:00:00Z",

@@ -202,6 +202,12 @@ export function bookingGroup(overrides: Partial<Schemas["BookingGroup"]> = {}) {
     server_now: "2026-08-02T09:00:00Z",
     recovery_action: "WAIT",
     next_transition_at: "2026-08-02T09:05:00Z",
+    // The payment entry point (contract 1.14.0). Present from confirmation, since
+    // the group is created by the checkout that owns it; `order_id` stays null
+    // until capture, which is what makes "paid" impossible to fake in a fixture.
+    checkout_id: "checkout-1",
+    checkout_version: 1,
+    order_id: null,
     units: [fulfilmentUnit()],
     created_at: "2026-08-02T09:00:00Z",
     updated_at: "2026-08-02T09:00:00Z",

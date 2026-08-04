@@ -108,6 +108,49 @@ export const queryKeys = {
     group: (groupId: string) => [...queryKeys.booking.groups(), groupId] as const,
   },
 
+  /**
+   * Money: payment attempts, orders, refunds and tax documents (contract 1.10.0,
+   * reachable from a Booking Group since 1.14.0).
+   *
+   * A sibling of `booking` rather than a child of it. A payment outlives the
+   * group state that triggered it — the attempt is still the authoritative record
+   * of what was charged after the group has moved to `BOOKED`, and the order and
+   * its invoice outlive the group entirely. Nesting them under `booking.group(id)`
+   * would put a financial record inside a cache entry that group invalidation is
+   * entitled to discard.
+   *
+   * Everything is keyed by the server's own identifier. There is deliberately no
+   * "current payment" key: which attempt is current is a server fact, read through
+   * `forCheckout`, not something the client decides by remembering the last one it
+   * created.
+   */
+  payment: {
+    all: ["payment"] as const,
+
+    /** One payment attempt, observed until the provider outcome settles. */
+    attempt: (attemptId: string) => [...queryKeys.payment.all, "attempt", attemptId] as const,
+
+    /**
+     * The latest attempt for a checkout, as Django orders them.
+     *
+     * The recovery read. After a lost provider redirect the client may hold no
+     * attempt id at all — it has only the checkout — and this is how it finds out
+     * whether the attempt it started actually exists and where it got to.
+     */
+    forCheckout: (checkoutId: string) =>
+      [...queryKeys.payment.all, "checkout", checkoutId] as const,
+
+    /** The Order created at capture: per-unit allocations and tax documents. */
+    order: (orderId: string) => [...queryKeys.payment.all, "order", orderId] as const,
+
+    /** One immutable invoice or credit note. */
+    taxDocument: (documentId: string) =>
+      [...queryKeys.payment.all, "tax-document", documentId] as const,
+
+    /** One refund and its per-unit allocations. */
+    refund: (refundId: string) => [...queryKeys.payment.all, "refund", refundId] as const,
+  },
+
   /** Geocoding and serviceability lookups. */
   locations: {
     all: ["locations"] as const,

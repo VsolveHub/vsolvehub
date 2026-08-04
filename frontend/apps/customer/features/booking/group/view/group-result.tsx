@@ -2,6 +2,7 @@
 
 import type { Schemas } from "@vsolve/api-client";
 import { Badge, ErrorState } from "@vsolve/ui";
+import Link from "next/link";
 
 import type { Checkout, FulfilmentUnit } from "../queries";
 import { Money } from "./money";
@@ -16,8 +17,11 @@ import { Money } from "./money";
  * of group and unit progress is FE-09's, and building half of it here would mean
  * a poller with no reconnect, backoff or freshness semantics.
  *
- * Payment genuinely does not exist yet (BE-08), which is why the copy below says
- * nothing has been charged rather than implying a pending charge.
+ * Payment now exists (BE-08, published 1.10.0 and reachable from a group since
+ * 1.14.0), so this screen links to it rather than declaring it unavailable. It
+ * still does not claim a charge: nothing is due until every visit has a
+ * professional committed, and the link below is to the payment screen, which
+ * reads the server's own `recovery_action` before offering anything.
  *
  * Nothing here polls, and nothing advances state. Confirmation starts a search
  * that Django's own workers run; a browser that observes it does not drive it,
@@ -142,6 +146,19 @@ export function GroupResult({ checkout }: { checkout: Checkout }) {
         </p>
         <p className="mt-2 text-sm text-text-secondary">
           Reference <span className="font-mono tabular-nums">{group.id}</span>
+        </p>
+
+        {/* The route out of this screen. It is a link and not a payment control
+            on purpose: whether anything is due is Django's answer, and the
+            booking page reads it live rather than deciding here from a status
+            captured at confirmation. */}
+        <p className="mt-4">
+          <Link
+            href={`/bookings/${group.id}`}
+            className="text-sm font-semibold text-text-link hover:underline"
+          >
+            Track this booking and pay when it is ready
+          </Link>
         </p>
       </div>
     </div>

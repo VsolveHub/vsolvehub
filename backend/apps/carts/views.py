@@ -120,7 +120,10 @@ class BookingGroupCollectionView(APIView):
         reject_invalid_cursor_query(request)
         queryset = (
             BookingGroup.objects.filter(customer=cast(User, request.user))
-            .select_related("quote")
+            # `checkout` and `order` are reverse one-to-ones read by the payment
+            # entry fields (proposal 0011); without them the list costs two extra
+            # queries per row.
+            .select_related("quote", "checkout", "order")
             .prefetch_related("units__lines", "units__offers", "units__reservation")
         )
         paginator = BookingGroupCursorPagination()
@@ -142,7 +145,7 @@ class BookingGroupDetailView(APIView):
     )
     def get(self, request: Request, group_id: UUID) -> Response:
         group = get_object_or_404(
-            BookingGroup.objects.prefetch_related(
+            BookingGroup.objects.select_related("checkout", "order").prefetch_related(
                 "units__lines", "units__offers", "units__reservation"
             ),
             id=group_id,

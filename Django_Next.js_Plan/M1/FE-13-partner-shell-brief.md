@@ -1,4 +1,8 @@
-# FE-11 — Partner signed-in shell, login route and home
+# FE-13 — Partner signed-in shell, login route and home
+
+> Renumbered from FE-11 on 2026-08-04. On [`task.md`](./task.md), **FE-11** means
+> *Customer active booking + Partner fulfilment UI* (blocked on BE-09). The Partner
+> signed-in shell described here is **FE-13**. Content below is unchanged and correct.
 
 Build the navigation layer the Partner app never got. Every screen it connects
 already exists and works; nothing here is blocked by a backend contract.

@@ -267,6 +267,31 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         </div>
       ) : null}
 
+      {/* The server said payment is due, so the server's own instruction gets a
+          control. Gated on `recovery_action` and on the checkout the group now
+          publishes (contract 1.14.0) — not on the status string, and never on a
+          checkout id this client remembered from the tab that confirmed. */}
+      {group.recovery_action === "PAYMENT_REQUIRED" && group.checkout_id !== null ? (
+        <div className="mt-3">
+          <Link href={`/bookings/${group.id}/pay`} className={buttonStyles({})}>
+            Continue to payment
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Paid. The receipt is reachable for as long as the order exists, which
+          outlives every state the group above will pass through. */}
+      {group.order_id !== null ? (
+        <div className="mt-3">
+          <Link
+            href={`/bookings/${group.id}/receipt`}
+            className={buttonStyles({ variant: "outline" })}
+          >
+            View your receipt
+          </Link>
+        </div>
+      ) : null}
+
       {expiry && !expiry.isExpired && !isTerminal(group) ? (
         <p className="mt-3 text-sm text-text-secondary">
           <span aria-hidden data-numeric>

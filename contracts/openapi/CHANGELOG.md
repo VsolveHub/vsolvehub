@@ -1,5 +1,36 @@
 # API Contract Changelog
 
+## 1.14.0 - Booking Group payment entry point
+
+Additive and backward compatible. Implements proposal 0011. No new endpoint, no new command, no
+migration — three read-only nullable fields on an existing projection.
+
+### Booking Group (proposal 0011)
+
+- `BookingGroup` now carries `checkout_id`, `checkout_version` and `order_id`. They appear on both
+  `GET /api/v1/booking-groups/{group_id}/` and the `booking_group_list` page.
+- This closes an unexecutable instruction. `recovery_action` has returned `PAYMENT_REQUIRED` since
+  1.9.0, but `POST /api/v1/payment-attempts/` requires `checkout_id` and
+  `expected_checkout_version`; the group published neither, and there is no
+  `GET /api/v1/checkouts/{checkout_id}/` to resolve one. A Customer could therefore pay only from
+  inside the browser tab that created the checkout. A reload, a second device or a notification
+  link all reached a dead end, and the reservation expired holding capacity the Customer had
+  already committed to.
+- `checkout_version` is published alongside `checkout_id` on purpose. Sent back as
+  `expected_checkout_version`, it is the guard that stops a payment being raised against a checkout
+  that has moved. Publishing the id alone would force clients to guess a version and defeat it.
+  A stale value still answers `409`, unchanged.
+- `order_id` is `null` before capture and names the `Order` after it. `Order` is retrievable by id
+  alone — there is no list and no filter — so without this pointer a Customer who had paid could
+  not reach their own allocations, invoice or credit note. `GET /api/v1/orders/{order_id}/` remains
+  the read and keeps its own ownership check; this field discloses only the identifier.
+- All three are `null` when the relation is absent, matching `CheckoutSession.booking_group` and
+  `Order.booking_group`, which are both nullable. Clients render no payment affordance on `null`
+  rather than building one on a guessed id.
+- Authorization is unchanged. `BookingGroupDetailView` already scopes to `customer=request.user`,
+  and another Customer's group id still answers `404`. Both list and detail `select_related` the
+  two reverse one-to-ones, so the fields cost no query per row.
+
 ## 1.13.0 - Cart removal, typed offer commands and bounded list cursors
 
 This is the coherent WIP integration release for proposals 0007, 0008 and 0009. It has not been

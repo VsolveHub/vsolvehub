@@ -99,7 +99,23 @@ modified files in the tree.
 
 ---
 
-# Step 1 — FE-10: Customer payment ★ START HERE
+# Step 1 — FE-10: Customer payment ★ IMPLEMENTED 2026-08-05
+
+> **Status: built, unit-verified, browser gate outstanding.**
+>
+> A blocker surfaced during the read-first phase and was fixed before any UI was written:
+> the group projection could say `PAYMENT_REQUIRED` but published neither field the payment
+> command requires, and no checkout-detail endpoint existed. That is **proposal 0011**, now
+> implemented and published as **OpenAPI 1.14.0** (5 backend regression tests green).
+>
+> Delivered: `/bookings/[groupId]/pay` and `/bookings/[groupId]/receipt`, `features/payment/`
+> (`model/outcome.ts`, `model/provider-handoff.ts`, `queries.ts`, `view/`), CTAs on the group
+> detail and confirmation screens, 34 new unit tests, typecheck/lint/build clean.
+>
+> **Still to do at this gate:** `e2e/payment.e2e.ts` (redirect loss, duplicate submission,
+> expired reservation, ambiguous outcome) and `/security-review`. Run those before commit.
+>
+> The original prompt is kept below as the record of what was asked for.
 
 **This is the missing "Continue to Payment".** The backend has been ready since OpenAPI 1.10.0 and
 has **zero frontend consumers** — `grep` for `payment-attempts` across `frontend/**` returns nothing.

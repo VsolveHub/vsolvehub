@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.13.0)
- * Checksum: ffe48c8f32c61784
+ * Source:   contracts/openapi/v1.yaml (version 1.14.0)
+ * Checksum: d0160e93152c00cb
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1388,6 +1388,11 @@ export interface components {
             readonly recovery_action: components["schemas"]["RecoveryActionEnum"];
             /** Format: date-time */
             readonly next_transition_at: string | null;
+            /** Format: uuid */
+            readonly checkout_id: string | null;
+            readonly checkout_version: number | null;
+            /** Format: uuid */
+            readonly order_id: string | null;
             readonly units: components["schemas"]["FulfilmentUnit"][];
             /** Format: date-time */
             readonly created_at: string;

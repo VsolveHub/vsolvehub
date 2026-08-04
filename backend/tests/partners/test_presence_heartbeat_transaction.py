@@ -28,7 +28,10 @@ PHONE_NUMBER = "+919900000099"
 
 
 @pytest.fixture
-def seeded_partner(django_db_setup, django_db_blocker):  # type: ignore[no-untyped-def]
+def seeded_partner(  # type: ignore[no-untyped-def]
+    django_db_setup,  # noqa: ARG001 - requested for ordering, not for its value
+    django_db_blocker,
+):
     """Seeds outside the per-test transaction, matching how the data really exists."""
     with django_db_blocker.unblock():
         call_command("seed_technician_catalog")
