@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider, SessionSync } from "@vsolve/query";
+
+import { SiteHeader } from "@/features/session/view/site-header";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -33,10 +35,16 @@ export const viewport = {
 };
 
 /**
- * No signed-in shell here yet: the customer session (Django OTP) and the
- * browsing/transactional route groups land in the next pass. Catalog and the
- * booking workspace do not require a session provider at this layer — the
- * workspace's own login stage owns authentication inline.
+ * The header sits here, above every route, because navigation is a whole-app
+ * concern and because until it existed nothing in this app linked to
+ * `/bookings` at all.
+ *
+ * It is *not* an auth gate. Catalog, `/book/[service]` and `/cart` are usable
+ * signed out — the anonymous cart is a deliberate product surface — so the
+ * header reads the session to decide what to show and never to decide who may
+ * pass. The gate lives on the one tree that needs it, `app/(flow)/bookings/`,
+ * and the booking workspace keeps its own inline login interrupt so a customer
+ * mid-scope is never thrown to a full page.
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -44,6 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <QueryProvider>
           <SessionSync />
+          <SiteHeader />
           {children}
         </QueryProvider>
       </body>
