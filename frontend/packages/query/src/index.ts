@@ -6,6 +6,8 @@ export type { QueryKeys } from "./keys";
 
 export { CursorContractError, cursorFromNextUrl } from "./cursor";
 
+export { safeNextPath } from "./next-path";
+
 export {
   STATIC_CONTENT,
   SESSION_STATE,

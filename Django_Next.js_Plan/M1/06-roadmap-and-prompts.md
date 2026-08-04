@@ -8,6 +8,30 @@ paste it cold and it will still work.
 
 ---
 
+## Parallel lanes in flight — 2026-08-05
+
+Three lanes are running concurrently. **FE-10 landed first (`7b555e1`)**, which was the merge
+gate both other lanes were waiting on: `backend/config/settings/base.py` and
+`frontend/packages/query/src/keys.ts` are now committed and clean.
+
+| Lane | Owns | Must not touch |
+| --- | --- | --- |
+| **BE-OPS** (step 4) | `backend/config/celery.py`, `backend/config/settings/**`, `apps/foundation/**`, `docs/runbooks/**`, **creates `docs/adr/`** | `contracts/openapi/v1.yaml` — never regenerates. No serializer or view changes. |
+| **FE-16** (step 5) | `frontend/apps/admin/**`, a **separate** `operations` export block in `packages/query/src/keys.ts` | `apps/customer/**`, `apps/partner/**`, the `payment` and `booking` key blocks |
+| **FE-14** (step 2, active) | `frontend/apps/customer/app/**`, `apps/customer/features/session/**` | `apps/admin/**`, `packages/query/src/keys.ts` (uses existing `session` keys), all of `backend/**` |
+
+Rules while these overlap:
+
+- **Only one lane regenerates `v1.yaml` at a time.** BE-OPS changes no contract by design; FE-16
+  consumes contracts published since 1.8.0/1.9.0. So for now nothing but a future BE-07/BE-09 may
+  bump the version, and that lane must land alone.
+- `packages/query/src/keys.ts` takes **additive export blocks only**. Never reorder or reformat
+  the file — that turns a clean three-way merge into a conflict across every lane at once.
+- Regenerating `schema.d.ts` is additive for the payment paths. It removes nothing FE-16 reads.
+- Commit per lane, not per file. A lane that finishes green commits its own scope and nothing else.
+
+---
+
 ## 0. Standing rules for every task in this roadmap
 
 Put these in front of any prompt you run. They are the difference between "it works on my machine"
