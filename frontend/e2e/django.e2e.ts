@@ -60,7 +60,11 @@ test.describe("credentialed browser session against Django", () => {
   });
 
   test("bootstraps CSRF over a credentialed cross-origin request", async ({ page }) => {
-    await page.goto("/apply", { waitUntil: "domcontentloaded" });
+    // `/login` rather than a protected route: these transport probes only need a
+    // page on the frontend origin, and an anonymous visit to `/apply` now
+    // redirects here anyway — mid-`evaluate`, which destroys the execution
+    // context and fails the test for a reason that has nothing to do with CORS.
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
 
     const bootstrap = await page.evaluate(async (origin) => {
       try {
@@ -86,7 +90,7 @@ test.describe("credentialed browser session against Django", () => {
   });
 
   test("keeps the session cookie unreadable from the frontend origin", async ({ page }) => {
-    await page.goto("/apply", { waitUntil: "domcontentloaded" });
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
     await page.evaluate(
       (origin) => fetch(`${origin}/api/v1/auth/csrf/`, { credentials: "include" }),
       API_ORIGIN,
@@ -104,7 +108,10 @@ test.describe("credentialed browser session against Django", () => {
   }) => {
     const phoneNumber = uniquePhoneNumber();
 
-    await page.goto("/apply", { waitUntil: "domcontentloaded" });
+    // `/login` rather than `/apply`: onboarding no longer carries a login form of
+    // its own. There is one OTP surface for the whole app, and an unauthenticated
+    // visit to any protected route is redirected here.
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
     await expect(page.getByLabel(/mobile number/i)).toBeVisible();
 
     // Driven entirely through the shipped UI. An earlier version requested a
@@ -134,8 +141,10 @@ test.describe("credentialed browser session against Django", () => {
     await page.getByRole("button", { name: /verify and continue/i }).click();
 
     // Past the login gate means Django issued a session and the browser is
-    // sending it back on a cross-origin request.
-    await expect(page.getByRole("link", { name: /your application/i })).toBeVisible({
+    // sending it back on a cross-origin request. This account is brand new, so
+    // login routes it to `/apply` — the branch for "there is still work here".
+    await expect(page).toHaveURL(/\/apply$/, { timeout: 20_000 });
+    await expect(page.getByRole("navigation", { name: "Partner" })).toBeVisible({
       timeout: 20_000,
     });
 
@@ -194,7 +203,7 @@ test.describe("credentialed browser session against Django", () => {
   });
 
   test("reports the anonymous session projection without a 401", async ({ page }) => {
-    await page.goto("/apply", { waitUntil: "domcontentloaded" });
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
 
     const projection = await page.evaluate(async (origin) => {
       const response = await fetch(`${origin}/api/v1/auth/session/`, {
@@ -208,5 +217,52 @@ test.describe("credentialed browser session against Django", () => {
     expect(projection.status).toBe(200);
     expect(projection.body.user).toBeNull();
     expect(projection.body.active_role).toBeNull();
+  });
+
+  test("exposes the Date response header over credentialed CORS", async ({ page }) => {
+    // Real-Django G24 proof: proposal 0010 requires Access-Control-Expose-Headers
+    // to include Date so serverClock can calibrate. Distinct from
+    // contract-intercepted offers.e2e.ts.
+    await page.goto("/login", { waitUntil: "domcontentloaded" });
+
+    const probe = await page.evaluate(async (origin) => {
+      try {
+        const response = await fetch(`${origin}/api/v1/auth/csrf/`, {
+          credentials: "include",
+        });
+        const exposed = response.headers.get("access-control-expose-headers") ?? "";
+        const date = response.headers.get("date");
+        return {
+          ok: response.ok,
+          exposed: exposed.toLowerCase(),
+          dateReadable: date !== null,
+          error: null as string | null,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          exposed: "",
+          dateReadable: false,
+          error: String(error),
+        };
+      }
+    }, API_ORIGIN);
+
+    expect(probe.error).toBeNull();
+    expect(probe.ok).toBe(true);
+    // Not skipped. `beforeEach` already skips this whole describe when Django is
+    // unreachable, which is the only honest reason to not run; a reachable
+    // Django that withholds `Date` is precisely the misconfiguration this test
+    // exists to reject, and skipping on it would make the proof green in exactly
+    // the case it is meant to catch.
+    //
+    // A readable `Date` *is* the CORS exposure proof. `Access-Control-Expose-Headers`
+    // itself is not always enumerable to JavaScript even when Date is.
+    expect(
+      probe.dateReadable,
+      `Django at ${API_ORIGIN} did not expose a readable Date header. ` +
+        "serverClock cannot calibrate without it, so every countdown falls back " +
+        "to the device clock. Set CORS_EXPOSE_HEADERS to include Date (proposal 0010).",
+    ).toBe(true);
   });
 });

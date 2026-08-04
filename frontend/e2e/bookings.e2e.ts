@@ -240,21 +240,56 @@ test.describe("the bookings list", () => {
     );
   });
 
-  test("says the list is truncated rather than presenting a partial one as complete", async ({
-    page,
-  }) => {
-    await installDispatchApi(page, {
-      groupPage: {
-        body: {
-          next: "https://api.example/api/v1/booking-groups/?cursor=x",
-          previous: null,
-          results: [TWO_UNIT_GROUP],
+  test("loads further pages through the opaque cursor, preserving order", async ({ page }) => {
+    const pageTwoGroup = {
+      ...TWO_UNIT_GROUP,
+      id: "group-2",
+      units: [
+        {
+          ...TWO_UNIT_GROUP.units[0],
+          id: "fu-3",
+          lines: [{ ...TWO_UNIT_GROUP.units[0]!.lines[0], label: "Geyser repair" }],
         },
-      },
+      ],
+    };
+
+    await installDispatchApi(page, {
+      groupPage: [
+        {
+          body: {
+            next: "https://api.example/api/v1/booking-groups/?cursor=opaque-page-2",
+            previous: null,
+            results: [TWO_UNIT_GROUP],
+          },
+        },
+        {
+          body: {
+            next: null,
+            previous: null,
+            results: [pageTwoGroup],
+          },
+        },
+      ],
     });
     await page.goto("/bookings");
 
-    await expect(page.getByText(/older ones are not listed here yet/i)).toBeVisible();
+    await expect(page.getByRole("link", { name: /2 visits/i })).toBeVisible();
+    await expect(page.getByText(/older ones are not listed/i)).toHaveCount(0);
+
+    const nextResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/booking-groups/") &&
+        new URL(response.url()).searchParams.get("cursor") === "opaque-page-2" &&
+        response.request().method() === "GET",
+    );
+    await page.getByRole("button", { name: "Load more" }).click();
+    const response = await nextResponse;
+    expect(response.ok()).toBe(true);
+    const body = (await response.json()) as { results: { id: string }[] };
+    expect(body.results[0]?.id).toBe("group-2");
+
+    await expect(page.getByText(/geyser repair/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0);
   });
 
   test("says so plainly when there is nothing to show", async ({ page }) => {

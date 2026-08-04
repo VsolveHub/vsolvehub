@@ -8,7 +8,51 @@ implemented, with the missing production behaviour named · `[ ]` not implemente
 path alone never makes a business capability complete; its authorized HTTP contract, idempotency,
 failure recovery, audit and concurrency behaviour must also exist.
 
-## Audit snapshot — 2026-08-04 (WIP review)
+## Audit snapshot — 2026-08-04 (full repo re-audit)
+
+Re-derived from the working tree rather than from prior status claims. See
+[task.md](./task.md) for the consolidated board.
+
+- `pytest` (venv): **218 passed**, branch-aware coverage **86.47%** against an 85% gate,
+  in 160s. No failures, no skips at module level.
+- Committed `contracts/openapi/v1.yaml` is **1.13.0** with 60 published paths. The frontend's
+  generated client matches it (`contract:check` clean).
+- **Implemented and serving:** `identity`, `catalog`, `locations`, `partners`, `carts`,
+  `assignments`, `commerce`, `pricing`, `health`. `foundation` holds the outbox primitives.
+- **BE-08 is complete and has no consumer.** `apps/commerce/` publishes payment attempts, checkout
+  payment, the Razorpay webhook, refunds, orders and tax documents; **no frontend code calls any of
+  them.** That is FE-10, not a backend gap.
+- **BE-09 has no code at all.** There is no fulfilment app: no en-route, arrived, start-OTP,
+  evidence, amendment, completion or abort command exists anywhere in `backend/apps/`.
+- **BE-10 has no code at all.** No cases, ledger, payout or notification models or endpoints.
+- **BE-07 remaining hardening is still open:** revoke/release/manual-recovery idempotency, ranking
+  explainability, accept/expiry/payment-hold concurrency.
+- **R4 is unchanged and now tracked as BE-OPS on the board.** Tests still run locmem + eager Celery.
+  No worker/beat topology, no outbox recovery sweep, no real-Redis suite.
+- `docs/runbooks/` holds 2 runbooks (partner document storage, payment reconciliation).
+  **`docs/adr/` does not exist.**
+- External blockers unchanged: MSG91/DLT, malware scan approval, KYC retention, Razorpay live,
+  CA/Finance/legal, real Redis/Celery crash recovery.
+
+## Audit snapshot — 2026-08-04 (proposals 0007–0010 gate green)
+
+- `.\scripts\quality.cmd` passes: Ruff format/lint, strict MyPy (123 files), **210 tests**, branch-aware
+  coverage **86.40%**, migration drift check clean, generated OpenAPI validates and matches the
+  committed `contracts/openapi/v1.yaml` at **1.13.0**.
+- `makemigrations --check --dry-run` reports no model drift; `git diff --check` is clean.
+- Proposal 0007: typed `POST …/remove/` with version body, DELETE sibling, conflict/`not_found`
+  regressions including a PostgreSQL edit-vs-remove race.
+- Proposal 0008: published optional `cursor` on booking-groups and partner offers; blank/whitespace/
+  malformed/poison cursors return `400 cursor_invalid`; traversal/ownership/ordering/mid-insert pass.
+- Proposal 0009: required `Idempotency-Key`, `OfferActionEnum`, same-key replay, reservation conflict,
+  concurrent accept and profile-less Partner denial.
+- Proposal 0010: `Date` CORS exposure, production fail-closed, `live_server` readable header,
+  `Offer`/`OfferPage.server_now`.
+- Frontend follow-ups for G21/G22/G23/FE-09C remain outstanding and are not claimed Done.
+- External blockers unchanged: MSG91/DLT, malware scan approval, KYC retention, Razorpay live,
+  CA/Finance/legal, real Redis/Celery crash recovery.
+
+## Prior audit snapshot — 2026-08-04 (WIP review before gate)
 
 - Focused proposal suites on the dirty tree: **0007 cart removal** and **0010 server clock** pass;
   **0009 offer commands** 17/18 pass (one fixture `Role.DoesNotExist`); **0008 cursors** 8/14 pass.
@@ -259,9 +303,8 @@ in R7; the API fails closed until those integrations exist.
       allocation properties plus a true cart-edit/checkout race protect the invariants.
 
 **Status: complete for Cart/Plan/Quote/Group money semantics; proposal 0007 backend half is
-implemented with focused evidence, pending a green full quality gate.** OpenAPI 1.13.0 publishes
-`cart_items_remove`. FE-08G's removal integration is Ready. Do not treat the proposal as fully Done
-until `quality.cmd` is green on the integrated tree.
+complete and verified under OpenAPI 1.13.0 with a green full quality gate.** FE-08G's removal
+integration remains Ready and is the only remaining half of 0007.
 
 ## B6 — Availability, offer and reservation
 
@@ -289,34 +332,30 @@ until `quality.cmd` is green on the integrated tree.
 - [x] Implement the approved M1 delivery transport: bounded short polling of a replayable Partner
       inbox projection, with reconnect/freshness semantics and no assumption that a browser tab stays
       open. Polling observes state only; Celery owns every deadline and transition.
-- [~] Publish the existing `cursor` query parameter on Customer Booking Group and Partner offer list
+- [x] Publish the existing `cursor` query parameter on Customer Booking Group and Partner offer list
       operations, then prove cursor traversal has no duplicates/skips while rows are inserted
       concurrently (proposal 0008).
-      Runtime traversal, ownership, ordering and mid-walk insert tests already pass. Still missing:
-      Operations-style query serializer / OpenAPI `cursor` on both list operations, `400 cursor_invalid`
-      for mangled cursors (today: `not_found` or `internal_error`), blank-cursor refusal, and the
-      schema regression asserting the published parameter.
-- [~] Make Partner accept/decline/undo/commit commands idempotent under a required stable key; publish
+      OpenAPI 1.13.0 publishes optional `cursor` (`minLength: 1`) on both lists. Shared
+      `StrictCursorPagination` / `CursorInvalidApiError` refuse blank, whitespace, malformed and
+      poison-position cursors as `400 cursor_invalid`. Traversal, ownership, ordering and mid-walk
+      insert regressions pass under the green full gate.
+- [x] Make Partner accept/decline/undo/commit commands idempotent under a required stable key; publish
       a closed action enum, all reachable error responses and a distinct reservation-conflict code.
       Same-key replay must return the authoritative successful projection and create exactly one
       Reservation (proposal 0009).
-      Implemented in views/services and present in OpenAPI 1.13.0 (`OfferActionEnum`, required
-      `Idempotency-Key`, 400/403/404/409, `offer_reservation_conflict`). Focused suite mostly green;
-      remaining: profile-less Partner fixture (`Role.DoesNotExist`), changelog entry for 0009, and a
-      green full quality gate (currently blocked by MyPy + 0008).
+      OpenAPI 1.13.0 publishes `OfferActionEnum`, required `Idempotency-Key`, 400/403/404/409 and
+      `offer_reservation_conflict`. Focused suite and full quality gate are green.
 - [x] Publish reliable server-clock calibration for Partner offers. `Date` is exposed globally
       through credentialed CORS, and `server_now` is published on both the `Offer` projection and the
       offer page envelope as defense in depth for the 45-second expiry and 120-second undo window.
       The page-level field covers an empty inbox, which carries no offer to read a timestamp from
-      (proposal 0010, OpenAPI 1.11.0 / bundled in 1.13.0). Focused live_server suite passes; MyPy
-      still fails on a redundant cast in `get_server_now`.
+      (proposal 0010, OpenAPI 1.11.0 retained in 1.13.0). MyPy and the full quality gate are green.
 - [ ] Complete revoke/release/manual-recovery commands with authorization, idempotency and audit, and
       add real concurrent-accept/expiry/payment-hold tests.
 
-**Status: BE-07 runtime exists; contract hardening is in progress on the dirty tree (reviewed
-2026-08-04).** 0007 and 0010 have passing focused evidence. 0009 is implemented and schema-published
-but not gate-closed. 0008 still lacks published `cursor` + invalid-cursor contract. Travel/presence/
-ranking, explainability and manual recovery remain additional B6 hardening.
+**Status: BE-07 contract defects 0007–0010 are backend-verified in OpenAPI 1.13.0 (2026-08-04).**
+Travel/presence/ranking, explainability and manual recovery remain additional B6 hardening before
+production. Frontend G21/G22/G23/FE-09C follow-ups are Ready and not Done.
 
 ## B7 — Orders, payment, refund and documents
 

@@ -128,6 +128,21 @@ export default defineConfig({
       },
     },
     {
+      /**
+       * FE-11's signed-in shell, login route and home.
+       *
+       * Its own project alongside `partner-apply` for the same reason: it
+       * installs contract-shaped API routes for every test, and the
+       * contract-independent Partner specs must not inherit them.
+       */
+      name: "partner-shell",
+      testMatch: /partner-shell\.e2e\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3001",
+      },
+    },
+    {
       name: "admin-chromium",
       testMatch: /admin\.e2e\.ts/,
       use: {

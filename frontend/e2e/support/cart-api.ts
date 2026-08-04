@@ -454,6 +454,8 @@ export interface CartApiOptions {
   addresses?: unknown[];
   /** `PATCH /cart/items/{id}/`. */
   patchItem?: { status?: number; body: unknown };
+  /** `POST /cart/items/{id}/remove/`. */
+  removeItem?: { status?: number; body: unknown };
   /** `POST /cart/merge/`. */
   merge?: { status?: number; body: unknown };
   /** `POST /fulfilment-plan-sets/` and its `GET` read-back. */
@@ -549,6 +551,31 @@ export async function installCartApi(page: Page, options: CartApiOptions = {}) {
     const patch = options.patchItem;
     if (!patch) return json(route, TWO_ITEM_CART);
     return json(route, patch.body, patch.status ?? 200);
+  });
+
+  // Registered after `items/*/`: Playwright prefers the last matching route, and
+  // without this the remove POST would fall through to the catch-all 404.
+  await page.route(`${API}/cart/items/*/remove/`, (route) => {
+    record(route);
+    const remove = options.removeItem;
+    if (!remove) {
+      return json(
+        route,
+        cart({
+          version: 4,
+          items: [
+            cartItem({
+              id: "item-2",
+              variant_id: "variant-2",
+              service_slug: "geyser-repair",
+              service_name: "Geyser repair",
+              variant_name: "Storage geyser",
+            }),
+          ],
+        }),
+      );
+    }
+    return json(route, remove.body, remove.status ?? 200);
   });
 
   await page.route(`${API}/cart/merge/`, (route) => {

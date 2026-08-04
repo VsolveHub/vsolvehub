@@ -87,13 +87,63 @@ describe("when polling stops", () => {
 });
 
 describe("reading", () => {
-  it("reads the list without asking for a cursor the contract does not publish", async () => {
+  it("reads page one without a cursor", async () => {
     client.GET.mockResolvedValue(ok(groupPage()));
 
     const { result } = renderHook(() => useBookingGroups(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(client.GET).toHaveBeenCalledWith("/api/v1/booking-groups/");
+    expect(client.GET).toHaveBeenCalledWith("/api/v1/booking-groups/", {
+      params: { query: {} },
+    });
+  });
+
+  it("passes the opaque cursor for the next page and preserves order", async () => {
+    const pageOne = groupPage({
+      next: "https://api.example/api/v1/booking-groups/?cursor=opaque-page-2",
+      results: [group({ id: "group-1" })],
+    });
+    const pageTwo = groupPage({
+      next: null,
+      results: [group({ id: "group-2" })],
+    });
+    client.GET
+      .mockResolvedValueOnce(ok(pageOne))
+      .mockResolvedValueOnce(ok(pageTwo));
+
+    const { result } = renderHook(() => useBookingGroups(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.hasNextPage).toBe(true);
+
+    await result.current.fetchNextPage();
+    await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+
+    expect(client.GET).toHaveBeenNthCalledWith(2, "/api/v1/booking-groups/", {
+      params: { query: { cursor: "opaque-page-2" } },
+    });
+    expect(result.current.data?.pages.flatMap((page) => page.results).map((g) => g.id)).toEqual([
+      "group-1",
+      "group-2",
+    ]);
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it("ends pagination when next is null", async () => {
+    client.GET.mockResolvedValue(ok(groupPage({ next: null })));
+
+    const { result } = renderHook(() => useBookingGroups(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it("surfaces a malformed next URL instead of truncating silently", async () => {
+    client.GET.mockResolvedValue(
+      ok(groupPage({ next: "https://api.example/api/v1/booking-groups/?page=2" })),
+    );
+
+    const { result } = renderHook(() => useBookingGroups(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toMatchObject({ code: "cursor_contract" });
   });
 
   it("reads one group by id", async () => {
@@ -191,13 +241,32 @@ describe("cancelling", () => {
   });
 
   it("re-reads the list after a version conflict, so the next decision is informed", async () => {
-    queryClient.setQueryData(queryKeys.booking.groups(), groupPage());
+    queryClient.setQueryData(queryKeys.booking.groups(), {
+      pages: [groupPage()],
+      pageParams: [""],
+    });
     client.POST.mockResolvedValue(refusal("booking_group_version_conflict"));
 
     const { result } = renderHook(() => useCancelBookingGroup(), { wrapper });
     result.current.mutate({ groupId: "group-1", expectedVersion: 1 });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() =>
+      expect(queryClient.getQueryState(queryKeys.booking.groups())?.isInvalidated).toBe(true),
+    );
+  });
+
+  it("invalidates infinite list pages after a successful cancel", async () => {
+    queryClient.setQueryData(queryKeys.booking.groups(), {
+      pages: [groupPage()],
+      pageParams: [""],
+    });
+    client.POST.mockResolvedValue(ok(group({ status: "CANCELLED", version: 2 })));
+
+    const { result } = renderHook(() => useCancelBookingGroup(), { wrapper });
+    result.current.mutate({ groupId: "group-1", expectedVersion: 1 });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     await waitFor(() =>
       expect(queryClient.getQueryState(queryKeys.booking.groups())?.isInvalidated).toBe(true),
     );

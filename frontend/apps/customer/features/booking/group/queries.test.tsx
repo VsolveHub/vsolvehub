@@ -33,6 +33,7 @@ const {
   useCreatePlanQuote,
   useCreatePlanSet,
   useMergeCart,
+  useRemoveCartItem,
   useUpdateCartItem,
 } = await import("./queries");
 const { cartMergeConflict, isCommandInFlight } = await import("./conflicts");
@@ -233,6 +234,118 @@ describe("editing and concurrency", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(client.PATCH).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("removing an item", () => {
+  it("posts both concurrency versions to the publishable remove command", async () => {
+    client.POST.mockResolvedValue(ok(cart({ version: 5, items: [cartItem({ id: "item-2" })] })));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper });
+    result.current.mutate({
+      itemId: "item-1",
+      expectedCartVersion: 4,
+      expectedItemVersion: 2,
+    });
+
+    await waitFor(() => expect(client.POST).toHaveBeenCalled());
+    expect(client.POST).toHaveBeenCalledWith("/api/v1/cart/items/{item_id}/remove/", {
+      params: { path: { item_id: "item-1" } },
+      body: { expected_cart_version: 4, expected_item_version: 2 },
+    });
+  });
+
+  it("replaces cached cart with the authoritative response and leaves the sibling intact", async () => {
+    queryClient.setQueryData(
+      queryKeys.booking.cart(),
+      cart({ version: 4, items: [cartItem({ id: "item-1" }), cartItem({ id: "item-2" })] }),
+    );
+    const remaining = cart({
+      version: 5,
+      items: [cartItem({ id: "item-2", quantity: 1, version: 1 })],
+    });
+    client.POST.mockResolvedValue(ok(remaining));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper });
+    result.current.mutate({
+      itemId: "item-1",
+      expectedCartVersion: 4,
+      expectedItemVersion: 1,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryClient.getQueryData(queryKeys.booking.cart())).toEqual(remaining);
+  });
+
+  it("invalidates only plan sets and quotes after removal", async () => {
+    queryClient.setQueryData(queryKeys.booking.planSet("ps-1"), planSet());
+    queryClient.setQueryData(queryKeys.booking.planQuote("q-1"), groupQuote());
+    queryClient.setQueryData(queryKeys.catalog.categories(), [{ slug: "electrical" }]);
+    queryClient.setQueryData(queryKeys.addresses.list(), [{ id: "addr-1" }]);
+    client.POST.mockResolvedValue(ok(cart({ version: 5, items: [] })));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper });
+    result.current.mutate({
+      itemId: "item-1",
+      expectedCartVersion: 4,
+      expectedItemVersion: 1,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryClient.getQueryState(queryKeys.booking.planSet("ps-1"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(queryKeys.booking.planQuote("q-1"))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(queryKeys.catalog.categories())?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(queryKeys.addresses.list())?.isInvalidated).toBe(false);
+  });
+
+  it("refetches after a stale cart version refusal", async () => {
+    queryClient.setQueryData(queryKeys.booking.cart(), cart({ version: 4 }));
+    client.POST.mockResolvedValue(refusal("cart_version_conflict", { current_version: 9 }));
+    client.GET.mockResolvedValue(ok(cart({ version: 9 })));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper });
+    result.current.mutate({
+      itemId: "item-1",
+      expectedCartVersion: 4,
+      expectedItemVersion: 2,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() =>
+      expect(queryClient.getQueryState(queryKeys.booking.cart())?.isInvalidated).toBe(true),
+    );
+  });
+
+  it("refetches when the item is already gone", async () => {
+    queryClient.setQueryData(queryKeys.booking.cart(), cart({ version: 4 }));
+    client.POST.mockResolvedValue(refusal("cart_item_not_found"));
+    client.GET.mockResolvedValue(ok(cart({ version: 5, items: [] })));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper });
+    result.current.mutate({
+      itemId: "item-1",
+      expectedCartVersion: 4,
+      expectedItemVersion: 1,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() =>
+      expect(queryClient.getQueryState(queryKeys.booking.cart())?.isInvalidated).toBe(true),
+    );
+  });
+
+  it("does not auto-retry a refused removal", async () => {
+    client.POST.mockResolvedValue(refusal("cart_version_conflict"));
+
+    const { result } = renderHook(() => useRemoveCartItem(), { wrapper });
+    result.current.mutate({
+      itemId: "item-1",
+      expectedCartVersion: 4,
+      expectedItemVersion: 2,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(client.POST).toHaveBeenCalledTimes(1);
   });
 });
 

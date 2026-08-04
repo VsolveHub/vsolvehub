@@ -23,18 +23,8 @@ export interface CartItemsProps {
   /** Ids of items with a mutation in flight, so only those rows disable. */
   pendingItemIds: readonly string[];
   onUpdateQuantity: (input: { item: CartItem; quantity: number }) => void;
-  /**
-   * Null when removal is not integrable.
-   *
-   * The published contract still exposes `DELETE /cart/items/{id}/` with no request body,
-   * while Django requires the cart and item versions in one. Rather than send a
-   * command the server will reject, the row explains the limitation. See
-   * `contracts/proposals/0007-cart-item-removal-body.md` and the boundary
-   * rendered below.
-   */
-  onRemove: ((item: CartItem) => void) | null;
-  /** Why removal is unavailable, when it is. */
-  removalBoundary: string | null;
+  /** Opens confirmation for the selected service. Always available once G21 is wired. */
+  onRemove: (item: CartItem) => void;
 }
 
 function QuantityStepper({
@@ -109,13 +99,11 @@ function CartItemRow({
   isPending,
   onUpdateQuantity,
   onRemove,
-  removalBoundary,
 }: {
   item: CartItem;
   isPending: boolean;
   onUpdateQuantity: (quantity: number) => void;
-  onRemove: (() => void) | null;
-  removalBoundary: string | null;
+  onRemove: () => void;
 }) {
   return (
     <li className="rounded-card border border-line bg-surface p-4">
@@ -126,26 +114,20 @@ function CartItemRow({
           <ScopeSummary scope={item.scope} />
         </div>
 
-        {onRemove ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={isPending}
-            aria-label={`Remove ${item.service_name}`}
-            onClick={onRemove}
-          >
-            Remove
-          </Button>
-        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={isPending}
+          aria-label={`Remove ${item.service_name}`}
+          onClick={onRemove}
+        >
+          Remove
+        </Button>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <QuantityStepper item={item} disabled={isPending} onChange={onUpdateQuantity} />
       </div>
-
-      {onRemove === null && removalBoundary !== null ? (
-        <p className="mt-3 text-sm text-text-secondary">{removalBoundary}</p>
-      ) : null}
     </li>
   );
 }
@@ -155,7 +137,6 @@ export function CartItems({
   pendingItemIds,
   onUpdateQuantity,
   onRemove,
-  removalBoundary,
 }: CartItemsProps) {
   if (cart.items.length === 0) {
     return (
@@ -174,8 +155,7 @@ export function CartItems({
           item={item}
           isPending={pendingItemIds.includes(item.id)}
           onUpdateQuantity={(quantity) => onUpdateQuantity({ item, quantity })}
-          onRemove={onRemove ? () => onRemove(item) : null}
-          removalBoundary={removalBoundary}
+          onRemove={() => onRemove(item)}
         />
       ))}
     </ul>

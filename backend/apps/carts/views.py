@@ -78,6 +78,11 @@ from apps.locations.models import Address
 from apps.partners.permissions import IsOperationsUser
 from common.errors.serializers import ApiErrorSerializer
 from common.observability.context import get_request_id
+from common.pagination import (
+    BoundedCursorQuerySerializer,
+    StrictCursorPagination,
+    reject_invalid_cursor_query,
+)
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
 
@@ -93,7 +98,7 @@ class CompatibilityRuleCursorPagination(CursorPagination):
     ordering = ("-created_at", "-id")
 
 
-class BookingGroupCursorPagination(CursorPagination):
+class BookingGroupCursorPagination(StrictCursorPagination):
     page_size = 25
     ordering = ("-created_at", "-id")
 
@@ -104,9 +109,15 @@ class BookingGroupCollectionView(APIView):
     @extend_schema(
         tags=["Booking Groups"],
         operation_id="booking_group_list",
-        responses={200: BookingGroupPageSerializer, 403: ApiErrorSerializer},
+        parameters=[BoundedCursorQuerySerializer],
+        responses={
+            200: BookingGroupPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
     )
     def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
         queryset = (
             BookingGroup.objects.filter(customer=cast(User, request.user))
             .select_related("quote")

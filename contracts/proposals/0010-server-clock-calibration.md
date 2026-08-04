@@ -3,10 +3,10 @@
 **Author:** Claude (FE-09 frontend integration)
 **Date:** 3 August 2026
 **Verified against:** OpenAPI 1.10.0 and `backend/config/settings/base.py`
-**Status:** Implemented in the backend — published in OpenAPI 1.11.0. Frontend acceptance (§4) is the
-one remaining item and belongs to the FE-09 follow-up.
+**Status:** Fully complete — backend verified in OpenAPI 1.11.0 / retained in 1.13.0; FE-09C
+skewed-device offer/undo countdown proofs and real-Django readable `Date` evidence green 2026-08-04.
 **Consuming applications:** Customer, Partner, Operations — every countdown in the product
-**Severity:** This is a live defect, not a gap. It affects deployed behaviour today.
+**Severity:** This was a live defect; CORS `Date` exposure plus `server_now` close it.
 
 ## Problem
 

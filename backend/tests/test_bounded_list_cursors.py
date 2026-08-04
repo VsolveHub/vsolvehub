@@ -55,6 +55,7 @@ UNUSABLE_CURSORS = (
     "cD1nYXJiYWdl",  # decodes to `p=garbage`, then poisons the ordering comparison
     "bz1ub3QtYS1udW1iZXI=",  # decodes to `o=not-a-number`, an unusable page offset
     "//79",  # decodes to bytes that are not ASCII
+    "   ",  # present but whitespace-only — not the same as omitting the parameter
 )
 
 
@@ -421,12 +422,14 @@ def test_an_unusable_cursor_is_refused_rather_than_crashing(cursor: str) -> None
     ):
         response = client.get(path, {"cursor": cursor})
         assert response.status_code == HTTPStatus.BAD_REQUEST, response.json()
-        assert response.json()["error"]["code"] == "cursor_invalid"
-        assert response.json()["error"]["retryable"] is False
+        error = response.json()["error"]
+        assert error["code"] == "cursor_invalid"
+        assert error["retryable"] is False
+        assert error["request_id"]
 
 
 def test_a_blank_cursor_is_refused_by_the_published_minimum_length() -> None:
-    """`minLength: 1` is published, so a blank value is out of contract rather than absent."""
+    """An explicitly supplied blank cursor is not the first page."""
 
     call_command("seed_technician_catalog")
     tenant = _tenant(phone="+919876500011", partner_suffix="81", key_prefix="cursor-owner")
@@ -437,7 +440,10 @@ def test_a_blank_cursor_is_refused_by_the_published_minimum_length() -> None:
     ):
         response = client.get(path, {"cursor": ""})
         assert response.status_code == HTTPStatus.BAD_REQUEST, response.json()
-        assert response.json()["error"]["details"]["cursor"]
+        error = response.json()["error"]
+        assert error["code"] == "cursor_invalid"
+        assert error["retryable"] is False
+        assert error["request_id"]
 
 
 def test_rows_inserted_mid_walk_neither_duplicate_nor_skip_the_remaining_pages(

@@ -1,8 +1,14 @@
 "use client";
 
 import { ApiRequestError, getStableIdempotencyKey, request, type Schemas } from "@vsolve/api-client";
-import { EXPIRING_STATE, boundedPoll, queryKeys } from "@vsolve/query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CursorContractError,
+  EXPIRING_STATE,
+  boundedPoll,
+  cursorFromNextUrl,
+  queryKeys,
+} from "@vsolve/query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -33,6 +39,7 @@ import { getApiClient } from "@/lib/api/browser";
  */
 
 export type BookingGroup = Schemas["BookingGroup"];
+export type BookingGroupPage = Schemas["BookingGroupPage"];
 export type FulfilmentUnit = Schemas["FulfilmentUnit"];
 export type GroupStatus = Schemas["BookingGroupStatusEnum"];
 export type RecoveryAction = Schemas["RecoveryActionEnum"];
@@ -68,22 +75,47 @@ export function isTerminal(group: BookingGroup): boolean {
   return TERMINAL_STATUSES.includes(group.status);
 }
 
+/** `400 cursor_invalid` — restart from page one rather than truncating silently. */
+export function isCursorInvalid(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "cursor_invalid";
+}
+
+export function isCursorContractFailure(error: unknown): boolean {
+  return error instanceof CursorContractError;
+}
+
 /**
- * The customer's Booking Groups.
+ * The customer's Booking Groups, traversed page by page.
  *
- * Page one only. `booking_group_list` paginates with a cursor at runtime but
- * publishes no `cursor` query parameter, so the generated client cannot request
- * page two — see `contracts/proposals/0008-bounded-list-cursor-parameters.md`.
- * `next` is still read, because a truncated list the customer is told about is
- * honest and a truncated list presented as complete is not.
+ * Cursor pagination through the generated `cursor` query parameter. The list
+ * identity stays in the query key; each page's opaque cursor is only a
+ * `pageParam`. `next` is never raw-fetched — `cursorFromNextUrl` extracts the
+ * opaque value Django already published.
  *
  * Not polled. A list is where someone arrives, not where they wait; the detail
  * view is what observes a live group.
  */
 export function useBookingGroups(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.booking.groups(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/booking-groups/")),
+    queryFn: async ({ pageParam }) => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/booking-groups/", {
+          params: {
+            query: {
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
+        }),
+      );
+      // Validate `next` while the page is still being accepted. Throwing only from
+      // `getNextPageParam` can leave a truncated list looking complete; surfacing
+      // CursorContractError here drives the restart UI instead.
+      cursorFromNextUrl(page.next);
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
     enabled,
     ...EXPIRING_STATE,
   });

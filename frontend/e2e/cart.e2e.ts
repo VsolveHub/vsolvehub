@@ -76,17 +76,151 @@ test.describe("a cart with more than one service", () => {
     await expect(geyser.getByRole("status")).toHaveText("1");
   });
 
-  test("keeps removal honestly unavailable while the contract lacks its request body", async ({
+  test("removes one item after confirmation and leaves the sibling unchanged", async ({
     page,
   }) => {
+    const api = await installCartApi(page, {
+      removeItem: {
+        body: cart({
+          version: 4,
+          items: [
+            cartItem({
+              id: "item-2",
+              service_name: "Geyser repair",
+              variant_id: "variant-2",
+              service_slug: "geyser-repair",
+              variant_name: "Storage geyser",
+            }),
+          ],
+        }),
+      },
+    });
+    await page.goto("/cart");
+
+    await page.getByRole("button", { name: "Remove Fan installation" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(/Fan installation/);
+    await dialog.getByRole("button", { name: "Remove" }).click();
+
+    await expect(page.getByRole("heading", { name: "Fan installation" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Geyser repair" })).toBeVisible();
+    await expect(page.getByText(/saved version/)).toContainText("4");
+
+    const remove = api.to("/api/v1/cart/items/item-1/remove/");
+    expect(remove).toHaveLength(1);
+    expect(remove[0]?.method).toBe("POST");
+    expect(remove[0]?.body).toMatchObject({
+      expected_cart_version: 3,
+      expected_item_version: 1,
+    });
+  });
+
+  test("remove confirmation is keyboard-operable and Escape cancels", async ({ page }) => {
     await installCartApi(page);
     await page.goto("/cart");
 
+    await page.getByRole("button", { name: "Remove Fan installation" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const element = document.querySelector("dialog[open]");
+          return element !== null && element.contains(document.activeElement);
+        }),
+      )
+      .toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
     await expect(page.getByRole("heading", { name: "Fan installation" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
-    await expect(
-      page.getByText(/removing a service is not available yet/i).first(),
-    ).toBeVisible();
+  });
+
+  test("cannot double-submit a remove while one is in flight", async ({ page }) => {
+    await installCartApi(page);
+
+    let removeCount = 0;
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await page.route("**/api/v1/cart/items/*/remove/", async (route) => {
+      if (route.request().method() === "OPTIONS") {
+        await route.fulfill({
+          status: 204,
+          headers: {
+            "access-control-allow-origin": "http://localhost:3000",
+            "access-control-allow-credentials": "true",
+            "access-control-allow-methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS",
+            "access-control-allow-headers": "content-type,x-csrftoken,idempotency-key",
+          },
+          body: "",
+        });
+        return;
+      }
+      removeCount += 1;
+      await held;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: {
+          "access-control-allow-origin": "http://localhost:3000",
+          "access-control-allow-credentials": "true",
+        },
+        body: JSON.stringify(
+          cart({
+            version: 4,
+            items: [cartItem({ id: "item-2", service_name: "Geyser repair" })],
+          }),
+        ),
+      });
+    });
+
+    await page.goto("/cart");
+    await page.getByRole("button", { name: "Remove Fan installation" }).click();
+    const confirm = page.getByRole("dialog").getByRole("button", { name: "Remove" });
+    await confirm.click();
+
+    // Loading renames the confirm control; assert the in-flight state by label.
+    const pending = page.getByRole("dialog").getByRole("button", { name: /removing fan installation/i });
+    await expect(pending).toBeDisabled();
+    await pending.click({ force: true }).catch(() => undefined);
+    expect(removeCount).toBe(1);
+
+    release?.();
+    await expect(page.getByRole("heading", { name: "Fan installation" })).toHaveCount(0);
+  });
+
+  test("recovers from a stale cart version on remove by re-reading server truth", async ({
+    page,
+  }) => {
+    const api = await installCartApi(page, {
+      cart: [
+        TWO_ITEM_CART,
+        cart({
+          version: 9,
+          items: [
+            cartItem({ id: "item-1", service_name: "Fan installation" }),
+            cartItem({ id: "item-2", service_name: "Geyser repair" }),
+          ],
+        }),
+      ],
+      removeItem: {
+        status: 409,
+        body: envelope("cart_version_conflict", { current_version: 9 }),
+      },
+    });
+    await page.goto("/cart");
+
+    await page.getByRole("button", { name: "Remove Fan installation" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Remove" }).click();
+
+    await expect(page.getByRole("alert").first()).toContainText(/changed somewhere else/i);
+    await expect(page.getByText(/saved version/)).toContainText("9");
+    expect(api.to("/api/v1/cart/").length).toBeGreaterThan(1);
   });
 
   test("recovers from a stale cart version by re-reading server truth", async ({ page }) => {

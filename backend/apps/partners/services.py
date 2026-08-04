@@ -1385,6 +1385,7 @@ def go_online(
     return session
 
 
+@transaction.atomic
 def heartbeat_presence(
     *,
     user: User,
@@ -1394,6 +1395,10 @@ def heartbeat_presence(
     accuracy_m: int | None = None,
     consent_version: str | None = None,
 ) -> PartnerOnlineSession:
+    # Atomic because `_application_for_update` takes a row lock, and Django
+    # refuses `select_for_update` in autocommit. Its absence here made every
+    # heartbeat a 500 while `go_online` and `go_offline`, which open one,
+    # worked — so presence could be entered and never held.
     application = _application_for_update(user)
     _assert_operational_eligibility(application)
     session = (

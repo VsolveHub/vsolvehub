@@ -530,6 +530,12 @@ paths:
   /api/v1/booking-groups/:
     get:
       operationId: booking_group_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
       tags:
       - Booking Groups
       security:
@@ -540,6 +546,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BookingGroupPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -2340,6 +2352,12 @@ paths:
   /api/v1/partner/offers/:
     get:
       operationId: partner_offer_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
       tags:
       - Partner
       security:
@@ -2350,6 +2368,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OfferPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/partner/offers/{offer_id}/{action}/:
     post:

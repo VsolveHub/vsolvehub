@@ -1,12 +1,18 @@
 "use client";
 
-import { describeError } from "@vsolve/query";
+import { describeError, queryKeys } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { Money } from "@/features/booking/group/view/money";
 
-import { useBookingGroups, type BookingGroup } from "../queries";
+import {
+  isCursorContractFailure,
+  isCursorInvalid,
+  useBookingGroups,
+  type BookingGroup,
+} from "../queries";
 import { GROUP_STATUS_MEANING, GroupStatusBadge } from "./group-status";
 
 /**
@@ -16,6 +22,10 @@ import { GROUP_STATUS_MEANING, GroupStatusBadge } from "./group-status";
  * to look at, and the detail view is what observes a live one. Nothing here
  * polls — a list that refreshed itself under a reading finger would move the row
  * being tapped.
+ *
+ * Further pages load only when the customer asks ("Load more"). Uncontrolled
+ * infinite scroll would race against focus and against deciding which row was
+ * tapped while the list grew underneath.
  */
 
 function totalOf(group: BookingGroup) {
@@ -75,7 +85,12 @@ function GroupRow({ group }: { group: BookingGroup }) {
 }
 
 export function BookingGroupList() {
+  const queryClient = useQueryClient();
   const groupsQuery = useBookingGroups();
+
+  function restartFromPageOne() {
+    void queryClient.resetQueries({ queryKey: queryKeys.booking.groups() });
+  }
 
   if (groupsQuery.isPending) {
     return (
@@ -87,19 +102,38 @@ export function BookingGroupList() {
     );
   }
 
-  if (groupsQuery.isError) {
+  const groups = groupsQuery.data?.pages.flatMap((page) => page.results) ?? [];
+  const listError = groupsQuery.error;
+
+  // A failed next-page fetch still has page-one data — keep the rows and offer
+  // recovery. Only a failed first page is a full-screen error.
+  if (groupsQuery.isError && groups.length === 0) {
+    const restartable =
+      isCursorInvalid(listError) || isCursorContractFailure(listError);
+
     return (
       <ErrorState
-        title="We could not load your bookings"
-        message={describeError(groupsQuery.error, "read").message}
-        actionLabel="Try again"
-        onAction={() => void groupsQuery.refetch()}
+        title={
+          restartable
+            ? "We could not continue this list"
+            : "We could not load your bookings"
+        }
+        message={
+          restartable
+            ? "Start again from the beginning — older pages are still available once you do."
+            : describeError(listError, "read").message
+        }
+        actionLabel={restartable ? "Start from the beginning" : "Try again"}
+        onAction={() => {
+          if (restartable) {
+            restartFromPageOne();
+            return;
+          }
+          void groupsQuery.refetch();
+        }}
       />
     );
   }
-
-  const page = groupsQuery.data;
-  const groups = page?.results ?? [];
 
   if (groups.length === 0) {
     return (
@@ -123,20 +157,41 @@ export function BookingGroupList() {
         ))}
       </ul>
 
-      {/*
-        The published list paginates with a cursor at runtime but exposes no
-        `cursor` query parameter, so page two cannot be requested through the
-        generated client — see proposal 0008. Saying the list is truncated is
-        honest; presenting it as complete would not be, and a "Show more" button
-        that cannot work would be worse than either.
-      */}
-      {page?.next ? (
-        <p className="mt-4 text-sm text-text-secondary">
-          Showing your most recent bookings. Older ones are not listed here yet.
-        </p>
+      {groupsQuery.hasNextPage ? (
+        <div className="mt-4">
+          <Button
+            variant="outline"
+            onClick={() => void groupsQuery.fetchNextPage()}
+            loading={groupsQuery.isFetchingNextPage}
+            loadingLabel="Loading more bookings"
+            disabled={groupsQuery.isFetchingNextPage}
+          >
+            Load more
+          </Button>
+        </div>
+      ) : null}
+
+      {groupsQuery.isFetchNextPageError && listError ? (
+        <>
+          <p className="mt-3 text-sm text-critical" role="alert">
+            {isCursorInvalid(listError) || isCursorContractFailure(listError)
+              ? "We could not load the next page. Start from the beginning to try again."
+              : describeError(listError, "read").message}
+          </p>
+          {isCursorInvalid(listError) || isCursorContractFailure(listError) ? (
+            <div className="mt-3">
+              <Button variant="outline" onClick={restartFromPageOne}>
+                Start from the beginning
+              </Button>
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       <div className="mt-6">
+        {/* Disabled for *any* fetch, including a next-page one. A refetch that
+            overlaps a cursor traversal races two writers into the same page
+            list, and the loser silently decides which rows survive. */}
         <Button variant="outline" onClick={() => void groupsQuery.refetch()} disabled={groupsQuery.isFetching}>
           Refresh
         </Button>

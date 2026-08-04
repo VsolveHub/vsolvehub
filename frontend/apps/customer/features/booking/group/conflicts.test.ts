@@ -4,6 +4,7 @@ import {
   cartMergeConflict,
   cartVersionConflict,
   duplicateCartItemConflict,
+  isCartItemNotFound,
   isCommandInFlight,
   isIdempotencyKeyReused,
   isPlanStale,
@@ -40,6 +41,17 @@ describe("cart version conflict", () => {
     expect(cartVersionConflict(conflict("duplicate_cart_item"))).toBeNull();
     expect(cartVersionConflict(new Error("offline"))).toBeNull();
     expect(cartVersionConflict(null)).toBeNull();
+  });
+});
+
+describe("cart item not found", () => {
+  it("recognises the published code", () => {
+    expect(isCartItemNotFound(conflict("cart_item_not_found"))).toBe(true);
+  });
+
+  it("does not fire for other refusals", () => {
+    expect(isCartItemNotFound(conflict("cart_version_conflict"))).toBe(false);
+    expect(isCartItemNotFound(new Error("offline"))).toBe(false);
   });
 });
 

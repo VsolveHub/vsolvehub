@@ -187,6 +187,49 @@ export function useUpdateCartItem() {
   });
 }
 
+export interface RemoveCartItemInput {
+  itemId: string;
+  expectedCartVersion: number;
+  expectedItemVersion: number;
+}
+
+/**
+ * Removes one item through the publishable POST command.
+ *
+ * Both optimistic versions are required. No `Idempotency-Key`: the version pair
+ * is the replay protection. No optimistic cache write — the authoritative Cart
+ * response replaces local state only after Django confirms the removal.
+ */
+export function useRemoveCartItem() {
+  const applyCart = useApplyCart();
+  const refetchOnStale = useRefetchCartOnStaleVersion();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RemoveCartItemInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/cart/items/{item_id}/remove/", {
+          params: { path: { item_id: input.itemId } },
+          body: {
+            expected_cart_version: input.expectedCartVersion,
+            expected_item_version: input.expectedItemVersion,
+          },
+        }),
+      ),
+    onSuccess: applyCart,
+    onError: (error) => {
+      refetchOnStale(error);
+      // Already-gone / unknown ids: the outcome the customer wanted has happened.
+      // Refetch so the row disappears from authoritative state rather than leaving
+      // a stale list that still invites another remove.
+      if (error instanceof ApiRequestError && error.code === "cart_item_not_found") {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+      }
+    },
+    retry: false,
+  });
+}
+
 export interface MergeCartInput {
   expectedCustomerCartVersion: number;
   expectedSessionCartVersion: number;

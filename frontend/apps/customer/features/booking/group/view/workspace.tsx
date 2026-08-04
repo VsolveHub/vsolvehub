@@ -23,7 +23,11 @@ import {
   planUnavailable,
   type PlanItemFailure,
 } from "../conflicts";
-import { describeConfirmFailure, describeQuoteFailure } from "../reasons";
+import {
+  describeConfirmFailure,
+  describeQuoteFailure,
+  describeRemovalFailure,
+} from "../reasons";
 import {
   useCandidateStarts,
   useCart,
@@ -33,6 +37,7 @@ import {
   useMergeCart,
   usePlanQuote,
   usePlanSet,
+  useRemoveCartItem,
   useUpdateCartItem,
   type Cart,
   type CartItem,
@@ -44,6 +49,7 @@ import { GroupResult } from "./group-result";
 import { MergeDialog } from "./merge-dialog";
 import { PlanComparison } from "./plan-comparison";
 import { QuoteReview } from "./quote-review";
+import { RemoveCartItemDialog } from "./remove-dialog";
 import { ScheduleStep } from "./schedule-step";
 
 /**
@@ -85,21 +91,6 @@ import { ScheduleStep } from "./schedule-step";
  * locally to look like it still works.
  */
 
-/**
- * Removal is published without the body Django requires.
- *
- * `DELETE /api/v1/cart/items/{item_id}/` still carries no `requestBody` as of
- * published contract 1.10.0, while the Django view reads `expected_cart_version` and
- * `expected_item_version` from one — so the generated client cannot express a
- * request the server would accept. Sending it anyway, or reaching around the
- * generated types to attach a body, would be inventing a contract. The row says
- * so instead, and `contracts/proposals/0007-cart-item-removal-body.md` asks for
- * the operation to be republished with its request body.
- */
-const REMOVAL_BOUNDARY =
-  "Removing a service is not available yet — the published API does not accept the " +
-  "version check this needs. You can set the quantity you want, or start a new booking.";
-
 type Step = "cart" | "schedule" | "plans" | "review" | "confirmed";
 
 const STEP_LABELS: Record<Step, string> = {
@@ -134,11 +125,35 @@ export function GroupBookingWorkspace() {
   const [quoteId, setQuoteId] = useState<string | null>(null);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  /**
+   * The row the removal dialog is asking about — an **id**, never the row.
+   *
+   * A `CartItem` held in state is a snapshot of one cart version, and the whole
+   * point of the removal command is that it carries `expected_item_version`. Once
+   * a version conflict has refetched the cart, a snapshot taken when the dialog
+   * opened would resend the version Django just rejected, and pressing Try again
+   * would loop against the same refusal forever. Holding the id and deriving the
+   * row below means the dialog always confirms against what the server currently
+   * publishes.
+   */
+  const [removalItemId, setRemovalItemId] = useState<string | null>(null);
   const [planFailures, setPlanFailures] = useState<PlanItemFailure[] | null>(null);
   const [mergeDismissed, setMergeDismissed] = useState(false);
 
   const cartQuery = useCart();
   const cart: Cart | undefined = cartQuery.data;
+
+  /**
+   * The row the dialog is confirming, read back from the current cart.
+   *
+   * Resolves to `null` the moment the cart no longer contains it — a removal
+   * that succeeded elsewhere, or one this dialog just performed — which closes
+   * the dialog rather than leaving it asking about a row that is gone.
+   */
+  const itemPendingRemoval: CartItem | null =
+    removalItemId === null
+      ? null
+      : (cart?.items.find((item) => item.id === removalItemId) ?? null);
 
   // Django performs the login merge inside `GET /cart/` and refuses with
   // `cart_merge_conflict` when a human has to choose. The refusal is read off
@@ -154,6 +169,7 @@ export function GroupBookingWorkspace() {
   const createAddress = useCreateAddress();
   const updateAddress = useUpdateAddress();
   const updateItem = useUpdateCartItem();
+  const removeItem = useRemoveCartItem();
   const mergeCart = useMergeCart();
   const createPlanSet = useCreatePlanSet();
   const createQuote = useCreatePlanQuote();
@@ -407,16 +423,70 @@ export function GroupBookingWorkspace() {
                         { onSettled: () => setPendingItemId(null) },
                       );
                     }}
-                    onRemove={null}
-                    removalBoundary={REMOVAL_BOUNDARY}
+                    onRemove={(item) => {
+                      removeItem.reset();
+                      setRemovalItemId(item.id);
+                    }}
                   />
                 </div>
+
+                <RemoveCartItemDialog
+                  item={itemPendingRemoval}
+                  isPending={removeItem.isPending}
+                  // Only refusals the customer can act on from inside the dialog
+                  // reach here; the rest close it and are shown beside the
+                  // reloaded cart below.
+                  errorMessage={
+                    removeItem.isError ? describeRemovalFailure(removeItem.error).message : null
+                  }
+                  onDismiss={() => {
+                    if (removeItem.isPending) return;
+                    removeItem.reset();
+                    setRemovalItemId(null);
+                  }}
+                  onConfirm={() => {
+                    // Read from the derived row, not from a captured one: after a
+                    // conflict this is the version the server currently holds.
+                    const item = itemPendingRemoval;
+                    if (item === null) return;
+                    setPendingItemId(item.id);
+                    removeItem.mutate(
+                      {
+                        itemId: item.id,
+                        expectedCartVersion: cart.version,
+                        expectedItemVersion: item.version,
+                      },
+                      {
+                        onSuccess: () => setRemovalItemId(null),
+                        onError: (error) => {
+                          // A conflict and an already-gone item are both answered
+                          // by the cart re-read the mutation triggers, and neither
+                          // is retried from here. Closing hands the customer back
+                          // to the reloaded list, which is what they now need to
+                          // see — and what a modal is holding inert.
+                          if (!describeRemovalFailure(error).retryable) setRemovalItemId(null);
+                        },
+                        onSettled: () => setPendingItemId(null),
+                      },
+                    );
+                  }}
+                />
 
                 {updateItem.isError ? (
                   <p className="mt-3 text-sm text-critical" role="alert">
                     {cartVersionConflict(updateItem.error) !== null
                       ? "Your booking changed somewhere else, so that edit was not applied. We have reloaded it — try again."
                       : describeError(updateItem.error, "mutation").message}
+                  </p>
+                ) : null}
+
+                {/* Only once the dialog has closed. While it is open the page
+                    behind it is inert, so a second copy of the same message
+                    would be unreadable and unreachable — and would be announced
+                    twice the moment the dialog went away. */}
+                {removeItem.isError && itemPendingRemoval === null ? (
+                  <p className="mt-3 text-sm text-critical" role="alert">
+                    {describeRemovalFailure(removeItem.error).message}
                   </p>
                 ) : null}
 

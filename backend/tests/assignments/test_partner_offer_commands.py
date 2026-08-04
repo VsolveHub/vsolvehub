@@ -281,9 +281,10 @@ def test_a_session_without_the_partner_role_is_denied() -> None:
 
 def test_duplicate_decline_replay_does_not_advance_dispatch_twice() -> None:
     call_command("seed_technician_catalog")
-    first = _partner(suffix="62", variant_slugs=("switch-socket-repair",))
+    _first = _partner(suffix="62", variant_slugs=("switch-socket-repair",))
     _second = _partner(suffix="63", variant_slugs=("switch-socket-repair",))
     offer = _live_offer(phone=FIRST_CUSTOMER, key="decline-replay")
+    declined_partner_id = offer.partner_id
     client = _partner_client(offer.partner)
 
     declined_status, declined = _command(client, offer, "decline", key="decline-once")
@@ -299,7 +300,7 @@ def test_duplicate_decline_replay_does_not_advance_dispatch_twice() -> None:
         AssignmentAttempt.objects.filter(fulfilment_unit=offer.fulfilment_unit).count()
         == EXPECTED_SUCCESSOR_OFFERS
     )
-    assert successors.exclude(id=offer.id).get().partner_id != first.id
+    assert successors.exclude(id=offer.id).get().partner_id != declined_partner_id
     assert not Reservation.objects.exists()
 
 
@@ -483,7 +484,10 @@ def test_a_partner_role_without_a_partner_profile_is_denied() -> None:
     call_command("seed_technician_catalog")
     _partner(suffix="72", variant_slugs=("switch-socket-repair",))
     offer = _live_offer(phone=FIRST_CUSTOMER, key="no-profile")
-    role = Role.objects.get(code="partner")
+    role, _created = Role.objects.get_or_create(
+        code="partner",
+        defaults={"name": "Partner", "is_system": True},
+    )
     profileless = User.objects.create_user(phone_number="+919876549999")
     UserRole.objects.create(user=profileless, role=role)
 
@@ -495,3 +499,6 @@ def test_a_partner_role_without_a_partner_profile_is_denied() -> None:
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert _error_code(response.json()) == "permission_denied"
     assert not Reservation.objects.exists()
+    offer.refresh_from_db()
+    assert offer.status == PartnerOffer.Status.OFFERED
+    assert not IdempotencyRecord.objects.filter(key="no-profile-key").exists()

@@ -207,14 +207,175 @@ describe("a cart with more than one service", () => {
     expect(within(fanRow).getByRole("status")).toHaveTextContent("2");
   });
 
-  it("keeps removal visibly unavailable rather than offering a control that cannot work", async () => {
+  it("removes one item through confirmation and leaves the sibling unchanged", async () => {
+    ok(
+      "POST",
+      "/api/v1/cart/items/{item_id}/remove/",
+      cart({
+        version: 4,
+        items: [cartItem({ id: "item-2", service_name: "Geyser repair", quantity: 1 })],
+      }),
+    );
+
     renderWorkspace();
     await screen.findByText("Fan installation");
 
-    expect(screen.queryByRole("button", { name: /^remove/i })).not.toBeInTheDocument();
-    expect(
-      screen.getAllByText(/removing a service is not available yet/i).length,
-    ).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName(/remove fan installation/i);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() =>
+      expect(client.POST).toHaveBeenCalledWith("/api/v1/cart/items/{item_id}/remove/", {
+        params: { path: { item_id: "item-1" } },
+        body: {
+          expected_cart_version: 3,
+          expected_item_version: 1,
+        },
+      }),
+    );
+    expect(await screen.findByText("Geyser repair")).toBeInTheDocument();
+    expect(screen.queryByText("Fan installation")).not.toBeInTheDocument();
+    expect(screen.getByText(/saved version/)).toHaveTextContent("4");
+  });
+
+  it("recovers from a stale cart version on remove by refetching", async () => {
+    refuse("POST", "/api/v1/cart/items/{item_id}/remove/", "cart_version_conflict", {
+      current_version: 9,
+    });
+
+    renderWorkspace();
+    await screen.findByText("Fan installation");
+    const readsBefore = cartReads().length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/changed somewhere else/i);
+    await waitFor(() => expect(cartReads().length).toBeGreaterThan(readsBefore));
+  });
+
+  it("treats an already-removed item as recovered by refetching", async () => {
+    refuse("POST", "/api/v1/cart/items/{item_id}/remove/", "cart_item_not_found");
+
+    renderWorkspace();
+    await screen.findByText("Fan installation");
+    const readsBefore = cartReads().length;
+
+    // Next cart read is the recovery: Django no longer lists the removed row.
+    ok(
+      "GET",
+      "/api/v1/cart/",
+      cart({ version: 4, items: [cartItem({ id: "item-2", service_name: "Geyser repair" })] }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/already gone/i);
+    await waitFor(() => expect(cartReads().length).toBeGreaterThan(readsBefore));
+  });
+
+  it("confirms against the reloaded version rather than the one the server rejected", async () => {
+    // The loop this guards. The dialog used to hold a `CartItem` snapshot taken
+    // when it opened, so after a version conflict refetched the cart, pressing
+    // Remove again resent the version Django had just rejected — the same
+    // refusal, for as long as the customer kept trying.
+    refuse("POST", "/api/v1/cart/items/{item_id}/remove/", "cart_version_conflict", {
+      current_version: 9,
+    });
+
+    renderWorkspace();
+    await screen.findByText("Fan installation");
+
+    // What the recovery re-read publishes: same row, moved on.
+    ok(
+      "GET",
+      "/api/v1/cart/",
+      cart({
+        version: 9,
+        items: [
+          cartItem({ id: "item-1", service_name: "Fan installation", version: 4 }),
+          cartItem({ id: "item-2", service_name: "Geyser repair" }),
+        ],
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove" }),
+    );
+
+    // Closed onto the reloaded cart, not left open over a list being replaced
+    // underneath it — a modal makes that list inert, so the customer could not
+    // see what changed while the dialog still asked about the old version.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/saved version/)).toHaveTextContent("9"));
+
+    ok(
+      "POST",
+      "/api/v1/cart/items/{item_id}/remove/",
+      cart({ version: 10, items: [cartItem({ id: "item-2", service_name: "Geyser repair" })] }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove" }),
+    );
+
+    await waitFor(() => {
+      const removals = sent.filter((call) => call.path === "/api/v1/cart/items/{item_id}/remove/");
+      expect(removals).toHaveLength(2);
+      expect(removals[1]!.init.body).toEqual({
+        expected_cart_version: 9,
+        expected_item_version: 4,
+      });
+    });
+  });
+
+  it("shows a retryable removal failure inside the dialog, not behind it", async () => {
+    // `showModal()` makes the page behind a dialog inert: a message rendered out
+    // there is unreachable by keyboard and skipped by a screen reader. If the
+    // customer can act on the refusal without dismissing, it has to be in here.
+    routes.POST.set("/api/v1/cart/items/{item_id}/remove/", {
+      status: 503,
+      body: refusal("service_unavailable").error,
+    });
+
+    renderWorkspace();
+    await screen.findByText("Fan installation");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Remove" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toBeInTheDocument());
+    // Once, not twice. A second copy on the page would be announced the moment
+    // the dialog closed.
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(within(dialog).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("closes the dialog when the row it is asking about leaves the cart", async () => {
+    ok(
+      "PATCH",
+      "/api/v1/cart/items/{item_id}/",
+      cart({ version: 4, items: [cartItem({ id: "item-2", service_name: "Geyser repair" })] }),
+    );
+
+    renderWorkspace();
+    await screen.findByText("Fan installation");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Fan installation" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // Something else settles the same row — another tab, or the cart re-read.
+    // A dialog asking to remove a service that is already gone is a control
+    // that cannot do anything.
+    fireEvent.click(screen.getByRole("button", { name: /increase geyser repair/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("recovers from a stale cart version by refetching rather than by patching locally", async () => {

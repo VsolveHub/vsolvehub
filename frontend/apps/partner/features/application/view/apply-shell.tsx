@@ -1,114 +1,28 @@
 "use client";
 
-import { useAuthGuard, useLogout, useOtpFlow } from "@vsolve/query";
-import { Button, ErrorState, OtpForm, Spinner, cn } from "@vsolve/ui";
+import { cn } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { getApiClient } from "@/lib/api/browser";
-
 import { APPLICATION_STEPS, stepIndexOf } from "../model/steps";
 
 /**
- * The signed-in shell for `/apply/*`.
+ * The `/apply/*` step strip.
  *
- * One gate for the whole onboarding tree rather than a check per page: an
- * applicant who is halfway through and gets logged out — Operations revokes a
- * session, the cookie expires — must not discover it one page at a time.
+ * Session handling used to live here — a login form, a "loading your
+ * application" state and an error card, all duplicated on two other screens.
+ * All three now belong to `PartnerShell` in this route's layout, which also
+ * carries the header this once drew. No role is required there, deliberately:
+ * `PATCH /api/v1/partner/application/` is `IsAuthenticated` and nothing more,
+ * because someone applying to be a Partner does not have the Partner role yet.
  *
- * No role is required. `PATCH /api/v1/partner/application/` is `IsAuthenticated`
- * and nothing more, which is correct: someone applying to be a Partner does not
- * have the Partner role yet, and demanding it here would lock out every new
- * applicant.
+ * What is left is the one thing only onboarding has: where you are in it.
  */
-
-function ApplyLogin() {
-  const flow = useOtpFlow(getApiClient());
-
-  return (
-    <div className="mx-auto w-full max-w-md px-4 py-10">
-      <h1 className="text-2xl font-bold text-text">Become a Partner</h1>
-      <p className="mt-2 text-sm text-text-secondary">
-        Log in with your mobile number to start or continue your application. We
-        will text you a code — there is no password.
-      </p>
-
-      <div className="mt-6">
-        <OtpForm
-          {...flow}
-          heading="Your mobile number"
-          headingLevel={2}
-          description="Use the number you want customers and support to reach you on."
-          verifyLabel="Verify and continue"
-          footer={
-            <p>
-              Applying does not commit you to anything. You choose the hours you
-              work, and you can stop at any time.
-            </p>
-          }
-        />
-      </div>
-    </div>
-  );
-}
-
 export function ApplyShell({ children }: { children: ReactNode }) {
-  const guard = useAuthGuard(getApiClient());
-  const logout = useLogout(getApiClient());
-
-  if (guard.status === "checking") {
-    return (
-      <div className="mx-auto flex w-full max-w-md items-center gap-2 px-4 py-16 text-text-secondary">
-        <Spinner size="sm" />
-        Loading your application…
-      </div>
-    );
-  }
-
-  // Covers both "never logged in" (a 200 projection with `user: null`) and
-  // "session ended" (a 401). The copy stays neutral because the login screen is
-  // the same either way; screens that need to word the difference read
-  // `guard.reason`.
-  if (guard.status === "unauthenticated") return <ApplyLogin />;
-
-  if (guard.status !== "authenticated") {
-    return (
-      <div className="mx-auto w-full max-w-md px-4 py-16">
-        <ErrorState
-          title="We could not open your application"
-          message="Nothing has been lost. Check your connection and try again."
-          actionLabel="Try again"
-          onAction={() => window.location.reload()}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/apply" className="text-lg font-bold text-text">
-          Your application
-        </Link>
-        <div className="flex items-center gap-3">
-          <span data-numeric className="text-sm text-text-secondary">
-            {guard.user.phone_number}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => logout.mutate()}
-            loading={logout.isPending}
-            loadingLabel="Logging out"
-          >
-            Log out
-          </Button>
-        </div>
-      </header>
-
+    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-4">
       <ApplySteps />
-
       <main className="mt-6">{children}</main>
     </div>
   );
@@ -117,13 +31,10 @@ export function ApplyShell({ children }: { children: ReactNode }) {
 /**
  * The step navigation.
  *
- * Marks where the applicant is, which the previous version did not: every step
+ * Marks where the applicant is, which an earlier version did not: every step
  * looked identical, so after a save there was no way to tell you had moved —
  * and no way to tell you had not. `aria-current="page"` carries that to a screen
  * reader; the fill and weight carry it visually.
- *
- * Kept as its own component so `usePathname` re-renders the strip and not the
- * whole shell on every navigation.
  */
 function ApplySteps() {
   const pathname = usePathname();
@@ -132,7 +43,7 @@ function ApplySteps() {
   return (
     /* Horizontal on a phone, so the whole path stays visible without the steps
        shrinking to unreadable. */
-    <nav aria-label="Application steps" className="-mx-4 mt-4 overflow-x-auto px-4">
+    <nav aria-label="Application steps" className="-mx-4 overflow-x-auto px-4">
       <ul className="flex list-none gap-1 p-0">
         {APPLICATION_STEPS.map((step, index) => {
           const isCurrent = index === currentIndex;

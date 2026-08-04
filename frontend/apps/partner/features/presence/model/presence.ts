@@ -8,6 +8,11 @@
  */
 
 export type PresenceStatus =
+  /**
+   * A previous session is being confirmed with Django and nothing can be said
+   * yet. Distinct from `unknown`, which means we asked and could not find out.
+   */
+  | "checking"
   /** No session; no offers will arrive. */
   | "offline"
   /** Asking the browser for a location, or asking Django for a session. */
@@ -41,9 +46,20 @@ export interface PresenceInput {
   isConnecting: boolean;
   locationDenied: boolean;
   hasFailed: boolean;
+  /**
+   * True until a session stored by a previous page load has been confirmed.
+   *
+   * Server-rendered markup cannot read the browser's storage, so this starts
+   * true on both sides of hydration and is resolved by an effect. Without it the
+   * first paint has to guess, and the only guess available is "offline".
+   */
+  isChecking?: boolean;
 }
 
 export function presenceStatus(input: PresenceInput): PresenceStatus {
+  // First, and deliberately: every branch below is an assertion about
+  // availability, and none of them can be made before the check completes.
+  if (input.isChecking) return "checking";
   if (input.locationDenied) return "location_denied";
   if (input.isConnecting) return "connecting";
   if (!input.hasSession) return input.hasFailed ? "unknown" : "offline";
@@ -64,6 +80,11 @@ export interface PresenceCopy {
  * session. Every other state says plainly what will and will not happen.
  */
 export const PRESENCE_COPY: Record<PresenceStatus, PresenceCopy> = {
+  checking: {
+    label: "Checking",
+    detail: "Confirming whether you are still online.",
+    tone: "neutral",
+  },
   offline: {
     label: "Offline",
     detail: "You will not be offered any jobs until you go online.",

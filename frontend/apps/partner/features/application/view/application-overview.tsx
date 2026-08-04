@@ -97,6 +97,32 @@ export function ApplicationOverview() {
         </div>
       ) : null}
 
+      {/*
+        Approval used to end the page.
+
+        The only outgoing link was gated on `isEditable`, which is false once an
+        application is APPROVED — so the screen collapsed to a heading, a banner
+        and a history, and the banner's own "publish the hours you want to work"
+        pointed at nothing. Approval is the moment there is somewhere to go, not
+        the moment the links disappear.
+      */}
+      {application.status === "APPROVED" ? (
+        <div className="flex flex-wrap gap-3 border-t border-line pt-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex min-h-12 items-center rounded-control bg-action px-7 font-semibold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            Go to your work
+          </Link>
+          <Link
+            href="/availability"
+            className="inline-flex min-h-12 items-center rounded-control border border-line px-7 font-semibold text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            Set your hours
+          </Link>
+        </div>
+      ) : null}
+
       {application.transitions.length > 0 ? (
         <div className="border-t border-line pt-4">
           <h2 className="text-sm font-semibold text-text">What has happened so far</h2>

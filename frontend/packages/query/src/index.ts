@@ -4,6 +4,8 @@ export { QueryProvider } from "./provider";
 export { queryKeys } from "./keys";
 export type { QueryKeys } from "./keys";
 
+export { CursorContractError, cursorFromNextUrl } from "./cursor";
+
 export {
   STATIC_CONTENT,
   SESSION_STATE,

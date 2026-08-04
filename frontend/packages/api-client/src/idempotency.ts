@@ -14,9 +14,41 @@
  * redirect, or a reconnect resumes the same attempt rather than starting a
  * second one. `sessionStorage` and not `localStorage`: a key must not leak into
  * an unrelated future tab or session.
+ *
+ * ## When storage refuses
+ *
+ * Private mode, a full quota and hardened privacy settings all make
+ * `sessionStorage` throw — and they do it on `setItem`, after `getItem` has
+ * already answered `null`. Without a fallback that combination mints a *fresh
+ * key on every call*, which is the one behaviour this module exists to prevent:
+ * a double-clicked payment becomes two payments precisely for the users whose
+ * browser is most locked down. So a browser-only in-memory map backs storage up.
+ * It cannot survive a refresh — nothing can, once storage is refusing writes —
+ * but it makes same-page replay stable, which is where duplicate submits
+ * actually come from.
  */
 
 const STORAGE_PREFIX = "vsolve.idem.";
+
+/**
+ * Fallback for keys `sessionStorage` refused to hold.
+ *
+ * Browser-only, and the guard is not defensive tidiness. This module is
+ * imported by server components, where module scope lives for the life of the
+ * process and is shared by every concurrent request — a map populated there
+ * would hand one customer's checkout key to the next customer's checkout. On
+ * the server there is no persistence at all, and that is the correct answer:
+ * a server render has no attempt to resume.
+ *
+ * Storage stays authoritative whenever it works, so this map holds only the
+ * keys storage rejected. That keeps one key per operation rather than two
+ * layers that can disagree.
+ */
+const memoryKeys = new Map<string, string>();
+
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
+}
 
 /** Generates a fresh key. Prefers the platform CSPRNG. */
 export function createIdempotencyKey(): string {
@@ -37,12 +69,45 @@ export function createIdempotencyKey(): string {
 
 function storage(): Storage | null {
   // Server render, or a browser with storage blocked by privacy settings.
-  if (typeof window === "undefined") return null;
+  if (!isBrowser()) return null;
   try {
     return window.sessionStorage;
   } catch {
     return null;
   }
+}
+
+/**
+ * Reads a key from storage, falling back to the keys storage would not hold.
+ *
+ * `getItem` is wrapped too: some hardened environments expose the object and
+ * throw on access, and an exception here must not surface as a failed payment.
+ */
+function readKey(storageKey: string): string | null {
+  const store = storage();
+  if (store) {
+    try {
+      const stored = store.getItem(storageKey);
+      if (stored) return stored;
+    } catch {
+      // Fall through to the in-memory fallback.
+    }
+  }
+  return isBrowser() ? (memoryKeys.get(storageKey) ?? null) : null;
+}
+
+/** Persists a key, keeping it in memory only when storage refused it. */
+function writeKey(storageKey: string, key: string): void {
+  const store = storage();
+  if (store) {
+    try {
+      store.setItem(storageKey, key);
+      return;
+    } catch {
+      // Quota or private-mode failure — the memory fallback below is the point.
+    }
+  }
+  if (isBrowser()) memoryKeys.set(storageKey, key);
 }
 
 /**
@@ -53,25 +118,18 @@ function storage(): Storage | null {
  * `checkout:9f2c...` or `extension:af31...`. Two different operations must never
  * share an id, and the same operation must always produce the same id.
  *
- * When storage is unavailable the key is still returned, but it cannot survive
- * a refresh. Server-side idempotency remains the real guarantee; this only
- * makes the client cooperate with it.
+ * When storage is unavailable the key is still stable for the life of the page
+ * but cannot survive a refresh. Server-side idempotency remains the real
+ * guarantee; this only makes the client cooperate with it.
  */
 export function getStableIdempotencyKey(operationId: string): string {
-  const store = storage();
   const storageKey = `${STORAGE_PREFIX}${operationId}`;
 
-  if (store) {
-    const existing = store.getItem(storageKey);
-    if (existing) return existing;
-  }
+  const existing = readKey(storageKey);
+  if (existing) return existing;
 
   const key = createIdempotencyKey();
-  try {
-    store?.setItem(storageKey, key);
-  } catch {
-    // Quota or private-mode failure. Proceed with an in-memory key.
-  }
+  writeKey(storageKey, key);
   return key;
 }
 
@@ -83,8 +141,12 @@ export function getStableIdempotencyKey(operationId: string): string {
  * exactly when the stored key is doing its job.
  */
 export function clearIdempotencyKey(operationId: string): void {
+  const storageKey = `${STORAGE_PREFIX}${operationId}`;
+  // Both layers, unconditionally. Clearing one and leaving the other is how a
+  // "cleared" operation comes back with its old key on the next call.
+  memoryKeys.delete(storageKey);
   try {
-    storage()?.removeItem(`${STORAGE_PREFIX}${operationId}`);
+    storage()?.removeItem(storageKey);
   } catch {
     // Nothing actionable; the key will expire with the session.
   }
@@ -92,5 +154,5 @@ export function clearIdempotencyKey(operationId: string): void {
 
 /** True when an operation already has a key in flight. */
 export function hasIdempotencyKey(operationId: string): boolean {
-  return storage()?.getItem(`${STORAGE_PREFIX}${operationId}`) != null;
+  return readKey(`${STORAGE_PREFIX}${operationId}`) !== null;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
-import { SESSION_STATE, VOLATILE_STATE, queryKeys } from "@vsolve/query";
+import { SESSION_STATE, VOLATILE_STATE, cursorFromNextUrl, queryKeys } from "@vsolve/query";
 import {
   useInfiniteQuery,
   useMutation,
@@ -81,19 +81,9 @@ export function useApplicationQueue(filters: QueueFilters = {}) {
         }),
       ),
     initialPageParam: "",
-    getNextPageParam: (lastPage) => cursorOf(lastPage.next),
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
     ...VOLATILE_STATE,
   });
-}
-
-/** Django returns a full URL; only its `cursor` parameter is ours to resend. */
-function cursorOf(nextUrl: string | null): string | undefined {
-  if (!nextUrl) return undefined;
-  try {
-    return new URL(nextUrl).searchParams.get("cursor") ?? undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export function useApplicationDetail(applicationId: string | null) {

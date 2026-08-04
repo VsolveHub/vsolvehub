@@ -6,7 +6,6 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -40,12 +39,17 @@ from apps.partners.models import PartnerProfile
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
 from common.errors.serializers import ApiErrorSerializer
+from common.pagination import (
+    BoundedCursorQuerySerializer,
+    StrictCursorPagination,
+    reject_invalid_cursor_query,
+)
 from common.schema import IDEMPOTENCY_KEY_HEADER, OFFER_ACTION_PATH_PARAMETER, OFFER_ACTIONS
 
 PARTNER_OFFER_COMMAND_OPERATION = "partner_offer.command"
 
 
-class PartnerOfferCursorPagination(CursorPagination):
+class PartnerOfferCursorPagination(StrictCursorPagination):
     page_size = 50
     ordering = ("-created_at", "-id")
 
@@ -81,9 +85,15 @@ class PartnerOfferListView(APIView):
     @extend_schema(
         tags=["Partner"],
         operation_id="partner_offer_list",
-        responses={200: OfferPageSerializer},
+        parameters=[BoundedCursorQuerySerializer],
+        responses={
+            200: OfferPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
     )
     def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
         profile = partner_profile_for_user(cast(User, request.user))
         if profile is None:
             return Response(

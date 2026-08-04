@@ -1,7 +1,8 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Select } from "@vsolve/ui";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { describeError } from "@vsolve/query";
+import { Badge, Button, Card, ErrorState, Select, Spinner } from "@vsolve/ui";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useApplicationReference } from "@/features/application/reference-queries";
 
@@ -11,6 +12,11 @@ import {
   presenceStatus,
   type PresenceStatus,
 } from "../model/presence";
+import {
+  clearStoredSession,
+  readStoredSession,
+  writeStoredSession,
+} from "../model/stored-session";
 import { useGoOffline, useGoOnline, useHeartbeat } from "../queries";
 
 /**
@@ -46,6 +52,16 @@ const LOCATION_OPTIONS: PositionOptions = {
   timeout: 15_000,
 };
 
+/**
+ * Storage is only read at mount, so there is nothing to subscribe to.
+ *
+ * Module scope, not inline: `useSyncExternalStore` resubscribes whenever this
+ * identity changes, and a new closure each render would resubscribe forever.
+ */
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
 function currentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -57,6 +73,7 @@ function currentPosition(): Promise<GeolocationPosition> {
 }
 
 const TONE: Record<PresenceStatus, "neutral" | "success" | "warning" | "danger"> = {
+  checking: "neutral",
   offline: "neutral",
   connecting: "neutral",
   online: "success",
@@ -64,6 +81,35 @@ const TONE: Record<PresenceStatus, "neutral" | "success" | "warning" | "danger">
   location_denied: "danger",
   unknown: "warning",
 };
+
+/**
+ * The server's own words about why going online was refused.
+ *
+ * `describeError` is used rather than hand-written copy because the interesting
+ * refusals here are eligibility decisions Django alone knows about — an
+ * unapproved document, a suspended account, an area that stopped accepting
+ * Partners. Any message written on this side would be a guess at which one.
+ *
+ * No retry button: every refusal this endpoint returns is `retryable: false`,
+ * and offering to resend a request the server has already decided against just
+ * repeats the refusal.
+ */
+function GoOnlineFailure({ error }: { error: unknown }) {
+  // A non-financial write: going online changes availability, never money, so
+  // the reassurance copy must not talk about charges.
+  const failure = describeError(error, "mutation");
+
+  return (
+    <ErrorState
+      inline
+      className="mt-4"
+      title={failure.title}
+      message={failure.message}
+      severity={failure.severity}
+      reference={failure.reference}
+    />
+  );
+}
 
 export function PresencePanel({ consentVersion }: { consentVersion: string | null }) {
   const reference = useApplicationReference();
@@ -84,6 +130,21 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
    * React did for its own reasons. The interval below advances this instead.
    */
   const [now, setNow] = useState(() => Date.now());
+  /**
+   * Whether a previous load left a session behind, read hydration-safely.
+   *
+   * `useSyncExternalStore` because browser storage is exactly the external store
+   * it exists for: the server snapshot is `null` — it has no storage to read —
+   * and React reconciles the client's real value after hydration without a
+   * mismatch. Reading storage in a `useState` initialiser instead made the two
+   * sides disagree, so the first paint asserted "Offline" and corrected itself a
+   * moment later. That is the flicker a reloading Partner saw as their
+   * availability dropping and coming back.
+   */
+  const storedSession = useSyncExternalStore(subscribeToNothing, readStoredSession, () => null);
+  const [hasProbedStoredSession, setHasProbedStoredSession] = useState(false);
+  /** True only while a stored session exists and Django has not answered about it. */
+  const isRestoring = storedSession !== null && !hasProbedStoredSession;
 
   const status = presenceStatus({
     hasSession: sessionId !== null,
@@ -91,6 +152,7 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
     isConnecting: goOnline.isPending,
     locationDenied,
     hasFailed: goOnline.isError,
+    isChecking: isRestoring,
   });
 
   const sendHeartbeat = useCallback(
@@ -121,6 +183,58 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
   useEffect(() => {
     sendHeartbeatRef.current = sendHeartbeat;
   }, [sendHeartbeat]);
+
+  /**
+   * Reattaches to the session this browser left behind.
+   *
+   * A heartbeat, deliberately, not a second `online` call: `go_online` ends the
+   * live session and records a fresh location, so restoring with it would move
+   * the Partner's recorded position on every refresh and churn the dispatch
+   * pool. A heartbeat carrying only the session id asks Django whether that
+   * session is still live and changes nothing if it is.
+   *
+   * Runs once. Django's answer is what decides the screen: a refusal means the
+   * session is gone — expired, replaced by another device, or ended — and the
+   * stored id is dropped rather than retried.
+   */
+  const heartbeatRef = useRef(heartbeat);
+  useEffect(() => {
+    heartbeatRef.current = heartbeat;
+  }, [heartbeat]);
+
+  useEffect(() => {
+    const stored = readStoredSession();
+    // Nothing stored means nothing to confirm and no request to spend. The
+    // screen already reads as offline, because `isRestoring` is false without
+    // a stored session.
+    if (stored === null) return;
+
+    let cancelled = false;
+    void heartbeatRef.current
+      .mutateAsync({ session_id: stored })
+      .then((session) => {
+        if (cancelled) return;
+        setSessionId(session.id);
+        // `Date.now()`, not the timestamp in the response. Django persists
+        // `last_persisted_heartbeat_at` at most once every
+        // `PARTNER_PRESENCE_DB_TOUCH_SECONDS` and serves presence from cache in
+        // between, so a healthy session reports a time minutes old — well past
+        // the ninety seconds that mean "stale". What the response proves is that
+        // the server answered just now, which is what freshness is measured
+        // from, and it keeps the comparison on a single local clock.
+        setLastBeatAt(Date.now());
+      })
+      .catch(() => {
+        if (!cancelled) clearStoredSession();
+      })
+      .finally(() => {
+        if (!cancelled) setHasProbedStoredSession(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (sessionId === null) return;
@@ -161,7 +275,11 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
 
     if (session) {
       setSessionId(session.id);
-      setLastBeatAt(Date.parse(session.last_persisted_heartbeat_at));
+      // Local clock here too, for the same reason the restore uses it: freshness
+      // is an elapsed duration measured on one clock, and mixing a server
+      // timestamp into it reintroduces device-clock skew as apparent staleness.
+      setLastBeatAt(Date.now());
+      writeStoredSession(session.id);
     }
   }
 
@@ -170,6 +288,10 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
     await goOffline.mutateAsync({ session_id: sessionId }).catch(() => null);
     setSessionId(null);
     setLastBeatAt(null);
+    // Cleared on either outcome. If Django refused the request the session may
+    // still be live server-side, but this browser no longer has any claim to it
+    // and a stale id would only produce a confusing restore on the next load.
+    clearStoredSession();
   }
 
   const copy = PRESENCE_COPY[status];
@@ -206,7 +328,28 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
         />
       ) : null}
 
-      {sessionId === null ? (
+      {/*
+        Why the refusal gets its own block rather than only the badge.
+
+        Django refuses `presence/online` with a specific, actionable sentence —
+        "Your required identity documents are not approved" is one a Partner can
+        act on. Folding that into the status turned it into "Not sure: we could
+        not confirm whether you are online", which is the copy for *doubt*. The
+        server was not doubtful; it had decided, and said why. The badge still
+        reports doubt, because a failed attempt genuinely leaves availability
+        unconfirmed — this says what went wrong underneath it.
+      */}
+      {goOnline.isError ? <GoOnlineFailure error={goOnline.error} /> : null}
+
+      {/* The controls wait for the same answer the badge does. Showing "Go
+          online" and swapping it for "Go offline" a moment later is the same
+          flicker, in the part of the card the Partner is reaching for. */}
+      {isRestoring ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-text-secondary">
+          <Spinner size="sm" />
+          Checking your last session…
+        </p>
+      ) : sessionId === null ? (
         <div className="mt-4 flex flex-col gap-3">
           <Select
             aria-label="Area you are working in"

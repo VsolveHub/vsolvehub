@@ -306,7 +306,11 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         ) : null}
       </div>
 
-      {cancelGroup.isError ? (
+      {/* Only once the dialog has closed. `showModal()` makes this inert while
+          the dialog is open, so a second copy of the same message is unreadable
+          and unreachable there — and is then announced twice the moment the
+          dialog goes away. The dialog carries its own copy. */}
+      {cancelGroup.isError && !isCancelOpen ? (
         <p className="mt-3 text-sm text-critical" role="alert">
           {describeCancelFailure(cancelGroup.error)}
         </p>

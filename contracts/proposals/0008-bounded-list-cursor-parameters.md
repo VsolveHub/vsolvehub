@@ -3,8 +3,9 @@
 **Author:** Claude (FE-09 frontend integration)
 **Date:** 3 August 2026
 **Verified against:** OpenAPI 1.10.0
-**Status:** Partial — runtime cursor traversal tests exist and pass; OpenAPI `cursor` publication,
-`cursor_invalid` refusal and blank-cursor validation are still missing (reviewed 2026-08-04).
+**Status:** Fully complete — backend verified in OpenAPI 1.13.0; Customer and Partner
+`useInfiniteQuery` cursor traversal, invalid-cursor recovery and Load more browser proofs green
+2026-08-04.
 **Consuming applications:** Customer (`/bookings`), Partner (`/offers`)
 **Required authorization:** `cookieAuth`; Partner list additionally requires `IsPartnerUser`
 

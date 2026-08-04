@@ -62,6 +62,89 @@ describe("getStableIdempotencyKey", () => {
   });
 });
 
+describe("when sessionStorage refuses to hold the key", () => {
+  /**
+   * Private mode and a full quota both throw on `setItem` *after* `getItem` has
+   * answered null. Without the in-memory fallback that combination mints a
+   * fresh key on every call, so a double-clicked payment becomes two payments
+   * for exactly the users whose browser is most locked down.
+   */
+  function blockWrites() {
+    return vi.spyOn(window.sessionStorage, "setItem").mockImplementation(() => {
+      throw new DOMException("QuotaExceededError", "QuotaExceededError");
+    });
+  }
+
+  it("keeps one key stable across repeated calls", () => {
+    const spy = blockWrites();
+    try {
+      const first = getStableIdempotencyKey("payment:blocked");
+      expect(getStableIdempotencyKey("payment:blocked")).toBe(first);
+      expect(getStableIdempotencyKey("payment:blocked")).toBe(first);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("still separates different operations", () => {
+    const spy = blockWrites();
+    try {
+      expect(getStableIdempotencyKey("payment:one")).not.toBe(
+        getStableIdempotencyKey("payment:two"),
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("reports the key as in flight", () => {
+    const spy = blockWrites();
+    try {
+      expect(hasIdempotencyKey("payment:reported")).toBe(false);
+      getStableIdempotencyKey("payment:reported");
+      expect(hasIdempotencyKey("payment:reported")).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("clears the fallback so a settled operation does not resurrect its key", () => {
+    const spy = blockWrites();
+    try {
+      const first = getStableIdempotencyKey("payment:settled");
+      clearIdempotencyKey("payment:settled");
+      expect(hasIdempotencyKey("payment:settled")).toBe(false);
+      expect(getStableIdempotencyKey("payment:settled")).not.toBe(first);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("hands back to storage once it starts accepting writes again", () => {
+    const spy = blockWrites();
+    const fallbackKey = getStableIdempotencyKey("payment:recovering");
+    spy.mockRestore();
+
+    // The fallback still answers, so the operation does not change identity
+    // mid-attempt just because the quota freed up.
+    expect(getStableIdempotencyKey("payment:recovering")).toBe(fallbackKey);
+  });
+
+  it("survives a throwing getItem as well as a throwing setItem", () => {
+    const setSpy = blockWrites();
+    const first = getStableIdempotencyKey("payment:hostile");
+    const getSpy = vi.spyOn(window.sessionStorage, "getItem").mockImplementation(() => {
+      throw new DOMException("SecurityError", "SecurityError");
+    });
+    try {
+      expect(getStableIdempotencyKey("payment:hostile")).toBe(first);
+    } finally {
+      getSpy.mockRestore();
+      setSpy.mockRestore();
+    }
+  });
+});
+
 describe("hasIdempotencyKey", () => {
   it("reports whether an operation is already in flight", () => {
     expect(hasIdempotencyKey("checkout:new")).toBe(false);

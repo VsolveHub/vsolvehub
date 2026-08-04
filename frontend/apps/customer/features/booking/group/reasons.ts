@@ -28,6 +28,8 @@
 import { describeError } from "@vsolve/query";
 
 import {
+  cartVersionConflict,
+  isCartItemNotFound,
   isCommandInFlight,
   isIdempotencyKeyReused,
   isPlanStale,
@@ -98,6 +100,50 @@ export function describeUnitReasons(value: unknown): string[] {
 /** Plan-level reasons, in the order the server ranked them. */
 export function describePlanReasons(value: unknown): string[] {
   return readReasonCodes(value).map(describePlanReason);
+}
+
+/** A refusal the customer is shown, and where the message belongs. */
+export interface RemovalFailure {
+  message: string;
+  /**
+   * True when pressing the same button again is a sensible next step.
+   *
+   * This is what decides *where* the message goes, and the placement matters
+   * more than the wording. A refusal that can be retried belongs inside the
+   * confirmation dialog the customer is still looking at — a native modal makes
+   * the page behind it inert, so a message rendered out there is both invisible
+   * and unreachable by a screen reader. A refusal that cannot be retried belongs
+   * beside the reloaded cart, because the reloaded cart is the thing the
+   * customer now has to look at.
+   */
+  retryable: boolean;
+}
+
+/**
+ * What a refused cart-item removal means, in the customer's terms.
+ *
+ * The two non-retryable cases are both answered by the cart re-read that the
+ * mutation itself triggers, and neither is a failure the customer caused. An
+ * already-gone item in particular is the outcome they asked for; styling it as
+ * an error they can fix would invite them to press Remove on a row that no
+ * longer exists.
+ */
+export function describeRemovalFailure(error: unknown): RemovalFailure {
+  if (cartVersionConflict(error) !== null) {
+    return {
+      message:
+        "Your booking changed somewhere else, so that removal was not applied. We have " +
+        "reloaded it — check what is there and try again.",
+      retryable: false,
+    };
+  }
+  if (isCartItemNotFound(error)) {
+    return {
+      message: "That service is already gone from this booking. We have reloaded what is left.",
+      retryable: false,
+    };
+  }
+  return { message: describeError(error, "mutation").message, retryable: true };
 }
 
 /**

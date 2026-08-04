@@ -277,6 +277,7 @@ def _validated_variant_inputs(
     variant_id: UUID,
     quantity: int,
     scope: dict[str, object],
+    reject_conflicting_quantity: bool = True,
 ) -> tuple[ServiceVariant, A1VariantConfiguration, TaskRate, dict[str, object]]:
     variant = (
         ServiceVariant.objects.select_related("service")
@@ -300,6 +301,7 @@ def _validated_variant_inputs(
         schema=configuration.scope_schema,
         scope=scope,
         quantity=quantity,
+        reject_conflicting_quantity=reject_conflicting_quantity,
     )
     _validate_scope(schema=configuration.scope_schema, scope=normalized_scope)
     task_rate = current_task_rate(variant=variant, task_code=variant.service.slug)
@@ -387,6 +389,9 @@ def update_cart_item(
         variant_id=item.variant_id,
         quantity=quantity,
         scope=scope,
+        # The scope arriving here is the one Django published for this item, so its
+        # quantity answer is a stale mirror of the field this request is moving.
+        reject_conflicting_quantity=False,
     )
     item.quantity = quantity
     item.version += 1
@@ -495,8 +500,18 @@ def _scope_with_quantity(
     schema: dict[str, object],
     scope: dict[str, object],
     quantity: int,
+    reject_conflicting_quantity: bool = True,
 ) -> dict[str, object]:
-    """Keep the legacy scope quantity consistent with the canonical request field."""
+    """Keep the legacy scope quantity consistent with the canonical request field.
+
+    A `quantity` answer that disagrees with the canonical field is a contradiction
+    worth refusing for as long as it is the client's own claim, which is the case
+    when an item is first added.  On an edit it is Django's own derivation handed
+    back instead: every read republishes it, so a Customer moving the quantity
+    necessarily returns the pre-edit mirror alongside the new canonical value.
+    Refusing that would refuse the very edit that caused it, so editing passes
+    `reject_conflicting_quantity=False` and lets the canonical field win.
+    """
     questions = schema.get("questions")
     if not isinstance(questions, list):
         return scope.copy()
@@ -508,7 +523,11 @@ def _scope_with_quantity(
 
     normalized = scope.copy()
     supplied_quantity = normalized.get("quantity")
-    if supplied_quantity is not None and supplied_quantity != quantity:
+    if (
+        reject_conflicting_quantity
+        and supplied_quantity is not None
+        and supplied_quantity != quantity
+    ):
         raise ValueError("Scope quantity must match the cart item quantity.")
     normalized["quantity"] = quantity
     return normalized

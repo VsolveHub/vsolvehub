@@ -1,5 +1,3 @@
-from typing import cast
-
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -121,7 +119,7 @@ class OfferSerializer(serializers.ModelSerializer[PartnerOffer]):
         projection is plain JSON in every context — including the idempotency record
         that a replayed Partner command is read back from.
         """
-        return cast(str, serializers.DateTimeField().to_representation(timezone.now()))
+        return timezone.now().isoformat()
 
 
 class ManualOfferSerializer(serializers.Serializer[dict[str, object]]):

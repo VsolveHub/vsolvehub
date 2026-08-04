@@ -3,9 +3,8 @@
 **Author:** Claude (FE-09 frontend integration)
 **Date:** 3 August 2026
 **Verified against:** OpenAPI 1.10.0
-**Status:** Partial — idempotent typed commands implemented and present in OpenAPI 1.13.0; one
-fixture failure, missing changelog entry for 0009, and full `quality.cmd` not yet green
-(reviewed 2026-08-04).
+**Status:** Fully complete — backend verified in OpenAPI 1.13.0; Partner stable Idempotency-Key
+adoption and lost-Accept same-key replay browser proof green 2026-08-04.
 **Consuming application:** Partner (`/offers`)
 **Consuming action:** Accept, Decline, Undo, Commit now on a Fulfilment Unit offer
 **Required authorization:** `cookieAuth` + `IsPartnerUser`, and the offer must belong to the caller

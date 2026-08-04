@@ -57,6 +57,17 @@ export function cartVersionConflict(error: unknown): CartVersionConflict | null 
   return { currentVersion: readNumber(details, "current_version") };
 }
 
+/**
+ * `cart_item_not_found` — the addressed row is not an active item of this cart.
+ *
+ * Removed, unknown and another Customer's ids answer identically. The recovery
+ * is the same in every case: refetch the cart and treat the service as already
+ * gone. Never style this as a hard failure the customer can "fix".
+ */
+export function isCartItemNotFound(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "cart_item_not_found";
+}
+
 /** The item that already expresses this exact request. */
 export interface DuplicateCartItemConflict {
   existingItemId: string | null;

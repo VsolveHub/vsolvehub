@@ -3,9 +3,8 @@
 **Author:** Claude (FE-08G frontend integration)
 **Date:** 3 August 2026
 **Verified against:** OpenAPI 1.9.0 and 1.10.0 — unchanged in both
-**Status:** Implemented in the backend — published in OpenAPI 1.13.0 as the `POST … /remove/`
-sibling. Frontend regeneration, the Remove control and browser acceptance (§Acceptance criteria 2–4
-and 8) remain outstanding.
+**Status:** Fully complete — backend verified in OpenAPI 1.13.0; frontend Remove UI, unit/cache
+regressions and two-item browser acceptance green 2026-08-04.
 **Consuming application:** Customer
 **Consuming route / action:** `/cart` — "Remove" on a cart item row
 **Required authorization:** Same as the rest of the Cart surface — `cookieAuth` or an anonymous

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.10.0)
- * Checksum: 739fe46b63f77232
+ * Source:   contracts/openapi/v1.yaml (version 1.13.0)
+ * Checksum: ffe48c8f32c61784
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -337,10 +337,44 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * @description Retained for callers already sending a DELETE body.
+         *
+         *     The request shape is still dropped from the published document by the
+         *     schema generator, so generated clients must use the POST sibling.  This
+         *     method exists only so existing hand-written callers keep working, and it
+         *     runs the same `remove_cart_item` command with no removal logic of its own.
+         */
         delete: operations["cart_items_destroy"];
         options?: never;
         head?: never;
         patch: operations["cart_items_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/cart/items/{item_id}/remove/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `POST /cart/items/{item_id}/remove/` — the publishable removal command.
+         *
+         *     drf-spectacular does not emit a `requestBody` for DELETE, so the optimistic
+         *     version pair Django requires was unreachable from a generated client.  This
+         *     sibling publishes the same body, calls the same domain service and returns the
+         *     same complete Cart.  No `Idempotency-Key` is required: the version pair is the
+         *     replay protection, because a repeat of an accepted removal can no longer match
+         *     a live row.
+         */
+        post: operations["cart_items_remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/cart/merge/": {
@@ -1474,6 +1508,10 @@ export interface components {
             /** @default false */
             replace_existing: boolean;
         };
+        CartItemRemoveRequest: {
+            expected_cart_version: number;
+            expected_item_version: number;
+        };
         CartMergeDecisionRequest: {
             /** Format: uuid */
             session_item_id: string;
@@ -1831,13 +1869,19 @@ export interface components {
             readonly undo_deadline: string | null;
             /** Format: date-time */
             readonly created_at: string;
+            /** Format: date-time */
+            readonly server_now: string;
         };
+        /** @enum {string} */
+        OfferActionEnum: "accept" | "commit" | "decline" | "undo";
         OfferPage: {
             /** Format: uri */
             next: string | null;
             /** Format: uri */
             previous: string | null;
             results: components["schemas"]["Offer"][];
+            /** Format: date-time */
+            readonly server_now: string;
         };
         OfferServiceLine: {
             /** Format: uuid */
@@ -3228,7 +3272,9 @@ export interface operations {
     };
     booking_group_list: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3241,6 +3287,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookingGroupPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             403: {
@@ -3497,6 +3551,14 @@ export interface operations {
                     "application/json": components["schemas"]["Cart"];
                 };
             };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3530,6 +3592,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Cart"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cart_items_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CartItemRemoveRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CartItemRemoveRequest"];
+                "multipart/form-data": components["schemas"]["CartItemRemoveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cart"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             409: {
@@ -4976,7 +5081,9 @@ export interface operations {
     };
     partner_offer_list: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4991,14 +5098,34 @@ export interface operations {
                     "application/json": components["schemas"]["OfferPage"];
                 };
             };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     partner_offers_create: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
             path: {
-                action: string;
+                /** @description The Partner offer command to run. The set is closed, so an unknown action is a client bug caught by the generated type rather than a runtime refusal shown to a Partner. */
+                action: components["schemas"]["OfferActionEnum"];
                 offer_id: string;
             };
             cookie?: never;
@@ -5011,6 +5138,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Offer"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

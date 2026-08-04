@@ -25,8 +25,17 @@ import { getApiClient } from "@/lib/api/browser";
 
 type Application = Schemas["PartnerApplication"];
 
-export function usePartnerApplication() {
+/**
+ * The signed-in Partner's application.
+ *
+ * `enabled` exists for one caller: `/login`, which has to know where to send
+ * someone *after* they authenticate. Asking Django for an application while
+ * nobody is signed in would spend a guaranteed 403 on every visit to the login
+ * screen and put a failed query in the cache the session then inherits.
+ */
+export function usePartnerApplication({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
+    enabled,
     queryKey: queryKeys.partner.application(),
     queryFn: () => request(() => getApiClient().GET("/api/v1/partner/application/")),
     // The application changes when the Partner edits it or a reviewer acts. It

@@ -1,6 +1,12 @@
 # API Contract Changelog
 
-## 1.13.0 - Typed cart-item removal
+## 1.13.0 - Cart removal, typed offer commands and bounded list cursors
+
+This is the coherent WIP integration release for proposals 0007, 0008 and 0009. It has not been
+consumed as an immutable published client pin; finishing the three contract gaps in one version
+avoids an unnecessary 1.14.0 bump.
+
+### Cart-item removal (proposal 0007)
 
 - Added `POST /api/v1/cart/items/{item_id}/remove/` (`cart_items_remove`) with a required
   `CartItemRemoveRequest` body carrying `expected_cart_version` and `expected_item_version`, and a
@@ -23,8 +29,30 @@
   recover by refetching the cart. This is an additive key on `add`, `update` and `remove`; existing
   `current_version` handling is unchanged.
 
-Migration note: regenerate clients at 1.13.0. Removal becomes callable through the generated client
-for the first time; no existing call site requires changes.
+### Partner offer commands (proposal 0009)
+
+- `POST /api/v1/partner/offers/{offer_id}/{action}/` now requires `Idempotency-Key`. The key scopes
+  to the authenticated Partner, offer id and action. Identical replay returns HTTP `200` with the
+  offer's current authoritative projection and performs the transition once.
+- `action` is the closed `OfferActionEnum`: `accept`, `decline`, `undo`, `commit`.
+- Declared responses are `200` (`Offer`), plus `400`, `403`, `404` and `409` (`ApiError`).
+- Reusing a key with a different command returns `409 idempotency_key_reused`. An unfinished
+  command returns `409 idempotency_in_progress` (`retryable: true`).
+- A genuine reservation race returns `409 offer_reservation_conflict` rather than an expiry-shaped
+  refusal. A Partner cannot command another Partner's offer (`404`).
+
+### Bounded list cursors (proposal 0008)
+
+- `GET /api/v1/booking-groups/` and `GET /api/v1/partner/offers/` publish an optional `cursor` query
+  parameter (`string`, `minLength: 1`), matching the Operations review-queue precedent.
+- Omitting `cursor` returns the first page. An explicitly blank, whitespace-only, malformed or
+  poison-position cursor returns `400 cursor_invalid` (`retryable: false`) in the standard error
+  envelope. Clients should reset to page one.
+- Page size remains server-bounded; clients cannot widen pages through unpublished parameters.
+
+Migration note: regenerate clients at 1.13.0. Cart removal becomes callable through the generated
+client for the first time. Offer commands require a stable Idempotency-Key per logical action.
+Booking Group and Partner offer lists can traverse with typed `cursor` values parsed from `next`.
 
 ## 1.11.0 - Browser-readable server clock
 
@@ -44,6 +72,7 @@ should keep the header as their primary calibration source — it refreshes on e
 tracks drift — and treat `server_now` as the more precise reading where an endpoint publishes it.
 
 Migration note: regenerate clients at 1.11.0. No existing call site requires changes.
+
 
 ## 1.10.0 - Booking Group payments, unit refunds and financial documents
 

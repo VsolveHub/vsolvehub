@@ -34,6 +34,7 @@ export function offer(overrides: Partial<Schemas["Offer"]> = {}) {
     expires_at: "2026-08-03T09:05:00Z",
     undo_deadline: null,
     created_at: "2026-08-03T09:00:00Z",
+    server_now: "2026-08-03T09:00:00Z",
     ...overrides,
   } satisfies Schemas["Offer"];
 }
@@ -43,6 +44,7 @@ export function offerPage(overrides: Partial<Schemas["OfferPage"]> = {}) {
     next: null,
     previous: null,
     results: [offer()],
+    server_now: "2026-08-03T09:00:00Z",
     ...overrides,
   } satisfies Schemas["OfferPage"];
 }

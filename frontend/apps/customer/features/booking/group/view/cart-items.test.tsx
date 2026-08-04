@@ -33,8 +33,7 @@ function renderCart(overrides: Partial<Parameters<typeof CartItems>[0]> = {}) {
     cart: twoItems,
     pendingItemIds: [] as readonly string[],
     onUpdateQuantity: vi.fn(),
-    onRemove: null,
-    removalBoundary: null,
+    onRemove: vi.fn(),
     ...overrides,
   };
   render(<CartItems {...props} />);
@@ -119,20 +118,19 @@ describe("editing an item", () => {
 });
 
 describe("removal", () => {
-  it("offers no remove control when the operation is not integrable", () => {
-    // A button that sends a request Django rejects is worse than no button.
-    renderCart({ onRemove: null, removalBoundary: "Removing is not available yet." });
-
-    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
-    expect(screen.getAllByText("Removing is not available yet.")).toHaveLength(2);
-  });
-
-  it("renders a remove control per item once one is supplied", () => {
+  it("renders a remove control per item", () => {
     const onRemove = vi.fn();
-    renderCart({ onRemove, removalBoundary: null });
+    renderCart({ onRemove });
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Geyser repair" }));
     expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "item-2" }));
+  });
+
+  it("disables remove on the in-flight row only", () => {
+    renderCart({ pendingItemIds: ["item-1"] });
+
+    expect(screen.getByRole("button", { name: "Remove Fan installation" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove Geyser repair" })).toBeEnabled();
   });
 });
 

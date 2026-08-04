@@ -26,6 +26,27 @@ describe("presence status", () => {
     expect(presenceStatus(base)).toBe("offline");
   });
 
+  /**
+   * A page load cannot know yet.
+   *
+   * The server renders this component without access to the browser's stored
+   * session, so the first paint used to assert "Offline — you will not be
+   * offered any jobs" and then correct itself to Online a moment later. To a
+   * Partner that reads as their availability dropping and coming back. Not
+   * knowing is its own state, and it outranks every other answer because all of
+   * them would be guesses.
+   */
+  it("admits it does not know yet while a stored session is being checked", () => {
+    expect(presenceStatus({ ...base, isChecking: true })).toBe("checking");
+  });
+
+  it("keeps checking ahead of the states it would otherwise be mistaken for", () => {
+    expect(presenceStatus({ ...base, isChecking: true, hasFailed: true })).toBe("checking");
+    expect(
+      presenceStatus({ ...base, isChecking: true, hasSession: true, msSinceHeartbeat: 0 }),
+    ).toBe("checking");
+  });
+
   it("does not claim online while the session is still being created", () => {
     expect(presenceStatus({ ...base, isConnecting: true })).toBe("connecting");
   });
