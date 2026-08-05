@@ -21,6 +21,7 @@ from rest_framework.test import APIClient
 from apps.assignments.group_services import accept_unit_offer, reconcile_group_dispatch
 from apps.assignments.models import PartnerOffer
 from apps.carts.models import BookingGroup
+from apps.commerce.models import Booking
 from apps.identity.models import User
 from tests.assignments.test_group_dispatch import _checkout, _quote
 from tests.carts.test_fulfilment_planning import (
@@ -29,6 +30,7 @@ from tests.carts.test_fulfilment_planning import (
     _partner,
     _plan,
 )
+from tests.fulfilment.conftest import create_booked_group
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -146,3 +148,41 @@ def test_another_customer_still_cannot_read_the_group() -> None:
     intruder.force_authenticate(User.objects.create_user(phone_number="+919876540077"))
 
     assert intruder.get(f"/api/v1/booking-groups/{group_id}/").status_code == HTTPStatus.NOT_FOUND
+
+
+def test_a_booked_unit_publishes_the_booking_id_its_visit_is_keyed_by() -> None:
+    """Without this the whole 1.16.0 Customer surface is unreachable.
+
+    Every post-payment command — cancel, reschedule, start OTP, confirm, dispute — is keyed by
+    `booking_id`, and this is the only projection that lists a Customer's units. A group detail
+    that described three visits while publishing no way to open any of them is the identical
+    break proposal 0011 fixed for payment.
+    """
+
+    booked = create_booked_group(key_prefix="unit-booking-id")
+
+    response = booked.client.get(f"/api/v1/booking-groups/{booked.group.id}/")
+
+    assert response.status_code == HTTPStatus.OK, response.json()
+    units = response.json()["units"]
+    assert units, "the group published no units"
+    for unit in units:
+        assert unit["booking_id"], "a booked unit published no booking_id"
+    assert {unit["booking_id"] for unit in units} == {
+        str(booking.id)
+        for booking in Booking.objects.filter(fulfilment_unit__booking_group=booked.group)
+    }
+
+
+def test_an_unbooked_unit_publishes_a_null_booking_id_rather_than_inventing_one() -> None:
+    """A unit still being matched has no visit. Null is the honest answer; a fabricated id
+    would send a Customer to a 403 on a Booking that does not exist."""
+
+    booked = create_booked_group(key_prefix="unit-booking-null")
+    Booking.objects.filter(fulfilment_unit__booking_group=booked.group).delete()
+
+    response = booked.client.get(f"/api/v1/booking-groups/{booked.group.id}/")
+
+    assert response.status_code == HTTPStatus.OK
+    for unit in response.json()["units"]:
+        assert unit["booking_id"] is None

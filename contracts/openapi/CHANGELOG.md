@@ -1,5 +1,133 @@
 # API Contract Changelog
 
+## 1.16.0 - Booking fulfilment (B8) is published: the door on a room that was already built
+
+26 new paths. `apps/fulfilment` has been a complete, tested domain layer since 1.15.1 with no
+`views.py`, `urls.py` or `serializers.py` and no entry in `config/urls.py` — every command
+reachable only from Python. This release publishes all of it at once.
+
+### Why all at once
+
+A fulfilment surface is a sequence, not a set. En route without arrived is not a smaller feature,
+it is a client that strands a Partner halfway through a visit. Publishing one command per release
+would have handed clients a contract they could not build a screen on, so the whole lifecycle
+lands together: arrival, start OTP, work, evidence, amendment, abort, completion, dispute,
+release and recovery.
+
+### Three actor prefixes, three projections, one Booking
+
+- `/bookings/{id}/…` — the Customer's visit.
+- `/partner/bookings/{id}/…` — the same visit as work.
+- `/operations/bookings/{id}/…` — both sides plus the audit trail.
+
+They are separate URL families on purpose. The same `Booking` is reachable from all three, and
+role-branching inside one view is one wrong `if` away from serving a Partner the Customer's
+address. **`booking_group_id` and `order_id` appear only on the Operations projection** — G7
+requires that a Partner cannot reach a sibling unit's scope or earnings, and the cheapest way to
+guarantee that is to never publish the identifier that would let them ask.
+
+The Customer projection names the Partner by `partner_display_name` and carries nothing else
+about them: no id, no phone number, no earnings.
+
+### The start OTP is deliberately split across two actors
+
+`POST /bookings/{id}/start-otp/` is the **Customer's** — they receive the code.
+`POST /partner/bookings/{id}/start-otp/verify/` is the **Partner's** — they type it in.
+
+That split is the whole mechanism: the OTP proves the Partner is standing in front of the
+Customer. A single endpoint, or a code published on the Partner's projection, would prove
+nothing. The response carries `code_length`, never the code.
+
+### Operations-assisted start now enforces the step-up it always described
+
+`POST /operations/bookings/{id}/assisted-start/` is the audited channel-outage workaround for a
+Customer who cannot receive an SMS. It requires `HasRecentOperationsStepUp` — a permission class
+that already existed, already documented as gating exactly this, and had never been enforced
+anywhere because until now there was no view to enforce it in. It is not a general-purpose OTP
+bypass: it starts work without the Customer's code and says so in the audit trail. `401`
+`step_up_required` when the re-verification is missing or stale.
+
+### Post-payment group commands are new paths, not new meanings for old ones
+
+`POST /booking-groups/{id}/cancel/` (`booking_group_cancel`) is **unchanged** and remains the
+pre-payment command, still answering `409` `booking_group_conflict` for a `BOOKED` group. The
+post-payment equivalents are:
+
+- `POST /booking-groups/{id}/cancel-booked/` — runs the fee ladder per unit, skips finished
+  units and names them, refuses the whole command if one unit is mid-work.
+- `POST /booking-groups/{id}/reschedule/` — moves every visit by one offset. The Customer names
+  a new start for the earliest visit and the rest shift with it, which preserves the planner's
+  sequential ordering, parallel overlap and dependency gaps. Per-unit starts are deliberately
+  not offered: they would let a client dissolve a server-authored grouping without any of the
+  planning inputs that made it legal.
+- `POST /booking-groups/{id}/address/` — group address change.
+
+Two commands rather than one endpoint whose meaning depends on state: one collects nothing, the
+other moves money.
+
+### `FulfilmentUnit.booking_id` — without it, none of the above is reachable
+
+One read-only nullable field on the Customer's `FulfilmentUnit` projection. No migration, no new
+endpoint: `FulfilmentUnit.booking` is an existing reverse one-to-one that the projection simply
+withheld.
+
+Every Customer command in this release is keyed by `booking_id`, and `GET /booking-groups/{id}/`
+is the only projection that lists a Customer's units — so without this a group detail could
+describe three visits and offer no way to open any of them. That is precisely the break proposal
+0011 fixed for payment, where `recovery_action` returned `PAYMENT_REQUIRED` while the group
+published neither `checkout_id` nor `checkout_version` to act on it with. Publishing a command
+and withholding its key is the same defect twice, so it is called out rather than slipped in.
+
+Null before capture, deliberately: a unit still being matched has no Booking, and a fabricated id
+would send a Customer to a `403` on a visit that does not exist.
+
+### Conventions every state-changing operation follows
+
+- **Required `Idempotency-Key`.** Same `execute_idempotent` helper proposal 0009 proved and
+  1.15.0 reused. A replay answers with *current* truth and an `Idempotent-Replay: true` header,
+  not the frozen body — every projection here carries `server_now` and live deadlines, and
+  republishing a stored body would hand a device a stale clock.
+- **Required `expected_version`.** Never defaulted. `409` `booking_version_conflict` carries
+  `current_version` so the client refetches rather than retrying blindly.
+- **`403` for both "not yours" and "does not exist".** Distinct codes would make these an
+  existence oracle — a caller could enumerate Booking ids from the status alone. Same decision
+  cart-item removal took in 1.13.0.
+- **Evidence uploads never stream through Django.** Request a short-lived grant, PUT to the
+  private bucket, finalize by object key with a client-computed `sha256` that Django recomputes
+  from the bytes and compares. The same three-step shape FE-07 established for KYC.
+
+### Enum names
+
+Six choice sets are now explicitly named in `ENUM_NAME_OVERRIDES`: `ScopeAmendmentStatusEnum`,
+`ScopeAmendmentLineKindEnum`, `WorkTaskKindEnum`, `WorkEvidenceKindEnum`, `WorkOutcomeEnum` and
+`BookingStatusEnum`. Left alone the generator resolves `status`/`kind` collisions by hashing —
+`Status7a2Enum`, `Kind0bfEnum` — and those names reach the generated TypeScript client, where
+they mean nothing and change whenever an unrelated model adds a choice.
+
+### Breaking: `DecisionEnum` is now `OperationsDocumentReviewDecisionEnum`
+
+The Operations document-review decision was published as `DecisionEnum` only because nothing else
+in the contract had a `decision` field. `CompletionResponse.decision` now does, and the generator
+disambiguates both — so a component an existing consumer imports has been renamed.
+
+Called out rather than absorbed, because a rename is a breaking change even when the values are
+identical. The new name is the better one and is kept; the single consumer
+(`apps/admin/features/partner-review/queries.ts`) is updated in the same commit. Any client
+generated from an earlier contract must update the type reference. Values are unchanged:
+`APPROVED` / `REJECTED`.
+
+### Method fields publish real types
+
+Nine `SerializerMethodField`s on the new projections are annotated with `@extend_schema_field`.
+Unannotated they emit `{}`, which a generated TypeScript client renders as `unknown` — handing
+every consumer the least useful type for the most useful data (`work_tasks`, `evidence`,
+`active_amendment`, `completion`, `status_history`). A schema test now asserts they stay typed.
+
+### Still not published
+
+Partner ledger, payout and `OperationsCase` remain BE-10. A dispute sets `Booking.payout_hold`
+and stops there; the Quality case the failure-outcomes table calls for does not exist yet.
+
 ## 1.15.1 - Booking fulfilment (B8): group outcome truth, no new surface
 
 No schema change, no new path and no new operation id. B8 lands as domain commands only, and this

@@ -670,6 +670,7 @@ class FulfilmentUnitSerializer(serializers.ModelSerializer[FulfilmentUnit]):
     starts_at = serializers.DateTimeField(source="requested_start", read_only=True)
     total = serializers.SerializerMethodField()
     state_deadline = serializers.SerializerMethodField()
+    booking_id = serializers.SerializerMethodField()
 
     class Meta:
         model = FulfilmentUnit
@@ -682,10 +683,30 @@ class FulfilmentUnitSerializer(serializers.ModelSerializer[FulfilmentUnit]):
             "arrival_window_minutes",
             "estimated_duration_minutes",
             "state_deadline",
+            "booking_id",
             "lines",
             "total",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_booking_id(unit: FulfilmentUnit) -> str | None:
+        """The visit this unit became, once it was paid for.
+
+        Without this the whole post-payment surface is unreachable. Every 1.16.0
+        Customer command is keyed by `booking_id`, and the only projection that lists a
+        Customer's units is this one — so a group detail could describe three visits and
+        offer no way to open any of them. That is the identical break proposal 0011 fixed
+        for payment: `recovery_action` said `PAYMENT_REQUIRED` while the group published
+        neither `checkout_id` nor `checkout_version` to act on it with.
+
+        Null before capture, and correctly so: a unit that is still being matched has no
+        Booking, and inventing an id for one would be inventing a visit.
+        """
+
+        booking = getattr(unit, "booking", None)
+        return None if booking is None else str(booking.id)
 
     @staticmethod
     @extend_schema_field(MoneySerializer)

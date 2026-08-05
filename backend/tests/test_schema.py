@@ -1,5 +1,6 @@
 from typing import Any, cast
 
+from django.conf import settings
 from drf_spectacular.generators import SchemaGenerator
 
 
@@ -8,10 +9,24 @@ def _operation(schema: dict[str, Any], path: str, method: str) -> dict[str, Any]
     return paths[path][method]
 
 
+def _required_idempotency_header(operation: dict[str, Any]) -> dict[str, Any]:
+    header = next(
+        parameter for parameter in operation["parameters"] if parameter["name"] == "Idempotency-Key"
+    )
+    assert header["in"] == "header"
+    assert header["required"] is True
+    return header
+
+
 def test_browser_session_and_idempotency_contract_is_published() -> None:
     schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
 
-    assert schema["info"]["version"] == "1.15.1"
+    # Asserted against configuration rather than a literal. A hardcoded version here has to be
+    # hand-edited on every release, which makes it noise rather than a check — and the real
+    # guard against an unintended contract change is `quality.cmd`'s diff of the generated
+    # schema against the committed `contracts/openapi/v1.yaml`. What this catches is the schema
+    # and the settings disagreeing, which no other check would notice.
+    assert schema["info"]["version"] == settings.SPECTACULAR_SETTINGS["VERSION"]
     csrf = _operation(schema, "/api/v1/auth/csrf/", "get")
     assert csrf["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/CsrfToken"
@@ -287,3 +302,70 @@ def test_partner_offer_command_publishes_a_retry_safe_typed_contract() -> None:
         assert command["responses"][status_code]["content"]["application/json"]["schema"] == {
             "$ref": "#/components/schemas/ApiError"
         }
+
+
+def test_fulfilment_surface_publishes_its_command_contract() -> None:
+    """B8's published surface, checked at the contract rather than only in the views.
+
+    A command that quietly stopped requiring `Idempotency-Key` or `expected_version` would
+    still pass every behavioural test — it would simply be less safe, and the first sign would
+    be a duplicate refund in production. These are the properties a client builds on, so they
+    are asserted where a client reads them.
+    """
+
+    schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
+
+    versioned_commands = [
+        ("/api/v1/bookings/{booking_id}/cancel/", "post"),
+        ("/api/v1/bookings/{booking_id}/reschedule/", "post"),
+        ("/api/v1/bookings/{booking_id}/completion/confirm/", "post"),
+        ("/api/v1/bookings/{booking_id}/completion/dispute/", "post"),
+        ("/api/v1/booking-groups/{group_id}/cancel-booked/", "post"),
+        ("/api/v1/booking-groups/{group_id}/reschedule/", "post"),
+        ("/api/v1/partner/bookings/{booking_id}/en-route/", "post"),
+        ("/api/v1/partner/bookings/{booking_id}/arrived/", "post"),
+        ("/api/v1/partner/bookings/{booking_id}/start-otp/verify/", "post"),
+        ("/api/v1/partner/bookings/{booking_id}/completion/", "post"),
+        ("/api/v1/partner/bookings/{booking_id}/abort/", "post"),
+        ("/api/v1/partner/bookings/{booking_id}/release/", "post"),
+        ("/api/v1/operations/bookings/{booking_id}/assisted-start/", "post"),
+        ("/api/v1/operations/bookings/{booking_id}/recover/", "post"),
+    ]
+    for path, method in versioned_commands:
+        operation = _operation(schema, path, method)
+        _required_idempotency_header(operation)
+        body = operation["requestBody"]["content"]["application/json"]["schema"]
+        component = schema["components"]["schemas"][body["$ref"].rsplit("/", 1)[-1]]
+        assert "expected_version" in component["required"], path
+
+
+def test_the_partner_projection_publishes_no_route_to_a_sibling_unit() -> None:
+    """G7 as a contract property, not only a runtime one.
+
+    The Partner projection must not carry `booking_group_id` or `order_id`. Absence is the
+    guarantee: with no identifier for the group, there is nothing for a Partner client to ask
+    a sibling-unit question with, however it is written.
+    """
+
+    schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
+    partner_booking = schema["components"]["schemas"]["PartnerBooking"]["properties"]
+
+    assert "booking_group_id" not in partner_booking
+    assert "order_id" not in partner_booking
+    # Operations is the one actor that legitimately sees both sides.
+    operations_booking = schema["components"]["schemas"]["OperationsBooking"]["properties"]
+    assert "booking_group_id" in operations_booking
+
+
+def test_the_richest_projection_fields_are_typed_rather_than_unknown() -> None:
+    """An unannotated `SerializerMethodField` publishes `{}` — which a generated TypeScript
+    client renders as `unknown`, handing every consumer the least useful type for the most
+    useful data. Each of these carries a real schema."""
+
+    schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
+    customer = schema["components"]["schemas"]["CustomerBooking"]["properties"]
+
+    assert customer["work_tasks"]["type"] == "array"
+    assert customer["work_tasks"]["items"]["$ref"].endswith("/WorkTask")
+    assert "$ref" in str(customer["active_amendment"])
+    assert "$ref" in str(customer["completion"])

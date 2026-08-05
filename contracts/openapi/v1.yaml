@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.15.1
+  version: 1.16.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -592,6 +592,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/booking-groups/{group_id}/address/:
+    post:
+      operationId: booked_group_change_address
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupAddressChangeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GroupAddressChangeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GroupAddressChangeRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRescheduleResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/booking-groups/{group_id}/cancel/:
     post:
       operationId: booking_group_cancel
@@ -657,6 +722,143 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/booking-groups/{group_id}/cancel-booked/:
+    post:
+      operationId: booked_group_cancel
+      description: |-
+        Post-payment group cancellation.
+
+        Distinct from `POST /booking-groups/{id}/cancel/`, which is and remains the *pre-payment*
+        command and still refuses a `BOOKED` group. Two different money paths — one collects
+        nothing, one runs the fee ladder per unit — so they are two different operations rather
+        than one endpoint that changes meaning depending on state.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupCancelRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GroupCancelRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GroupCancelRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupCancellationResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/booking-groups/{group_id}/reschedule/:
+    post:
+      operationId: booked_group_reschedule
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: group_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupRescheduleRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GroupRescheduleRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GroupRescheduleRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupRescheduleResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/booking/windows/:
     post:
       operationId: booking_windows_create
@@ -690,6 +892,362 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/:
+    get:
+      operationId: booking_retrieve
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerBooking'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/cancel/:
+    post:
+      operationId: booking_cancel
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingCancellationResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/completion/confirm/:
+    post:
+      operationId: booking_completion_confirm
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/completion/dispute/:
+    post:
+      operationId: booking_completion_dispute
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeCompletionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DisputeCompletionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DisputeCompletionRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/reschedule/:
+    post:
+      operationId: booking_reschedule
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RescheduleBookingRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RescheduleBookingRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RescheduleBookingRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/start-otp/:
+    post:
+      operationId: booking_start_otp_request
+      description: |-
+        The Customer requests the code; the Partner types it in.
+
+        Two different people, two different endpoints, which is what makes the OTP mean anything:
+        it proves the Partner is standing in front of the Customer. Publishing the code to the
+        Partner, or letting the Partner request it, would prove nothing at all.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartOtp'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
           content:
             application/json:
               schema:
@@ -1315,6 +1873,177 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Checkout'
+          description: ''
+  /api/v1/operations/bookings/{booking_id}/:
+    get:
+      operationId: operations_booking_retrieve
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBooking'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/bookings/{booking_id}/assisted-start/:
+    post:
+      operationId: operations_booking_assisted_start
+      description: |-
+        The audited channel-outage workaround, and the one place step-up is mandatory.
+
+        `operations_assisted_start` refuses a blank outage reason on its own, but the
+        re-verification it describes has never been enforced anywhere, because until this release
+        there was no view to enforce it in. `HasRecentOperationsStepUp` — already written, already
+        documented as gating exactly this — is that enforcement. It is not a general-purpose OTP
+        bypass: it starts work without the Customer's code and says so, loudly, in the audit trail.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistedStartRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistedStartRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistedStartRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBooking'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/bookings/{booking_id}/recover/:
+    post:
+      operationId: operations_booking_recover_partner
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoverBookingRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecoverBookingRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecoverBookingRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/operations/checkouts/{checkout_id}/offers/:
     post:
@@ -2557,6 +3286,772 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/bookings/{booking_id}/:
+    get:
+      operationId: partner_booking_retrieve
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/abort/:
+    post:
+      operationId: partner_booking_abort
+      description: |-
+        Shared plumbing for the Partner's physical-work commands.
+
+        They differ only in which service they call and what they read from the body, so the
+        version guard, idempotency key, actor resolution and projection live here once. A command
+        that needed to opt out of any of those would be a command that should not be on this base
+        class.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/arrived/:
+    post:
+      operationId: partner_booking_arrived
+      description: |-
+        Shared plumbing for the Partner's physical-work commands.
+
+        They differ only in which service they call and what they read from the body, so the
+        version guard, idempotency key, actor resolution and projection live here once. A command
+        that needed to opt out of any of those would be a command that should not be on this base
+        class.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/completion/:
+    post:
+      operationId: partner_booking_submit_completion
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitCompletionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubmitCompletionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubmitCompletionRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/contact-attempts/:
+    post:
+      operationId: partner_booking_contact_attempt
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerContactAttemptRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerContactAttemptRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerContactAttemptRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/customer-unavailable/:
+    post:
+      operationId: partner_booking_customer_unavailable
+      description: |-
+        Shared plumbing for the Partner's physical-work commands.
+
+        They differ only in which service they call and what they read from the body, so the
+        version guard, idempotency key, actor resolution and projection live here once. A command
+        that needed to opt out of any of those would be a command that should not be on this base
+        class.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/en-route/:
+    post:
+      operationId: partner_booking_en_route
+      description: |-
+        Shared plumbing for the Partner's physical-work commands.
+
+        They differ only in which service they call and what they read from the body, so the
+        version guard, idempotency key, actor resolution and projection live here once. A command
+        that needed to opt out of any of those would be a command that should not be on this base
+        class.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/evidence/:
+    post:
+      operationId: partner_booking_evidence_finalize
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceFinalizeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EvidenceFinalizeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EvidenceFinalizeRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkEvidence'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/evidence/uploads/:
+    post:
+      operationId: partner_booking_evidence_upload
+      description: |-
+        Mint a signed grant; the bytes never pass through Django on the way in.
+
+        The same three-step shape FE-07 established for KYC — request a grant, PUT to the bucket,
+        finalize by object key — for the same reason: streaming megabytes of site photographs
+        through the API server buys nothing and costs availability.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceUploadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EvidenceUploadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EvidenceUploadRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceUploadGrant'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/release/:
+    post:
+      operationId: partner_booking_release
+      description: |-
+        Give the job back, with a reason and no penalty attached.
+
+        `01-scope-and-flow.md` is explicit that M1 records a late release for manual Operations
+        review only — there is no automatic score, no threat and nothing the Partner can see that
+        implies one. The reason is required because recovery needs to know what happened, not to
+        justify the Partner to the platform.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReasonedCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/scope-amendments/:
+    post:
+      operationId: partner_booking_propose_amendment
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposeAmendmentRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposeAmendmentRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposeAmendmentRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/bookings/{booking_id}/start-otp/verify/:
+    post:
+      operationId: partner_booking_start_otp_verify
+      description: |-
+        Shared plumbing for the Partner's physical-work commands.
+
+        They differ only in which service they call and what they read from the body, so the
+        version guard, idempotency key, actor resolution and projection live here once. A command
+        that needed to opt out of any of those would be a command that should not be on this base
+        class.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartOtpVerifyRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StartOtpVerifyRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StartOtpVerifyRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/me/:
     get:
       operationId: partner_me_retrieve
@@ -3073,6 +4568,124 @@ paths:
               schema:
                 $ref: '#/components/schemas/Refund'
           description: ''
+  /api/v1/scope-amendments/{amendment_id}/approve/:
+    post:
+      operationId: scope_amendment_approve
+      description: |-
+        Approve or decline proposed extra work.
+
+        Approval is not a state flag — it mints the `PriceRevision` and its `PaymentAttempt` in the
+        same transaction, so a Customer cannot approve work that never gets billed. The response
+        carries the attempt id because the client's next step is to pay it.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: amendment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AmendmentApprovalResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/scope-amendments/{amendment_id}/decline/:
+    post:
+      operationId: scope_amendment_decline
+      description: |-
+        Approve or decline proposed extra work.
+
+        Approval is not a state flag — it mints the `PriceRevision` and its `PaymentAttempt` in the
+        same transaction, so a Customer cannot approve work that never gets billed. The response
+        carries the attempt id because the client's next step is to pay it.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: amendment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/service-areas/:
     get:
       operationId: service_areas_list
@@ -3374,6 +4987,23 @@ components:
       - longitude
       - postal_code
       - state
+    AmendmentApprovalResult:
+      type: object
+      properties:
+        amendment:
+          $ref: '#/components/schemas/ScopeAmendment'
+        payment_attempt_id:
+          type: string
+          format: uuid
+        amount_paise:
+          type: integer
+        currency:
+          type: string
+      required:
+      - amendment
+      - amount_paise
+      - currency
+      - payment_attempt_id
     ApiError:
       type: object
       properties:
@@ -3431,6 +5061,25 @@ components:
       - consent_version
       - customer_id
       - quote_id
+    AssistedStartRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        outage_reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+      required:
+      - expected_version
+      - outage_reason
     AuthenticatedSession:
       type: object
       properties:
@@ -3488,6 +5137,19 @@ components:
       - partner_id
       - reservation_id
       - scheduled_start
+    BookingCancellationResult:
+      type: object
+      properties:
+        booking:
+          $ref: '#/components/schemas/CustomerBooking'
+        refund_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - booking
+      - refund_ids
     BookingGroup:
       type: object
       properties:
@@ -3618,6 +5280,62 @@ components:
         * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
         * `FAILED` - Failed
+    BookingStatusEnum:
+      enum:
+      - CONFIRMED
+      - EN_ROUTE
+      - ARRIVED
+      - IN_PROGRESS
+      - COMPLETION_SUBMITTED
+      - COMPLETED
+      - PARTIALLY_COMPLETED
+      - DISPUTED
+      - RECOVERY_REQUIRED
+      - ABORTED
+      - CANCELLED
+      type: string
+      description: |-
+        * `CONFIRMED` - Confirmed
+        * `EN_ROUTE` - En route
+        * `ARRIVED` - Arrived
+        * `IN_PROGRESS` - In progress
+        * `COMPLETION_SUBMITTED` - Completion submitted
+        * `COMPLETED` - Completed
+        * `PARTIALLY_COMPLETED` - Partially completed
+        * `DISPUTED` - Disputed
+        * `RECOVERY_REQUIRED` - Recovery required
+        * `ABORTED` - Aborted
+        * `CANCELLED` - Cancelled
+    BookingStatusHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        command:
+          type: string
+          readOnly: true
+        from_status:
+          type: string
+          readOnly: true
+        to_status:
+          type: string
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - command
+      - created_at
+      - from_status
+      - id
+      - reason
+      - to_status
     BookingWindow:
       type: object
       properties:
@@ -4221,6 +5939,78 @@ components:
       required:
       - expected_version
       - review_reason
+    CompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        decision:
+          allOf:
+          - $ref: '#/components/schemas/CompletionResponseDecisionEnum'
+          readOnly: true
+        dispute_reason:
+          type: string
+          readOnly: true
+        responded_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - decision
+      - dispute_reason
+      - id
+      - responded_at
+    CompletionResponseDecisionEnum:
+      enum:
+      - CONFIRMED
+      - DISPUTED
+      - AUTO_FINALIZED
+      type: string
+      description: |-
+        * `CONFIRMED` - Confirmed
+        * `DISPUTED` - Disputed
+        * `AUTO_FINALIZED` - Auto-finalized
+    CompletionSubmission:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        notes:
+          type: string
+          readOnly: true
+        safety_damage_declared:
+          type: boolean
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        responds_by:
+          type: string
+          format: date-time
+          readOnly: true
+        outcomes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkOutcome'
+          readOnly: true
+        response:
+          allOf:
+          - $ref: '#/components/schemas/CompletionResponse'
+          nullable: true
+          readOnly: true
+      required:
+      - id
+      - notes
+      - outcomes
+      - responds_by
+      - response
+      - safety_damage_declared
+      - submitted_at
     ConfirmationPolicyEnum:
       enum:
       - ALL_OR_NOTHING
@@ -4288,14 +6078,110 @@ components:
           readOnly: true
       required:
       - csrf_token
-    DecisionEnum:
-      enum:
-      - APPROVED
-      - REJECTED
-      type: string
+    CustomerBooking:
+      type: object
       description: |-
-        * `APPROVED` - APPROVED
-        * `REJECTED` - REJECTED
+        One visit, as the Customer who paid for it sees it.
+
+        Carries the Partner's display name and nothing else about them — not their phone number,
+        not their earnings, not their other jobs. `G7` in the frontend task file is the same rule
+        from the other side: Customer projections contain no Partner identity beyond what is needed
+        to recognise the person at the door.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        en_route_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        late_declared_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancellation_reason:
+          type: string
+          readOnly: true
+        work_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkTask'
+          readOnly: true
+        active_amendment:
+          allOf:
+          - $ref: '#/components/schemas/ScopeAmendment'
+          nullable: true
+          readOnly: true
+        completion:
+          allOf:
+          - $ref: '#/components/schemas/CompletionSubmission'
+          nullable: true
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - active_amendment
+      - arrived_at
+      - cancellation_reason
+      - cancelled_at
+      - completion
+      - en_route_at
+      - estimated_duration_minutes
+      - fulfilment_unit_id
+      - id
+      - late_declared_at
+      - partner_display_name
+      - scheduled_start
+      - server_now
+      - status
+      - version
+      - work_tasks
+    CustomerContactAttemptRequestRequest:
+      type: object
+      properties:
+        outcome:
+          type: string
+          minLength: 1
+          maxLength: 32
+      required:
+      - outcome
     DependencyEnum:
       enum:
       - NONE
@@ -4443,6 +6329,111 @@ components:
         * `TENTATIVE` - Tentative
         * `CONFIRMED` - Confirmed
         * `RELEASED` - Released
+    DisputeCompletionRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        dispute_reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+        disputed_outcome_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - dispute_reason
+      - expected_version
+    EvidenceFinalizeRequestRequest:
+      type: object
+      description: |-
+        The client's claim about what it uploaded; Django streams the object and checks it.
+
+        `sha256` is not trusted — it is *compared*. The same three-step shape FE-07 established for
+        KYC: the client computes the digest locally, Django recomputes it from the bytes actually in
+        the bucket, and a mismatch fails closed. Sending it is what makes the comparison possible.
+      properties:
+        kind:
+          $ref: '#/components/schemas/WorkEvidenceKindEnum'
+        object_key:
+          type: string
+          minLength: 1
+          maxLength: 512
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          minLength: 1
+          pattern: ^[0-9a-f]{64}$
+        work_task_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - content_type
+      - kind
+      - object_key
+      - sha256
+      - size_bytes
+    EvidenceUploadGrant:
+      type: object
+      description: |-
+        A short-lived, single-attempt grant to put bytes in a private bucket.
+
+        The token is published because the browser must send it, and for no longer than one attempt:
+        FE-07 established that a signed grant lives in component state and is dropped afterwards,
+        never persisted. `expires_at` is what makes that enforceable.
+      properties:
+        object_key:
+          type: string
+        upload_url:
+          type: string
+        upload_token:
+          type: string
+        resumable_url:
+          type: string
+        method:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - expires_at
+      - method
+      - object_key
+      - resumable_url
+      - upload_token
+      - upload_url
+    EvidenceUploadRequestRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/WorkEvidenceKindEnum'
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+      required:
+      - content_type
+      - kind
+      - size_bytes
     ExcludedCandidate:
       type: object
       properties:
@@ -4627,6 +6618,11 @@ components:
           format: date-time
           nullable: true
           readOnly: true
+        booking_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
         lines:
           type: array
           items:
@@ -4638,6 +6634,7 @@ components:
           readOnly: true
       required:
       - arrival_window_minutes
+      - booking_id
       - estimated_duration_minutes
       - id
       - lines
@@ -4745,6 +6742,54 @@ components:
         * `COMPLETED` - Completed
         * `PARTIALLY_COMPLETED` - Partially completed
         * `DISPUTED` - Disputed
+    GroupAddressChangeRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        new_address_id:
+          type: string
+          format: uuid
+      required:
+      - expected_version
+      - new_address_id
+    GroupCancelRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+      required:
+      - expected_version
+      - reason
+    GroupCancellationResult:
+      type: object
+      properties:
+        booking_group_id:
+          type: string
+          format: uuid
+        group_status:
+          type: string
+        group_version:
+          type: integer
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitCancellationOutcome'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - booking_group_id
+      - group_status
+      - group_version
+      - server_now
+      - units
     GroupQuote:
       type: object
       properties:
@@ -4908,6 +6953,41 @@ components:
       - position
       - starts_at
       - total
+    GroupRescheduleRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        new_group_start:
+          type: string
+          format: date-time
+      required:
+      - expected_version
+      - new_group_start
+    GroupRescheduleResult:
+      type: object
+      properties:
+        booking_group_id:
+          type: string
+          format: uuid
+        group_version:
+          type: integer
+        shift_seconds:
+          type: integer
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnitRescheduleOutcome'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - booking_group_id
+      - group_version
+      - server_now
+      - shift_seconds
+      - units
     LifecycleStatusEnum:
       enum:
       - DRAFT
@@ -5186,11 +7266,139 @@ components:
       - next
       - previous
       - results
+    OperationsBooking:
+      type: object
+      description: |-
+        Cross-unit recovery context, with the audit trail that justifies it.
+
+        Operations is the one actor that legitimately sees both sides, so this is the one
+        projection that names the Partner and the Booking Group. Every read of it is audited by
+        `IsOperationsUser`.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        booking_group_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        order_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_display_name:
+          type: string
+          readOnly: true
+        en_route_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        customer_unavailable_wait_started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        late_declared_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancellation_reason:
+          type: string
+          readOnly: true
+        payout_hold:
+          type: boolean
+          readOnly: true
+        work_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkTask'
+          readOnly: true
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkEvidence'
+          readOnly: true
+        status_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingStatusHistory'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - arrived_at
+      - booking_group_id
+      - cancellation_reason
+      - cancelled_at
+      - customer_unavailable_wait_started_at
+      - en_route_at
+      - estimated_duration_minutes
+      - evidence
+      - fulfilment_unit_id
+      - id
+      - late_declared_at
+      - order_id
+      - partner_display_name
+      - partner_id
+      - payout_hold
+      - scheduled_start
+      - server_now
+      - status
+      - status_history
+      - version
+      - work_tasks
+    OperationsDocumentReviewDecisionEnum:
+      enum:
+      - APPROVED
+      - REJECTED
+      type: string
+      description: |-
+        * `APPROVED` - APPROVED
+        * `REJECTED` - REJECTED
     OperationsDocumentReviewRequest:
       type: object
       properties:
         decision:
-          $ref: '#/components/schemas/DecisionEnum'
+          $ref: '#/components/schemas/OperationsDocumentReviewDecisionEnum'
         reason:
           type: string
           maxLength: 2000
@@ -5374,6 +7582,25 @@ components:
       - challenge_id
       - code
       - phone_number
+    OutcomeInputRequest:
+      type: object
+      properties:
+        work_task_id:
+          type: string
+          format: uuid
+        outcome:
+          $ref: '#/components/schemas/WorkOutcomeEnum'
+        quantity:
+          type: integer
+          minimum: 0
+          default: 0
+        reason:
+          type: string
+          default: ''
+          maxLength: 240
+      required:
+      - outcome
+      - work_task_id
     PartnerApplication:
       type: object
       properties:
@@ -5669,6 +7896,93 @@ components:
       - service_area_id
       - starts_at
       - weekday
+    PartnerBooking:
+      type: object
+      description: |-
+        The same visit, as the Partner assigned to it sees it.
+
+        Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
+        amounts the Partner is working to. The Booking Group is not addressable from here at all:
+        `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
+        cheapest way to guarantee that is to never publish the identifier that would let them try.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        scheduled_start:
+          type: string
+          format: date-time
+          readOnly: true
+        estimated_duration_minutes:
+          type: integer
+          readOnly: true
+        en_route_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        arrived_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        customer_unavailable_wait_started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        late_declared_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        work_tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkTask'
+          readOnly: true
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkEvidence'
+          readOnly: true
+        active_amendment:
+          allOf:
+          - $ref: '#/components/schemas/ScopeAmendment'
+          nullable: true
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - active_amendment
+      - arrived_at
+      - customer_unavailable_wait_started_at
+      - en_route_at
+      - estimated_duration_minutes
+      - evidence
+      - fulfilment_unit_id
+      - id
+      - late_declared_at
+      - scheduled_start
+      - server_now
+      - status
+      - version
+      - work_tasks
     PartnerConsent:
       type: object
       properties:
@@ -6523,6 +8837,39 @@ components:
         * `IN_REVIEW` - In review
         * `COMPLETED` - Completed
         * `REJECTED` - Rejected
+    ProcessingStatusEnum:
+      enum:
+      - PENDING
+      - CLEAN
+      - FAILED
+      type: string
+      description: |-
+        * `PENDING` - Pending scan
+        * `CLEAN` - Clean
+        * `FAILED` - Failed scan
+    ProposeAmendmentRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+        task_quantity:
+          type: integer
+          minimum: 1
+      required:
+      - expected_version
+      - reason
+      - task_quantity
     PurposeEnum:
       enum:
       - BOOKING_GROUP
@@ -6709,6 +9056,25 @@ components:
         * `DUPLICATE_DISPATCH` - Duplicate dispatch
         * `STUCK_DISPATCH` - Stuck dispatch
         * `OPERATIONS_ERROR` - Operations error
+    ReasonedCommandRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+      required:
+      - expected_version
+      - reason
     ReconciliationStateEnum:
       enum:
       - PENDING
@@ -6719,6 +9085,24 @@ components:
         * `PENDING` - Pending
         * `IN_SYNC` - In sync
         * `NEEDS_ATTENTION` - Needs attention
+    RecoverBookingRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        offer_id:
+          type: string
+          format: uuid
+      required:
+      - expected_version
+      - offer_id
     RecoveryActionEnum:
       enum:
       - WAIT
@@ -6865,6 +9249,24 @@ components:
         * `SUCCEEDED` - Succeeded
         * `FAILED` - Failed
         * `UNDER_REVIEW` - Under review
+    RescheduleBookingRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        new_requested_start:
+          type: string
+          format: date-time
+      required:
+      - expected_version
+      - new_requested_start
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -6949,6 +9351,129 @@ components:
         * `CLEAN` - Clean
         * `REJECTED` - Rejected
         * `FAILED` - Scan failed
+    ScopeAmendment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        booking_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ScopeAmendmentStatusEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        evidence_required:
+          type: boolean
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        responded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopeAmendmentLine'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - booking_id
+      - currency
+      - evidence_required
+      - expires_at
+      - id
+      - lines
+      - reason
+      - responded_at
+      - server_now
+      - status
+      - total_paise
+      - version
+    ScopeAmendmentLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ScopeAmendmentLineKindEnum'
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+      required:
+      - amount_paise
+      - code
+      - currency
+      - id
+      - kind
+      - label
+      - position
+      - quantity
+    ScopeAmendmentLineKindEnum:
+      enum:
+      - TASK
+      - MATERIAL
+      type: string
+      description: |-
+        * `TASK` - Task
+        * `MATERIAL` - Material
+    ScopeAmendmentStatusEnum:
+      enum:
+      - PROPOSED
+      - CUSTOMER_APPROVED
+      - CUSTOMER_DECLINED
+      - PAYMENT_PENDING
+      - AUTHORIZED
+      - EXPIRED
+      type: string
+      description: |-
+        * `PROPOSED` - Proposed
+        * `CUSTOMER_APPROVED` - Customer approved
+        * `CUSTOMER_DECLINED` - Customer declined
+        * `PAYMENT_PENDING` - Payment pending
+        * `AUTHORIZED` - Authorized
+        * `EXPIRED` - Expired
     ServiceArea:
       type: object
       properties:
@@ -7333,6 +9858,54 @@ components:
       description: |-
         * `MANUAL` - Manual
         * `REVERSE_GEOCODED` - Reverse geocoded
+    StartOtp:
+      type: object
+      description: |-
+        What the Customer is told about the code they must read out.
+
+        `code_length` rather than the code: the Customer reads the code off their own SMS, and
+        publishing it here would hand it to anyone who could reach this endpoint — which is the
+        whole point of the OTP. `development_code` is populated only by the development sender,
+        exactly as OTP login already works.
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        code_length:
+          type: integer
+        development_code:
+          type: string
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - booking_id
+      - code_length
+      - expires_at
+      - server_now
+    StartOtpVerifyRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        code:
+          type: string
+          minLength: 1
+          maxLength: 12
+      required:
+      - code
+      - expected_version
     StepUpSession:
       type: object
       properties:
@@ -7376,6 +9949,32 @@ components:
       - id
       - name
       - slug
+    SubmitCompletionRequestRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        notes:
+          type: string
+          default: ''
+          maxLength: 2000
+        safety_damage_declared:
+          type: boolean
+          default: false
+        outcomes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OutcomeInputRequest'
+      required:
+      - expected_version
+      - outcomes
     TargetStatusEnum:
       enum:
       - UNDER_REVIEW
@@ -7496,6 +10095,53 @@ components:
         * `TOO_SOON` - TOO_SOON
         * `OUTSIDE_OPERATING_WINDOW` - OUTSIDE_OPERATING_WINDOW
         * `NO_CAPACITY` - NO_CAPACITY
+    UnitCancellationOutcome:
+      type: object
+      properties:
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+        booking_id:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+        booking_status:
+          type: string
+        fee_paise:
+          type: integer
+        refund_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - booking_id
+      - booking_status
+      - fee_paise
+      - fulfilment_unit_id
+      - outcome
+      - refund_ids
+    UnitRescheduleOutcome:
+      type: object
+      properties:
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+        booking_id:
+          type: string
+          format: uuid
+        old_requested_start:
+          type: string
+          format: date-time
+        new_requested_start:
+          type: string
+          format: date-time
+      required:
+      - booking_id
+      - fulfilment_unit_id
+      - new_requested_start
+      - old_requested_start
     User:
       type: object
       properties:
@@ -7562,6 +10208,20 @@ components:
       - id
       - is_current
       - last_seen_at
+    VersionedCommandRequest:
+      type: object
+      description: |-
+        The floor every state-changing fulfilment command sits on.
+
+        `expected_version` is required, never defaulted. A command that would apply to whatever
+        state it happens to find is the thing optimistic concurrency exists to prevent, and a
+        default here would silently reintroduce it for every caller that forgot the field.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - expected_version
     WebhookAccepted:
       type: object
       properties:
@@ -7574,6 +10234,157 @@ components:
       required:
       - accepted
       - duplicate
+    WorkEvidence:
+      type: object
+      description: |-
+        Evidence metadata only.
+
+        The object key is a private-bucket path and the bytes are KYC-adjacent: neither belongs in
+        a list projection. A reader who needs the file asks for a fresh, audited, expiring grant,
+        the same way Partner documents work.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/WorkEvidenceKindEnum'
+          readOnly: true
+        work_task_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        content_type:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        processing_status:
+          allOf:
+          - $ref: '#/components/schemas/ProcessingStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - content_type
+      - created_at
+      - id
+      - kind
+      - processing_status
+      - size_bytes
+      - work_task_id
+    WorkEvidenceKindEnum:
+      enum:
+      - BEFORE
+      - AFTER
+      - CONTACT_ATTEMPT
+      - SAFETY
+      - DAMAGE
+      - AMENDMENT
+      - COMPLETION
+      - WAIT
+      type: string
+      description: |-
+        * `BEFORE` - Before
+        * `AFTER` - After
+        * `CONTACT_ATTEMPT` - Contact attempt
+        * `SAFETY` - Safety
+        * `DAMAGE` - Damage
+        * `AMENDMENT` - Amendment
+        * `COMPLETION` - Completion
+        * `WAIT` - Wait
+    WorkOutcome:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        work_task_id:
+          type: string
+          format: uuid
+          readOnly: true
+        outcome:
+          allOf:
+          - $ref: '#/components/schemas/WorkOutcomeEnum'
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - outcome
+      - quantity
+      - reason
+      - work_task_id
+    WorkOutcomeEnum:
+      enum:
+      - COMPLETED
+      - PARTIAL
+      - NOT_STARTED
+      - BLOCKED
+      - NOT_APPLICABLE
+      type: string
+      description: |-
+        * `COMPLETED` - Completed
+        * `PARTIAL` - Partial
+        * `NOT_STARTED` - Not started
+        * `BLOCKED` - Blocked
+        * `NOT_APPLICABLE` - Not applicable
+    WorkTask:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/WorkTaskKindEnum'
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+      required:
+      - amount_paise
+      - code
+      - currency
+      - id
+      - kind
+      - label
+      - position
+      - quantity
+    WorkTaskKindEnum:
+      enum:
+      - ORIGINAL
+      - AMENDMENT
+      type: string
+      description: |-
+        * `ORIGINAL` - Original scope
+        * `AMENDMENT` - Approved amendment
   securitySchemes:
     cookieAuth:
       type: apiKey

@@ -195,7 +195,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.15.1",
+    "VERSION": "1.16.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -204,11 +204,27 @@ SPECTACULAR_SETTINGS = {
         "drf_spectacular.hooks.postprocess_schema_enums",
         "common.schema.publish_parameter_enum_components",
     ],
+    # Every choice set that shares a field name with another must be named here.
+    # Left to itself the generator resolves a collision by hashing — `Status7a2Enum`,
+    # `Kind0bfEnum` — and those names reach the published contract and the generated
+    # TypeScript client, where they mean nothing to a reader and change whenever an
+    # unrelated model adds a choice.
     "ENUM_NAME_OVERRIDES": {
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
         "QuoteLineKindEnum": "apps.carts.models.QuoteLine.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
+        "ScopeAmendmentStatusEnum": "apps.fulfilment.models.ScopeAmendment.Status",
+        "ScopeAmendmentLineKindEnum": "apps.fulfilment.models.ScopeAmendmentLine.Kind",
+        "WorkTaskKindEnum": "apps.fulfilment.models.WorkTask.Kind",
+        "WorkEvidenceKindEnum": "apps.fulfilment.models.WorkEvidence.Kind",
+        "WorkOutcomeEnum": "apps.fulfilment.models.WorkOutcome.Outcome",
+        "BookingStatusEnum": "apps.commerce.models.Booking.Status",
+        # Named so the *existing* `DecisionEnum` keeps its name. Adding a second `decision`
+        # field made the generator disambiguate both, silently renaming a component the admin
+        # app already imported — a published rename is a breaking change, and a new model is
+        # not a reason to inflict one on an existing consumer.
+        "CompletionResponseDecisionEnum": "apps.fulfilment.models.CompletionResponse.Decision",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
