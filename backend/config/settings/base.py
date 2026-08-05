@@ -1,4 +1,4 @@
-﻿"""Settings shared by every Vsolve Hub backend environment."""
+"""Settings shared by every Vsolve Hub backend environment."""
 
 from pathlib import Path
 
@@ -398,6 +398,18 @@ CELERY_BEAT_SCHEDULE = {
     "reconcile-refunds": {
         "task": "apps.commerce.tasks.reconcile_refunds",
         "schedule": 60.0,
+    },
+    "reconcile-payouts": {
+        "task": "apps.payouts.tasks.reconcile_payouts",
+        # Hourly. Ambiguous payouts are never re-submitted — this only *reads* the provider
+        # and settles an item once it is definite, so a slow cadence costs nothing.
+        "schedule": 60.0 * 60,
+    },
+    "identity-retention-sweep": {
+        "task": "apps.identity.tasks.run_retention_sweep",
+        # Daily. Deleting expired OTP challenges, sessions and audit events is not urgent;
+        # doing it in the middle of a booking peak would be.
+        "schedule": 60.0 * 60 * 24,
     },
 }
 
