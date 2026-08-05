@@ -285,7 +285,22 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT_SECONDS", default=60)
 CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", default=45)
+
+# `OutboxEvent.available_at` is a visibility deadline, not a creation stamp. A worker that claims
+# an event pushes the deadline out by the lease; a worker that dies without publishing lets the
+# deadline lapse, and the recovery sweep re-drives the event. The lease must exceed
+# CELERY_TASK_TIME_LIMIT, otherwise the sweep re-queues work that is still legitimately running.
+OUTBOX_LEASE_SECONDS = env.int("OUTBOX_LEASE_SECONDS", default=120)
+OUTBOX_MAX_ATTEMPTS = env.int("OUTBOX_MAX_ATTEMPTS", default=10)
+OUTBOX_RETRY_BACKOFF_SECONDS = env.int("OUTBOX_RETRY_BACKOFF_SECONDS", default=30)
+OUTBOX_RETRY_BACKOFF_MAX_SECONDS = env.int("OUTBOX_RETRY_BACKOFF_MAX_SECONDS", default=900)
+OUTBOX_RECOVERY_BATCH_SIZE = env.int("OUTBOX_RECOVERY_BATCH_SIZE", default=200)
+
 CELERY_BEAT_SCHEDULE = {
+    "recover-outbox-events": {
+        "task": "apps.foundation.tasks.recover_outbox_events",
+        "schedule": 30.0,
+    },
     "reconcile-booking-group-dispatch": {
         "task": "apps.assignments.tasks.reconcile_booking_group_dispatch",
         "schedule": 10.0,

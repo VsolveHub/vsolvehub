@@ -35,8 +35,8 @@ for local development and tests only and is never selected as a fallback.
 
 ## Reconciliation and Finance handling
 
-Celery beat schedules `apps.commerce.tasks.reconcile_payments` and
-`apps.commerce.tasks.reconcile_refunds` every two minutes. A worker fans records out to retrying,
+Celery beat schedules `apps.commerce.tasks.reconcile_payments` every 30 seconds and
+`apps.commerce.tasks.reconcile_refunds` every 60 seconds. A worker fans records out to retrying,
 idempotent per-record tasks. Finance can also invoke the authenticated reconciliation endpoints.
 
 Investigate records where `reconciliation_state=needs_attention`, refunds in `under_review` or

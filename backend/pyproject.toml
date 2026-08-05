@@ -61,6 +61,8 @@ addopts = [
   "--cov=common",
   "--cov-report=term-missing",
   "-ra",
+  "-m",
+  "not integration",
 ]
 markers = [
   "integration: requires PostgreSQL and Redis",

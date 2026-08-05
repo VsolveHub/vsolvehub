@@ -38,6 +38,52 @@ seven-day rounded-coordinate cache. Set the production contact in `GEOCODING_USE
 the selected provider's production usage terms/capacity before launch. Provider failure returns a
 recoverable manual-entry response and never invents an address.
 
+## Asynchronous topology
+
+The web server, the Celery worker and the Celery beat scheduler are three separate processes. The
+server alone runs no background work; starting it without a worker leaves every outbox event
+undelivered.
+
+```powershell
+.\scripts\worker.cmd
+.\scripts\beat.cmd
+```
+
+Run **exactly one beat process per deployment**. Beat is a scheduler, not a worker: a second one
+does not share the schedule, so every periodic task fires twice. Workers are the opposite — run as
+many as the load needs, because the outbox lease and `select_for_update(skip_locked=True)` keep two
+workers from delivering one event concurrently.
+
+`OutboxEvent.available_at` is a visibility deadline rather than a creation stamp. Claiming an event
+pushes the deadline out by `OUTBOX_LEASE_SECONDS`; a worker that dies before publishing lets the
+deadline lapse, and the `recover-outbox-events` sweep re-drives the event every 30 seconds. This
+makes one setting load-bearing:
+
+> `OUTBOX_LEASE_SECONDS` must stay greater than `CELERY_TASK_TIME_LIMIT`.
+
+If the lease is shorter, the sweep re-queues work that is still legitimately running and the
+handler executes twice. The defaults (120s lease against a 60s task time limit) satisfy this;
+raising `CELERY_TASK_TIME_LIMIT_SECONDS` without raising the lease breaks it.
+
+Events that exhaust `OUTBOX_MAX_ATTEMPTS` stop being swept and become dead letters. Inspect them
+with `manage.py outbox_report` and return exactly one to the sweep with
+`manage.py outbox_replay --event-id <uuid>`. The procedures are in `docs/runbooks/queue-outage.md`,
+`docs/runbooks/outbox-replay.md` and `docs/runbooks/stuck-command.md`.
+
+## Integration tests
+
+The default `pytest` run needs no Redis: it excludes the `integration` marker and runs Celery
+eagerly. Eager mode proves nothing about ordering, retries or crash recovery, so the opt-in suite
+runs against the real broker with a worker in a real subprocess that the tests kill.
+
+```powershell
+docker compose --env-file ..\infra\.env.example -f ..\infra\compose.yaml up -d
+.\scripts\integration-tests.cmd
+```
+
+The suite fails loudly rather than skipping when `infra/compose.yaml` is not up. It uses
+`config.settings.integration`, which is deliberately not derived from `config.settings.test`.
+
 ## API endpoints
 
 - API: `http://localhost:8000/api/v1/`
