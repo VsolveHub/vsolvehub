@@ -1,5 +1,85 @@
 # API Contract Changelog
 
+## 1.17.0 - Cases, ledger, payouts and kill switches
+
+18 new paths. `apps/cases`, `apps/payouts` and `apps/notifications` were domain layers behind no
+door — the same shape B8 was in before 1.16.0 — and this publishes all three at once for the same
+reason: an Operations console cannot be built against half a case lifecycle.
+
+### Operations cases
+
+`GET|POST /operations/cases/`, `GET /operations/cases/{id}/`, and `claim` / `escalate` /
+`resolve` / `notes`. Cursor-paginated with `status`, `owner_team`, `kind` and `overdue` filters.
+
+The detail projection publishes **`allowed_resolutions`** — the terminal results this case kind
+may close on. That set is a domain rule that differs per kind, and a console carrying its own
+copy would offer a button the server refuses the first time the two drift. Same reasoning as
+`recovery_action` on Booking Groups: publish the decision, do not make the client infer it.
+
+There is **one** case projection, not three. Unlike a Booking, a case has exactly one audience —
+a case can quote a Customer's complaint verbatim and name a Partner in a safety report, so no
+Customer-facing or Partner-facing shape exists to publish.
+
+### Partner earnings
+
+`GET /partner/earnings/`, `GET /partner/ledger/`, `GET /partner/payout-account/`. All three
+resolve the Partner from the session and take no `partner_id` — the safest filter is the one a
+caller cannot supply, which is the same reasoning that keeps `booking_group_id` off the Partner
+booking projection.
+
+The balance is **four numbers, not one**. "You have ₹4,200" is not true in any useful sense when
+₹1,800 of it is held behind an open quality case, and a Partner planning their week needs to know
+which part is actually coming. There is deliberately **no withdraw affordance**: M1 pays through
+a reviewed batch, and a button implying otherwise would promise something the platform does not
+do.
+
+`PartnerLedgerEntry.calculation_snapshot` is published on purpose. A Partner is entitled to see
+why they were paid what they were paid; hiding it turns every payment question into a support
+ticket.
+
+### Payout batches
+
+`GET|POST /operations/payout-batches/`, detail, and `approve` / `pay` / `cancel`. Plus
+`GET /operations/unpayable-partners/` and `POST /operations/ledger-adjustments/`.
+
+**`approve` and `pay` require `HasRecentOperationsStepUp`** — a fresh OTP on the session.
+Maker-checker already means two different people are involved; the step-up means neither of them
+can be a stolen session on an unlocked laptop. Approving a payout run is the largest money-moving
+action in the platform. `401 step_up_required` when the re-verification is missing or stale.
+
+**`cancel` deliberately does not.** Cancelling only returns money to the pool, and making the
+safe direction as heavy as the dangerous one trains people to leave bad batches sitting approved.
+
+`unpayable-partners` exists so a Partner owed money with no verified account is *reported* rather
+than silently skipped — a Partner left out of a run with no explanation is a support ticket
+waiting to happen.
+
+### Kill switches
+
+`GET|POST /operations/kill-switches/` and `POST /operations/kill-switches/release/`.
+
+Rows rather than settings: an environment variable needs a deploy, and the moment you need to
+stop sending is the moment you cannot wait for a release. No step-up on either direction — a
+control that is hard to reach during an incident is a control nobody uses. The reason is required
+by a check constraint as well as the serializer, because an outage nobody can explain afterwards
+is worse than the outage.
+
+### Enum names
+
+Fourteen new choice sets are named explicitly in `ENUM_NAME_OVERRIDES`. Left alone the generator
+resolved `status` and `kind` collisions by hashing — `Status112Enum`, `Kind106Enum` — and those
+reach the generated TypeScript client, where they mean nothing and change whenever an unrelated
+model adds a choice. `status` and `kind` are the two most reused field names in this schema, so
+every new one is named on arrival.
+
+### Removed
+
+`HasRecentFinanceStepUp` and `FINANCE_STEP_UP_TTL_SECONDS` are deleted. Refunds moved to the
+Operations step-up, payouts use the same, and nothing held the finance role. The control that
+mattered — a fresh OTP before money moves — is unchanged and now has one implementation instead
+of two. `POST /auth/finance/step-up/` is untouched: it stamps `UserSession.stepped_up_at`, which
+is the field both permissions always read.
+
 ## 1.16.0 - Booking fulfilment (B8) is published: the door on a room that was already built
 
 26 new paths. `apps/fulfilment` has been a complete, tested domain layer since 1.15.1 with no

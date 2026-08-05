@@ -137,14 +137,23 @@ def _capture(attempt: PaymentAttempt, *, payment_id: str = "fake_payment_be08") 
     return order
 
 
-def _finance_client() -> tuple[APIClient, User]:
+def _refund_operator_client() -> tuple[APIClient, User]:
+    """An Operations user who has just confirmed their session with an OTP.
+
+    Refunds moved from `HasRecentFinanceStepUp` to `HasRecentOperationsStepUp`: the
+    platform has one staff role, and a `finance` role nobody was ever granted made these
+    endpoints unreachable rather than restricted. The control under test is the same one
+    — a money-moving command still requires a fresh step-up, and a session without one is
+    refused below.
+    """
+
     role, _created = Role.objects.get_or_create(
-        code="finance",
-        defaults={"name": "Finance", "is_system": True},
+        code="operations",
+        defaults={"name": "Operations", "is_system": True},
     )
     user = User.objects.create_user(phone_number="+919876548888")
     UserRole.objects.create(user=user, role=role)
-    client = force_role_client(user=user, role_code="finance")
+    client = force_role_client(user=user, role_code="operations")
     session = UserSession.objects.get(user=user, active_role=role)
     session.stepped_up_at = timezone.now()
     session.save(update_fields=("stepped_up_at",))
@@ -482,8 +491,8 @@ def test_parallel_group_capture_creates_one_booking_per_unit_and_partial_unit_re
 
     unit = group.units.order_by("position").first()
     assert unit is not None
-    finance_client, _finance_user = _finance_client()
-    response = finance_client.post(
+    operator_client, _operator = _refund_operator_client()
+    response = operator_client.post(
         "/api/v1/finance/refunds/",
         {
             "order_id": str(order.id),
@@ -559,9 +568,9 @@ def test_finance_unit_refund_reconciles_allocations_and_issues_credit_note() -> 
         amount_paise=attempt.amount_paise,
     )
     unit_ids = list(group.units.values_list("id", flat=True))
-    finance_client, finance_user = _finance_client()
+    operator_client, operator = _refund_operator_client()
 
-    response = finance_client.post(
+    response = operator_client.post(
         "/api/v1/finance/refunds/",
         {
             "order_id": str(order.id),
@@ -574,7 +583,7 @@ def test_finance_unit_refund_reconciles_allocations_and_issues_credit_note() -> 
 
     assert response.status_code == HTTPStatus.ACCEPTED, response.json()
     refund = Refund.objects.get(id=response.json()["id"])
-    assert refund.requested_by == finance_user
+    assert refund.requested_by == operator
     assert refund.status == Refund.Status.SUCCEEDED
     assert refund.amount_paise == order.total_paise
     assert (
@@ -598,7 +607,7 @@ def test_finance_unit_refund_reconciles_allocations_and_issues_credit_note() -> 
     order_detail = customer_client.get(f"/api/v1/orders/{order.id}/")
     assert detail.status_code == document.status_code == order_detail.status_code == HTTPStatus.OK
     assert len(order_detail.json()["bookings"]) == group.units.count()
-    reconcile = finance_client.post(
+    reconcile = operator_client.post(
         f"/api/v1/finance/refunds/{refund.id}/reconcile/",
         HTTP_IDEMPOTENCY_KEY="refund-reconcile-after-webhook",
     )
@@ -611,8 +620,8 @@ def test_definitive_refund_failure_is_visible_to_finance(
     client, _customer, checkout, group = _payment_ready_group()
     attempt = _create_attempt(client, checkout, key="failed-refund-payment")
     order = _capture(attempt, payment_id="fake_payment_failed_refund")
-    finance_client, finance_user = _finance_client()
-    del finance_client
+    operator_client, operator = _refund_operator_client()
+    del operator_client
     monkeypatch.setattr(
         "apps.foundation.services._queue_outbox_event",
         lambda _event_id: None,
@@ -624,7 +633,7 @@ def test_definitive_refund_failure_is_visible_to_finance(
         unit_ids=[unit.id],
         reason_code="provider_failure_test",
         idempotency_key="failed-refund-command",
-        requested_by_id=finance_user.id,
+        requested_by_id=operator.id,
     )
 
     class RejectedProvider:
@@ -661,6 +670,42 @@ def test_customer_cannot_initiate_finance_refund_command() -> None:
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY="unauthorized-refund",
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert not Refund.objects.exists()
+
+
+def test_operations_without_a_recent_step_up_cannot_refund() -> None:
+    """The control that survived the move off the finance role.
+
+    Dropping the separate role narrowed the gate to one thing — a fresh OTP confirmation
+    on this session — so that one thing has to be proven, not assumed. Written to fail if
+    `HasRecentOperationsStepUp` is ever relaxed to a plain role check.
+    """
+
+    client, _customer, checkout, group = _payment_ready_group()
+    attempt = _create_attempt(client, checkout)
+    order = _capture(attempt, payment_id="fake_payment_no_step_up")
+
+    role, _created = Role.objects.get_or_create(
+        code="operations",
+        defaults={"name": "Operations", "is_system": True},
+    )
+    operator = User.objects.create_user(phone_number="+919876548777")
+    UserRole.objects.create(user=operator, role=role)
+    # A real Operations session, deliberately never stepped up.
+    stale_client = force_role_client(user=operator, role_code="operations")
+
+    response = stale_client.post(
+        "/api/v1/finance/refunds/",
+        {
+            "order_id": str(order.id),
+            "fulfilment_unit_ids": [str(group.units.first().id)],  # type: ignore[union-attr]
+            "reason_code": "customer_cancelled",
+        },
+        format="json",
+        HTTP_IDEMPOTENCY_KEY="refund-without-step-up",
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN

@@ -1,4 +1,4 @@
-"""Settings shared by every Vsolve Hub backend environment."""
+﻿"""Settings shared by every Vsolve Hub backend environment."""
 
 from pathlib import Path
 
@@ -198,7 +198,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.16.0",
+    "VERSION": "1.17.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -208,8 +208,8 @@ SPECTACULAR_SETTINGS = {
         "common.schema.publish_parameter_enum_components",
     ],
     # Every choice set that shares a field name with another must be named here.
-    # Left to itself the generator resolves a collision by hashing — `Status7a2Enum`,
-    # `Kind0bfEnum` — and those names reach the published contract and the generated
+    # Left to itself the generator resolves a collision by hashing â€” `Status7a2Enum`,
+    # `Kind0bfEnum` â€” and those names reach the published contract and the generated
     # TypeScript client, where they mean nothing to a reader and change whenever an
     # unrelated model adds a choice.
     "ENUM_NAME_OVERRIDES": {
@@ -225,9 +225,25 @@ SPECTACULAR_SETTINGS = {
         "BookingStatusEnum": "apps.commerce.models.Booking.Status",
         # Named so the *existing* `DecisionEnum` keeps its name. Adding a second `decision`
         # field made the generator disambiguate both, silently renaming a component the admin
-        # app already imported — a published rename is a breaking change, and a new model is
+        # app already imported â€” a published rename is a breaking change, and a new model is
         # not a reason to inflict one on an existing consumer.
         "CompletionResponseDecisionEnum": "apps.fulfilment.models.CompletionResponse.Decision",
+        # B9/B10 choice sets. Same reasoning as above — `status` and `kind` are the two most
+        # reused field names in the schema, so every new one has to be named on arrival.
+        "OperationsCaseKindEnum": "apps.cases.models.OperationsCase.Kind",
+        "OperationsCaseStatusEnum": "apps.cases.models.OperationsCase.Status",
+        "OperationsCaseSeverityEnum": "apps.cases.models.OperationsCase.Severity",
+        "OperationsCaseTeamEnum": "apps.cases.models.OperationsCase.Team",
+        "OperationsCaseEventKindEnum": "apps.cases.models.OperationsCaseEvent.Kind",
+        "LedgerEntryKindEnum": "apps.payouts.models.PartnerLedgerEntry.Kind",
+        "LedgerEntryStatusEnum": "apps.payouts.models.PartnerLedgerEntry.Status",
+        "PayoutAccountStatusEnum": "apps.payouts.models.PartnerPayoutAccount.Status",
+        "PayoutBatchStatusEnum": "apps.payouts.models.PayoutBatch.Status",
+        "PayoutBatchItemStatusEnum": "apps.payouts.models.PayoutBatchItem.Status",
+        "KillSwitchScopeEnum": "apps.notifications.models.KillSwitch.Scope",
+        "NotificationChannelEnum": "apps.notifications.models.NotificationIntent.Channel",
+        "NotificationIntentStatusEnum": "apps.notifications.models.NotificationIntent.Status",
+        "NotificationDeliveryStatusEnum": "apps.notifications.models.NotificationDelivery.Status",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -244,7 +260,6 @@ OTP_PHONE_RATE_LIMIT = 5
 OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
-FINANCE_STEP_UP_TTL_SECONDS = env.int("FINANCE_STEP_UP_TTL_SECONDS", default=10 * 60)
 OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
@@ -271,7 +286,7 @@ RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
 RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
 RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
-# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded.
+# paying people, and a wrong payout â€” unlike a wrong capture â€” cannot be refunded.
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
 

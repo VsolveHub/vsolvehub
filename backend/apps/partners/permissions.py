@@ -71,29 +71,6 @@ class IsPartnerUser(BasePermission):
         )
 
 
-class HasRecentFinanceStepUp(BasePermission):
-    """Require a finance role and fresh OTP confirmation for money-moving commands."""
-
-    message = "A recent finance step-up is required."
-
-    def has_permission(self, request: Request, _view: APIView) -> bool:
-        user = request.user
-        if not isinstance(user, User) or not user.is_authenticated or not user.is_active:
-            return False
-        session_key = request.session.session_key
-        if not session_key:
-            return False
-        return UserSession.objects.filter(
-            user=user,
-            session_key_hash=keyed_hash(session_key),
-            revoked_at__isnull=True,
-            expires_at__gt=timezone.now(),
-            active_role__code="finance",
-            stepped_up_at__gte=timezone.now()
-            - timedelta(seconds=settings.FINANCE_STEP_UP_TTL_SECONDS),
-        ).exists()
-
-
 class HasRecentOperationsStepUp(BasePermission):
     """Require an operations role and fresh OTP confirmation for outage-assisted commands.
 

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.16.0
+  version: 1.17.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -1638,6 +1638,16 @@ paths:
   /api/v1/finance/refunds/:
     post:
       operationId: finance_refunds_create
+      description: |-
+        Issue a refund against an Order's Fulfilment Units.
+
+        Gated on `HasRecentOperationsStepUp` rather than the finance variant. The platform
+        has one staff role — Operations — and a separate `finance` role was never granted to
+        anybody, so the finance gate made these endpoints unreachable rather than restricted.
+
+        The control that actually matters is unchanged: a money-moving command still requires
+        a fresh OTP confirmation on the session, and `mark_session_step_up` is role-agnostic,
+        so `POST /auth/finance/step-up/` still stamps the session this reads.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -1679,6 +1689,8 @@ paths:
   /api/v1/finance/refunds/{refund_id}/reconcile/:
     post:
       operationId: finance_refunds_reconcile_create
+      description: Ask the provider what became of a refund. See the note on the collection
+        view.
       parameters:
       - in: header
         name: Idempotency-Key
@@ -2020,6 +2032,419 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationsBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/:
+    get:
+      operationId: operations_cases_list
+      description: |-
+        The queue, filtered the way somebody actually works it.
+
+        Cursor-paginated rather than offset: a queue is inserted into constantly, and an offset page
+        two skips whatever arrived while page one was being read. Same `StrictCursorPagination` the
+        Partner application queue and offer inbox use.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: Filter by case kind.
+      - in: query
+        name: overdue
+        schema:
+          type: boolean
+        description: Only cases past their SLA deadline.
+      - in: query
+        name: owner_team
+        schema:
+          type: string
+        description: Filter by owning team.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by case status.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperationsCaseList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: operations_cases_open
+      description: |-
+        The queue, filtered the way somebody actually works it.
+
+        Cursor-paginated rather than offset: a queue is inserted into constantly, and an offset page
+        two skips whatever arrived while page one was being read. Same `StrictCursorPagination` the
+        Partner application queue and offer inbox use.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenCaseRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OpenCaseRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OpenCaseRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/{case_id}/:
+    get:
+      operationId: operations_case_retrieve
+      parameters:
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/{case_id}/claim/:
+    post:
+      operationId: operations_case_claim
+      description: 'Shared plumbing: version guard, idempotency key, projection.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedCaseCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedCaseCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedCaseCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/{case_id}/escalate/:
+    post:
+      operationId: operations_case_escalate
+      description: 'Shared plumbing: version guard, idempotency key, projection.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalateCaseRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EscalateCaseRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EscalateCaseRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/{case_id}/notes/:
+    post:
+      operationId: operations_case_add_note
+      description: A note or a record of something sent. Never moves the case — sending
+        is not progress.
+      parameters:
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseNoteRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseNoteRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseNoteRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/{case_id}/resolve/:
+    post:
+      operationId: operations_case_resolve
+      description: |-
+        Closing a case names what happened.
+
+        The resolution must be one of the case kind's required terminal results — published on the
+        detail projection as `allowed_resolutions`, so a console never has to carry its own copy of
+        a rule that differs per kind.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveCaseRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResolveCaseRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResolveCaseRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
           description: ''
         '400':
           content:
@@ -2497,6 +2922,170 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/kill-switches/:
+    get:
+      operationId: operations_kill_switches_list
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KillSwitch'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: operations_kill_switch_engage
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngageKillSwitchRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EngageKillSwitchRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EngageKillSwitchRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/kill-switches/release/:
+    post:
+      operationId: operations_kill_switch_release
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseKillSwitchRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReleaseKillSwitchRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReleaseKillSwitchRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitch'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/ledger-adjustments/:
+    post:
+      operationId: operations_ledger_adjust
+      description: Correct the ledger by adding to it. Step-up, because an adjustment
+        moves what is owed.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAdjustmentRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LedgerAdjustmentRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LedgerAdjustmentRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerLedgerEntry'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/offers/{offer_id}/revoke/:
     post:
       operationId: operations_offer_revoke
@@ -2919,6 +3508,351 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/payout-batches/:
+    get:
+      operationId: operations_payout_batches_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by batch status.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PayoutBatchList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: operations_payout_batch_propose
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposePayoutBatchRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposePayoutBatchRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposePayoutBatchRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-batches/{batch_id}/:
+    get:
+      operationId: operations_payout_batch_retrieve
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBatch'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-batches/{batch_id}/approve/:
+    post:
+      operationId: operations_payout_batch_approve
+      description: |-
+        Maker-checker plus a fresh OTP.
+
+        Two different people is a control against one person acting alone. The step-up is a control
+        against neither of them actually being present — an unlocked laptop with an Operations
+        session open should not be able to release a week of payouts.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBatch'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-batches/{batch_id}/cancel/:
+    post:
+      operationId: operations_payout_batch_cancel
+      description: |-
+        No step-up: cancelling only returns money to the pool.
+
+        Making the safe direction as heavy as the dangerous one trains people to leave batches
+        sitting approved rather than cancel a bad one.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/payout-batches/{batch_id}/pay/:
+    post:
+      operationId: operations_payout_batch_pay
+      description: |-
+        The moment money starts leaving. Step-up again, because approval and payment can be
+        hours apart and the second decision deserves its own proof of presence.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionedBatchCommandRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutBatch'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/reservations/{reservation_id}/release/:
     post:
       operationId: operations_reservation_release
@@ -2979,6 +3913,39 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/unpayable-partners/:
+    get:
+      operationId: operations_unpayable_partners
+      description: Who is owed money and cannot be paid. The list a run is chased
+        from.
+      parameters:
+      - in: query
+        name: period_end
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: period_start
+        schema:
+          type: string
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnpayablePartner'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -4052,6 +5019,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/earnings/:
+    get:
+      operationId: partner_earnings_retrieve
+      description: |-
+        What the Partner is owed, split by state.
+
+        One number would be a lie: money held behind an open quality case is not money you can plan
+        around. `05-pricing-payments-and-settlement.md` also rules out on-demand withdrawal in M1, so
+        this deliberately publishes no "withdraw" affordance — payouts run as a reviewed batch, and a
+        button that implied otherwise would be promising something the platform does not do.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBalance'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/ledger/:
+    get:
+      operationId: partner_ledger_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PartnerLedgerEntry'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/me/:
     get:
       operationId: partner_me_retrieve
@@ -4160,6 +5182,38 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/payout-account/:
+    get:
+      operationId: partner_payout_account_retrieve
+      description: |-
+        The Partner's own account, masked.
+
+        Read-only here on purpose. Registering or changing an account starts a cooling period and is
+        the event an account-takeover investigation begins from, so it goes through the reviewed
+        onboarding path rather than a self-service PATCH nobody watches.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPayoutAccount'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -5624,6 +6678,18 @@ components:
       - decisions
       - expected_customer_cart_version
       - expected_session_cart_version
+    CaseNoteRequestRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        is_communication:
+          type: boolean
+          default: false
+      required:
+      - body
     Category:
       type: object
       properties:
@@ -6353,6 +7419,33 @@ components:
       required:
       - dispute_reason
       - expected_version
+    EngageKillSwitchRequestRequest:
+      type: object
+      properties:
+        scope:
+          $ref: '#/components/schemas/KillSwitchScopeEnum'
+        target:
+          type: string
+          default: ''
+          maxLength: 140
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+      required:
+      - reason
+      - scope
+    EscalateCaseRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        severity:
+          $ref: '#/components/schemas/OperationsCaseSeverityEnum'
+      required:
+      - expected_version
+      - severity
     EvidenceFinalizeRequestRequest:
       type: object
       description: |-
@@ -6988,6 +8081,138 @@ components:
       - server_now
       - shift_seconds
       - units
+    KillSwitch:
+      type: object
+      description: |-
+        A switch, with both signatures and both timestamps.
+
+        Who engaged it and why are published rather than kept internal: the question asked during an
+        incident is "why did notifications stop at 3am", and an answer that requires a database query
+        is an answer nobody gets in time.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        scope:
+          allOf:
+          - $ref: '#/components/schemas/KillSwitchScopeEnum'
+          readOnly: true
+        target:
+          type: string
+          readOnly: true
+        is_engaged:
+          type: boolean
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        engaged_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        engaged_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        released_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        released_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - engaged_at
+      - engaged_by_id
+      - id
+      - is_engaged
+      - reason
+      - released_at
+      - released_by_id
+      - scope
+      - target
+      - updated_at
+      - version
+    KillSwitchScopeEnum:
+      enum:
+      - NOTIFICATIONS
+      - SMS
+      - PAYMENTS
+      - PAYOUTS
+      - DISPATCH
+      - SERVICE_AREA
+      - SERVICE
+      type: string
+      description: |-
+        * `NOTIFICATIONS` - All outbound notifications
+        * `SMS` - SMS channel
+        * `PAYMENTS` - Payment collection
+        * `PAYOUTS` - Partner payouts
+        * `DISPATCH` - Partner dispatch
+        * `SERVICE_AREA` - One service area
+        * `SERVICE` - One service
+    LedgerAdjustmentRequestRequest:
+      type: object
+      description: |-
+        A correction, which is always a new entry rather than an edit.
+
+        `net_paise` is signed and deliberately has no minimum: a negative value is a reversal, which
+        is the whole mechanism the settlement document asks for.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        net_paise:
+          type: integer
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+        corrects_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - net_paise
+      - partner_id
+      - reason
+    LedgerEntryKindEnum:
+      enum:
+      - EARNING
+      - ADJUSTMENT
+      - REVERSAL
+      type: string
+      description: |-
+        * `EARNING` - Earning
+        * `ADJUSTMENT` - Adjustment
+        * `REVERSAL` - Reversal
+    LedgerEntryStatusEnum:
+      enum:
+      - PENDING
+      - AVAILABLE
+      - RESERVED
+      - PAID
+      - RELEASED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `AVAILABLE` - Available
+        * `RESERVED` - Reserved in a batch
+        * `PAID` - Paid
+        * `RELEASED` - Released
     LifecycleStatusEnum:
       enum:
       - DRAFT
@@ -7199,6 +8424,38 @@ components:
         * `DECLINED` - Declined
         * `EXPIRED` - Expired
         * `REVOKED` - Revoked
+    OpenCaseRequestRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/OperationsCaseKindEnum'
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 240
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseSeverityEnum'
+          default: NORMAL
+        detail:
+          type: string
+          default: ''
+          maxLength: 4000
+        booking_id:
+          type: string
+          format: uuid
+          nullable: true
+        order_id:
+          type: string
+          format: uuid
+          nullable: true
+        partner_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - kind
+      - summary
     OperationsApplicationQueueItem:
       type: object
       properties:
@@ -7386,6 +8643,317 @@ components:
       - status_history
       - version
       - work_tasks
+    OperationsCase:
+      type: object
+      description: |-
+        One case, with the vocabulary a reviewer needs to close it.
+
+        `allowed_resolutions` is published rather than hardcoded in the console. The set is a domain
+        rule that differs per case kind, and a UI carrying its own copy would offer a button the
+        server refuses the first time the two drift — the same reason `recovery_action` is published
+        on Booking Groups instead of being inferred from status.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseKindEnum'
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseSeverityEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseStatusEnum'
+          readOnly: true
+        owner_team:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseTeamEnum'
+          readOnly: true
+        owner_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        booking_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        order_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        summary:
+          type: string
+          readOnly: true
+        detail:
+          type: string
+          readOnly: true
+        due_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_overdue:
+          type: boolean
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        resolution:
+          type: string
+          readOnly: true
+        resolution_note:
+          type: string
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        holds_payout:
+          type: boolean
+          readOnly: true
+        allowed_resolutions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCaseEvent'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - allowed_resolutions
+      - booking_id
+      - created_at
+      - detail
+      - due_at
+      - events
+      - holds_payout
+      - id
+      - is_overdue
+      - kind
+      - order_id
+      - owner_id
+      - owner_team
+      - partner_id
+      - resolution
+      - resolution_note
+      - resolved_at
+      - server_now
+      - severity
+      - status
+      - summary
+      - version
+    OperationsCaseEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseEventKindEnum'
+          readOnly: true
+        actor_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        body:
+          type: string
+          readOnly: true
+        context:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor_id
+      - body
+      - context
+      - created_at
+      - id
+      - kind
+    OperationsCaseEventKindEnum:
+      enum:
+      - OPENED
+      - CLAIMED
+      - STATUS_CHANGED
+      - SEVERITY_CHANGED
+      - NOTE
+      - COMMUNICATION
+      - RESOLVED
+      - CANCELLED
+      type: string
+      description: |-
+        * `OPENED` - Opened
+        * `CLAIMED` - Claimed
+        * `STATUS_CHANGED` - Status changed
+        * `SEVERITY_CHANGED` - Severity changed
+        * `NOTE` - Note
+        * `COMMUNICATION` - Communication sent
+        * `RESOLVED` - Resolved
+        * `CANCELLED` - Cancelled
+    OperationsCaseKindEnum:
+      enum:
+      - ASSIGNMENT
+      - LATE_NO_SHOW
+      - CUSTOMER_UNAVAILABLE
+      - PARTIAL_WORK
+      - QUALITY
+      - SAFETY
+      - PAYMENT
+      - REFUND
+      - PAYOUT
+      type: string
+      description: |-
+        * `ASSIGNMENT` - Assignment or recovery
+        * `LATE_NO_SHOW` - Late or no-show
+        * `CUSTOMER_UNAVAILABLE` - Customer unavailable
+        * `PARTIAL_WORK` - Partial or aborted work
+        * `QUALITY` - Quality or warranty
+        * `SAFETY` - Safety or damage
+        * `PAYMENT` - Payment ambiguity
+        * `REFUND` - Refund ambiguity
+        * `PAYOUT` - Payout ambiguity
+    OperationsCaseList:
+      type: object
+      description: |-
+        The queue row. No events and no detail — a list of two hundred cases should not carry
+        two hundred audit trails, and the body of a safety report is not queue-scanning material.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseKindEnum'
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseSeverityEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseStatusEnum'
+          readOnly: true
+        owner_team:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseTeamEnum'
+          readOnly: true
+        owner_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        booking_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        summary:
+          type: string
+          readOnly: true
+        due_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_overdue:
+          type: boolean
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        holds_payout:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - booking_id
+      - created_at
+      - due_at
+      - holds_payout
+      - id
+      - is_overdue
+      - kind
+      - owner_id
+      - owner_team
+      - partner_id
+      - severity
+      - status
+      - summary
+      - version
+    OperationsCaseSeverityEnum:
+      enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `NORMAL` - Normal
+        * `HIGH` - High
+        * `URGENT` - Urgent
+    OperationsCaseStatusEnum:
+      enum:
+      - OPEN
+      - IN_PROGRESS
+      - WAITING
+      - RESOLVED
+      - CANCELLED
+      type: string
+      description: |-
+        * `OPEN` - Open
+        * `IN_PROGRESS` - In progress
+        * `WAITING` - Waiting on someone
+        * `RESOLVED` - Resolved
+        * `CANCELLED` - Cancelled
+    OperationsCaseTeamEnum:
+      enum:
+      - DISPATCH
+      - BOOKING_SUPPORT
+      - QUALITY_SUPPORT
+      - SAFETY
+      - FINANCE
+      type: string
+      description: |-
+        * `DISPATCH` - Dispatch Operations
+        * `BOOKING_SUPPORT` - Booking support
+        * `QUALITY_SUPPORT` - Quality support
+        * `SAFETY` - Restricted safety team
+        * `FINANCE` - Finance Operations
     OperationsDocumentReviewDecisionEnum:
       enum:
       - APPROVED
@@ -7896,6 +9464,35 @@ components:
       - service_area_id
       - starts_at
       - weekday
+    PartnerBalance:
+      type: object
+      description: |-
+        What is owed, by state.
+
+        Four numbers rather than one, because "you have ₹4,200" is not true in any useful sense when
+        ₹1,800 of it is held behind an open quality case. A Partner planning their week needs to know
+        which part of it is actually coming.
+      properties:
+        pending_paise:
+          type: integer
+        available_paise:
+          type: integer
+        reserved_paise:
+          type: integer
+        paid_paise:
+          type: integer
+        currency:
+          type: string
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - available_paise
+      - currency
+      - paid_paise
+      - pending_paise
+      - reserved_paise
+      - server_now
     PartnerBooking:
       type: object
       description: |-
@@ -8275,6 +9872,124 @@ components:
       - latitude
       - longitude
       - service_area_id
+    PartnerLedgerEntry:
+      type: object
+      description: |-
+        One line of a Partner's statement.
+
+        `calculation_snapshot` is published deliberately: a Partner is entitled to see why they were
+        paid what they were paid, and "the commission was 18% capped at ₹X, applied to the two tasks
+        you actually completed" is the answer. Hiding it turns every payment question into a support
+        ticket.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        booking_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/LedgerEntryKindEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/LedgerEntryStatusEnum'
+          readOnly: true
+        gross_paise:
+          type: integer
+          readOnly: true
+        commission_paise:
+          type: integer
+          readOnly: true
+        net_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        calculation_snapshot:
+          readOnly: true
+        corrects_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - booking_id
+      - calculation_snapshot
+      - commission_paise
+      - corrects_id
+      - created_at
+      - currency
+      - gross_paise
+      - id
+      - kind
+      - net_paise
+      - reason
+      - status
+    PartnerPayoutAccount:
+      type: object
+      description: |-
+        The account, masked, plus when it becomes usable.
+
+        `effective_from` is published because it is the honest explanation for why a freshly added
+        account has not been paid into yet. Without it the Partner sees a verified account and no
+        money, which reads as a bug rather than as the cooling period it is.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutAccountStatusEnum'
+          readOnly: true
+        account_last4:
+          type: string
+          readOnly: true
+        ifsc:
+          type: string
+          readOnly: true
+        holder_name:
+          type: string
+          readOnly: true
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        effective_from:
+          type: string
+          format: date-time
+          readOnly: true
+        is_payable_now:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - account_last4
+      - created_at
+      - effective_from
+      - holder_name
+      - id
+      - ifsc
+      - is_payable_now
+      - status
+      - verified_at
     PartnerPresence:
       type: object
       properties:
@@ -8668,6 +10383,259 @@ components:
         * `EXPIRED` - Expired
         * `PARTIALLY_REFUNDED` - Partially refunded
         * `REFUNDED` - Refunded
+    PayoutAccountStatusEnum:
+      enum:
+      - PENDING
+      - VERIFIED
+      - REJECTED
+      - REPLACED
+      type: string
+      description: |-
+        * `PENDING` - Pending verification
+        * `VERIFIED` - Verified
+        * `REJECTED` - Rejected
+        * `REPLACED` - Replaced
+    PayoutBatch:
+      type: object
+      description: |-
+        A run, with both signatures on it.
+
+        `proposed_by_id` and `approved_by_id` are both published so a console can render the
+        maker-checker state without a second call — and so an approver can see at a glance that the
+        batch in front of them is not one they proposed.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchStatusEnum'
+          readOnly: true
+        period_start:
+          type: string
+          format: date-time
+          readOnly: true
+        period_end:
+          type: string
+          format: date-time
+          readOnly: true
+        proposed_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        approved_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        cancelled_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        total_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        item_count:
+          type: integer
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutBatchItem'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_at
+      - approved_by_id
+      - cancelled_at
+      - cancelled_by_id
+      - created_at
+      - currency
+      - id
+      - item_count
+      - items
+      - period_end
+      - period_start
+      - proposed_by_id
+      - reference
+      - server_now
+      - status
+      - total_paise
+      - version
+    PayoutBatchItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        ledger_entry_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchItemStatusEnum'
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        provider_payout_id:
+          type: string
+          readOnly: true
+        failure_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - amount_paise
+      - completed_at
+      - currency
+      - failure_code
+      - id
+      - ledger_entry_id
+      - partner_id
+      - provider_payout_id
+      - status
+      - submitted_at
+    PayoutBatchItemStatusEnum:
+      enum:
+      - RESERVED
+      - SUBMITTED
+      - PAID
+      - FAILED
+      - UNDER_REVIEW
+      - RELEASED
+      type: string
+      description: |-
+        * `RESERVED` - Reserved
+        * `SUBMITTED` - Submitted
+        * `PAID` - Paid
+        * `FAILED` - Failed
+        * `UNDER_REVIEW` - Under review
+        * `RELEASED` - Released
+    PayoutBatchList:
+      type: object
+      description: |-
+        The list row. Items are omitted: a run can hold hundreds, and a list of runs is not where
+        anybody reads them.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        reference:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PayoutBatchStatusEnum'
+          readOnly: true
+        period_start:
+          type: string
+          format: date-time
+          readOnly: true
+        period_end:
+          type: string
+          format: date-time
+          readOnly: true
+        proposed_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        approved_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        total_paise:
+          type: integer
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        item_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - approved_by_id
+      - created_at
+      - currency
+      - id
+      - item_count
+      - period_end
+      - period_start
+      - proposed_by_id
+      - reference
+      - status
+      - total_paise
+    PayoutBatchStatusEnum:
+      enum:
+      - DRAFT
+      - PENDING_APPROVAL
+      - APPROVED
+      - PAYING
+      - PAID
+      - FAILED
+      - CANCELLED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `PENDING_APPROVAL` - Pending approval
+        * `APPROVED` - Approved
+        * `PAYING` - Paying
+        * `PAID` - Paid
+        * `FAILED` - Failed
+        * `CANCELLED` - Cancelled
     PlanQuoteCreateRequest:
       type: object
       properties:
@@ -8870,6 +10838,23 @@ components:
       - expected_version
       - reason
       - task_quantity
+    ProposePayoutBatchRequestRequest:
+      type: object
+      properties:
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 64
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+      required:
+      - period_end
+      - period_start
+      - reference
     PurposeEnum:
       enum:
       - BOOKING_GROUP
@@ -9249,6 +11234,17 @@ components:
         * `SUCCEEDED` - Succeeded
         * `FAILED` - Failed
         * `UNDER_REVIEW` - Under review
+    ReleaseKillSwitchRequestRequest:
+      type: object
+      properties:
+        scope:
+          $ref: '#/components/schemas/KillSwitchScopeEnum'
+        target:
+          type: string
+          default: ''
+          maxLength: 140
+      required:
+      - scope
     RescheduleBookingRequestRequest:
       type: object
       description: |-
@@ -9267,6 +11263,24 @@ components:
       required:
       - expected_version
       - new_requested_start
+    ResolveCaseRequestRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        resolution:
+          type: string
+          minLength: 1
+          maxLength: 48
+        note:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - expected_version
+      - note
+      - resolution
     ReverseGeocodeRequestRequest:
       type: object
       properties:
@@ -10142,6 +12156,19 @@ components:
       - fulfilment_unit_id
       - new_requested_start
       - old_requested_start
+    UnpayablePartner:
+      type: object
+      description: |-
+        Partners owed money with no payable account. Reported, never silently skipped —
+        a Partner left out of a run without explanation is a support ticket waiting to happen.
+      properties:
+        partner_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - partner_ids
     User:
       type: object
       properties:
@@ -10208,6 +12235,22 @@ components:
       - id
       - is_current
       - last_seen_at
+    VersionedBatchCommandRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - expected_version
+    VersionedCaseCommandRequest:
+      type: object
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - expected_version
     VersionedCommandRequest:
       type: object
       description: |-

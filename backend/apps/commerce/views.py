@@ -38,7 +38,7 @@ from apps.commerce.services import (
 )
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
-from apps.partners.permissions import HasRecentFinanceStepUp
+from apps.partners.permissions import HasRecentOperationsStepUp
 from common.errors.serializers import ApiErrorSerializer
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
@@ -276,7 +276,18 @@ class RazorpayWebhookView(APIView):
 
 
 class FinanceRefundCollectionView(APIView):
-    permission_classes = (IsAuthenticated, HasRecentFinanceStepUp)
+    """Issue a refund against an Order's Fulfilment Units.
+
+    Gated on `HasRecentOperationsStepUp` rather than the finance variant. The platform
+    has one staff role — Operations — and a separate `finance` role was never granted to
+    anybody, so the finance gate made these endpoints unreachable rather than restricted.
+
+    The control that actually matters is unchanged: a money-moving command still requires
+    a fresh OTP confirmation on the session, and `mark_session_step_up` is role-agnostic,
+    so `POST /auth/finance/step-up/` still stamps the session this reads.
+    """
+
+    permission_classes = (IsAuthenticated, HasRecentOperationsStepUp)
 
     @extend_schema(
         tags=["Finance"],
@@ -331,7 +342,9 @@ class RefundDetailView(APIView):
 
 
 class FinanceRefundReconcileView(APIView):
-    permission_classes = (IsAuthenticated, HasRecentFinanceStepUp)
+    """Ask the provider what became of a refund. See the note on the collection view."""
+
+    permission_classes = (IsAuthenticated, HasRecentOperationsStepUp)
 
     @extend_schema(
         tags=["Finance"],
