@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.14.0)
- * Checksum: d0160e93152c00cb
+ * Source:   contracts/openapi/v1.yaml (version 1.16.0)
+ * Checksum: 1544ffad200f2359
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -263,6 +263,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/booking-groups/{group_id}/address/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["booked_group_change_address"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/booking-groups/{group_id}/cancel/": {
         parameters: {
             query?: never;
@@ -279,6 +295,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/booking-groups/{group_id}/cancel-booked/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Post-payment group cancellation.
+         *
+         *     Distinct from `POST /booking-groups/{id}/cancel/`, which is and remains the *pre-payment*
+         *     command and still refuses a `BOOKED` group. Two different money paths — one collects
+         *     nothing, one runs the fee ladder per unit — so they are two different operations rather
+         *     than one endpoint that changes meaning depending on state.
+         */
+        post: operations["booked_group_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/booking-groups/{group_id}/reschedule/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["booked_group_reschedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/booking/windows/": {
         parameters: {
             query?: never;
@@ -289,6 +345,109 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["booking_windows_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["booking_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["booking_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/completion/confirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["booking_completion_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/completion/dispute/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["booking_completion_dispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/reschedule/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["booking_reschedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/start-otp/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The Customer requests the code; the Partner types it in.
+         *
+         *     Two different people, two different endpoints, which is what makes the OTP mean anything:
+         *     it proves the Partner is standing in front of the Customer. Publishing the code to the
+         *     Partner, or letting the Partner request it, would prove nothing at all.
+         */
+        post: operations["booking_start_otp_request"];
         delete?: never;
         options?: never;
         head?: never;
@@ -617,6 +776,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/bookings/{booking_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["operations_booking_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/bookings/{booking_id}/assisted-start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The audited channel-outage workaround, and the one place step-up is mandatory.
+         *
+         *     `operations_assisted_start` refuses a blank outage reason on its own, but the
+         *     re-verification it describes has never been enforced anywhere, because until this release
+         *     there was no view to enforce it in. `HasRecentOperationsStepUp` — already written, already
+         *     documented as gating exactly this — is that enforcement. It is not a general-purpose OTP
+         *     bypass: it starts work without the Customer's code and says so, loudly, in the audit trail.
+         */
+        post: operations["operations_booking_assisted_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/bookings/{booking_id}/recover/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_booking_recover_partner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/checkouts/{checkout_id}/offers/": {
         parameters: {
             query?: never;
@@ -713,6 +929,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/fulfilment-units/{unit_id}/dispatch-explanation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["operations_fulfilment_unit_dispatch_explanation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/fulfilment-units/{unit_id}/offers/": {
         parameters: {
             query?: never;
@@ -723,6 +955,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["operations_fulfilment_unit_offer_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/fulfilment-units/{unit_id}/recover/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_fulfilment_unit_recover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/offers/{offer_id}/revoke/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_offer_revoke"];
         delete?: never;
         options?: never;
         head?: never;
@@ -841,6 +1105,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/reservations/{reservation_id}/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_reservation_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/orders/{order_id}/": {
         parameters: {
             query?: never;
@@ -931,6 +1211,253 @@ export interface paths {
         get: operations["partner_availability_retrieve"];
         put: operations["partner_availability_update"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_booking_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/abort/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Shared plumbing for the Partner's physical-work commands.
+         *
+         *     They differ only in which service they call and what they read from the body, so the
+         *     version guard, idempotency key, actor resolution and projection live here once. A command
+         *     that needed to opt out of any of those would be a command that should not be on this base
+         *     class.
+         */
+        post: operations["partner_booking_abort"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/arrived/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Shared plumbing for the Partner's physical-work commands.
+         *
+         *     They differ only in which service they call and what they read from the body, so the
+         *     version guard, idempotency key, actor resolution and projection live here once. A command
+         *     that needed to opt out of any of those would be a command that should not be on this base
+         *     class.
+         */
+        post: operations["partner_booking_arrived"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/completion/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_booking_submit_completion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/contact-attempts/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_booking_contact_attempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/customer-unavailable/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Shared plumbing for the Partner's physical-work commands.
+         *
+         *     They differ only in which service they call and what they read from the body, so the
+         *     version guard, idempotency key, actor resolution and projection live here once. A command
+         *     that needed to opt out of any of those would be a command that should not be on this base
+         *     class.
+         */
+        post: operations["partner_booking_customer_unavailable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/en-route/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Shared plumbing for the Partner's physical-work commands.
+         *
+         *     They differ only in which service they call and what they read from the body, so the
+         *     version guard, idempotency key, actor resolution and projection live here once. A command
+         *     that needed to opt out of any of those would be a command that should not be on this base
+         *     class.
+         */
+        post: operations["partner_booking_en_route"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/evidence/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_booking_evidence_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/evidence/uploads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Mint a signed grant; the bytes never pass through Django on the way in.
+         *
+         *     The same three-step shape FE-07 established for KYC — request a grant, PUT to the bucket,
+         *     finalize by object key — for the same reason: streaming megabytes of site photographs
+         *     through the API server buys nothing and costs availability.
+         */
+        post: operations["partner_booking_evidence_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Give the job back, with a reason and no penalty attached.
+         *
+         *     `01-scope-and-flow.md` is explicit that M1 records a late release for manual Operations
+         *     review only — there is no automatic score, no threat and nothing the Partner can see that
+         *     implies one. The reason is required because recovery needs to know what happened, not to
+         *     justify the Partner to the platform.
+         */
+        post: operations["partner_booking_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/scope-amendments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["partner_booking_propose_amendment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/bookings/{booking_id}/start-otp/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Shared plumbing for the Partner's physical-work commands.
+         *
+         *     They differ only in which service they call and what they read from the body, so the
+         *     version guard, idempotency key, actor resolution and projection live here once. A command
+         *     that needed to opt out of any of those would be a command that should not be on this base
+         *     class.
+         */
+        post: operations["partner_booking_start_otp_verify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1193,6 +1720,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scope-amendments/{amendment_id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Approve or decline proposed extra work.
+         *
+         *     Approval is not a state flag — it mints the `PriceRevision` and its `PaymentAttempt` in the
+         *     same transaction, so a Customer cannot approve work that never gets billed. The response
+         *     carries the attempt id because the client's next step is to pay it.
+         */
+        post: operations["scope_amendment_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scope-amendments/{amendment_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Approve or decline proposed extra work.
+         *
+         *     Approval is not a state flag — it mints the `PriceRevision` and its `PaymentAttempt` in the
+         *     same transaction, so a Customer cannot approve work that never gets billed. The response
+         *     carries the attempt id because the client's next step is to pay it.
+         */
+        post: operations["scope_amendment_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/service-areas/": {
         parameters: {
             query?: never;
@@ -1336,6 +1909,13 @@ export interface components {
             source?: components["schemas"]["SourceEnum"];
             is_default?: boolean;
         };
+        AmendmentApprovalResult: {
+            amendment: components["schemas"]["ScopeAmendment"];
+            /** Format: uuid */
+            payment_attempt_id: string;
+            amount_paise: number;
+            currency: string;
+        };
         ApiError: {
             readonly error: components["schemas"]["ApiErrorDetail"];
         };
@@ -1353,6 +1933,17 @@ export interface components {
             quote_id: string;
             consent_purpose: string;
             consent_version: string;
+        };
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        AssistedStartRequestRequest: {
+            expected_version: number;
+            outage_reason: string;
         };
         AuthenticatedSession: {
             readonly user: components["schemas"]["User"];
@@ -1374,6 +1965,10 @@ export interface components {
             readonly estimated_duration_minutes: number;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        BookingCancellationResult: {
+            booking: components["schemas"]["CustomerBooking"];
+            refund_ids: string[];
         };
         BookingGroup: {
             /** Format: uuid */
@@ -1416,13 +2011,39 @@ export interface components {
          *     * `ALL_UNITS_HELD` - All units held
          *     * `PAYMENT_PENDING` - Payment pending
          *     * `BOOKED` - Booked
+         *     * `COMPLETED` - Completed
          *     * `REPLAN_REQUIRED` - Replan required
          *     * `CANCELLED` - Cancelled
          *     * `EXPIRED` - Expired
          *     * `FAILED` - Failed
          * @enum {string}
          */
-        BookingGroupStatusEnum: "CONFIRMED" | "MATCHING" | "PARTIALLY_HELD" | "ALL_UNITS_HELD" | "PAYMENT_PENDING" | "BOOKED" | "REPLAN_REQUIRED" | "CANCELLED" | "EXPIRED" | "FAILED";
+        BookingGroupStatusEnum: "CONFIRMED" | "MATCHING" | "PARTIALLY_HELD" | "ALL_UNITS_HELD" | "PAYMENT_PENDING" | "BOOKED" | "COMPLETED" | "REPLAN_REQUIRED" | "CANCELLED" | "EXPIRED" | "FAILED";
+        /**
+         * @description * `CONFIRMED` - Confirmed
+         *     * `EN_ROUTE` - En route
+         *     * `ARRIVED` - Arrived
+         *     * `IN_PROGRESS` - In progress
+         *     * `COMPLETION_SUBMITTED` - Completion submitted
+         *     * `COMPLETED` - Completed
+         *     * `PARTIALLY_COMPLETED` - Partially completed
+         *     * `DISPUTED` - Disputed
+         *     * `RECOVERY_REQUIRED` - Recovery required
+         *     * `ABORTED` - Aborted
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        BookingStatusEnum: "CONFIRMED" | "EN_ROUTE" | "ARRIVED" | "IN_PROGRESS" | "COMPLETION_SUBMITTED" | "COMPLETED" | "PARTIALLY_COMPLETED" | "DISPUTED" | "RECOVERY_REQUIRED" | "ABORTED" | "CANCELLED";
+        BookingStatusHistory: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly command: string;
+            readonly from_status: string;
+            readonly to_status: string;
+            readonly reason: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         BookingWindow: {
             readonly id: string;
             /** Format: date-time */
@@ -1644,6 +2265,33 @@ export interface components {
             expected_version: number;
             review_reason: string;
         };
+        CompletionResponse: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly decision: components["schemas"]["CompletionResponseDecisionEnum"];
+            readonly dispute_reason: string;
+            /** Format: date-time */
+            readonly responded_at: string;
+        };
+        /**
+         * @description * `CONFIRMED` - Confirmed
+         *     * `DISPUTED` - Disputed
+         *     * `AUTO_FINALIZED` - Auto-finalized
+         * @enum {string}
+         */
+        CompletionResponseDecisionEnum: "CONFIRMED" | "DISPUTED" | "AUTO_FINALIZED";
+        CompletionSubmission: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly notes: string;
+            readonly safety_damage_declared: boolean;
+            /** Format: date-time */
+            readonly submitted_at: string;
+            /** Format: date-time */
+            readonly responds_by: string;
+            readonly outcomes: components["schemas"]["WorkOutcome"][];
+            readonly response: components["schemas"]["CompletionResponse"] | null;
+        };
         /**
          * @description * `ALL_OR_NOTHING` - All or nothing
          * @enum {string}
@@ -1674,11 +2322,42 @@ export interface components {
             readonly csrf_token: string;
         };
         /**
-         * @description * `APPROVED` - APPROVED
-         *     * `REJECTED` - REJECTED
-         * @enum {string}
+         * @description One visit, as the Customer who paid for it sees it.
+         *
+         *     Carries the Partner's display name and nothing else about them — not their phone number,
+         *     not their earnings, not their other jobs. `G7` in the frontend task file is the same rule
+         *     from the other side: Customer projections contain no Partner identity beyond what is needed
+         *     to recognise the person at the door.
          */
-        DecisionEnum: "APPROVED" | "REJECTED";
+        CustomerBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly fulfilment_unit_id: string | null;
+            readonly status: components["schemas"]["BookingStatusEnum"];
+            readonly version: number;
+            /** Format: date-time */
+            readonly scheduled_start: string;
+            readonly estimated_duration_minutes: number;
+            readonly partner_display_name: string;
+            /** Format: date-time */
+            readonly en_route_at: string | null;
+            /** Format: date-time */
+            readonly arrived_at: string | null;
+            /** Format: date-time */
+            readonly late_declared_at: string | null;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
+            readonly cancellation_reason: string;
+            readonly work_tasks: components["schemas"]["WorkTask"][];
+            readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
+            readonly completion: components["schemas"]["CompletionSubmission"] | null;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        CustomerContactAttemptRequestRequest: {
+            outcome: string;
+        };
         /**
          * @description * `NONE` - No ordering dependency
          *     * `LEFT_BEFORE_RIGHT` - Left before right
@@ -1686,6 +2365,116 @@ export interface components {
          * @enum {string}
          */
         DependencyEnum: "NONE" | "LEFT_BEFORE_RIGHT" | "RIGHT_BEFORE_LEFT";
+        DispatchAttempt: {
+            /** Format: uuid */
+            attempt_id: string;
+            rank: number;
+            /** Format: uuid */
+            partner_id: string;
+            /** Format: date-time */
+            created_at: string;
+            offer_status: string | null;
+            eligibility: {
+                [key: string]: unknown;
+            };
+            ranked: components["schemas"]["RankedCandidate"][];
+            excluded: components["schemas"]["ExcludedCandidate"][];
+        };
+        DispatchCommandRequestRequest: {
+            expected_unit_version: number;
+            reason: components["schemas"]["ReasonEnum"];
+            /** @default  */
+            note: string;
+        };
+        DispatchExplanation: {
+            /** Format: uuid */
+            fulfilment_unit_id: string;
+            unit_status: string;
+            unit_version: number;
+            policy: string;
+            policy_version: number;
+            attempts: components["schemas"]["DispatchAttempt"][];
+            /** Format: date-time */
+            server_now: string;
+        };
+        DispatchReservation: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly fulfilment_unit_id: string | null;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly status: components["schemas"]["DispatchReservationStatusEnum"];
+            /** Format: date-time */
+            readonly expires_at: string;
+            /** Format: date-time */
+            readonly released_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description * `TENTATIVE` - Tentative
+         *     * `CONFIRMED` - Confirmed
+         *     * `RELEASED` - Released
+         * @enum {string}
+         */
+        DispatchReservationStatusEnum: "TENTATIVE" | "CONFIRMED" | "RELEASED";
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        DisputeCompletionRequestRequest: {
+            expected_version: number;
+            dispute_reason: string;
+            disputed_outcome_ids?: string[];
+        };
+        /**
+         * @description The client's claim about what it uploaded; Django streams the object and checks it.
+         *
+         *     `sha256` is not trusted — it is *compared*. The same three-step shape FE-07 established for
+         *     KYC: the client computes the digest locally, Django recomputes it from the bytes actually in
+         *     the bucket, and a mismatch fails closed. Sending it is what makes the comparison possible.
+         */
+        EvidenceFinalizeRequestRequest: {
+            kind: components["schemas"]["WorkEvidenceKindEnum"];
+            object_key: string;
+            content_type: string;
+            size_bytes: number;
+            sha256: string;
+            /** Format: uuid */
+            work_task_id?: string | null;
+        };
+        /**
+         * @description A short-lived, single-attempt grant to put bytes in a private bucket.
+         *
+         *     The token is published because the browser must send it, and for no longer than one attempt:
+         *     FE-07 established that a signed grant lives in component state and is dropped afterwards,
+         *     never persisted. `expires_at` is what makes that enforceable.
+         */
+        EvidenceUploadGrant: {
+            object_key: string;
+            upload_url: string;
+            upload_token: string;
+            resumable_url: string;
+            method: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        EvidenceUploadRequestRequest: {
+            kind: components["schemas"]["WorkEvidenceKindEnum"];
+            content_type: string;
+            size_bytes: number;
+        };
+        ExcludedCandidate: {
+            /** Format: uuid */
+            partner_id: string;
+            reasons: string[];
+        };
         ExpectedVersionRequest: {
             expected_version: number;
         };
@@ -1745,8 +2534,24 @@ export interface components {
             readonly estimated_duration_minutes: number;
             /** Format: date-time */
             readonly state_deadline: string | null;
+            /** Format: uuid */
+            readonly booking_id: string | null;
             readonly lines: components["schemas"]["FulfilmentUnitLine"][];
             readonly total: components["schemas"]["Money"];
+        };
+        FulfilmentUnitDispatch: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            status: string;
+            version: number;
+            group_status: string;
+            /** Format: uuid */
+            live_offer_id: string | null;
+            live_offer_status: string | null;
+            reservation_status: string | null;
+            /** Format: date-time */
+            server_now: string;
         };
         FulfilmentUnitLine: {
             /** Format: uuid */
@@ -1764,12 +2569,33 @@ export interface components {
          *     * `HELD` - Held
          *     * `PAYMENT_PENDING` - Payment pending
          *     * `BOOKED` - Booked
+         *     * `RECOVERY_REQUIRED` - Recovery required
          *     * `CANCELLED` - Cancelled
          *     * `FAILED` - Failed
          *     * `COMPLETED` - Completed
+         *     * `PARTIALLY_COMPLETED` - Partially completed
+         *     * `DISPUTED` - Disputed
          * @enum {string}
          */
-        FulfilmentUnitStatusEnum: "PLANNED" | "MATCHING" | "HELD" | "PAYMENT_PENDING" | "BOOKED" | "CANCELLED" | "FAILED" | "COMPLETED";
+        FulfilmentUnitStatusEnum: "PLANNED" | "MATCHING" | "HELD" | "PAYMENT_PENDING" | "BOOKED" | "RECOVERY_REQUIRED" | "CANCELLED" | "FAILED" | "COMPLETED" | "PARTIALLY_COMPLETED" | "DISPUTED";
+        GroupAddressChangeRequestRequest: {
+            expected_version: number;
+            /** Format: uuid */
+            new_address_id: string;
+        };
+        GroupCancelRequestRequest: {
+            expected_version: number;
+            reason: string;
+        };
+        GroupCancellationResult: {
+            /** Format: uuid */
+            booking_group_id: string;
+            group_status: string;
+            group_version: number;
+            units: components["schemas"]["UnitCancellationOutcome"][];
+            /** Format: date-time */
+            server_now: string;
+        };
         GroupQuote: {
             /** Format: uuid */
             readonly id: string;
@@ -1824,6 +2650,20 @@ export interface components {
             readonly lines: components["schemas"]["GroupQuoteLine"][];
             readonly total: components["schemas"]["Money"];
             readonly cancellation_policy_snapshot: unknown;
+        };
+        GroupRescheduleRequestRequest: {
+            expected_version: number;
+            /** Format: date-time */
+            new_group_start: string;
+        };
+        GroupRescheduleResult: {
+            /** Format: uuid */
+            booking_group_id: string;
+            group_version: number;
+            shift_seconds: number;
+            units: components["schemas"]["UnitRescheduleOutcome"][];
+            /** Format: date-time */
+            server_now: string;
         };
         /**
          * @description * `DRAFT` - Draft
@@ -1930,8 +2770,56 @@ export interface components {
             readonly previous: string | null;
             readonly results: components["schemas"]["OperationsApplicationQueueItem"][];
         };
+        /**
+         * @description Cross-unit recovery context, with the audit trail that justifies it.
+         *
+         *     Operations is the one actor that legitimately sees both sides, so this is the one
+         *     projection that names the Partner and the Booking Group. Every read of it is audited by
+         *     `IsOperationsUser`.
+         */
+        OperationsBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly fulfilment_unit_id: string | null;
+            /** Format: uuid */
+            readonly booking_group_id: string | null;
+            /** Format: uuid */
+            readonly order_id: string;
+            readonly status: components["schemas"]["BookingStatusEnum"];
+            readonly version: number;
+            /** Format: date-time */
+            readonly scheduled_start: string;
+            readonly estimated_duration_minutes: number;
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly partner_display_name: string;
+            /** Format: date-time */
+            readonly en_route_at: string | null;
+            /** Format: date-time */
+            readonly arrived_at: string | null;
+            /** Format: date-time */
+            readonly customer_unavailable_wait_started_at: string | null;
+            /** Format: date-time */
+            readonly late_declared_at: string | null;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
+            readonly cancellation_reason: string;
+            readonly payout_hold: boolean;
+            readonly work_tasks: components["schemas"]["WorkTask"][];
+            readonly evidence: components["schemas"]["WorkEvidence"][];
+            readonly status_history: components["schemas"]["BookingStatusHistory"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description * `APPROVED` - APPROVED
+         *     * `REJECTED` - REJECTED
+         * @enum {string}
+         */
+        OperationsDocumentReviewDecisionEnum: "APPROVED" | "REJECTED";
         OperationsDocumentReviewRequest: {
-            decision: components["schemas"]["DecisionEnum"];
+            decision: components["schemas"]["OperationsDocumentReviewDecisionEnum"];
             reason?: string;
         };
         OperationsPartnerScheduleUpdateRequest: {
@@ -1991,6 +2879,15 @@ export interface components {
             code: string;
             device_identifier?: string;
             device_label?: string;
+        };
+        OutcomeInputRequest: {
+            /** Format: uuid */
+            work_task_id: string;
+            outcome: components["schemas"]["WorkOutcomeEnum"];
+            /** @default 0 */
+            quantity: number;
+            /** @default  */
+            reason: string;
         };
         PartnerApplication: {
             /** Format: uuid */
@@ -2097,6 +2994,38 @@ export interface components {
             ends_at: string;
             /** @default false */
             ends_next_day: boolean;
+        };
+        /**
+         * @description The same visit, as the Partner assigned to it sees it.
+         *
+         *     Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
+         *     amounts the Partner is working to. The Booking Group is not addressable from here at all:
+         *     `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
+         *     cheapest way to guarantee that is to never publish the identifier that would let them try.
+         */
+        PartnerBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly fulfilment_unit_id: string | null;
+            readonly status: components["schemas"]["BookingStatusEnum"];
+            readonly version: number;
+            /** Format: date-time */
+            readonly scheduled_start: string;
+            readonly estimated_duration_minutes: number;
+            /** Format: date-time */
+            readonly en_route_at: string | null;
+            /** Format: date-time */
+            readonly arrived_at: string | null;
+            /** Format: date-time */
+            readonly customer_unavailable_wait_started_at: string | null;
+            /** Format: date-time */
+            readonly late_declared_at: string | null;
+            readonly work_tasks: components["schemas"]["WorkTask"][];
+            readonly evidence: components["schemas"]["WorkEvidence"][];
+            readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
+            /** Format: date-time */
+            readonly server_now: string;
         };
         PartnerConsent: {
             /** Format: uuid */
@@ -2402,10 +3331,30 @@ export interface components {
          */
         PrivacyStatusEnum: "RECEIVED" | "IN_REVIEW" | "COMPLETED" | "REJECTED";
         /**
-         * @description * `BOOKING_GROUP` - Booking group
+         * @description * `PENDING` - Pending scan
+         *     * `CLEAN` - Clean
+         *     * `FAILED` - Failed scan
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP";
+        ProcessingStatusEnum: "PENDING" | "CLEAN" | "FAILED";
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        ProposeAmendmentRequestRequest: {
+            expected_version: number;
+            reason: string;
+            task_quantity: number;
+        };
+        /**
+         * @description * `BOOKING_GROUP` - Booking group
+         *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+         * @enum {string}
+         */
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION";
         Quote: {
             /** Format: uuid */
             readonly id: string;
@@ -2455,6 +3404,35 @@ export interface components {
             readonly amount: components["schemas"]["Money"];
             readonly included_in_total: boolean;
         };
+        RankedCandidate: {
+            /** Format: uuid */
+            partner_id: string;
+            rank: number;
+            factors: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @description * `PARTNER_UNREACHABLE` - Partner unreachable
+         *     * `CUSTOMER_REQUEST` - Customer request
+         *     * `SAFETY_CONCERN` - Safety concern
+         *     * `DUPLICATE_DISPATCH` - Duplicate dispatch
+         *     * `STUCK_DISPATCH` - Stuck dispatch
+         *     * `OPERATIONS_ERROR` - Operations error
+         * @enum {string}
+         */
+        ReasonEnum: "PARTNER_UNREACHABLE" | "CUSTOMER_REQUEST" | "SAFETY_CONCERN" | "DUPLICATE_DISPATCH" | "STUCK_DISPATCH" | "OPERATIONS_ERROR";
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        ReasonedCommandRequest: {
+            expected_version: number;
+            reason: string;
+        };
         /**
          * @description * `PENDING` - Pending
          *     * `IN_SYNC` - In sync
@@ -2462,6 +3440,18 @@ export interface components {
          * @enum {string}
          */
         ReconciliationStateEnum: "PENDING" | "IN_SYNC" | "NEEDS_ATTENTION";
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        RecoverBookingRequestRequest: {
+            expected_version: number;
+            /** Format: uuid */
+            offer_id: string;
+        };
         /**
          * @description * `WAIT` - WAIT
          *     * `PAYMENT_REQUIRED` - PAYMENT_REQUIRED
@@ -2516,6 +3506,18 @@ export interface components {
          * @enum {string}
          */
         RefundStatusEnum: "REQUESTED" | "SUBMITTED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNDER_REVIEW";
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        RescheduleBookingRequestRequest: {
+            expected_version: number;
+            /** Format: date-time */
+            new_requested_start: string;
+        };
         ReverseGeocodeRequestRequest: {
             /** Format: decimal */
             latitude: string;
@@ -2547,6 +3549,52 @@ export interface components {
          * @enum {string}
          */
         ScanStatusEnum: "PENDING" | "CLEAN" | "REJECTED" | "FAILED";
+        ScopeAmendment: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly booking_id: string;
+            readonly status: components["schemas"]["ScopeAmendmentStatusEnum"];
+            readonly version: number;
+            readonly reason: string;
+            readonly evidence_required: boolean;
+            readonly total_paise: number;
+            readonly currency: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+            /** Format: date-time */
+            readonly responded_at: string | null;
+            readonly lines: components["schemas"]["ScopeAmendmentLine"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        ScopeAmendmentLine: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly position: number;
+            readonly kind: components["schemas"]["ScopeAmendmentLineKindEnum"];
+            readonly code: string;
+            readonly label: string;
+            readonly quantity: number;
+            readonly amount_paise: number;
+            readonly currency: string;
+        };
+        /**
+         * @description * `TASK` - Task
+         *     * `MATERIAL` - Material
+         * @enum {string}
+         */
+        ScopeAmendmentLineKindEnum: "TASK" | "MATERIAL";
+        /**
+         * @description * `PROPOSED` - Proposed
+         *     * `CUSTOMER_APPROVED` - Customer approved
+         *     * `CUSTOMER_DECLINED` - Customer declined
+         *     * `PAYMENT_PENDING` - Payment pending
+         *     * `AUTHORIZED` - Authorized
+         *     * `EXPIRED` - Expired
+         * @enum {string}
+         */
+        ScopeAmendmentStatusEnum: "PROPOSED" | "CUSTOMER_APPROVED" | "CUSTOMER_DECLINED" | "PAYMENT_PENDING" | "AUTHORIZED" | "EXPIRED";
         ServiceArea: {
             /** Format: uuid */
             readonly id: string;
@@ -2674,6 +3722,35 @@ export interface components {
          * @enum {string}
          */
         SourceEnum: "MANUAL" | "REVERSE_GEOCODED";
+        /**
+         * @description What the Customer is told about the code they must read out.
+         *
+         *     `code_length` rather than the code: the Customer reads the code off their own SMS, and
+         *     publishing it here would hand it to anyone who could reach this endpoint — which is the
+         *     whole point of the OTP. `development_code` is populated only by the development sender,
+         *     exactly as OTP login already works.
+         */
+        StartOtp: {
+            /** Format: uuid */
+            booking_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            code_length: number;
+            development_code?: string | null;
+            /** Format: date-time */
+            server_now: string;
+        };
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        StartOtpVerifyRequestRequest: {
+            expected_version: number;
+            code: string;
+        };
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -2692,6 +3769,21 @@ export interface components {
             readonly slug: string;
             readonly name: string;
             readonly description: string;
+        };
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        SubmitCompletionRequestRequest: {
+            expected_version: number;
+            /** @default  */
+            notes: string;
+            /** @default false */
+            safety_damage_declared: boolean;
+            outcomes: components["schemas"]["OutcomeInputRequest"][];
         };
         /**
          * @description * `UNDER_REVIEW` - UNDER_REVIEW
@@ -2740,6 +3832,26 @@ export interface components {
          * @enum {string}
          */
         UnavailableReasonEnum: "PAST" | "TOO_SOON" | "OUTSIDE_OPERATING_WINDOW" | "NO_CAPACITY";
+        UnitCancellationOutcome: {
+            /** Format: uuid */
+            fulfilment_unit_id: string;
+            /** Format: uuid */
+            booking_id: string;
+            outcome: string;
+            booking_status: string;
+            fee_paise: number;
+            refund_ids: string[];
+        };
+        UnitRescheduleOutcome: {
+            /** Format: uuid */
+            fulfilment_unit_id: string;
+            /** Format: uuid */
+            booking_id: string;
+            /** Format: date-time */
+            old_requested_start: string;
+            /** Format: date-time */
+            new_requested_start: string;
+        };
         User: {
             /** Format: uuid */
             readonly id: string;
@@ -2762,10 +3874,86 @@ export interface components {
             readonly expires_at: string;
             readonly is_current: boolean;
         };
+        /**
+         * @description The floor every state-changing fulfilment command sits on.
+         *
+         *     `expected_version` is required, never defaulted. A command that would apply to whatever
+         *     state it happens to find is the thing optimistic concurrency exists to prevent, and a
+         *     default here would silently reintroduce it for every caller that forgot the field.
+         */
+        VersionedCommandRequest: {
+            expected_version: number;
+        };
         WebhookAccepted: {
             readonly accepted: boolean;
             readonly duplicate: boolean;
         };
+        /**
+         * @description Evidence metadata only.
+         *
+         *     The object key is a private-bucket path and the bytes are KYC-adjacent: neither belongs in
+         *     a list projection. A reader who needs the file asks for a fresh, audited, expiring grant,
+         *     the same way Partner documents work.
+         */
+        WorkEvidence: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["WorkEvidenceKindEnum"];
+            /** Format: uuid */
+            readonly work_task_id: string | null;
+            readonly content_type: string;
+            readonly size_bytes: number;
+            readonly processing_status: components["schemas"]["ProcessingStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `BEFORE` - Before
+         *     * `AFTER` - After
+         *     * `CONTACT_ATTEMPT` - Contact attempt
+         *     * `SAFETY` - Safety
+         *     * `DAMAGE` - Damage
+         *     * `AMENDMENT` - Amendment
+         *     * `COMPLETION` - Completion
+         *     * `WAIT` - Wait
+         * @enum {string}
+         */
+        WorkEvidenceKindEnum: "BEFORE" | "AFTER" | "CONTACT_ATTEMPT" | "SAFETY" | "DAMAGE" | "AMENDMENT" | "COMPLETION" | "WAIT";
+        WorkOutcome: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly work_task_id: string;
+            readonly outcome: components["schemas"]["WorkOutcomeEnum"];
+            readonly quantity: number;
+            readonly reason: string;
+        };
+        /**
+         * @description * `COMPLETED` - Completed
+         *     * `PARTIAL` - Partial
+         *     * `NOT_STARTED` - Not started
+         *     * `BLOCKED` - Blocked
+         *     * `NOT_APPLICABLE` - Not applicable
+         * @enum {string}
+         */
+        WorkOutcomeEnum: "COMPLETED" | "PARTIAL" | "NOT_STARTED" | "BLOCKED" | "NOT_APPLICABLE";
+        WorkTask: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["WorkTaskKindEnum"];
+            readonly position: number;
+            readonly code: string;
+            readonly label: string;
+            readonly quantity: number;
+            readonly amount_paise: number;
+            readonly currency: string;
+        };
+        /**
+         * @description * `ORIGINAL` - Original scope
+         *     * `AMENDMENT` - Approved amendment
+         * @enum {string}
+         */
+        WorkTaskKindEnum: "ORIGINAL" | "AMENDMENT";
     };
     responses: never;
     parameters: never;
@@ -3349,6 +4537,68 @@ export interface operations {
             };
         };
     };
+    booked_group_change_address: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupAddressChangeRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GroupAddressChangeRequestRequest"];
+                "multipart/form-data": components["schemas"]["GroupAddressChangeRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRescheduleResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     booking_group_cancel: {
         parameters: {
             query?: never;
@@ -3375,6 +4625,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookingGroup"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booked_group_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupCancelRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GroupCancelRequestRequest"];
+                "multipart/form-data": components["schemas"]["GroupCancelRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupCancellationResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booked_group_reschedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupRescheduleRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GroupRescheduleRequestRequest"];
+                "multipart/form-data": components["schemas"]["GroupRescheduleRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupRescheduleResult"];
                 };
             };
             400: {
@@ -3443,6 +4817,350 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBooking"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReasonedCommandRequest"];
+                "multipart/form-data": components["schemas"]["ReasonedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingCancellationResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_completion_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_completion_dispute: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisputeCompletionRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DisputeCompletionRequestRequest"];
+                "multipart/form-data": components["schemas"]["DisputeCompletionRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_reschedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RescheduleBookingRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RescheduleBookingRequestRequest"];
+                "multipart/form-data": components["schemas"]["RescheduleBookingRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_start_otp_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartOtp"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4061,6 +5779,167 @@ export interface operations {
             };
         };
     };
+    operations_booking_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBooking"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_booking_assisted_start: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistedStartRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssistedStartRequestRequest"];
+                "multipart/form-data": components["schemas"]["AssistedStartRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_booking_recover_partner: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoverBookingRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RecoverBookingRequestRequest"];
+                "multipart/form-data": components["schemas"]["RecoverBookingRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_checkouts_offers_create: {
         parameters: {
             query?: never;
@@ -4387,6 +6266,43 @@ export interface operations {
             };
         };
     };
+    operations_fulfilment_unit_dispatch_explanation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispatchExplanation"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_fulfilment_unit_offer_create: {
         parameters: {
             query?: never;
@@ -4410,6 +6326,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Offer"];
+                };
+            };
+        };
+    };
+    operations_fulfilment_unit_recover: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                unit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchCommandRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DispatchCommandRequestRequest"];
+                "multipart/form-data": components["schemas"]["DispatchCommandRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FulfilmentUnitDispatch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_offer_revoke: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                offer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchCommandRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DispatchCommandRequestRequest"];
+                "multipart/form-data": components["schemas"]["DispatchCommandRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Offer"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -4761,6 +6801,68 @@ export interface operations {
             };
         };
     };
+    operations_reservation_release: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                reservation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DispatchCommandRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DispatchCommandRequestRequest"];
+                "multipart/form-data": components["schemas"]["DispatchCommandRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispatchReservation"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     orders_retrieve: {
         parameters: {
             query?: never;
@@ -5040,6 +7142,708 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_abort: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReasonedCommandRequest"];
+                "multipart/form-data": components["schemas"]["ReasonedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_arrived: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_submit_completion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitCompletionRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SubmitCompletionRequestRequest"];
+                "multipart/form-data": components["schemas"]["SubmitCompletionRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_contact_attempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerContactAttemptRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CustomerContactAttemptRequestRequest"];
+                "multipart/form-data": components["schemas"]["CustomerContactAttemptRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_customer_unavailable: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_en_route: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_evidence_finalize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceFinalizeRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EvidenceFinalizeRequestRequest"];
+                "multipart/form-data": components["schemas"]["EvidenceFinalizeRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkEvidence"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_evidence_upload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceUploadRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EvidenceUploadRequestRequest"];
+                "multipart/form-data": components["schemas"]["EvidenceUploadRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceUploadGrant"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_release: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReasonedCommandRequest"];
+                "multipart/form-data": components["schemas"]["ReasonedCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_propose_amendment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeAmendmentRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposeAmendmentRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProposeAmendmentRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_booking_start_otp_verify: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartOtpVerifyRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StartOtpVerifyRequestRequest"];
+                "multipart/form-data": components["schemas"]["StartOtpVerifyRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5585,6 +8389,118 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    scope_amendment_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                amendment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AmendmentApprovalResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    scope_amendment_decline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                amendment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

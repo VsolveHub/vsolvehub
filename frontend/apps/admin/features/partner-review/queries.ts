@@ -222,7 +222,7 @@ export interface DocumentReviewInput {
   documentId: string;
   /** The application to refresh afterwards; the endpoint returns only the document. */
   applicationId: string;
-  decision: Schemas["DecisionEnum"];
+  decision: Schemas["OperationsDocumentReviewDecisionEnum"];
   /**
    * Why it was rejected.
    *

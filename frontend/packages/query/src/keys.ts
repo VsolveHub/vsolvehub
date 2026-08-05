@@ -129,6 +129,34 @@ export const queryKeys = {
      */
     groups: () => [...queryKeys.booking.all, "groups"] as const,
     group: (groupId: string) => [...queryKeys.booking.groups(), groupId] as const,
+
+    /**
+     * One unit's post-payment visit — arrival through completion (contract 1.16.0).
+     *
+     * A child of `groups()` rather than a sibling, because a group refetch must
+     * be able to reach every visit under it: a group-wide cancel or reschedule
+     * moves all of them at once, and leaving the unit reads stale would show a
+     * customer a visit that no longer exists at that time.
+     *
+     * The reverse does not hold. A single visit going en route says nothing
+     * about its siblings, so `visit(id)` invalidates only itself.
+     */
+    visits: () => [...queryKeys.booking.groups(), "visits"] as const,
+    visit: (bookingId: string) => [...queryKeys.booking.visits(), bookingId] as const,
+  },
+
+  /**
+   * The Partner's side of the same visits (contract 1.16.0).
+   *
+   * Deliberately *not* under `booking`. A Partner and a Customer read different
+   * projections of one `Booking` from different endpoints, and sharing a cache
+   * key would let one app's response answer the other's question — which is the
+   * cache-level version of the field leak the three separate serializers exist
+   * to prevent. Different question, different key.
+   */
+  partnerWork: {
+    all: ["partner-work"] as const,
+    visit: (bookingId: string) => [...queryKeys.partnerWork.all, "visit", bookingId] as const,
   },
 
   /**
@@ -285,6 +313,23 @@ export const queryKeys = {
      */
     compatibilityRule: (ruleId: string) =>
       [...queryKeys.operations.all, "compatibility-rule", ruleId] as const,
+
+    /**
+     * Why dispatch chose who it chose, for one Fulfilment Unit (contract 1.15.0).
+     *
+     * Keyed by the unit because that is what the explanation is *of*. It is the
+     * only published read on the dispatch-recovery surface, and it carries the
+     * `unit_version` every command on that surface has to send — so it is also
+     * the thing a refused command invalidates. Nothing else may write to this
+     * key: a command's response is a projection of what it just did, not an
+     * explanation of what dispatch decided.
+     *
+     * There are deliberately **no offer or reservation keys** beside it. The
+     * contract publishes no Operations read for either, so a key here would
+     * advertise a lookup that does not exist.
+     */
+    dispatchExplanation: (unitId: string) =>
+      [...queryKeys.operations.all, "dispatch-explanation", unitId] as const,
   },
 } as const;
 

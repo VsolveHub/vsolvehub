@@ -65,7 +65,17 @@ function formatWhen(instant: string): string {
  * the others look failed, and a unit that is held does not make the booking look
  * confirmed — the group heading above is the only place the whole is described.
  */
-function UnitCard({ unit, index, total }: { unit: FulfilmentUnit; index: number; total: number }) {
+function UnitCard({
+  unit,
+  index,
+  total,
+  groupId,
+}: {
+  unit: FulfilmentUnit;
+  index: number;
+  total: number;
+  groupId: string;
+}) {
   const deadline = useServerCountdown(unit.state_deadline, 1000);
 
   return (
@@ -116,6 +126,18 @@ function UnitCard({ unit, index, total }: { unit: FulfilmentUnit; index: number;
         <span>Visit total</span>
         <Money value={unit.total} className="tabular-nums" />
       </p>
+
+      {/* Only once the unit has become a real Booking. Before capture there is no
+          visit to open, and `booking_id` is null — rendering a link to nothing is
+          how a customer ends up on a 403 wondering what they did wrong. */}
+      {unit.booking_id ? (
+        <Link
+          href={`/bookings/${groupId}/visits/${unit.booking_id}`}
+          className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-text-link hover:underline"
+        >
+          Track this visit
+        </Link>
+      ) : null}
     </li>
   );
 }
@@ -316,7 +338,13 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
 
       <ul className="mt-5 flex flex-col gap-3">
         {group.units.map((unit, index) => (
-          <UnitCard key={unit.id} unit={unit} index={index} total={group.units.length} />
+          <UnitCard
+            key={unit.id}
+            unit={unit}
+            index={index}
+            total={group.units.length}
+            groupId={group.id}
+          />
         ))}
       </ul>
 

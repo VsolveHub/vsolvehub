@@ -35,6 +35,10 @@ export function unit(overrides: Partial<Schemas["FulfilmentUnit"]> = {}) {
     arrival_window_minutes: 60,
     estimated_duration_minutes: 45,
     state_deadline: null,
+    // Null while the unit is `MATCHING`: there is no visit to open until the
+    // group has been paid for. A test wanting the "Track this visit" link
+    // supplies both a booked status and an id, so the two cannot drift apart.
+    booking_id: null,
     lines: [unitLine()],
     total: money(31742),
     ...overrides,

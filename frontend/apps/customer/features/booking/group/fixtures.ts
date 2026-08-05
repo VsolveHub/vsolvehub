@@ -182,6 +182,11 @@ export function fulfilmentUnit(overrides: Partial<Schemas["FulfilmentUnit"]> = {
     // anything has no deadline — which is not the same as one whose deadline is
     // now, and the fixture keeps the distinction available to tests.
     state_deadline: null,
+    // 1.16.0's route into the post-payment visit. Null by default because this
+    // fixture's unit is still `MATCHING`: a unit that has not been paid for has
+    // no Booking, and a fixture that always supplied one would let a test pass
+    // against a link the real projection cannot yet produce.
+    booking_id: null,
     lines: [fulfilmentUnitLine()],
     total: money(31742),
     ...overrides,
