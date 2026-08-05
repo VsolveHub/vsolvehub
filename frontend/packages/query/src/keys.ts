@@ -35,6 +35,29 @@ export const queryKeys = {
     detail: (addressId: string) => [...queryKeys.addresses.all, "detail", addressId] as const,
   },
 
+  /**
+   * The customer's own privacy record: communication preferences and DSR
+   * requests (contract 1.14.0).
+   *
+   * A sibling of `session` rather than a child. Revoking a device must not
+   * discard the preference list, and switching the active role does not change
+   * what the person has consented to — nesting these under `session.all` would
+   * make both of those invalidations reach data they have no claim on.
+   *
+   * There is deliberately **no consent-receipt key**. `POST
+   * /api/v1/auth/privacy/consents/` is the only published consent operation:
+   * Django exposes no list, so there is no server answer to cache. A key here
+   * would advertise a read that does not exist, and the first thing written
+   * against it would be a client-side history — which is to say, a fabrication.
+   */
+  privacy: {
+    all: ["privacy"] as const,
+    /** Per-channel, per-purpose messaging switches. */
+    preferences: () => [...queryKeys.privacy.all, "preferences"] as const,
+    /** Access and erasure requests, with the status Django is working to. */
+    requests: () => [...queryKeys.privacy.all, "requests"] as const,
+  },
+
   /** Public catalog: categories, services, variant configuration. */
   catalog: {
     all: ["catalog"] as const,
@@ -241,6 +264,27 @@ export const queryKeys = {
      */
     partnerApplication: (applicationId: string) =>
       [...queryKeys.operations.all, "partner-application", applicationId] as const,
+
+    /**
+     * Proposed and reviewed service-compatibility rules (contract 1.15.0).
+     *
+     * Filters are in the key for the same reason the application queue's are:
+     * "drafts awaiting review" and "active rules" are different questions, and a
+     * shared cache entry would answer one with the other.
+     */
+    compatibilityRules: (filters: { lifecycleStatus?: string; variantId?: string }) =>
+      [...queryKeys.operations.all, "compatibility-rules", filters] as const,
+
+    /**
+     * One rule, at one version.
+     *
+     * Keyed by id and read separately from the queue row it was opened from.
+     * Every command on a rule carries the version the reviewer was looking at,
+     * so the detail has to be able to refetch on its own after a conflict
+     * without disturbing the queue underneath it.
+     */
+    compatibilityRule: (ruleId: string) =>
+      [...queryKeys.operations.all, "compatibility-rule", ruleId] as const,
   },
 } as const;
 

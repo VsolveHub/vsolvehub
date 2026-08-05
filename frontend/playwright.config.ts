@@ -80,6 +80,23 @@ export default defineConfig({
       },
     },
     {
+      /**
+       * FE-10's Customer payment and receipt.
+       *
+       * Its own project for the same reason as `customer-cart`: it installs
+       * contract-shaped API routes for every test, and it additionally stubs the
+       * Razorpay SDK at the network boundary. Neither may leak into the
+       * contract-independent customer specs — a shell test that silently ran
+       * against a stubbed provider would stop proving anything about the shell.
+       */
+      name: "customer-payment",
+      testMatch: /payment\.e2e\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3000",
+      },
+    },
+    {
       name: "partner-chromium",
       testMatch: /partner\.e2e\.ts/,
       use: {

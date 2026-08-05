@@ -1,8 +1,8 @@
 "use client";
 
 import { request, type Schemas } from "@vsolve/api-client";
-import { SESSION_STATE, VOLATILE_STATE, publishToTabs, queryKeys } from "@vsolve/query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { VOLATILE_STATE, queryKeys } from "@vsolve/query";
+import { useQuery } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -32,96 +32,37 @@ import { getApiClient } from "@/lib/api/browser";
  * Freshness tiers come from `@vsolve/query` and are chosen per query. Nothing
  * here defaults: a serviceability answer served from cache is a false claim about
  * coverage, which is why it is `VOLATILE_STATE` while addresses are
- * `SESSION_STATE`.
+ * `SESSION_STATE` (in `features/addresses/queries.ts`, which now owns them).
  */
 
 /* -------------------------------------------------------------------------
    Published endpoints
    ------------------------------------------------------------------------- */
 
-export function useAddresses(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.addresses.list(),
-    queryFn: () => request(() => getApiClient().GET("/api/v1/addresses/")),
-    enabled,
-    ...SESSION_STATE,
-  });
-}
-
-export function useReverseGeocode() {
-  return useMutation({
-    mutationFn: (input: Schemas["ReverseGeocodeRequestRequest"]) =>
-      request(() =>
-        getApiClient().POST("/api/v1/geocoding/reverse/", { body: input }),
-      ),
-    retry: false,
-  });
-}
-
-export function useCreateAddress() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: Schemas["AddressRequest"]) =>
-      request(() => getApiClient().POST("/api/v1/addresses/", { body: input })),
-    onSuccess: (address) => {
-      queryClient.setQueryData<Schemas["Address"][]>(
-        queryKeys.addresses.list(),
-        (current = []) => [address, ...current.filter((item) => item.id !== address.id)],
-      );
-      publishToTabs({ type: "cache.invalidate", queryKey: queryKeys.addresses.all });
-    },
-    retry: false,
-  });
-}
-
-export function useUpdateAddress() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: {
-      addressId: string;
-      patch: Schemas["PatchedAddressRequest"];
-    }) =>
-      request(() =>
-        getApiClient().PATCH("/api/v1/addresses/{address_id}/", {
-          params: { path: { address_id: input.addressId } },
-          body: input.patch,
-        }),
-      ),
-    onSuccess: (address) => {
-      queryClient.setQueryData(queryKeys.addresses.detail(address.id), address);
-      queryClient.setQueryData<Schemas["Address"][]>(
-        queryKeys.addresses.list(),
-        (current = []) => current.map((item) => (item.id === address.id ? address : item)),
-      );
-      publishToTabs({ type: "cache.invalidate", queryKey: queryKeys.addresses.all });
-    },
-    retry: false,
-  });
-}
-
-export function useArchiveAddress() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (addressId: string) =>
-      request(() =>
-        getApiClient().DELETE("/api/v1/addresses/{address_id}/", {
-          params: { path: { address_id: addressId } },
-        }),
-      ),
-    onSuccess: (_result, addressId) => {
-      queryClient.removeQueries({ queryKey: queryKeys.addresses.detail(addressId) });
-      queryClient.setQueryData<Schemas["Address"][]>(
-        queryKeys.addresses.list(),
-        (current = []) => current.filter((item) => item.id !== addressId),
-      );
-      publishToTabs({ type: "cache.invalidate", queryKey: queryKeys.addresses.all });
-    },
-    retry: false,
-  });
-}
+/**
+ * Saved addresses live in `features/addresses/queries.ts`.
+ *
+ * They were defined here until the account address book needed the same four
+ * operations. Re-exported rather than copied: a second implementation would be a
+ * second cache-writing policy for one resource, and checkout and the account
+ * screen would drift on what happens after a delete. Import site unchanged for
+ * every existing caller.
+ */
+export {
+  isGeocoded,
+  formatAddressLine,
+  useAddresses,
+  useCreateAddress,
+  useUpdateAddress,
+  useArchiveAddress,
+  useReverseGeocode,
+} from "@/features/addresses/queries";
+export type {
+  Address,
+  AddressInput,
+  AddressPatch,
+  ResolvedLocation,
+} from "@/features/addresses/queries";
 
 export function useServiceability(input: {
   postalCode: string | null;

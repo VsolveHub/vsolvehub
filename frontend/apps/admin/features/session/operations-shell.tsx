@@ -2,6 +2,8 @@
 
 import { hasRole, useAuthGuard, useLogout, useOtpFlow, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -28,6 +30,52 @@ import { getApiClient } from "@/lib/api/browser";
  */
 
 const OPERATIONS_ROLE = "operations";
+
+/**
+ * Every workspace this console can reach.
+ *
+ * Rendered only inside the authenticated branch. An unauthenticated visitor
+ * learns nothing about what Operations can do from the login screen, which is
+ * the same reason the home page carries no readiness dashboard.
+ */
+const WORKSPACES: { href: string; label: string }[] = [
+  { href: "/reviews", label: "Partner applications" },
+  { href: "/operations/compatibility-rules", label: "Compatibility rules" },
+  { href: "/operations/manual-offers", label: "Offer work" },
+  { href: "/operations/assisted-checkouts", label: "Assisted checkout" },
+  { href: "/operations/partner-availability", label: "Partner availability" },
+];
+
+function WorkspaceNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav aria-label="Operations workspaces" className="border-b border-line bg-surface">
+      <ul className="mx-auto flex max-w-7xl list-none flex-wrap gap-1 px-4 py-2 sm:px-6 lg:px-8">
+        {WORKSPACES.map((entry) => {
+          const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+
+          return (
+            <li key={entry.href}>
+              <Link
+                href={entry.href}
+                aria-current={active ? "page" : undefined}
+                className={[
+                  "inline-flex min-h-11 items-center rounded-control px-3 text-sm font-semibold",
+                  active
+                    ? "bg-selected-surface text-text-link"
+                    : "text-text-secondary hover:bg-surface-hover",
+                ].join(" ")}
+              >
+                {entry.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
 function OperationsLogin() {
   const flow = useOtpFlow(getApiClient());
@@ -186,6 +234,8 @@ export function OperationsShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      <WorkspaceNav />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
     </div>

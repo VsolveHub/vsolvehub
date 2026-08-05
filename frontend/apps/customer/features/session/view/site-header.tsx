@@ -46,6 +46,10 @@ const LINKS: readonly NavLink[] = [
   // from a visitor who has already added something to it would be absurd.
   { href: "/cart", label: "Basket" },
   { href: "/bookings", label: "My bookings", private: true },
+  // Private for the same reason as bookings: every screen behind it is
+  // `IsAuthenticated`, so showing it to a visitor is offering a link that
+  // bounces straight to login.
+  { href: "/account", label: "Account", private: true },
 ];
 
 export function SiteHeader() {
