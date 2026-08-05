@@ -1,0 +1,175 @@
+"""Shared refund computation for cancellation, reschedule and partial-work settlement.
+
+Money never gets a second path: every refund here is the existing `commerce.Refund` /
+`commerce.RefundAllocation` / `commerce.PaymentAllocation` machinery, sized against whatever
+amount the caller has already computed (a fee-ladder deduction, or an unperformed-work amount)
+and split across a Fulfilment Unit's live allocations the same way regardless of which command
+triggered it.
+
+One Fulfilment Unit can hold allocations on more than one `PaymentAttempt` — the checkout
+capture pays for the original scope, and an authorized `ScopeAmendment`'s revision payment adds
+its own. A `Refund` names exactly one attempt, because that attempt is the provider payment the
+money is physically returned through, so refunds are raised **per attempt**: never one Refund
+allocated across two payments, which would either ask a provider to return more than its payment
+was worth or mark money returned that never moved.
+"""
+
+from uuid import UUID
+
+from django.db.models import Sum
+
+from apps.carts.models import FulfilmentUnit
+from apps.commerce.models import (
+    Booking,
+    PaymentAllocation,
+    PaymentAttempt,
+    Refund,
+    RefundAllocation,
+)
+from apps.foundation.services import enqueue_outbox_event
+
+RefundableParts = list[tuple[PaymentAllocation, int]]
+
+
+def refundable_unit_allocations(*, unit: FulfilmentUnit) -> RefundableParts:
+    """Every live `PaymentAllocation` for this unit, with how much of each is still refundable.
+
+    Ordered oldest attempt first, so a refund smaller than the unit's total comes out of the
+    original capture before it touches a later amendment payment.
+    """
+
+    allocations = list(
+        PaymentAllocation.objects.select_for_update()
+        .select_related("payment_attempt")
+        .filter(fulfilment_unit=unit)
+        .order_by("payment_attempt__created_at", "payment_attempt_id", "position", "id")
+    )
+    parts: RefundableParts = []
+    for allocation in allocations:
+        pending = (
+            RefundAllocation.objects.filter(
+                payment_allocation=allocation,
+                refund__status__in=(
+                    Refund.Status.REQUESTED,
+                    Refund.Status.SUBMITTED,
+                    Refund.Status.PROCESSING,
+                    Refund.Status.UNDER_REVIEW,
+                ),
+            ).aggregate(total=Sum("amount_paise"))["total"]
+            or 0
+        )
+        available = allocation.amount_paise - allocation.refunded_paise - pending
+        if available > 0:
+            parts.append((allocation, available))
+    return parts
+
+
+def _group_by_attempt(parts: RefundableParts) -> list[tuple[PaymentAttempt, RefundableParts]]:
+    """Preserve `refundable_unit_allocations`' oldest-attempt-first order."""
+
+    grouped: dict[UUID, tuple[PaymentAttempt, RefundableParts]] = {}
+    for allocation, available in parts:
+        attempt = allocation.payment_attempt
+        _found, bucket = grouped.setdefault(attempt.id, (attempt, []))
+        bucket.append((allocation, available))
+    return list(grouped.values())
+
+
+def _split_across(parts: RefundableParts, amount_paise: int) -> list[int]:
+    """Proportional shares that sum to exactly `amount_paise`, remainder handed out in order."""
+
+    total = sum(available for _allocation, available in parts)
+    shares = [amount_paise * available // total for _allocation, available in parts]
+    remainder = amount_paise - sum(shares)
+    index = 0
+    while remainder > 0 and index < len(parts):
+        _allocation, available = parts[index]
+        add = min(available - shares[index], remainder)
+        shares[index] += add
+        remainder -= add
+        index += 1
+    return shares
+
+
+def _refund_one_attempt(
+    *,
+    booking: Booking,
+    attempt: PaymentAttempt,
+    parts: RefundableParts,
+    amount_paise: int,
+    reason_code: str,
+    requested_by_id: UUID,
+    idempotency_key: str,
+) -> Refund:
+    if idempotency_key:
+        existing = attempt.refunds.filter(idempotency_key=idempotency_key).first()
+        if existing is not None:
+            return existing
+    refund = Refund.objects.create(
+        order=booking.order,
+        payment_attempt=attempt,
+        amount_paise=amount_paise,
+        currency=attempt.currency,
+        reason_code=reason_code,
+        idempotency_key=idempotency_key,
+        requested_by_id=requested_by_id,
+    )
+    for (allocation, _available), share in zip(
+        parts, _split_across(parts, amount_paise), strict=True
+    ):
+        if share <= 0:
+            continue
+        RefundAllocation.objects.create(
+            refund=refund, payment_allocation=allocation, amount_paise=share
+        )
+    enqueue_outbox_event(
+        aggregate_type="refund",
+        aggregate_id=refund.id,
+        event_type="refund.submission_requested",
+        idempotency_key=f"refund-submit:{refund.id}",
+        payload={"refund_id": str(refund.id)},
+    )
+    return refund
+
+
+def create_partial_refunds(
+    *,
+    booking: Booking,
+    unit: FulfilmentUnit,
+    refund_amount_paise: int,
+    reason_code: str,
+    requested_by_id: UUID,
+    idempotency_key: str,
+) -> list[Refund]:
+    """Cap the request at what remains refundable and return it, one `Refund` per attempt.
+
+    Returns an empty list rather than a zero-amount `Refund` row. The same idempotency key is
+    safe across attempts: `commerce_unique_payment_refund_key` scopes it to one attempt, so a
+    replay finds each attempt's own refund instead of creating a second one.
+    """
+
+    parts = refundable_unit_allocations(unit=unit)
+    if not parts or refund_amount_paise <= 0:
+        return []
+    remaining = min(refund_amount_paise, sum(available for _allocation, available in parts))
+    refunds: list[Refund] = []
+    for attempt, attempt_parts in _group_by_attempt(parts):
+        if remaining <= 0:
+            break
+        attempt_total = sum(available for _allocation, available in attempt_parts)
+        take = min(remaining, attempt_total)
+        if take <= 0:
+            continue
+        refunds.append(
+            _refund_one_attempt(
+                booking=booking,
+                attempt=attempt,
+                parts=attempt_parts,
+                amount_paise=take,
+                reason_code=reason_code,
+                requested_by_id=requested_by_id,
+                idempotency_key=idempotency_key,
+            )
+        )
+        remaining -= take
+    return refunds

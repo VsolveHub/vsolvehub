@@ -423,6 +423,8 @@ def _request_automatic_refund(*, attempt: PaymentAttempt, reason_code: str) -> R
 
 
 def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
+    if attempt.checkout_id is None:
+        raise ValueError("Only a Booking Group payment attempt has a Checkout to materialize.")
     checkout = (
         CheckoutSession.objects.select_for_update()
         .select_related("quote")

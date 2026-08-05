@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.carts",
     "apps.assignments",
     "apps.commerce",
+    "apps.fulfilment",
     "apps.catalog",
     "apps.pricing",
     "apps.locations",
@@ -172,10 +173,24 @@ M1_SEQUENTIAL_UNIT_MAX_MINUTES = 240
 M1_FULFILMENT_PLAN_LIMIT = 3
 M1_FULFILMENT_PLAN_TTL_SECONDS = 15 * 60
 
+# M1 booking-fulfilment clocks (05-initial-configuration.md).
+M1_LATE_ARRIVAL_GRACE_MINUTES = 15
+M1_CUSTOMER_WAIT_MINUTES = 10
+M1_CUSTOMER_CONTACT_ATTEMPT_MINUTES = (0, 5)
+M1_START_OTP_TTL_SECONDS = 5 * 60
+M1_START_OTP_MAX_ATTEMPTS = 5
+M1_COMPLETION_RESPONSE_HOURS = 24
+M1_QUALITY_DISPUTE_WINDOW_HOURS = 72
+M1_SCOPE_AMENDMENT_RESPONSE_MINUTES = 30
+M1_CANCELLATION_BAND_MORE_THAN_24H = "more-than-24-hours"
+M1_CANCELLATION_BAND_24_TO_2H = "24-to-2-hours"
+M1_CANCELLATION_BAND_LESS_THAN_2H = "less-than-2-hours"
+M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.14.0",
+    "VERSION": "1.15.1",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -206,6 +221,7 @@ OTP_IP_RATE_LIMIT = 20
 OTP_PROVIDER = env("OTP_PROVIDER", default="unconfigured")
 OTP_DEVELOPMENT_CODE_ENABLED = env.bool("OTP_DEVELOPMENT_CODE_ENABLED", default=False)
 FINANCE_STEP_UP_TTL_SECONDS = env.int("FINANCE_STEP_UP_TTL_SECONDS", default=10 * 60)
+OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", default=10 * 60)
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
@@ -258,6 +274,7 @@ PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS = env.int(
     "PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS",
     default=24,
 )
+FULFILMENT_EVIDENCE_BUCKET = env("FULFILMENT_EVIDENCE_BUCKET", default="fulfilment-evidence")
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
@@ -308,6 +325,14 @@ CELERY_BEAT_SCHEDULE = {
     "cleanup-partner-document-uploads": {
         "task": "apps.partners.tasks.cleanup_partner_document_uploads",
         "schedule": 60.0 * 60,
+    },
+    "sweep-late-bookings": {
+        "task": "apps.fulfilment.tasks.sweep_late_bookings",
+        "schedule": 60.0,
+    },
+    "sweep-completion-auto-finalize": {
+        "task": "apps.fulfilment.tasks.sweep_completion_auto_finalize",
+        "schedule": 300.0,
     },
     "reconcile-partner-presence-sessions": {
         "task": "apps.partners.tasks.reconcile_partner_presence_sessions",

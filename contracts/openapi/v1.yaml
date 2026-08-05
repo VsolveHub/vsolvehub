@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.14.0
+  version: 1.15.1
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -1637,6 +1637,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/fulfilment-units/{unit_id}/dispatch-explanation/:
+    get:
+      operationId: operations_fulfilment_unit_dispatch_explanation
+      parameters:
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchExplanation'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/fulfilment-units/{unit_id}/offers/:
     post:
       operationId: operations_fulfilment_unit_offer_create
@@ -1669,6 +1702,136 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/v1/operations/fulfilment-units/{unit_id}/recover/:
+    post:
+      operationId: operations_fulfilment_unit_recover
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: unit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FulfilmentUnitDispatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/offers/{offer_id}/revoke/:
+    post:
+      operationId: operations_offer_revoke
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: offer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/operations/partner-applications/:
     get:
@@ -2002,6 +2165,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PartnerSchedule'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/reservations/{reservation_id}/release/:
+    post:
+      operationId: operations_reservation_release
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DispatchCommandRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchReservation'
           description: ''
         '400':
           content:
@@ -3372,6 +3600,7 @@ components:
       - ALL_UNITS_HELD
       - PAYMENT_PENDING
       - BOOKED
+      - COMPLETED
       - REPLAN_REQUIRED
       - CANCELLED
       - EXPIRED
@@ -3384,6 +3613,7 @@ components:
         * `ALL_UNITS_HELD` - All units held
         * `PAYMENT_PENDING` - Payment pending
         * `BOOKED` - Booked
+        * `COMPLETED` - Completed
         * `REPLAN_REQUIRED` - Replan required
         * `CANCELLED` - Cancelled
         * `EXPIRED` - Expired
@@ -4076,6 +4306,156 @@ components:
         * `NONE` - No ordering dependency
         * `LEFT_BEFORE_RIGHT` - Left before right
         * `RIGHT_BEFORE_LEFT` - Right before left
+    DispatchAttempt:
+      type: object
+      properties:
+        attempt_id:
+          type: string
+          format: uuid
+        rank:
+          type: integer
+        partner_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        offer_status:
+          type: string
+          nullable: true
+        eligibility:
+          type: object
+          additionalProperties: {}
+        ranked:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankedCandidate'
+        excluded:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExcludedCandidate'
+      required:
+      - attempt_id
+      - created_at
+      - eligibility
+      - excluded
+      - offer_status
+      - partner_id
+      - rank
+      - ranked
+    DispatchCommandRequestRequest:
+      type: object
+      properties:
+        expected_unit_version:
+          type: integer
+          minimum: 1
+        reason:
+          $ref: '#/components/schemas/ReasonEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 500
+      required:
+      - expected_unit_version
+      - reason
+    DispatchExplanation:
+      type: object
+      properties:
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+        unit_status:
+          type: string
+        unit_version:
+          type: integer
+        policy:
+          type: string
+        policy_version:
+          type: integer
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DispatchAttempt'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - attempts
+      - fulfilment_unit_id
+      - policy
+      - policy_version
+      - server_now
+      - unit_status
+      - unit_version
+    DispatchReservation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        fulfilment_unit_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/DispatchReservationStatusEnum'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        released_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - expires_at
+      - fulfilment_unit_id
+      - id
+      - partner_id
+      - released_at
+      - server_now
+      - status
+    DispatchReservationStatusEnum:
+      enum:
+      - TENTATIVE
+      - CONFIRMED
+      - RELEASED
+      type: string
+      description: |-
+        * `TENTATIVE` - Tentative
+        * `CONFIRMED` - Confirmed
+        * `RELEASED` - Released
+    ExcludedCandidate:
+      type: object
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        reasons:
+          type: array
+          items:
+            type: string
+      required:
+      - partner_id
+      - reasons
     ExpectedVersionRequest:
       type: object
       properties:
@@ -4267,6 +4647,43 @@ components:
       - status
       - total
       - version
+    FulfilmentUnitDispatch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+        status:
+          type: string
+        version:
+          type: integer
+        group_status:
+          type: string
+        live_offer_id:
+          type: string
+          format: uuid
+          nullable: true
+        live_offer_status:
+          type: string
+          nullable: true
+        reservation_status:
+          type: string
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - group_status
+      - id
+      - live_offer_id
+      - live_offer_status
+      - position
+      - reservation_status
+      - server_now
+      - status
+      - version
     FulfilmentUnitLine:
       type: object
       properties:
@@ -4309,9 +4726,12 @@ components:
       - HELD
       - PAYMENT_PENDING
       - BOOKED
+      - RECOVERY_REQUIRED
       - CANCELLED
       - FAILED
       - COMPLETED
+      - PARTIALLY_COMPLETED
+      - DISPUTED
       type: string
       description: |-
         * `PLANNED` - Planned
@@ -4319,9 +4739,12 @@ components:
         * `HELD` - Held
         * `PAYMENT_PENDING` - Payment pending
         * `BOOKED` - Booked
+        * `RECOVERY_REQUIRED` - Recovery required
         * `CANCELLED` - Cancelled
         * `FAILED` - Failed
         * `COMPLETED` - Completed
+        * `PARTIALLY_COMPLETED` - Partially completed
+        * `DISPUTED` - Disputed
     GroupQuote:
       type: object
       properties:
@@ -6103,8 +6526,11 @@ components:
     PurposeEnum:
       enum:
       - BOOKING_GROUP
+      - SCOPE_AMENDMENT_REVISION
       type: string
-      description: '* `BOOKING_GROUP` - Booking group'
+      description: |-
+        * `BOOKING_GROUP` - Booking group
+        * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
     Quote:
       type: object
       properties:
@@ -6252,6 +6678,37 @@ components:
       - code
       - included_in_total
       - label
+    RankedCandidate:
+      type: object
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+        rank:
+          type: integer
+        factors:
+          type: object
+          additionalProperties: {}
+      required:
+      - factors
+      - partner_id
+      - rank
+    ReasonEnum:
+      enum:
+      - PARTNER_UNREACHABLE
+      - CUSTOMER_REQUEST
+      - SAFETY_CONCERN
+      - DUPLICATE_DISPATCH
+      - STUCK_DISPATCH
+      - OPERATIONS_ERROR
+      type: string
+      description: |-
+        * `PARTNER_UNREACHABLE` - Partner unreachable
+        * `CUSTOMER_REQUEST` - Customer request
+        * `SAFETY_CONCERN` - Safety concern
+        * `DUPLICATE_DISPATCH` - Duplicate dispatch
+        * `STUCK_DISPATCH` - Stuck dispatch
+        * `OPERATIONS_ERROR` - Operations error
     ReconciliationStateEnum:
       enum:
       - PENDING

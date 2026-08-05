@@ -2,7 +2,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.assignments.models import PartnerOffer
+from apps.assignments.models import DispatchCommandAudit, PartnerOffer, Reservation
 from common.serializers import MoneySerializer
 
 
@@ -134,3 +134,78 @@ class OfferPageSerializer(serializers.Serializer[dict[str, object]]):
     # server instant too. A Partner who opens straight to an empty inbox is exactly
     # the offer-first session that has no other calibration source.
     server_now = serializers.DateTimeField(read_only=True)
+
+
+class RankedCandidateSerializer(serializers.Serializer[dict[str, object]]):
+    partner_id = serializers.UUIDField()
+    rank = serializers.IntegerField()
+    factors = serializers.DictField(child=serializers.JSONField())
+
+
+class ExcludedCandidateSerializer(serializers.Serializer[dict[str, object]]):
+    partner_id = serializers.UUIDField()
+    reasons = serializers.ListField(child=serializers.CharField())
+
+
+class DispatchAttemptSerializer(serializers.Serializer[dict[str, object]]):
+    attempt_id = serializers.UUIDField()
+    rank = serializers.IntegerField()
+    partner_id = serializers.UUIDField()
+    created_at = serializers.DateTimeField()
+    offer_status = serializers.CharField(allow_null=True)
+    eligibility = serializers.DictField(child=serializers.JSONField())
+    ranked = RankedCandidateSerializer(many=True)
+    excluded = ExcludedCandidateSerializer(many=True)
+
+
+class DispatchExplanationSerializer(serializers.Serializer[dict[str, object]]):
+    fulfilment_unit_id = serializers.UUIDField()
+    unit_status = serializers.CharField()
+    unit_version = serializers.IntegerField()
+    policy = serializers.CharField()
+    policy_version = serializers.IntegerField()
+    attempts = DispatchAttemptSerializer(many=True)
+    server_now = serializers.DateTimeField()
+
+
+class DispatchCommandRequestSerializer(serializers.Serializer[dict[str, object]]):
+    expected_unit_version = serializers.IntegerField(min_value=1)
+    reason = serializers.ChoiceField(choices=DispatchCommandAudit.Reason.choices)
+    note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+
+
+class DispatchReservationSerializer(serializers.ModelSerializer[Reservation]):
+    fulfilment_unit_id = serializers.UUIDField(read_only=True, allow_null=True)
+    partner_id = serializers.UUIDField(read_only=True)
+    server_now = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Reservation
+        fields = (
+            "id",
+            "fulfilment_unit_id",
+            "partner_id",
+            "status",
+            "expires_at",
+            "released_at",
+            "created_at",
+            "server_now",
+        )
+        read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.DateTimeField())
+    def get_server_now(_reservation: Reservation) -> str:
+        return timezone.now().isoformat()
+
+
+class FulfilmentUnitDispatchSerializer(serializers.Serializer[dict[str, object]]):
+    id = serializers.UUIDField()
+    position = serializers.IntegerField()
+    status = serializers.CharField()
+    version = serializers.IntegerField()
+    group_status = serializers.CharField()
+    live_offer_id = serializers.UUIDField(allow_null=True)
+    live_offer_status = serializers.CharField(allow_null=True)
+    reservation_status = serializers.CharField(allow_null=True)
+    server_now = serializers.DateTimeField()

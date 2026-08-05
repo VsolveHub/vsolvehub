@@ -498,6 +498,7 @@ class BookingGroup(models.Model):
         ALL_UNITS_HELD = "ALL_UNITS_HELD", "All units held"
         PAYMENT_PENDING = "PAYMENT_PENDING", "Payment pending"
         BOOKED = "BOOKED", "Booked"
+        COMPLETED = "COMPLETED", "Completed"
         REPLAN_REQUIRED = "REPLAN_REQUIRED", "Replan required"
         CANCELLED = "CANCELLED", "Cancelled"
         EXPIRED = "EXPIRED", "Expired"
@@ -537,9 +538,12 @@ class FulfilmentUnit(models.Model):
         HELD = "HELD", "Held"
         PAYMENT_PENDING = "PAYMENT_PENDING", "Payment pending"
         BOOKED = "BOOKED", "Booked"
+        RECOVERY_REQUIRED = "RECOVERY_REQUIRED", "Recovery required"
         CANCELLED = "CANCELLED", "Cancelled"
         FAILED = "FAILED", "Failed"
         COMPLETED = "COMPLETED", "Completed"
+        PARTIALLY_COMPLETED = "PARTIALLY_COMPLETED", "Partially completed"
+        DISPUTED = "DISPUTED", "Disputed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     booking_group = models.ForeignKey(

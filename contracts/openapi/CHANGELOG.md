@@ -1,5 +1,138 @@
 # API Contract Changelog
 
+## 1.15.1 - Booking fulfilment (B8): group outcome truth, no new surface
+
+No schema change, no new path and no new operation id. B8 lands as domain commands only, and this
+entry exists to record two things a client can observe anyway: one changed value on an existing
+published field, and one capability that deliberately has no endpoint yet.
+
+### `BookingGroup.status` can now settle on `CANCELLED` after booking
+
+- The enum is unchanged — `CANCELLED` has always been a published value — but a **booked** group
+  can now reach it. Previously a group whose every visit ended up cancelled derived `COMPLETED`,
+  because the derivation only asked whether every Fulfilment Unit had finished, not whether any of
+  them had actually delivered anything. A Customer who cancelled everything was shown a completed
+  booking. That is exactly the hidden success state the quality rules forbid, and it is fixed.
+- The rule now: a booked group settles once every unit is terminal, to `COMPLETED` if at least one
+  unit was delivered (`COMPLETED`, `PARTIALLY_COMPLETED` or `DISPUTED`) and to `CANCELLED` if none
+  were. One delivered visit is enough — a cancelled sibling does not erase the visit that happened,
+  and an open dispute still lives underneath a settled group rather than holding it open.
+- Clients that treat `COMPLETED` as "there is an invoice to show" were previously wrong for
+  fully-cancelled groups and are now correct without changing.
+
+### Group-wide post-payment cancellation exists, but not as an endpoint
+
+- `POST /api/v1/booking-groups/{group_id}/cancel/` (`booking_group_cancel`) is **unchanged**: it
+  still answers `409` `booking_group_conflict` with `reason: status_not_cancellable` for a group in
+  `BOOKED`. It remains the pre-payment command it always was.
+- The post-payment equivalent is implemented as the domain command
+  `apps.fulfilment.cancellation.cancel_booked_group` and is not yet reachable over HTTP. The whole
+  of B8 is service-layer at this release — start OTP, en route/arrived, completion, dispute and
+  Partner release have no published paths either — so publishing one B8 command alone would be a
+  contract clients could not build a fulfilment surface on. The API surface for B8 is tracked as an
+  open gap in `Django_Next.js_Plan/M1/02-backend-tasks.md`; when it lands it lands as one release.
+### Money and safety behaviour fixed before it could be published
+
+Three defects found by the security review of this work, all fixed here rather than shipped
+behind a future endpoint:
+
+- **A refund is now raised per `PaymentAttempt`.** A Fulfilment Unit can hold allocations on two
+  attempts — the checkout capture and an authorized scope amendment's revision payment. The
+  refund split previously wrote one `Refund` against the first attempt with `RefundAllocation`
+  rows spanning both, which either asks a provider to return more than that payment was worth or
+  marks money returned that never moved. Cancellation and partial-work settlement now return a
+  list of refunds, one per attempt, oldest attempt first.
+- **A reschedule must name a future time.** Partner availability is evaluated by weekday and
+  time of day, so a start one whole week in the past passed it. A backdated visit makes the
+  lateness watchdog declare an on-time Partner late, and that flag never clears — it would have
+  handed the Customer a permanent full-refund switch, usable even after the Partner arrived.
+- **A mid-job Partner release is settled, not cancelled.** A Partner may release before the
+  visit, on the way, on site or mid-job, and all four land in the same status. A Customer may
+  walk away from the first three for a full refund; once work has started the visit settles line
+  by line through the completion report instead, so a cancellation can never refund work that
+  was actually performed.
+- **Work evidence now checks who is uploading.** Minting a signed upload URL and recording
+  evidence both verify the actor is the Booking's Customer or its Partner, and a recorded object
+  key must belong to the Booking it is filed against. Evidence gates automatic completion, so
+  neither could be left to a view that does not exist yet.
+
+### Error codes reserved, not yet returned
+
+B8's commands raise typed failures already, but no published endpoint can return them yet. They are
+recorded here so the codes are fixed before a client ever sees one, not renamed underneath it:
+
+- `booking_command_invalid` (`400`, `retryable: false`) — the command cannot apply to the Booking
+  state it found: already en route, already cancelled, an amendment already answered, or a
+  group-wide cancel that found one visit mid-work.
+- `booking_version_conflict` (`409`, `retryable: true`, `details.current_version`) — the Booking
+  changed since the caller read it.
+- `partner_unavailable_for_window` (`409`), `outside_serviceable_area` (`409`), `otp_invalid`
+  (`400`) and `step_up_required` (`401`) — reschedule, address change, start OTP and the
+  Operations-assisted outage start respectively.
+- A group-wide cancel refused for a mid-work visit names that visit in the message and changes
+  nothing. It is never a partial application, so there is no "which units succeeded" shape to
+  publish for a failure.
+
+## 1.15.0 - Operations dispatch override and explainability
+
+Additive and backward compatible. Closes the remaining BE-07 hardening gaps: revoke/release/
+manual-recovery are now typed, idempotent, authorized commands rather than an internal-only status
+value, and dispatch ordering is now explainable to Operations rather than opaque.
+
+### Dispatch explanation (read)
+
+- Added `GET /api/v1/operations/fulfilment-units/{unit_id}/dispatch-explanation/`
+  (`operations_fulfilment_unit_dispatch_explanation`), scoped to `IsOperationsUser`. Returns
+  `DispatchExplanation`: the unit's current `status`/`version`, the ranking `policy` and
+  `policy_version` that ran, and one `DispatchAttempt` per candidate the unit has been offered to,
+  each carrying the full `ranked`/`excluded` provenance (`RankedCandidate`, `ExcludedCandidate`)
+  for that attempt.
+- The pool is bounded to the Fulfilment Unit's service area and the document names every Partner
+  considered and a closed-set reason for every one excluded
+  (`application_not_approved` | `variant_not_offered` | `already_attempted` |
+  `unavailable_at_start`). There is no business ranking published — `factors` names the one input
+  (`tiebreak_partner_id`) that actually decided the order today, not a score no code computes.
+- This endpoint discloses Partner ids that are never published to the Partner or Customer
+  surfaces, so it is Operations-only; a Partner or Customer session receives `403`.
+
+### Dispatch override commands (write)
+
+- Added `POST /api/v1/operations/offers/{offer_id}/revoke/` (`operations_offer_revoke`) →
+  `Offer`. Withdraws a live offer from a Partner and immediately hands the unit to the next
+  eligible candidate.
+- Added `POST /api/v1/operations/reservations/{reservation_id}/release/`
+  (`operations_reservation_release`) → `DispatchReservation`. Frees a Partner's held slot. If the
+  Booking Group is still `PAYMENT_PENDING`, releasing one unit's hold compensates the **whole**
+  group to `REPLAN_REQUIRED` instead of producing a partial hold the Customer can no longer pay
+  for as quoted; otherwise the unit returns to `MATCHING` and dispatch re-offers it.
+- Added `POST /api/v1/operations/fulfilment-units/{unit_id}/recover/`
+  (`operations_fulfilment_unit_recover`) → `FulfilmentUnitDispatch`. Runs the identical dispatch
+  reconciliation Celery beat runs, under an actor, a version guard and a durable audit record,
+  rather than a second divergent recovery path.
+- All three require the `Idempotency-Key` header and a `DispatchCommandRequest` body of
+  `expected_unit_version`, a closed-set `reason`, and an optional `note`. Replaying the identical
+  request under the same key answers `200` with the **current** projection (live deadlines,
+  `server_now`), not the frozen first response, and writes exactly one audit row regardless of
+  how many times it is replayed.
+- `note` is operator-authored free text; it is never echoed into any Partner- or Customer-facing
+  projection.
+
+### New error codes
+
+- `dispatch_command_invalid` (`400`, `retryable: false`) — the command cannot apply to the
+  dispatch state it found: the offer is no longer live, the reservation is already released, or
+  the Booking Group has already reached a terminal state.
+- `dispatch_version_conflict` (`409`, `retryable: true`, `details.current_version`) — the
+  Fulfilment Unit changed since the caller read it. A refused command of this shape burns no
+  idempotency key, so the same key can be retried once the console has refetched.
+
+### Ranking provenance (persisted, not newly published as a standalone resource)
+
+- `AssignmentAttempt` now records `ranking_snapshot` internally: the policy, the service-area pool
+  considered, and a named reason for every Partner passed over. It is not merged into
+  `PartnerOffer.partner_projection_snapshot` and is not published on any Partner or Customer
+  surface — only through the Operations explanation endpoint above.
+
 ## 1.14.0 - Booking Group payment entry point
 
 Additive and backward compatible. Implements proposal 0011. No new endpoint, no new command, no

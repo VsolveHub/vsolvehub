@@ -10,27 +10,20 @@ from psycopg.types.range import Range
 
 from apps.assignments.exceptions import OfferReservationConflictApiError
 from apps.assignments.models import AssignmentAttempt, PartnerOffer, Reservation
+from apps.assignments.ranking import evaluate_unit_candidates, unit_variant_ids
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
-from apps.partners.models import PartnerApplication, PartnerProfile
+from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
 
 GROUP_TERMINAL_STATUSES = (
     BookingGroup.Status.BOOKED,
+    BookingGroup.Status.COMPLETED,
     BookingGroup.Status.REPLAN_REQUIRED,
     BookingGroup.Status.CANCELLED,
     BookingGroup.Status.EXPIRED,
     BookingGroup.Status.FAILED,
 )
-
-
-def _unit_variant_ids(unit: FulfilmentUnit) -> tuple[UUID, ...]:
-    return tuple(
-        unit.lines.filter(cart_item__isnull=False)
-        .order_by("position")
-        .values_list("cart_item__variant_id", flat=True)
-        .distinct()
-    )
 
 
 def _partner_available(*, partner: PartnerProfile, unit: FulfilmentUnit) -> bool:
@@ -42,28 +35,29 @@ def _partner_available(*, partner: PartnerProfile, unit: FulfilmentUnit) -> bool
     )
 
 
+def _is_post_booking_recovery(group: BookingGroup, unit: FulfilmentUnit) -> bool:
+    """A `BOOKED` group is terminal for the pre-payment dispatch sweep, but not for
+    `apps.fulfilment.recovery_services` manually re-offering a `RECOVERY_REQUIRED` unit a
+    replacement Partner after the original one released post-booking. This is the one case a
+    `BOOKED` group is still allowed through the manual-offer / accept / commit path.
+    """
+
+    return (
+        group.status == BookingGroup.Status.BOOKED
+        and unit.status == FulfilmentUnit.Status.RECOVERY_REQUIRED
+    )
+
+
+def _blocks_offer_action(group: BookingGroup, unit: FulfilmentUnit) -> bool:
+    if group.status not in GROUP_TERMINAL_STATUSES:
+        return False
+    return not _is_post_booking_recovery(group, unit)
+
+
 def _eligible_candidates(unit: FulfilmentUnit) -> list[PartnerProfile]:
-    attempted = AssignmentAttempt.objects.filter(fulfilment_unit=unit).values_list(
-        "candidate_id", flat=True
-    )
-    candidates = PartnerProfile.objects.filter(
-        application__status=PartnerApplication.Status.APPROVED,
-        service_area_links__service_area=unit.service_area,
-        service_area_links__is_active=True,
-    )
-    variant_ids = _unit_variant_ids(unit)
-    if not variant_ids:
-        return []
-    for variant_id in variant_ids:
-        candidates = candidates.filter(
-            service_links__variant_id=variant_id,
-            service_links__is_active=True,
-        )
-    return [
-        candidate
-        for candidate in candidates.exclude(id__in=attempted).distinct().order_by("id")
-        if _partner_available(partner=candidate, unit=unit)
-    ]
+    """The ordered, offerable candidates — the same evaluation Operations reads back."""
+
+    return list(evaluate_unit_candidates(unit).ordered)
 
 
 def _set_unit_status(unit: FulfilmentUnit, status: str) -> None:
@@ -117,15 +111,21 @@ def _create_offer(
     unit: FulfilmentUnit,
     selected_candidate: PartnerProfile | None = None,
 ) -> PartnerOffer | None:
-    if group.status in GROUP_TERMINAL_STATUSES:
+    post_booking_recovery = _is_post_booking_recovery(group, unit)
+    if _blocks_offer_action(group, unit):
         return None
     attempt_count = AssignmentAttempt.objects.filter(fulfilment_unit=unit).count()
     if attempt_count >= settings.M1_PARTNER_SEARCH_CANDIDATE_LIMIT:
-        _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
+        # A stuck post-booking recovery leaves this one unit for Operations to retry or cancel
+        # by hand — the group's other, already-fulfilled units are never mass-compensated for it.
+        if not post_booking_recovery:
+            _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
         return None
-    candidates = _eligible_candidates(unit)
+    ranking = evaluate_unit_candidates(unit)
+    candidates = list(ranking.ordered)
     if not candidates:
-        _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
+        if not post_booking_recovery:
+            _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
         return None
     candidate = selected_candidate or candidates[0]
     if candidate not in candidates:
@@ -136,15 +136,16 @@ def _create_offer(
         rank=attempt_count + 1,
         eligibility_snapshot={
             "service_area_id": str(unit.service_area_id),
-            "variant_ids": [str(value) for value in _unit_variant_ids(unit)],
+            "variant_ids": [str(value) for value in unit_variant_ids(unit)],
             "requested_start": unit.requested_start.isoformat(),
             "estimated_duration_minutes": unit.estimated_duration_minutes,
         },
+        ranking_snapshot=ranking.provenance(unit=unit, selected=candidate),
     )
-    deadline = min(
-        group.expires_at,
-        timezone.now() + timedelta(seconds=settings.M1_PARTNER_OFFER_TIMEOUT_SECONDS),
-    )
+    offer_timeout = timezone.now() + timedelta(seconds=settings.M1_PARTNER_OFFER_TIMEOUT_SECONDS)
+    # A `BOOKED` group's own `expires_at` is its long-past checkout deadline, not a bound that
+    # should ever cap a post-booking recovery offer.
+    deadline = offer_timeout if post_booking_recovery else min(group.expires_at, offer_timeout)
     pricing = unit.quote_unit.quote.pricing_policy_snapshot
     gross_paise = (
         unit.quote_unit.task_subtotal_paise + unit.quote_unit.minimum_visit_adjustment_paise
@@ -205,7 +206,10 @@ def create_manual_unit_offer(*, unit_id: UUID, partner_id: UUID) -> PartnerOffer
         .select_related("service_area", "quote_unit__quote")
         .get(id=unit_id)
     )
-    if group.status in GROUP_TERMINAL_STATUSES or unit.status != FulfilmentUnit.Status.MATCHING:
+    if _blocks_offer_action(group, unit) or unit.status not in (
+        FulfilmentUnit.Status.MATCHING,
+        FulfilmentUnit.Status.RECOVERY_REQUIRED,
+    ):
         raise ValueError("This Fulfilment Unit is not searching for a Partner.")
     if PartnerOffer.objects.filter(
         fulfilment_unit=unit,
@@ -298,7 +302,7 @@ def accept_unit_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffe
         raise PermissionError("This offer belongs to another Partner.")
     now = timezone.now()
     if (
-        group.status in GROUP_TERMINAL_STATUSES
+        _blocks_offer_action(group, unit)
         or offer.status != PartnerOffer.Status.OFFERED
         or offer.expires_at <= now
     ):

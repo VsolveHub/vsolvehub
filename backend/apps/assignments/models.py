@@ -1,5 +1,7 @@
 import uuid
+from typing import Any
 
+from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateTimeRangeField, RangeOperators
 from django.db import models
@@ -29,6 +31,10 @@ class AssignmentAttempt(models.Model):
     candidate = models.ForeignKey(PartnerProfile, on_delete=models.PROTECT)
     rank = models.PositiveSmallIntegerField()
     eligibility_snapshot = models.JSONField(default=dict)
+    # Why this candidate was ordered where it was: the policy that ran, the pool it
+    # considered, the factor that decided it, and a named reason for every Partner it
+    # passed over. Operations-only — it is never merged into the Partner projection.
+    ranking_snapshot = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -72,12 +78,17 @@ class Reservation(models.Model):
         on_delete=models.PROTECT,
         related_name="reservation",
     )
-    fulfilment_unit = models.OneToOneField(
+    # A `ForeignKey`, not a `OneToOneField`: a unit's Partner can be released and re-matched
+    # (pre-payment recovery, and post-booking recovery in `apps.fulfilment`), and each attempt
+    # leaves its own row behind rather than reusing one. `assignments_one_active_reservation_
+    # per_unit` below is what actually enforces "at most one live reservation at a time" —
+    # scoped to the active statuses, exactly like the Partner-overlap exclusion constraint.
+    fulfilment_unit = models.ForeignKey(
         FulfilmentUnit,
         null=True,
         blank=True,
         on_delete=models.PROTECT,
-        related_name="reservation",
+        related_name="reservations",
     )
     partner = models.ForeignKey(
         PartnerProfile, on_delete=models.PROTECT, related_name="reservations"
@@ -104,6 +115,11 @@ class Reservation(models.Model):
                     | Q(checkout__isnull=True, fulfilment_unit__isnull=False)
                 ),
                 name="assignments_reservation_exactly_one_scope",
+            ),
+            models.UniqueConstraint(
+                fields=("fulfilment_unit",),
+                condition=Q(status__in=("TENTATIVE", "CONFIRMED")),
+                name="assignments_one_active_reservation_per_unit",
             ),
         ]
 
@@ -187,3 +203,79 @@ class PartnerOffer(models.Model):
     def __str__(self) -> str:
         scope_id = self.fulfilment_unit_id or self.checkout_id
         return f"{scope_id}:{self.partner_id}:{self.status}"
+
+
+class DispatchCommandAudit(models.Model):
+    """Immutable evidence of an Operations override on autonomous dispatch.
+
+    Revoking an offer takes work away from a Partner who may already be travelling to it,
+    and releasing a hold frees capacity a Customer believes they have. Neither is
+    reconstructable from the resulting state — a `REVOKED` offer looks the same whether an
+    agent revoked it or group compensation did. This row is the only record of who decided,
+    why, and what the unit looked like on either side of the decision.
+    """
+
+    class Command(models.TextChoices):
+        REVOKE_OFFER = "REVOKE_OFFER", "Revoke offer"
+        RELEASE_RESERVATION = "RELEASE_RESERVATION", "Release reservation"
+        RECOVER_UNIT = "RECOVER_UNIT", "Recover fulfilment unit"
+
+    class Reason(models.TextChoices):
+        PARTNER_UNREACHABLE = "PARTNER_UNREACHABLE", "Partner unreachable"
+        CUSTOMER_REQUEST = "CUSTOMER_REQUEST", "Customer request"
+        SAFETY_CONCERN = "SAFETY_CONCERN", "Safety concern"
+        DUPLICATE_DISPATCH = "DUPLICATE_DISPATCH", "Duplicate dispatch"
+        STUCK_DISPATCH = "STUCK_DISPATCH", "Stuck dispatch"
+        OPERATIONS_ERROR = "OPERATIONS_ERROR", "Operations error"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="dispatch_commands_issued",
+    )
+    command = models.CharField(max_length=32, choices=Command.choices)
+    reason = models.CharField(max_length=32, choices=Reason.choices)
+    note = models.CharField(max_length=500, blank=True)
+    fulfilment_unit = models.ForeignKey(
+        FulfilmentUnit,
+        on_delete=models.PROTECT,
+        related_name="dispatch_command_audits",
+    )
+    offer = models.ForeignKey(
+        PartnerOffer,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="dispatch_command_audits",
+    )
+    reservation = models.ForeignKey(
+        Reservation,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="dispatch_command_audits",
+    )
+    idempotency_key = models.CharField(max_length=128)
+    unit_version_before = models.PositiveIntegerField()
+    before_state = models.JSONField(default=dict)
+    after_state = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+        indexes = [models.Index(fields=("fulfilment_unit", "created_at"))]
+
+    def __str__(self) -> str:
+        return f"{self.fulfilment_unit_id}:{self.command}:{self.created_at.isoformat()}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Refuse any write that is not the original insert.
+
+        Audit evidence that can be edited is not evidence. The database has no rewrite
+        path either — nothing in this app updates these rows — and this makes an
+        accidental one fail loudly rather than silently rewriting history.
+        """
+        if not self._state.adding:
+            raise ValueError("Dispatch command audit rows are immutable.")
+        super().save(*args, **kwargs)

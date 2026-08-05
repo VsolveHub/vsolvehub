@@ -59,6 +59,29 @@ class Order(models.Model):
 
 
 class Booking(models.Model):
+    """One operational Fulfilment Unit after confirmation.
+
+    `partner`, `reservation`, `scheduled_start` and `estimated_duration_minutes` are the one
+    deliberate mutability exception in this otherwise append-only model: a post-booking Partner
+    recovery (`apps.fulfilment.recovery_services.recover_booking_partner`) rewrites them in place
+    when a replacement Partner commits, rather than creating a second `Booking` row for the same
+    `FulfilmentUnit` — the unit keeps exactly one operational Booking, matching its `OneToOneField`.
+    Every rewrite is recorded in `apps.fulfilment.models.BookingStatusHistory`.
+    """
+
+    class Status(models.TextChoices):
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        EN_ROUTE = "EN_ROUTE", "En route"
+        ARRIVED = "ARRIVED", "Arrived"
+        IN_PROGRESS = "IN_PROGRESS", "In progress"
+        COMPLETION_SUBMITTED = "COMPLETION_SUBMITTED", "Completion submitted"
+        COMPLETED = "COMPLETED", "Completed"
+        PARTIALLY_COMPLETED = "PARTIALLY_COMPLETED", "Partially completed"
+        DISPUTED = "DISPUTED", "Disputed"
+        RECOVERY_REQUIRED = "RECOVERY_REQUIRED", "Recovery required"
+        ABORTED = "ABORTED", "Aborted"
+        CANCELLED = "CANCELLED", "Cancelled"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="bookings")
     fulfilment_unit = models.OneToOneField(
@@ -75,7 +98,20 @@ class Booking(models.Model):
     partner = models.ForeignKey(PartnerProfile, on_delete=models.PROTECT)
     scheduled_start = models.DateTimeField()
     estimated_duration_minutes = models.PositiveIntegerField()
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.CONFIRMED)
+    version = models.PositiveIntegerField(default=1)
+    en_route_at = models.DateTimeField(null=True, blank=True)
+    arrived_at = models.DateTimeField(null=True, blank=True)
+    customer_unavailable_wait_started_at = models.DateTimeField(null=True, blank=True)
+    late_declared_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=240, blank=True)
+    # Set when a dispute/safety/damage case opens. Read (never written) by the future B9/BE-10
+    # Partner ledger before releasing a payout — this is the documented seam, not a fabricated
+    # OperationsCase.
+    payout_hold = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return str(self.id)
@@ -84,6 +120,7 @@ class Booking(models.Model):
 class PaymentAttempt(models.Model):
     class Purpose(models.TextChoices):
         BOOKING_GROUP = "BOOKING_GROUP", "Booking group"
+        SCOPE_AMENDMENT_REVISION = "SCOPE_AMENDMENT_REVISION", "Scope amendment revision"
 
     class Status(models.TextChoices):
         PROVIDER_PENDING = "PROVIDER_PENDING", "Provider pending"
@@ -101,8 +138,14 @@ class PaymentAttempt(models.Model):
         NEEDS_ATTENTION = "NEEDS_ATTENTION", "Needs attention"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Nullable only for `Purpose.SCOPE_AMENDMENT_REVISION` — a post-booking charge for
+    # additional catalog work has no `CheckoutSession`; every other purpose still requires one.
     checkout = models.ForeignKey(
-        CheckoutSession, on_delete=models.PROTECT, related_name="payment_attempts"
+        CheckoutSession,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payment_attempts",
     )
     booking_group = models.ForeignKey(
         BookingGroup,
@@ -166,6 +209,13 @@ class PaymentAttempt(models.Model):
                 fields=("booking_group", "idempotency_key"),
                 condition=(models.Q(booking_group__isnull=False) & ~models.Q(idempotency_key="")),
                 name="commerce_unique_group_payment_key",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(purpose="BOOKING_GROUP", checkout__isnull=False)
+                    | models.Q(purpose="SCOPE_AMENDMENT_REVISION", checkout__isnull=True)
+                ),
+                name="commerce_payment_attempt_checkout_matches_purpose",
             ),
         ]
 

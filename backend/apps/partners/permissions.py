@@ -92,3 +92,30 @@ class HasRecentFinanceStepUp(BasePermission):
             stepped_up_at__gte=timezone.now()
             - timedelta(seconds=settings.FINANCE_STEP_UP_TTL_SECONDS),
         ).exists()
+
+
+class HasRecentOperationsStepUp(BasePermission):
+    """Require an operations role and fresh OTP confirmation for outage-assisted commands.
+
+    Gates `apps.fulfilment`'s Operations-assisted outage start and assisted work start —
+    the one deliberate, audited channel-outage workaround, never a general-purpose bypass.
+    """
+
+    message = "A recent Operations step-up is required."
+
+    def has_permission(self, request: Request, _view: APIView) -> bool:
+        user = request.user
+        if not isinstance(user, User) or not user.is_authenticated or not user.is_active:
+            return False
+        session_key = request.session.session_key
+        if not session_key:
+            return False
+        return UserSession.objects.filter(
+            user=user,
+            session_key_hash=keyed_hash(session_key),
+            revoked_at__isnull=True,
+            expires_at__gt=timezone.now(),
+            active_role__code="operations",
+            stepped_up_at__gte=timezone.now()
+            - timedelta(seconds=settings.OPERATIONS_STEP_UP_TTL_SECONDS),
+        ).exists()

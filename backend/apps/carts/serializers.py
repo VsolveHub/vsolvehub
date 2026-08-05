@@ -707,8 +707,11 @@ class FulfilmentUnitSerializer(serializers.ModelSerializer[FulfilmentUnit]):
             )
             if deadline is not None:
                 deadlines.append(deadline)
-        reservation = getattr(unit, "reservation", None)
-        if reservation is not None and reservation.status in ("TENTATIVE", "CONFIRMED"):
+        reservation = next(
+            (r for r in unit.reservations.all() if r.status in ("TENTATIVE", "CONFIRMED")),
+            None,
+        )
+        if reservation is not None:
             deadlines.append(reservation.expires_at)
         return min(deadlines).isoformat() if deadlines else None
 

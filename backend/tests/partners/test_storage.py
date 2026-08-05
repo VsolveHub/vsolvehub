@@ -7,7 +7,7 @@ import pytest
 import requests
 from django.utils import timezone
 
-from apps.partners.storage import (
+from apps.foundation.storage import (
     DocumentStorageError,
     SupabaseDocumentStorage,
 )
@@ -38,7 +38,7 @@ def test_signed_upload_uses_private_api_headers_and_exposes_tus_token() -> None:
     }
     before = timezone.now()
 
-    with patch("apps.partners.storage.requests.post", return_value=response) as request:
+    with patch("apps.foundation.storage.requests.post", return_value=response) as request:
         signed = _storage().create_signed_upload(object_key="partners/id/file.pdf")
 
     assert signed.upload_token == signed_token
@@ -62,7 +62,7 @@ def test_object_verification_streams_and_hashes_authoritative_bytes() -> None:
     }
     response.iter_content.return_value = body
 
-    with patch("apps.partners.storage.requests.get", return_value=response) as request:
+    with patch("apps.foundation.storage.requests.get", return_value=response) as request:
         verified = _storage().verify_object(
             object_key="partners/id/file.pdf",
             maximum_size_bytes=1024,
@@ -80,7 +80,7 @@ def test_object_verification_rejects_declared_oversize_and_closes_response() -> 
     response.headers = {"Content-Length": "1025", "Content-Type": "application/pdf"}
 
     with (
-        patch("apps.partners.storage.requests.get", return_value=response),
+        patch("apps.foundation.storage.requests.get", return_value=response),
         pytest.raises(DocumentStorageError, match="exceeds"),
     ):
         _storage().verify_object(
@@ -100,13 +100,13 @@ def test_signed_review_is_short_lived_and_delete_is_idempotent_for_missing_objec
     }
     missing_response = _response(status_code=404)
 
-    with patch("apps.partners.storage.requests.post", return_value=signed_response):
+    with patch("apps.foundation.storage.requests.post", return_value=signed_response):
         signed = _storage().create_signed_review(
             object_key="partners/id/file.pdf",
             expires_in_seconds=300,
         )
     with patch(
-        "apps.partners.storage.requests.delete",
+        "apps.foundation.storage.requests.delete",
         return_value=missing_response,
     ) as delete_request:
         _storage().delete_object(object_key="partners/id/file.pdf")
