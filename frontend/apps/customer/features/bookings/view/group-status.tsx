@@ -22,6 +22,15 @@ import type { BookingGroup, FulfilmentUnit, GroupStatus, RecoveryAction } from "
  * from `status` — `REPLAN_REQUIRED` obviously means replan — would be a second
  * implementation of a server rule, and the first time the two disagreed the
  * customer would be offered an action Django refuses.
+ *
+ * ## Every status the contract publishes has copy here
+ *
+ * These maps are `Record<Status, …>` on purpose: a status added to the contract
+ * is a `typecheck` failure rather than a badge that renders `undefined`. The
+ * post-visit states — a unit that needs a replacement Partner, one where only
+ * some of the work was done, one under dispute — arrived with the B8 fulfilment
+ * layer and are labelled below. What the *Customer* can then do about them is
+ * FE-11's job; a status with no wording would be a hole in the meantime.
  */
 
 export const GROUP_STATUS_LABELS: Record<GroupStatus, string> = {
@@ -31,6 +40,7 @@ export const GROUP_STATUS_LABELS: Record<GroupStatus, string> = {
   ALL_UNITS_HELD: "All professionals held",
   PAYMENT_PENDING: "Ready for payment",
   BOOKED: "Booked",
+  COMPLETED: "Completed",
   REPLAN_REQUIRED: "Needs replanning",
   CANCELLED: "Cancelled",
   EXPIRED: "Expired",
@@ -47,6 +57,7 @@ export const GROUP_STATUS_MEANING: Record<GroupStatus, string> = {
   ALL_UNITS_HELD: "Every visit has a professional held. Nothing has been charged yet.",
   PAYMENT_PENDING: "Every visit has a professional. Payment is the last step.",
   BOOKED: "Everything is confirmed.",
+  COMPLETED: "Every visit in this booking is finished.",
   REPLAN_REQUIRED:
     "We could not fill every visit, so nothing was booked and any holds have been released. Choosing a new arrangement starts a fresh search.",
   CANCELLED: "This booking was cancelled. Nothing has been charged.",
@@ -61,6 +72,7 @@ const GROUP_TONES: Record<GroupStatus, "neutral" | "success" | "warning" | "dang
   ALL_UNITS_HELD: "success",
   PAYMENT_PENDING: "warning",
   BOOKED: "success",
+  COMPLETED: "success",
   REPLAN_REQUIRED: "warning",
   CANCELLED: "neutral",
   EXPIRED: "neutral",
@@ -73,9 +85,17 @@ export const UNIT_STATUS_LABELS: Record<Schemas["FulfilmentUnitStatusEnum"], str
   HELD: "Professional held",
   PAYMENT_PENDING: "Awaiting payment",
   BOOKED: "Booked",
+  // The visit is paid for and the professional fell through — a release, a
+  // no-show or an abort. It is not a failure and it is not cancelled: the visit
+  // still stands and a replacement is being found.
+  RECOVERY_REQUIRED: "Finding a replacement",
   CANCELLED: "Cancelled",
   FAILED: "No professional found",
   COMPLETED: "Completed",
+  // Some of the work was done and some was not. Django refunds the unperformed
+  // part, so this must not read as either "done" or "nothing happened".
+  PARTIALLY_COMPLETED: "Partly done",
+  DISPUTED: "Being looked into",
 };
 
 const UNIT_TONES: Record<
@@ -87,9 +107,12 @@ const UNIT_TONES: Record<
   HELD: "success",
   PAYMENT_PENDING: "warning",
   BOOKED: "success",
+  RECOVERY_REQUIRED: "warning",
   CANCELLED: "neutral",
   FAILED: "danger",
   COMPLETED: "success",
+  PARTIALLY_COMPLETED: "warning",
+  DISPUTED: "warning",
 };
 
 /**

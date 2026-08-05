@@ -131,13 +131,25 @@ export type PaymentPhase =
 /**
  * The single phase a screen renders from.
  *
- * Ordered so the more certain answer always wins. `paid` is tested before
- * `expired` on purpose: an attempt can capture moments before its own window
- * closes, and the customer whose money moved must never be shown an expiry.
+ * Ordered so the *least* certain answer wins, and then so the more certain of
+ * the remainder does.
+ *
+ * `ambiguous` is tested first, ahead of `paid`. `NEEDS_ATTENTION` on a
+ * `CAPTURED` attempt is Django saying its own record and the provider's do not
+ * agree, and "Your booking is paid for — your payment is confirmed" is exactly
+ * the claim it is telling us not to make. It is also the one phase that offers
+ * `Check again`, so rendering `paid` over an unreconciled capture left the
+ * customer with no way to ask us to look while the screen quietly kept polling.
+ * `isSettled` already refuses to stop polling on `NEEDS_ATTENTION`; this makes
+ * the copy agree with it.
+ *
+ * `paid` is then tested before `expired`: an attempt can capture moments before
+ * its own window closes, and the customer whose money moved must never be shown
+ * an expiry.
  */
 export function paymentPhase(attempt: PaymentAttempt, serverNow: Date): PaymentPhase {
-  if (isPaid(attempt)) return "paid";
   if (isAmbiguous(attempt)) return "ambiguous";
+  if (isPaid(attempt)) return "paid";
   if (isNotCharged(attempt)) return "not-charged";
   if (isExpired(attempt, serverNow)) return "expired";
   if (attempt.status === "PROVIDER_PENDING") return "preparing";

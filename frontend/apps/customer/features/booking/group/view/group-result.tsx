@@ -1,9 +1,12 @@
 "use client";
 
-import type { Schemas } from "@vsolve/api-client";
 import { Badge, ErrorState } from "@vsolve/ui";
 import Link from "next/link";
 
+import {
+  GROUP_STATUS_LABELS,
+  UNIT_STATUS_LABELS,
+} from "@/features/bookings/view/group-status";
 import type { Checkout, FulfilmentUnit } from "../queries";
 import { Money } from "./money";
 
@@ -28,29 +31,17 @@ import { Money } from "./money";
  * and this screen does not yet observe.
  */
 
-const UNIT_STATUS_LABELS: Record<Schemas["FulfilmentUnitStatusEnum"], string> = {
-  PLANNED: "Planned",
-  MATCHING: "Finding a professional",
-  HELD: "Professional held",
-  PAYMENT_PENDING: "Awaiting payment",
-  BOOKED: "Booked",
-  CANCELLED: "Cancelled",
-  FAILED: "Could not be filled",
-  COMPLETED: "Completed",
-};
-
-const GROUP_STATUS_LABELS: Record<Schemas["BookingGroupStatusEnum"], string> = {
-  CONFIRMED: "Confirmed",
-  MATCHING: "Finding professionals",
-  PARTIALLY_HELD: "Some professionals held",
-  ALL_UNITS_HELD: "All professionals held",
-  PAYMENT_PENDING: "Awaiting payment",
-  BOOKED: "Booked",
-  REPLAN_REQUIRED: "Needs replanning",
-  CANCELLED: "Cancelled",
-  EXPIRED: "Expired",
-  FAILED: "Could not be completed",
-};
+/**
+ * Status wording comes from `features/bookings`, not from a copy kept here.
+ *
+ * There were two maps until contract 1.15.1 added `RECOVERY_REQUIRED`,
+ * `PARTIALLY_COMPLETED` and `DISPUTED` and both went incomplete at once — which
+ * is the argument against the second copy in one line. They had also already
+ * drifted where it matters most: this screen called `PARTIALLY_HELD` "Some
+ * professionals held", the exact reading `group-status.tsx` exists to defend
+ * against, because under `ALL_OR_NOTHING` a group with two of three
+ * professionals has booked nothing.
+ */
 
 function UnitCard({ unit }: { unit: FulfilmentUnit }) {
   return (

@@ -158,6 +158,24 @@ describe("paymentPhase", () => {
     expect(paymentPhase(flagged, SERVER_NOW)).toBe("ambiguous");
   });
 
+  it("prefers ambiguity over a paid claim, when Django says the two disagree", () => {
+    // The gap the browser suite caught. `NEEDS_ATTENTION` on a capture is Django
+    // saying its record and the provider's do not agree — "your payment is
+    // confirmed" is precisely the claim it is telling us not to make. It also
+    // withheld the one control that lets the customer ask us to look, because
+    // `Check again` is offered on `ambiguous` alone.
+    const disputed = attempt({ status: "CAPTURED", reconciliation_state: "NEEDS_ATTENTION" });
+    expect(paymentPhase(disputed, SERVER_NOW)).toBe("ambiguous");
+    // And it is still not settled, so the screen keeps watching.
+    expect(isSettled(disputed)).toBe(false);
+  });
+
+  it("reports a reconciled capture as paid", () => {
+    expect(
+      paymentPhase(attempt({ status: "CAPTURED", reconciliation_state: "IN_SYNC" }), SERVER_NOW),
+    ).toBe("paid");
+  });
+
   it("maps the live states", () => {
     expect(paymentPhase(attempt({ status: "PROVIDER_PENDING" }), SERVER_NOW)).toBe("preparing");
     expect(paymentPhase(attempt(), SERVER_NOW)).toBe("awaiting-customer");

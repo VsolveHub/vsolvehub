@@ -48,6 +48,22 @@ import {
 
 const GROUP = "/bookings/group-1";
 const PAY = `${GROUP}/pay`;
+
+/**
+ * The pay button, under either of its names.
+ *
+ * `Button` swaps its visible label for a spinner while `loading`, leaving only
+ * the `sr-only` "Opening payment" in the accessible name. A locator written for
+ * the idle name therefore stops resolving the moment the button is pressed —
+ * and a second `click({ force: true })` on it does not "press a disabled
+ * button", it waits out the entire test timeout looking for an element that no
+ * longer exists. `.catch(() => undefined)` cannot rescue that, because the
+ * timeout kills the test first.
+ *
+ * That is what made the double-press scenarios below no-ops. Matching both
+ * names is what makes the second press land on the real control.
+ */
+const PAY_BUTTON = /continue to payment|opening payment/i;
 const CHECKOUT_PAYMENT = "/api/v1/checkouts/checkout-1/payment/";
 const START_ATTEMPT = "/api/v1/payment-attempts/";
 
@@ -242,11 +258,12 @@ test.describe("pressing pay twice", () => {
     });
     await page.goto(PAY);
 
-    const pay = page.getByRole("button", { name: "Continue to payment" });
-    await pay.click();
+    await page.getByRole("button", { name: "Continue to payment" }).click();
     // `force`, because the point is what happens when the control is already
     // disabled: a test that politely waited for it to be clickable would prove
-    // nothing about the double-tap it is named after.
+    // nothing about the double-tap it is named after. The locator has to match
+    // the busy name too — see `PAY_BUTTON`.
+    const pay = page.getByRole("button", { name: PAY_BUTTON });
     await pay.click({ force: true }).catch(() => undefined);
 
     await expect(page.getByText("₹317.42").first()).toBeVisible();
@@ -262,8 +279,12 @@ test.describe("pressing pay twice", () => {
     });
     await page.goto(PAY);
 
-    const pay = page.getByRole("button", { name: "Continue to payment" });
-    await pay.click();
+    await page.getByRole("button", { name: "Continue to payment" }).click();
+    // The widget is open and the control is now busy and disabled. Both further
+    // presses are real presses on the real button — see `PAY_BUTTON` for why
+    // they used to be sixty-second waits on a locator that resolved to nothing.
+    const pay = page.getByRole("button", { name: PAY_BUTTON });
+    await expect(pay).toBeDisabled();
     await pay.click({ force: true }).catch(() => undefined);
     await pay.click({ force: true }).catch(() => undefined);
 
@@ -393,9 +414,16 @@ test.describe("an outcome nobody can confirm yet", () => {
     });
     await page.goto(PAY);
 
+    // Wait for the ambiguous screen before moving the world. Overriding first
+    // meant the very first read already answered `CAPTURED`, so `Check again`
+    // never existed and the click waited out the test — the scenario never
+    // exercised reconciliation at all.
+    const check = page.getByRole("button", { name: "Check again" });
+    await expect(check).toBeVisible();
+
     api.setCheckoutPayment(attempt({ status: "CAPTURED", version: 2 }));
     api.setGroup(paidGroup());
-    await page.getByRole("button", { name: "Check again" }).click();
+    await check.click();
 
     await expect(page.getByRole("heading", { name: "Your booking is paid for" })).toBeVisible({
       timeout: POLL,
