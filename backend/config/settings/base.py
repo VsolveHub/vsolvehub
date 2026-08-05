@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "apps.fulfilment",
     "apps.cases",
     "apps.payouts",
+    "apps.notifications",
     "apps.catalog",
     "apps.pricing",
     "apps.locations",
