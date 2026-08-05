@@ -30,7 +30,7 @@ exploration, not as crossed-out active policy.
 | ADR-023 | Partial work and abort are first-class launch states | Physical work does not always end in binary completion/cancellation |
 | ADR-024 | Completion submission precedes final settlement | Customer dispute rights and Partner payout certainty both need a deadline |
 | ADR-025 | Additional work requires immutable revision, approval and payment | No unauthorized labour/material charge |
-| ADR-026 | Crew work waits for the workforce domain | Required helpers cannot be represented as an optional integer |
+
 | ADR-027 | Partner-procured materials require approval, receipt and outcome | Bound fraud, returns and reimbursement risk |
 | ADR-028 | Operations is case-oriented and command-driven | Every exceptional state needs owner, SLA and terminal result |
 | ADR-029 | Future models ship with their capability | Avoid unusable nullable seams and speculative migrations |

@@ -8,7 +8,27 @@ implemented, with the missing production behaviour named · `[ ]` not implemente
 path alone never makes a business capability complete; its authorized HTTP contract, idempotency,
 failure recovery, audit and concurrency behaviour must also exist.
 
-## Audit snapshot — 2026-08-04 (full repo re-audit)
+## Audit snapshot — 2026-08-05 (verified against real PostgreSQL, committed)
+
+`scripts/quality.cmd` is **green**: Ruff format/check, strict MyPy, **384 passed** (3 integration
+tests deselected by the default `-m "not integration"`), branch-aware coverage **87.45%** against
+the 85% gate, no migration drift, and a freshly generated OpenAPI that validates and matches the
+committed `contracts/openapi/v1.yaml` at **1.15.1** with **82** published paths. Runtime 10m38s.
+
+Corrections to the 2026-08-04 snapshot below, which was written from a stale tree:
+
+- **B8 is not "no code".** `apps/fulfilment` is complete — 12 models, ~3,100 LOC, 126 tests — and
+  is now committed. It still has **no HTTP surface**; that is BE-09-API and it is the single
+  highest-value remaining backend task.
+- **BE-OPS is not open.** Worker/beat scripts, the outbox recovery sweep with lease and
+  dead-letter, and a real-infrastructure suite all exist.
+- **`docs/adr/` exists** and holds 6 ADRs. `docs/runbooks/` holds 5, not 2.
+- **BE-08 is not "no consumer".** FE-10 calls payment attempts, checkout payment, reconcile,
+  orders and tax documents.
+
+The full findings are in [07-audit-2026-08-05.md](./07-audit-2026-08-05.md).
+
+## Audit snapshot — 2026-08-04 (full repo re-audit — superseded above)
 
 Re-derived from the working tree rather than from prior status claims. See
 [task.md](./task.md) for the consolidated board.
@@ -25,8 +45,12 @@ Re-derived from the working tree rather than from prior status claims. See
 - **BE-09 has no code at all.** There is no fulfilment app: no en-route, arrived, start-OTP,
   evidence, amendment, completion or abort command exists anywhere in `backend/apps/`.
 - **BE-10 has no code at all.** No cases, ledger, payout or notification models or endpoints.
-- **BE-07 remaining hardening is still open:** revoke/release/manual-recovery idempotency, ranking
-  explainability, accept/expiry/payment-hold concurrency.
+- **BE-07 remaining hardening is closed (OpenAPI 1.15.0):** revoke/release/manual-recovery are
+  now typed, authorized, idempotent, audited commands; ranking provenance is persisted and
+  readable by Operations; accept/expiry/payment-hold/worker-death races are proven against real
+  PostgreSQL. The legacy Checkout-scoped dispatch path in `services.py` keeps its prior
+  `eligibility_snapshot` and gains no ranking provenance — B6 re-keyed dispatch to the Fulfilment
+  Unit and that is the live path.
 - **R4 is unchanged and now tracked as BE-OPS on the board.** Tests still run locmem + eager Celery.
   No worker/beat topology, no outbox recovery sweep, no real-Redis suite.
 - `docs/runbooks/` holds 2 runbooks (partner document storage, payment reconciliation).
@@ -321,8 +345,13 @@ integration remains Ready and is the only remaining half of 0007.
       deterministic business ranking are not implemented; current order is Partner UUID.
 - [x] Sequential offer model and commands for start, accept, commit, decline and undo, including the
       120-second tentative reservation and payment window.
-- [~] Assignment-attempt audit records basic eligibility inputs, but does not record ranking factors,
-      exclusion reasons or the bounded privacy policy required to explain assignment decisions.
+- [x] Assignment-attempt audit now persists `ranking_snapshot`: the policy that ran, the pool it
+      considered (bounded to the unit's service area — the bounded privacy policy), the single
+      factor that decided the order, and a named exclusion reason for every Partner passed over.
+      Published read-only to Operations at
+      `GET /api/v1/operations/fulfilment-units/{unit_id}/dispatch-explanation/`. No business
+      ranking was added — order is still Partner UUID; this only makes the existing order
+      explainable (OpenAPI 1.15.0).
 - [x] Move offer expiry, undo expiry, payment-hold expiry and candidate advance to Celery/beat so a
       closed browser cannot stop dispatch. Replace the customer `search/advance` command with a read
       projection.
@@ -350,12 +379,25 @@ integration remains Ready and is the only remaining half of 0007.
       offer page envelope as defense in depth for the 45-second expiry and 120-second undo window.
       The page-level field covers an empty inbox, which carries no offer to read a timestamp from
       (proposal 0010, OpenAPI 1.11.0 retained in 1.13.0). MyPy and the full quality gate are green.
-- [ ] Complete revoke/release/manual-recovery commands with authorization, idempotency and audit, and
+- [x] Complete revoke/release/manual-recovery commands with authorization, idempotency and audit, and
       add real concurrent-accept/expiry/payment-hold tests.
+      `POST /api/v1/operations/offers/{offer_id}/revoke/`,
+      `POST /api/v1/operations/reservations/{reservation_id}/release/` and
+      `POST /api/v1/operations/fulfilment-units/{unit_id}/recover/` are scoped to
+      `IsOperationsUser`, guarded by `expected_unit_version` (`409 dispatch_version_conflict` on a
+      stale read), replayable exactly once under a required `Idempotency-Key` through the same
+      `execute_idempotent` helper proposal 0009 proved, and each writes exactly one immutable
+      `DispatchCommandAudit` row naming the actor, reason and before/after state. Real-PostgreSQL
+      tests cover a revoke racing an accept, an accept landing exactly as the offer expires, a
+      payment-hold release racing the expiry sweep, and a worker backend killed mid-transaction
+      (`pg_terminate_backend`) — none of them may partially commit or burn an idempotency key
+      (OpenAPI 1.15.0).
 
 **Status: BE-07 contract defects 0007–0010 are backend-verified in OpenAPI 1.13.0 (2026-08-04).**
-Travel/presence/ranking, explainability and manual recovery remain additional B6 hardening before
-production. Frontend G21/G22/G23/FE-09C follow-ups are Ready and not Done.
+**BE-07 remaining hardening (revoke/release/manual-recovery idempotency, ranking explainability,
+real-PostgreSQL concurrency) is complete in OpenAPI 1.15.0 (2026-08-05).** Travel/presence
+business ranking (still Partner UUID order) remains additional B6 hardening before production.
+Frontend G21/G22/G23/FE-09C follow-ups are Ready and not Done.
 
 ## B7 — Orders, payment, refund and documents
 
@@ -395,19 +437,110 @@ documented in `docs/runbooks/payment-reconciliation.md`.
 
 ## B8 — Booking fulfilment
 
-- [ ] Implement fulfilment state machine, history and expected-version commands per unit, plus the
+- [x] Implement fulfilment state machine, history and expected-version commands per unit, plus the
       derived Customer Booking Group projection.
-- [ ] Implement idempotent Customer cancel, reschedule and address-change commands with the frozen
+- [x] Implement idempotent Customer cancel, reschedule and address-change commands with the frozen
       revalidation, reacceptance, recovery and no-silent-mutation rules.
-- [ ] Implement En route, Arrived, Customer unavailable, lateness watchdogs and restricted
+- [x] Implement En route, Arrived, Customer unavailable, lateness watchdogs and restricted
       Operations-assisted outage start.
-- [ ] Implement start OTP, WorkTask, WorkEvidence, scope amendment and revision payment.
-- [ ] Implement Abort, line-level outcomes, completion submission, Customer confirmation/dispute,
+- [x] Implement start OTP, WorkTask, WorkEvidence, scope amendment and revision payment.
+- [x] Implement Abort, line-level outcomes, completion submission, Customer confirmation/dispute,
       evidence-gated timeout, partial-work refund/ledger and Partner release/recovery.
-- [ ] Support group-wide and unit cancellation/reschedule commands without hidden partial success;
+- [x] Support group-wide and unit cancellation/reschedule commands without hidden partial success;
       unaffected units retain independent truth and every financial change uses unit allocations.
 
-**Status: not started.**
+**Status: B8 domain layer complete; no HTTP surface yet, and two boundaries stated below.**
+
+`apps/fulfilment` implements the full physical-work lifecycle as domain commands: the
+`ALLOWED_TRANSITIONS` state machine with an immutable `BookingStatusHistory` row per move,
+`BookingGroup` -> `FulfilmentUnit` -> `Booking` lock ordering on every command, expected-version
+guards, start OTP, `WorkTask`/`WorkEvidence`, scope amendment and revision payment, abort,
+line-level outcomes, completion submission and Customer confirm/dispute, the evidence-gated
+auto-finalize watchdog, and Partner release/recovery that rewrites the same `Booking` row rather
+than creating a second one for a unit. Every refund — cancellation fee ladder, partial-work
+settlement, group-wide cancellation — goes through `apps/fulfilment/refunds.py` onto the existing
+`commerce.Refund` / `RefundAllocation` / `PaymentAllocation` tables. There is no second money path.
+
+Group-wide cancellation (`cancel_booked_group`) classifies every unit before writing anything:
+still-cancellable units are cancelled under **their own** fee band with their own `Refund`, units
+that already finished are skipped **and named in the result**, and one mid-work unit refuses the
+whole command so nothing half-lands. `BookingGroup.Status.COMPLETED` is now derived only when at
+least one unit actually delivered; a group whose every visit was cancelled derives `CANCELLED`.
+Contract impact is recorded in `contracts/openapi/CHANGELOG.md` 1.15.1.
+
+A security review of the whole app ran before sign-off and found three real defects, all fixed
+with a regression test each: a refund could be allocated across two `PaymentAttempt`s (one
+`Refund` per attempt now); `reschedule_booking` accepted a backdated start, which would have made
+the lateness watchdog permanently waive every cancellation fee (a future-time guard now); and the
+work-evidence boundary checked no actor at all, so any caller could mint a signed upload URL for
+any Booking and file evidence against it (`_guard_evidence_actor` plus an object-key/Booking bind
+now). The evidence one mattered most — evidence is what gates automatic completion.
+
+Verification on this run: **ruff format/check clean**, **strict MyPy clean (147 files)**,
+`makemigrations --check --dry-run` reports no drift, the generated OpenAPI validates, and
+`tests/fulfilment` (126) plus `tests/carts` + `tests/assignments` + `tests/commerce` (112) pass.
+Every row of `01-scope-and-flow.md`'s failure-outcomes table that fulfilment owns has a test in
+`tests/fulfilment/test_failure_outcomes.py` asserting unit truth, reconciled group truth and a
+once-only audit row; that file's header maps the remaining rows to the apps that own them. The
+group-level races are covered against real PostgreSQL in
+`tests/fulfilment/test_fulfilment_concurrency.py` — real threads and connections, no mocks.
+
+**Known boundaries, stated rather than hidden:**
+
+- **No HTTP surface.** Every B8 command is service-layer only; `apps/fulfilment` has no
+  `views.py`, `urls.py` or `serializers.py`, so no Customer, Partner or Operations client can
+  invoke any of them yet. `POST /api/v1/booking-groups/{group_id}/cancel/` is still the
+  pre-payment command and still refuses a `BOOKED` group. Publishing B8 is its own task and must
+  land as one release, not one command at a time. Do not read the ticked lines above as a
+  shippable feature — they are a complete and tested domain layer behind no door.
+- **Step-up verification for the Operations-assisted start is not enforced anywhere yet.**
+  `operations_assisted_start` refuses a blank outage reason and audits the named operator, but
+  the re-verification `step_up_required` describes is a view-layer permission that does not exist
+  because the view does not exist. This must land with the B8 API, not after it.
+- **Reschedule inside the fee window is refused, not repriced.** A Customer inside the
+  fee-bearing window cancels (paying the fee they would anyway) and books again; a full re-match
+  is out of M1 scope. A late Partner waives this, like the cancellation fee.
+- **An incomplete amendment task is not separately refundable.** An authorized `ScopeAmendment`'s
+  revision payment shares the original catalog line's `PaymentAllocation`, so partial-work refund
+  covers original scope only; Operations settles the amendment case by hand through the same
+  `Refund` path. Documented on `_refund_unperformed_work`.
+- B9's `OperationsCase` does not exist yet, so a dispute sets `Booking.payout_hold` and stops
+  there. The Quality case the failure-outcomes table calls for is B9's work.
+- **There is no group-wide *reschedule*.** B8 line 6 names group-wide and unit
+  cancellation/reschedule; group-wide cancel, unit cancel, unit reschedule and group address
+  change all exist, group reschedule does not. It would follow the same classify-then-write
+  skeleton as `cancel_booked_group`.
+
+**Open review findings, ranked, none of them live (no HTTP surface):**
+
+A code review of this work raised eight issues beyond the security ones. One was Critical and is
+fixed: a Partner may release *mid-job*, and adding `RECOVERY_REQUIRED` to the Customer-cancellable
+statuses briefly made those Bookings fully refundable, wiping out completed-line settlement.
+`customer_can_cancel` now refuses a cancel once a `WorkSession` exists, with a regression test on
+both the unit and group commands. The rest are open and should close before B8 is published:
+
+1. `cancel_booked_group` short-circuits on a `COMPLETED` group, so "cancel my finished bookings"
+   returns success for a command that never ran, and skips the version guard. It should
+   short-circuit only when a cancellation actually happened (some unit is `CANCELLED`).
+2. On a genuine replay, `_settled_group_result` reports `fee_paise=0` / `refund_ids=()` for every
+   unit even when the first call charged a fee. The real values are already in the
+   `BookingStatusHistory` context and should be read back from there.
+3. The derived per-unit idempotency key `f"{key}:{unit.id}"` adds 37 characters to a
+   `max_length=128` column — a caller key over 91 characters is a `DataError`, not a typed
+   refusal. Needs the same guard `MAX_CANCELLATION_REASON_CHARS` got.
+4. The reschedule future-time guard should be a minimum-*notice* guard: a Customer 24h out can
+   still move a visit to `now + 16 minutes` and manufacture a late Partner forwards.
+5. `create_partial_refunds`' docstring claims a replay returns the existing refunds; it returns
+   `[]`, because the pending-refund subtraction empties `parts` first. No double refund occurs —
+   the docstring is what is wrong.
+6. `_refund_one_attempt`'s idempotency lookup returns a previously `FAILED` refund as though it
+   were live, so a retry never happens.
+7. Untested: one `create_partial_refunds` call producing two `Refund`s. The existing test only
+   reaches the single-attempt path, and `_split_across`' remainder handling has no direct test.
+
+**Update 2026-08-05:** the seven findings above are still open and are now tracked as **S3** on the
+board — they must close before BE-09-API publishes these commands, not after. The missing
+group-wide reschedule named under "Known boundaries" is part of the same task.
 
 ## B9 — Cases, ledger and payout
 
@@ -429,10 +562,14 @@ documented in `docs/runbooks/payment-reconciliation.md`.
 - [ ] Implement service/area/payment/payout kill switches and maker-checker controls where required.
 - [ ] Add metrics/alerts for conversion, assignment, lateness/no-show, partial/dispute, money
       ambiguity, case SLA, outbox and worker queues.
-- [ ] Create `docs/adr/**` and `docs/runbooks/**`; document every critical dependency, replay process
-      and stuck state. Those required directories currently do not exist.
+- [x] Create `docs/adr/**` and `docs/runbooks/**`; document every critical dependency, replay process
+      and stuck state. 6 ADRs and 5 runbooks exist (partner document storage, payment
+      reconciliation, outbox replay, queue outage, stuck command).
 
-**Status: not started, apart from request logging and the Partner-presence reconciliation task.**
+**Status: documentation and async recovery done (BE-OPS); notifications, kill switches and
+metrics/alerts not started.** No notification intent/delivery/failure model exists, no kill switch
+exists, and observability is JSON logging plus request IDs — there are no metrics, dashboards or
+alerts.
 
 ## Backend completion gate
 

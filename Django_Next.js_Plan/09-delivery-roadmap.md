@@ -35,7 +35,7 @@ Scope:
 - Partner pending earnings and Operations-reviewed payout batch;
 - Operations case workspace and production controls.
 
-Excluded: Instant, A2, crews, Partner-procured materials, recurring work, automatic
+Excluded: Instant, A2, crews, Partner-procured materials, automatic
 reliability penalties, provider picker, live tracking and on-demand payout.
 
 Detailed execution is in [M1](./M1/README.md).
@@ -58,21 +58,19 @@ Scope:
 Gate: inspection outcomes, delayed quote acceptance, material fraud/return and callback funding must pass
 end-to-end acceptance.
 
-## M3 — Time blocks and recurring local services
+## M3 — Time blocks
 
-Purpose: expand into services whose product is time or continuity.
+Purpose: expand into services whose product is time.
 
 Scope:
 
 - `A3_TIME_BLOCK` timer, extension and attendance settlement;
-- `A4_RECURRING_SERIES` with billing cycle, continuity, rolling visit materialization, skip, pause,
-  substitute and series cancellation;
 - eligible Beauty, Cleaning, Maid, Elder Care, Gardening and Pet service configurations;
 - Partner language packs required by the actual recruitment cohort;
 - optional Customer language packs based on demand.
 
-Gate: a recurring service cannot launch as many unrelated one-off bookings. Continuity, substitution,
-proration and series cancellation are mandatory.
+Gate: time-block timer, extension, overtime/abort and attendance outcome must pass end-to-end
+acceptance.
 
 ## M4 — Instant dispatch and mobile supply reliability
 
@@ -91,20 +89,16 @@ Gate: notification reliability, p50 eligible pool, acceptance latency, paid-assi
 refund/reconciliation and safety support thresholds are met in production-like pilot. Instant is not
 built merely because a feature flag can hide it.
 
-## M5 — Projects and staffing
+## M5 — Projects
 
-Purpose: support quoted outcomes and managed workforce rather than forcing them into visit bookings.
+Purpose: support quoted outcomes rather than forcing them into visit bookings.
 
 Scope:
 
 - `A5_CUSTOM_PROJECT`: request, proposal, comparison, agreement, milestones, evidence, change orders,
-  dispute and compliant fund release;
-- `A6_STAFFING`: provider organizations, memberships, named workers, shifts, supervisors, attendance,
-  replacements, wage/commission and settlement;
-- multi-person Technician jobs migrate to the workforce/crew capability where required.
+  dispute and compliant fund release.
 
-Gate: legal/payment review of milestone funds and workforce obligations; no unidentified `crew_size`
-shortcut.
+Gate: legal/payment review of milestone funds.
 
 ## M6 — Rentals and trips
 

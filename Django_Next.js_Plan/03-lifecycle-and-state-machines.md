@@ -10,7 +10,7 @@ discover → multi-item cart/scope → address/serviceability → plan alternati
 ```
 
 Stages vary by archetype. A1 has task quantity, A2 has inspection and follow-up, A3 has purchased
-time, A4 has recurrence, and A5-A10 use their own engines.
+time, and A5-A10 use their own engines.
 
 ## Checkout lifecycle
 
@@ -40,7 +40,7 @@ Payment cannot start until every unit required by the accepted all-or-nothing pl
 one required unit releases the other tentative holds and enters `REPLAN_REQUIRED`; it never silently
 changes the confirmed structure.
 
-## Booking fulfilment lifecycle for A1-A4
+## Booking fulfilment lifecycle for A1-A3
 
 ```text
 AWAITING_ASSIGNMENT       only where an approved payment-first mode exists
@@ -138,13 +138,7 @@ inspection booking paid and performed
 - An extension requires capacity, quote, approval and payment before time is added.
 - Unapproved overrun is visible and non-billable; the Partner must complete, extend or abort honestly.
 
-## A4 recurring series
 
-- A series owns recurrence, continuity target, billing cycle, pause/end policy and materialization
-  horizon.
-- Each visit is a booking with its own Partner, OTP, evidence and outcome.
-- Skip, pause, series cancellation and individual-visit cancellation are distinct commands.
-- Substitution is visible in advance and affects only the relevant visit.
 
 ## A5 custom project
 
@@ -156,11 +150,7 @@ request → proposals → accepted agreement → funded milestone
 Change orders are versioned and require both parties' approval. Funds are not described as escrow
 unless the selected regulated payment arrangement legally supports that term.
 
-## A6 staffing
 
-Organizations, named workers, shifts, supervisor approval, attendance events, replacement and wage
-settlement form their own domain. A numeric `crew_size` on an individual Partner is not a substitute.
-Work that safely requires two people cannot proceed with one.
 
 ## A7 rental
 

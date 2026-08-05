@@ -31,20 +31,16 @@ clear expiry and eligibility rule.
 Price is purchased blocks multiplied by the effective block rate, with configured minimum/maximum.
 Approved extensions create new revision and payment records.
 
-### A4 recurring series
 
-Pricing supports per-visit or billing-cycle plans, explicit included visits, skip/pause proration,
-substitution treatment and series cancellation. A monthly price is never simulated as unrelated daily
-charges.
 
 ### A5 projects
 
 Accepted proposal lines and milestone amounts form the agreement. Change orders never overwrite the
 accepted proposal. Customer funds are released according to the selected compliant provider model.
 
-### A6-A10
+### A5-A10
 
-- Staffing: worker/shift rate, attendance and statutory wage/deduction rules.
+
 - Rental: rental period, deposit, delivery, extension, damage/loss and late-return lines.
 - Trip: base, distance/time/toll/waiting/cancellation rules with route evidence.
 - Stay: nightly rate, taxes/fees, deposit, cancellation/no-show and add-ons.

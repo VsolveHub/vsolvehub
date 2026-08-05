@@ -46,7 +46,7 @@ does not redefine the domain documents. A milestone may add detail but cannot we
 | Release/abort | M1 | before disclosure, en route, after arrival, after start, emergency and platform-attributed cause |
 | Earnings/payout | M1 onward | estimate/final difference, dispute hold, reversal, payout ambiguity, bank-account recovery |
 | Native Instant readiness | M4 | permission denied, stale location/presence, killed app, token invalid, device replacement |
-| Organizations/workforce | M5 | membership removal, worker no-show, unsafe understaffing, supervisor dispute, wage correction |
+
 
 ## Operations product
 
@@ -67,9 +67,9 @@ does not redefine the domain documents. A milestone may add detail but cannot we
 | A1 task visit | M1 | task scope, min visit price, estimate, partial work, amendment and settlement |
 | A2 inspection | M2 | inspection outcomes, same-visit capacity decision, linked follow-up and credit expiry |
 | A3 time block | M3 | purchased time, timer, extension, overtime/abort and attendance outcome |
-| A4 recurring | M3 | continuity, billing cycle, materialization, skip/pause/substitute and series cancellation |
+
 | A5 custom project | M5 | proposals, agreement, funded milestones, evidence, change orders and dispute |
-| A6 staffing | M5 | organizations, named workers, shifts, attendance, replacement, wage rules and compliance |
+
 | A7 rental | M6 | inventory, deposit, handover/return condition, extension, damage/loss and settlement |
 | A8 trip | M6 | driver/vehicle, route price, pickup/start/end, emergency and tracking consent/retention |
 | A9 stay | M7 | unit inventory, guest policy, check-in/out, cancellation/no-show, deposit/damage |

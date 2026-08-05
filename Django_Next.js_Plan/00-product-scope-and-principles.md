@@ -28,9 +28,9 @@ must be able to recover every non-terminal state without editing database rows.
 | `A1_TASK_VISIT` | Defined task units | Visit, task price, scope outcomes | Technician repair, beauty, cleaning |
 | `A2_INSPECTION_FIRST` | Diagnosis followed by optional repair | Inspection fee, follow-up quote | AC/RO/computer diagnostics |
 | `A3_TIME_BLOCK` | A block of professional time | Timer, extension, attendance | Maid/elder-care ad hoc help |
-| `A4_RECURRING_SERIES` | Repeating visits and continuity | Series, pause/skip/substitute, billing cycle | Maid, gardening, pet walking |
+
 | `A5_CUSTOM_PROJECT` | Accepted project proposal | Bid, agreement, milestones, change orders | Events, interiors, shifting |
-| `A6_STAFFING` | Worker shifts | Workforce, attendance, supervisor, wages | Manpower and day labour |
+
 | `A7_RENTAL` | Temporary possession of an asset | Inventory, deposit, handover, return | Tools, generators, vehicles |
 | `A8_TRIP` | A journey | Driver/vehicle dispatch, route and consented tracking | Taxi and goods movement |
 | `A9_STAY` | Nights in a property | Inventory, guest policy, check-in/out | Rooms, PG, hostel, hotel |

@@ -63,7 +63,7 @@ Before live operation, qualified advisers approve current India requirements for
 - DPDP notice, consent, retention and rights handling;
 - TRAI/DLT sender, header and transactional templates;
 - payment aggregation, deposits/milestones and any use of the word escrow;
-- workforce, rental, transport and accommodation obligations before those archetypes launch.
+- rental, transport and accommodation obligations before those archetypes launch.
 
 Configuration is effective-dated. The plan does not freeze legal rates or interpretations.
 

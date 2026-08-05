@@ -9,7 +9,30 @@ Task markers: `[x]` implemented and integrated against the published contract ·
 exists but is not end-to-end integrable, with the blocker named · `[ ]` not implemented. Fixture-only
 or quarantined proposal behaviour is never marked complete.
 
-## Audit snapshot — 2026-08-04 (full repo re-audit)
+## Audit snapshot — 2026-08-05 (verified, committed)
+
+- `pnpm test`: **838 passed across 53 files**. `pnpm typecheck` 9/9 clean. `pnpm lint` clean at
+  `--max-warnings 0`. Generated client current at contract **1.15.1**.
+- **Playwright has still not been run.** `payment.e2e.ts` and `partner-shell.e2e.ts` have never
+  been executed at all. Last recorded figure remains 173, from before FE-10/13/14/15/16 existed.
+- **FE-10 payment is built** — `/bookings/[groupId]/pay` and `/receipt`, consuming payment
+  attempts, checkout payment, reconcile, orders and tax documents. The "no Continue to Payment"
+  gap recorded below is closed.
+- **FE-14 is built** — `/` and `/login` exist; the root no longer 404s.
+- **FE-15 is built** — `/account/{addresses,messages,privacy,sessions}`. Its privacy scanner had
+  never been run and was failing the one file that logs correctly; fixed and verified red.
+- **FE-16 is built** — the four Operations consoles. Its shell did not compile (missing `Link` /
+  `usePathname`) and its `WorkspaceNav` was never rendered, so the routes were reachable only by
+  typed URL. Fixed; nav mounted.
+- **Neither FE-15 nor FE-16 has meaningful test coverage.** FE-16 has zero test files; FE-15 has
+  only the source scanner. That is lanes P-A and P-B.
+- Four published Operations dispatch commands and the whole Finance refund surface still have no
+  UI — FE-17 and FE-18 on the board.
+- Working tree committed as `bc17926` + `10903d7`.
+
+The full findings are in [07-audit-2026-08-05.md](./07-audit-2026-08-05.md).
+
+## Audit snapshot — 2026-08-04 (full repo re-audit — superseded above)
 
 Re-derived from the working tree. See [task.md](./task.md) for the consolidated board.
 
@@ -334,8 +357,10 @@ accessibility, real-browser session foundations and FE-09C server-clock proof ar
 - [x] Wire stable-idempotency group confirmation plus stale cart/plan/quote, expired quote,
       withdrawn plan, duplicate confirmation and in-flight idempotency recovery. FE-09 now renders
       server-published group recovery/cancellation actions without deriving them from status.
-- [ ] Build payment attempt, provider redirect/SDK boundary, ambiguous-result reconciliation,
+- [~] Build payment attempt, provider redirect/SDK boundary, ambiguous-result reconciliation,
       group reservation-expiry restart and unit-allocated receipt in FE-10 against OpenAPI 1.10.0.
+      Built and unit-tested; **`e2e/payment.e2e.ts` has never been run**, so redirect loss and
+      duplicate submission have no browser proof.
 - [x] Add `/cart` loading/error route boundaries and browser coverage for anonymous login interrupt,
       explicit merge, sequential/parallel/separate/mixed plans, stale plan/cart/quote, per-item
       failures, duplicate confirmation, keyboard dialog behavior and responsive/accessibility cases.
@@ -425,16 +450,24 @@ Next frontend task: FE-10.
 - [x] Build Operations OTP/session/selected-role guard and a dynamic routable dashboard shell.
 - [x] Build Partner application queue/detail, claim ownership, masked-document reveal/review and
       conflict recovery against OpenAPI 1.5.0.
-- [ ] Build catalog/rate/pricing/area management after the B3 Operations contract is published.
-- [ ] Build assisted multi-item cart, plan confirmation/payment link and manual unit offer/recovery
+- [ ] Build catalog/rate/pricing/area management after the B3 Operations contract is published
+      (still unpublished — BE-CAT).
+- [~] Build assisted multi-item cart, plan confirmation/payment link and manual unit offer/recovery
       through ordinary APIs; Operations cannot invent grouping or force Partner acceptance.
+      FE-16 built `/operations/{assisted-checkouts,manual-offers,compatibility-rules,
+      partner-availability}` against 1.8.0/1.9.0. **No tests exist for any of the four** (P-A).
+- [ ] Build Operations dispatch recovery — offer revoke, reservation release, unit recover and the
+      read-only dispatch explanation published in 1.15.0 (FE-17). Four paths, no caller.
+- [ ] Build the Finance refund queue and reconcile command behind the finance step-up gate,
+      published since 1.10.0 (FE-18).
 - [ ] Build case list/detail with owner, SLA, evidence, communication and allowed commands after B9.
 - [ ] Build Booking Group dependency view plus unit offer/reservation/payment/refund/ledger/payout
-      timelines after BE-09/BE-10 publish the remaining fulfilment, case and ledger projections.
+      timelines after BE-09-API/BE-10 publish the remaining fulfilment, case and ledger projections.
 - [ ] Build kill switches, maker-checker and audit references after B10.
 - [ ] Mask KYC, bank, exact address and sensitive evidence by default and audit every reveal.
 
-**Status: authenticated Partner-review capability complete; broader Operations product remains.**
+**Status: Partner review and the four 1.8.0/1.9.0 consoles are built; the consoles are untested,
+and dispatch recovery, Finance, catalog lifecycle, cases and kill switches remain.**
 Catalog, Booking Group recovery, finance, cases, kill switches and maker-checker depend on later
 backend contracts.
 

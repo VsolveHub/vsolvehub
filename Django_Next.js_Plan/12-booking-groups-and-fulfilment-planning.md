@@ -18,7 +18,7 @@ its execution children are `FulfilmentUnit` records.
 - Category equality is never proof of compatibility or Partner eligibility.
 
 This model is product-wide for bookable service work. Archetypes retain their own lifecycle engines:
-projects, staffing, rentals, trips, stays and listings are not forced through visit planning merely
+projects, rentals, trips, stays and listings are not forced through visit planning merely
 to appear in a universal cart.
 
 ## Durable model
@@ -196,10 +196,10 @@ steps and compensations, not a distributed database transaction.
   coordinated assignment, unit bookings and allocated money for a conservative launch catalog.
 - M2 adds inspection/material/warranty rules as new planner inputs and unit types; it does not replace
   the group model.
-- M3 adds time-block and recurring-series units. A series remains its own aggregate and may create
+- M3 adds time-block units. A time block remains its own aggregate and may create
   linked visits in a group where product policy permits.
 - M4 adds Instant unit timing and payment ordering without changing cart/group/unit cardinality.
-- M5-M7 add project, staffing, rental, trip, stay and listing aggregates. Only compatible purchasable
+- M5-M7 add project, rental, trip, stay and listing aggregates. Only compatible purchasable
   outputs link to an Order/Booking Group; their native lifecycle is never flattened into A1.
 
 ## Required acceptance families

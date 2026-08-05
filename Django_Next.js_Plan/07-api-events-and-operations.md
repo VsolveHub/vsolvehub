@@ -159,7 +159,7 @@ Required families:
 - assignment recovery and lateness watchdogs;
 - Booking Group planning expiry, all-unit hold coordination and idempotent compensation;
 - completion-response and dispute-window deadlines;
-- series visit materialization, milestone reminders and archetype jobs when those features launch;
+- milestone reminders and archetype jobs when those features launch;
 - invoice/credit-note generation;
 - media processing and retention deletion;
 - outbox publication and dead-letter recovery;

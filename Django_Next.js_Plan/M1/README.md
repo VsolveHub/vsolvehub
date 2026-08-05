@@ -30,7 +30,7 @@ relationships; later milestones extend them rather than replace them.
 - A2 inspection-first.
 - Crews/helpers or services that cannot safely be completed by one person.
 - Partner-procured materials and same-day advances.
-- A3-A10 archetypes.
+- A3, A5, A7-A10 archetypes.
 - Warranty promise/callback booking; linked quality support is included.
 - Provider picker, preferred Partner, ratings-based ranking, automatic reliability penalties.
 - COD, part-pay, pay-on-completion, coupons, wallet, surge and on-demand payout.
@@ -51,7 +51,7 @@ later milestones must replace. This inventory is the explicit boundary:
 | Active catalog | Six reviewed one-person Technician variants | Catalog/configuration expands; no schema assumes only these services/categories |
 | Geography | Hyderabad `500032` | Service areas are configuration; no hidden city/radius fallback |
 | Timing | Today/Scheduled, 7-day horizon | Instant and longer horizons extend unit timing without replacing group relationships |
-| Partner model | One lead Partner per A1 unit | Multi-line unit requires common eligibility; crews use A6 workforce, not fake helpers |
+| Partner model | One lead Partner per A1 unit | Multi-line unit requires common eligibility |
 | Assignment | Sequential offers per unit, bounded candidates | Coordinator may evolve delivery/ranking; explicit Partner acceptance remains permanent |
 | Customer choice | No provider picker | Preferred/provider choice may be introduced without bypassing eligibility |
 | Transport | Bounded polling observation | Push/SSE/native delivery may replace transport; browser never owns transitions |

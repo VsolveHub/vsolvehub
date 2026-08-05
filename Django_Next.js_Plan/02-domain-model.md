@@ -184,9 +184,9 @@ restricted than ordinary booking support.
 
 The following appear only when their milestone begins:
 
-- `A4`: `BookingSeries`, `SeriesVisit`, pause/skip/substitution and billing cycle
+
 - `A5`: `ProjectRequest`, `PartnerProposal`, `ProjectAgreement`, `Milestone`, `ChangeOrder`
-- `A6`: `ProviderOrganization`, `Membership`, `Shift`, `AttendanceEvent`, wage rule
+
 - `A7`: `RentalAsset`, `InventoryReservation`, `Handover`, `ReturnInspection`, deposit
 - `A8`: `Trip`, `Vehicle`, `DriverAssignment`, `Route`, tracking consent and position retention
 - `A9`: `Property`, `UnitInventory`, `StayReservation`, guest and check-in/out policy
