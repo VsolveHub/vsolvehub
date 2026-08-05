@@ -91,6 +91,23 @@ def _split_across(parts: RefundableParts, amount_paise: int) -> list[int]:
     return shares
 
 
+def _retry_key(*, attempt: PaymentAttempt, idempotency_key: str) -> str:
+    """A fresh key for a refund the provider definitively rejected.
+
+    Two constraints have to hold at once. `commerce_unique_payment_refund_key` allows one row
+    per (attempt, key), so a retry cannot reuse the key. And `submit_refund` hands
+    `refund.idempotency_key` straight to `provider.create_refund` — replaying the rejected key
+    at the provider would simply be rejected again. Both are solved by suffixing the attempt's
+    rejection count, which is stable for a given number of failures and so still de-duplicates
+    a replayed retry.
+    """
+
+    failed = attempt.refunds.filter(
+        idempotency_key__startswith=idempotency_key, status=Refund.Status.FAILED
+    ).count()
+    return f"{idempotency_key}:r{failed}"
+
+
 def _refund_one_attempt(
     *,
     booking: Booking,
@@ -101,17 +118,30 @@ def _refund_one_attempt(
     requested_by_id: UUID,
     idempotency_key: str,
 ) -> Refund:
-    if idempotency_key:
-        existing = attempt.refunds.filter(idempotency_key=idempotency_key).first()
+    key = idempotency_key
+    if key:
+        # `FAILED` is deliberately excluded, and it is the only status excluded. It means
+        # `PaymentProviderRejectedError` — the provider refused outright, `reconciliation_state`
+        # settled `IN_SYNC`, and no money moved. `refundable_unit_allocations` therefore counts
+        # the allocation as refundable again, so reaching this line with a rejected refund on the
+        # key means money is still genuinely owed. Handing that row back would report a refund
+        # that will never pay and raise nothing to replace it. An *ambiguous* provider result is
+        # `UNDER_REVIEW`, not `FAILED`, and is returned as live on purpose: Finance owns it and a
+        # second provider call could double-refund.
+        existing = (
+            attempt.refunds.filter(idempotency_key=key).exclude(status=Refund.Status.FAILED).first()
+        )
         if existing is not None:
             return existing
+        if attempt.refunds.filter(idempotency_key=key, status=Refund.Status.FAILED).exists():
+            key = _retry_key(attempt=attempt, idempotency_key=idempotency_key)
     refund = Refund.objects.create(
         order=booking.order,
         payment_attempt=attempt,
         amount_paise=amount_paise,
         currency=attempt.currency,
         reason_code=reason_code,
-        idempotency_key=idempotency_key,
+        idempotency_key=key,
         requested_by_id=requested_by_id,
     )
     for (allocation, _available), share in zip(
@@ -143,9 +173,18 @@ def create_partial_refunds(
 ) -> list[Refund]:
     """Cap the request at what remains refundable and return it, one `Refund` per attempt.
 
-    Returns an empty list rather than a zero-amount `Refund` row. The same idempotency key is
-    safe across attempts: `commerce_unique_payment_refund_key` scopes it to one attempt, so a
-    replay finds each attempt's own refund instead of creating a second one.
+    Returns an empty list rather than a zero-amount `Refund` row.
+
+    **A replay returns `[]`, not the refunds the first call raised.** The de-duplication happens
+    a step earlier than it looks: `refundable_unit_allocations` subtracts refunds that are
+    already in flight, so once the first call's rows exist there is nothing left refundable,
+    `parts` is empty and this returns immediately. `_refund_one_attempt`'s key lookup is the
+    second line of defence, reached only when a rejected refund has freed its allocation again.
+    Either way no double refund is possible — but a caller must not read `[]` as "nothing was
+    ever refunded". Read the `BookingStatusHistory` context for that; it holds the real ids.
+
+    The same idempotency key is safe across attempts: `commerce_unique_payment_refund_key`
+    scopes it to one attempt, so two attempts each get their own refund rather than colliding.
     """
 
     parts = refundable_unit_allocations(unit=unit)

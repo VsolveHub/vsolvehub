@@ -232,7 +232,7 @@ Each depends on the one above it. Do not parallelise inside this chain.
 
 | # | Task | Depends on |
 | --- | --- | --- |
-| **S3** | Close the **7 open B8 review findings** in [02-backend-tasks.md](./02-backend-tasks.md) and add the missing **group-wide reschedule**. These are money and idempotency defects in the layer S4 exposes. | — |
+| ~~S3~~ | ~~Close the 7 open B8 review findings and add group-wide reschedule.~~ **Done 2026-08-06.** All seven fixed with a regression each in `tests/fulfilment/test_review_findings.py`; the four behavioural ones were each verified red with the old behaviour surgically restored. `reschedule_booked_group` added. New setting `M1_RESCHEDULE_MIN_NOTICE_MINUTES = 120`. | — |
 | **S4** | **BE-09-API** — publish all of B8 over HTTP as one release. OpenAPI → 1.16.0 + changelog. | S3 |
 | **S5** | Regenerate the frontend client, then build **FE-11** — Customer active-booking views and the Partner work/evidence/amendment/completion UI. | S4 |
 | **S6** | **BE-10** — B9 cases/ledger/payout, then B10 notifications, kill switches and metrics. | S4 (shares fulfilment truth) |

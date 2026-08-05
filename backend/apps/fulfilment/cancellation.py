@@ -28,7 +28,7 @@ from apps.fulfilment.exceptions import (
     OutsideServiceableAreaApiError,
     PartnerUnavailableApiError,
 )
-from apps.fulfilment.models import WorkSession
+from apps.fulfilment.models import BookingStatusHistory, WorkSession
 from apps.fulfilment.refunds import create_partial_refunds, refundable_unit_allocations
 from apps.fulfilment.services import (
     TERMINAL_BOOKING_STATUSES,
@@ -67,6 +67,15 @@ FEE_WAIVER_PARTNER_LATE = "partner_late"
 #: boundary so an over-long reason is a typed refusal, not a `DataError` from the driver —
 #: `tests/fulfilment/test_group_cancellation.py` fails if the two ever drift apart.
 MAX_CANCELLATION_REASON_CHARS = 240
+
+#: What a caller's group-cancellation key may be, so the derived per-unit key still fits.
+#:
+#: `cancel_booked_group` appends `":{unit.id}"` — a colon plus a 36-character UUID — before the
+#: key reaches `commerce.Refund.idempotency_key`, which is `max_length=128`. Without this guard a
+#: 92-character caller key is a `DataError` raised by the driver mid-transaction rather than a
+#: typed refusal the client can act on, and `_retry_key` can add a few characters more on top.
+_UNIT_KEY_SUFFIX_CHARS = 1 + 36 + 4  # colon, UUID, and room for a retry suffix
+MAX_GROUP_IDEMPOTENCY_KEY_CHARS = 128 - _UNIT_KEY_SUFFIX_CHARS
 
 
 def select_cancellation_band(*, unit: FulfilmentUnit, booking: Booking) -> dict[str, Any]:
@@ -168,6 +177,16 @@ def _guard_cancellation_reason(reason: str) -> None:
         )
 
 
+def _guard_group_idempotency_key(idempotency_key: str) -> None:
+    if len(idempotency_key) > MAX_GROUP_IDEMPOTENCY_KEY_CHARS:
+        raise BookingCommandInvalidApiError(
+            reason=(
+                f"An idempotency key for a group cancellation cannot be longer than "
+                f"{MAX_GROUP_IDEMPOTENCY_KEY_CHARS} characters."
+            )
+        )
+
+
 def _release_booking_reservation(booking: Booking) -> None:
     if booking.reservation_id is None:
         return
@@ -250,10 +269,113 @@ def cancel_booking(
     return booking, refunds
 
 
+#: The only Booking statuses a visit can still be moved from. A visit that has arrived or started
+#: is settled through its completion report, not by moving it.
+RESCHEDULABLE_BOOKING_STATUSES = (Booking.Status.CONFIRMED, Booking.Status.EN_ROUTE)
+
+
 def _reschedule_notice_ok(*, unit: FulfilmentUnit, booking: Booking) -> bool:
     if is_partner_late(booking=booking, unit=unit):
         return True
     return bool(select_cancellation_band(unit=unit, booking=booking)["fee_paise"] == 0)
+
+
+def _earliest_reschedule_start() -> Any:
+    return timezone.now() + timedelta(minutes=settings.M1_RESCHEDULE_MIN_NOTICE_MINUTES)
+
+
+def _guard_unit_reschedulable(
+    *, unit: FulfilmentUnit, booking: Booking, new_requested_start: Any
+) -> None:
+    """Everything that must be true before any part of a reschedule is written.
+
+    Split out from the write half so the group-wide command can check every unit first and
+    refuse as a whole, rather than moving three visits and discovering the fourth cannot move.
+    """
+
+    if booking.status not in RESCHEDULABLE_BOOKING_STATUSES:
+        raise BookingCommandInvalidApiError(
+            reason="Only a Booking that has not started can be rescheduled."
+        )
+    if new_requested_start < _earliest_reschedule_start():
+        # A minimum *notice* guard, not merely a future-time one. Both directions are exploits
+        # and they are the same exploit.
+        #
+        # Backwards: `partner_available_during` only asks about weekday and time of day, so a
+        # start one whole week in the past passes it. A backdated `requested_start` makes
+        # `is_partner_late` true, the lateness sweep writes a `late_declared_at` that never
+        # clears, and a late Partner waives every cancellation fee — a permanent full-refund
+        # switch, plus a held slot parked in the past.
+        #
+        # Forwards: a Customer 24h out sits in the free band, so the notice check below passes.
+        # Moving the visit to twenty minutes from now clears `> timezone.now()` but no Partner
+        # can be there, so lateness is declared and the same fee waiver falls out. Requiring
+        # real notice on the *new* start closes both without a special case for either.
+        raise BookingCommandInvalidApiError(
+            reason=(
+                f"A new visit time must be at least "
+                f"{settings.M1_RESCHEDULE_MIN_NOTICE_MINUTES} minutes from now."
+            )
+        )
+    if not _reschedule_notice_ok(unit=unit, booking=booking):
+        raise BookingCommandInvalidApiError(
+            reason=(
+                "Reschedule is not available this close to the visit. Cancel instead — the "
+                "cancellation fee ladder shows what applies — and book a new time."
+            )
+        )
+    if not partner_available_during(
+        partner=booking.partner,
+        service_area=unit.service_area,
+        starts_at=new_requested_start,
+        duration_minutes=unit.estimated_duration_minutes,
+    ):
+        raise PartnerUnavailableApiError
+
+
+def _reschedule_locked_unit(
+    *,
+    unit: FulfilmentUnit,
+    booking: Booking,
+    new_requested_start: Any,
+    idempotency_key: str,
+) -> Booking:
+    """Move one already-locked, already-guarded unit and its Booking to a new start."""
+
+    old_requested_start = unit.requested_start
+    new_range = Range(
+        new_requested_start,
+        new_requested_start + timedelta(minutes=unit.estimated_duration_minutes),
+        "[)",
+    )
+    if booking.reservation_id is not None:
+        reservation = Reservation.objects.select_for_update().get(id=booking.reservation_id)
+        reservation.occupied_range = new_range
+        try:
+            reservation.save(update_fields=("occupied_range",))
+        except IntegrityError as exc:
+            # The GiST exclusion constraint refused the new range: the Partner is already held
+            # for something else then. Same answer as failing the availability check.
+            raise PartnerUnavailableApiError from exc
+    unit.requested_start = new_requested_start
+    unit.version += 1
+    unit.save(update_fields=("requested_start", "version", "updated_at"))
+    booking.scheduled_start = new_requested_start
+    booking.version += 1
+    booking.save(update_fields=("scheduled_start", "version", "updated_at"))
+    record_transition(
+        booking=booking,
+        actor=booking.customer,
+        command=BookingCommand.RESCHEDULE,
+        from_status=booking.status,
+        to_status=booking.status,
+        idempotency_key=idempotency_key,
+        context={
+            "old_requested_start": old_requested_start.isoformat(),
+            "new_requested_start": new_requested_start.isoformat(),
+        },
+    )
+    return booking
 
 
 @transaction.atomic
@@ -277,65 +399,13 @@ def reschedule_booking(
     if booking.customer_id != customer_id:
         raise PermissionError("This Booking belongs to another Customer.")
     guard_booking_version(booking, expected_version)
-    if booking.status not in (Booking.Status.CONFIRMED, Booking.Status.EN_ROUTE):
-        raise BookingCommandInvalidApiError(
-            reason="Only a Booking that has not started can be rescheduled."
-        )
-    if new_requested_start <= timezone.now():
-        # Load-bearing, not cosmetic. `partner_available_during` only asks about weekday and
-        # time of day, so a start one whole week in the past passes it. A backdated
-        # `requested_start` makes `is_partner_late` true, the lateness sweep then writes a
-        # `late_declared_at` that never clears, and a late Partner waives every cancellation
-        # fee — a Customer could reschedule backwards once and hold a permanent full-refund
-        # switch. It would also park the Partner's held slot in the past.
-        raise BookingCommandInvalidApiError(reason="A new visit time must be in the future.")
-    if not _reschedule_notice_ok(unit=unit, booking=booking):
-        raise BookingCommandInvalidApiError(
-            reason=(
-                "Reschedule is not available this close to the visit. Cancel instead — the "
-                "cancellation fee ladder shows what applies — and book a new time."
-            )
-        )
-    if not partner_available_during(
-        partner=booking.partner,
-        service_area=unit.service_area,
-        starts_at=new_requested_start,
-        duration_minutes=unit.estimated_duration_minutes,
-    ):
-        raise PartnerUnavailableApiError
-
-    old_requested_start = unit.requested_start
-    new_range = Range(
-        new_requested_start,
-        new_requested_start + timedelta(minutes=unit.estimated_duration_minutes),
-        "[)",
-    )
-    if booking.reservation_id is not None:
-        reservation = Reservation.objects.select_for_update().get(id=booking.reservation_id)
-        reservation.occupied_range = new_range
-        try:
-            reservation.save(update_fields=("occupied_range",))
-        except IntegrityError as exc:
-            raise PartnerUnavailableApiError from exc
-    unit.requested_start = new_requested_start
-    unit.version += 1
-    unit.save(update_fields=("requested_start", "version", "updated_at"))
-    booking.scheduled_start = new_requested_start
-    booking.version += 1
-    booking.save(update_fields=("scheduled_start", "version", "updated_at"))
-    record_transition(
+    _guard_unit_reschedulable(unit=unit, booking=booking, new_requested_start=new_requested_start)
+    return _reschedule_locked_unit(
+        unit=unit,
         booking=booking,
-        actor=booking.customer,
-        command=BookingCommand.RESCHEDULE,
-        from_status=booking.status,
-        to_status=booking.status,
+        new_requested_start=new_requested_start,
         idempotency_key=idempotency_key,
-        context={
-            "old_requested_start": old_requested_start.isoformat(),
-            "new_requested_start": new_requested_start.isoformat(),
-        },
     )
-    return booking
 
 
 @transaction.atomic
@@ -466,22 +536,89 @@ def _locked_group_bookings(units: list[FulfilmentUnit]) -> dict[UUID, Booking]:
     )
 
 
+def _recorded_cancellation(booking: Booking) -> BookingStatusHistory | None:
+    """The audit row the original cancellation wrote for this Booking, if it wrote one."""
+
+    return (
+        BookingStatusHistory.objects.filter(
+            booking=booking,
+            command=BookingCommand.CANCEL,
+            to_status=Booking.Status.CANCELLED,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def _replayed_unit_outcome(*, unit: FulfilmentUnit, booking: Booking) -> UnitCancellationOutcome:
+    """Reconstruct one unit's outcome from the audit trail rather than reporting zeroes.
+
+    A replay has to answer with what actually happened, not with a shape that merely looks
+    harmless. Reporting `fee_paise=0` and no refund ids for a unit the first call charged a fee
+    on tells the Customer their money is coming back in full — the same money the first call
+    kept. The real values were written into the `BookingStatusHistory` context by
+    `_cancel_locked_unit`, so they are read back from there.
+    """
+
+    history = (
+        _recorded_cancellation(booking) if booking.status == Booking.Status.CANCELLED else None
+    )
+    if history is None:
+        return UnitCancellationOutcome(
+            fulfilment_unit_id=unit.id,
+            booking_id=booking.id,
+            outcome=UnitCancellationOutcome.Outcome.ALREADY_TERMINAL,
+            booking_status=booking.status,
+            fee_paise=0,
+            refund_ids=(),
+        )
+    context = history.context or {}
+    return UnitCancellationOutcome(
+        fulfilment_unit_id=unit.id,
+        booking_id=booking.id,
+        outcome=UnitCancellationOutcome.Outcome.CANCELLED,
+        booking_status=booking.status,
+        fee_paise=int(context.get("fee_paise", 0)),
+        refund_ids=tuple(UUID(value) for value in context.get("refund_ids", ())),
+    )
+
+
 def _settled_group_result(group: BookingGroup) -> GroupCancellationResult:
     units = list(group.units.order_by("position"))
     bookings = _by_unit_id(Booking.objects.filter(fulfilment_unit__in=units))
     outcomes = tuple(
-        UnitCancellationOutcome(
-            fulfilment_unit_id=unit.id,
-            booking_id=bookings[unit.id].id,
-            outcome=UnitCancellationOutcome.Outcome.ALREADY_TERMINAL,
-            booking_status=bookings[unit.id].status,
-            fee_paise=0,
-            refund_ids=(),
-        )
+        _replayed_unit_outcome(unit=unit, booking=bookings[unit.id])
         for unit in units
         if unit.id in bookings
     )
     return GroupCancellationResult(group=group, units=outcomes)
+
+
+def _group_already_cancelled(group: BookingGroup) -> bool:
+    """Whether a cancellation actually happened here, as opposed to the group merely being over.
+
+    The distinction is the whole point. A settled group is not evidence of a replay: a group
+    every visit of which was *delivered* also settles, and answering "cancel my finished
+    bookings" with a success for a command that never ran — skipping the version guard on the
+    way — is precisely the hidden success state the quality rules forbid. Only a group with at
+    least one cancelled unit can be the second call of a cancellation.
+    """
+
+    if group.status not in _SETTLED_GROUP_STATUSES:
+        return False
+    return group.units.filter(status=FulfilmentUnit.Status.CANCELLED).exists()
+
+
+def _ungroupcancellable_reason(group: BookingGroup) -> str:
+    if group.status in _SETTLED_GROUP_STATUSES:
+        return (
+            "This Booking Group has already finished. Its visits are settled through their own "
+            "completion or cancellation records and cannot be cancelled again."
+        )
+    return (
+        "This Booking Group has not been paid for yet. Cancel it through the pre-payment "
+        "Booking Group cancellation instead."
+    )
 
 
 @transaction.atomic
@@ -505,26 +642,27 @@ def cancel_booked_group(
       command is refused and no unit moves. A group cancel is never allowed to half-land.
 
     Locks follow the same order as `locked_booking_context`: group, then units, then Bookings.
-    Idempotent by group state: replaying it once the group has settled reports every unit as
-    already terminal instead of charging a second fee or writing a second audit row.
+
+    Idempotent by evidence, not by mood: a replay is recognised only when the group has settled
+    **and** at least one unit is actually `CANCELLED`. A group that simply finished — every visit
+    delivered — is not a replay, and answering it with a success would report a command that
+    never ran and skip the version guard on the way. It is refused instead. A genuine replay
+    reconstructs each unit's fee and refund ids from the audit trail rather than reporting
+    zeroes, so the second answer is the same as the first.
     """
 
     group = BookingGroup.objects.select_for_update().get(id=group_id, customer_id=customer_id)
-    if group.status in _SETTLED_GROUP_STATUSES:
+    if _group_already_cancelled(group):
         return _settled_group_result(group)
     if group.version != expected_version:
         raise BookingGroupConflictApiError(reason="version_changed", current_version=group.version)
     if group.status != BookingGroup.Status.BOOKED:
-        raise BookingCommandInvalidApiError(
-            reason=(
-                "This Booking Group has not been paid for yet. Cancel it through the pre-payment "
-                "Booking Group cancellation instead."
-            )
-        )
+        raise BookingCommandInvalidApiError(reason=_ungroupcancellable_reason(group))
 
     # Checked up front, not per unit: a group with nothing left to cancel must still refuse a
-    # reason the audit trail could not hold.
+    # reason or a key the audit trail and the refund rows could not hold.
     _guard_cancellation_reason(reason)
+    _guard_group_idempotency_key(idempotency_key)
 
     units = list(group.units.select_for_update().order_by("position"))
     bookings_by_unit_id = _locked_group_bookings(units)
@@ -591,3 +729,113 @@ def cancel_booked_group(
             )
         )
     return GroupCancellationResult(group=group, units=tuple(outcomes))
+
+
+@dataclass(frozen=True, slots=True)
+class UnitRescheduleOutcome:
+    fulfilment_unit_id: UUID
+    booking_id: UUID
+    old_requested_start: Any
+    new_requested_start: Any
+
+
+@dataclass(frozen=True, slots=True)
+class GroupRescheduleResult:
+    group: BookingGroup
+    shift: timedelta
+    units: tuple[UnitRescheduleOutcome, ...]
+
+
+@transaction.atomic
+def reschedule_booked_group(
+    *,
+    group_id: UUID,
+    customer_id: UUID,
+    expected_version: int,
+    new_group_start: Any,
+    idempotency_key: str = "",
+) -> GroupRescheduleResult:
+    """Move every visit in a booked Booking Group by one offset, atomically or not at all.
+
+    ## Why an offset rather than a start per unit
+
+    The relationships between units are server-authored and are the whole point of the planner:
+    two lines run sequentially with one Partner, two independent units overlap in a coordinated
+    parallel window, a dependency forces one visit after another. Letting a client post an
+    arbitrary start per unit would let it dissolve that structure — put a dependent visit before
+    the one it depends on, or pull two "parallel" units a day apart — without any of the planning
+    inputs that made the grouping legal. So the Customer moves the *group*: they name a new start
+    for the earliest visit and every other visit shifts by the same delta, which preserves gaps,
+    ordering and overlap exactly as planned.
+
+    ## Classify, then write
+
+    The same skeleton as `cancel_booked_group`, for the same reason. Every unit is checked —
+    status, notice, Partner availability at its own new time — before a single row moves. One
+    unmovable visit refuses the whole command, because a group reschedule that moved three of
+    four visits would leave a Customer with a split appointment nobody agreed to and no
+    single command to undo it with.
+
+    Reservations are re-ranged inside the same transaction, so the PostgreSQL exclusion
+    constraint is what ultimately decides whether the new arrangement is legal.
+    """
+
+    group = BookingGroup.objects.select_for_update().get(id=group_id, customer_id=customer_id)
+    if group.version != expected_version:
+        raise BookingGroupConflictApiError(reason="version_changed", current_version=group.version)
+    if group.status != BookingGroup.Status.BOOKED:
+        raise BookingCommandInvalidApiError(
+            reason="Only a booked Booking Group's visits can be rescheduled."
+        )
+    _guard_group_idempotency_key(idempotency_key)
+
+    units = list(group.units.select_for_update().order_by("position"))
+    bookings_by_unit_id = _locked_group_bookings(units)
+    if not units:
+        raise BookingCommandInvalidApiError(
+            reason="This Booking Group has no visits to reschedule."
+        )
+
+    earliest = min(unit.requested_start for unit in units)
+    shift = new_group_start - earliest
+
+    planned: list[tuple[FulfilmentUnit, Booking, Any]] = []
+    for unit in units:
+        booking = bookings_by_unit_id.get(unit.id)
+        if booking is None:
+            raise BookingCommandInvalidApiError(
+                reason=(
+                    "This Booking Group has a Fulfilment Unit with no Booking and cannot be "
+                    "rescheduled as a group."
+                )
+            )
+        planned.append((unit, booking, unit.requested_start + shift))
+
+    # Every guard for every unit, before any write. A refusal here is a refusal, not a rollback.
+    for unit, booking, new_start in planned:
+        _guard_unit_reschedulable(unit=unit, booking=booking, new_requested_start=new_start)
+
+    outcomes: list[UnitRescheduleOutcome] = []
+    for unit, booking, new_start in planned:
+        old_start = unit.requested_start
+        # Per-unit keys for the same reason `cancel_booked_group` derives them: one key across
+        # the group would make every unit's audit row indistinguishable from its siblings'.
+        unit_key = f"{idempotency_key}:{unit.id}" if idempotency_key else ""
+        moved = _reschedule_locked_unit(
+            unit=unit,
+            booking=booking,
+            new_requested_start=new_start,
+            idempotency_key=unit_key,
+        )
+        outcomes.append(
+            UnitRescheduleOutcome(
+                fulfilment_unit_id=unit.id,
+                booking_id=moved.id,
+                old_requested_start=old_start,
+                new_requested_start=new_start,
+            )
+        )
+
+    group.version += 1
+    group.save(update_fields=("version", "updated_at"))
+    return GroupRescheduleResult(group=group, shift=shift, units=tuple(outcomes))

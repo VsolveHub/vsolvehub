@@ -182,6 +182,11 @@ M1_START_OTP_MAX_ATTEMPTS = 5
 M1_COMPLETION_RESPONSE_HOURS = 24
 M1_QUALITY_DISPUTE_WINDOW_HOURS = 72
 M1_SCOPE_AMENDMENT_RESPONSE_MINUTES = 30
+# The earliest a Customer may move a visit to. Mirrors the fee ladder's two-hour boundary below,
+# which the frozen configuration already treats as "too close to the visit to change for free".
+# A guard that only required a *future* time let a Customer 24h out drop the visit to twenty
+# minutes away, make the Partner unreachably late, and waive their own cancellation fee.
+M1_RESCHEDULE_MIN_NOTICE_MINUTES = 120
 M1_CANCELLATION_BAND_MORE_THAN_24H = "more-than-24-hours"
 M1_CANCELLATION_BAND_24_TO_2H = "24-to-2-hours"
 M1_CANCELLATION_BAND_LESS_THAN_2H = "less-than-2-hours"

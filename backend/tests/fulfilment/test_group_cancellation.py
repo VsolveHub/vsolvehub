@@ -203,8 +203,11 @@ def test_group_cancel_replay_under_the_same_key_refunds_and_audits_exactly_once(
     )
 
     assert len(first_result.cancelled) == TWO_UNITS
-    assert replay.cancelled == ()
-    assert len(replay.skipped) == TWO_UNITS
+    # A replay reports what the first call did, not zeroes. Reporting these as skipped with no
+    # fee and no refund ids was the defect: for a fee-bearing unit it told the Customer their
+    # money was coming back in full, when the first call had kept part of it.
+    assert len(replay.cancelled) == TWO_UNITS
+    assert replay.skipped == ()
     assert Refund.objects.count() == refunds_after_first
     for unit in (first, second):
         assert (

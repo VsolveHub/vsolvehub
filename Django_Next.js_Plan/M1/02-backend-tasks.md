@@ -506,41 +506,53 @@ group-level races are covered against real PostgreSQL in
   `Refund` path. Documented on `_refund_unperformed_work`.
 - B9's `OperationsCase` does not exist yet, so a dispute sets `Booking.payout_hold` and stops
   there. The Quality case the failure-outcomes table calls for is B9's work.
-- **There is no group-wide *reschedule*.** B8 line 6 names group-wide and unit
-  cancellation/reschedule; group-wide cancel, unit cancel, unit reschedule and group address
-  change all exist, group reschedule does not. It would follow the same classify-then-write
-  skeleton as `cancel_booked_group`.
+- ~~There is no group-wide *reschedule*.~~ **Closed 2026-08-06** — `reschedule_booked_group`
+  exists and follows the same classify-then-write skeleton. See the findings section below.
 
-**Open review findings, ranked, none of them live (no HTTP surface):**
+**Review findings — all closed 2026-08-06 (S3).**
 
-A code review of this work raised eight issues beyond the security ones. One was Critical and is
-fixed: a Partner may release *mid-job*, and adding `RECOVERY_REQUIRED` to the Customer-cancellable
-statuses briefly made those Bookings fully refundable, wiping out completed-line settlement.
-`customer_can_cancel` now refuses a cancel once a `WorkSession` exists, with a regression test on
-both the unit and group commands. The rest are open and should close before B8 is published:
+A code review of this work raised eight issues beyond the security ones. One was Critical and was
+fixed at the time: a Partner may release *mid-job*, and adding `RECOVERY_REQUIRED` to the
+Customer-cancellable statuses briefly made those Bookings fully refundable, wiping out
+completed-line settlement. `customer_can_cancel` now refuses a cancel once a `WorkSession` exists.
 
-1. `cancel_booked_group` short-circuits on a `COMPLETED` group, so "cancel my finished bookings"
-   returns success for a command that never ran, and skips the version guard. It should
-   short-circuit only when a cancellation actually happened (some unit is `CANCELLED`).
-2. On a genuine replay, `_settled_group_result` reports `fee_paise=0` / `refund_ids=()` for every
-   unit even when the first call charged a fee. The real values are already in the
-   `BookingStatusHistory` context and should be read back from there.
-3. The derived per-unit idempotency key `f"{key}:{unit.id}"` adds 37 characters to a
-   `max_length=128` column — a caller key over 91 characters is a `DataError`, not a typed
-   refusal. Needs the same guard `MAX_CANCELLATION_REASON_CHARS` got.
-4. The reschedule future-time guard should be a minimum-*notice* guard: a Customer 24h out can
-   still move a visit to `now + 16 minutes` and manufacture a late Partner forwards.
-5. `create_partial_refunds`' docstring claims a replay returns the existing refunds; it returns
-   `[]`, because the pending-refund subtraction empties `parts` first. No double refund occurs —
-   the docstring is what is wrong.
-6. `_refund_one_attempt`'s idempotency lookup returns a previously `FAILED` refund as though it
-   were live, so a retry never happens.
-7. Untested: one `create_partial_refunds` call producing two `Refund`s. The existing test only
-   reaches the single-attempt path, and `_split_across`' remainder handling has no direct test.
+The remaining seven are now fixed, in `tests/fulfilment/test_review_findings.py`. Every
+behavioural one was verified failing against the old code before being accepted — findings 1
+(both tests), 2, 4 and 6 were each run red with the original behaviour surgically restored.
 
-**Update 2026-08-05:** the seven findings above are still open and are now tracked as **S3** on the
-board — they must close before BE-09-API publishes these commands, not after. The missing
-group-wide reschedule named under "Known boundaries" is part of the same task.
+1. **Fixed.** `cancel_booked_group` short-circuited on any settled group, so "cancel my finished
+   bookings" returned success for a command that never ran and skipped the version guard.
+   `_group_already_cancelled` now requires at least one `CANCELLED` unit before treating the call
+   as a replay; a delivered group is refused with a reason that says so.
+2. **Fixed.** `_settled_group_result` reported `fee_paise=0` / `refund_ids=()` on a genuine
+   replay, which for a fee-bearing unit told the Customer their money was coming back in full.
+   `_replayed_unit_outcome` reads the real values back from the `BookingStatusHistory` context
+   and reports the unit as `CANCELLED`, so the second answer matches the first.
+3. **Fixed.** `MAX_GROUP_IDEMPOTENCY_KEY_CHARS` is derived from the column width minus the
+   `":{uuid}"` suffix and a retry suffix, and is asserted against
+   `Refund.idempotency_key.max_length` by a test so the two cannot drift.
+4. **Fixed.** `M1_RESCHEDULE_MIN_NOTICE_MINUTES` (120, mirroring the fee ladder's two-hour
+   boundary) replaces the bare future-time check. It closes the exploit in both directions —
+   backdating, and the forward version where a Customer in the free band drops the visit to
+   twenty minutes away and manufactures a late Partner.
+5. **Fixed.** The `create_partial_refunds` docstring now says what actually happens: a replay
+   returns `[]` because `refundable_unit_allocations` has already subtracted the in-flight
+   refunds, and a caller wanting the real ids must read the audit context.
+6. **Fixed.** `_refund_one_attempt` excludes `FAILED` from its key lookup and retries under a new
+   key. `FAILED` means the provider refused outright and no money moved, so the allocation is
+   refundable again and handing the rejected row back reported a refund that would never pay.
+   `UNDER_REVIEW` — the *ambiguous* result — is still returned as live on purpose: Finance owns
+   it and a second provider call could double-refund. Both directions have a test.
+7. **Fixed.** A two-attempt `create_partial_refunds` call is covered (unit paid on the checkout
+   capture plus an authorized amendment's revision payment), and `_split_across`' remainder loop
+   has a parametrized test asserting the shares sum exactly and never exceed an allocation.
+
+**Group-wide reschedule now exists.** `reschedule_booked_group` moves every visit by one offset —
+the Customer names a new start for the earliest visit and the rest shift with it, which preserves
+the planner's sequential ordering, parallel overlap and dependency gaps. Per-unit starts were
+deliberately not offered: they would let a client dissolve a server-authored grouping without any
+of the planning inputs that made it legal. Same classify-then-write skeleton as
+`cancel_booked_group`, so one unmovable visit refuses the whole command and nothing half-lands.
 
 ## B9 — Cases, ledger and payout
 
