@@ -449,7 +449,9 @@ documented in `docs/runbooks/payment-reconciliation.md`.
 - [x] Support group-wide and unit cancellation/reschedule commands without hidden partial success;
       unaffected units retain independent truth and every financial change uses unit allocations.
 
-**Status: B8 domain layer complete; no HTTP surface yet, and two boundaries stated below.**
+**Status: B8 complete and published (OpenAPI 1.16.0, 2026-08-06).** The domain layer below is
+unchanged; what changed is that it is now reachable. See `apps/fulfilment/views.py`,
+`serializers.py` and `urls.py`, and `tests/fulfilment/test_fulfilment_api.py`.
 
 `apps/fulfilment` implements the full physical-work lifecycle as domain commands: the
 `ALLOWED_TRANSITIONS` state machine with an immutable `BookingStatusHistory` row per move,
@@ -487,16 +489,15 @@ group-level races are covered against real PostgreSQL in
 
 **Known boundaries, stated rather than hidden:**
 
-- **No HTTP surface.** Every B8 command is service-layer only; `apps/fulfilment` has no
-  `views.py`, `urls.py` or `serializers.py`, so no Customer, Partner or Operations client can
-  invoke any of them yet. `POST /api/v1/booking-groups/{group_id}/cancel/` is still the
-  pre-payment command and still refuses a `BOOKED` group. Publishing B8 is its own task and must
-  land as one release, not one command at a time. Do not read the ticked lines above as a
-  shippable feature — they are a complete and tested domain layer behind no door.
-- **Step-up verification for the Operations-assisted start is not enforced anywhere yet.**
-  `operations_assisted_start` refuses a blank outage reason and audits the named operator, but
-  the re-verification `step_up_required` describes is a view-layer permission that does not exist
-  because the view does not exist. This must land with the B8 API, not after it.
+- ~~**No HTTP surface.**~~ **Closed 2026-08-06 (OpenAPI 1.16.0).** All of B8 is published as one
+  release across 26 paths: `/bookings/{id}/…` for the Customer, `/partner/bookings/{id}/…` for
+  the Partner and `/operations/bookings/{id}/…` for Operations, each with its own projection.
+  `POST /booking-groups/{group_id}/cancel/` is unchanged and remains the pre-payment command;
+  the post-payment equivalents are `cancel-booked/`, `reschedule/` and `address/`.
+- ~~**Step-up verification for the Operations-assisted start is not enforced anywhere yet.**~~
+  **Closed 2026-08-06.** `HasRecentOperationsStepUp` had existed, and had documented itself as
+  gating exactly this, since before the permission had a view to sit on.
+  `OperationsAssistedStartView` is that view, and a test proves work does not start without it.
 - **Reschedule inside the fee window is refused, not repriced.** A Customer inside the
   fee-bearing window cancels (paying the fee they would anyway) and books again; a full re-match
   is out of M1 scope. A late Partner waives this, like the cancellation fee.
@@ -556,32 +557,73 @@ of the planning inputs that made it legal. Same classify-then-write skeleton as
 
 ## B9 — Cases, ledger and payout
 
-- [ ] Implement typed OperationsCase with owner, severity, SLA, evidence, communication, allowed
-      commands and immutable audit.
-- [ ] Cover assignment, late/no-show, unavailable Customer, partial/abort, quality, safety, payment,
-      refund and payout case types.
-- [ ] Implement immutable Partner ledger entries/adjustments and Operations-reviewed payout batches.
-- [ ] Implement ledger reservation, the frozen RazorpayX payout adapter, idempotent sandbox payout,
-      payout-account verification and account-change cooling.
+- [x] Implement typed OperationsCase with owner, severity, SLA, evidence, communication, allowed
+      commands and immutable audit. `apps/cases` — nine case kinds, five owning teams routed from
+      the ownership table rather than chosen by the opener, severity-derived SLA deadlines, and an
+      append-only `OperationsCaseEvent` that refuses `save()` on an existing row.
+- [x] Cover assignment, late/no-show, unavailable Customer, partial/abort, quality, safety, payment,
+      refund and payout case types. Each has its **required terminal result** encoded in
+      `ALLOWED_RESOLUTIONS`; `resolve_case` refuses anything outside it, which is what turns
+      "cases may not close merely because a notification was sent" into a constraint. A test
+      asserts every published kind has both a team and a resolution set.
+- [x] Implement immutable Partner ledger entries/adjustments and Operations-reviewed payout batches.
+      `apps/payouts` — `PartnerLedgerEntry.save()` refuses any edit outside the reservation
+      lifecycle, so a correction must be a new `ADJUSTMENT`/`REVERSAL` entry. Reversals are stored
+      signed, so a balance is a plain `SUM` rather than a case analysis a report could get wrong.
+      Maker-checker is both a service check and a `CheckConstraint`, so a command that forgot to
+      ask is still refused by PostgreSQL.
+- [~] Ledger reservation, payout-account verification and account-change cooling are implemented.
+      **The RazorpayX adapter and sandbox payout submission are not** — `PayoutBatchItem` carries
+      its provider fields and per-item idempotency key, and the batch stops at `APPROVED`.
 
-**Status: not started.**
+**Status: cases and ledger complete; provider submission open.**
+
+The acceptance list's payout property — "two payout batches cannot reserve/pay one ledger entry
+twice" — is proved twice: once through the ordinary command path, and once with real threads and
+real connections against PostgreSQL. The guarantee is a partial unique index
+(`payouts_one_live_reservation_per_ledger_entry`), so the losing caller gets an `IntegrityError`
+rather than a silent duplicate; the service check exists only to turn that into a typed refusal.
+
+A payout hold is released by *closing the case that holds it*, and only when no other open case
+holds the same booking — two investigations can cover one visit, and closing the first must not
+pay a Partner out from under the second.
+
+Earnings settle to **delivered** scope, not booked scope: a visit where two of three tasks were
+done earns two tasks' worth, pro-rata on a partial. Reading the quoted total would pay for work
+that never happened, and nothing downstream would catch it because the number would look right.
 
 ## B10 — Events, messaging and observability
 
-- [ ] Implement notification intent/delivery/failure records, bounded retry and SMS/transactional
-      fallback policy.
-- [ ] Implement offer, checkout, reservation, lateness, completion, reconciliation and retention jobs.
-- [ ] Implement service/area/payment/payout kill switches and maker-checker controls where required.
+- [x] Implement notification intent/delivery/failure records, bounded retry and SMS/transactional
+      fallback policy. `apps/notifications` — intent and delivery are separate rows, because
+      "we decided to tell someone" and "a provider accepted it" are different facts and merging
+      them is how a system reports a Customer was notified while the gateway was down.
+      Suppression is an intent with a reason, never a missing row. `TRANSACTIONAL_PURPOSES`
+      cannot be muted: a Customer who switched off promotions still learns their professional is
+      at the door. Retries are bounded (3) and never in-process.
+- [~] Offer, checkout, reservation, lateness and completion jobs exist in their owning apps
+      (`assignments.tasks`, `fulfilment.tasks`, `commerce.tasks`, `payouts.tasks`).
+      **Retention jobs remain unimplemented** — the privacy models exist and nothing sweeps them.
+- [x] Implement service/area/payment/payout kill switches. `KillSwitch` is a row rather than a
+      setting: an environment variable needs a deploy, and the moment you need to stop sending is
+      the moment you cannot wait for a release. Each carries an audited actor and a reason, the
+      reason enforced by a check constraint. Maker-checker exists for payout batches (B9) and for
+      compatibility rules (B6); no other command requires it yet.
 - [ ] Add metrics/alerts for conversion, assignment, lateness/no-show, partial/dispute, money
       ambiguity, case SLA, outbox and worker queues.
 - [x] Create `docs/adr/**` and `docs/runbooks/**`; document every critical dependency, replay process
       and stuck state. 6 ADRs and 5 runbooks exist (partner document storage, payment
       reconciliation, outbox replay, queue outage, stuck command).
 
-**Status: documentation and async recovery done (BE-OPS); notifications, kill switches and
-metrics/alerts not started.** No notification intent/delivery/failure model exists, no kill switch
-exists, and observability is JSON logging plus request IDs — there are no metrics, dashboards or
-alerts.
+**Status: notifications and kill switches implemented (2026-08-06); metrics and alerts not
+started.** Observability is still JSON logging plus request IDs — there are no metrics,
+dashboards or alerts, and that is the remaining B10 item along with retention jobs and the HTTP
+surface for cases, ledger, payouts and switches.
+
+**None of B9 or B10 has an HTTP surface yet.** `apps/cases`, `apps/payouts` and
+`apps/notifications` are service-layer only — the same shape B8 was in before 1.16.0, and the
+same warning applies: do not read the ticked lines above as a shippable feature. Publishing them
+is its own release and FE-12 depends on it.
 
 ## Backend completion gate
 

@@ -9,7 +9,25 @@ Task markers: `[x]` implemented and integrated against the published contract ·
 exists but is not end-to-end integrable, with the blocker named · `[ ]` not implemented. Fixture-only
 or quarantined proposal behaviour is never marked complete.
 
-## Audit snapshot — 2026-08-05 (verified, committed)
+## Audit snapshot — 2026-08-06
+
+- `pnpm test`: **1101 passed across 72 files**. `pnpm typecheck` 9/9. `pnpm lint` clean at
+  `--max-warnings 0`. Generated client current at contract **1.16.0**.
+- **Playwright has still never been run** — not once, against any of FE-10 through FE-18. The
+  last recorded figure of 173 predates all of them. This is the largest single piece of unproven
+  frontend behaviour in the milestone.
+- **FE-11 is implemented** against the B8 API published in 1.16.0: `features/visit/` (Customer)
+  and `features/work/` (Partner), with routes `/bookings/[groupId]/visits/[bookingId]` and
+  `/jobs/[bookingId]`. It needed a contract fix first — `FulfilmentUnit.booking_id`, without
+  which a group could describe three visits and offer no way to open any of them.
+- **FE-15, FE-16, FE-17 and FE-18 are complete with tests** (parallel session, `637033c`).
+- **FE-12 is the only frontend task left**, and it is blocked: `apps/cases`, `apps/payouts` and
+  `apps/notifications` exist as domain layers with no HTTP surface, so building against them
+  would mean inventing DTOs.
+
+The live board is [task.md](./task.md).
+
+## Audit snapshot — 2026-08-05 (superseded)
 
 - `pnpm test`: **838 passed across 53 files**. `pnpm typecheck` 9/9 clean. `pnpm lint` clean at
   `--max-warnings 0`. Generated client current at contract **1.15.1**.
@@ -375,21 +393,28 @@ payloads.
 
 ## F3 — Customer active booking
 
-- [ ] Show a Booking Group summary plus authoritative status, Partner, appointment and text ETA per
-      Fulfilment Unit; no map.
-- [ ] Provide group-wide and unit cancel/reschedule/address-change/support commands only when allowed
-      by backend state, with the resulting impact on other units shown before confirmation.
-- [ ] Show delay and fee-free recovery when the server declares an SLA breach.
-- [ ] Display arrival and start OTP securely.
-- [ ] Display and approve/decline scope amendments and collect revision payment.
-- [ ] Show completion submission with Confirm and Report a problem.
-- [ ] Show unit-level partial/refund/dispute states, derived group status and allocated invoice/credit
-      note lines without making unaffected units appear failed.
+- [x] Show a Booking Group summary plus authoritative status, Partner, appointment and text ETA per
+      Fulfilment Unit; no map. `features/visit/` renders one visit; the group detail links into it
+      through `FulfilmentUnit.booking_id` (1.16.0).
+- [x] Provide unit cancel/reschedule and group-wide cancel/reschedule/address-change only when
+      allowed by backend state. The `can*` predicates pick which screen to show and never decide
+      whether a command is permitted — Django owns `ALLOWED_TRANSITIONS`, the fee ladder and the
+      reschedule notice rule, and refuses anything the client gets wrong.
+- [x] Show delay and fee-free recovery when the server declares an SLA breach. `RECOVERY_REQUIRED`
+      reads as "finding a replacement", never as cancelled.
+- [x] Display arrival and start OTP securely. The Customer requests the code and reads it from
+      their own SMS; the response carries `code_length`, never the code.
+- [x] Display and approve/decline scope amendments. Approval returns the `PaymentAttempt` Django
+      minted in the same transaction, so approval is never reported as finished before it is paid.
+- [x] Show completion submission with Confirm and Report a problem, at equal visual weight.
+- [x] Show unit-level partial/refund/dispute states without making unaffected units appear failed.
+      Every status in the contract has copy; `Record<VisitStatus, …>` makes a new one a typecheck
+      failure rather than a badge rendering `undefined`.
 - [ ] Cover reload, multi-tab, stale-version, partial-unit failure, group recovery and accessibility
       flows with E2E tests.
 
-**Status: not started and blocked by BE-09 fulfilment/cancellation contracts.** BE-08 financial read
-projections are published, but they do not authorize the frontend to invent post-booking commands.
+**Status: implemented against OpenAPI 1.16.0 (2026-08-06).** 10 predicate tests pin which actions
+are offered and when polling stops. Browser E2E for reload, multi-tab and stale-version remains.
 
 ## F4 — Partner onboarding, schedule and presence
 
@@ -429,19 +454,27 @@ acceptance and the production scanner/retention release decisions remain complet
       is green (G24 Done).
 - [x] Hide exact address/contact until the server disclosure projection permits it; FE-09 renders
       only the unit-scoped fields carried by the generated Offer projection.
-- [ ] Build release with reason; no threat or opaque score.
-- [ ] Build En route, Arrived, Customer unavailable, start OTP and contact/support.
-- [ ] Persist tasks/evidence/upload status and scope amendment.
-- [ ] Build Abort and line-level completion outcome.
+- [x] Build release with reason; no threat or opaque score. There is no consequence copy because
+      there is no consequence — M1 records a late release for manual Operations review only, and
+      inventing a warning would push a Partner who cannot attend toward a no-show.
+- [x] Build En route, Arrived, Customer unavailable and start OTP. The `can*` predicates offer at
+      most one forward action per state, which a test asserts across every published status —
+      `ALLOWED_TRANSITIONS` permits one, so two on screen would mean the machine and the UI have
+      diverged.
+- [~] Tasks and scope amendment are integrated; **evidence upload/finalize is published (grant →
+      PUT → finalize against a checksum Django recomputes) but has no Partner UI yet.**
+- [x] Build Abort and line-level completion outcome. Every task must be answered before the report
+      can be sent: Django settles money from these outcomes, so an unanswered task would either
+      refund work that happened or pay for work that did not.
 - [ ] Show pending/available/paid ledger states and payout account/status without unsupported
       on-demand withdrawal.
 - [x] Prove the Partner offer UI cannot query or render a sibling unit, Partner identity, scope or
       earnings from the same Booking Group.
 
-**Status: FE-09 Done including G22/G23/FE-09C.** Customer group recovery and the Partner offer inbox
-pass unit/component and contract-shaped Playwright gates with cursor traversal, stable-key commands
-and skewed-device clock proof. Partner fulfilment work, ledger and payout remain blocked by BE-09/BE-10.
-Next frontend task: FE-10.
+**Status: FE-09 and the FE-11 Partner work surface are implemented (2026-08-06, OpenAPI 1.16.0).**
+`/jobs/[bookingId]` runs en route → arrived → start OTP → report, plus abort and release. 7
+predicate tests. **Remaining in F5:** the evidence upload UI, and ledger/payout, which stay
+blocked by BE-10.
 
 ## F6 — Operations
 
