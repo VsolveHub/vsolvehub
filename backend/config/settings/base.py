@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     "apps.assignments",
     "apps.commerce",
     "apps.fulfilment",
+    "apps.cases",
+    "apps.payouts",
     "apps.catalog",
     "apps.pricing",
     "apps.locations",
@@ -257,6 +259,20 @@ PAYMENT_PROVIDER_READ_TIMEOUT_SECONDS = env.float(
 )
 PAYMENT_LEGAL_ENTITY_CODE = env("PAYMENT_LEGAL_ENTITY_CODE", default="vsolve")
 PAYMENT_LIVE_COLLECTIONS_APPROVED = env.bool("PAYMENT_LIVE_COLLECTIONS_APPROVED", default=False)
+
+# Outbound payouts. Separate credentials from collections on purpose: the key that can move
+# money *out* is the more dangerous of the two, and sharing one secret between them means a
+# read-only integration cannot be granted without also granting payout rights.
+PAYOUT_PROVIDER = env("PAYOUT_PROVIDER", default="unconfigured")
+RAZORPAYX_API_BASE_URL = env("RAZORPAYX_API_BASE_URL", default="https://api.razorpay.com/v1")
+RAZORPAYX_KEY_ID = env("RAZORPAYX_KEY_ID", default="")
+RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
+RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
+RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
+# Credentials are not activation. A deployment that merely *has* keys has not decided to start
+# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded.
+PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
+PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
 
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GEOCODING_NOMINATIM_URL = env(
