@@ -208,6 +208,32 @@ class CompatibilityRulePageSerializer(serializers.Serializer[dict[str, object]])
     results = CompatibilityRuleSerializer(many=True)
 
 
+class SchedulingGroupsRequestSerializer(serializers.Serializer[dict[str, object]]):
+    address_id = serializers.UUIDField()
+    expected_cart_version = serializers.IntegerField(min_value=1)
+
+
+class SchedulingGroupSerializer(serializers.Serializer[dict[str, object]]):
+    """One separately-schedulable visit.
+
+    `key` is opaque to the client and is sent back with the chosen start. It
+    identifies the visit by its membership, so a cart edit produces different keys
+    and the server can refuse a schedule aimed at visits that no longer exist.
+    """
+
+    key = serializers.CharField()
+    # `label` shadows `Field.label`; the same ignore is used by `QuoteLineSerializer`
+    # and the catalog's own label field for exactly this DRF/mypy clash.
+    label = serializers.CharField()  # type: ignore[assignment]
+    estimated_duration_minutes = serializers.IntegerField()
+    cart_item_ids = serializers.ListField(child=serializers.UUIDField())
+
+
+class SchedulingGroupsSerializer(serializers.Serializer[dict[str, object]]):
+    cart_version = serializers.IntegerField()
+    groups = SchedulingGroupSerializer(many=True)
+
+
 class FulfilmentPlanSetCreateSerializer(serializers.Serializer[dict[str, object]]):
     address_id = serializers.UUIDField()
     expected_cart_version = serializers.IntegerField(min_value=1)

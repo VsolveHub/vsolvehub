@@ -1499,6 +1499,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/cart/scheduling-groups/:
+    post:
+      operationId: cart_scheduling_groups_create
+      description: |-
+        How the current cart splits into separately-schedulable visits.
+
+        A read, not a command: nothing is reserved, priced or persisted. It exists
+        because the Customer has to be shown *how many* start times to pick before
+        picking any, and the plan-set command cannot answer that — it takes the times
+        as input.
+
+        Serviceability is resolved here for the same reason the planner resolves it: a
+        cart that straddles two service areas, or contains something this address
+        cannot be served, has no visits rather than empty ones. The refusal carries the
+        same per-item reasons the planner raises, so one screen renders both.
+      tags:
+      - Cart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchedulingGroupsRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SchedulingGroupsRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SchedulingGroupsRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchedulingGroups'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/categories/:
     get:
       operationId: categories_list
@@ -11423,6 +11473,55 @@ components:
         * `CLEAN` - Clean
         * `REJECTED` - Rejected
         * `FAILED` - Scan failed
+    SchedulingGroup:
+      type: object
+      description: |-
+        One separately-schedulable visit.
+
+        `key` is opaque to the client and is sent back with the chosen start. It
+        identifies the visit by its membership, so a cart edit produces different keys
+        and the server can refuse a schedule aimed at visits that no longer exist.
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        estimated_duration_minutes:
+          type: integer
+        cart_item_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - cart_item_ids
+      - estimated_duration_minutes
+      - key
+      - label
+    SchedulingGroups:
+      type: object
+      properties:
+        cart_version:
+          type: integer
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchedulingGroup'
+      required:
+      - cart_version
+      - groups
+    SchedulingGroupsRequestRequest:
+      type: object
+      properties:
+        address_id:
+          type: string
+          format: uuid
+        expected_cart_version:
+          type: integer
+          minimum: 1
+      required:
+      - address_id
+      - expected_cart_version
     ScopeAmendment:
       type: object
       properties:

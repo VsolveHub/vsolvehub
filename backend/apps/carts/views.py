@@ -21,6 +21,7 @@ from apps.carts.compatibility import (
     reject_compatibility_rule,
     retire_compatibility_rule,
 )
+from apps.carts.exceptions import CartVersionConflictApiError
 from apps.carts.models import (
     BookingGroup,
     Cart,
@@ -30,7 +31,12 @@ from apps.carts.models import (
     Quote,
     ServiceCompatibilityRule,
 )
-from apps.carts.planning import create_fulfilment_plan_set, create_plan_quote
+from apps.carts.planning import (
+    create_fulfilment_plan_set,
+    create_plan_quote,
+    resolve_cart_service_area,
+    scheduling_groups,
+)
 from apps.carts.serializers import (
     AssistedCheckoutCreateSerializer,
     BookingGroupCancelSerializer,
@@ -59,6 +65,8 @@ from apps.carts.serializers import (
     PlanQuoteCreateSerializer,
     QuoteCreateSerializer,
     QuoteSerializer,
+    SchedulingGroupsRequestSerializer,
+    SchedulingGroupsSerializer,
 )
 from apps.carts.services import (
     _cart_for,
@@ -597,6 +605,73 @@ class BookingWindowsView(APIView):
         except ValueError as exc:
             raise ValidationError(str(exc), code="booking_windows_invalid") from exc
         return Response(BookingWindowsSerializer(windows).data)
+
+
+class CartSchedulingGroupsView(APIView):
+    """How the current cart splits into separately-schedulable visits.
+
+    A read, not a command: nothing is reserved, priced or persisted. It exists
+    because the Customer has to be shown *how many* start times to pick before
+    picking any, and the plan-set command cannot answer that — it takes the times
+    as input.
+
+    Serviceability is resolved here for the same reason the planner resolves it: a
+    cart that straddles two service areas, or contains something this address
+    cannot be served, has no visits rather than empty ones. The refusal carries the
+    same per-item reasons the planner raises, so one screen renders both.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Cart"],
+        operation_id="cart_scheduling_groups_create",
+        request=SchedulingGroupsRequestSerializer,
+        responses={
+            200: SchedulingGroupsSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = SchedulingGroupsRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = cast(User, request.user)
+        try:
+            cart = merge_session_cart(user=user, session_key=_session_key(request))
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="cart_merge_conflict") from exc
+        if cart.version != serializer.validated_data["expected_cart_version"]:
+            raise CartVersionConflictApiError(current_version=cart.version)
+        address = get_object_or_404(
+            Address,
+            id=serializer.validated_data["address_id"],
+            customer=user,
+            archived_at__isnull=True,
+        )
+        try:
+            area = resolve_cart_service_area(cart=cart, address=address)
+            groups = scheduling_groups(cart=cart, area=area)
+        except ValueError as exc:
+            # An empty cart, or one over the planning limit. Both are states the
+            # Customer can see and fix, not server faults.
+            raise ValidationError(str(exc), code="cart_not_schedulable") from exc
+        return Response(
+            SchedulingGroupsSerializer(
+                {
+                    "cart_version": cart.version,
+                    "groups": [
+                        {
+                            "key": group.key,
+                            "label": group.label,
+                            "estimated_duration_minutes": group.estimated_duration_minutes,
+                            "cart_item_ids": list(group.cart_item_ids),
+                        }
+                        for group in groups
+                    ],
+                }
+            ).data
+        )
 
 
 class FulfilmentPlanSetView(APIView):

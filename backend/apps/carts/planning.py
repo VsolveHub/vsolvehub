@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -67,6 +68,16 @@ class ProposedAlternative:
 
 
 @dataclass(frozen=True, slots=True)
+class SchedulingGroup:
+    """One separately-schedulable visit, published before any time is chosen."""
+
+    key: str
+    label: str
+    estimated_duration_minutes: int
+    cart_item_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PricedUnit:
     items: tuple[PlanningItem, ...]
     starts_at: datetime
@@ -91,7 +102,7 @@ def _fingerprint(value: object) -> str:
 def _planning_items(cart: Cart) -> tuple[PlanningItem, ...]:
     items = list(
         CartItem.objects.filter(cart=cart, removed_at__isnull=True)
-        .select_related("variant__service", "task_rate", "configuration")
+        .select_related("variant__service__subcategory", "task_rate", "configuration")
         .prefetch_related("scope_values")
         .order_by("created_at", "id")
     )
@@ -244,7 +255,24 @@ def _build_sequential_groups(
     rules: dict[frozenset[UUID], ServiceCompatibilityRule],
     area: ServiceArea,
     starts_at: datetime,
+    require_capacity: bool = True,
 ) -> tuple[tuple[PlanningItem, ...], ...]:
+    """Merges work that one Partner may do in sequence.
+
+    ``require_capacity`` distinguishes the two questions this answers.
+
+    The planner needs *"is there a Partner free to do all of this at this exact
+    time?"* and passes ``True``: a plan that cannot be staffed is not a plan.
+
+    The scheduling groups the Customer picks slots against need *"is this the kind
+    of work one Partner does in one visit?"* and pass ``False``. Capacity has no
+    place in that question — a Partner calling in sick would otherwise split
+    "Electrician" into two slot pickers and merge them again an hour later, and the
+    Customer would have no way to understand why the screen changed. When no single
+    Partner can in fact cover the group, the planner still resolves it correctly by
+    falling back to independent visits at the chosen start, so nothing is promised
+    here that cannot be delivered.
+    """
     groups: list[tuple[PlanningItem, ...]] = []
     for item in items:
         placed = False
@@ -258,11 +286,14 @@ def _build_sequential_groups(
                     rules=rules,
                     mode=ServiceCompatibilityRule.Mode.SAME_PARTNER_SEQUENTIAL,
                 )
-                and _eligible_partner_ids(
-                    items=candidate,
-                    area=area,
-                    starts_at=starts_at,
-                    duration_minutes=duration,
+                and (
+                    not require_capacity
+                    or _eligible_partner_ids(
+                        items=candidate,
+                        area=area,
+                        starts_at=starts_at,
+                        duration_minutes=duration,
+                    )
                 )
             ):
                 groups[index] = candidate
@@ -338,6 +369,80 @@ def _candidate_alternatives(
             )
         )
     return tuple(proposals[: settings.M1_FULFILMENT_PLAN_LIMIT])
+
+
+def scheduling_group_key(cart_item_ids: Iterable[UUID]) -> str:
+    """A stable identity for one visit, derived only from its membership.
+
+    Order-independent and time-independent on purpose. The Customer picks a start
+    against this key and sends it back with the plan-set command, which matches on
+    it; a key that moved when the probe time moved would reopen the slot picker on
+    every refetch and make the whole flow unusable.
+    """
+    joined = ",".join(sorted(str(value) for value in cart_item_ids))
+    return hashlib.sha256(joined.encode()).hexdigest()[:32]
+
+
+def _group_label(items: tuple[PlanningItem, ...]) -> str:
+    """The heading for one visit.
+
+    Groups only ever form between variants a rule allows one Partner to do in
+    sequence, so the first item's subcategory names the whole visit. Falls back
+    through the service's own name rather than inventing a heading.
+    """
+    service = items[0].item.variant.service
+    if service.subcategory_id is not None:
+        return str(service.subcategory.name)
+    return str(service.name)
+
+
+def scheduling_groups(
+    *,
+    cart: Cart,
+    area: ServiceArea,
+    at: datetime | None = None,
+) -> tuple[SchedulingGroup, ...]:
+    """How this cart splits into separately-schedulable visits.
+
+    The grouping the Customer picks slots against: one row per visit, published
+    *before* any start time has been chosen. That ordering is the whole point —
+    the plan-set command needs the times as input, so it cannot be what tells the
+    Customer how many times to pick.
+
+    Answerable early because it asks only the time-independent half of the merge
+    rule: an active `SAME_PARTNER_SEQUENTIAL` compatibility rule between every pair,
+    and a combined duration inside `M1_SEQUENTIAL_UNIT_MAX_MINUTES`. Whether a
+    Partner is actually free is deliberately excluded (see
+    `_build_sequential_groups`) so the number of slot pickers does not change under
+    the Customer while they are looking at it.
+
+    `at` exists for the effective-dating of compatibility rules, which is genuinely
+    time-sensitive — Operations can retire a rule — and defaults to now.
+
+    The client renders this and never derives it. Deciding in the browser which
+    services share a Partner would be a second implementation of the compatibility
+    rules, and the first time the two disagreed the Customer would be offered a
+    visit the planner refuses to build.
+    """
+    items = _planning_items(cart)
+    at = timezone.now() if at is None else at
+    rules = _current_rules(items, at=at)
+    grouped = _build_sequential_groups(
+        _order_items_by_dependencies(items, rules=rules),
+        rules=rules,
+        area=area,
+        starts_at=at,
+        require_capacity=False,
+    )
+    return tuple(
+        SchedulingGroup(
+            key=scheduling_group_key(entry.item.id for entry in group),
+            label=_group_label(group),
+            estimated_duration_minutes=sum(entry.duration_minutes for entry in group),
+            cart_item_ids=tuple(entry.item.id for entry in group),
+        )
+        for group in grouped
+    )
 
 
 def _allocate(total: int, weights: tuple[int, ...]) -> tuple[int, ...]:
@@ -491,32 +596,33 @@ def _policy_snapshot(
     }
 
 
-@transaction.atomic
-def create_fulfilment_plan_set(  # noqa: PLR0912
+def resolve_cart_service_area(
     *,
-    customer: User,
     cart: Cart,
     address: Address,
-    expected_cart_version: int,
-    preferred_start: datetime,
-) -> FulfilmentPlanSet:
-    now = timezone.now()
-    locked_cart = Cart.objects.select_for_update().get(id=cart.id)
-    if locked_cart.customer_id != customer.id:
-        raise PermissionError("The cart does not belong to this Customer.")
-    if locked_cart.version != expected_cart_version:
-        raise FulfilmentPlanStaleApiError
-    if address.customer_id != customer.id or address.archived_at is not None:
-        raise PermissionError("Use one of the Customer's active addresses.")
-    items = _planning_items(locked_cart)
+    at: datetime | None = None,
+    items: tuple[PlanningItem, ...] | None = None,
+) -> ServiceArea:
+    """The one service area every item in this cart resolves to.
+
+    Raises `FulfilmentPlanUnavailableApiError` carrying a per-item reason when an
+    item is unserviceable, or when the cart straddles two areas — a cart that
+    cannot happen in one place cannot be planned as one booking.
+
+    Shared by the planner and the scheduling-groups read so the two cannot disagree
+    about where a cart can happen. `at` is optional because the grouping read has
+    no chosen time yet: omitting it asks "is this area serviceable at all", which
+    is the strongest question answerable before the Customer has picked a slot.
+    """
+    entries = _planning_items(cart) if items is None else items
     service_area: ServiceArea | None = None
     failures: list[dict[str, object]] = []
-    for entry in items:
+    for entry in entries:
         decision = check_serviceability(
             postal_code=address.postal_code,
             variant_id=entry.item.variant_id,
-            requested_start=preferred_start,
-            duration_minutes=entry.duration_minutes,
+            requested_start=at,
+            duration_minutes=entry.duration_minutes if at is not None else None,
         )
         if not decision.is_serviceable or decision.service_area is None:
             failures.append(
@@ -536,6 +642,33 @@ def create_fulfilment_plan_set(  # noqa: PLR0912
             )
     if failures or service_area is None:
         raise FulfilmentPlanUnavailableApiError(reasons=failures)
+    return service_area
+
+
+@transaction.atomic
+def create_fulfilment_plan_set(
+    *,
+    customer: User,
+    cart: Cart,
+    address: Address,
+    expected_cart_version: int,
+    preferred_start: datetime,
+) -> FulfilmentPlanSet:
+    now = timezone.now()
+    locked_cart = Cart.objects.select_for_update().get(id=cart.id)
+    if locked_cart.customer_id != customer.id:
+        raise PermissionError("The cart does not belong to this Customer.")
+    if locked_cart.version != expected_cart_version:
+        raise FulfilmentPlanStaleApiError
+    if address.customer_id != customer.id or address.archived_at is not None:
+        raise PermissionError("Use one of the Customer's active addresses.")
+    items = _planning_items(locked_cart)
+    service_area = resolve_cart_service_area(
+        cart=locked_cart,
+        address=address,
+        at=preferred_start,
+        items=items,
+    )
     _assert_window_time_is_current(
         starts_at=preferred_start,
         area_timezone=service_area.timezone,
