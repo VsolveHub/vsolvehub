@@ -6,7 +6,8 @@ import { Ban, CalendarClock, CheckCircle2, ChevronRight, Clock, MapPin } from "l
 import Link from "next/link";
 import { useState } from "react";
 
-import { usePartnerJobs, type JobBucket, type PartnerVisit, type VisitStatus } from "../queries";
+import { STATUS_COPY, TONE_STYLES } from "../model/status";
+import { usePartnerJobs, type JobBucket, type PartnerVisit } from "../queries";
 
 /**
  * Every job this Partner has, on three shelves.
@@ -25,33 +26,6 @@ const TABS: { bucket: JobBucket; label: string; icon: typeof Clock }[] = [
   { bucket: "completed", label: "Done", icon: CheckCircle2 },
   { bucket: "cancelled", label: "Cancelled", icon: Ban },
 ];
-
-/**
- * Plain wording for every published status.
- *
- * A `Record` on purpose: a status added to the contract is a `typecheck` failure
- * rather than a pill that renders `undefined`.
- */
-const STATUS_COPY: Record<VisitStatus, { label: string; tone: "go" | "wait" | "done" | "stop" }> = {
-  CONFIRMED: { label: "Booked", tone: "wait" },
-  EN_ROUTE: { label: "On the way", tone: "go" },
-  ARRIVED: { label: "Arrived", tone: "go" },
-  IN_PROGRESS: { label: "Working", tone: "go" },
-  COMPLETION_SUBMITTED: { label: "Waiting for customer", tone: "wait" },
-  COMPLETED: { label: "Done", tone: "done" },
-  PARTIALLY_COMPLETED: { label: "Part done", tone: "done" },
-  DISPUTED: { label: "Customer raised a problem", tone: "stop" },
-  RECOVERY_REQUIRED: { label: "Needs help", tone: "stop" },
-  ABORTED: { label: "Stopped", tone: "stop" },
-  CANCELLED: { label: "Cancelled", tone: "stop" },
-};
-
-const TONE_STYLES: Record<"go" | "wait" | "done" | "stop", string> = {
-  go: "border-info-line bg-info-surface text-info-text",
-  wait: "border-warning-line bg-warning-surface text-warning-text",
-  done: "border-success-line bg-success-surface text-success-text",
-  stop: "border-critical-200 bg-critical-50 text-critical",
-};
 
 const EMPTY_COPY: Record<JobBucket, { title: string; description: string }> = {
   active: {

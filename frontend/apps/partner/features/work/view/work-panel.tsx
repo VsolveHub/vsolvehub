@@ -1,6 +1,7 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Field, Input, Spinner, formatMoney } from "@vsolve/ui";
+import { Button, Card, ErrorState, Field, Input, Spinner } from "@vsolve/ui";
+import { CalendarClock } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -21,6 +22,7 @@ import {
   type OutcomeInput,
   type PartnerVisit,
 } from "../queries";
+import { STATUS_COPY, TONE_STYLES } from "../model/status";
 import { JobMoney } from "./job-money";
 
 /**
@@ -289,16 +291,37 @@ export function WorkPanel({ bookingId }: { bookingId: string }) {
 
   const data = visit.data;
   const versioned = { bookingId: data.id, expectedVersion: data.version };
-  const gross = data.work_tasks.reduce((total, task) => total + task.amount_paise, 0);
+  const status = STATUS_COPY[data.status];
+  const start = new Date(data.scheduled_start);
 
   return (
     <Card className="p-6">
+      {/* Was `status.replaceAll("_", " ").toLowerCase()` beside a client-side sum
+          of the task amounts. The first put raw domain vocabulary in front of the
+          Partner; the second computed money in the browser, which this codebase
+          forbids everywhere else — and mislabelled the task subtotal as what the
+          job is worth. `JobMoney` renders the server's figures below. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <Badge tone="info">{data.status.replaceAll("_", " ").toLowerCase()}</Badge>
-        <span data-numeric className="text-sm text-text-secondary">
-          {formatMoney(gross)} of work
+        <span
+          className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${TONE_STYLES[status.tone]}`}
+        >
+          {status.label}
         </span>
       </div>
+
+      <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text-secondary">
+        <CalendarClock aria-hidden className="size-4" />
+        <time dateTime={data.scheduled_start} className="font-semibold text-text">
+          {start.toLocaleString(undefined, {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </time>
+        <span>· about {data.estimated_duration_minutes} min of work</span>
+      </p>
 
       {/* The task list used to be a bare bulleted list with no amounts. What a
           job is worth is the thing a Partner most wants from this screen, and
