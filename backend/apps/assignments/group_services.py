@@ -353,10 +353,29 @@ def _commit_locked_unit_offer(
 
 @transaction.atomic
 def commit_unit_offer(*, offer_id: UUID, partner: PartnerProfile | None = None) -> PartnerOffer:
+    """Locks in an accepted offer.
+
+    ## Why a Partner may commit inside their own undo window
+
+    The undo window exists to protect **the Partner**: it is their grace period,
+    and nobody else's. A Partner pressing "Commit now" is waiving their own
+    remaining protection, which is exactly what the control is for — and the only
+    time anyone would ever press it is while the window is still open. Refusing it
+    then made the button unusable for its whole lifetime.
+
+    The waiver is personal, so it is gated on `partner`. An **unattributed**
+    commit — the system deciding on the Partner's behalf — still has to wait the
+    window out, because closing someone else's grace period early is precisely
+    what the deadline is there to prevent. The reconciler never reaches this
+    function anyway: it enforces `undo_deadline <= now` at its own call site and
+    goes straight to `_commit_locked_unit_offer`.
+    """
     group, unit, offer = _locked_offer_context(offer_id)
     if partner is not None and offer.partner_id != partner.id:
         raise PermissionError("This offer belongs to another Partner.")
-    if offer.undo_deadline is None or offer.undo_deadline > timezone.now():
+    if offer.undo_deadline is None:
+        raise ValueError("This Fulfilment Unit offer cannot be committed.")
+    if partner is None and offer.undo_deadline > timezone.now():
         raise ValueError("The Partner undo window is still open.")
     return _commit_locked_unit_offer(group, unit, offer)
 

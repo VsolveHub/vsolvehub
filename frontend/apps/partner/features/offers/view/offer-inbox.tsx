@@ -3,6 +3,7 @@
 import { describeError, queryKeys } from "@vsolve/query";
 import { Button, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
 import { useQueryClient } from "@tanstack/react-query";
+import { Clock, RefreshCw } from "lucide-react";
 
 import {
   isCursorContractFailure,
@@ -88,16 +89,21 @@ function describeFailure(error: unknown): string | null {
  * fail?" are answered by the row itself. Two rows can have commands in flight at
  * once without either one reporting the other's outcome.
  */
-function OfferRow({ offer }: { offer: Offer }) {
+function OfferRow({ offer, index }: { offer: Offer; index: number }) {
   const command = useOfferCommand();
 
   return (
-    <OfferCard
-      offer={offer}
-      isBusy={command.isPending}
-      unconfirmedMessage={command.isError ? describeFailure(command.error) : null}
-      onCommand={(action) => command.mutate({ offerId: offer.id, action })}
-    />
+    <div
+      className="vsh-stagger-rise"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
+      <OfferCard
+        offer={offer}
+        isBusy={command.isPending}
+        unconfirmedMessage={command.isError ? describeFailure(command.error) : null}
+        onCommand={(action) => command.mutate({ offerId: offer.id, action })}
+      />
+    </div>
   );
 }
 
@@ -105,7 +111,7 @@ function InboxSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       {Array.from({ length: 2 }, (_, index) => (
-        <Skeleton key={index} className="h-56 w-full" />
+        <Skeleton key={index} className="h-52 w-full rounded-card" />
       ))}
     </div>
   );
@@ -160,17 +166,22 @@ export function OfferInbox() {
     <div>
       {/* Freshness stated rather than implied: a poller that has quietly stopped
           looks identical to one that is up to date. */}
-      <p className="text-sm text-text-secondary" aria-live="polite">
-        {offersQuery.isFetching && !offersQuery.isFetchingNextPage
-          ? "Checking for new offers…"
-          : livePollPaused
-            ? "Live updates are paused while you look through older offers. Go back to the latest to resume them."
-            : "New offers appear here automatically. Closing this page does not affect them."}
+      <p className="flex items-center gap-1.5 text-xs text-text-muted" aria-live="polite">
+        {offersQuery.isFetching && !offersQuery.isFetchingNextPage ? (
+          <>
+            <RefreshCw size={12} className="animate-spin" aria-hidden />
+            Checking for new offers…
+          </>
+        ) : livePollPaused ? (
+          "Live updates are paused while you look through older offers."
+        ) : (
+          "New offers appear here automatically."
+        )}
       </p>
 
       {livePollPaused ? (
         <div className="mt-3">
-          <Button variant="outline" onClick={restartFromPageOne}>
+          <Button variant="outline" size="sm" onClick={restartFromPageOne}>
             Back to the latest offers
           </Button>
         </div>
@@ -179,14 +190,15 @@ export function OfferInbox() {
       {offers.length === 0 ? (
         <div className="mt-4">
           <EmptyState
+            icon={<Clock size={32} />}
             title="No offers right now"
             description="When a job near you matches your skills and availability, it will appear here. Make sure you are online to receive offers."
           />
         </div>
       ) : (
         <ul className="mt-4 flex flex-col gap-3">
-          {offers.map((offer) => (
-            <OfferRow key={offer.id} offer={offer} />
+          {offers.map((offer, index) => (
+            <OfferRow key={offer.id} offer={offer} index={index} />
           ))}
         </ul>
       )}
@@ -195,6 +207,7 @@ export function OfferInbox() {
         <div className="mt-4">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => void offersQuery.fetchNextPage()}
             loading={offersQuery.isFetchingNextPage}
             loadingLabel="Loading more offers"
@@ -214,7 +227,7 @@ export function OfferInbox() {
           </p>
           {isCursorInvalid(listError) || isCursorContractFailure(listError) ? (
             <div className="mt-3">
-              <Button variant="outline" onClick={restartFromPageOne}>
+              <Button variant="outline" size="sm" onClick={restartFromPageOne}>
                 Start from the beginning
               </Button>
             </div>
@@ -222,12 +235,14 @@ export function OfferInbox() {
         </>
       ) : null}
 
-      <div className="mt-6">
-        {/* Disabled for *any* fetch, including a next-page one. A refetch that
-            overlaps a cursor traversal races two writers into the same page
-            list, and the loser silently decides what the Partner ends up
-            looking at. */}
-        <Button variant="outline" onClick={() => void offersQuery.refetch()} disabled={offersQuery.isFetching}>
+      <div className="mt-6 flex justify-center">
+        <Button
+          variant="outline"
+          size="sm"
+          icon={<RefreshCw size={14} />}
+          onClick={() => void offersQuery.refetch()}
+          disabled={offersQuery.isFetching}
+        >
           Check now
         </Button>
       </div>

@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.partners.models import (
@@ -14,8 +15,10 @@ from apps.partners.models import (
     PartnerConsentDocument,
     PartnerDocument,
     PartnerOnlineSession,
+    PartnerProfile,
     Skill,
 )
+from apps.payouts.models import PartnerPayoutAccount
 
 
 class PartnerConsentInputSerializer(serializers.Serializer[dict[str, object]]):
@@ -237,6 +240,81 @@ class PartnerApplicationTransitionSerializer(
             "occurred_at",
         )
         read_only_fields = fields
+
+
+class PartnerProfileSerializer(serializers.ModelSerializer[PartnerProfile]):
+    """Who the Partner is, as distinct from the form they filled in to join.
+
+    `GET /partner/me/` used to return the application, which is why the app had no
+    profile screen worth the name: opening "Profile" showed a half-finished
+    onboarding draft. An application is a *submission* with a review lifecycle; a
+    profile is a standing record of a person who works here. Those stop being the
+    same thing the moment onboarding is approved.
+
+    Carries what a Partner would expect to see about themselves and nothing about
+    anyone else: no reviewer, no internal review notes, no other Partner's areas.
+    `approval_status` is published because it decides whether they can work at
+    all, and a Partner is entitled to know that without reading it off a rejected
+    request.
+    """
+
+    phone_number = serializers.CharField(source="user.phone_number", read_only=True)
+    approval_status = serializers.SerializerMethodField()
+    skills = serializers.SerializerMethodField()
+    service_areas = serializers.SerializerMethodField()
+    member_since = serializers.DateTimeField(source="created_at", read_only=True)
+    has_payout_account = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PartnerProfile
+        fields = (
+            "id",
+            "display_name",
+            "phone_number",
+            "biography",
+            "experience_years",
+            "approval_status",
+            "skills",
+            "service_areas",
+            "member_since",
+            "has_payout_account",
+        )
+        read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_approval_status(profile: PartnerProfile) -> str | None:
+        application = getattr(profile, "application", None)
+        return None if application is None else str(application.status)
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_skills(profile: PartnerProfile) -> list[str]:
+        """The work this Partner is approved to do, named the way a customer sees it."""
+        return sorted(
+            {link.variant.service.name for link in profile.service_links.all() if link.is_active}
+        )
+
+    @staticmethod
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_service_areas(profile: PartnerProfile) -> list[str]:
+        return sorted(
+            {link.service_area.name for link in profile.service_area_links.all() if link.is_active}
+        )
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_has_payout_account(profile: PartnerProfile) -> bool:
+        """Whether money has somewhere to go.
+
+        Verified only: a pending or rejected account cannot be paid to, so
+        reporting it as "set up" would tell a Partner their earnings are on the
+        way when nothing can leave. No account details are published here.
+        """
+        return PartnerPayoutAccount.objects.filter(
+            partner=profile,
+            status=PartnerPayoutAccount.Status.VERIFIED,
+        ).exists()
 
 
 class PartnerApplicationSerializer(serializers.ModelSerializer[PartnerApplication]):

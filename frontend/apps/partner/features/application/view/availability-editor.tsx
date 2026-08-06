@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, Button, Field, Input, Select } from "@vsolve/ui";
+import { Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -26,8 +27,8 @@ import {
  */
 
 const PROBLEM_MESSAGES: Record<PeriodProblem, string> = {
-  ZERO_LENGTH: "Start and end are the same. Tick “ends next day” for a full day.",
-  ENDS_BEFORE_START: "This ends before it starts. Tick “ends next day” if it runs overnight.",
+  ZERO_LENGTH: "Start and end are the same. Tick 'ends next day' for a full day.",
+  ENDS_BEFORE_START: "This ends before it starts. Tick 'ends next day' if it runs overnight.",
   OVERLAPS_ANOTHER: "This overlaps another period on the same day.",
 };
 
@@ -53,10 +54,12 @@ export function AvailabilityEditor({
   saveError = null,
 }: AvailabilityEditorProps) {
   const [periods, setPeriods] = useState<DraftPeriod[]>([...initialPeriods]);
+  const [showAll, setShowAll] = useState(false);
 
   const problems = useMemo(() => scheduleProblems(periods), [periods]);
   const hours = weeklyHours(periods);
   const hasProblems = problems.size > 0;
+  const hasChanges = JSON.stringify(periods) !== JSON.stringify(initialPeriods);
 
   function update(key: string, patch: Partial<DraftPeriod>) {
     setPeriods((current) =>
@@ -82,19 +85,17 @@ export function AvailabilityEditor({
     );
   }
 
+  // Show first 2 days initially, rest behind toggle
+  const visibleDays = showAll ? WEEKDAYS : WEEKDAYS.slice(0, 2);
+
   return (
-    <div>
+    <div className="pb-28">
+      {/* Section header */}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold text-text">When you work</h2>
-        <p className="text-sm text-text-secondary" aria-live="polite">
-          {hours === 0 ? (
-            "No hours published"
-          ) : (
-            <>
-              <span data-numeric>{hours}</span> hours a week
-            </>
-          )}
-        </p>
+        <h2 className="text-lg font-bold text-text">When you work</h2>
+        <Badge tone="info" className="tabular-nums">
+          {hours === 0 ? "No hours" : `${hours} hours a week`}
+        </Badge>
       </div>
 
       <p className="mt-1 text-sm text-text-secondary">
@@ -102,17 +103,36 @@ export function AvailabilityEditor({
         until you save.
       </p>
 
-      <div className="mt-4 flex flex-col gap-4">
-        {WEEKDAYS.map((weekdayLabel, weekday) => {
+      {/* Weekday cards */}
+      <div className="mt-4 flex flex-col gap-3">
+        {visibleDays.map((weekdayLabel, index) => {
+          // When collapsed, index maps to the actual weekday directly
+          const weekday = showAll ? index : index;
           const dayPeriods = periods.filter((period) => period.weekday === weekday);
+          const dayHours = dayPeriods.reduce((acc, p) => {
+            // Rough hour count for display
+            const start = Number(p.startsAt.split(":")[0]) + Number(p.startsAt.split(":")[1]) / 60;
+            const end = Number(p.endsAt.split(":")[0]) + Number(p.endsAt.split(":")[1]) / 60;
+            return acc + (p.endsNextDay ? 24 - start + end : end - start);
+          }, 0);
 
           return (
-            <section key={weekdayLabel} className="rounded-card border border-line p-4">
+            <section
+              key={weekdayLabel}
+              className="vsh-stagger-rise rounded-card border border-line bg-surface p-4"
+              style={{ animationDelay: `${index * 60}ms` }}
+            >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-text">{weekdayLabel}</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wide text-text">
+                  {weekdayLabel}
+                </h3>
                 {dayPeriods.length === 0 ? (
-                  <Badge tone="neutral">Not working</Badge>
-                ) : null}
+                  <Badge tone="neutral">NOT WORKING</Badge>
+                ) : (
+                  <span className="text-sm tabular-nums text-text-muted">
+                    {Math.round(dayHours)} hrs
+                  </span>
+                )}
               </div>
 
               {dayPeriods.map((period) => {
@@ -121,7 +141,7 @@ export function AvailabilityEditor({
                 return (
                   <div
                     key={period.key}
-                    className="mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3"
+                    className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3"
                   >
                     <Field label="From" error={undefined}>
                       <Input
@@ -132,6 +152,8 @@ export function AvailabilityEditor({
                         }
                       />
                     </Field>
+
+                    <span className="flex h-11 items-center text-text-muted">—</span>
 
                     <Field label="To">
                       <Input
@@ -174,10 +196,12 @@ export function AvailabilityEditor({
 
                     <Button
                       variant="ghost"
+                      size="sm"
                       onClick={() => remove(period.key)}
                       aria-label={`Remove ${weekdayLabel} ${period.startsAt} to ${period.endsAt}`}
+                      icon={<Trash2 size={16} />}
                     >
-                      Remove
+                      <span className="sr-only">Remove</span>
                     </Button>
 
                     {problem ? (
@@ -189,30 +213,56 @@ export function AvailabilityEditor({
                 );
               })}
 
-              <Button variant="secondary" className="mt-3" onClick={() => add(weekday)}>
+              <button
+                type="button"
+                className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-info-text hover:underline"
+                onClick={() => add(weekday)}
+              >
+                <Plus size={14} />
                 Add hours
                 <span className="sr-only"> on {weekdayLabel}</span>
-              </Button>
+              </button>
             </section>
           );
         })}
       </div>
 
+      {/* Show remaining days toggle */}
+      {!showAll ? (
+        <button
+          type="button"
+          className="mt-4 w-full text-center text-sm font-semibold text-info-text hover:underline"
+          onClick={() => setShowAll(true)}
+        >
+          Show remaining days
+        </button>
+      ) : null}
+
+      {/* Validation error */}
       {saveError ? (
         <p role="alert" className="mt-4 text-sm font-medium text-danger-text">
           {saveError}
         </p>
       ) : null}
 
-      <div className="mt-6 flex items-center gap-3">
-        <Button onClick={() => onSave(periods)} disabled={hasProblems || isSaving}>
-          {isSaving ? "Saving…" : "Save hours"}
-        </Button>
-        {hasProblems ? (
-          <p className="text-sm text-text-secondary" aria-live="polite">
-            Fix the periods marked above first.
+      {/* Sticky save bar */}
+      <div className="fixed inset-x-0 bottom-14 z-30 border-t border-line bg-surface px-4 py-3">
+        <div className="mx-auto max-w-2xl">
+          <Button
+            block
+            onClick={() => onSave(periods)}
+            disabled={hasProblems || isSaving || !hasChanges}
+          >
+            {isSaving ? "Saving…" : "Save hours"}
+          </Button>
+          <p className="mt-1.5 text-center text-xs text-text-muted" aria-live="polite">
+            {hasProblems
+              ? "Fix the periods marked above first."
+              : hasChanges
+                ? "You have unsaved changes."
+                : "No changes made to save."}
           </p>
-        ) : null}
+        </div>
       </div>
     </div>
   );

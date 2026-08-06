@@ -84,6 +84,8 @@ from apps.fulfilment.serializers import (
     GroupRescheduleRequestSerializer,
     GroupRescheduleResultSerializer,
     OperationsBookingSerializer,
+    PartnerBookingListQuerySerializer,
+    PartnerBookingPageSerializer,
     PartnerBookingSerializer,
     ProposeAmendmentRequestSerializer,
     ReasonedCommandSerializer,
@@ -110,6 +112,11 @@ from apps.partners.permissions import (
     IsPartnerUser,
 )
 from common.errors.serializers import ApiErrorSerializer
+from common.pagination import (
+    BoundedCursorQuerySerializer,
+    StrictCursorPagination,
+    reject_invalid_cursor_query,
+)
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
 FULFILMENT_TAG = "Fulfilment"
@@ -720,6 +727,68 @@ class BookedGroupAddressChangeView(APIView):
 # --------------------------------------------------------------------------------------------
 # Partner — physical work
 # --------------------------------------------------------------------------------------------
+
+
+# Buckets the Partner actually thinks in. `active` is everything still owed work,
+# so a status added to the lifecycle shows up there by default rather than silently
+# vanishing from every shelf.
+_PARTNER_TERMINAL_STATUSES = (
+    Booking.Status.COMPLETED,
+    Booking.Status.PARTIALLY_COMPLETED,
+    Booking.Status.CANCELLED,
+    Booking.Status.ABORTED,
+)
+_PARTNER_BUCKETS: dict[str, tuple[str, ...]] = {
+    "completed": (Booking.Status.COMPLETED, Booking.Status.PARTIALLY_COMPLETED),
+    "cancelled": (Booking.Status.CANCELLED, Booking.Status.ABORTED),
+}
+
+
+class PartnerBookingCursorPagination(StrictCursorPagination):
+    page_size = 25
+    ordering = ("-scheduled_start", "-id")
+
+
+class PartnerBookingCollectionView(APIView):
+    """The Partner's own work, as a list.
+
+    Published because the app previously had no way to ask "what jobs do I have?"
+    — only `GET /partner/bookings/{id}/`, which needs an id the Partner had no
+    screen to get one from.
+
+    Scoped to the caller's own profile and takes no `partner_id`: the safest
+    filter is the one a caller cannot supply, which is the same reasoning that
+    keeps `booking_group_id` off the Partner booking projection.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=[FULFILMENT_TAG],
+        operation_id="partner_booking_list",
+        parameters=[PartnerBookingListQuerySerializer, BoundedCursorQuerySerializer],
+        responses={200: PartnerBookingPageSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
+        query = PartnerBookingListQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        profile = _partner_profile(cast(User, request.user))
+
+        queryset = _booking_queryset().filter(partner=profile)
+        bucket = query.validated_data.get("bucket")
+        if bucket == "active":
+            queryset = queryset.exclude(status__in=_PARTNER_TERMINAL_STATUSES)
+        elif bucket is not None:
+            queryset = queryset.filter(status__in=_PARTNER_BUCKETS[bucket])
+
+        paginator = PartnerBookingCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        response = paginator.get_paginated_response(PartnerBookingSerializer(page, many=True).data)
+        # An empty shelf carries no row to calibrate a countdown from, so the page
+        # publishes the server instant too — the same reason the offer inbox does.
+        response.data["server_now"] = timezone.now()
+        return response
 
 
 class PartnerBookingDetailView(APIView):

@@ -1,8 +1,10 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, Spinner, StatCard, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
+import { AlertTriangle, CheckCircle2, ChevronDown, Hourglass, Landmark } from "lucide-react";
 
 import { usePartnerBalance, usePartnerLedger, usePartnerPayoutAccount } from "../queries";
+import { EarningsChart, toDailyEarnings } from "./earnings-chart";
 
 /**
  * What the Partner has earned.
@@ -35,11 +37,11 @@ const STATUS_TONE: Record<string, "neutral" | "info" | "success" | "warning"> = 
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: "On hold",
-  AVAILABLE: "Ready",
-  RESERVED: "In the next run",
-  PAID: "Paid",
-  RELEASED: "Back in the queue",
+  PENDING: "ON HOLD",
+  AVAILABLE: "READY",
+  RESERVED: "IN NEXT RUN",
+  PAID: "PAID",
+  RELEASED: "RELEASED",
 };
 
 export function EarningsPanel() {
@@ -71,110 +73,183 @@ export function EarningsPanel() {
   const entries = ledger.data?.pages.flatMap((page) => page.results) ?? [];
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Ready to be paid" value={formatMoney(data.available_paise)} />
-        <StatCard label="In the next run" value={formatMoney(data.reserved_paise)} />
-        <StatCard label="On hold" value={formatMoney(data.pending_paise)} />
-        <StatCard label="Paid so far" value={formatMoney(data.paid_paise)} />
-      </div>
-
+    <div className="space-y-5">
+      {/* Warning banner */}
       {data.pending_paise > 0 ? (
-        <p className="rounded-control bg-warning-surface p-3 text-sm text-warning-text">
-          Some of your earnings are on hold while we look into a job. We will release them as soon
-          as that is settled.
-        </p>
+        <div className="flex gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
+          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-warning-text" aria-hidden />
+          <div>
+            <p className="text-sm font-semibold text-warning-text">
+              Some of your earnings are on hold
+            </p>
+            <p className="mt-0.5 text-sm text-warning-text/80">
+              Review the required documentation to release funds.
+            </p>
+          </div>
+        </div>
       ) : null}
 
-      <Card className="p-4">
-        <h2 className="text-sm font-semibold text-text">How you get paid</h2>
-        <p className="mt-1 text-sm leading-6 text-text-secondary">
-          We pay out in a weekly run that our team reviews before it goes out. There is no
-          withdraw button — you do not need to do anything.
+      {/* The one number that answers "what is actually coming to me". Four equal
+          tiles made the reader compare before they could read; a hero and three
+          supports say which is the answer and which are context. */}
+      <Card className="p-5">
+        <p className="text-sm font-semibold text-text-secondary">Coming to you</p>
+        <p data-numeric className="mt-1 text-4xl font-bold leading-tight text-text">
+          {formatMoney(data.available_paise)}
         </p>
-
-        {account.data ? (
-          <p className="mt-3 text-sm text-text-secondary">
-            Paying into <span data-numeric>••••{account.data.account_last4}</span>
-            {account.data.is_payable_now ? null : (
-              <>
-                {" — "}
-                <span className="text-warning-text">
-                  not usable until{" "}
-                  <time dateTime={account.data.effective_from}>
-                    {new Date(account.data.effective_from).toLocaleDateString("en-IN")}
-                  </time>
-                  . New accounts wait a day before we pay into them, so a change you did not make
-                  cannot take your money straight away.
-                </span>
-              </>
-            )}
-          </p>
-        ) : (
-          <p className="mt-3 text-sm text-text-secondary">
-            No payout account yet. Your account details are collected during onboarding.
-          </p>
-        )}
+        <p className="mt-2 text-sm text-text-secondary">
+          We pay this out in the next payment run.
+        </p>
       </Card>
 
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="p-3">
+          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
+            <Hourglass size={12} aria-hidden />
+            Waiting
+          </p>
+          <p data-numeric className="mt-1 text-lg font-bold text-text">
+            {formatMoney(data.reserved_paise)}
+          </p>
+        </Card>
+        <Card className="p-3">
+          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-warning-text">
+            <AlertTriangle size={12} aria-hidden />
+            On hold
+          </p>
+          <p data-numeric className="mt-1 text-lg font-bold text-text">
+            {formatMoney(data.pending_paise)}
+          </p>
+        </Card>
+        <Card className="p-3">
+          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-success-text">
+            <CheckCircle2 size={12} aria-hidden />
+            Paid
+          </p>
+          <p data-numeric className="mt-1 text-lg font-bold text-text">
+            {formatMoney(data.paid_paise)}
+          </p>
+        </Card>
+      </div>
+
+      <Card className="p-5">
+        <h2 className="text-base font-bold text-text">How you are doing</h2>
+        <div className="mt-3">
+          <EarningsChart days={toDailyEarnings(entries)} />
+        </div>
+      </Card>
+
+      {/* Payout method */}
+      <Card className="flex items-center gap-3 p-4">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-info-surface text-info-text">
+          <Landmark size={20} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-text">Payout Method</p>
+          {account.data ? (
+            <p className="text-sm text-text-secondary">
+              Paying into <span data-numeric>••••{account.data.account_last4}</span>
+              {account.data.is_payable_now ? null : (
+                <>
+                  {" — "}
+                  <span className="text-warning-text">
+                    not usable until{" "}
+                    <time dateTime={account.data.effective_from}>
+                      {new Date(account.data.effective_from).toLocaleDateString("en-IN")}
+                    </time>
+                  </span>
+                </>
+              )}
+            </p>
+          ) : (
+            <p className="text-sm text-text-secondary">
+              No payout account yet.
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {/* Recent Activity */}
       <section aria-labelledby="ledger">
-        <h2 id="ledger" className="text-sm font-semibold text-text">
-          Your earnings
+        <h2 id="ledger" className="text-base font-bold text-text">
+          Recent Activity
         </h2>
 
         {ledger.isPending ? (
-          <p className="mt-2 flex items-center gap-2 text-sm text-text-secondary">
+          <p className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
             <Spinner size="sm" />
             Loading…
           </p>
         ) : null}
 
         {!ledger.isPending && entries.length === 0 ? (
-          <p className="mt-2 text-sm text-text-secondary">
+          <p className="mt-3 text-sm text-text-secondary">
             Nothing yet. Completed jobs appear here once the customer confirms them.
           </p>
         ) : null}
 
-        <ul className="mt-2 list-none space-y-2">
-          {entries.map((entry) => (
-            <li
-              key={entry.id}
-              className="rounded-card border border-line bg-surface p-4 text-sm"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Badge tone={STATUS_TONE[entry.status] ?? "neutral"}>
-                  {STATUS_LABEL[entry.status] ?? entry.status}
-                </Badge>
-                <span data-numeric className="font-semibold text-text">
-                  {formatMoney(entry.net_paise)}
-                </span>
-              </div>
-              <p className="mt-2 text-text-secondary">
-                <span data-numeric>{formatMoney(entry.gross_paise)}</span> for the work
-                {entry.commission_paise > 0 ? (
-                  <>
-                    {" less "}
-                    <span data-numeric>{formatMoney(entry.commission_paise)}</span> commission
-                  </>
-                ) : null}
-              </p>
-              {entry.reason ? (
-                <p className="mt-1 text-text-secondary">{entry.reason}</p>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        {entries.length > 0 ? (
+          <div className="mt-3 overflow-hidden rounded-card border border-line">
+            {/* Table header */}
+            <div className="flex items-center justify-between bg-surface-sunken px-4 py-2">
+              <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
+                Status
+              </span>
+              <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
+                Amount
+              </span>
+            </div>
+
+            {/* Entries */}
+            <ul className="list-none divide-y divide-line">
+              {entries.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between gap-3 bg-surface px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <Badge tone={STATUS_TONE[entry.status] ?? "neutral"}>
+                      {STATUS_LABEL[entry.status] ?? entry.status}
+                    </Badge>
+                    <p className="mt-1 text-sm text-text-secondary">
+                      <span data-numeric className="font-medium text-text">
+                        {formatMoney(entry.gross_paise)}
+                      </span>
+                      {" for the work"}
+                      {entry.commission_paise > 0 ? (
+                        <>
+                          {" less "}
+                          <span data-numeric>{formatMoney(entry.commission_paise)}</span>
+                          {" commission"}
+                        </>
+                      ) : null}
+                    </p>
+                    {entry.reason ? (
+                      <p className="mt-0.5 text-xs text-text-muted">{entry.reason}</p>
+                    ) : null}
+                  </div>
+                  <span data-numeric className="shrink-0 text-base font-bold text-text">
+                    {formatMoney(entry.net_paise)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {ledger.hasNextPage ? (
-          <Button
-            className="mt-3"
-            variant="outline"
-            loading={ledger.isFetchingNextPage}
-            loadingLabel="Loading"
-            onClick={() => void ledger.fetchNextPage()}
-          >
-            Load more
-          </Button>
+          <div className="mt-4 flex justify-center">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<ChevronDown size={14} />}
+              loading={ledger.isFetchingNextPage}
+              loadingLabel="Loading"
+              onClick={() => void ledger.fetchNextPage()}
+            >
+              Load more
+            </Button>
+          </div>
         ) : null}
       </section>
     </div>

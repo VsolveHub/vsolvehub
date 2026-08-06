@@ -2,6 +2,7 @@
 
 import { describeError } from "@vsolve/query";
 import { Badge, Button, Card, ErrorState, Select, Spinner } from "@vsolve/ui";
+import { Power } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useApplicationReference } from "@/features/application/reference-queries";
@@ -378,6 +379,8 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
         <div className="mt-4">
           <Button
             variant="outline"
+            block
+            icon={<Power size={16} />}
             onClick={() => void handleGoOffline()}
             loading={goOffline.isPending}
             loadingLabel="Going offline"

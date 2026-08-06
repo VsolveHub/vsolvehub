@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 54461ed3f446b805
+ * Checksum: 458264513868a633
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1568,6 +1568,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/bookings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The Partner's own work, as a list.
+         *
+         *     Published because the app previously had no way to ask "what jobs do I have?"
+         *     — only `GET /partner/bookings/{id}/`, which needs an id the Partner had no
+         *     screen to get one from.
+         *
+         *     Scoped to the caller's own profile and takes no `partner_id`: the safest
+         *     filter is the one a caller cannot supply, which is the same reasoning that
+         *     keeps `booking_group_id` off the Partner booking projection.
+         */
+        get: operations["partner_booking_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/bookings/{booking_id}/": {
         parameters: {
             query?: never;
@@ -1862,6 +1889,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description The signed-in Partner's own profile.
+         *
+         *     This used to return the *application* — byte-for-byte the same payload as
+         *     `GET /partner/application/` — which is why "Profile" in the app opened a
+         *     half-finished onboarding form. An application is a submission under review; a
+         *     profile is the standing record of someone who works here.
+         *
+         *     404 while no profile exists yet, because an applicant who has not been set up
+         *     genuinely has none, and inventing an empty one would make the app render a
+         *     person who is not there.
+         */
         get: operations["partner_me_retrieve"];
         put?: never;
         post?: never;
@@ -3718,6 +3757,15 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        PartnerBookingPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["PartnerBooking"][];
+            /** Format: date-time */
+            server_now: string;
+        };
         PartnerConsent: {
             /** Format: uuid */
             readonly id: string;
@@ -3902,6 +3950,35 @@ export interface components {
         PartnerPresenceSessionRequestRequest: {
             /** Format: uuid */
             session_id: string;
+        };
+        /**
+         * @description Who the Partner is, as distinct from the form they filled in to join.
+         *
+         *     `GET /partner/me/` used to return the application, which is why the app had no
+         *     profile screen worth the name: opening "Profile" showed a half-finished
+         *     onboarding draft. An application is a *submission* with a review lifecycle; a
+         *     profile is a standing record of a person who works here. Those stop being the
+         *     same thing the moment onboarding is approved.
+         *
+         *     Carries what a Partner would expect to see about themselves and nothing about
+         *     anyone else: no reviewer, no internal review notes, no other Partner's areas.
+         *     `approval_status` is published because it decides whether they can work at
+         *     all, and a Partner is entitled to know that without reading it off a rejected
+         *     request.
+         */
+        PartnerProfile: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly display_name: string;
+            readonly phone_number: string;
+            readonly biography: string;
+            readonly experience_years: number;
+            readonly approval_status: string | null;
+            readonly skills: string[];
+            readonly service_areas: string[];
+            /** Format: date-time */
+            readonly member_since: string;
+            readonly has_payout_account: boolean;
         };
         PartnerSchedule: {
             readonly rules: components["schemas"]["PartnerAvailabilityRule"][];
@@ -9053,6 +9130,41 @@ export interface operations {
             };
         };
     };
+    partner_booking_list: {
+        parameters: {
+            query?: {
+                /**
+                 * @description * `active` - active
+                 *     * `completed` - completed
+                 *     * `cancelled` - cancelled
+                 */
+                bucket?: "active" | "completed" | "cancelled";
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBookingPage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     partner_booking_retrieve: {
         parameters: {
             query?: never;
@@ -9826,7 +9938,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PartnerApplication"];
+                    "application/json": components["schemas"]["PartnerProfile"];
                 };
             };
             404: {

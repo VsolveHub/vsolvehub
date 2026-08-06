@@ -2,6 +2,12 @@
 
 import { hasRole, useAuthGuard, useLogout, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn } from "@vsolve/ui";
+import {
+  Briefcase,
+  Home,
+  UserCircle,
+  Wallet,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -38,12 +44,15 @@ import { getApiClient } from "@/lib/api/browser";
 
 export const PARTNER_ROLE = "partner";
 
-/** Every signed-in destination, in the order a Partner meets them. */
+/** Every signed-in destination, in the order they appear in the bottom tab bar. */
 const NAV = [
-  { href: "/dashboard", label: "Home" },
-  { href: "/offers", label: "Offers" },
-  { href: "/availability", label: "Availability" },
-  { href: "/apply", label: "Application" },
+  { href: "/dashboard", label: "Home", icon: Home },
+  { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/earnings", label: "Money", icon: Wallet },
+  // Was `/apply`, which opened the onboarding form. An application is a
+  // submission under review; a profile is the record of a person who works here,
+  // and the Account tab has to lead to the second one.
+  { href: "/profile", label: "You", icon: UserCircle },
 ] as const;
 
 function ShellMessage({ children }: { children: ReactNode }) {
@@ -222,9 +231,10 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <div className="flex min-h-screen flex-col">
+      {/* ---- Top bar ---- */}
+      <header className="sticky top-0 z-30 border-b border-line bg-surface">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <Link
             href="/dashboard"
             className="flex items-center gap-2 rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
@@ -232,62 +242,74 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             <Logo className="h-7 w-auto" />
             <span className="text-sm font-semibold text-text-secondary">Partner</span>
           </Link>
-          <div className="flex items-center gap-3">
-            <span data-numeric className="text-sm text-text-secondary">
-              {guard.user.phone_number}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => logout.mutate()}
-              loading={logout.isPending}
-              loadingLabel="Signing out"
-            >
-              Sign out
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => logout.mutate()}
+            loading={logout.isPending}
+            loadingLabel="Signing out"
+          >
+            Sign Out
+          </Button>
         </div>
-
-        <PartnerNav />
       </header>
 
+      {/* ---- Page content ---- */}
       <ShellContent>{children}</ShellContent>
+
+      {/* ---- Bottom tab bar ---- */}
+      <BottomTabBar />
     </div>
   );
 }
 
 /**
- * The signed-in navigation.
+ * The bottom tab bar navigation.
  *
- * Its own component so `usePathname` re-renders the strip rather than the whole
- * shell — and, with it, the offer inbox's poll — on every navigation.
+ * Fixed to the bottom of the viewport. Uses Lucide icons for visual clarity.
+ * The active tab gets a navy pill background with white text and icon; inactive
+ * tabs use muted text. All tabs are 44px minimum touch targets.
  */
-function PartnerNav() {
+function BottomTabBar() {
   const pathname = usePathname();
 
   return (
-    /* Horizontal and scrollable on a phone: four destinations that shrink to fit
-       become four unreadable ones. */
-    <nav aria-label="Partner" className="mx-auto max-w-3xl overflow-x-auto px-4 pb-2">
-      <ul className="flex list-none gap-1 p-0">
+    <nav
+      aria-label="Partner navigation"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
+    >
+      <ul className="mx-auto flex max-w-2xl list-none justify-around p-0">
         {NAV.map((item) => {
-          // `/apply/documents` is still the Application tab. Prefix matching, so
-          // a step page does not leave the whole strip looking unvisited.
           const isCurrent =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
+
           return (
-            <li key={item.href}>
+            <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
                 aria-current={isCurrent ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-control px-3 text-sm font-semibold",
-                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action",
+                  "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.625rem] font-semibold",
+                  "transition-colors duration-fast ease-out",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
                   isCurrent
-                    ? "bg-selected-surface text-text"
-                    : "text-text-secondary hover:bg-surface-hover hover:text-text",
+                    ? "text-action-secondary"
+                    : "text-text-muted hover:text-text-secondary",
                 )}
               >
+                <span
+                  className={cn(
+                    "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-fast",
+                    isCurrent ? "bg-selected-surface" : "",
+                  )}
+                >
+                  <Icon
+                    size={20}
+                    strokeWidth={isCurrent ? 2.5 : 2}
+                    aria-hidden
+                  />
+                </span>
                 {item.label}
               </Link>
             </li>
@@ -333,7 +355,7 @@ function ShellContent({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   return (
-    <div ref={contentRef} tabIndex={-1} className="outline-none">
+    <div ref={contentRef} tabIndex={-1} className="flex-1 pb-20 outline-none">
       {children}
     </div>
   );

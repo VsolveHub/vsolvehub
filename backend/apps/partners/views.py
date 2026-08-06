@@ -17,8 +17,8 @@ from apps.identity.models import AccessAuditEvent, User
 from apps.identity.services import record_access_event
 from apps.locations.serializers import PartnerServiceAreaOptionSerializer
 from apps.partners.exceptions import PartnerDomainError, PartnerSelfReviewError
-from apps.partners.models import PartnerDocument
-from apps.partners.permissions import IsOperationsUser
+from apps.partners.models import PartnerDocument, PartnerProfile
+from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import (
     applicant_service_areas,
     applicant_skills,
@@ -49,6 +49,7 @@ from apps.partners.serializers import (
     PartnerPresenceHeartbeatSerializer,
     PartnerPresenceSerializer,
     PartnerPresenceSessionRequestSerializer,
+    PartnerProfileSerializer,
     PartnerScheduleSerializer,
     PartnerScheduleUpdateSerializer,
     PartnerSkillOptionSerializer,
@@ -147,14 +148,37 @@ class RequiredPartnerConsentListView(APIView):
 
 
 class PartnerMeView(APIView):
-    permission_classes = (IsAuthenticated,)
+    """The signed-in Partner's own profile.
+
+    This used to return the *application* — byte-for-byte the same payload as
+    `GET /partner/application/` — which is why "Profile" in the app opened a
+    half-finished onboarding form. An application is a submission under review; a
+    profile is the standing record of someone who works here.
+
+    404 while no profile exists yet, because an applicant who has not been set up
+    genuinely has none, and inventing an empty one would make the app render a
+    person who is not there.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
 
     @extend_schema(
         tags=["Partner"],
-        responses={200: PartnerApplicationSerializer, 404: ApiErrorSerializer},
+        responses={200: PartnerProfileSerializer, 404: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
-        return _application_response(cast(User, request.user))
+        profile = (
+            PartnerProfile.objects.select_related("user", "application")
+            .prefetch_related(
+                "service_links__variant__service",
+                "service_area_links__service_area",
+            )
+            .filter(user=cast(User, request.user))
+            .first()
+        )
+        if profile is None:
+            raise NotFound("No Partner profile exists for this account.")
+        return Response(PartnerProfileSerializer(profile).data)
 
 
 class PartnerApplicationView(APIView):

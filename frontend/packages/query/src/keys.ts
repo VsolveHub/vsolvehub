@@ -180,6 +180,14 @@ export const queryKeys = {
   partnerWork: {
     all: ["partner-work"] as const,
     visit: (bookingId: string) => [...queryKeys.partnerWork.all, "visit", bookingId] as const,
+    /**
+     * The Partner's own job list, by shelf (contract 1.19.0).
+     *
+     * The bucket is in the key because "what do I have to do now" and "what did I
+     * finish" are different questions, and one shared cache entry would answer
+     * one with the other — the same reasoning as the Operations queues.
+     */
+    bookings: (bucket: string) => [...queryKeys.partnerWork.all, "bookings", bucket] as const,
   },
 
   /**
@@ -279,7 +287,14 @@ export const queryKeys = {
   /** The signed-in Partner's own application, eligibility and schedule. */
   partner: {
     all: ["partner"] as const,
-    /** Profile, approval state and current eligibility. */
+    /**
+     * The Partner's own standing profile — who they are, not the form they
+     * filled in to join.
+     *
+     * Distinct from `application()` on purpose. `GET /partner/me/` used to return
+     * the application byte-for-byte, and one shared key would re-create exactly
+     * the confusion that made "Profile" open a half-finished onboarding draft.
+     */
     me: () => [...queryKeys.partner.all, "me"] as const,
     /**
      * The application, including its documents and transition history.

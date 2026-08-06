@@ -309,6 +309,21 @@ class StartOtpSerializer(serializers.Serializer[dict[str, Any]]):
 # --------------------------------------------------------------------------------------------
 
 
+class PartnerBookingListQuerySerializer(serializers.Serializer[dict[str, object]]):
+    """Which shelf of the Partner's work to read.
+
+    Buckets rather than raw statuses, because a Partner is answering "what do I
+    have to do now?", not "which of eleven states is this row in". The mapping
+    lives on the server so the app cannot invent a bucket the queue does not
+    honour.
+    """
+
+    bucket = serializers.ChoiceField(
+        choices=("active", "completed", "cancelled"),
+        required=False,
+    )
+
+
 class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
     """The same visit, as the Partner assigned to it sees it.
 
@@ -370,6 +385,15 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
 # --------------------------------------------------------------------------------------------
 # Operations projection
 # --------------------------------------------------------------------------------------------
+
+
+class PartnerBookingPageSerializer(serializers.Serializer[dict[str, object]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = PartnerBookingSerializer(many=True)
+    # An empty shelf carries no row to calibrate a countdown from, so the page
+    # publishes the server instant too — the same reason the offer inbox does.
+    server_now = serializers.DateTimeField()
 
 
 class OperationsBookingSerializer(serializers.ModelSerializer[Booking]):

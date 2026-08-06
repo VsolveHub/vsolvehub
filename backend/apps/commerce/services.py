@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.assignments.models import Reservation
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
+from apps.carts.services import clear_booked_cart_items
 from apps.commerce.models import (
     Booking,
     DocumentSequence,
@@ -490,6 +491,10 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
     checkout.status = CheckoutSession.Status.COMPLETED
     checkout.version += 1
     checkout.save(update_fields=("status", "version"))
+    # The cart has become a booking. Only the items this quote actually booked are
+    # removed — anything added since, or left behind because it could not be
+    # planned, is still work the Customer wants.
+    clear_booked_cart_items(quote=checkout.quote)
     _issue_document(
         order=order,
         attempt=attempt,

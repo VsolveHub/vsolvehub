@@ -10,6 +10,7 @@ import { ReadinessChecklist } from "@/features/application/view/readiness-checkl
 import { ApplicationStatusBanner } from "@/features/application/view/status-banner";
 import { OfferInbox } from "@/features/offers/view/offer-inbox";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
+import { TodayStrip } from "@/features/work/view/today-strip";
 import { getApiClient } from "@/lib/api/browser";
 
 import { PARTNER_ROLE, SwitchToPartner } from "../partner-shell";
@@ -30,13 +31,13 @@ const PRIMARY_LINK =
   "inline-flex min-h-12 items-center rounded-control bg-action px-7 font-semibold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
 
 const QUIET_LINK =
-  "inline-flex min-h-11 items-center font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
+  "inline-flex min-h-11 items-center text-sm font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action";
 
 function Home({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
       <h1 className="text-2xl font-bold text-text">{title}</h1>
-      <div className="mt-6 flex flex-col gap-6">{children}</div>
+      <div className="mt-5 flex flex-col gap-5">{children}</div>
     </main>
   );
 }
@@ -103,17 +104,25 @@ export function DashboardHome() {
         {guard.activeRole === PARTNER_ROLE ? (
           <>
             <section>
-              <h2 className="sr-only">Offers</h2>
-              <OfferInbox />
-            </section>
-
-            <section className="border-t border-line pt-6">
               <PartnerPresence />
-              <p className="mt-3">
+              <p className="mt-2 text-right">
                 <Link href="/availability" className={QUIET_LINK}>
-                  Set the hours you work
+                  Set your working hours
                 </Link>
               </p>
+            </section>
+
+            {/* What they already agreed to, before what is newly on offer.
+                "What do I have to do now" outranks "is there more work". */}
+            <div className="border-t border-line pt-5">
+              <TodayStrip />
+            </div>
+
+            <section className="border-t border-line pt-5">
+              <h2 className="text-base font-bold text-text">New offers</h2>
+              <div className="mt-3">
+                <OfferInbox />
+              </div>
             </section>
           </>
         ) : (

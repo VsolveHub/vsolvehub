@@ -467,6 +467,68 @@ def remove_cart_item(
     return locked_cart
 
 
+def clear_booked_cart_items(*, quote: Quote) -> Cart | None:
+    """Removes exactly the items this quote turned into a booking.
+
+    ## Why only these items
+
+    A cart can outlive a checkout. Anything the Customer added after the quote was
+    priced, or anything the planner could not fit and they chose to leave behind,
+    is still work they want — emptying the whole cart would silently discard it.
+    The items are therefore read back from the quote's own plan units rather than
+    from the cart, so what is removed is precisely what was paid for.
+
+    ## Why at capture and not at checkout
+
+    A Booking Group can still expire or fail to find a Partner, and its recovery
+    action sends the Customer back to the cart to arrange it differently. If the
+    items were cleared when the group was created, that recovery would hand them
+    an empty cart and nothing to re-plan. Once payment is captured the booking is
+    real, and the cart has genuinely become something else.
+
+    Idempotent: `removed_at__isnull=True` means a replayed capture removes nothing
+    a second time and leaves the cart version alone.
+    """
+    booked_item_ids = {
+        line.plan_unit_item.cart_item_id
+        for unit in quote.units.all()
+        for line in unit.lines.all()
+        if line.plan_unit_item is not None and line.plan_unit_item.cart_item_id is not None
+    }
+    if not booked_item_ids:
+        return None
+
+    cart_id = (
+        Quote.objects.filter(id=quote.id)
+        .values_list("fulfilment_plan__plan_set__cart_id", flat=True)
+        .first()
+    )
+    if cart_id is None:
+        return None
+
+    locked_cart = Cart.objects.select_for_update().get(id=cart_id)
+    now = timezone.now()
+    removed = 0
+    for item in CartItem.objects.select_for_update().filter(
+        cart=locked_cart,
+        id__in=booked_item_ids,
+        removed_at__isnull=True,
+    ):
+        item.version += 1
+        item.removed_at = now
+        item.save(update_fields=("version", "removed_at", "updated_at"))
+        removed += 1
+    if removed == 0:
+        return locked_cart
+
+    locked_cart.version += 1
+    locked_cart.save(update_fields=("version", "updated_at"))
+    # Plans and quotes derived from the previous cart version no longer describe
+    # what is in it, and the Customer must not be shown one.
+    _invalidate_cart_outputs(cart=locked_cart)
+    return locked_cart
+
+
 def _validate_scope(*, schema: dict[str, object], scope: dict[str, object]) -> None:
     questions = schema.get("questions")
     if not isinstance(questions, list):

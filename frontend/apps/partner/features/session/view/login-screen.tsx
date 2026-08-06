@@ -3,6 +3,8 @@
 import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, useOtpFlow } from "@vsolve/query";
 import { Card, ErrorState, Logo, OtpForm, Spinner } from "@vsolve/ui";
+import { HelpCircle } from "lucide-react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
@@ -94,37 +96,64 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-10">
-      <Card className="p-6 sm:p-8">
-        <Logo className="h-8 w-auto" />
-        <h1 className="mt-6 text-2xl font-bold text-text">Partner log in</h1>
-        <p className="mt-2 text-sm leading-6 text-text-secondary">
-          Use the mobile number your Partner account is on. We will text you a
-          code — there is no password.
-        </p>
-
-        <div className="mt-6">
-          <OtpForm
-            {...flow}
-            heading="Your mobile number"
-            headingLevel={2}
-            description="We will text you a code. There is no password."
-            verifyLabel="Verify and continue"
-            footer={
-              <p>
-                Not a Partner yet?{" "}
-                <a
-                  href="/apply"
-                  className="font-semibold text-info-text underline-offset-4 hover:underline"
-                >
-                  Apply to join
-                </a>{" "}
-                — it takes a few minutes and does not commit you to anything.
-              </p>
-            }
+    <main className="mx-auto w-full max-w-md px-4 py-6">
+      {/* Hero illustration card */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-center bg-surface px-6 pt-6">
+          {/* `next/image` rather than a bare tag: this is the largest paint on
+              the first screen a Partner ever sees, often on a slow connection,
+              and it is the one image worth serving at the right size. */}
+          <Image
+            src="/image.png"
+            alt="Partner tradespeople — weekly payouts, flexible hours, transparent earnings"
+            width={280}
+            height={280}
+            priority
+            className="vsh-hero-slideup mx-auto h-auto w-full max-w-[280px]"
           />
         </div>
+
+        {/* Orange accent divider */}
+        <div className="h-[3px] bg-action" />
+
+        {/* OTP form */}
+        <div className="p-6 sm:p-8">
+          <Logo className="h-8 w-auto" />
+          <h1 className="mt-6 text-2xl font-bold text-text">Partner log in</h1>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            Use the mobile number your Partner account is on. We will text you a
+            code — there is no password.
+          </p>
+
+          <div className="mt-6">
+            <OtpForm
+              {...flow}
+              heading="Your mobile number"
+              headingLevel={2}
+              description="We will text you a code. There is no password."
+              verifyLabel="Verify and continue"
+              footer={
+                <p>
+                  Not a Partner yet?{" "}
+                  <a
+                    href="/apply"
+                    className="font-semibold text-info-text underline-offset-4 hover:underline"
+                  >
+                    Apply to join
+                  </a>{" "}
+                  — it takes a few minutes and does not commit you to anything.
+                </p>
+              }
+            />
+          </div>
+        </div>
       </Card>
+
+      {/* Help link */}
+      <p className="mt-6 flex items-center justify-center gap-1.5 text-sm text-text-muted">
+        <HelpCircle size={16} aria-hidden />
+        Need help logging in?
+      </p>
     </main>
   );
 }

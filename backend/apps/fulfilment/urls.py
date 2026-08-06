@@ -34,6 +34,7 @@ from apps.fulfilment.views import (
     OperationsRecoverBookingView,
     PartnerAbortView,
     PartnerArrivedView,
+    PartnerBookingCollectionView,
     PartnerBookingDetailView,
     PartnerContactAttemptView,
     PartnerCustomerUnavailableView,
@@ -101,6 +102,10 @@ urlpatterns = [
         name="booked-group-address",
     ),
     # Partner — the physical work
+    path(
+        "partner/bookings/",
+        PartnerBookingCollectionView.as_view(),
+    ),
     path(
         "partner/bookings/<uuid:booking_id>/",
         PartnerBookingDetailView.as_view(),

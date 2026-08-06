@@ -335,3 +335,37 @@ export function useProposeAmendment() {
     retry: false,
   });
 }
+
+/* -------------------------------------------------------------------------
+   The job list (contract 1.19.0)
+   ------------------------------------------------------------------------- */
+
+/** The shelves a Partner actually thinks in. Django owns the status mapping. */
+export type JobBucket = "active" | "completed" | "cancelled";
+
+/**
+ * The Partner's own work, as a list.
+ *
+ * This did not exist before 1.19.0, which is why the app had no job list: the
+ * only published read was `GET /partner/bookings/{id}/`, and there was no screen
+ * that could produce an id to call it with.
+ *
+ * Buckets rather than raw statuses. Eleven `BookingStatusEnum` values are a
+ * domain detail; "what do I have to do", "what did I finish" and "what fell
+ * through" are the three questions a Partner actually asks. The mapping is the
+ * server's, so the app cannot invent a shelf the queue does not honour.
+ */
+export function usePartnerJobs(bucket: JobBucket) {
+  return useQuery({
+    queryKey: queryKeys.partnerWork.bookings(bucket),
+    queryFn: async () =>
+      (
+        await request(() =>
+          getApiClient().GET("/api/v1/partner/bookings/", {
+            params: { query: { bucket } },
+          }),
+        )
+      ).results,
+    ...EXPIRING_STATE,
+  });
+}

@@ -4324,6 +4324,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/bookings/:
+    get:
+      operationId: partner_booking_list
+      description: |-
+        The Partner's own work, as a list.
+
+        Published because the app previously had no way to ask "what jobs do I have?"
+        — only `GET /partner/bookings/{id}/`, which needs an id the Partner had no
+        screen to get one from.
+
+        Scoped to the caller's own profile and takes no `partner_id`: the safest
+        filter is the one a caller cannot supply, which is the same reasoning that
+        keeps `booking_group_id` off the Partner booking projection.
+      parameters:
+      - in: query
+        name: bucket
+        schema:
+          enum:
+          - active
+          - completed
+          - cancelled
+          type: string
+          minLength: 1
+        description: |-
+          * `active` - active
+          * `completed` - completed
+          * `cancelled` - cancelled
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
+      tags:
+      - Fulfilment
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBookingPage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/bookings/{booking_id}/:
     get:
       operationId: partner_booking_retrieve
@@ -5146,6 +5195,17 @@ paths:
   /api/v1/partner/me/:
     get:
       operationId: partner_me_retrieve
+      description: |-
+        The signed-in Partner's own profile.
+
+        This used to return the *application* — byte-for-byte the same payload as
+        `GET /partner/application/` — which is why "Profile" in the app opened a
+        half-finished onboarding form. An application is a submission under review; a
+        profile is the standing record of someone who works here.
+
+        404 while no profile exists yet, because an applicant who has not been set up
+        genuinely has none, and inventing an empty one would make the app render a
+        person who is not there.
       tags:
       - Partner
       security:
@@ -5155,7 +5215,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PartnerApplication'
+                $ref: '#/components/schemas/PartnerProfile'
           description: ''
         '404':
           content:
@@ -9704,6 +9764,29 @@ components:
       - status
       - version
       - work_tasks
+    PartnerBookingPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerBooking'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - next
+      - previous
+      - results
+      - server_now
     PartnerConsent:
       type: object
       properties:
@@ -10194,6 +10277,71 @@ components:
           format: uuid
       required:
       - session_id
+    PartnerProfile:
+      type: object
+      description: |-
+        Who the Partner is, as distinct from the form they filled in to join.
+
+        `GET /partner/me/` used to return the application, which is why the app had no
+        profile screen worth the name: opening "Profile" showed a half-finished
+        onboarding draft. An application is a *submission* with a review lifecycle; a
+        profile is a standing record of a person who works here. Those stop being the
+        same thing the moment onboarding is approved.
+
+        Carries what a Partner would expect to see about themselves and nothing about
+        anyone else: no reviewer, no internal review notes, no other Partner's areas.
+        `approval_status` is published because it decides whether they can work at
+        all, and a Partner is entitled to know that without reading it off a rejected
+        request.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        phone_number:
+          type: string
+          readOnly: true
+        biography:
+          type: string
+          readOnly: true
+        experience_years:
+          type: integer
+          readOnly: true
+        approval_status:
+          type: string
+          nullable: true
+          readOnly: true
+        skills:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        service_areas:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        member_since:
+          type: string
+          format: date-time
+          readOnly: true
+        has_payout_account:
+          type: boolean
+          readOnly: true
+      required:
+      - approval_status
+      - biography
+      - display_name
+      - experience_years
+      - has_payout_account
+      - id
+      - member_since
+      - phone_number
+      - service_areas
+      - skills
     PartnerSchedule:
       type: object
       properties:

@@ -21,14 +21,13 @@ export function OffersGate() {
   const isApproved = application.data?.status === "APPROVED";
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
       <h1 className="text-2xl font-bold text-text">Your offers</h1>
-      <p className="mt-2 text-sm leading-6 text-text-secondary">
-        Each offer is one visit. Accepting gives you two minutes to change your mind at no
-        cost.
+      <p className="mt-1.5 text-sm leading-6 text-text-secondary">
+        Each offer is one visit. Accepting gives you two minutes to change your mind.
       </p>
 
-      <div className="mt-6">
+      <div className="mt-5">
         {application.isPending ? (
           <p className="flex items-center gap-2 text-text-secondary">
             <Spinner size="sm" />

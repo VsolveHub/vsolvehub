@@ -1,6 +1,7 @@
 "use client";
 
 import { Spinner } from "@vsolve/ui";
+import { SlidersHorizontal } from "lucide-react";
 
 import { usePartnerApplication } from "@/features/application/queries";
 import { ApprovalRequired } from "@/features/application/view/approval-required";
@@ -21,13 +22,15 @@ export function PresenceGate() {
   const isApproved = application.data?.status === "APPROVED";
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-8">
-      <h1 className="text-2xl font-bold text-text">Your availability</h1>
-      <p className="mt-2 text-sm leading-6 text-text-secondary">
-        You are only offered work while you are online.
-      </p>
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-text">Availability</h1>
+        <span className="text-text-muted">
+          <SlidersHorizontal size={20} aria-hidden />
+        </span>
+      </div>
 
-      <div className="mt-6">
+      <div className="mt-5">
         {application.isPending ? (
           <p className="flex items-center gap-2 text-text-secondary">
             <Spinner size="sm" />
