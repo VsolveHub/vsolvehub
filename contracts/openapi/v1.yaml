@@ -2101,9 +2101,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OperationsCaseList'
+                $ref: '#/components/schemas/OperationsCasePage'
           description: ''
         '403':
           content:
@@ -3531,9 +3529,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PayoutBatchList'
+                $ref: '#/components/schemas/PayoutBatchPage'
           description: ''
         '403':
           content:
@@ -5064,9 +5060,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PartnerLedgerEntry'
+                $ref: '#/components/schemas/PartnerLedgerPage'
           description: ''
         '403':
           content:
@@ -8914,6 +8908,32 @@ components:
       - status
       - summary
       - version
+    OperationsCasePage:
+      type: object
+      description: |-
+        The paginated envelope the queue actually returns.
+
+        Declared explicitly because `responses={200: Serializer(many=True)}` publishes a bare array,
+        and the view returns `{next, previous, results}`. A generated client built from the array
+        shape reads `page.next` off an array and gets `undefined` — a contract that lies about its
+        own response, which is worse than one that omits it.
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCaseList'
+      required:
+      - next
+      - previous
+      - results
     OperationsCaseSeverityEnum:
       enum:
       - LOW
@@ -9938,6 +9958,25 @@ components:
       - net_paise
       - reason
       - status
+    PartnerLedgerPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerLedgerEntry'
+      required:
+      - next
+      - previous
+      - results
     PartnerPayoutAccount:
       type: object
       description: |-
@@ -10618,6 +10657,25 @@ components:
       - reference
       - status
       - total_paise
+    PayoutBatchPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutBatchList'
+      required:
+      - next
+      - previous
+      - results
     PayoutBatchStatusEnum:
       enum:
       - DRAFT

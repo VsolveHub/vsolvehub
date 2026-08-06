@@ -29,6 +29,7 @@ from apps.cases.serializers import (
     EscalateCaseRequestSerializer,
     OpenCaseRequestSerializer,
     OperationsCaseListSerializer,
+    OperationsCasePageSerializer,
     OperationsCaseSerializer,
     ResolveCaseRequestSerializer,
     VersionedCaseCommandSerializer,
@@ -93,7 +94,7 @@ class OperationsCaseListView(APIView):
             OpenApiParameter("overdue", bool, description="Only cases past their SLA deadline."),
             OpenApiParameter("cursor", str, description="Opaque page cursor."),
         ],
-        responses={200: OperationsCaseListSerializer(many=True), 403: ApiErrorSerializer},
+        responses={200: OperationsCasePageSerializer, 403: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
         queryset = OperationsCase.objects.all()

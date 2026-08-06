@@ -46,8 +46,10 @@ from apps.payouts.serializers import (
     LedgerAdjustmentRequestSerializer,
     PartnerBalanceSerializer,
     PartnerLedgerEntrySerializer,
+    PartnerLedgerPageSerializer,
     PartnerPayoutAccountSerializer,
     PayoutBatchListSerializer,
+    PayoutBatchPageSerializer,
     PayoutBatchSerializer,
     ProposePayoutBatchRequestSerializer,
     UnpayablePartnerSerializer,
@@ -136,7 +138,7 @@ class PartnerLedgerView(APIView):
         tags=[PARTNER_TAG],
         operation_id="partner_ledger_list",
         parameters=[OpenApiParameter("cursor", str, description="Opaque page cursor.")],
-        responses={200: PartnerLedgerEntrySerializer(many=True), 403: ApiErrorSerializer},
+        responses={200: PartnerLedgerPageSerializer, 403: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(cast(User, request.user))
@@ -197,7 +199,7 @@ class PayoutBatchListView(APIView):
             OpenApiParameter("status", str, description="Filter by batch status."),
             OpenApiParameter("cursor", str, description="Opaque page cursor."),
         ],
-        responses={200: PayoutBatchListSerializer(many=True), 403: ApiErrorSerializer},
+        responses={200: PayoutBatchPageSerializer, 403: ApiErrorSerializer},
     )
     def get(self, request: Request) -> Response:
         queryset = PayoutBatch.objects.all()

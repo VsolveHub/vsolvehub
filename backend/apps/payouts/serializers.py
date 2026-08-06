@@ -238,3 +238,15 @@ class UnpayablePartnerSerializer(serializers.Serializer[dict[str, Any]]):
     a Partner left out of a run without explanation is a support ticket waiting to happen."""
 
     partner_ids = serializers.ListField(child=serializers.UUIDField())
+
+
+class PayoutBatchPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = PayoutBatchListSerializer(many=True)
+
+
+class PartnerLedgerPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = PartnerLedgerEntrySerializer(many=True)

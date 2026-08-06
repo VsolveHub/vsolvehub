@@ -3,6 +3,7 @@
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.base import *
+from config.settings.guards import guard_per_host_sessions
 
 DEBUG = False
 
@@ -33,6 +34,10 @@ if "date" not in {header.strip().lower() for header in CORS_EXPOSE_HEADERS}:
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+
+guard_per_host_sessions(SESSION_COOKIE_DOMAIN, CSRF_COOKIE_DOMAIN)
+
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=3600)

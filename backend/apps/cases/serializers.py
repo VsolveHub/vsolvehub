@@ -154,3 +154,17 @@ class CaseNoteRequestSerializer(serializers.Serializer[dict[str, Any]]):
     #: Records that something was actually sent to a person, rather than an internal note. The
     #: distinction matters when reconstructing what Operations told whom, and when.
     is_communication = serializers.BooleanField(default=False)
+
+
+class OperationsCasePageSerializer(serializers.Serializer[dict[str, Any]]):
+    """The paginated envelope the queue actually returns.
+
+    Declared explicitly because `responses={200: Serializer(many=True)}` publishes a bare array,
+    and the view returns `{next, previous, results}`. A generated client built from the array
+    shape reads `page.next` off an array and gets `undefined` — a contract that lies about its
+    own response, which is worse than one that omits it.
+    """
+
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = OperationsCaseListSerializer(many=True)

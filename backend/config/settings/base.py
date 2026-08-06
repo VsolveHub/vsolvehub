@@ -208,8 +208,8 @@ SPECTACULAR_SETTINGS = {
         "common.schema.publish_parameter_enum_components",
     ],
     # Every choice set that shares a field name with another must be named here.
-    # Left to itself the generator resolves a collision by hashing â€” `Status7a2Enum`,
-    # `Kind0bfEnum` â€” and those names reach the published contract and the generated
+    # Left to itself the generator resolves a collision by hashing — `Status7a2Enum`,
+    # `Kind0bfEnum` — and those names reach the published contract and the generated
     # TypeScript client, where they mean nothing to a reader and change whenever an
     # unrelated model adds a choice.
     "ENUM_NAME_OVERRIDES": {
@@ -225,7 +225,7 @@ SPECTACULAR_SETTINGS = {
         "BookingStatusEnum": "apps.commerce.models.Booking.Status",
         # Named so the *existing* `DecisionEnum` keeps its name. Adding a second `decision`
         # field made the generator disambiguate both, silently renaming a component the admin
-        # app already imported â€” a published rename is a breaking change, and a new model is
+        # app already imported — a published rename is a breaking change, and a new model is
         # not a reason to inflict one on an existing consumer.
         "CompletionResponseDecisionEnum": "apps.fulfilment.models.CompletionResponse.Decision",
         # B9/B10 choice sets. Same reasoning as above — `status` and `kind` are the two most
@@ -250,6 +250,26 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
 
 SESSION_COOKIE_NAME = "vsolve_session"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
+
+# Per-host sessions, deliberately.
+#
+# The three apps are deployed on separate hosts — vsolvehub.com,
+# partner.vsolvehub.com and consolve.vsolvehub.com. Leaving the cookie domain
+# unset means the browser scopes each session cookie to the exact host that set
+# it, so signing in to the Customer site grants nothing on the Operations
+# console and vice versa.
+#
+# The alternative — `.vsolvehub.com` — would give one sign-in across all three,
+# and would also mean a stolen Customer session cookie is a valid credential
+# against the console that approves payouts. Convenience for a handful of staff
+# is not worth widening the blast radius of every Customer session on the
+# platform. Staff sign in to the console separately, which takes one OTP.
+#
+# `None` is Django's default; it is named here so that a future change is a
+# deliberate edit to a documented line rather than an env var somebody adds
+# without reading this.
+SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", default=None) or None
+CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", default=None) or None
 SESSION_SAVE_EVERY_REQUEST = False
 
 OTP_CODE_LENGTH = 6
@@ -286,7 +306,7 @@ RAZORPAYX_KEY_SECRET = env("RAZORPAYX_KEY_SECRET", default="")
 RAZORPAYX_ACCOUNT_NUMBER = env("RAZORPAYX_ACCOUNT_NUMBER", default="")
 RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 # Credentials are not activation. A deployment that merely *has* keys has not decided to start
-# paying people, and a wrong payout â€” unlike a wrong capture â€” cannot be refunded.
+# paying people, and a wrong payout — unlike a wrong capture — cannot be refunded.
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
 
