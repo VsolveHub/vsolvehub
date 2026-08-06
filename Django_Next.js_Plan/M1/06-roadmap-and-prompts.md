@@ -8,27 +8,31 @@ paste it cold and it will still work.
 
 ---
 
-## Parallel lanes in flight — 2026-08-05
+## Status — 2026-08-06: every step in this roadmap is complete
 
-Three lanes are running concurrently. **FE-10 landed first (`7b555e1`)**, which was the merge
-gate both other lanes were waiting on: `backend/config/settings/base.py` and
-`frontend/packages/query/src/keys.ts` are now committed and clean.
+**Steps 0 through 9 below have all landed.** The last of them, FE-12, committed as `8ec2fe9`; the
+branch merged to `main` the same day at OpenAPI **1.17.0** / 126 paths.
 
-| Lane | Owns | Must not touch |
-| --- | --- | --- |
-| **BE-OPS** (step 4) | `backend/config/celery.py`, `backend/config/settings/**`, `apps/foundation/**`, `docs/runbooks/**`, **creates `docs/adr/`** | `contracts/openapi/v1.yaml` — never regenerates. No serializer or view changes. |
-| **FE-16** (step 5) | `frontend/apps/admin/**`, a **separate** `operations` export block in `packages/query/src/keys.ts` | `apps/customer/**`, `apps/partner/**`, the `payment` and `booking` key blocks |
-| **FE-14** (step 2, active) | `frontend/apps/customer/app/**`, `apps/customer/features/session/**` | `apps/admin/**`, `packages/query/src/keys.ts` (uses existing `session` keys), all of `backend/**` |
+The only M1 stage still open is **S8 acceptance**, which this file does not carry a prompt for —
+its target is [`04-acceptance-and-cutover.md`](./04-acceptance-and-cutover.md), and its entry
+conditions are in [`task.md`](./task.md).
 
-Rules while these overlap:
+**The prompts below are kept as a record, not as a queue.** Read them for the reasoning that went
+into each task and for the standing rules in section 0, which still apply to any new work. Do not
+run them; several describe contracts that have since been superseded, and step 0 in particular
+would try to commit files that were committed days ago.
 
-- **Only one lane regenerates `v1.yaml` at a time.** BE-OPS changes no contract by design; FE-16
-  consumes contracts published since 1.8.0/1.9.0. So for now nothing but a future BE-07/BE-09 may
-  bump the version, and that lane must land alone.
-- `packages/query/src/keys.ts` takes **additive export blocks only**. Never reorder or reformat
-  the file — that turns a clean three-way merge into a conflict across every lane at once.
-- Regenerating `schema.d.ts` is additive for the payment paths. It removes nothing FE-16 reads.
-- Commit per lane, not per file. A lane that finishes green commits its own scope and nothing else.
+### What the parallel-lane rules taught, which is worth keeping
+
+Three lanes ran concurrently on 2026-08-05, and the coordination rules that made it work generalize:
+
+- **Only one lane regenerates `v1.yaml` at a time**, and that lane lands alone. A contract is a
+  shared serialized artifact; two agents regenerating it produce a conflict that neither can
+  resolve by reading the diff.
+- **`packages/query/src/keys.ts` takes additive export blocks only** — never reorder or reformat it.
+  Reformatting a shared file turns a clean three-way merge into a conflict across every lane at once.
+- **Commit per lane, not per file.** A lane that finishes green commits its own scope and nothing
+  else.
 
 ---
 
@@ -83,20 +87,30 @@ Claude cannot launch it.
 
 ## The order, and why
 
-| # | Task | Backend dep | Effort | Why here |
-| --- | --- | --- | --- | --- |
-| 0 | Commit FE-13 | none | minutes | 21 untracked files are one `git clean` from gone |
-| 1 | **FE-10 Customer payment** | **none — published since 1.10.0** | L | Your reported gap. Closes the money loop. Highest value in the repo. |
-| 2 | **FE-14 Customer shell** | none | M | Customers cannot click to cart, bookings or login today. FE-10's redirect return needs a real landing. |
-| 3 | BE-07 hardening | — | M | BE-09 trusts its outputs |
-| 4 | BE-OPS worker/beat + `docs/adr/` | — | M | BE-09/BE-10 both assume it; eager-Celery tests hide real failures |
-| 5 | FE-15 account · FE-16 ops surfaces | none | M each | Published contracts with no UI. Parallelisable. |
-| 6 | **BE-09 fulfilment (B8)** | — | **XL** | Largest remaining body. Everything post-payment is dark without it. |
-| 7 | FE-11 active booking + partner work | BE-09 | L | Unblocked by 6 |
-| 8 | BE-10 cases/ledger/payout | BE-09 | XL | Financial + operational closure |
-| 9 | FE-12 ops + partner earnings | BE-10 | L | M1 completion gate |
+All ten steps are **Done**. The dependency column is the part worth re-reading: it is why the order
+was what it was.
 
-Steps 1 and 2 have **zero backend dependency**. Start today.
+| # | Task | Backend dep | Effort | Why here | State |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Commit FE-13 | none | minutes | 21 untracked files are one `git clean` from gone | Done |
+| 1 | **FE-10 Customer payment** | **none — published since 1.10.0** | L | Your reported gap. Closes the money loop. Highest value in the repo. | Done; browser gate open |
+| 2 | **FE-14 Customer shell** | none | M | Customers cannot click to cart, bookings or login today. FE-10's redirect return needs a real landing. | Done |
+| 3 | BE-07 hardening | — | M | BE-09 trusts its outputs | Done |
+| 4 | BE-OPS worker/beat + `docs/adr/` | — | M | BE-09/BE-10 both assume it; eager-Celery tests hide real failures | Done |
+| 5 | FE-15 account · FE-16 ops surfaces | none | M each | Published contracts with no UI. Parallelisable. | Done |
+| 6 | **BE-09 fulfilment (B8)** | — | **XL** | Largest remaining body. Everything post-payment is dark without it. | Done, **plus BE-09-API** |
+| 7 | FE-11 active booking + partner work | BE-09 | L | Unblocked by 6 | Done |
+| 8 | BE-10 cases/ledger/payout | BE-09 | XL | Financial + operational closure | Done |
+| 9 | FE-12 ops + partner earnings | BE-10 | L | M1 completion gate | Done |
+
+**Step 6 needed splitting, and that was the plan's one real sequencing miss.** BE-09 was written as
+a single XL task, but a domain layer with no HTTP surface does not unblock step 7 — FE-11 could not
+start until the 26 paths were published as BE-09-API (1.16.0). The same shape repeated at step 8:
+B9/B10 domains landed, and FE-12 stayed blocked until S6d published them at 1.17.0.
+
+The lesson is now on the board as a named pattern: **publishing a command while withholding the key
+that invokes it**. It has happened three times — `checkout_id`, `booking_id`, and the dispatch
+commands. When a task says "implement X", ask separately when X becomes reachable.
 
 ---
 

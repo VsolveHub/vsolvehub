@@ -8,57 +8,61 @@ This file is **state**. For the ordered plan and a copy-pasteable prompt per tas
 
 ---
 
-## Audit snapshot — 2026-08-06
+## Audit snapshot — 2026-08-06 (end of S7, merged to `main`)
 
 | Check | Result |
 | --- | --- |
 | Committed OpenAPI | `contracts/openapi/v1.yaml` **1.17.0**, **126** published paths |
-| Backend apps | 16 installed. `fulfilment`, `cases`, `payouts` and `notifications` all added since 1.15.1, and all four are now published over HTTP. |
-| Backend `quality.cmd` | **Last verified green at 1.16.0**: 428 passed, branch-aware coverage 87.31%, no drift, contract matches. **Not re-run since `apps/cases`, `apps/payouts` and `apps/notifications` landed.** |
-| Frontend | typecheck 9/9, lint clean, **1138 tests across 76 files**, client current at 1.17.0 |
-| Playwright | **Still never run.** Not once against FE-10, FE-11, FE-13, FE-14, FE-15, FE-16, FE-17 or FE-18. |
-| Working tree | Committed through `8ec2fe9` |
+| Backend apps | 16 installed. `fulfilment`, `cases`, `payouts` and `notifications` all added since 1.15.1, and all four are published over HTTP. |
+| Backend `quality.cmd` | **Green at 1.17.0**: Ruff clean, strict MyPy clean on **180 files**, **535 passed** (3 integration deselected), branch-aware coverage **85.25%** against the 85% gate, no migration drift, generated OpenAPI validates and matches the committed contract. Runtime 13m25s. |
+| Frontend | typecheck **9/9**, lint clean, **1138 tests across 76 files**, client current at 1.17.0 |
+| Playwright | **133 green** on the Operations console + responsive harness. Customer payment, Customer visit and Partner jobs still have **none**. |
+| Working tree | Clean, merged to `main` |
+
+### The critical path is complete
+
+**S1 through S7 are done.** S8 — the 44 acceptance scenarios against authoritative Django — is the
+only stage of the M1 plan still open, and it is verification rather than building.
 
 ### Test status, corrected
 
-`apps/cases` and `apps/payouts` are **verified**. The 47 tests pass — 70 green across payouts,
-cases, notifications and session isolation — once run against an isolated `DATABASE_URL`. The
-first diagnosis recorded here ("cross-file fixture collisions") was wrong; the parallel session
-identified the real cause independently: two pytest processes sharing one `test_vsolve`
-database, producing `DuplicateDatabase` and `ObjectInUse` at setup.
+`apps/cases` and `apps/payouts` are **verified**: 70 green across payouts, cases, notifications and
+session isolation. The first diagnosis recorded here ("cross-file fixture collisions") was
+**wrong**; the parallel session identified the real cause independently — two pytest processes
+sharing one `test_vsolve` database, producing `DuplicateDatabase` and `ObjectInUse` at setup.
 
 **Run the backend suite with a distinct `DATABASE_URL` when another session is working** — e.g.
 `…/vsolve_lane1`. This is now the standing instruction, not a workaround.
 
-`apps/notifications` has 19 tests. Sessions have 6. Ruff and strict MyPy are clean across
-everything except one untracked in-flight file owned by the parallel session
-(`seed_console_demo_data.py`).
+### Defects caught by verification rather than by writing code
 
-### What this snapshot corrects
+Six now, and they cluster. Recording them because the pattern predicts where to look next.
 
-Four large pieces of work had landed and were sitting uncommitted, so every status line below them
-was stale:
-
-1. **`apps/fulfilment` — the whole B8 domain layer.** 12 models, ~3,100 LOC, 126 tests. Complete
-   and green; **no HTTP surface**, by design (see BE-09-API).
-2. **BE-07 dispatch hardening.** Ranking provenance, `DispatchCommandAudit`,
-   revoke/release/recover with real-PostgreSQL races. OpenAPI 1.15.x.
-3. **FE-15 + FE-16.** Customer account surfaces and the four Operations consoles.
-4. **BE-OPS.** `docs/adr/` (6 ADRs), `docs/runbooks/` (5), outbox recovery sweep, worker/beat
-   scripts, real-infrastructure suite.
-
-### Two defects that shipped in that work, both now fixed
+**Guards that were never run red:**
 
 - **The Operations shell did not compile.** `operations-shell.tsx` was missing its `Link` and
   `usePathname` imports, and `WorkspaceNav` was written but never rendered — so `admin` failed
-  typecheck and lint, and the four new `/operations/*` routes were reachable only by typed URL.
-- **FE-15's privacy guard failed on the file that was correct.** The log rule counted
+  typecheck and lint, and the four `/operations/*` routes were reachable only by typed URL.
+- **FE-15's privacy guard failed the file that was correct.** The log rule counted
   `console.error`'s own name, and the tag `"[account-error-boundary]"`, as mentions of the error
   object. It now scans only a call's arguments with quoted literals stripped, and was verified red
   against a deliberate leak before being trusted.
+- **A frontend test typechecked green only because turbo replayed a cache.** `role-selection.test.ts`
+  cast its fixture `as never` and then spread it, which is illegal. A cold run failed. Typing it
+  properly also revealed the fixture never had the `full_name`/`email` the contract declares —
+  the cast was hiding a shape mismatch. **A cached gate is not a gate.**
 
-In both cases the production code was right and the guard was wrong. Worth remembering: a guard
-that has never been run red is not evidence.
+**Doors published without their handles** — three occurrences of one mistake:
+
+- `checkout_id` on `BookingGroup` (proposal 0011): `recovery_action` said `PAYMENT_REQUIRED` and
+  the command it pointed at needed an id the projection withheld.
+- `booking_id` on `FulfilmentUnit` (1.16.0): same shape, discovered while wiring FE-11.
+- The dispatch commands (1.15.0): published, with no caller anywhere.
+
+**A list that could not return its first page:** `StrictCursorPagination` reads `ordering` from
+itself, DRF defaults it to `-created`, and none of `OperationsCase`, `PartnerLedgerEntry` or
+`PayoutBatch` has that field — so three list endpoints died in paginator setup. Found only by
+running them.
 
 ---
 
@@ -106,18 +110,20 @@ reconciliation, outbox replay, queue outage, stuck command).
 120s undo, Commit now, stable-key idempotent replay, server-clock countdowns), `/login` +
 `/dashboard` + shell (FE-13; `partner-shell.e2e.ts` never run).
 `/jobs/[bookingId]` is the FE-11 work surface: en route → arrived → start OTP → per-task
-completion report, plus abort and release with reason. **No earnings screen** — that needs
-BE-10's ledger API.
+completion report, plus abort and release with reason. `/earnings` is the FE-12 ledger view:
+balance, per-entry calculation snapshot, and the masked payout account with its
+`is_payable_now` explanation.
 
-**Operations (`apps/admin`)** — `/`, `/reviews`, `/operations/{compatibility-rules,
-manual-offers,assisted-checkouts,partner-availability,dispatch}` and `/finance` (FE-16, FE-17,
-FE-18), all now with tests. No UI for cases, ledger or payouts — those need BE-10's API first.
+**Operations (`apps/admin`)** — `/`, `/reviews`, `/finance`, and
+`/operations/{compatibility-rules,manual-offers,assisted-checkouts,partner-availability,dispatch,
+cases,payouts,kill-switches}` (FE-16, FE-17, FE-18, FE-12), all reachable from the nav and all
+with tests.
 
 ### Shared packages
 
-`@vsolve/api-client` (generated **1.16.0**, errors, idempotency, server-clock), `@vsolve/query`
-(auth guard, OTP, session, cursor, polling, countdown, error presentation, key factory),
-`@vsolve/ui`, `@vsolve/config`, `@vsolve/testing`.
+`@vsolve/api-client` (generated **1.17.0**, errors, idempotency, server-clock), `@vsolve/query`
+(auth guard, OTP, session, cursor, polling, countdown, error presentation, key factory,
+per-host role selection), `@vsolve/ui`, `@vsolve/config`, `@vsolve/testing`.
 
 ---
 
@@ -169,7 +175,7 @@ is FE-13 here.** The brief's content is correct; only its ID is wrong.
 | BE-08 | Done; live activation gated | — | Group payment allocations, Razorpay/fake provider boundaries, monotonic webhook reduction, payment/refund reconciliation, unit refunds, immutable invoice/credit-note retrieval (1.10.0). | Duplicate/out-of-order webhooks, redirect loss, hold/capture races, amount mismatch and failed refunds converge safely. **Production stays fail-closed until Razorpay credentials, durable worker/beat deployment and CA/legal approval are supplied.** |
 | BE-09 | **Done** | — | Per-unit B8 fulfilment commands, 126 domain tests plus real-PostgreSQL group races, one money path through `commerce.Refund`. | Domain layer green; the seven open review findings closed in S3. |
 | **BE-09-API** | **Done** | — | **B8 published over HTTP as one release (OpenAPI 1.16.0, 26 new paths).** `/bookings/{id}/…`, `/partner/bookings/{id}/…` and `/operations/bookings/{id}/…` are three URL families with three projections — `booking_group_id` and `order_id` appear only on the Operations one, so a Partner has no identifier with which to ask about a sibling unit. Start OTP is split across two actors on purpose. Post-payment group cancel/reschedule/address are new paths; the pre-payment `cancel` is unchanged. | 18 API tests covering authorization, the existence oracle, idempotent replay, stale versions, projection scope and the full en-route→confirmed walk. **Unblocks FE-11.** |
-| BE-10 | **Partial** | Yes | **B9 domain is done.** `apps/cases` (OperationsCase + append-only events, nine kinds, team routing, SLA, required terminal results) and `apps/payouts` (immutable signed ledger, payout accounts with a 24h change-cooling window, Operations-reviewed batches with maker-checker in both the service and the schema). A dispute now holds the Partner's earning at `PENDING` and closing the case releases it — but only when no other open case holds the same booking. **Remaining:** RazorpayX adapter + sandbox submission, B10 notifications/kill-switches/metrics, and the HTTP surface for all of it. | Financial maker-checker and the double-reservation race pass, the latter with real threads against PostgreSQL. Provider ambiguity drills need the adapter first. |
+| BE-10 | **Done** | — | **B9 + B10, domain and HTTP (1.17.0, 18 paths).** `apps/cases` (nine kinds, team routing, SLA, required terminal results, append-only events), `apps/payouts` (immutable signed ledger, 24h account-change cooling, maker-checker in both the service and a `CheckConstraint`, RazorpayX adapter, reconciliation sweep), `apps/notifications` (intent/delivery split, kill switches as rows). A dispute holds the Partner's earning at `PENDING`; closing the case releases it, but only when no other open case holds the same booking. Metrics named and retention swept (S6c). | Financial maker-checker and the double-reservation race pass, the latter with real threads against PostgreSQL — the guarantee is a partial unique index, so the losing caller gets an `IntegrityError` rather than a silent duplicate. **Open, both external:** live RazorpayX sandbox submission (credentials) and notification provider delivery (MSG91/DLT). |
 | **BE-RANK** | **Not started** | Yes | Dispatch eligibility currently ignores travel buffers, area operating hours during matching and presence policy; order is a stable sort on Partner UUID. Explainability was added, the ranking was not. | A Partner is not offered a job they cannot physically reach, and the recorded `ranking_snapshot` names a real deciding factor. |
 | **BE-CAT** | **Not started** | Yes | B3 Operations lifecycle APIs: authorized, audited catalog / task-rate / pricing-policy / service-area management with effective-date and activation validation, plus range `ExclusionConstraint` overlap protection for simultaneously-effective rates (only plain `UniqueConstraint` exists today). | Two overlapping effective rates cannot both be active; activation and quote selection have concurrency tests. |
 | BE-OPS | **Done** | — | Worker/beat topology (`scripts/worker.*`, `scripts/beat.*`), outbox recovery sweep with lease/dead-letter, real-infrastructure suite (`tests/integration/`, `-m integration`), 5 runbooks and 6 ADRs. | Landed in `d3e1e6d`. The 3 integration tests are deselected from the default run by design and need `-m integration` against real Redis. |
@@ -194,14 +200,14 @@ runtime endpoint, DTO, price, deadline, role, identifier or success state may be
 | FE-08G | Done | — | Multi-item `/cart`, login merge, server plan comparison, group/unit quote, versioned cart-item removal against 1.13.0. | G21 Remove uses `POST …/remove/` with both versions, authoritative `setQueryData`, targeted invalidation, two-item and stale-version browser cases. |
 | FE-09 | Done | — | Customer `/bookings` list/detail recovery, unit-scoped Partner `/offers`, bounded visibility-aware polling, cursor `useInfiniteQuery`, stable offer-command idempotency, skewed-device clock proof. | G22 traversal, G23 lost-Accept same-key replay, G24/FE-09C server-clock proofs green under 1.13.0. |
 | **FE-10** | **Implemented; browser gate outstanding** | — | **The missing "Continue to Payment" — built 2026-08-05 against OpenAPI 1.14.0.** Required a backend contract fix first (proposal 0011, below). Routes `/bookings/[groupId]/pay` and `/receipt`; `features/payment/` with `model/outcome.ts` (phase machine), `model/provider-handoff.ts` (Razorpay SDK boundary), `queries.ts`. CTAs added to `group-detail.tsx` (gated on `recovery_action === "PAYMENT_REQUIRED"`) and `group-result.tsx` (whose stale "payment does not exist" comment is gone). | **34 new unit tests green**; typecheck 9/9, lint clean, customer build passes with both routes `ƒ` dynamic. Stable key per `checkout:version`; no mutation auto-retry; server-clock deadlines; SDK callbacks trigger a re-read and never a success claim. **Remaining: `e2e/payment.e2e.ts` browser acceptance (redirect loss, duplicate submission, expired reservation, ambiguous outcome) and `/security-review`.** |
-| **FE-13** | **Built, unverified, uncommitted** | — | **Partner signed-in shell** (`FE-11-partner-shell-brief.md`, mislabelled FE-11 there). `/login` route, `/dashboard` home, one `useAuthGuard` shell over offers/availability/apply, marketing→product entry, approved-Partner dead-end fixed. | Unit tests (`session/model/redirect.test.ts`, `presence-panel.test.tsx`), typecheck and lint are green in this audit. **`e2e/partner-shell.e2e.ts` has not been run here, and none of it is committed.** Run Playwright, then commit. |
+| **FE-13** | **Done; browser gate outstanding** | — | **Partner signed-in shell** (`FE-11-partner-shell-brief.md`, mislabelled FE-11 there). `/login` route, `/dashboard` home, one `useAuthGuard` shell over offers/availability/apply, marketing→product entry, approved-Partner dead-end fixed. Committed. | Unit tests (`session/model/redirect.test.ts`, `presence-panel.test.tsx`), typecheck and lint green. **`e2e/partner-shell.e2e.ts` has still never been run.** |
 | **FE-14** | **Done** | — | **Customer shell, root page and `/login` — built 2026-08-05.** `app/page.tsx` (the root used to 404), `app/login/page.tsx`, `features/session/view/{site-header,customer-shell,login-screen}.tsx`, and a session gate at `app/(flow)/bookings/layout.tsx`. `safeNextPath` moved to `@vsolve/query` rather than copied — an open-redirect guard should have one implementation. | 7 header tests + 351 customer tests green; typecheck 9/9, lint clean; build shows `/` and `/login` live and both new routes reachable. **Correction to the original brief: the gate covers `/bookings/**` only.** Gating `/cart` would have been wrong — the anonymous cart is a deliberate product surface and the login-merge flow exists to serve it. The booking workspace's inline login interrupt is preserved, not duplicated. |
 | **FE-15** | **Done** | — | **Customer account surfaces** — `/account/{addresses,messages,privacy,sessions}` are live, and the storage/log/URL privacy boundary is enforced by a source scanner that has been verified red against a deliberate leak. | **Remaining:** component tests for the address book, communication preferences, consent receipts and privacy requests; prove deletion is confirmed against server truth and never optimistic. |
 | **FE-16** | **Done** | — | **The four Operations consoles** — compatibility-rule maker-checker, assisted checkout, unit offers + reoffer, partner availability. Nav mounted 2026-08-05; before that the shell did not compile and the routes were reachable only by typed URL. | **Remaining: zero test files exist for any of the four features.** Needs maker-checker refusal, self-approval denial, assisted-checkout consent capture, reoffer and availability-edit coverage. |
 | **FE-17** | **Done** | — | **Operations dispatch recovery**: offer revoke, reservation release, unit recover, and the read-only dispatch explanation. Four published paths with no caller anywhere in the frontend. | Every command sends `expected_unit_version` and a stable `Idempotency-Key`; a stale read surfaces `dispatch_version_conflict` and refetches rather than retrying. |
 | **FE-18** | **Done** | — | **Finance console**: refund queue (`GET /finance/refunds/`), the reconcile command, and the `auth/finance/step-up/` gate in front of them. | No refund is reported successful before Django says so; a failed refund stays visibly in progress rather than resolving optimistically. |
 | FE-11 | **Done** | — | Customer visit surface (status vocabulary, start-code prompt, confirm/dispute with equal weight, task list) and Partner work surface (en route → arrived → OTP → report, abort, release with reason, per-task outcomes). Both poll only while the *server* can still move the visit. | 17 predicate tests pin which actions are offered and when polling stops. The `can*` helpers pick a screen and never permit a command — `ALLOWED_TRANSITIONS`, the fee ladder and the notice rule stay in Django. **Remaining:** browser E2E for reload/multi-tab/stale-version. |
-| FE-12 | Not started | **No — needs S6d, the B9/B10 HTTP surface** | Operations cases/timelines/kill switches/maker-checker and Partner ledger/payout screens. The domain exists; nothing is reachable over HTTP yet, so building against it would mean inventing DTOs. | Sensitive data masked by default; every reveal and financial action follows published authorization and audit references. |
+| FE-12 | **Done** | — | **Operations cases, payouts and kill switches, plus the Partner earnings view** — `/operations/{cases,payouts,kill-switches}` and `/earnings`, all in the nav. Built against 1.17.0, no invented DTOs. | The payout account is masked to `account_last4` and the provider fund-account id is not in the projection at all, so there is nothing to leak. Approve/pay carry the step-up; **cancel does not, deliberately** — the gate slows money leaving, and a stop button harder to press than the go button is backwards. `model/guards.test.ts` pins that a proposer cannot approve their own batch in the UI, the same rule PostgreSQL enforces underneath. |
 
 ---
 
@@ -250,25 +256,43 @@ S1–S5 are complete and committed. S6 is partly done. The table is the honest r
 | ~~S3~~ | Seven B8 review findings + group reschedule | **Done** 2026-08-06 (`87c3591`) |
 | ~~S4~~ | BE-09-API — B8 published as one release, OpenAPI 1.16.0 | **Done** 2026-08-06 (`d7c06ba`) |
 | ~~S5~~ | FE-11 Customer visit + Partner work surfaces | **Done** 2026-08-06 (`4d23843`) |
-| **S6a** | **B9 domain** — cases, ledger, payout batches, RazorpayX adapter | **Done** (`5b7c679`). 47 tests written, **not verified green together** — cross-file fixture collisions in the shared booked-group helper. |
-| **S6b** | **B10 domain** — notification intent/delivery, kill switches | **Done** (`a73c14c`). **No tests written.** |
+| ~~S6a~~ | **B9 domain** — cases, ledger, payout batches, RazorpayX adapter | **Done** (`5b7c679`). Verified: 47 tests green on an isolated `DATABASE_URL`. The "cross-file fixture collisions" diagnosis was wrong — see the corrected test-status note above. |
+| ~~S6b~~ | **B10 domain** — notification intent/delivery, kill switches | **Done** (`a73c14c`). 19 tests. |
 | ~~S6c~~ | Metric names + retention sweeps | **Done** (`c279243`). `common/observability/metrics.py` names every counter the plan asks for; retention sweeps expired OTP challenges, sessions and audit events on separate horizons. Consent receipts are deliberately never swept. **Alerting on those metrics is still a deployment task, not a code one.** |
 | ~~S6d~~ | The HTTP surface for B9/B10 | **Done** (`466aa55`). 18 paths in OpenAPI **1.17.0**. Payout approve/pay behind `HasRecentOperationsStepUp`; cancel deliberately not. `HasRecentFinanceStepUp` deleted. |
 | ~~S7~~ | **FE-12** | **Done** (`8ec2fe9`). `/operations/{cases,payouts,kill-switches}` and Partner `/earnings`, all reachable from the nav. |
-| **S8** | **M1 acceptance** — the 44 scenarios plus the concurrency list, against authoritative Django, then the cutover checklist. **This is the only stage left.** | Unblocked. Needs the test debt below cleared first — running acceptance on an unverified base proves nothing. |
+| ~~S7b~~ | Per-host sessions, role-picker removal, demo seed data | **Done** (`2e8e7ee`, `31b319b`, `b76ed70`). See the three-host section below. |
+| **S8** | **M1 acceptance** — the 44 scenarios plus the concurrency list, against authoritative Django, then the cutover checklist. **This is the only stage left.** | Unblocked. Clear the two-item entry list above first — running acceptance on an unverified base proves nothing. |
 
 ### What is still unproven
 
-Two things, both verification rather than building:
+Two things, both verification rather than building. **This is the S8 entry list** — running
+acceptance on an unverified base proves nothing, so clear these first.
 
-1. **No tests on the 18 new 1.17.0 API paths.** The domain layers underneath them are covered
-   (70 tests); the views are not. `tests/fulfilment/test_fulfilment_api.py` is the pattern to
-   follow — authorization, the existence oracle, idempotent replay, stale versions and
-   projection scope.
-2. **Playwright has never run against FE-10 through FE-15, or FE-11's visit and job surfaces.**
-   The parallel session added an `operations-shell` project and got 133 green, which is the
-   first browser coverage the console has had. Customer payment, Customer visit tracking and
-   Partner jobs still have none.
+1. **API tests for the 1.17.0 paths are thin.** `tests/payouts/test_payout_api.py` and
+   `tests/cases/test_cases_api.py` exist and cover the shapes that matter most — partner-scoped
+   reads, the masked account, batch envelopes, the unpayable-partners explanation, refusal of an
+   adjustment without a step-up, and the reconciliation sweep. The kill-switch board and several
+   case commands still have no view-level test. `tests/fulfilment/test_fulfilment_api.py` is the
+   pattern: authorization, the existence oracle, idempotent replay, stale versions, projection
+   scope.
+2. **Playwright covers the Operations console and nothing else.** 133 green there (the
+   `operations-shell` project plus the responsive harness). **Customer payment
+   (`payment.e2e.ts`), Customer visit tracking, Partner jobs and the Partner shell
+   (`partner-shell.e2e.ts`) have never been run in a browser.** These are the highest-value
+   remaining tests in the milestone: every one of them is a money or safety path.
+
+### Seeded demo data
+
+`python manage.py seed_console_demo_data` fills every Operations console from real domain
+services rather than fixture inserts — 10 cases (2 deliberately overdue), 10 payout runs spanning
+every state, 12 ledger entries, 3 kill switches, a populated review queue and 2 rule drafts. It
+is idempotent and re-runnable.
+
+Five real bugs were fixed in it before it produced usable data (`b76ed70`), including seeded
+dispatch stealing offers from live test partners, and stale reservations blocking re-runs.
+Compatibility rules are seeded as **DRAFT on purpose**: a seeder that approves its own rules
+would hide the maker-checker gate the console exists to exercise.
 
 ### Three-host deployment — decided and implemented
 

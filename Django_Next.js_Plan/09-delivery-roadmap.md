@@ -17,6 +17,12 @@ ownership—are introduced with their first use and extended compatibly.
 
 ## M1 — Scheduled A1 Technician foundation
 
+**Status as of 2026-08-06: built, not yet accepted.** Every scope line below is implemented and
+published at OpenAPI **1.17.0** (126 paths); the backend gate is green at 535 tests and the
+frontend at 1138. What remains is the launch gate itself — the 44 acceptance scenarios run
+end to end against authoritative Django, and browser coverage for the money and safety paths.
+That gate cannot be bypassed. See [M1/task.md](./M1/task.md).
+
 Purpose: prove honest multi-service task-priced planning and one-or-more A1 visits from discovery
 through allocated settlement.
 

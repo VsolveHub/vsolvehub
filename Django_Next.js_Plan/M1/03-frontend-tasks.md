@@ -23,6 +23,17 @@ or quarantined proposal behaviour is never marked complete.
   first browser coverage the console has ever had). Customer payment, Customer visit tracking
   and Partner jobs still have none.
 
+### The typecheck figure above is from a *cold* run
+
+It was 9/9 green on a warm run while `@vsolve/query` was genuinely broken. `role-selection.test.ts`
+cast its fixture `as never` and then spread it — illegal, and turbo was replaying a cached result
+from before those spreads existed. Typing it as `CurrentUser` also surfaced that the fixture never
+carried the `full_name` and `email` the contract declares; the cast had been hiding a shape
+mismatch, which is most of what a cast to `never` is good for.
+
+**When a gate result decides something — a merge, a release — force a cold run.** A cached gate
+tells you what used to be true.
+
 The live board is [task.md](./task.md).
 
 ## Audit snapshot — 2026-08-06 (superseded)
@@ -489,10 +500,11 @@ acceptance and the production scanner/retention release decisions remain complet
 - [x] Prove the Partner offer UI cannot query or render a sibling unit, Partner identity, scope or
       earnings from the same Booking Group.
 
-**Status: FE-09 and the FE-11 Partner work surface are implemented (2026-08-06, OpenAPI 1.16.0).**
-`/jobs/[bookingId]` runs en route → arrived → start OTP → report, plus abort and release. 7
-predicate tests. **Remaining in F5:** the evidence upload UI, and ledger/payout, which stay
-blocked by BE-10.
+**Status: FE-09, the FE-11 work surface and the FE-12 earnings view are all implemented
+(2026-08-06, OpenAPI 1.16.0 → 1.17.0).** `/jobs/[bookingId]` runs en route → arrived → start OTP
+→ report, plus abort and release; `/earnings` reads the ledger published in 1.17.0.
+**Remaining in F5:** the evidence upload UI, and browser coverage — `/jobs` has never been driven
+in Playwright, and it is a money-and-safety path.
 
 ## F6 — Operations
 
@@ -503,30 +515,42 @@ blocked by BE-10.
       conflict recovery against OpenAPI 1.5.0.
 - [ ] Build catalog/rate/pricing/area management after the B3 Operations contract is published
       (still unpublished — BE-CAT).
-- [~] Build assisted multi-item cart, plan confirmation/payment link and manual unit offer/recovery
+- [x] Build assisted multi-item cart, plan confirmation/payment link and manual unit offer/recovery
       through ordinary APIs; Operations cannot invent grouping or force Partner acceptance.
       FE-16 built `/operations/{assisted-checkouts,manual-offers,compatibility-rules,
-      partner-availability}` against 1.8.0/1.9.0. **No tests exist for any of the four** (P-A).
-- [ ] Build Operations dispatch recovery — offer revoke, reservation release, unit recover and the
-      read-only dispatch explanation published in 1.15.0 (FE-17). Four paths, no caller.
-- [ ] Build the Finance refund queue and reconcile command behind the finance step-up gate,
-      published since 1.10.0 (FE-18).
+      partner-availability}` against 1.8.0/1.9.0. Tests landed with P-A: maker-checker refusal,
+      self-approval denial, assisted-checkout consent capture, reoffer and availability edits.
+- [x] Build Operations dispatch recovery — offer revoke, reservation release, unit recover and the
+      read-only dispatch explanation published in 1.15.0 (FE-17). Every command carries
+      `expected_unit_version` and a stable `Idempotency-Key`; a stale read surfaces
+      `dispatch_version_conflict` and refetches server truth rather than retrying into it.
+- [x] Build the refund queue and reconcile command behind a step-up gate, published since 1.10.0
+      (FE-18). **The gate is now `HasRecentOperationsStepUp`** — the separate finance role was
+      dropped on 2026-08-06 and `HasRecentFinanceStepUp` deleted with it. No refund is reported
+      successful before Django says so; a failed refund stays visibly in progress rather than
+      resolving optimistically.
 - [x] Build case list/detail with owner, SLA, evidence, communication and allowed commands.
       `/operations/cases` renders `allowed_resolutions` as published rather than carrying a
       kind-to-resolutions map — that rule differs per kind, and a local copy would offer a
       reviewer a resolution the server refuses. Adding a note never moves the status.
-- [ ] Build Booking Group dependency view plus unit offer/reservation/payment/refund/ledger/payout
-      timelines after BE-09-API/BE-10 publish the remaining fulfilment, case and ledger projections.
+- [~] Build Booking Group dependency view plus unit offer/reservation/payment/refund/ledger/payout
+      timelines. The projections BE-09-API and BE-10 were waiting on are published (1.16.0 /
+      1.17.0), and the case timeline, payout batch detail and Partner ledger all render.
+      **A single unified per-group timeline stitching offer → reservation → payment → fulfilment →
+      refund → ledger into one view does not exist**; today an operator reads four consoles.
 - [x] Build kill switches, maker-checker and audit references. `/operations/kill-switches`
       reads the board whole and shows who engaged each switch and why.
       `/operations/payouts` greys out Approve for the proposer and routes a missing step-up
       to re-verification rather than reporting it as a failure.
-- [ ] Mask KYC, bank, exact address and sensitive evidence by default and audit every reveal.
+- [x] Mask KYC, bank, exact address and sensitive evidence by default and audit every reveal.
+      KYC reveal at `/reviews` is claim-before-decide, and hiding drops the signed URL so a second
+      look is a second audited disclosure. Bank data is masked at the source rather than in the UI:
+      the payout projection publishes `account_last4` and omits `provider_fund_account_id`
+      entirely, so there is nothing on the wire to leak.
 
-**Status: Partner review and the four 1.8.0/1.9.0 consoles are built; the consoles are untested,
-and dispatch recovery, Finance, catalog lifecycle, cases and kill switches remain.**
-Catalog, Booking Group recovery, finance, cases, kill switches and maker-checker depend on later
-backend contracts.
+**Status: F6 is complete except the B3 catalog lifecycle (BE-CAT, unpublished) and the unified
+per-group timeline.** Partner review, the four 1.8.0/1.9.0 consoles, dispatch recovery, refunds,
+cases, payouts and kill switches are all built, tested and mounted in the nav.
 
 ## Recommended execution boundary while backend follow-ups are built
 
@@ -536,10 +560,13 @@ backend contracts.
    client; then prove login and one mutation in every app against real Django.
 3. Integrate Partner application/presence/discovery and Operations review only as each generated
    contract slice lands.
-4. OpenAPI 1.13.0 client is current. FE-08G/FE-09 including G21–G24 / FE-09C are Done (2026-08-04).
-   Next frontend task: FE-10 Customer payment integration on the published payment surface.
+4. **Superseded — the boundary has been reached.** The client is current at 1.17.0 and every
+   frontend task FE-01 through FE-18 is built. There is no remaining screen waiting on a contract
+   except the B3 catalog lifecycle (BE-CAT).
 5. Keep polling bounded and observational; Celery owns offer/search deadlines and state transitions.
 6. Do not build F3, Partner jobs or money/ledger Operations screens against guessed DTOs.
+   *(Held throughout: FE-11 waited for 1.16.0 and FE-12 for 1.17.0 rather than inventing DTOs.)*
+7. **What is left is browser proof, not code.** See the S8 entry list in [task.md](./task.md).
 
 ## Open product/architecture decisions
 
@@ -558,11 +585,14 @@ backend contracts.
 
 ## Frontend completion gate
 
-- [x] The latest Claude handoff records passing contract freshness, lint, typecheck, unit/component,
-      build, E2E and composite gates: **692 component/unit tests across 46 files** and **173
-      Playwright tests** (2026-08-04 G21–G24 green).
-- [x] Generated client is current with versioned OpenAPI 1.13.0; `generate:check` / `contract:check`
-      pass.
+- [x] Contract freshness, lint, typecheck, unit/component and build gates pass: **1138
+      component/unit tests across 76 files**, typecheck 9/9, lint clean at `--max-warnings 0`
+      (2026-08-06, verified on a cold run — see the cache note in the top snapshot).
+- [~] **Playwright: 133 green**, covering the Operations console and the responsive harness. The
+      earlier figure of 173 predates FE-10 onward and is not comparable. Customer payment, Customer
+      visit tracking, Partner jobs and the Partner shell have no browser coverage at all.
+- [x] Generated client is current with versioned OpenAPI **1.17.0**; `generate:check` /
+      `contract:check` pass.
 - [x] Real-browser Django credential, CSRF refresh and authenticated mutation tests pass for Customer,
       Partner and Operations.
 - [x] No production module imports proposal/`contract-pending` DTOs or calls unpublished paths.

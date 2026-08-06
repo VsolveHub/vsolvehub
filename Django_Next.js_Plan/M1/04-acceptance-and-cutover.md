@@ -1,5 +1,36 @@
 # M1 Acceptance and Cutover
 
+## Where acceptance stands — 2026-08-06
+
+**None of the 44 scenarios below has been executed as a formal acceptance run.** This is S8, the
+only stage of the M1 plan still open, and the distinction it turns on is worth stating plainly:
+
+- **Covered by automated tests** — most scenarios have a backend test asserting the invariant they
+  describe. Scenario 23 ("two payout batches cannot reserve/pay one ledger entry twice") is proved
+  twice, once through the command path and once with real threads against PostgreSQL. That is
+  strong evidence the *rule* holds.
+- **Not the same as accepted** — an acceptance run drives the scenario end to end through the
+  deployed surface, as the actor, against authoritative Django. A unit test proving the ledger
+  cannot double-reserve does not prove an operator can complete a payout run in the console.
+
+The **concurrency acceptance list is in good shape**: every line of it has a real-PostgreSQL test
+with real threads, which is the form that list needs. The **end-to-end list is the gap**, and it
+is a browser gap rather than a backend one.
+
+### What to clear before starting S8
+
+Running acceptance on an unverified base proves nothing. Two items, both listed in
+[task.md](./task.md):
+
+1. View-level tests for the remaining 1.17.0 paths (the kill-switch board, several case commands).
+2. **Playwright on the money and safety paths.** 133 tests currently cover the Operations console
+   and the responsive harness. Customer payment, Customer visit tracking, Partner jobs and the
+   Partner shell have none — and scenarios 8, 9, 10, 13, 18, 19, 20 and 21 all live there.
+
+Demo data for the Operations scenarios is available: `python manage.py seed_console_demo_data`
+fills every console through real domain services, including two deliberately SLA-breached cases
+and payout runs in every state.
+
 ## Required end-to-end scenarios
 
 1. Logged-out Customer completes a multi-service Scheduled A1 Booking Group without losing cart,
@@ -93,6 +124,31 @@
 Exactly one valid transition wins. Losers receive current state and a safe recovery action.
 
 ## Production readiness
+
+### Three-host deployment
+
+The apps deploy to three origins: `vsolvehub.com` (Customer), `partner.vsolvehub.com` (Partner)
+and `consolve.vsolvehub.com` (Operations).
+
+- **Sessions are per-host and production refuses to start otherwise.** `SESSION_COOKIE_DOMAIN` and
+  `CSRF_COOKIE_DOMAIN` stay unset, so the browser scopes each session cookie to the exact host that
+  issued it. A shared `.vsolvehub.com` cookie would make a stolen Customer session a valid
+  credential against the console that approves payouts. This is refused at startup rather than
+  documented as a warning, because it is a one-line change somebody makes for a good reason —
+  giving staff a single sign-in — and it breaks nothing visibly when they do.
+  `config/settings/guards.py` holds the check so it is testable without executing a whole settings
+  module.
+- **`CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` must list all three origins.**
+  Credentialed CORS is fail-closed, so an unlisted origin gets nothing at all. Production also
+  refuses to start if the CORS list is not a subset of the CSRF list, or if any origin is not
+  HTTPS.
+- **`DJANGO_ALLOWED_HOSTS`** must name the API host.
+- **No role picker.** Each app selects its own role, because the domain *is* the role. This is not
+  a convenience: Django re-grants `customer` on every login and session creation takes the
+  alphabetically first grant, so `customer` sorts ahead of both `operations` and `partner` and
+  every staff and Partner sign-in used to land on a picker.
+
+### Remaining readiness items
 
 - The [frozen M1 configuration](./05-initial-configuration.md) is loaded, versioned and verified; live
   payment, SMS, payout and storage credentials/configuration are reviewed without entering secrets in

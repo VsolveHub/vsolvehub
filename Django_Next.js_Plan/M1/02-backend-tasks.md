@@ -8,6 +8,57 @@ implemented, with the missing production behaviour named · `[ ]` not implemente
 path alone never makes a business capability complete; its authorized HTTP contract, idempotency,
 failure recovery, audit and concurrency behaviour must also exist.
 
+## Audit snapshot — 2026-08-06 (S1–S7 complete, merged to `main`)
+
+`scripts/quality.cmd` is **green**: Ruff format/check, strict MyPy across **180 source files**,
+**535 passed** (3 integration tests deselected by the default `-m "not integration"`),
+branch-aware coverage **85.25%** against the 85% gate, no migration drift, and a freshly generated
+OpenAPI that validates and matches the committed `contracts/openapi/v1.yaml`. Runtime 13m25s.
+
+Coverage fell from 87.45% to 85.25% while the suite grew from 384 to 535 tests. That is expected
+and not a regression in what is tested: three whole apps' worth of view code landed at once, and
+the least-covered file in the tree is `apps/payouts/providers.py` at 62% — the RazorpayX adapter,
+whose uncovered lines are the live HTTP branches that cannot run without credentials.
+
+`contracts/openapi/v1.yaml` is **1.17.0** with **126** published paths, up from 82 at 1.15.1. The
+three releases that got it there:
+
+| Release | What it published | Paths |
+| --- | --- | --- |
+| 1.16.0 | BE-09-API — the whole B8 fulfilment surface, three actor projections | +26 |
+| 1.17.0 | B9/B10 — cases, ledger, payout batches, kill switches | +18 |
+
+16 backend apps, all with an HTTP surface except `foundation` and `pricing`, which are
+deliberately internal.
+
+### What changed since the 2026-08-05 snapshot below
+
+- **B8 has a door.** `apps/fulfilment`'s 26 paths are live across Customer, Partner and Operations.
+  The three projections are not cosmetic: `booking_group_id` and `order_id` appear **only** on the
+  Operations one, so a Partner holds no identifier with which to ask about a sibling unit.
+- **B9 and B10 are published.** `apps/cases`, `apps/payouts` and `apps/notifications` are no longer
+  service-layer-only. FE-12 is unblocked and built.
+- **Metrics and retention sweeps exist** (S6c). `common/observability/metrics.py` names every
+  counter the plan's watch-list asks for. Retention sweeps OTP challenges (7d), sessions (90d) and
+  audit events (365d) on separate horizons; consent receipts are deliberately never swept.
+- **Sessions are per-host and production refuses to start otherwise.** See the three-host section
+  in [task.md](./task.md).
+- **The finance role is gone.** `HasRecentFinanceStepUp` was deleted; refunds now gate on
+  `HasRecentOperationsStepUp`.
+
+### Two defects this stage's own verification caught
+
+Worth recording because both would have shipped, and neither was found by writing more code:
+
+1. **Three cursor-paginated list endpoints were broken on their first page.**
+   `StrictCursorPagination` reads `ordering` from itself and DRF defaults it to `-created` — a
+   field none of `OperationsCase`, `PartnerLedgerEntry` or `PayoutBatch` has. Paginator setup died
+   before it could compute `has_next`. Fixed by declaring `ordering` explicitly, matching the
+   Partner offer inbox.
+2. **A frontend test typechecked green only because turbo replayed a cached result.** A `never`
+   cast cannot be spread, and two tests spread the fixture. A cold run failed. Typing it properly
+   also revealed the fixture never matched the shape it claimed. **A cached gate is not a gate.**
+
 ## Audit snapshot — 2026-08-05 (verified against real PostgreSQL, committed)
 
 `scripts/quality.cmd` is **green**: Ruff format/check, strict MyPy, **384 passed** (3 integration
@@ -572,11 +623,20 @@ of the planning inputs that made it legal. Same classify-then-write skeleton as
       signed, so a balance is a plain `SUM` rather than a case analysis a report could get wrong.
       Maker-checker is both a service check and a `CheckConstraint`, so a command that forgot to
       ask is still refused by PostgreSQL.
-- [~] Ledger reservation, payout-account verification and account-change cooling are implemented.
-      **The RazorpayX adapter and sandbox payout submission are not** — `PayoutBatchItem` carries
-      its provider fields and per-item idempotency key, and the batch stops at `APPROVED`.
+- [x] Ledger reservation, payout-account verification and account-change cooling are implemented.
+      The **RazorpayX adapter** now exists (`apps/payouts/providers.py`) and treats provider
+      ambiguity as its own outcome rather than collapsing it to success or failure — an unknown
+      payout is the one state where guessing costs real money in both directions. A reconciliation
+      sweep (`reconcile_payouts`) settles what was in flight. **Sandbox submission against real
+      RazorpayX credentials has not been run**; the fake provider is fail-closed outside `DEBUG`
+      unless `PAYOUTS_ALLOW_FAKE_PROVIDER` is set.
+- [x] Publish B9 over HTTP (**OpenAPI 1.17.0**). Partner earnings/ledger/account; Operations case
+      queue + detail with claim/escalate/resolve/notes, payout batches with approve/pay/cancel,
+      unpayable partners and ledger adjustments. Approve and pay sit behind
+      `HasRecentOperationsStepUp`; **cancel deliberately does not** — the gate exists to slow money
+      leaving, and making the stop button harder to press than the go button is backwards.
 
-**Status: cases and ledger complete; provider submission open.**
+**Status: complete; live provider submission gated on credentials.**
 
 The acceptance list's payout property — "two payout batches cannot reserve/pay one ledger entry
 twice" — is proved twice: once through the ordinary command path, and once with real threads and
@@ -601,47 +661,69 @@ that never happened, and nothing downstream would catch it because the number wo
       Suppression is an intent with a reason, never a missing row. `TRANSACTIONAL_PURPOSES`
       cannot be muted: a Customer who switched off promotions still learns their professional is
       at the door. Retries are bounded (3) and never in-process.
-- [~] Offer, checkout, reservation, lateness and completion jobs exist in their owning apps
+- [x] Offer, checkout, reservation, lateness and completion jobs exist in their owning apps
       (`assignments.tasks`, `fulfilment.tasks`, `commerce.tasks`, `payouts.tasks`).
-      **Retention jobs remain unimplemented** — the privacy models exist and nothing sweeps them.
+      **Retention sweeps landed 2026-08-06** (`apps/identity/retention.py` + `tasks.py`): expired
+      OTP challenges at 7 days, ended sessions at 90, access-audit events at 365. Three horizons
+      rather than one, because they answer to different obligations. Consent receipts are
+      **deliberately never swept** — a receipt is the evidence that consent was given, and deleting
+      it destroys the only proof that the thing you did was allowed.
 - [x] Implement service/area/payment/payout kill switches. `KillSwitch` is a row rather than a
       setting: an environment variable needs a deploy, and the moment you need to stop sending is
       the moment you cannot wait for a release. Each carries an audited actor and a reason, the
       reason enforced by a check constraint. Maker-checker exists for payout batches (B9) and for
       compatibility rules (B6); no other command requires it yet.
-- [ ] Add metrics/alerts for conversion, assignment, lateness/no-show, partial/dispute, money
-      ambiguity, case SLA, outbox and worker queues.
+- [~] Add metrics/alerts for conversion, assignment, lateness/no-show, partial/dispute, money
+      ambiguity, case SLA, outbox and worker queues. **The names exist**
+      (`common/observability/metrics.py`); a test pins that every row of this watch-list has a
+      constant, because a metric invented at its call site is one nobody can alert on — the alert
+      and the emitter disagree the moment somebody renames a variable. `emit()` never raises: the
+      point is to observe a system, not to add a way for it to fail, and there is nowhere useful to
+      report a logging failure *to*. **Alerting and dashboards are a deployment task, not a code
+      one, and remain open.**
 - [x] Create `docs/adr/**` and `docs/runbooks/**`; document every critical dependency, replay process
       and stuck state. 6 ADRs and 5 runbooks exist (partner document storage, payment
       reconciliation, outbox replay, queue outage, stuck command).
 
-**Status: notifications and kill switches implemented (2026-08-06); metrics and alerts not
-started.** Observability is still JSON logging plus request IDs — there are no metrics,
-dashboards or alerts, and that is the remaining B10 item along with retention jobs and the HTTP
-surface for cases, ledger, payouts and switches.
+- [x] Publish B10 over HTTP (**OpenAPI 1.17.0**): the kill-switch board with engage/release.
 
-**None of B9 or B10 has an HTTP surface yet.** `apps/cases`, `apps/payouts` and
-`apps/notifications` are service-layer only — the same shape B8 was in before 1.16.0, and the
-same warning applies: do not read the ticked lines above as a shippable feature. Publishing them
-is its own release and FE-12 depends on it.
+**Status: implemented and published (2026-08-06). Two things remain, both deployment rather than
+code:** wiring the metric names to a real collector with alert rules, and a provider adapter for
+`NotificationIntent` delivery — which is gated on MSG91/DLT approval, not on us.
+
+**B9 and B10 now have their HTTP surface** (1.17.0, 18 paths), so the warning that stood here
+through 2026-08-06 is discharged and FE-12 is built. The lesson it recorded is worth keeping,
+though, because it has now bitten three times: **publishing a command while withholding the key
+that invokes it** — `checkout_id` in proposal 0011, `booking_id` on `FulfilmentUnit` in 1.16.0,
+and the dispatch commands in 1.15.0. A model with a service layer and no door is not a feature,
+and a door whose handle is not in the projection is not one either.
 
 ## Backend completion gate
 
-- [x] Ruff format/check, strict MyPy and current unit/API tests pass.
-- [x] Current branch-aware coverage threshold passes: **85.42%**.
+- [x] Ruff format/check, strict MyPy and current unit/API tests pass: **535 passed**, 2026-08-06.
+- [x] Current branch-aware coverage threshold passes: **85.25%** against the 85% gate.
 - [x] Migration model-drift check and generated OpenAPI validation pass.
 - [x] Locked base dependencies currently pass `pip-audit`.
-- [~] PostgreSQL is exercised by the current suite and the historical singleton cart has a
-      concurrent-write regression. Replace it with multi-item cart/version, plan partition and
-      partial-group-hold races; dedicated assignment/payment race suites remain missing.
+- [x] PostgreSQL concurrency is exercised with real threads and real connections: multi-item
+      cart edit-vs-remove, plan partition, partial-group hold, offer accept/expiry/payment-hold/
+      worker-death, group cancellation, and the double payout reservation. Each of these is a
+      guarantee the database makes rather than one the service layer asserts — a GiST exclusion
+      constraint for reservation overlap, a partial unique index for the payout, a
+      `CheckConstraint` for maker-checker — so the losing caller gets an `IntegrityError` and the
+      service check exists only to turn that into a typed refusal.
 - [x] Local PostgreSQL/Redis Docker health and applied developer migrations were verified on the
       current audit run.
 - [ ] Real Redis, Celery worker/beat, outbox crash recovery and provider integration tests pass.
 - [~] `scripts/quality.cmd` enforces Ruff, MyPy, tests, migration drift and committed OpenAPI freshness;
       frontend-client, dependency and real-infrastructure gates remain in their owning workflows.
 - [ ] All local/staging migrations are applied and readiness is green before acceptance testing.
-- [ ] Authorization, idempotency, failure, audit and recovery tests exist for every state-changing
-      business command.
-- [ ] Required ADRs, runbooks, dashboards and alerts exist before production handoff.
+- [~] Authorization, idempotency, failure, audit and recovery tests exist for every state-changing
+      business command. B8's 26 paths are covered to this standard
+      (`tests/fulfilment/test_fulfilment_api.py`, the pattern to copy). The 1.17.0 paths are
+      covered at the domain layer and partly at the view layer; the kill-switch board and several
+      case commands have no view-level test yet.
+- [~] Required ADRs, runbooks, dashboards and alerts exist before production handoff. **6 ADRs and
+      5 runbooks exist. Metric names exist; dashboards and alert rules do not** — that is a
+      deployment task against a real collector, not a code one.
 - [ ] A real-browser Django session/CSRF mutation test passes for Customer, Partner and Operations
       origins, including rotation, revoke, rejected origin and browser-storage/log assertions.
