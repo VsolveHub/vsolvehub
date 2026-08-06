@@ -32,7 +32,7 @@ import {
  *
  * ## The console holds no refund it was not just handed
  *
- * There is no Finance read in the contract, so everything on screen is the
+ * There is no staff read of a refund in the contract, so everything on screen is the
  * response to the command that ran. That limitation is stated rather than
  * papered over: an empty panel labelled "Refunds" reads as "there are none
  * pending", which would be a claim about money made from no data at all.
@@ -203,7 +203,7 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
 
           <Field
             label="Reason code"
-            description="As Finance records it, for example service-not-delivered."
+            description="As Operations records it, for example service-not-delivered."
             required
             error={submitted ? errors.reasonCode : undefined}
           >
@@ -341,7 +341,7 @@ export function RefundConsole({ onStepUpRequired }: { onStepUpRequired: (reason:
       <Card className="mt-5 p-5">
         <h2 className="text-base font-bold text-text">Reconcile a refund by id</h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          There is no Finance list of refunds and no Finance lookup — the only
+          There is no list of refunds and no staff lookup — the only
           published read is the Customer&apos;s own. So a refund from a previous
           session is reached by id, from the case you are working, and
           reconciling it is what shows you where it got to.

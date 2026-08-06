@@ -11,8 +11,8 @@ import { useConfirmStepUp, useRequestStepUpCode, type StepUpSession } from "../q
  *
  * ## Why this does not gate the commands itself
  *
- * `HasRecentFinanceStepUp` compares `UserSession.stepped_up_at` against
- * `FINANCE_STEP_UP_TTL_SECONDS`, and that TTL is not published in the contract.
+ * `HasRecentOperationsStepUp` compares `UserSession.stepped_up_at` against
+ * `OPERATIONS_STEP_UP_TTL_SECONDS`, and that TTL is not published in the contract.
  * A countdown here would be a number this component invented about an
  * authorization decision, and it would be wrong in the direction that matters:
  * an operator watching "4 minutes left" while Django has already refused.
@@ -98,7 +98,7 @@ export function StepUpGate({
         <div className="mt-4 max-w-sm">
           <Field
             label="Your mobile number"
-            description="The number your Finance access was granted to."
+            description="The number your Operations access was granted to."
             required
           >
             <Input

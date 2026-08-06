@@ -160,6 +160,21 @@ export const queryKeys = {
   },
 
   /**
+   * The Partner's own money (contract 1.17.0).
+   *
+   * Beside `partnerWork` rather than inside it: a ledger outlives the visit that
+   * created it. A completed job's cache entry can be dropped while the earning it
+   * produced is still unpaid, and nesting them would let a work refetch quietly
+   * invalidate a statement the Partner is reading.
+   */
+  partnerMoney: {
+    all: ["partner-money"] as const,
+    balance: () => [...queryKeys.partnerMoney.all, "balance"] as const,
+    ledger: () => [...queryKeys.partnerMoney.all, "ledger"] as const,
+    payoutAccount: () => [...queryKeys.partnerMoney.all, "payout-account"] as const,
+  },
+
+  /**
    * Money: payment attempts, orders, refunds and tax documents (contract 1.10.0,
    * reachable from a Booking Group since 1.14.0).
    *
@@ -313,6 +328,32 @@ export const queryKeys = {
      */
     compatibilityRule: (ruleId: string) =>
       [...queryKeys.operations.all, "compatibility-rule", ruleId] as const,
+
+    /**
+     * The case queue, keyed by its filters (contract 1.17.0).
+     *
+     * Filters belong in the key for the same reason the application queue's do:
+     * "my team's open cases" and "everything overdue" are different questions,
+     * and one shared entry would answer one with the other.
+     */
+    cases: (filters: {
+      status?: string;
+      ownerTeam?: string;
+      kind?: string;
+      overdue?: boolean;
+    }) => [...queryKeys.operations.all, "cases", filters] as const,
+
+    /** One case with its full audit trail. Refetched on its own after a conflict. */
+    case: (caseId: string) => [...queryKeys.operations.all, "case", caseId] as const,
+
+    /** Payout runs. The list carries no items; the detail does. */
+    payoutBatches: (filters: { status?: string }) =>
+      [...queryKeys.operations.all, "payout-batches", filters] as const,
+    payoutBatch: (batchId: string) =>
+      [...queryKeys.operations.all, "payout-batch", batchId] as const,
+
+    /** Kill switches. One key: the board is read whole, never a switch at a time. */
+    killSwitches: () => [...queryKeys.operations.all, "kill-switches"] as const,
 
     /**
      * Why dispatch chose who it chose, for one Fulfilment Unit (contract 1.15.0).

@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.16.0)
- * Checksum: 1544ffad200f2359
+ * Source:   contracts/openapi/v1.yaml (version 1.17.0)
+ * Checksum: d970125e6329430a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -657,6 +657,17 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Issue a refund against an Order's Fulfilment Units.
+         *
+         *     Gated on `HasRecentOperationsStepUp` rather than the finance variant. The platform
+         *     has one staff role — Operations — and a separate `finance` role was never granted to
+         *     anybody, so the finance gate made these endpoints unreachable rather than restricted.
+         *
+         *     The control that actually matters is unchanged: a money-moving command still requires
+         *     a fresh OTP confirmation on the session, and `mark_session_step_up` is role-agnostic,
+         *     so `POST /auth/finance/step-up/` still stamps the session this reads.
+         */
         post: operations["finance_refunds_create"];
         delete?: never;
         options?: never;
@@ -673,6 +684,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Ask the provider what became of a refund. See the note on the collection view. */
         post: operations["finance_refunds_reconcile_create"];
         delete?: never;
         options?: never;
@@ -833,6 +845,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/cases/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The queue, filtered the way somebody actually works it.
+         *
+         *     Cursor-paginated rather than offset: a queue is inserted into constantly, and an offset page
+         *     two skips whatever arrived while page one was being read. Same `StrictCursorPagination` the
+         *     Partner application queue and offer inbox use.
+         */
+        get: operations["operations_cases_list"];
+        put?: never;
+        /**
+         * @description The queue, filtered the way somebody actually works it.
+         *
+         *     Cursor-paginated rather than offset: a queue is inserted into constantly, and an offset page
+         *     two skips whatever arrived while page one was being read. Same `StrictCursorPagination` the
+         *     Partner application queue and offer inbox use.
+         */
+        post: operations["operations_cases_open"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/{case_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["operations_case_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/{case_id}/claim/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Shared plumbing: version guard, idempotency key, projection. */
+        post: operations["operations_case_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/{case_id}/escalate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Shared plumbing: version guard, idempotency key, projection. */
+        post: operations["operations_case_escalate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/{case_id}/notes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A note or a record of something sent. Never moves the case — sending is not progress. */
+        post: operations["operations_case_add_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/{case_id}/resolve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Closing a case names what happened.
+         *
+         *     The resolution must be one of the case kind's required terminal results — published on the
+         *     detail projection as `allowed_resolutions`, so a console never has to carry its own copy of
+         *     a rule that differs per kind.
+         */
+        post: operations["operations_case_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/checkouts/{checkout_id}/offers/": {
         parameters: {
             query?: never;
@@ -977,6 +1109,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/kill-switches/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["operations_kill_switches_list"];
+        put?: never;
+        post: operations["operations_kill_switch_engage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/kill-switches/release/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["operations_kill_switch_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/ledger-adjustments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Correct the ledger by adding to it. Step-up, because an adjustment moves what is owed. */
+        post: operations["operations_ledger_adjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/offers/{offer_id}/revoke/": {
         parameters: {
             query?: never;
@@ -1105,6 +1286,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/payout-batches/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["operations_payout_batches_list"];
+        put?: never;
+        post: operations["operations_payout_batch_propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-batches/{batch_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["operations_payout_batch_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-batches/{batch_id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Maker-checker plus a fresh OTP.
+         *
+         *     Two different people is a control against one person acting alone. The step-up is a control
+         *     against neither of them actually being present — an unlocked laptop with an Operations
+         *     session open should not be able to release a week of payouts.
+         */
+        post: operations["operations_payout_batch_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-batches/{batch_id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description No step-up: cancelling only returns money to the pool.
+         *
+         *     Making the safe direction as heavy as the dangerous one trains people to leave batches
+         *     sitting approved rather than cancel a bad one.
+         */
+        post: operations["operations_payout_batch_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/payout-batches/{batch_id}/pay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The moment money starts leaving. Step-up again, because approval and payment can be
+         *     hours apart and the second decision deserves its own proof of presence.
+         */
+        post: operations["operations_payout_batch_pay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/reservations/{reservation_id}/release/": {
         parameters: {
             query?: never;
@@ -1115,6 +1393,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["operations_reservation_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/unpayable-partners/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Who is owed money and cannot be paid. The list a run is chased from. */
+        get: operations["operations_unpayable_partners"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1464,6 +1759,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/earnings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What the Partner is owed, split by state.
+         *
+         *     One number would be a lie: money held behind an open quality case is not money you can plan
+         *     around. `05-pricing-payments-and-settlement.md` also rules out on-demand withdrawal in M1, so
+         *     this deliberately publishes no "withdraw" affordance — payouts run as a reviewed batch, and a
+         *     button that implied otherwise would be promising something the platform does not do.
+         */
+        get: operations["partner_earnings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/ledger/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["partner_ledger_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/me/": {
         parameters: {
             query?: never;
@@ -1506,6 +1841,29 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["partner_offers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/payout-account/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The Partner's own account, masked.
+         *
+         *     Read-only here on purpose. Registering or changing an account starts a cooling period and is
+         *     the event an account-takeover investigation begins from, so it goes through the reviewed
+         *     onboarding path rather than a self-service PATCH nobody watches.
+         */
+        get: operations["partner_payout_account_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2148,6 +2506,11 @@ export interface components {
             expected_session_cart_version: number;
             decisions: components["schemas"]["CartMergeDecisionRequest"][];
         };
+        CaseNoteRequestRequest: {
+            body: string;
+            /** @default false */
+            is_communication: boolean;
+        };
         Category: {
             /** Format: uuid */
             readonly id: string;
@@ -2433,6 +2796,16 @@ export interface components {
             dispute_reason: string;
             disputed_outcome_ids?: string[];
         };
+        EngageKillSwitchRequestRequest: {
+            scope: components["schemas"]["KillSwitchScopeEnum"];
+            /** @default  */
+            target: string;
+            reason: string;
+        };
+        EscalateCaseRequestRequest: {
+            expected_version: number;
+            severity: components["schemas"]["OperationsCaseSeverityEnum"];
+        };
         /**
          * @description The client's claim about what it uploaded; Django streams the object and checks it.
          *
@@ -2666,6 +3039,73 @@ export interface components {
             server_now: string;
         };
         /**
+         * @description A switch, with both signatures and both timestamps.
+         *
+         *     Who engaged it and why are published rather than kept internal: the question asked during an
+         *     incident is "why did notifications stop at 3am", and an answer that requires a database query
+         *     is an answer nobody gets in time.
+         */
+        KillSwitch: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly scope: components["schemas"]["KillSwitchScopeEnum"];
+            readonly target: string;
+            readonly is_engaged: boolean;
+            readonly reason: string;
+            /** Format: uuid */
+            readonly engaged_by_id: string | null;
+            /** Format: date-time */
+            readonly engaged_at: string | null;
+            /** Format: uuid */
+            readonly released_by_id: string | null;
+            /** Format: date-time */
+            readonly released_at: string | null;
+            readonly version: number;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description * `NOTIFICATIONS` - All outbound notifications
+         *     * `SMS` - SMS channel
+         *     * `PAYMENTS` - Payment collection
+         *     * `PAYOUTS` - Partner payouts
+         *     * `DISPATCH` - Partner dispatch
+         *     * `SERVICE_AREA` - One service area
+         *     * `SERVICE` - One service
+         * @enum {string}
+         */
+        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE";
+        /**
+         * @description A correction, which is always a new entry rather than an edit.
+         *
+         *     `net_paise` is signed and deliberately has no minimum: a negative value is a reversal, which
+         *     is the whole mechanism the settlement document asks for.
+         */
+        LedgerAdjustmentRequestRequest: {
+            /** Format: uuid */
+            partner_id: string;
+            net_paise: number;
+            reason: string;
+            /** Format: uuid */
+            corrects_id?: string | null;
+        };
+        /**
+         * @description * `EARNING` - Earning
+         *     * `ADJUSTMENT` - Adjustment
+         *     * `REVERSAL` - Reversal
+         * @enum {string}
+         */
+        LedgerEntryKindEnum: "EARNING" | "ADJUSTMENT" | "REVERSAL";
+        /**
+         * @description * `PENDING` - Pending
+         *     * `AVAILABLE` - Available
+         *     * `RESERVED` - Reserved in a batch
+         *     * `PAID` - Paid
+         *     * `RELEASED` - Released
+         * @enum {string}
+         */
+        LedgerEntryStatusEnum: "PENDING" | "AVAILABLE" | "RESERVED" | "PAID" | "RELEASED";
+        /**
          * @description * `DRAFT` - Draft
          *     * `ACTIVE` - Active
          *     * `RETIRED` - Retired
@@ -2748,6 +3188,20 @@ export interface components {
          * @enum {string}
          */
         OfferStatusEnum: "OFFERED" | "ACCEPTED_PENDING_UNDO" | "COMMITTED" | "UNDONE" | "DECLINED" | "EXPIRED" | "REVOKED";
+        OpenCaseRequestRequest: {
+            kind: components["schemas"]["OperationsCaseKindEnum"];
+            summary: string;
+            /** @default NORMAL */
+            severity: components["schemas"]["OperationsCaseSeverityEnum"];
+            /** @default  */
+            detail: string;
+            /** Format: uuid */
+            booking_id?: string | null;
+            /** Format: uuid */
+            order_id?: string | null;
+            /** Format: uuid */
+            partner_id?: string | null;
+        };
         OperationsApplicationQueueItem: {
             /** Format: uuid */
             readonly id: string;
@@ -2812,6 +3266,150 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /**
+         * @description One case, with the vocabulary a reviewer needs to close it.
+         *
+         *     `allowed_resolutions` is published rather than hardcoded in the console. The set is a domain
+         *     rule that differs per case kind, and a UI carrying its own copy would offer a button the
+         *     server refuses the first time the two drift — the same reason `recovery_action` is published
+         *     on Booking Groups instead of being inferred from status.
+         */
+        OperationsCase: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["OperationsCaseKindEnum"];
+            readonly severity: components["schemas"]["OperationsCaseSeverityEnum"];
+            readonly status: components["schemas"]["OperationsCaseStatusEnum"];
+            readonly owner_team: components["schemas"]["OperationsCaseTeamEnum"];
+            /** Format: uuid */
+            readonly owner_id: string | null;
+            /** Format: uuid */
+            readonly booking_id: string | null;
+            /** Format: uuid */
+            readonly order_id: string | null;
+            /** Format: uuid */
+            readonly partner_id: string | null;
+            readonly summary: string;
+            readonly detail: string;
+            /** Format: date-time */
+            readonly due_at: string;
+            readonly is_overdue: boolean;
+            readonly version: number;
+            readonly resolution: string;
+            readonly resolution_note: string;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+            readonly holds_payout: boolean;
+            readonly allowed_resolutions: string[];
+            readonly events: components["schemas"]["OperationsCaseEvent"][];
+            /** Format: date-time */
+            readonly server_now: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        OperationsCaseEvent: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["OperationsCaseEventKindEnum"];
+            /** Format: uuid */
+            readonly actor_id: string | null;
+            readonly body: string;
+            readonly context: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `OPENED` - Opened
+         *     * `CLAIMED` - Claimed
+         *     * `STATUS_CHANGED` - Status changed
+         *     * `SEVERITY_CHANGED` - Severity changed
+         *     * `NOTE` - Note
+         *     * `COMMUNICATION` - Communication sent
+         *     * `RESOLVED` - Resolved
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        OperationsCaseEventKindEnum: "OPENED" | "CLAIMED" | "STATUS_CHANGED" | "SEVERITY_CHANGED" | "NOTE" | "COMMUNICATION" | "RESOLVED" | "CANCELLED";
+        /**
+         * @description * `ASSIGNMENT` - Assignment or recovery
+         *     * `LATE_NO_SHOW` - Late or no-show
+         *     * `CUSTOMER_UNAVAILABLE` - Customer unavailable
+         *     * `PARTIAL_WORK` - Partial or aborted work
+         *     * `QUALITY` - Quality or warranty
+         *     * `SAFETY` - Safety or damage
+         *     * `PAYMENT` - Payment ambiguity
+         *     * `REFUND` - Refund ambiguity
+         *     * `PAYOUT` - Payout ambiguity
+         * @enum {string}
+         */
+        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT";
+        /**
+         * @description The queue row. No events and no detail — a list of two hundred cases should not carry
+         *     two hundred audit trails, and the body of a safety report is not queue-scanning material.
+         */
+        OperationsCaseList: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["OperationsCaseKindEnum"];
+            readonly severity: components["schemas"]["OperationsCaseSeverityEnum"];
+            readonly status: components["schemas"]["OperationsCaseStatusEnum"];
+            readonly owner_team: components["schemas"]["OperationsCaseTeamEnum"];
+            /** Format: uuid */
+            readonly owner_id: string | null;
+            /** Format: uuid */
+            readonly booking_id: string | null;
+            /** Format: uuid */
+            readonly partner_id: string | null;
+            readonly summary: string;
+            /** Format: date-time */
+            readonly due_at: string;
+            readonly is_overdue: boolean;
+            readonly version: number;
+            readonly holds_payout: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description The paginated envelope the queue actually returns.
+         *
+         *     Declared explicitly because `responses={200: Serializer(many=True)}` publishes a bare array,
+         *     and the view returns `{next, previous, results}`. A generated client built from the array
+         *     shape reads `page.next` off an array and gets `undefined` — a contract that lies about its
+         *     own response, which is worse than one that omits it.
+         */
+        OperationsCasePage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["OperationsCaseList"][];
+        };
+        /**
+         * @description * `LOW` - Low
+         *     * `NORMAL` - Normal
+         *     * `HIGH` - High
+         *     * `URGENT` - Urgent
+         * @enum {string}
+         */
+        OperationsCaseSeverityEnum: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+        /**
+         * @description * `OPEN` - Open
+         *     * `IN_PROGRESS` - In progress
+         *     * `WAITING` - Waiting on someone
+         *     * `RESOLVED` - Resolved
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        OperationsCaseStatusEnum: "OPEN" | "IN_PROGRESS" | "WAITING" | "RESOLVED" | "CANCELLED";
+        /**
+         * @description * `DISPATCH` - Dispatch Operations
+         *     * `BOOKING_SUPPORT` - Booking support
+         *     * `QUALITY_SUPPORT` - Quality support
+         *     * `SAFETY` - Restricted safety team
+         *     * `FINANCE` - Finance Operations
+         * @enum {string}
+         */
+        OperationsCaseTeamEnum: "DISPATCH" | "BOOKING_SUPPORT" | "QUALITY_SUPPORT" | "SAFETY" | "FINANCE";
         /**
          * @description * `APPROVED` - APPROVED
          *     * `REJECTED` - REJECTED
@@ -2996,6 +3594,22 @@ export interface components {
             ends_next_day: boolean;
         };
         /**
+         * @description What is owed, by state.
+         *
+         *     Four numbers rather than one, because "you have ₹4,200" is not true in any useful sense when
+         *     ₹1,800 of it is held behind an open quality case. A Partner planning their week needs to know
+         *     which part of it is actually coming.
+         */
+        PartnerBalance: {
+            pending_paise: number;
+            available_paise: number;
+            reserved_paise: number;
+            paid_paise: number;
+            currency: string;
+            /** Format: date-time */
+            server_now: string;
+        };
+        /**
          * @description The same visit, as the Partner assigned to it sees it.
          *
          *     Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
@@ -3130,6 +3744,61 @@ export interface components {
             longitude: string;
             accuracy_m: number;
             consent_version: string;
+        };
+        /**
+         * @description One line of a Partner's statement.
+         *
+         *     `calculation_snapshot` is published deliberately: a Partner is entitled to see why they were
+         *     paid what they were paid, and "the commission was 18% capped at ₹X, applied to the two tasks
+         *     you actually completed" is the answer. Hiding it turns every payment question into a support
+         *     ticket.
+         */
+        PartnerLedgerEntry: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly booking_id: string | null;
+            readonly kind: components["schemas"]["LedgerEntryKindEnum"];
+            readonly status: components["schemas"]["LedgerEntryStatusEnum"];
+            readonly gross_paise: number;
+            readonly commission_paise: number;
+            readonly net_paise: number;
+            readonly currency: string;
+            readonly calculation_snapshot: unknown;
+            /** Format: uuid */
+            readonly corrects_id: string | null;
+            readonly reason: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PartnerLedgerPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["PartnerLedgerEntry"][];
+        };
+        /**
+         * @description The account, masked, plus when it becomes usable.
+         *
+         *     `effective_from` is published because it is the honest explanation for why a freshly added
+         *     account has not been paid into yet. Without it the Partner sees a verified account and no
+         *     money, which reads as a bug rather than as the cooling period it is.
+         */
+        PartnerPayoutAccount: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["PayoutAccountStatusEnum"];
+            readonly account_last4: string;
+            readonly ifsc: string;
+            readonly holder_name: string;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            /** Format: date-time */
+            readonly effective_from: string;
+            readonly is_payable_now: boolean;
+            /** Format: date-time */
+            readonly created_at: string;
         };
         PartnerPresence: {
             /** Format: uuid */
@@ -3268,6 +3937,118 @@ export interface components {
          * @enum {string}
          */
         PaymentAttemptStatusEnum: "PROVIDER_PENDING" | "CREATED" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "EXPIRED" | "PARTIALLY_REFUNDED" | "REFUNDED";
+        /**
+         * @description * `PENDING` - Pending verification
+         *     * `VERIFIED` - Verified
+         *     * `REJECTED` - Rejected
+         *     * `REPLACED` - Replaced
+         * @enum {string}
+         */
+        PayoutAccountStatusEnum: "PENDING" | "VERIFIED" | "REJECTED" | "REPLACED";
+        /**
+         * @description A run, with both signatures on it.
+         *
+         *     `proposed_by_id` and `approved_by_id` are both published so a console can render the
+         *     maker-checker state without a second call — and so an approver can see at a glance that the
+         *     batch in front of them is not one they proposed.
+         */
+        PayoutBatch: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly reference: string;
+            readonly status: components["schemas"]["PayoutBatchStatusEnum"];
+            /** Format: date-time */
+            readonly period_start: string;
+            /** Format: date-time */
+            readonly period_end: string;
+            /** Format: uuid */
+            readonly proposed_by_id: string;
+            /** Format: uuid */
+            readonly approved_by_id: string | null;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: uuid */
+            readonly cancelled_by_id: string | null;
+            /** Format: date-time */
+            readonly cancelled_at: string | null;
+            readonly version: number;
+            readonly total_paise: number;
+            readonly currency: string;
+            readonly item_count: number;
+            readonly items: components["schemas"]["PayoutBatchItem"][];
+            /** Format: date-time */
+            readonly server_now: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PayoutBatchItem: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly partner_id: string;
+            /** Format: uuid */
+            readonly ledger_entry_id: string;
+            readonly status: components["schemas"]["PayoutBatchItemStatusEnum"];
+            readonly amount_paise: number;
+            readonly currency: string;
+            readonly provider_payout_id: string;
+            readonly failure_code: string;
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+        };
+        /**
+         * @description * `RESERVED` - Reserved
+         *     * `SUBMITTED` - Submitted
+         *     * `PAID` - Paid
+         *     * `FAILED` - Failed
+         *     * `UNDER_REVIEW` - Under review
+         *     * `RELEASED` - Released
+         * @enum {string}
+         */
+        PayoutBatchItemStatusEnum: "RESERVED" | "SUBMITTED" | "PAID" | "FAILED" | "UNDER_REVIEW" | "RELEASED";
+        /**
+         * @description The list row. Items are omitted: a run can hold hundreds, and a list of runs is not where
+         *     anybody reads them.
+         */
+        PayoutBatchList: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly reference: string;
+            readonly status: components["schemas"]["PayoutBatchStatusEnum"];
+            /** Format: date-time */
+            readonly period_start: string;
+            /** Format: date-time */
+            readonly period_end: string;
+            /** Format: uuid */
+            readonly proposed_by_id: string;
+            /** Format: uuid */
+            readonly approved_by_id: string | null;
+            readonly total_paise: number;
+            readonly currency: string;
+            readonly item_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PayoutBatchPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["PayoutBatchList"][];
+        };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `PENDING_APPROVAL` - Pending approval
+         *     * `APPROVED` - Approved
+         *     * `PAYING` - Paying
+         *     * `PAID` - Paid
+         *     * `FAILED` - Failed
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        PayoutBatchStatusEnum: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PAYING" | "PAID" | "FAILED" | "CANCELLED";
         PlanQuoteCreateRequest: {
             /** Format: uuid */
             plan_id: string;
@@ -3348,6 +4129,13 @@ export interface components {
             expected_version: number;
             reason: string;
             task_quantity: number;
+        };
+        ProposePayoutBatchRequestRequest: {
+            reference: string;
+            /** Format: date-time */
+            period_start: string;
+            /** Format: date-time */
+            period_end: string;
         };
         /**
          * @description * `BOOKING_GROUP` - Booking group
@@ -3506,6 +4294,11 @@ export interface components {
          * @enum {string}
          */
         RefundStatusEnum: "REQUESTED" | "SUBMITTED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNDER_REVIEW";
+        ReleaseKillSwitchRequestRequest: {
+            scope: components["schemas"]["KillSwitchScopeEnum"];
+            /** @default  */
+            target: string;
+        };
         /**
          * @description The floor every state-changing fulfilment command sits on.
          *
@@ -3517,6 +4310,11 @@ export interface components {
             expected_version: number;
             /** Format: date-time */
             new_requested_start: string;
+        };
+        ResolveCaseRequestRequest: {
+            expected_version: number;
+            resolution: string;
+            note: string;
         };
         ReverseGeocodeRequestRequest: {
             /** Format: decimal */
@@ -3852,6 +4650,13 @@ export interface components {
             /** Format: date-time */
             new_requested_start: string;
         };
+        /**
+         * @description Partners owed money with no payable account. Reported, never silently skipped —
+         *     a Partner left out of a run without explanation is a support ticket waiting to happen.
+         */
+        UnpayablePartner: {
+            partner_ids: string[];
+        };
         User: {
             /** Format: uuid */
             readonly id: string;
@@ -3873,6 +4678,12 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
             readonly is_current: boolean;
+        };
+        VersionedBatchCommandRequest: {
+            expected_version: number;
+        };
+        VersionedCaseCommandRequest: {
+            expected_version: number;
         };
         /**
          * @description The floor every state-changing fulfilment command sits on.
@@ -5940,6 +6751,386 @@ export interface operations {
             };
         };
     };
+    operations_cases_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+                /** @description Filter by case kind. */
+                kind?: string;
+                /** @description Only cases past their SLA deadline. */
+                overdue?: boolean;
+                /** @description Filter by owning team. */
+                owner_team?: string;
+                /** @description Filter by case status. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCasePage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_cases_open: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenCaseRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OpenCaseRequestRequest"];
+                "multipart/form-data": components["schemas"]["OpenCaseRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_case_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_case_claim: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedCaseCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedCaseCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedCaseCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_case_escalate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EscalateCaseRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EscalateCaseRequestRequest"];
+                "multipart/form-data": components["schemas"]["EscalateCaseRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_case_add_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseNoteRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaseNoteRequestRequest"];
+                "multipart/form-data": components["schemas"]["CaseNoteRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_case_resolve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveCaseRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ResolveCaseRequestRequest"];
+                "multipart/form-data": components["schemas"]["ResolveCaseRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_checkouts_offers_create: {
         parameters: {
             query?: never;
@@ -6392,6 +7583,183 @@ export interface operations {
             };
         };
     };
+    operations_kill_switches_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_kill_switch_engage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EngageKillSwitchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EngageKillSwitchRequestRequest"];
+                "multipart/form-data": components["schemas"]["EngageKillSwitchRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_kill_switch_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseKillSwitchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReleaseKillSwitchRequestRequest"];
+                "multipart/form-data": components["schemas"]["ReleaseKillSwitchRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KillSwitch"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_ledger_adjust: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAdjustmentRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LedgerAdjustmentRequestRequest"];
+                "multipart/form-data": components["schemas"]["LedgerAdjustmentRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerLedgerEntry"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_offer_revoke: {
         parameters: {
             query?: never;
@@ -6801,6 +8169,337 @@ export interface operations {
             };
         };
     };
+    operations_payout_batches_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+                /** @description Filter by batch status. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatchPage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_batch_propose: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposePayoutBatchRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposePayoutBatchRequestRequest"];
+                "multipart/form-data": components["schemas"]["ProposePayoutBatchRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_batch_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatch"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_batch_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedBatchCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedBatchCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedBatchCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_batch_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedBatchCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedBatchCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedBatchCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_payout_batch_pay: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionedBatchCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VersionedBatchCommandRequest"];
+                "multipart/form-data": components["schemas"]["VersionedBatchCommandRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutBatch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_reservation_release: {
         parameters: {
             query?: never;
@@ -6854,6 +8553,36 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_unpayable_partners: {
+        parameters: {
+            query: {
+                period_end: string;
+                period_start: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnpayablePartner"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7861,6 +9590,63 @@ export interface operations {
             };
         };
     };
+    partner_earnings_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBalance"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_ledger_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerLedgerPage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     partner_me_retrieve: {
         parameters: {
             query?: never;
@@ -7974,6 +9760,41 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_payout_account_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerPayoutAccount"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

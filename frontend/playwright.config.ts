@@ -169,6 +169,22 @@ export default defineConfig({
     },
     {
       /**
+       * The signed-in Operations console.
+       *
+       * Its own project for the same reason as `partner-shell`: it installs a
+       * contract-shaped session for every test, and `admin.e2e.ts` must not
+       * inherit it — that spec's whole job is to prove the anonymous boundary,
+       * and a stubbed session would quietly stop it doing so.
+       */
+      name: "operations-shell",
+      testMatch: /operations\.e2e\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3002",
+      },
+    },
+    {
+      /**
        * The only project that talks to Django. It skips itself when the backend
        * is unreachable, so the rest of the suite stays runnable frontend-only —
        * see the header of `django.e2e.ts` for why a skip beats a failure here.

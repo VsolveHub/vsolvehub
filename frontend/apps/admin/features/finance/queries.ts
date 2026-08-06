@@ -12,12 +12,12 @@ import { useMutation } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * Finance: step up, issue a refund, reconcile one with the provider.
+ * Refunds: step up, issue one, reconcile one with the provider.
  *
  * ## There is nothing to read, and the console must not pretend otherwise
  *
- * The contract publishes **no Finance read at all**. `GET /refunds/{id}/` exists
- * but `RefundDetailView` filters `order__customer=user`, so a Finance operator
+ * The contract publishes **no staff read at all**. `GET /refunds/{id}/` exists
+ * but `RefundDetailView` filters `order__customer=user`, so an operator
  * gets a 404 for every refund they did not personally buy — it is a Customer
  * endpoint that happens to live near this one. `POST /finance/refunds/` is a
  * create with no list beside it.
@@ -29,8 +29,8 @@ import { getApiClient } from "@/lib/api/browser";
  *
  * ## Step-up is a session fact, not a client flag
  *
- * `HasRecentFinanceStepUp` checks Django's `UserSession.stepped_up_at` against
- * `FINANCE_STEP_UP_TTL_SECONDS` on every money-moving request. The TTL is **not
+ * `HasRecentOperationsStepUp` checks Django's `UserSession.stepped_up_at` against
+ * `OPERATIONS_STEP_UP_TTL_SECONDS` on every money-moving request. The TTL is **not
  * published in the contract**, so this module deliberately computes no countdown
  * and stores no "we are stepped up" boolean to gate its own buttons: both would
  * be a client-side copy of an authorization decision, and the copy would be
@@ -56,6 +56,11 @@ export type StepUpSession = Schemas["StepUpSession"];
  * challenge, and `FinanceStepUpView` verifies it against the *signed-in* user,
  * refusing if the verified number is not theirs. A separate request path here
  * would be a second implementation of the rate limit.
+ *
+ * The endpoint keeps its `finance` path segment because that is what the
+ * contract publishes. It is role-agnostic underneath: `mark_session_step_up`
+ * only stamps `UserSession.stepped_up_at`, which is the field
+ * `HasRecentOperationsStepUp` reads.
  */
 export function useRequestStepUpCode() {
   return useRequestOtp(getApiClient());
@@ -100,7 +105,7 @@ export interface RefundInput {
   orderId: string;
   /** The visits being refunded. Django caps this at 20. */
   fulfilmentUnitIds: string[];
-  /** A slug Finance already uses, e.g. `service-not-delivered`. */
+  /** A slug Operations already uses, e.g. `service-not-delivered`. */
   reasonCode: string;
 }
 
@@ -178,9 +183,9 @@ export function useReconcileRefund() {
    ------------------------------------------------------------------------- */
 
 /**
- * The step-up has lapsed, or this session is not acting as Finance.
+ * The step-up has lapsed, or this session is not acting as Operations.
  *
- * Django answers `403` from `HasRecentFinanceStepUp` for both, and it does not
+ * Django answers `403` from `HasRecentOperationsStepUp` for both, and it does not
  * say which. That is fine to surface honestly — "confirm who you are again" is
  * the recovery for the common case and harmless in the other, where the shell
  * has already refused the whole console.

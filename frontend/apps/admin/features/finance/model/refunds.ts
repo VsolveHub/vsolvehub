@@ -3,7 +3,7 @@ import type { Schemas } from "@vsolve/api-client";
 import { isUuid } from "@/features/shared/identifiers";
 
 /**
- * What Finance can say about a refund, and what it must not.
+ * What the console can say about a refund, and what it must not.
  *
  * ## `202` is not "refunded"
  *
@@ -22,7 +22,7 @@ import { isUuid } from "@/features/shared/identifiers";
  * record and the provider's agree. `NEEDS_ATTENTION` on a `SUCCEEDED` refund is
  * a real and confusing combination — the money moved and the books do not
  * balance — and collapsing the two into one badge would hide exactly the case
- * Finance exists to catch.
+ * this console exists to catch.
  */
 
 export type RefundStatus = Schemas["RefundStatusEnum"];
@@ -136,7 +136,7 @@ export function validateRefund(draft: RefundDraft): Record<string, string> {
 
   const reason = draft.reasonCode.trim();
   if (reason === "" || reason.length > REASON_CODE_MAX_LENGTH) {
-    errors.reasonCode = `Give the reason code Finance uses, up to ${REASON_CODE_MAX_LENGTH} characters.`;
+    errors.reasonCode = `Give the reason code Operations uses, up to ${REASON_CODE_MAX_LENGTH} characters.`;
   } else if (!REASON_CODE_PATTERN.test(reason)) {
     errors.reasonCode = "Letters, numbers, hyphens and underscores only — no spaces.";
   }

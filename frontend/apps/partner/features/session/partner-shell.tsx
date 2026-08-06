@@ -197,9 +197,23 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     );
   }
 
+  // Selecting the Partner role for them. This app is deployed on its own domain,
+  // so the domain is the role — and since Django re-grants `customer` on every
+  // login and picks the alphabetically first grant, every Partner sign-in would
+  // otherwise land on a picker asking a question the URL already answered.
+  if (guard.isSelectingRole) {
+    return (
+      <main className="flex min-h-screen items-center justify-center gap-2 px-4 text-text-secondary">
+        <Spinner size="sm" />
+        Opening your account…
+      </main>
+    );
+  }
+
   if (guard.status === "forbidden") {
-    // Holding the grant but acting as another role is recoverable in one click;
-    // not holding it at all is an invitation to apply, not a denial.
+    // Normally handled above. Reaching here with the grant means the automatic
+    // switch was refused, so this is a real fallback; without the grant it is an
+    // invitation to apply, not a denial.
     return hasRole(guard.user, PARTNER_ROLE) ? (
       <SwitchToPartner />
     ) : (

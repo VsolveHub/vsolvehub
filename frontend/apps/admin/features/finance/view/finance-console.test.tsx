@@ -257,7 +257,7 @@ describe("reconciling", () => {
     client.POST.mockResolvedValue(ok(refund({ status: "SUCCEEDED" })));
     render(<RefundConsole onStepUpRequired={vi.fn()} />, { wrapper });
 
-    expect(screen.getByText(/no Finance list of refunds and no Finance lookup/i)).toBeInTheDocument();
+    expect(screen.getByText(/no list of refunds and no staff lookup/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/refund id/i), { target: { value: refund().id } });
     fireEvent.click(screen.getByRole("button", { name: /reconcile this refund/i }));

@@ -13,6 +13,7 @@ import {
   type ApiClient,
   type Schemas,
 } from "@vsolve/api-client";
+import { useEffect } from "react";
 
 import { SESSION_STATE } from "./freshness";
 import { queryKeys } from "./keys";
@@ -55,6 +56,19 @@ export type AuthGuardReason =
   | "session_expired"
   | "permission_denied"
   | "missing_role"
+  /**
+   * The user holds the role but Django has a different one selected.
+   *
+   * Distinct from `missing_role` because the remedy is completely different, and
+   * because on this platform it is the *normal* path rather than an edge case:
+   * `verify_login_otp` re-grants `customer` on every login and session creation
+   * picks the alphabetically first grant, so `customer` beats `operations` and
+   * `partner` every time. Every staff and Partner sign-in lands here.
+   *
+   * One switch call fixes it, which is why `useAuthGuard` makes it rather than
+   * showing a picker — see `autoSelectRole`.
+   */
+  | "role_not_selected"
   | "query_failed";
 
 export type AuthGuardDecision =
@@ -85,7 +99,7 @@ export type AuthGuardDecision =
   | {
       status: "forbidden";
       canRender: false;
-      reason: "permission_denied" | "missing_role";
+      reason: "permission_denied" | "missing_role" | "role_not_selected";
       user: CurrentUser | null;
       error: unknown;
       missingRoles: readonly (KnownRole | string)[];
@@ -233,15 +247,17 @@ export function evaluateAuthGuard({
   }
 
   // Granted but not selected. Rendering the workspace here would look like
-  // access and then fail on every request, so it is refused with the roles the
-  // session would have to switch to.
+  // access and then fail on every request, so it is refused — but with its own
+  // reason, because "you do not have access" and "your session is acting as
+  // someone else" need different answers, and only one of them is recoverable
+  // without a person.
   if (requireActiveRole && requiredRoles.length > 0) {
     const isActing = requiredRoles.some((role) => role === activeRole);
     if (!isActing) {
       return {
         status: "forbidden",
         canRender: false,
-        reason: "missing_role",
+        reason: "role_not_selected",
         user,
         error: null,
         missingRoles: requiredRoles,
@@ -302,10 +318,34 @@ export function useAuthGuard(
     requiredRoles?: readonly (KnownRole | string)[];
     /** Require the role to be Django's *selected* role, not merely granted. */
     requireActiveRole?: boolean;
+    /**
+     * Select the required role automatically when the user already holds it.
+     *
+     * ## Why this is the default for a single-role app
+     *
+     * Each app is deployed on its own domain — customer, partner and operations
+     * — so the domain *is* the role. Asking somebody who has just signed in to
+     * `consolve.vsolvehub.com` which role they meant is asking a question whose
+     * answer the URL already gave.
+     *
+     * It is not a rare prompt, either. `verify_login_otp` re-grants `customer`
+     * on every login and session creation picks the alphabetically first grant,
+     * so `customer` beats both `operations` and `partner`: without this, *every*
+     * staff and Partner sign-in lands on a picker.
+     *
+     * ## Why this is not a security hole
+     *
+     * The switch is `POST /auth/roles/switch/`, and Django refuses it unless the
+     * grant is held and unrevoked. This asks for a role the user already has; it
+     * cannot obtain one. A user with no Operations grant still gets
+     * `missing_role` and the honest no-access screen.
+     */
+    autoSelectRole?: boolean;
   } = {},
-): AuthGuardDecision & { activeRole: string | null } {
+): AuthGuardDecision & { activeRole: string | null; isSelectingRole: boolean } {
   const session = useCurrentSession(apiClient, { enabled: options.enabled });
   const activeRole = session.data?.active_role ?? null;
+  const switchRole = useSwitchRole(apiClient);
 
   const decision = evaluateAuthGuard({
     // `user: null` in a 200 projection is a definite "nobody", which lands on
@@ -318,7 +358,31 @@ export function useAuthGuard(
     requireActiveRole: options.requireActiveRole,
   });
 
-  return { ...decision, activeRole };
+  const autoSelect = options.autoSelectRole ?? true;
+  const wanted = options.requiredRoles?.[0] ?? null;
+  const shouldSelect =
+    autoSelect &&
+    decision.reason === "role_not_selected" &&
+    wanted !== null &&
+    // Attempted once. `switchRole.isIdle` goes false the moment the mutation
+    // fires, so a rejected switch cannot become a loop against an endpoint that
+    // will keep rejecting it — the manual screen is the fallback.
+    switchRole.isIdle;
+
+  useEffect(() => {
+    if (shouldSelect && wanted !== null) switchRole.mutate(wanted);
+    // `switchRole` is a stable mutation object; re-running on its identity would
+    // re-fire the effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldSelect, wanted]);
+
+  return {
+    ...decision,
+    activeRole,
+    // Lets a shell render "signing you in" rather than flashing a picker for the
+    // instant between reading the session and the switch landing.
+    isSelectingRole: shouldSelect || switchRole.isPending,
+  };
 }
 
 export function useSessionDevices(
