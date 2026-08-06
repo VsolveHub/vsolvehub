@@ -10,7 +10,7 @@ paste it cold and it will still work.
 
 ## Status — 2026-08-06: every step in this roadmap is complete
 
-**Steps 0 through 9 below have all landed.** The last of them, FE-12, committed as `8ec2fe9`; the
+**Steps 0 through 9 below have all landed.** The last of them, FE-12, committed as `e6875d6`; the
 branch merged to `main` the same day at OpenAPI **1.17.0** / 126 paths.
 
 The only M1 stage still open is **S8 acceptance**, which this file does not carry a prompt for —

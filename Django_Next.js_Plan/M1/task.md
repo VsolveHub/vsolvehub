@@ -178,7 +178,7 @@ is FE-13 here.** The brief's content is correct; only its ID is wrong.
 | BE-10 | **Done** | — | **B9 + B10, domain and HTTP (1.17.0, 18 paths).** `apps/cases` (nine kinds, team routing, SLA, required terminal results, append-only events), `apps/payouts` (immutable signed ledger, 24h account-change cooling, maker-checker in both the service and a `CheckConstraint`, RazorpayX adapter, reconciliation sweep), `apps/notifications` (intent/delivery split, kill switches as rows). A dispute holds the Partner's earning at `PENDING`; closing the case releases it, but only when no other open case holds the same booking. Metrics named and retention swept (S6c). | Financial maker-checker and the double-reservation race pass, the latter with real threads against PostgreSQL — the guarantee is a partial unique index, so the losing caller gets an `IntegrityError` rather than a silent duplicate. **Open, both external:** live RazorpayX sandbox submission (credentials) and notification provider delivery (MSG91/DLT). |
 | **BE-RANK** | **Not started** | Yes | Dispatch eligibility currently ignores travel buffers, area operating hours during matching and presence policy; order is a stable sort on Partner UUID. Explainability was added, the ranking was not. | A Partner is not offered a job they cannot physically reach, and the recorded `ranking_snapshot` names a real deciding factor. |
 | **BE-CAT** | **Not started** | Yes | B3 Operations lifecycle APIs: authorized, audited catalog / task-rate / pricing-policy / service-area management with effective-date and activation validation, plus range `ExclusionConstraint` overlap protection for simultaneously-effective rates (only plain `UniqueConstraint` exists today). | Two overlapping effective rates cannot both be active; activation and quote selection have concurrency tests. |
-| BE-OPS | **Done** | — | Worker/beat topology (`scripts/worker.*`, `scripts/beat.*`), outbox recovery sweep with lease/dead-letter, real-infrastructure suite (`tests/integration/`, `-m integration`), 5 runbooks and 6 ADRs. | Landed in `d3e1e6d`. The 3 integration tests are deselected from the default run by design and need `-m integration` against real Redis. |
+| BE-OPS | **Done** | — | Worker/beat topology (`scripts/worker.*`, `scripts/beat.*`), outbox recovery sweep with lease/dead-letter, real-infrastructure suite (`tests/integration/`, `-m integration`), 5 runbooks and 6 ADRs. | Landed in `dc4a308`. The 3 integration tests are deselected from the default run by design and need `-m integration` against real Redis. |
 
 ---
 
@@ -253,15 +253,15 @@ S1–S5 are complete and committed. S6 is partly done. The table is the honest r
 | --- | --- | --- |
 | ~~S1~~ | Green the tree and commit | **Done** 2026-08-05 |
 | ~~S2~~ | Real gates against real PostgreSQL | **Done** 2026-08-05 |
-| ~~S3~~ | Seven B8 review findings + group reschedule | **Done** 2026-08-06 (`87c3591`) |
-| ~~S4~~ | BE-09-API — B8 published as one release, OpenAPI 1.16.0 | **Done** 2026-08-06 (`d7c06ba`) |
-| ~~S5~~ | FE-11 Customer visit + Partner work surfaces | **Done** 2026-08-06 (`4d23843`) |
-| ~~S6a~~ | **B9 domain** — cases, ledger, payout batches, RazorpayX adapter | **Done** (`5b7c679`). Verified: 47 tests green on an isolated `DATABASE_URL`. The "cross-file fixture collisions" diagnosis was wrong — see the corrected test-status note above. |
-| ~~S6b~~ | **B10 domain** — notification intent/delivery, kill switches | **Done** (`a73c14c`). 19 tests. |
-| ~~S6c~~ | Metric names + retention sweeps | **Done** (`c279243`). `common/observability/metrics.py` names every counter the plan asks for; retention sweeps expired OTP challenges, sessions and audit events on separate horizons. Consent receipts are deliberately never swept. **Alerting on those metrics is still a deployment task, not a code one.** |
-| ~~S6d~~ | The HTTP surface for B9/B10 | **Done** (`466aa55`). 18 paths in OpenAPI **1.17.0**. Payout approve/pay behind `HasRecentOperationsStepUp`; cancel deliberately not. `HasRecentFinanceStepUp` deleted. |
-| ~~S7~~ | **FE-12** | **Done** (`8ec2fe9`). `/operations/{cases,payouts,kill-switches}` and Partner `/earnings`, all reachable from the nav. |
-| ~~S7b~~ | Per-host sessions, role-picker removal, demo seed data | **Done** (`2e8e7ee`, `31b319b`, `b76ed70`). See the three-host section below. |
+| ~~S3~~ | Seven B8 review findings + group reschedule | **Done** 2026-08-06 (`8ff87ff`) |
+| ~~S4~~ | BE-09-API — B8 published as one release, OpenAPI 1.16.0 | **Done** 2026-08-06 (`5500c3e`) |
+| ~~S5~~ | FE-11 Customer visit + Partner work surfaces | **Done** 2026-08-06 (`5a83f1b`) |
+| ~~S6a~~ | **B9 domain** — cases, ledger, payout batches, RazorpayX adapter | **Done** (`e6bb07c`). Verified: 47 tests green on an isolated `DATABASE_URL`. The "cross-file fixture collisions" diagnosis was wrong — see the corrected test-status note above. |
+| ~~S6b~~ | **B10 domain** — notification intent/delivery, kill switches | **Done** (`b1bb8b9`). 19 tests. |
+| ~~S6c~~ | Metric names + retention sweeps | **Done** (`e142a01`). `common/observability/metrics.py` names every counter the plan asks for; retention sweeps expired OTP challenges, sessions and audit events on separate horizons. Consent receipts are deliberately never swept. **Alerting on those metrics is still a deployment task, not a code one.** |
+| ~~S6d~~ | The HTTP surface for B9/B10 | **Done** (`c60e083`). 18 paths in OpenAPI **1.17.0**. Payout approve/pay behind `HasRecentOperationsStepUp`; cancel deliberately not. `HasRecentFinanceStepUp` deleted. |
+| ~~S7~~ | **FE-12** | **Done** (`e6875d6`). `/operations/{cases,payouts,kill-switches}` and Partner `/earnings`, all reachable from the nav. |
+| ~~S7b~~ | Per-host sessions, role-picker removal, demo seed data | **Done** (`f270715`, `02701f3`, `3185f5c`). See the three-host section below. |
 | **S8** | **M1 acceptance** — the 44 scenarios plus the concurrency list, against authoritative Django, then the cutover checklist. **This is the only stage left.** | Unblocked. Clear the two-item entry list above first — running acceptance on an unverified base proves nothing. |
 
 ### What is still unproven
@@ -289,7 +289,7 @@ services rather than fixture inserts — 10 cases (2 deliberately overdue), 10 p
 every state, 12 ledger entries, 3 kill switches, a populated review queue and 2 rule drafts. It
 is idempotent and re-runnable.
 
-Five real bugs were fixed in it before it produced usable data (`b76ed70`), including seeded
+Five real bugs were fixed in it before it produced usable data (`3185f5c`), including seeded
 dispatch stealing offers from live test partners, and stale reservations blocking re-runs.
 Compatibility rules are seeded as **DRAFT on purpose**: a seeder that approves its own rules
 would hide the maker-checker gate the console exists to exercise.
@@ -298,7 +298,7 @@ would hide the maker-checker gate the console exists to exercise.
 
 The apps deploy to `vsolvehub.com`, `partner.vsolvehub.com` and `consolve.vsolvehub.com`.
 
-**Sessions are per-host, and production refuses to start otherwise** (`2e8e7ee`).
+**Sessions are per-host, and production refuses to start otherwise** (`f270715`).
 `SESSION_COOKIE_DOMAIN` and `CSRF_COOKIE_DOMAIN` stay unset, so the browser scopes each session
 cookie to the exact host that issued it. A shared `.vsolvehub.com` cookie would make a stolen
 Customer session a valid credential against the console that approves payouts — refused rather
@@ -306,7 +306,7 @@ than warned about, because it is a one-line change somebody makes to give staff 
 sign-in and it breaks nothing visibly. `config/settings/guards.py` holds the check so it can be
 tested without executing a whole settings module.
 
-**The role picker is gone** (`31b319b`). Each app selects its own role, because the domain *is*
+**The role picker is gone** (`02701f3`). Each app selects its own role, because the domain *is*
 the role — and because `verify_login_otp` re-grants `customer` on every login and session
 creation picks the alphabetically first grant, so every staff and Partner sign-in used to land
 on a picker.
@@ -321,7 +321,7 @@ Still to set at deploy time:
 
 ### Parallel lanes — all closed
 
-P-A through P-I were completed in a concurrent session and are committed (`637033c`): FE-16 and
+P-A through P-I were completed in a concurrent session and are committed (`0e1e75d`): FE-16 and
 FE-15 tests, FE-17 Operations dispatch recovery, FE-18 the Finance refund console, and a shared
 admin workspace shell. Nothing on the parallel board is open.
 

@@ -27,7 +27,7 @@ mypy. Local infrastructure is `infra/compose.yaml` (PostgreSQL on 15432, Redis o
 - The default `pytest` run must remain runnable with **no Redis** present. Integration tests are
   opt-in via the `integration` marker, which is already declared in `pyproject.toml` and currently
   unused by any test.
-- FE-10 landed as `7b555e1` and the contract is at 1.14.0. Confine `base.py` edits to the Celery
+- FE-10 landed as `56ecc22` and the contract is at 1.14.0. Confine `base.py` edits to the Celery
   block near line 288 and leave `SPECTACULAR_SETTINGS` alone.
 - Stage only BE-OPS paths when committing. FE-14 work is live in the same working tree.
 - No `print` (ruff `T20`). Use the `logging` module or `self.stdout.write` in management commands.

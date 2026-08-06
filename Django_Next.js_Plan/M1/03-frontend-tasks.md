@@ -47,7 +47,7 @@ The live board is [task.md](./task.md).
   and `features/work/` (Partner), with routes `/bookings/[groupId]/visits/[bookingId]` and
   `/jobs/[bookingId]`. It needed a contract fix first — `FulfilmentUnit.booking_id`, without
   which a group could describe three visits and offer no way to open any of them.
-- **FE-15, FE-16, FE-17 and FE-18 are complete with tests** (parallel session, `637033c`).
+- **FE-15, FE-16, FE-17 and FE-18 are complete with tests** (parallel session, `0e1e75d`).
 - **FE-12 is the only frontend task left**, and it is blocked: `apps/cases`, `apps/payouts` and
   `apps/notifications` exist as domain layers with no HTTP surface, so building against them
   would mean inventing DTOs.
@@ -73,7 +73,7 @@ The live board is [task.md](./task.md).
   only the source scanner. That is lanes P-A and P-B.
 - Four published Operations dispatch commands and the whole Finance refund surface still have no
   UI — FE-17 and FE-18 on the board.
-- Working tree committed as `bc17926` + `10903d7`.
+- Working tree committed as `ae419bd` + `8db89b1`.
 
 The full findings are in [07-audit-2026-08-05.md](./07-audit-2026-08-05.md).
 
