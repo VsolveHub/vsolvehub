@@ -247,10 +247,37 @@ class SchedulingGroupsSerializer(serializers.Serializer[dict[str, object]]):
     groups = SchedulingGroupSerializer(many=True)
 
 
+class PreferredStartSerializer(serializers.Serializer[dict[str, object]]):
+    """One visit's chosen start, keyed by the scheduling group it belongs to."""
+
+    group_key = serializers.CharField(max_length=64)
+    starts_at = serializers.DateTimeField()
+
+
 class FulfilmentPlanSetCreateSerializer(serializers.Serializer[dict[str, object]]):
+    """Plan a cart against one start time **per visit**.
+
+    `preferred_starts` replaced a single `preferred_start` in 1.18.0. One time for
+    the whole cart made "electrician on Monday, salon on Friday" inexpressible:
+    every unit was derived by cascading a single clock forward.
+
+    Every group the server publishes must carry a start, and no group may carry
+    two. A missing one is refused rather than defaulted, because defaulting picks
+    a time on the Customer's behalf for work they never scheduled.
+    """
+
     address_id = serializers.UUIDField()
     expected_cart_version = serializers.IntegerField(min_value=1)
-    preferred_start = serializers.DateTimeField()
+    preferred_starts = PreferredStartSerializer(many=True, allow_empty=False)
+
+    @staticmethod
+    def validate_preferred_starts(
+        value: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        keys = [entry["group_key"] for entry in value]
+        if len(keys) != len(set(keys)):
+            raise serializers.ValidationError("Each visit may be given only one start time.")
+        return value
 
 
 class PlanUnitItemSerializer(serializers.ModelSerializer[PlanUnitItem]):

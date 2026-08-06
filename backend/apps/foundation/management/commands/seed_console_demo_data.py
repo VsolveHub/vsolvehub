@@ -385,12 +385,22 @@ class Command(BaseCommand):
         cart_version = int(response.json()["version"])
         self._demo_partner(slug=slug, slot=slot)
 
+        groups_response = client.post(
+            "/api/v1/cart/scheduling-groups/",
+            {"address_id": address_id, "expected_cart_version": cart_version},
+            format="json",
+        )
+        assert groups_response.status_code == HTTPStatus.OK, groups_response.json()
+
         plan_response = client.post(
             "/api/v1/fulfilment-plan-sets/",
             {
                 "address_id": address_id,
                 "expected_cart_version": cart_version,
-                "preferred_start": _preferred_start(slot).isoformat(),
+                "preferred_starts": [
+                    {"group_key": group["key"], "starts_at": _preferred_start(slot).isoformat()}
+                    for group in groups_response.json()["groups"]
+                ],
             },
             format="json",
             HTTP_IDEMPOTENCY_KEY=f"{key_prefix}-plan",

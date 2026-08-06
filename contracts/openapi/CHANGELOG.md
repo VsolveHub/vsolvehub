@@ -1,5 +1,45 @@
 # API Contract Changelog
 
+## 1.18.0 - One start time per visit
+
+**Breaking.** `POST /fulfilment-plan-sets/` replaces `preferred_start: datetime` with
+`preferred_starts: [{group_key, starts_at}]`.
+
+One time for the whole cart made "electrician on Monday, salon on Friday" inexpressible. The
+planner derived every unit by cascading a single clock forward, so a Customer with two unrelated
+services could only ask for them back-to-back on one day. Every group the server publishes must
+now carry a start, and no group may carry two — a missing one is refused rather than defaulted,
+because defaulting picks a time on the Customer's behalf for work they never scheduled.
+
+### The grouping is published before the times
+
+`POST /cart/scheduling-groups/` answers *how many* start times to pick, which the plan-set command
+structurally cannot: it takes the times as input. The response is a projection over the grouping
+the planner already computes from `ServiceCompatibilityRule`.
+
+It deliberately **ignores Partner availability**. Merging asks two questions — "is this the kind of
+work one Partner does in one visit?" and "is someone free at this exact time?" — and only the first
+belongs to a slot picker. Including the second would split "Electrician" into two rows because
+somebody called in sick, and merge them again an hour later, with nothing on screen to explain the
+change. Staffing is still resolved at plan time, where a group no single Partner can cover falls
+back to independent visits at the chosen start.
+
+`scheduling_groups_changed` (409) is the refusal when the submitted keys are not the visits the
+cart currently makes. Group keys are derived from membership, so editing the cart invalidates them
+by construction. Not repaired: re-deriving and reassigning would move a visit to a slot nobody
+agreed to.
+
+### Cart suggestions
+
+`POST /cart/suggestions/` returns catalog `ServiceCard`s for variants carrying an active
+`SAME_PARTNER_SEQUENTIAL` rule against something already in the cart — the same rule the planner
+uses to merge work into one unit, which is what entitles the cart to say "the same professional can
+do this in the same visit". `PARALLEL_ALLOWED` is excluded: it means a *second* Partner, and
+therefore a second visit and a second minimum-visit floor.
+
+Empty stays empty. There is no popular-services fallback, because the heading is a claim about
+compatibility and padding it would make that claim false.
+
 ## 1.17.0 - Cases, ledger, payouts and kill switches
 
 18 new paths. `apps/cases`, `apps/payouts` and `apps/notifications` were domain layers behind no

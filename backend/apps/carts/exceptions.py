@@ -120,6 +120,25 @@ class FulfilmentPlanStaleApiError(APIException):
     )
 
 
+class SchedulingGroupsChangedApiError(APIException):
+    """The visits the Customer picked times for are not the visits this cart makes now.
+
+    Refused rather than repaired. Re-deriving the grouping and reassigning the
+    chosen times would move a visit to a slot the Customer never agreed to — the
+    two services they scheduled separately could silently become one, or a time
+    picked for the electrician could land on the salon. Asking again is the only
+    honest recovery, and the client refetches the grouping to do it.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "scheduling_groups_changed"
+    error_code = "scheduling_groups_changed"
+    safe_message = (
+        "Your cart changed, so the visits you picked times for no longer match. "
+        "Nothing has been booked. Choose your times again."
+    )
+
+
 class FulfilmentPlanUnavailableApiError(APIException):
     status_code = status.HTTP_409_CONFLICT
     default_code = "fulfilment_plan_unavailable"

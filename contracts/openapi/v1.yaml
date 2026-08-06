@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.17.0
+  version: 1.18.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -7740,6 +7740,16 @@ components:
       - status
     FulfilmentPlanSetCreateRequest:
       type: object
+      description: |-
+        Plan a cart against one start time **per visit**.
+
+        `preferred_starts` replaced a single `preferred_start` in 1.18.0. One time for
+        the whole cart made "electrician on Monday, salon on Friday" inexpressible:
+        every unit was derived by cascading a single clock forward.
+
+        Every group the server publishes must carry a start, and no group may carry
+        two. A missing one is refused rather than defaulted, because defaulting picks
+        a time on the Customer's behalf for work they never scheduled.
       properties:
         address_id:
           type: string
@@ -7747,13 +7757,14 @@ components:
         expected_cart_version:
           type: integer
           minimum: 1
-        preferred_start:
-          type: string
-          format: date-time
+        preferred_starts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreferredStartRequest'
       required:
       - address_id
       - expected_cart_version
-      - preferred_start
+      - preferred_starts
     FulfilmentPlanSetStatusEnum:
       enum:
       - ACTIVE
@@ -10899,6 +10910,21 @@ components:
       - quantity
       - scope_snapshot
       - variant_snapshot
+    PreferredStartRequest:
+      type: object
+      description: One visit's chosen start, keyed by the scheduling group it belongs
+        to.
+      properties:
+        group_key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        starts_at:
+          type: string
+          format: date-time
+      required:
+      - group_key
+      - starts_at
     PrivacyRequest:
       type: object
       properties:

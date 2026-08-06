@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timedelta
 from http import HTTPStatus
 from threading import Barrier
+from typing import cast
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -150,13 +151,41 @@ def _partner(*, suffix: str, variant_slugs: tuple[str, ...]) -> PartnerProfile:
     return partner
 
 
-def _plan(client: APIClient, *, address_id: str, cart_version: int) -> dict[str, object]:
+def _scheduling_groups(
+    client: APIClient, *, address_id: str, cart_version: int
+) -> list[dict[str, object]]:
+    response = client.post(
+        "/api/v1/cart/scheduling-groups/",
+        {"address_id": address_id, "expected_cart_version": cart_version},
+        format="json",
+    )
+    assert response.status_code == HTTPStatus.OK, response.json()
+    return cast(list[dict[str, object]], response.json()["groups"])
+
+
+def _plan(
+    client: APIClient,
+    *,
+    address_id: str,
+    cart_version: int,
+    starts_at: datetime | None = None,
+) -> dict[str, object]:
+    """Plans the cart, giving every published visit the same start.
+
+    Real callers pick a time per visit; these tests are about the planner's
+    structure rather than about scheduling, so they hand every group one time and
+    keep the old single-start behaviour as the case under test.
+    """
+    when = _preferred_start() if starts_at is None else starts_at
+    groups = _scheduling_groups(client, address_id=address_id, cart_version=cart_version)
     response = client.post(
         "/api/v1/fulfilment-plan-sets/",
         {
             "address_id": address_id,
             "expected_cart_version": cart_version,
-            "preferred_start": _preferred_start().isoformat(),
+            "preferred_starts": [
+                {"group_key": group["key"], "starts_at": when.isoformat()} for group in groups
+            ],
         },
         format="json",
         HTTP_IDEMPOTENCY_KEY=f"plan-{cart_version}",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -20,6 +20,7 @@ from apps.assignments.models import Reservation
 from apps.carts.exceptions import (
     FulfilmentPlanStaleApiError,
     FulfilmentPlanUnavailableApiError,
+    SchedulingGroupsChangedApiError,
 )
 from apps.carts.models import (
     Cart,
@@ -520,15 +521,32 @@ def _allocate(total: int, weights: tuple[int, ...]) -> tuple[int, ...]:
 def _unit_schedule(
     proposal: ProposedAlternative,
     *,
-    preferred_start: datetime,
+    starts_by_item: Mapping[UUID, datetime],
 ) -> tuple[datetime, ...]:
+    """When each unit of this alternative starts.
+
+    Every unit is anchored to the start the Customer chose for **its own**
+    scheduling group. That is the whole point of per-visit scheduling: an
+    electrician on Monday and a salon appointment on Friday must not be derived
+    from one clock.
+
+    Within a single scheduling group the old cascade is preserved. An alternative
+    may split one group into several units — "two professionals instead of one" —
+    and those still have to run back-to-back rather than on top of each other,
+    because the group is work one Partner was expected to do in sequence and may
+    carry an ordering dependency. Cursors are therefore kept *per anchor*: units
+    sharing a chosen start queue behind each other, units with different chosen
+    starts do not interact at all.
+    """
     if proposal.simultaneous:
-        return tuple(preferred_start for _group in proposal.groups)
+        return tuple(starts_by_item[group[0].item.id] for group in proposal.groups)
+    cursors: dict[datetime, datetime] = {}
     starts: list[datetime] = []
-    cursor = preferred_start
     for group in proposal.groups:
+        anchor = starts_by_item[group[0].item.id]
+        cursor = cursors.get(anchor, anchor)
         starts.append(cursor)
-        cursor += timedelta(minutes=sum(item.duration_minutes for item in group))
+        cursors[anchor] = cursor + timedelta(minutes=sum(item.duration_minutes for item in group))
     return tuple(starts)
 
 
@@ -537,10 +555,10 @@ def _price_alternative(
     *,
     area: ServiceArea,
     postal_code: str,
-    preferred_start: datetime,
+    starts_by_item: Mapping[UUID, datetime],
     policy: PricingPolicy,
 ) -> tuple[PricedUnit, ...] | None:
-    starts = _unit_schedule(proposal, preferred_start=preferred_start)
+    starts = _unit_schedule(proposal, starts_by_item=starts_by_item)
     unit_inputs: list[UnitInput] = []
     for group, starts_at in zip(proposal.groups, starts, strict=True):
         duration = sum(item.duration_minutes for item in group)
@@ -659,7 +677,7 @@ def resolve_cart_service_area(
     *,
     cart: Cart,
     address: Address,
-    at: datetime | None = None,
+    starts_by_item: Mapping[UUID, datetime] | None = None,
     items: tuple[PlanningItem, ...] | None = None,
 ) -> ServiceArea:
     """The one service area every item in this cart resolves to.
@@ -669,14 +687,19 @@ def resolve_cart_service_area(
     cannot happen in one place cannot be planned as one booking.
 
     Shared by the planner and the scheduling-groups read so the two cannot disagree
-    about where a cart can happen. `at` is optional because the grouping read has
-    no chosen time yet: omitting it asks "is this area serviceable at all", which
-    is the strongest question answerable before the Customer has picked a slot.
+    about where a cart can happen.
+
+    `starts_by_item` maps each cart item to the start of *its own* visit, because
+    with per-visit scheduling "is the area open then?" has a different answer for
+    each one. Omitting it asks only "is this area serviceable at all", which is the
+    strongest question answerable before the Customer has picked any slot — and is
+    exactly what the scheduling-groups read needs.
     """
     entries = _planning_items(cart) if items is None else items
     service_area: ServiceArea | None = None
     failures: list[dict[str, object]] = []
     for entry in entries:
+        at = None if starts_by_item is None else starts_by_item.get(entry.item.id)
         decision = check_serviceability(
             postal_code=address.postal_code,
             variant_id=entry.item.variant_id,
@@ -704,6 +727,31 @@ def resolve_cart_service_area(
     return service_area
 
 
+def _starts_by_item(
+    *,
+    cart: Cart,
+    area: ServiceArea,
+    submitted: Mapping[str, datetime],
+    at: datetime,
+) -> dict[UUID, datetime]:
+    """Maps each cart item to the start chosen for the visit it belongs to.
+
+    Refuses outright when the submitted keys are not exactly the visits this cart
+    currently makes — too few, too many, or simply different. Both halves matter: a
+    missing key means work with no time, and an unknown key means the Customer
+    scheduled a visit that no longer exists.
+
+    Deliberately not repaired. Re-deriving the grouping and reassigning the times
+    would move a visit to a slot nobody agreed to — two services scheduled days
+    apart could silently collapse into one, or the electrician's time could land on
+    the salon appointment. The Customer is asked again instead.
+    """
+    groups = scheduling_groups(cart=cart, area=area, at=at)
+    if {group.key for group in groups} != set(submitted):
+        raise SchedulingGroupsChangedApiError
+    return {item_id: submitted[group.key] for group in groups for item_id in group.cart_item_ids}
+
+
 @transaction.atomic
 def create_fulfilment_plan_set(
     *,
@@ -711,7 +759,7 @@ def create_fulfilment_plan_set(
     cart: Cart,
     address: Address,
     expected_cart_version: int,
-    preferred_start: datetime,
+    preferred_starts: Mapping[str, datetime],
 ) -> FulfilmentPlanSet:
     now = timezone.now()
     locked_cart = Cart.objects.select_for_update().get(id=cart.id)
@@ -722,28 +770,41 @@ def create_fulfilment_plan_set(
     if address.customer_id != customer.id or address.archived_at is not None:
         raise PermissionError("Use one of the Customer's active addresses.")
     items = _planning_items(locked_cart)
-    service_area = resolve_cart_service_area(
+    # The area is resolved without times first, because the grouping the submitted
+    # starts are keyed to is itself area-scoped: asking "is this cart serviceable
+    # here at all" is what makes the group keys meaningful enough to check.
+    service_area = resolve_cart_service_area(cart=locked_cart, address=address, items=items)
+    submitted = dict(preferred_starts)
+    starts_by_item = _starts_by_item(
+        cart=locked_cart,
+        area=service_area,
+        submitted=submitted,
+        at=now,
+    )
+    resolve_cart_service_area(
         cart=locked_cart,
         address=address,
-        at=preferred_start,
+        starts_by_item=starts_by_item,
         items=items,
     )
-    _assert_window_time_is_current(
-        starts_at=preferred_start,
-        area_timezone=service_area.timezone,
-        now=now,
-    )
+    for starts_at in submitted.values():
+        _assert_window_time_is_current(
+            starts_at=starts_at,
+            area_timezone=service_area.timezone,
+            now=now,
+        )
     pricing = current_pricing_policy(code="m1-technician")
     cancellation = current_cancellation_policy(code="m1-scheduled-today")
     if pricing is None or cancellation is None:
         raise ValueError("Current pricing and cancellation policies are required.")
     rules = _current_rules(items, at=now)
+    earliest = min(submitted.values())
     try:
         proposals = _candidate_alternatives(
             items=items,
             rules=rules,
             area=service_area,
-            preferred_start=preferred_start,
+            preferred_start=earliest,
         )
     except ValueError as exc:
         raise FulfilmentPlanUnavailableApiError(
@@ -757,7 +818,7 @@ def create_fulfilment_plan_set(
                 proposal,
                 area=service_area,
                 postal_code=address.postal_code,
-                preferred_start=preferred_start,
+                starts_by_item=starts_by_item,
                 policy=pricing,
             )
         )
@@ -786,7 +847,7 @@ def create_fulfilment_plan_set(
             for entry in items
         ],
         "address_id": str(address.id),
-        "preferred_start": preferred_start.isoformat(),
+        "preferred_starts": {key: value.isoformat() for key, value in sorted(submitted.items())},
         "compatibility_rules": [
             {"id": str(rule.id), "version": rule.version, "mode": rule.mode}
             for rule in sorted(rules.values(), key=lambda value: str(value.id))
