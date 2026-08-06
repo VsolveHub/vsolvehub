@@ -32,6 +32,7 @@ from apps.carts.models import (
     ServiceCompatibilityRule,
 )
 from apps.carts.planning import (
+    cart_suggestion_service_ids,
     create_fulfilment_plan_set,
     create_plan_quote,
     resolve_cart_service_area,
@@ -51,6 +52,7 @@ from apps.carts.serializers import (
     CartItemUpdateSerializer,
     CartMergeSerializer,
     CartSerializer,
+    CartSuggestionsSerializer,
     CheckoutCreateSerializer,
     CheckoutSerializer,
     CompatibilityRuleDraftSerializer,
@@ -80,6 +82,7 @@ from apps.carts.services import (
     resolve_session_cart_merge,
     update_cart_item,
 )
+from apps.catalog.selectors import public_services_by_id
 from apps.foundation.services import CommandResult, execute_idempotent
 from apps.identity.models import User
 from apps.locations.models import Address
@@ -605,6 +608,52 @@ class BookingWindowsView(APIView):
         except ValueError as exc:
             raise ValidationError(str(exc), code="booking_windows_invalid") from exc
         return Response(BookingWindowsSerializer(windows).data)
+
+
+class CartSuggestionsView(APIView):
+    """Services one Partner could add to a visit this cart already has.
+
+    `POST` rather than `GET` because the answer is derived from the caller's own
+    cart, which is resolved from the session rather than the URL. A `GET` would
+    imply a cacheable address for something that differs per caller.
+
+    Open to anonymous callers for the same reason the cart itself is: a suggestion
+    is a catalog read, and asking someone to log in before we will tell them what
+    else a professional could do is a worse product for no privacy gain.
+    """
+
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        tags=["Cart"],
+        operation_id="cart_suggestions_create",
+        request=None,
+        responses={200: CartSuggestionsSerializer},
+    )
+    def post(self, request: Request) -> Response:
+        user = (
+            request.user
+            if isinstance(request.user, User) and request.user.is_authenticated
+            else None
+        )
+        session_key = _session_key(request)
+        try:
+            cart = (
+                merge_session_cart(user=user, session_key=session_key)
+                if user is not None
+                else _cart_for(user=None, session_key=session_key)
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="cart_merge_conflict") from exc
+        service_ids = cart_suggestion_service_ids(cart=cart)
+        return Response(
+            CartSuggestionsSerializer(
+                {
+                    "cart_version": cart.version,
+                    "suggestions": public_services_by_id(service_ids),
+                }
+            ).data
+        )
 
 
 class CartSchedulingGroupsView(APIView):

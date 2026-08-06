@@ -22,6 +22,7 @@ from apps.carts.models import (
     ServiceCompatibilityRule,
 )
 from apps.carts.services import BookingWindow, BookingWindowDay, BookingWindows
+from apps.catalog.serializers import ServiceCardSerializer
 from common.serializers import MoneySerializer
 
 
@@ -206,6 +207,18 @@ class CompatibilityRulePageSerializer(serializers.Serializer[dict[str, object]])
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = CompatibilityRuleSerializer(many=True)
+
+
+class CartSuggestionsSerializer(serializers.Serializer[dict[str, object]]):
+    """Services one Partner could add to a visit this cart already has.
+
+    `suggestions` reuses the catalog's own `ServiceCard`, so the cart renders the
+    same card the catalog does rather than a second, drifting shape. An empty list
+    is a real answer and the client renders nothing for it.
+    """
+
+    cart_version = serializers.IntegerField()
+    suggestions = ServiceCardSerializer(many=True)
 
 
 class SchedulingGroupsRequestSerializer(serializers.Serializer[dict[str, object]]):

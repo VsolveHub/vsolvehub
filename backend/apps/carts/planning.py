@@ -445,6 +445,65 @@ def scheduling_groups(
     )
 
 
+def cart_suggestion_service_ids(*, cart: Cart, limit: int = 4) -> tuple[UUID, ...]:
+    """Services one Partner could add to a visit this cart already has.
+
+    The signal is an active `SAME_PARTNER_SEQUENTIAL` compatibility rule against
+    something already in the cart — the *same* rule `_build_sequential_groups` uses
+    to merge work into one unit. That is what entitles the screen to say "the same
+    professional can do this in the same visit": it is the platform's own merge
+    decision, not a merchandising guess.
+
+    `PARALLEL_ALLOWED` is deliberately excluded. It means a **second** Partner, and
+    therefore a second visit and a second minimum-visit floor — the opposite of
+    what this section promises.
+
+    Returns empty rather than substituting popular services. A cart with nothing
+    compatible has nothing to say here, and filling the space anyway would make the
+    heading false.
+
+    Returns service **ids**, not cards: what is publishable about a service is the
+    catalog's decision, and `public_services_by_id` is where that gate lives.
+    """
+    try:
+        items = _planning_items(cart)
+    except ValueError:
+        return ()
+
+    now = timezone.now()
+    present_variant_ids = {entry.item.variant_id for entry in items}
+    present_service_ids = {entry.item.variant.service_id for entry in items}
+    rules = (
+        ServiceCompatibilityRule.objects.filter(
+            mode=ServiceCompatibilityRule.Mode.SAME_PARTNER_SEQUENTIAL,
+            is_active=True,
+            lifecycle_status=ServiceCompatibilityRule.LifecycleStatus.ACTIVE,
+            effective_from__lte=now,
+        )
+        .filter(models.Q(effective_to__isnull=True) | models.Q(effective_to__gt=now))
+        .filter(
+            models.Q(left_variant_id__in=present_variant_ids)
+            | models.Q(right_variant_id__in=present_variant_ids)
+        )
+        .select_related("left_variant", "right_variant")
+        .order_by("created_at", "id")
+    )
+
+    suggested: list[UUID] = []
+    for rule in rules:
+        for near_id, far in (
+            (rule.left_variant_id, rule.right_variant),
+            (rule.right_variant_id, rule.left_variant),
+        ):
+            if near_id not in present_variant_ids:
+                continue
+            if far.id in present_variant_ids or far.service_id in present_service_ids:
+                continue
+            if far.service_id not in suggested:
+                suggested.append(far.service_id)
+    return tuple(suggested[:limit])
+
+
 def _allocate(total: int, weights: tuple[int, ...]) -> tuple[int, ...]:
     denominator = sum(weights)
     if total == 0:

@@ -1,6 +1,8 @@
 """Optimized public catalog reads."""
 
+from collections.abc import Iterable
 from typing import Protocol, cast
+from uuid import UUID
 
 from django.db import models
 from django.db.models import Exists, OuterRef, Prefetch, QuerySet
@@ -92,6 +94,43 @@ def public_services_for_category(category_slug: str) -> QuerySet[Service]:
             subcategory__is_active=True,
             subcategory__category__is_active=True,
             subcategory__category__slug=category_slug,
+            has_current_rate=True,
+        )
+        .select_related("subcategory", "subcategory__category")
+        .prefetch_related(
+            Prefetch("variants", queryset=_public_variants(), to_attr="public_variants"),
+            Prefetch("media", queryset=ServiceMedia.objects.filter(is_active=True)),
+        )
+        .distinct()
+        .order_by("display_order", "name")
+    )
+
+
+def public_services_by_id(service_ids: Iterable[UUID]) -> QuerySet[Service]:
+    """Publishable cards for an explicit set of services.
+
+    Carries the same gate as the category listing — active service, active
+    subcategory and category, and a current rate — because a service that is not
+    fit to appear in the catalog is not fit to appear as a suggestion either.
+    Filtering by id without that gate is how a paused service reaches a customer.
+    """
+    ids = list(service_ids)
+    if not ids:
+        return Service.objects.none()
+    now = timezone.now()
+    current_rate = ServiceRate.objects.filter(
+        variant__service_id=OuterRef("pk"),
+        variant__is_active=True,
+        is_active=True,
+        effective_from__lte=now,
+    ).filter(models.Q(effective_to__isnull=True) | models.Q(effective_to__gt=now))
+    return (
+        Service.objects.annotate(has_current_rate=Exists(current_rate))
+        .filter(
+            id__in=ids,
+            status=Service.Status.ACTIVE,
+            subcategory__is_active=True,
+            subcategory__category__is_active=True,
             has_current_rate=True,
         )
         .select_related("subcategory", "subcategory__category")

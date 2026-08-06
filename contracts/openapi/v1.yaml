@@ -1549,6 +1549,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/cart/suggestions/:
+    post:
+      operationId: cart_suggestions_create
+      description: |-
+        Services one Partner could add to a visit this cart already has.
+
+        `POST` rather than `GET` because the answer is derived from the caller's own
+        cart, which is resolved from the session rather than the URL. A `GET` would
+        imply a cacheable address for something that differs per caller.
+
+        Open to anonymous callers for the same reason the cart itself is: a suggestion
+        is a catalog read, and asking someone to log in before we will tell them what
+        else a professional could do is a worse product for no privacy gain.
+      tags:
+      - Cart
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartSuggestions'
+          description: ''
   /api/v1/categories/:
     get:
       operationId: categories_list
@@ -6722,6 +6747,24 @@ components:
       - decisions
       - expected_customer_cart_version
       - expected_session_cart_version
+    CartSuggestions:
+      type: object
+      description: |-
+        Services one Partner could add to a visit this cart already has.
+
+        `suggestions` reuses the catalog's own `ServiceCard`, so the cart renders the
+        same card the catalog does rather than a second, drifting shape. An empty list
+        is a real answer and the client renders nothing for it.
+      properties:
+        cart_version:
+          type: integer
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceCard'
+      required:
+      - cart_version
+      - suggestions
     CaseNoteRequestRequest:
       type: object
       properties:

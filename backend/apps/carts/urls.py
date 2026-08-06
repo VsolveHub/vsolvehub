@@ -11,6 +11,7 @@ from apps.carts.views import (
     CartItemRemoveView,
     CartMergeView,
     CartSchedulingGroupsView,
+    CartSuggestionsView,
     CartView,
     CheckoutView,
     FulfilmentPlanSetDetailView,
@@ -38,6 +39,7 @@ urlpatterns = [
     path("cart/items/<uuid:item_id>/remove/", CartItemRemoveView.as_view()),
     path("cart/merge/", CartMergeView.as_view()),
     path("cart/scheduling-groups/", CartSchedulingGroupsView.as_view()),
+    path("cart/suggestions/", CartSuggestionsView.as_view()),
     path("booking/windows/", BookingWindowsView.as_view()),
     path("fulfilment-plan-sets/", FulfilmentPlanSetView.as_view()),
     path(
