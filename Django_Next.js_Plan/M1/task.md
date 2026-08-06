@@ -12,20 +12,26 @@ This file is **state**. For the ordered plan and a copy-pasteable prompt per tas
 
 | Check | Result |
 | --- | --- |
-| Committed OpenAPI | `contracts/openapi/v1.yaml` **1.16.0**, **108** published paths |
-| Backend apps | 15 installed — `fulfilment`, `cases`, `payouts` and `notifications` all added since 1.15.1 |
+| Committed OpenAPI | `contracts/openapi/v1.yaml` **1.17.0**, **126** published paths |
+| Backend apps | 16 installed. `fulfilment`, `cases`, `payouts` and `notifications` all added since 1.15.1, and all four are now published over HTTP. |
 | Backend `quality.cmd` | **Last verified green at 1.16.0**: 428 passed, branch-aware coverage 87.31%, no drift, contract matches. **Not re-run since `apps/cases`, `apps/payouts` and `apps/notifications` landed.** |
-| Frontend | typecheck 9/9, lint clean, **1101 tests across 72 files**, client current at 1.16.0 |
+| Frontend | typecheck 9/9, lint clean, **1138 tests across 76 files**, client current at 1.17.0 |
 | Playwright | **Still never run.** Not once against FE-10, FE-11, FE-13, FE-14, FE-15, FE-16, FE-17 or FE-18. |
-| Working tree | Committed through `a73c14c` |
+| Working tree | Committed through `8ec2fe9` |
 
 ### Test status of the newest work, stated plainly
 
-`apps/cases` and `apps/payouts` ship with 47 tests. Each file passes alone; run together they
-fail on cross-file fixture collisions in the shared booked-group helper — a harness problem, not
-a defect in the code under test, but **not verified green and not claimed as such**.
-`apps/notifications` has no tests yet. Ruff and strict MyPy are clean across all 166 files and
-the Django system check passes.
+`apps/cases` and `apps/payouts` ship with 47 tests. They passed per-file and failed when run
+together, and the diagnosis recorded here first — "cross-file fixture collisions" — was **wrong**.
+The parallel session hit the same symptom independently and identified it: two pytest processes
+were sharing one `test_vsolve` database, producing `DuplicateDatabase` and `ObjectInUse` at setup.
+That matches exactly what was seen — failures at fixture setup, single tests passing, the count
+varying between runs.
+
+So these tests are **unverified, not known-broken**, and the likely fix is an isolated database
+rather than a code change. **Run the backend suite with a distinct `DATABASE_URL` when another
+session is working** — e.g. `…/vsolve_lane2`. `apps/notifications` has no tests yet. Ruff and
+strict MyPy are clean across all 166 files and the Django system check passes.
 
 ### What this snapshot corrects
 
@@ -71,9 +77,9 @@ that has never been run red is not evidence.
 | `fulfilment` | BookingStatusHistory, BookingOtp, WorkSession, ScopeAmendment(+Line), PriceRevision, WorkTask, WorkEvidence, CustomerContactAttempt, CompletionSubmission, WorkOutcome, CompletionResponse | 26 paths across Customer / Partner / Operations: en route, arrived, customer-unavailable, contact attempts, start OTP (split across two actors), evidence upload+finalize, scope amendment propose/approve/decline, completion submit/confirm/dispute, abort, release, Operations assisted-start and recover, plus post-payment group cancel/reschedule/address | Done (1.16.0) |
 | `foundation` | outbox/events | — | Done (recovery sweep, dead-letter, worker/beat) |
 | `pricing` | rate models | — (read through carts) | Done |
-| `cases` | OperationsCase, OperationsCaseEvent (append-only) | **None yet** — service layer only | Domain done; needs an API |
-| `payouts` | PartnerLedgerEntry (immutable, signed), PartnerPayoutAccount, PayoutBatch, PayoutBatchItem | **None yet** — service layer only | Domain + RazorpayX adapter done; needs an API |
-| `notifications` | NotificationIntent, NotificationDelivery (immutable), KillSwitch | **None yet** — service layer only | Domain done; needs an API |
+| `cases` | OperationsCase, OperationsCaseEvent (append-only) | queue + detail, claim/escalate/resolve/notes | Done (1.17.0) |
+| `payouts` | PartnerLedgerEntry (immutable, signed), PartnerPayoutAccount, PayoutBatch, PayoutBatchItem | Partner earnings/ledger/account; Operations batches with approve/pay/cancel behind a step-up, unpayable partners, ledger adjustments | Done (1.17.0) |
+| `notifications` | NotificationIntent, NotificationDelivery (immutable), KillSwitch | kill-switch board, engage/release | Done (1.17.0); intent delivery has no provider adapter yet |
 
 `docs/adr/` holds 6 ADRs. `docs/runbooks/` holds 5 (partner document storage, payment
 reconciliation, outbox replay, queue outage, stuck command).
@@ -245,22 +251,43 @@ S1–S5 are complete and committed. S6 is partly done. The table is the honest r
 | ~~S5~~ | FE-11 Customer visit + Partner work surfaces | **Done** 2026-08-06 (`4d23843`) |
 | **S6a** | **B9 domain** — cases, ledger, payout batches, RazorpayX adapter | **Done** (`5b7c679`). 47 tests written, **not verified green together** — cross-file fixture collisions in the shared booked-group helper. |
 | **S6b** | **B10 domain** — notification intent/delivery, kill switches | **Done** (`a73c14c`). **No tests written.** |
-| **S6c** | **Metrics and alerts**, and privacy/session/OTP **retention jobs** | **Not started.** Observability is JSON logging + request IDs. |
-| **S6d** | **The HTTP surface for B9/B10.** `apps/cases`, `apps/payouts` and `apps/notifications` are service-layer only — exactly the shape B8 was in before 1.16.0. Publishing them is its own release (OpenAPI 1.17.0). | **Not started. Blocks S7.** |
-| **S7** | **FE-12** — Operations cases/timelines/kill switches, Partner ledger and payout screens | Blocked on S6d |
-| **S8** | **M1 acceptance** — 44 scenarios + the concurrency list against authoritative Django, then cutover | Blocked on S7 |
+| ~~S6c~~ | Metric names + retention sweeps | **Done** (`c279243`). `common/observability/metrics.py` names every counter the plan asks for; retention sweeps expired OTP challenges, sessions and audit events on separate horizons. Consent receipts are deliberately never swept. **Alerting on those metrics is still a deployment task, not a code one.** |
+| ~~S6d~~ | The HTTP surface for B9/B10 | **Done** (`466aa55`). 18 paths in OpenAPI **1.17.0**. Payout approve/pay behind `HasRecentOperationsStepUp`; cancel deliberately not. `HasRecentFinanceStepUp` deleted. |
+| ~~S7~~ | **FE-12** | **Done** (`8ec2fe9`). `/operations/{cases,payouts,kill-switches}` and Partner `/earnings`, all reachable from the nav. |
+| **S8** | **M1 acceptance** — the 44 scenarios plus the concurrency list, against authoritative Django, then the cutover checklist. **This is the only stage left.** | Unblocked. Needs the test debt below cleared first — running acceptance on an unverified base proves nothing. |
 
 ### Test debt, named rather than buried
 
-Three things are written and unverified. None of them is claimed as passing anywhere in these
-documents, and none should be trusted until run:
+Every feature on this board is built. What is left before S8 is **verification**, not building,
+and it is listed here so nobody mistakes "written" for "proven":
 
-1. **`tests/payouts` + `tests/cases` (47 tests).** Each file passes alone. Together they collide
-   on the shared `create_booked_group` helper's fixtures. The fix is harness-level, not a defect
-   in the code under test.
-2. **`apps/notifications` has no tests at all.**
-3. **Playwright has never been run** — not once, against any of FE-10 through FE-18. The last
-   recorded figure of 173 predates every one of them.
+1. **`tests/payouts` + `tests/cases` (47 tests) — unverified.** They passed per-file and failed
+   together, and the first diagnosis recorded here ("cross-file fixture collisions") was wrong.
+   Two pytest processes were sharing one `test_vsolve` database, producing `DuplicateDatabase`
+   and `ObjectInUse` at setup. **Run the backend suite with a distinct `DATABASE_URL` when
+   another session is working** — e.g. `…/vsolve_lane2`.
+2. **`apps/notifications` has no tests.** Neither do the 18 new 1.17.0 API paths.
+3. **Playwright has never been run against FE-10 through FE-18.** The last recorded figure of 173
+   predates every one of them. The parallel session added an `operations-shell` project and got
+   133 passing, which is the first browser coverage the console has ever had — but the Customer
+   payment, visit and Partner job surfaces have none.
+4. **The full backend gate has not run since 1.16.0.** Three apps and 18 endpoints have landed
+   since; the last green figure (428 passed, 87.31%) predates all of them.
+
+### Frontend deployment, still to configure
+
+The three apps are intended for separate hosts — `vsolvehub.com`,
+`partner.vsolvehub.com`, `consolve.vsolvehub.com`. The role picker that used to greet every
+sign-in is gone (`31b319b`): each app selects its own role, because the domain *is* the role.
+What still needs setting before those hosts work:
+
+- `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` must list all three origins. Credentialed
+  CORS is fail-closed, so an unlisted origin gets nothing at all.
+- **`SESSION_COOKIE_DOMAIN` is a product decision, not config trivia.** Setting it to
+  `.vsolvehub.com` gives one sign-in across all three; leaving it per-host keeps staff and
+  Customer sessions genuinely separate. Sharing it means a compromised Customer session rides
+  the same cookie as the Operations console. Per-host is the safer default and is what the code
+  currently assumes.
 
 ### Parallel lanes — all closed
 
