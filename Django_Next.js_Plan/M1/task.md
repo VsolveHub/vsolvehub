@@ -19,19 +19,20 @@ This file is **state**. For the ordered plan and a copy-pasteable prompt per tas
 | Playwright | **Still never run.** Not once against FE-10, FE-11, FE-13, FE-14, FE-15, FE-16, FE-17 or FE-18. |
 | Working tree | Committed through `8ec2fe9` |
 
-### Test status of the newest work, stated plainly
+### Test status, corrected
 
-`apps/cases` and `apps/payouts` ship with 47 tests. They passed per-file and failed when run
-together, and the diagnosis recorded here first — "cross-file fixture collisions" — was **wrong**.
-The parallel session hit the same symptom independently and identified it: two pytest processes
-were sharing one `test_vsolve` database, producing `DuplicateDatabase` and `ObjectInUse` at setup.
-That matches exactly what was seen — failures at fixture setup, single tests passing, the count
-varying between runs.
+`apps/cases` and `apps/payouts` are **verified**. The 47 tests pass — 70 green across payouts,
+cases, notifications and session isolation — once run against an isolated `DATABASE_URL`. The
+first diagnosis recorded here ("cross-file fixture collisions") was wrong; the parallel session
+identified the real cause independently: two pytest processes sharing one `test_vsolve`
+database, producing `DuplicateDatabase` and `ObjectInUse` at setup.
 
-So these tests are **unverified, not known-broken**, and the likely fix is an isolated database
-rather than a code change. **Run the backend suite with a distinct `DATABASE_URL` when another
-session is working** — e.g. `…/vsolve_lane2`. `apps/notifications` has no tests yet. Ruff and
-strict MyPy are clean across all 166 files and the Django system check passes.
+**Run the backend suite with a distinct `DATABASE_URL` when another session is working** — e.g.
+`…/vsolve_lane1`. This is now the standing instruction, not a workaround.
+
+`apps/notifications` has 19 tests. Sessions have 6. Ruff and strict MyPy are clean across
+everything except one untracked in-flight file owned by the parallel session
+(`seed_console_demo_data.py`).
 
 ### What this snapshot corrects
 
@@ -256,38 +257,43 @@ S1–S5 are complete and committed. S6 is partly done. The table is the honest r
 | ~~S7~~ | **FE-12** | **Done** (`8ec2fe9`). `/operations/{cases,payouts,kill-switches}` and Partner `/earnings`, all reachable from the nav. |
 | **S8** | **M1 acceptance** — the 44 scenarios plus the concurrency list, against authoritative Django, then the cutover checklist. **This is the only stage left.** | Unblocked. Needs the test debt below cleared first — running acceptance on an unverified base proves nothing. |
 
-### Test debt, named rather than buried
+### What is still unproven
 
-Every feature on this board is built. What is left before S8 is **verification**, not building,
-and it is listed here so nobody mistakes "written" for "proven":
+Two things, both verification rather than building:
 
-1. **`tests/payouts` + `tests/cases` (47 tests) — unverified.** They passed per-file and failed
-   together, and the first diagnosis recorded here ("cross-file fixture collisions") was wrong.
-   Two pytest processes were sharing one `test_vsolve` database, producing `DuplicateDatabase`
-   and `ObjectInUse` at setup. **Run the backend suite with a distinct `DATABASE_URL` when
-   another session is working** — e.g. `…/vsolve_lane2`.
-2. **`apps/notifications` has no tests.** Neither do the 18 new 1.17.0 API paths.
-3. **Playwright has never been run against FE-10 through FE-18.** The last recorded figure of 173
-   predates every one of them. The parallel session added an `operations-shell` project and got
-   133 passing, which is the first browser coverage the console has ever had — but the Customer
-   payment, visit and Partner job surfaces have none.
-4. **The full backend gate has not run since 1.16.0.** Three apps and 18 endpoints have landed
-   since; the last green figure (428 passed, 87.31%) predates all of them.
+1. **No tests on the 18 new 1.17.0 API paths.** The domain layers underneath them are covered
+   (70 tests); the views are not. `tests/fulfilment/test_fulfilment_api.py` is the pattern to
+   follow — authorization, the existence oracle, idempotent replay, stale versions and
+   projection scope.
+2. **Playwright has never run against FE-10 through FE-15, or FE-11's visit and job surfaces.**
+   The parallel session added an `operations-shell` project and got 133 green, which is the
+   first browser coverage the console has had. Customer payment, Customer visit tracking and
+   Partner jobs still have none.
 
-### Frontend deployment, still to configure
+### Three-host deployment — decided and implemented
 
-The three apps are intended for separate hosts — `vsolvehub.com`,
-`partner.vsolvehub.com`, `consolve.vsolvehub.com`. The role picker that used to greet every
-sign-in is gone (`31b319b`): each app selects its own role, because the domain *is* the role.
-What still needs setting before those hosts work:
+The apps deploy to `vsolvehub.com`, `partner.vsolvehub.com` and `consolve.vsolvehub.com`.
 
-- `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` must list all three origins. Credentialed
-  CORS is fail-closed, so an unlisted origin gets nothing at all.
-- **`SESSION_COOKIE_DOMAIN` is a product decision, not config trivia.** Setting it to
-  `.vsolvehub.com` gives one sign-in across all three; leaving it per-host keeps staff and
-  Customer sessions genuinely separate. Sharing it means a compromised Customer session rides
-  the same cookie as the Operations console. Per-host is the safer default and is what the code
-  currently assumes.
+**Sessions are per-host, and production refuses to start otherwise** (`2e8e7ee`).
+`SESSION_COOKIE_DOMAIN` and `CSRF_COOKIE_DOMAIN` stay unset, so the browser scopes each session
+cookie to the exact host that issued it. A shared `.vsolvehub.com` cookie would make a stolen
+Customer session a valid credential against the console that approves payouts — refused rather
+than warned about, because it is a one-line change somebody makes to give staff a single
+sign-in and it breaks nothing visibly. `config/settings/guards.py` holds the check so it can be
+tested without executing a whole settings module.
+
+**The role picker is gone** (`31b319b`). Each app selects its own role, because the domain *is*
+the role — and because `verify_login_otp` re-grants `customer` on every login and session
+creation picks the alphabetically first grant, so every staff and Partner sign-in used to land
+on a picker.
+
+Still to set at deploy time:
+
+- `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` must list all three origins.
+  Credentialed CORS is fail-closed, so an unlisted origin gets nothing at all, and production
+  refuses to start if the CORS list is not a subset of the CSRF list or if any origin is not
+  HTTPS.
+- `DJANGO_ALLOWED_HOSTS` for the API host.
 
 ### Parallel lanes — all closed
 

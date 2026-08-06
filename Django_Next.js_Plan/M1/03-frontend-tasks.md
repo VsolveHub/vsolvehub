@@ -9,7 +9,23 @@ Task markers: `[x]` implemented and integrated against the published contract ·
 exists but is not end-to-end integrable, with the blocker named · `[ ]` not implemented. Fixture-only
 or quarantined proposal behaviour is never marked complete.
 
-## Audit snapshot — 2026-08-06
+## Audit snapshot — 2026-08-06 (end of S7)
+
+- `pnpm test`: **1138 passed across 76 files**. `pnpm typecheck` 9/9. `pnpm lint` clean.
+  Generated client current at contract **1.17.0**.
+- **FE-11 and FE-12 are both implemented.** Customer visit tracking, Partner job surface,
+  Operations cases/payouts/kill-switches, and Partner earnings.
+- **The role picker is gone.** Each app selects its own role from its own domain — see
+  `role-selection.test.ts`. Previously every staff and Partner sign-in landed on a picker,
+  because Django re-grants `customer` on each login and session creation takes the
+  alphabetically first grant.
+- **Playwright**: 133 green on the `operations-shell` project (the parallel session's work — the
+  first browser coverage the console has ever had). Customer payment, Customer visit tracking
+  and Partner jobs still have none.
+
+The live board is [task.md](./task.md).
+
+## Audit snapshot — 2026-08-06 (superseded)
 
 - `pnpm test`: **1101 passed across 72 files**. `pnpm typecheck` 9/9. `pnpm lint` clean at
   `--max-warnings 0`. Generated client current at contract **1.16.0**.
@@ -466,8 +482,10 @@ acceptance and the production scanner/retention release decisions remain complet
 - [x] Build Abort and line-level completion outcome. Every task must be answered before the report
       can be sent: Django settles money from these outcomes, so an unanswered task would either
       refund work that happened or pay for work that did not.
-- [ ] Show pending/available/paid ledger states and payout account/status without unsupported
-      on-demand withdrawal.
+- [x] Show pending/available/paid ledger states and payout account/status without unsupported
+      on-demand withdrawal. Partner `/earnings` shows four numbers rather than one — money held
+      behind an open case is not money anybody can plan around — and publishes no withdraw
+      affordance, because M1 pays through a reviewed run and a button would promise otherwise.
 - [x] Prove the Partner offer UI cannot query or render a sibling unit, Partner identity, scope or
       earnings from the same Booking Group.
 
@@ -493,10 +511,16 @@ blocked by BE-10.
       read-only dispatch explanation published in 1.15.0 (FE-17). Four paths, no caller.
 - [ ] Build the Finance refund queue and reconcile command behind the finance step-up gate,
       published since 1.10.0 (FE-18).
-- [ ] Build case list/detail with owner, SLA, evidence, communication and allowed commands after B9.
+- [x] Build case list/detail with owner, SLA, evidence, communication and allowed commands.
+      `/operations/cases` renders `allowed_resolutions` as published rather than carrying a
+      kind-to-resolutions map — that rule differs per kind, and a local copy would offer a
+      reviewer a resolution the server refuses. Adding a note never moves the status.
 - [ ] Build Booking Group dependency view plus unit offer/reservation/payment/refund/ledger/payout
       timelines after BE-09-API/BE-10 publish the remaining fulfilment, case and ledger projections.
-- [ ] Build kill switches, maker-checker and audit references after B10.
+- [x] Build kill switches, maker-checker and audit references. `/operations/kill-switches`
+      reads the board whole and shows who engaged each switch and why.
+      `/operations/payouts` greys out Approve for the proposer and routes a missing step-up
+      to re-verification rather than reporting it as a failure.
 - [ ] Mask KYC, bank, exact address and sensitive evidence by default and audit every reveal.
 
 **Status: Partner review and the four 1.8.0/1.9.0 consoles are built; the consoles are untested,
