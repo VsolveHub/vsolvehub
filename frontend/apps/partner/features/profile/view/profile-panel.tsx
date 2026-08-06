@@ -13,9 +13,10 @@ import {
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { isNoProfileYet, usePartnerProfile, type PartnerProfile } from "../queries";
+import { EditNameDialog } from "./edit-name-dialog";
 
 /**
  * Who the Partner is.
@@ -97,6 +98,7 @@ function Page({ children }: { children: ReactNode }) {
 
 export function ProfilePanel() {
   const profileQuery = usePartnerProfile();
+  const [isEditingName, setIsEditingName] = useState(false);
 
   if (profileQuery.isPending) {
     return (
@@ -145,14 +147,32 @@ export function ProfilePanel() {
         >
           {initialOf(profile)}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-bold text-text">{profile.display_name}</h1>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-text-secondary">
             <Phone aria-hidden className="size-4" />
             {profile.phone_number}
           </p>
         </div>
+        <Button size="sm" variant="outline" onClick={() => setIsEditingName(true)}>
+          Edit
+        </Button>
       </Card>
+
+      {/* The number is deliberately not editable here. It is the login
+          credential, so moving it moves who can sign in — that belongs behind an
+          OTP challenge on the new number, not a field on a profile form. Saying
+          so beats a disabled input with no explanation. */}
+      <p className="-mt-1 px-1 text-xs text-text-secondary">
+        To change your phone number, contact support — it is how you sign in, so we
+        verify it before moving it.
+      </p>
+
+      <EditNameDialog
+        open={isEditingName}
+        currentName={profile.display_name}
+        onClose={() => setIsEditingName(false)}
+      />
 
       {/* The most consequential fact on the screen, so it gets a band rather
           than a line: whether this person can be offered work at all. */}

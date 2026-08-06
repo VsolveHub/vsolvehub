@@ -55,7 +55,7 @@ const TONE_STYLES: Record<"go" | "wait" | "done" | "stop", string> = {
 
 const EMPTY_COPY: Record<JobBucket, { title: string; description: string }> = {
   active: {
-    title: "No jobs right now",
+    title: "Nothing today or tomorrow",
     description: "Go online and we will send you work as it comes in.",
   },
   completed: {
@@ -104,6 +104,13 @@ export function JobList() {
           );
         })}
       </div>
+
+      {/* Says what the shelf holds. "To do" showing only two days is right —
+          it is a running order, not an archive — but only if the screen admits
+          it, or a Partner with work next week thinks it was lost. */}
+      {bucket === "active" ? (
+        <p className="mt-3 text-sm text-text-secondary">Today and tomorrow, soonest first.</p>
+      ) : null}
 
       <div className="mt-4">
         {jobsQuery.isPending ? (

@@ -2,7 +2,7 @@
 
 import { ApiRequestError, request, type Schemas } from "@vsolve/api-client";
 import { SESSION_STATE, queryKeys } from "@vsolve/query";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -32,5 +32,33 @@ export function usePartnerProfile() {
     ...SESSION_STATE,
     retry: (failureCount, error) =>
       error instanceof ApiRequestError && error.status === 404 ? false : failureCount < 2,
+  });
+}
+
+/**
+ * Changes the name Customers see.
+ *
+ * `display_name` only. The phone number is the login credential — moving it
+ * moves who can sign in — so it belongs behind an OTP challenge on the new
+ * number rather than behind a field on this form. Django refuses it here.
+ *
+ * No optimistic write: the response is the authoritative profile, and a name
+ * that appeared before the server accepted it would be a claim this client
+ * cannot make.
+ */
+export function useUpdatePartnerProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (displayName: string) =>
+      request(() =>
+        getApiClient().PATCH("/api/v1/partner/me/", {
+          body: { display_name: displayName },
+        }),
+      ),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(queryKeys.partner.me(), profile);
+    },
+    retry: false,
   });
 }

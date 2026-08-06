@@ -32,8 +32,10 @@ would leak the difference between "not yours" and "does not exist" through the e
 """
 
 from collections.abc import Callable
+from datetime import datetime, time, timedelta
 from typing import Any, cast
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.db import transaction
@@ -746,7 +748,27 @@ _PARTNER_BUCKETS: dict[str, tuple[str, ...]] = {
 
 class PartnerBookingCursorPagination(StrictCursorPagination):
     page_size = 25
+    #: History reads newest-first; the `active` shelf overrides this to soonest-first.
     ordering = ("-scheduled_start", "-id")
+
+
+class PartnerActiveBookingCursorPagination(PartnerBookingCursorPagination):
+    """Soonest first.
+
+    The work shelf is a running order, not an archive: the next thing to do
+    belongs at the top. Newest-first is right for what has already happened and
+    exactly wrong for what has not.
+    """
+
+    ordering = ("scheduled_start", "id")
+
+
+#: How far ahead the work shelf looks.
+#:
+#: Today and tomorrow only. A Partner uses this list to decide what to do now and
+#: what to plan for tonight; a booking three weeks out is real but it is not a
+#: task, and mixing the two buries the ones that are.
+_ACTIVE_HORIZON_DAYS = 2
 
 
 class PartnerBookingCollectionView(APIView):
@@ -777,12 +799,31 @@ class PartnerBookingCollectionView(APIView):
 
         queryset = _booking_queryset().filter(partner=profile)
         bucket = query.validated_data.get("bucket")
+        paginator: PartnerBookingCursorPagination = PartnerBookingCursorPagination()
+
         if bucket == "active":
-            queryset = queryset.exclude(status__in=_PARTNER_TERMINAL_STATUSES)
+            zone = ZoneInfo(settings.TIME_ZONE)
+            today = timezone.now().astimezone(zone).date()
+            window_start = datetime.combine(today, time.min, tzinfo=zone)
+            window_end = window_start + timedelta(days=_ACTIVE_HORIZON_DAYS)
+            queryset = (
+                queryset.exclude(status__in=_PARTNER_TERMINAL_STATUSES)
+                .filter(scheduled_start__gte=window_start, scheduled_start__lt=window_end)
+                # Stale work: the sweep already flagged it overdue and it never
+                # left CONFIRMED, so nothing was ever started on it. Leaving those
+                # on the shelf buries the jobs a Partner can still act on under
+                # ones nobody is going to do. They stay readable by id, and they
+                # are still counted wherever totals are counted — only the
+                # "what now?" list drops them.
+                .exclude(
+                    status=Booking.Status.CONFIRMED,
+                    late_declared_at__isnull=False,
+                )
+            )
+            paginator = PartnerActiveBookingCursorPagination()
         elif bucket is not None:
             queryset = queryset.filter(status__in=_PARTNER_BUCKETS[bucket])
 
-        paginator = PartnerBookingCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         response = paginator.get_paginated_response(PartnerBookingSerializer(page, many=True).data)
         # An empty shelf carries no row to calibrate a countdown from, so the page

@@ -242,6 +242,31 @@ class PartnerApplicationTransitionSerializer(
         read_only_fields = fields
 
 
+class PartnerProfileUpdateSerializer(serializers.Serializer[dict[str, object]]):
+    """What a Partner may change about themselves without a review.
+
+    `display_name` only. It is the name Customers see, so it is theirs to get
+    right, and nothing downstream depends on its value.
+
+    **Not** `phone_number`. That is the login credential: changing it moves who
+    can sign in, so it belongs behind an OTP challenge on the *new* number, not
+    behind a field on a profile form. A `PATCH` that accepted it would either let
+    a hijacked session lock the real Partner out, or let a typo do the same by
+    accident.
+
+    Skills and service areas are absent for a different reason: Operations
+    reviewed them, and a field here would silently reopen a reviewed decision.
+    """
+
+    display_name = serializers.CharField(max_length=120, trim_whitespace=True)
+
+    @staticmethod
+    def validate_display_name(value: str) -> str:
+        if not value.strip():
+            raise serializers.ValidationError("Enter the name Customers should see.")
+        return value.strip()
+
+
 class PartnerProfileSerializer(serializers.ModelSerializer[PartnerProfile]):
     """Who the Partner is, as distinct from the form they filled in to join.
 

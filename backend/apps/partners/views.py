@@ -50,6 +50,7 @@ from apps.partners.serializers import (
     PartnerPresenceSerializer,
     PartnerPresenceSessionRequestSerializer,
     PartnerProfileSerializer,
+    PartnerProfileUpdateSerializer,
     PartnerScheduleSerializer,
     PartnerScheduleUpdateSerializer,
     PartnerSkillOptionSerializer,
@@ -178,6 +179,35 @@ class PartnerMeView(APIView):
         )
         if profile is None:
             raise NotFound("No Partner profile exists for this account.")
+        return Response(PartnerProfileSerializer(profile).data)
+
+    @extend_schema(
+        tags=["Partner"],
+        operation_id="partner_me_update",
+        request=PartnerProfileUpdateSerializer,
+        responses={200: PartnerProfileSerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def patch(self, request: Request) -> Response:
+        """Changes what a Partner may change about themselves.
+
+        Deliberately narrow. The phone number is the login credential and is not
+        accepted here — see `PartnerProfileUpdateSerializer`.
+        """
+        serializer = PartnerProfileUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = PartnerProfile.objects.filter(user=cast(User, request.user)).first()
+        if profile is None:
+            raise NotFound("No Partner profile exists for this account.")
+        profile.display_name = cast(str, serializer.validated_data["display_name"])
+        profile.save(update_fields=("display_name", "updated_at"))
+        profile = (
+            PartnerProfile.objects.select_related("user", "application")
+            .prefetch_related(
+                "service_links__variant__service",
+                "service_area_links__service_area",
+            )
+            .get(id=profile.id)
+        )
         return Response(PartnerProfileSerializer(profile).data)
 
 

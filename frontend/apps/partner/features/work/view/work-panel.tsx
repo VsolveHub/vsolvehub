@@ -21,6 +21,7 @@ import {
   type OutcomeInput,
   type PartnerVisit,
 } from "../queries";
+import { JobMoney } from "./job-money";
 
 /**
  * The Partner's working surface for one visit.
@@ -299,14 +300,12 @@ export function WorkPanel({ bookingId }: { bookingId: string }) {
         </span>
       </div>
 
-      <ul className="mt-4 list-none space-y-1 text-sm text-text-secondary">
-        {data.work_tasks.map((task) => (
-          <li key={task.id}>
-            {task.label}
-            {task.quantity > 1 ? ` × ${task.quantity}` : ""}
-          </li>
-        ))}
-      </ul>
+      {/* The task list used to be a bare bulleted list with no amounts. What a
+          job is worth is the thing a Partner most wants from this screen, and
+          the projection already carried the per-task figures. */}
+      <div className="mt-4">
+        <JobMoney job={data} />
+      </div>
 
       {canStartWork(data) ? <StartWorkForm visit={data} /> : null}
       {canReportCompletion(data) ? <CompletionForm visit={data} /> : null}

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: e24959a6c6030c2d
+ * Checksum: e71fec44d65d1618
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1907,7 +1907,13 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * @description Changes what a Partner may change about themselves.
+         *
+         *     Deliberately narrow. The phone number is the login credential and is not
+         *     accepted here — see `PartnerProfileUpdateSerializer`.
+         */
+        patch: operations["partner_me_update"];
         trace?: never;
     };
     "/api/v1/partner/offers/": {
@@ -3782,8 +3788,17 @@ export interface components {
             readonly work_tasks: components["schemas"]["WorkTask"][];
             readonly evidence: components["schemas"]["WorkEvidence"][];
             readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
-            /** Format: date-time */
+            readonly earning: components["schemas"]["PartnerBookingEarning"] | null;
             readonly server_now: string;
+        };
+        /** @description One Partner's own money for one job — never the Customer's invoice. */
+        PartnerBookingEarning: {
+            gross_paise: number;
+            commission_paise: number;
+            net_paise: number;
+            currency: string;
+            status: string;
+            calculation_snapshot: unknown;
         };
         PartnerBookingPage: {
             /** Format: uri */
@@ -4091,6 +4106,24 @@ export interface components {
             service_area_ids?: string[];
             consents?: components["schemas"]["PartnerConsentInputRequest"][];
             device_identifier?: string;
+        };
+        /**
+         * @description What a Partner may change about themselves without a review.
+         *
+         *     `display_name` only. It is the name Customers see, so it is theirs to get
+         *     right, and nothing downstream depends on its value.
+         *
+         *     **Not** `phone_number`. That is the login credential: changing it moves who
+         *     can sign in, so it belongs behind an OTP challenge on the *new* number, not
+         *     behind a field on a profile form. A `PATCH` that accepted it would either let
+         *     a hijacked session lock the real Partner out, or let a typo do the same by
+         *     accident.
+         *
+         *     Skills and service areas are absent for a different reason: Operations
+         *     reviewed them, and a field here would silently reopen a reviewed decision.
+         */
+        PatchedPartnerProfileUpdateRequest: {
+            display_name?: string;
         };
         PaymentAllocation: {
             /** Format: uuid */
@@ -9994,6 +10027,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartnerProfile"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_me_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPartnerProfileUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPartnerProfileUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedPartnerProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerProfile"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             404: {

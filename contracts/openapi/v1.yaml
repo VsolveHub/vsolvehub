@@ -5223,6 +5223,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+    patch:
+      operationId: partner_me_update
+      description: |-
+        Changes what a Partner may change about themselves.
+
+        Deliberately narrow. The phone number is the login credential and is not
+        accepted here — see `PartnerProfileUpdateSerializer`.
+      tags:
+      - Partner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPartnerProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPartnerProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPartnerProfileUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerProfile'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/offers/:
     get:
       operationId: partner_offer_list
@@ -9776,14 +9817,19 @@ components:
           - $ref: '#/components/schemas/ScopeAmendment'
           nullable: true
           readOnly: true
+        earning:
+          allOf:
+          - $ref: '#/components/schemas/PartnerBookingEarning'
+          nullable: true
+          readOnly: true
         server_now:
           type: string
-          format: date-time
           readOnly: true
       required:
       - active_amendment
       - arrived_at
       - customer_unavailable_wait_started_at
+      - earning
       - en_route_at
       - estimated_duration_minutes
       - evidence
@@ -9795,6 +9841,28 @@ components:
       - status
       - version
       - work_tasks
+    PartnerBookingEarning:
+      type: object
+      description: One Partner's own money for one job — never the Customer's invoice.
+      properties:
+        gross_paise:
+          type: integer
+        commission_paise:
+          type: integer
+        net_paise:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        calculation_snapshot: {}
+      required:
+      - calculation_snapshot
+      - commission_paise
+      - currency
+      - gross_paise
+      - net_paise
+      - status
     PartnerBookingPage:
       type: object
       properties:
@@ -10610,6 +10678,27 @@ components:
           type: string
           writeOnly: true
           maxLength: 128
+    PatchedPartnerProfileUpdateRequest:
+      type: object
+      description: |-
+        What a Partner may change about themselves without a review.
+
+        `display_name` only. It is the name Customers see, so it is theirs to get
+        right, and nothing downstream depends on its value.
+
+        **Not** `phone_number`. That is the login credential: changing it moves who
+        can sign in, so it belongs behind an OTP challenge on the *new* number, not
+        behind a field on a profile form. A `PATCH` that accepted it would either let
+        a hijacked session lock the real Partner out, or let a typo do the same by
+        accident.
+
+        Skills and service areas are absent for a different reason: Operations
+        reviewed them, and a field here would silently reopen a reviewed decision.
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
     PaymentAllocation:
       type: object
       properties:

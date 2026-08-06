@@ -32,6 +32,7 @@ from apps.fulfilment.models import (
     WorkOutcome,
     WorkTask,
 )
+from apps.payouts.models import PartnerLedgerEntry
 
 
 class VersionedCommandSerializer(serializers.Serializer[dict[str, Any]]):
@@ -309,6 +310,17 @@ class StartOtpSerializer(serializers.Serializer[dict[str, Any]]):
 # --------------------------------------------------------------------------------------------
 
 
+class PartnerBookingEarningSerializer(serializers.Serializer[dict[str, object]]):
+    """One Partner's own money for one job — never the Customer's invoice."""
+
+    gross_paise = serializers.IntegerField()
+    commission_paise = serializers.IntegerField()
+    net_paise = serializers.IntegerField()
+    currency = serializers.CharField()
+    status = serializers.CharField()
+    calculation_snapshot = serializers.JSONField()
+
+
 class PartnerBookingListQuerySerializer(serializers.Serializer[dict[str, object]]):
     """Which shelf of the Partner's work to read.
 
@@ -337,6 +349,7 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
     work_tasks = serializers.SerializerMethodField()
     evidence = serializers.SerializerMethodField()
     active_amendment = serializers.SerializerMethodField()
+    earning = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -355,6 +368,7 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
             "work_tasks",
             "evidence",
             "active_amendment",
+            "earning",
             "server_now",
         )
         read_only_fields = fields
@@ -378,6 +392,42 @@ class PartnerBookingSerializer(serializers.ModelSerializer[Booking]):
         return None if amendment is None else ScopeAmendmentSerializer(amendment).data
 
     @extend_schema_field(serializers.DateTimeField())
+    @staticmethod
+    @extend_schema_field(PartnerBookingEarningSerializer(allow_null=True))
+    def get_earning(booking: Booking) -> dict[str, object] | None:
+        """What **this Partner** earns from this job, once it has settled.
+
+        Their own ledger line, not the Customer's invoice. The two are different
+        numbers and only one of them is the Partner's business: the Customer's
+        total carries a platform fee and tax that are not the Partner's to
+        receive, and showing it here would tell them they earned a figure they
+        will never be paid.
+
+        `null` until settlement writes the entry — an unfinished job has no
+        earning yet, and a projected one would be a promise made by a serializer.
+        `calculation_snapshot` is published because a Partner is entitled to see
+        why they were paid what they were paid; hiding it turns every payment
+        question into a support ticket.
+        """
+        entry = (
+            PartnerLedgerEntry.objects.filter(
+                booking=booking,
+                kind=PartnerLedgerEntry.Kind.EARNING,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if entry is None:
+            return None
+        return {
+            "gross_paise": entry.gross_paise,
+            "commission_paise": entry.commission_paise,
+            "net_paise": entry.net_paise,
+            "currency": entry.currency,
+            "status": entry.status,
+            "calculation_snapshot": entry.calculation_snapshot,
+        }
+
     def get_server_now(self, _instance: Booking) -> str:
         return timezone.now().isoformat()
 
