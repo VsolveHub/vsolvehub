@@ -115,6 +115,10 @@ describe("the workspaces", () => {
     // A page with no link to it is the defect this list exists to prevent —
     // refunds used to sit behind a `finance` role nobody was granted, which was
     // the same problem wearing a permission.
+    //
+    // Asserted as an exact ordered list rather than a subset, deliberately: a
+    // `toContain` check would pass while a newly built workspace sat unreachable,
+    // which is precisely how `/operations/*` shipped once already.
     client.GET.mockResolvedValue(ok(sessionState()));
     renderShell();
 
@@ -128,6 +132,9 @@ describe("the workspaces", () => {
       "/operations/manual-offers",
       "/operations/assisted-checkouts",
       "/operations/partner-availability",
+      "/operations/cases",
+      "/operations/payouts",
+      "/operations/kill-switches",
       "/finance",
     ]);
   });

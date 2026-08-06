@@ -129,6 +129,11 @@ describe("active role", () => {
     // Django's Operations permission asks which role the session is *acting* as.
     // Approving the screen on the grant alone renders a workspace whose every
     // request then 403s.
+    //
+    // The reason is `role_not_selected` rather than `missing_role`: the grant is
+    // held, so this is recoverable without a person, and `useAuthGuard` performs
+    // the switch itself. Reporting it as `missing_role` would send somebody who
+    // *does* have access to a no-access screen.
     const decision = evaluateAuthGuard({
       user: operationsUser,
       isPending: false,
@@ -139,7 +144,7 @@ describe("active role", () => {
     });
 
     expect(decision.status).toBe("forbidden");
-    expect(decision.reason).toBe("missing_role");
+    expect(decision.reason).toBe("role_not_selected");
     expect(decision.missingRoles).toEqual(["operations"]);
   });
 
