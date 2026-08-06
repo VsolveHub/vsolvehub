@@ -35,9 +35,11 @@ import {
   usePlanSet,
   useSchedulingGroups,
 } from "../queries";
-import { QuoteReview } from "./quote-review";
+import { ClockIcon, DetailRow, PhoneIcon, PinIcon } from "./detail-row";
+import { Money } from "./money";
+import { OrderSummary } from "./order-summary";
+import { QuoteStatusNotice } from "./quote-status-notice";
 import { SlotsModal } from "./slots-modal";
-import { formatServiceDuration } from "./duration";
 
 /**
  * Checkout: where, when, what it costs, and one Confirm.
@@ -71,6 +73,8 @@ export function CheckoutWorkspace() {
   const session = useCustomerSession();
 
   const [addressId, setAddressId] = useState<string | null>(null);
+  /** Reopens the address picker for a row that is already filled in. */
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
   /**
    * `null` means "nobody has decided" — the modal then follows the derived
    * default below. An explicit `true`/`false` is the customer opening or
@@ -204,6 +208,40 @@ export function CheckoutWorkspace() {
     );
   }
 
+  /** Turns a device fix into a saved address, then selects it. */
+  async function handleUseCurrentLocation() {
+    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        reject(new Error("Location permission is not available."));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        maximumAge: 30_000,
+        timeout: 12_000,
+      });
+    });
+    const resolved = await reverseGeocode.mutateAsync({
+      latitude: position.coords.latitude.toFixed(6),
+      longitude: position.coords.longitude.toFixed(6),
+    });
+    const created = await createAddress.mutateAsync({
+      label: addresses.length === 0 ? "Home" : "Saved address",
+      line1: resolved.line1,
+      locality: resolved.locality,
+      city: resolved.city,
+      state: resolved.state,
+      postal_code: resolved.postal_code,
+      country_code: resolved.country_code,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
+      source: "REVERSE_GEOCODED",
+      is_default: addresses.length === 0,
+    });
+    setAddressId(created.id);
+    setIsEditingAddress(false);
+  }
+
   function handleConfirm() {
     if (quote === null) return;
     createCheckout.mutate(quote.id, {
@@ -242,218 +280,246 @@ export function CheckoutWorkspace() {
   const isPricing = createPlanSet.isPending || createQuote.isPending;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
+    <div className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6">
       <h1 className="text-xl font-bold text-text">Checkout</h1>
 
-      <section aria-labelledby="address-heading" className="mt-6">
-        <h2 id="address-heading" className="sr-only">
-          Where
-        </h2>
-        <AddressStage
-          addresses={addresses}
-          isLoading={addressesQuery.isPending}
-          serviceability={serviceabilityQuery.data ?? null}
-          isCheckingServiceability={serviceabilityQuery.isFetching}
-          selectedAddressId={addressId}
-          onSelect={(address) => {
-            setAddressId(address.id);
-            // A different address is a different service area, so every time
-            // chosen against the old grouping is meaningless now.
-            setChosenStarts(new Map());
-            setPlanSetId(null);
-            setQuoteId(null);
-            setSlotsOverride(null);
-          }}
-          onUseCurrentLocation={async () => {
-            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-              if (typeof navigator === "undefined" || !navigator.geolocation) {
-                reject(new Error("Location permission is not available."));
-                return;
-              }
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                maximumAge: 30_000,
-                timeout: 12_000,
-              });
-            });
-            const resolved = await reverseGeocode.mutateAsync({
-              latitude: position.coords.latitude.toFixed(6),
-              longitude: position.coords.longitude.toFixed(6),
-            });
-            const created = await createAddress.mutateAsync({
-              label: addresses.length === 0 ? "Home" : "Saved address",
-              line1: resolved.line1,
-              locality: resolved.locality,
-              city: resolved.city,
-              state: resolved.state,
-              postal_code: resolved.postal_code,
-              country_code: resolved.country_code,
-              latitude: resolved.latitude,
-              longitude: resolved.longitude,
-              source: "REVERSE_GEOCODED",
-              is_default: addresses.length === 0,
-            });
-            setAddressId(created.id);
-          }}
-          isUsingCurrentLocation={reverseGeocode.isPending || createAddress.isPending}
-          onUpdateAddress={(id, patch) => updateAddress.mutate({ addressId: id, patch })}
-          isUpdatingAddress={updateAddress.isPending}
-        />
-      </section>
+      {/* Two rails on desktop, one column on a phone. The details rail leads
+          because it is the only part with anything to do; the summary follows it
+          on a phone so the price is read on the way to Confirm rather than after
+          it. */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+        <div className="flex flex-col gap-6">
+          <div className="overflow-hidden rounded-card border border-line bg-surface">
+            {session.phoneNumber === null ? null : (
+              <DetailRow icon={<PhoneIcon />} label="Send booking details to" isFirst>
+                {session.phoneNumber}
+              </DetailRow>
+            )}
 
-      {addressId !== null ? (
-        <section aria-labelledby="slots-heading" className="mt-8 border-t border-line pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="slots-heading" className="text-lg font-bold text-text">
-              When should we come?
-            </h2>
-            {isScheduled ? (
-              <Button size="sm" variant="outline" onClick={() => setSlotsOverride(true)}>
-                Change times
-              </Button>
-            ) : null}
+            <DetailRow
+              icon={<PinIcon />}
+              label="Address"
+              isFirst={session.phoneNumber === null}
+              actionLabel={selectedAddress === null ? undefined : "Edit"}
+              onAction={selectedAddress === null ? undefined : () => setIsEditingAddress(true)}
+            >
+              {selectedAddress === null ? (
+                <span>Choose where the work happens.</span>
+              ) : (
+                <span>
+                  <span className="font-medium text-text">{selectedAddress.label}</span>
+                  {" — "}
+                  {selectedAddress.line1}, {selectedAddress.locality}
+                </span>
+              )}
+            </DetailRow>
+
+            <DetailRow
+              icon={<ClockIcon />}
+              label={groups.length > 1 ? "Slots" : "Slot"}
+              actionLabel={isScheduled ? "Edit" : undefined}
+              onAction={isScheduled ? () => setSlotsOverride(true) : undefined}
+            >
+              {addressId === null ? (
+                <span>Pick an address first — times depend on the area.</span>
+              ) : groupsQuery.isPending ? (
+                <Skeleton className="h-5 w-40" />
+              ) : groupsQuery.isError ? (
+                <span className="text-critical">
+                  {describeError(groupsQuery.error, "read").message}
+                </span>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {groups.map((group) => {
+                    const startsAt = chosenStarts.get(group.key) ?? null;
+                    return (
+                      <li key={group.key}>
+                        {groups.length > 1 ? (
+                          <span className="font-medium text-text">{group.label}: </span>
+                        ) : null}
+                        {startsAt === null ? (
+                          <span>No time chosen</span>
+                        ) : (
+                          <span className="text-text">{formatChosen(startsAt)}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </DetailRow>
           </div>
 
-          {groupsQuery.isPending ? (
-            <Skeleton className="mt-4 h-24 w-full" />
-          ) : groupsQuery.isError ? (
-            <ErrorState
-              className="mt-4"
-              title="We could not work out your visits"
-              message={describeError(groupsQuery.error, "read").message}
-              actionLabel="Try again"
-              onAction={() => void groupsQuery.refetch()}
-            />
-          ) : (
-            <ul className="mt-4 flex flex-col gap-2">
-              {groups.map((group) => {
-                const startsAt = chosenStarts.get(group.key) ?? null;
-                return (
-                  <li
-                    key={group.key}
-                    className="flex items-center justify-between gap-4 rounded-card border border-line p-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-text">{group.label}</p>
-                      <p className="mt-0.5 text-sm text-text-secondary">
-                        Approx. {formatServiceDuration(group.estimated_duration_minutes)}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-sm font-medium text-text">
-                      {startsAt === null ? "No time chosen" : formatChosen(startsAt)}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {groups.length > 1 ? (
-            <p className="mt-3 text-sm text-text-secondary">
-              These need different professionals, so each visit has its own time — and its own
-              minimum visit charge.
-            </p>
+          {/* The address picker is a step until one is chosen, and stays
+              reachable afterwards through the row's Edit control. */}
+          {selectedAddress === null || isEditingAddress ? (
+            <section
+              aria-labelledby="address-heading"
+              className="rounded-card border border-line bg-surface p-5"
+            >
+              <h2 id="address-heading" className="text-base font-bold text-text">
+                Where should we come?
+              </h2>
+              <div className="mt-4">
+                <AddressStage
+                  addresses={addresses}
+                  isLoading={addressesQuery.isPending}
+                  serviceability={serviceabilityQuery.data ?? null}
+                  isCheckingServiceability={serviceabilityQuery.isFetching}
+                  selectedAddressId={addressId}
+                  onSelect={(address) => {
+                    setAddressId(address.id);
+                    setIsEditingAddress(false);
+                    // A different address is a different service area, so every
+                    // time chosen against the old grouping is meaningless now.
+                    setChosenStarts(new Map());
+                    setPlanSetId(null);
+                    setQuoteId(null);
+                    setSlotsOverride(null);
+                  }}
+                  onUseCurrentLocation={handleUseCurrentLocation}
+                  isUsingCurrentLocation={reverseGeocode.isPending || createAddress.isPending}
+                  onUpdateAddress={(id, patch) => updateAddress.mutate({ addressId: id, patch })}
+                  isUpdatingAddress={updateAddress.isPending}
+                />
+              </div>
+            </section>
           ) : null}
 
-          {!isScheduled && groups.length > 0 ? (
-            <div className="mt-4">
+          {addressId !== null && groups.length > 0 && !isScheduled ? (
+            <div>
               <Button onClick={() => setSlotsOverride(true)}>Select slots</Button>
             </div>
           ) : null}
-        </section>
-      ) : null}
 
-      {planFailures !== null && cart ? (
-        <div className="mt-6 rounded-card border border-critical-200 bg-critical-50 p-4">
-          <h3 className="text-sm font-semibold text-text">We could not arrange this booking</h3>
-          <p className="mt-1 text-sm text-text-secondary">
-            Nothing has been booked or charged. Try a different time, or book these separately.
-          </p>
-          <ul className="mt-3 flex flex-col gap-2 text-sm">
-            {planFailures.map((failure, index) => {
-              const item = cart.items.find((candidate) => candidate.id === failure.cartItemId);
-              return (
-                <li key={`${failure.cartItemId ?? "cart"}-${index}`}>
-                  <span className="font-medium text-text">
-                    {item ? item.service_name : "Your booking"}
-                  </span>
-                  <span className="block text-text-secondary">
-                    {describeItemFailure(failure.reason)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="mt-4">
-            <Button variant="outline" size="sm" onClick={rescheduleFromScratch}>
-              Choose different times
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {createPlanSet.isError && planFailures === null ? (
-        <p className="mt-4 text-sm text-critical" role="alert">
-          {isSchedulingGroupsChanged(createPlanSet.error)
-            ? "Your cart changed, so the times you picked no longer match. Nothing has been booked — choose your times again."
-            : describeError(createPlanSet.error, "mutation").message}
-        </p>
-      ) : null}
-
-      {createQuote.isError ? (
-        <p className="mt-4 text-sm text-critical" role="alert">
-          {describeQuoteFailure(createQuote.error)}
-        </p>
-      ) : null}
-
-      {isPricing ? <Skeleton className="mt-8 h-48 w-full" /> : null}
-
-      {quote !== null && !isPricing ? (
-        <section aria-labelledby="review-heading" className="mt-8 border-t border-line pt-6">
-          <h2 id="review-heading" className="text-lg font-bold text-text">
-            Review
-          </h2>
-
-          {!isPlanSetUsable ? (
-            <ErrorState
-              className="mt-4"
-              severity="warning"
-              title="These options are no longer current"
-              message="Your booking changed after this price was worked out, so it no longer describes what you are booking. Nothing has been booked or charged."
-              actionLabel="Work out fresh options"
-              onAction={rescheduleFromScratch}
-            />
-          ) : (
-            <div className="mt-4">
-              <QuoteReview
-                quote={quote}
-                visitCount={
-                  planSet?.plans.find((plan) => plan.id === quote.plan_id)?.visit_count ??
-                  quote.units.length
-                }
-                professionalCount={
-                  planSet?.plans.find((plan) => plan.id === quote.plan_id)?.professional_count ??
-                  quote.units.length
-                }
-                isConfirming={createCheckout.isPending}
-                confirmLabel="Confirm booking"
-                confirmNote="You will pay after we have assigned your professionals."
-                errorMessage={
-                  createCheckout.isError ? describeConfirmFailure(createCheckout.error) : null
-                }
-                onConfirm={handleConfirm}
-                onBack={() => setSlotsOverride(true)}
-                onStartOver={() => router.push("/cart")}
-              />
+          {planFailures !== null && cart ? (
+            <div className="rounded-card border border-critical-200 bg-critical-50 p-5">
+              <h2 className="text-sm font-semibold text-text">
+                We could not arrange this booking
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                Nothing has been booked or charged. Try a different time, or book these
+                separately.
+              </p>
+              <ul className="mt-3 flex flex-col gap-2 text-sm">
+                {planFailures.map((failure, index) => {
+                  const item = cart.items.find((candidate) => candidate.id === failure.cartItemId);
+                  return (
+                    <li key={`${failure.cartItemId ?? "cart"}-${index}`}>
+                      <span className="font-medium text-text">
+                        {item ? item.service_name : "Your booking"}
+                      </span>
+                      <span className="block text-text-secondary">
+                        {describeItemFailure(failure.reason)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-4">
+                <Button variant="outline" size="sm" onClick={rescheduleFromScratch}>
+                  Choose different times
+                </Button>
+              </div>
             </div>
-          )}
-        </section>
-      ) : null}
+          ) : null}
 
-      <div className="mt-8">
-        <Link href="/cart" className={buttonStyles({ variant: "ghost" })}>
-          Back to cart
-        </Link>
+          {createPlanSet.isError && planFailures === null ? (
+            <p className="text-sm text-critical" role="alert">
+              {isSchedulingGroupsChanged(createPlanSet.error)
+                ? "Your cart changed, so the times you picked no longer match. Nothing has been booked — choose your times again."
+                : describeError(createPlanSet.error, "mutation").message}
+            </p>
+          ) : null}
+
+          {createQuote.isError ? (
+            <p className="text-sm text-critical" role="alert">
+              {describeQuoteFailure(createQuote.error)}
+            </p>
+          ) : null}
+
+          {/* Confirm sits under the amount so the number is on screen at the
+              moment of the decision, on every width. */}
+          <div className="rounded-card border border-line bg-surface p-5">
+            {quote !== null && isPlanSetUsable && quote.status === "ACTIVE" ? (
+              <div className="flex items-baseline justify-between gap-3 border-b border-line pb-4">
+                <span className="text-sm font-semibold text-text">Amount to pay</span>
+                <Money value={quote.total} className="text-xl font-bold tabular-nums text-text" />
+              </div>
+            ) : null}
+
+            {quote !== null && !isPlanSetUsable ? (
+              <ErrorState
+                severity="warning"
+                title="These options are no longer current"
+                message="Your booking changed after this price was worked out. Nothing has been booked or charged."
+                actionLabel="Work out fresh options"
+                onAction={rescheduleFromScratch}
+              />
+            ) : quote !== null && quote.status !== "ACTIVE" ? (
+              // A withheld Confirm without a reason is the version of this
+              // screen that generates support tickets.
+              <QuoteStatusNotice quote={quote} onStartOver={rescheduleFromScratch} />
+            ) : (
+              <div className={quote === null ? "" : "mt-4"}>
+                <Button
+                  className="w-full"
+                  disabled={quote === null || quote.status !== "ACTIVE"}
+                  loading={createCheckout.isPending || isPricing}
+                  loadingLabel={isPricing ? "Working out your price" : "Confirming"}
+                  onClick={handleConfirm}
+                >
+                  Confirm booking
+                </Button>
+
+                {/* Load-bearing. Django's lifecycle is assign-then-pay, so
+                    confirming dispatches offers and charges nothing. Without
+                    this sentence the button reads as the end of the flow. */}
+                <p className="mt-3 text-center text-sm text-text-secondary">
+                  You will pay after we have assigned your professionals.
+                </p>
+
+                {quote === null && !isPricing ? (
+                  <p className="mt-2 text-center text-sm text-text-secondary" aria-live="polite">
+                    Pick an address and a time for every visit to continue.
+                  </p>
+                ) : null}
+
+                {createCheckout.isError ? (
+                  <p className="mt-3 text-sm text-critical" role="alert">
+                    {describeConfirmFailure(createCheckout.error)}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          <section aria-labelledby="cancellation-heading">
+            <h2 id="cancellation-heading" className="text-base font-bold text-text">
+              Cancellation policy
+            </h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Free cancellation before a professional is assigned. After that a fee may apply,
+              depending on how close the visit is.
+              {quote !== null && quote.units.length > 1
+                ? " Each visit has its own terms, because each one is a separate appointment."
+                : ""}
+            </p>
+          </section>
+        </div>
+
+        <aside aria-labelledby="summary-heading" className="lg:sticky lg:top-6">
+          <h2 id="summary-heading" className="sr-only">
+            Order summary
+          </h2>
+          {cart ? <OrderSummary cart={cart} groups={groups} quote={quote} /> : null}
+
+          <div className="mt-4">
+            <Link href="/cart" className={buttonStyles({ variant: "ghost" })}>
+              Back to cart
+            </Link>
+          </div>
+        </aside>
       </div>
 
       <SlotsModal
