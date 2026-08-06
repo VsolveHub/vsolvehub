@@ -68,6 +68,19 @@ from common.errors.serializers import ApiErrorSerializer
 from common.pagination import StrictCursorPagination
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
+
+class LedgerCursorPagination(StrictCursorPagination):
+    """See `CaseCursorPagination`: ordering belongs to the paginator, not the queryset."""
+
+    page_size = 50
+    ordering = ("-created_at", "-id")
+
+
+class PayoutBatchCursorPagination(StrictCursorPagination):
+    page_size = 50
+    ordering = ("-created_at", "-id")
+
+
 PARTNER_TAG = "Partner"
 OPERATIONS_TAG = "Operations"
 
@@ -142,8 +155,8 @@ class PartnerLedgerView(APIView):
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(cast(User, request.user))
-        queryset = PartnerLedgerEntry.objects.filter(partner=profile).order_by("-created_at", "id")
-        paginator = StrictCursorPagination()
+        queryset = PartnerLedgerEntry.objects.filter(partner=profile)
+        paginator = LedgerCursorPagination()
         page = paginator.paginate_queryset(queryset, request, self)
         return paginator.get_paginated_response(
             PartnerLedgerEntrySerializer(page or [], many=True).data
@@ -205,8 +218,8 @@ class PayoutBatchListView(APIView):
         queryset = PayoutBatch.objects.all()
         if value := request.query_params.get("status"):
             queryset = queryset.filter(status=value)
-        paginator = StrictCursorPagination()
-        page = paginator.paginate_queryset(queryset.order_by("-created_at", "id"), request, self)
+        paginator = PayoutBatchCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, self)
         return paginator.get_paginated_response(
             PayoutBatchListSerializer(page or [], many=True).data
         )

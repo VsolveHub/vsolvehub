@@ -44,6 +44,9 @@ ignore = [
 "**/models.py" = ["RUF012"]
 "config/settings/*.py" = ["F403", "F405"]
 "tests/**/*.py" = ["S101"]
+# Seed commands drive real endpoints and assert the responses, and use `random` for spread.
+# Neither is a security property: every one of them refuses to run outside `DEBUG`.
+"**/management/commands/seed_*.py" = ["S101", "S311"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -44,6 +44,20 @@ from common.schema import IDEMPOTENCY_KEY_HEADER
 
 OPERATIONS_TAG = "Operations"
 
+
+class CaseCursorPagination(StrictCursorPagination):
+    """`ordering` is a class attribute, not the queryset's `order_by`.
+
+    `CursorPagination` reads its ordering from itself and defaults to `-created`, a field this
+    model does not have — so a paginator that relies on the queryset's own ordering never
+    completes its setup and `get_paginated_response` fails on a missing `has_next`. The existing
+    Partner offer inbox declares its ordering the same way.
+    """
+
+    page_size = 50
+    ordering = ("-created_at", "-id")
+
+
 _ERRORS = {
     400: ApiErrorSerializer,
     403: ApiErrorSerializer,
@@ -110,8 +124,8 @@ class OperationsCaseListView(APIView):
                 status__in=(OperationsCase.Status.RESOLVED, OperationsCase.Status.CANCELLED)
             )
 
-        paginator = StrictCursorPagination()
-        page = paginator.paginate_queryset(queryset.order_by("-created_at", "id"), request, self)
+        paginator = CaseCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, self)
         return paginator.get_paginated_response(
             OperationsCaseListSerializer(page or [], many=True).data
         )
