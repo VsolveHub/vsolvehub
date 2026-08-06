@@ -12,6 +12,7 @@ from apps.payouts.views import (
     PartnerEarningsView,
     PartnerLedgerView,
     PartnerPayoutAccountView,
+    PartnerPerformanceView,
     PayoutBatchApproveView,
     PayoutBatchCancelView,
     PayoutBatchDetailView,
@@ -22,6 +23,11 @@ from apps.payouts.views import (
 
 urlpatterns = [
     path("partner/earnings/", PartnerEarningsView.as_view(), name="partner-earnings"),
+    path(
+        "partner/performance/",
+        PartnerPerformanceView.as_view(),
+        name="partner-performance",
+    ),
     path("partner/ledger/", PartnerLedgerView.as_view(), name="partner-ledger"),
     path(
         "partner/payout-account/",

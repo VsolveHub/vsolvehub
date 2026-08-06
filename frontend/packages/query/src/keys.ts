@@ -201,6 +201,14 @@ export const queryKeys = {
   partnerMoney: {
     all: ["partner-money"] as const,
     balance: () => [...queryKeys.partnerMoney.all, "balance"] as const,
+    /**
+     * Throughput and revenue over time (contract 1.19.0).
+     *
+     * Beside `balance` rather than inside it: "what am I owed" and "how am I
+     * doing" are different questions over the same ledger, and a balance refetch
+     * must not be able to discard a trend the Partner is reading.
+     */
+    performance: () => [...queryKeys.partnerMoney.all, "performance"] as const,
     ledger: () => [...queryKeys.partnerMoney.all, "ledger"] as const,
     payoutAccount: () => [...queryKeys.partnerMoney.all, "payout-account"] as const,
   },

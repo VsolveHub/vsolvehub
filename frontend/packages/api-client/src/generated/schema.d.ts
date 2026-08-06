@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 458264513868a633
+ * Checksum: e24959a6c6030c2d
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1965,6 +1965,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/performance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The numbers the Partner home screen is built from.
+         *
+         *     Separate from `earnings/`, which answers "what am I owed" — a balance by
+         *     state. This answers "how am I doing" — throughput and revenue over time.
+         *     Both are aggregates over the same ledger, and folding them into one payload
+         *     would make a screen that only wants today's total pull a full balance
+         *     breakdown it does not render.
+         *
+         *     No `partner_id`: the Partner is resolved from the session, which is the one
+         *     filter a caller cannot get wrong.
+         */
+        get: operations["partner_performance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/presence/heartbeat/": {
         parameters: {
             query?: never;
@@ -3790,6 +3818,12 @@ export interface components {
             purpose: string;
             document_version: string;
         };
+        PartnerDailyPerformance: {
+            /** Format: date */
+            date: string;
+            net_paise: number;
+            jobs: number;
+        };
         PartnerDocument: {
             /** Format: uuid */
             readonly id: string;
@@ -3924,6 +3958,27 @@ export interface components {
             readonly is_payable_now: boolean;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /**
+         * @description How a Partner is doing, in the periods they think in.
+         *
+         *     Counts come from `EARNING` ledger entries — one per completed booking, written
+         *     at settlement — so "jobs done" is never inferred from a mutable booking
+         *     timestamp. Revenue sums every entry kind, so an adjustment or reversal shows
+         *     up the day it lands rather than drifting from the balance beside it.
+         */
+        PartnerPerformance: {
+            today_net_paise: number;
+            today_jobs: number;
+            month_net_paise: number;
+            month_jobs: number;
+            average_monthly_net_paise: number;
+            lifetime_net_paise: number;
+            lifetime_jobs: number;
+            daily: components["schemas"]["PartnerDailyPerformance"][];
+            currency: string;
+            /** Format: date-time */
+            server_now: string;
         };
         PartnerPresence: {
             /** Format: uuid */
@@ -10072,6 +10127,33 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    partner_performance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerPerformance"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

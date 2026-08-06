@@ -42,12 +42,14 @@ from apps.partners.permissions import (
     IsPartnerUser,
 )
 from apps.payouts.models import PartnerLedgerEntry, PartnerPayoutAccount, PayoutBatch
+from apps.payouts.performance import partner_performance
 from apps.payouts.serializers import (
     LedgerAdjustmentRequestSerializer,
     PartnerBalanceSerializer,
     PartnerLedgerEntrySerializer,
     PartnerLedgerPageSerializer,
     PartnerPayoutAccountSerializer,
+    PartnerPerformanceSerializer,
     PayoutBatchListSerializer,
     PayoutBatchPageSerializer,
     PayoutBatchSerializer,
@@ -116,6 +118,31 @@ def _batch_projection(batch_id: UUID) -> ResponseBody:
 # --------------------------------------------------------------------------------------------
 # Partner
 # --------------------------------------------------------------------------------------------
+
+
+class PartnerPerformanceView(APIView):
+    """The numbers the Partner home screen is built from.
+
+    Separate from `earnings/`, which answers "what am I owed" — a balance by
+    state. This answers "how am I doing" — throughput and revenue over time.
+    Both are aggregates over the same ledger, and folding them into one payload
+    would make a screen that only wants today's total pull a full balance
+    breakdown it does not render.
+
+    No `partner_id`: the Partner is resolved from the session, which is the one
+    filter a caller cannot get wrong.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=[PARTNER_TAG],
+        operation_id="partner_performance_retrieve",
+        responses={200: PartnerPerformanceSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        profile = _partner_profile(cast(User, request.user))
+        return Response(PartnerPerformanceSerializer(partner_performance(profile)).data)
 
 
 class PartnerEarningsView(APIView):

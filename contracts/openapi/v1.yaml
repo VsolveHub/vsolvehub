@@ -5348,6 +5348,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/performance/:
+    get:
+      operationId: partner_performance_retrieve
+      description: |-
+        The numbers the Partner home screen is built from.
+
+        Separate from `earnings/`, which answers "what am I owed" — a balance by
+        state. This answers "how am I doing" — throughput and revenue over time.
+        Both are aggregates over the same ledger, and folding them into one payload
+        would make a screen that only wants today's total pull a full balance
+        breakdown it does not render.
+
+        No `partner_id`: the Partner is resolved from the session, which is the one
+        filter a caller cannot get wrong.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerPerformance'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/presence/heartbeat/:
     post:
       operationId: partner_presence_heartbeat_create
@@ -9862,6 +9893,20 @@ components:
       required:
       - document_version
       - purpose
+    PartnerDailyPerformance:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        net_paise:
+          type: integer
+        jobs:
+          type: integer
+      required:
+      - date
+      - jobs
+      - net_paise
     PartnerDocument:
       type: object
       properties:
@@ -10216,6 +10261,50 @@ components:
       - is_payable_now
       - status
       - verified_at
+    PartnerPerformance:
+      type: object
+      description: |-
+        How a Partner is doing, in the periods they think in.
+
+        Counts come from `EARNING` ledger entries — one per completed booking, written
+        at settlement — so "jobs done" is never inferred from a mutable booking
+        timestamp. Revenue sums every entry kind, so an adjustment or reversal shows
+        up the day it lands rather than drifting from the balance beside it.
+      properties:
+        today_net_paise:
+          type: integer
+        today_jobs:
+          type: integer
+        month_net_paise:
+          type: integer
+        month_jobs:
+          type: integer
+        average_monthly_net_paise:
+          type: integer
+        lifetime_net_paise:
+          type: integer
+        lifetime_jobs:
+          type: integer
+        daily:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerDailyPerformance'
+        currency:
+          type: string
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - average_monthly_net_paise
+      - currency
+      - daily
+      - lifetime_jobs
+      - lifetime_net_paise
+      - month_jobs
+      - month_net_paise
+      - server_now
+      - today_jobs
+      - today_net_paise
     PartnerPresence:
       type: object
       properties:

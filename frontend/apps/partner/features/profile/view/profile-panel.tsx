@@ -219,6 +219,11 @@ export function ProfilePanel() {
       <Card className="p-5">
         <h2 className="text-base font-bold text-text">Manage</h2>
         <div className="mt-3 flex flex-col gap-2">
+          <Link href="/jobs" className="w-full">
+            <Button variant="outline" className="w-full justify-start">
+              My bookings
+            </Button>
+          </Link>
           <Link href="/apply" className="w-full">
             <Button variant="outline" className="w-full justify-start">
               My application and documents

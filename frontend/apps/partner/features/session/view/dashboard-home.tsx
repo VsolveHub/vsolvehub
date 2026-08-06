@@ -8,7 +8,8 @@ import Link from "next/link";
 import { usePartnerApplication } from "@/features/application/queries";
 import { ReadinessChecklist } from "@/features/application/view/readiness-checklist";
 import { ApplicationStatusBanner } from "@/features/application/view/status-banner";
-import { OfferInbox } from "@/features/offers/view/offer-inbox";
+import { PerformanceSummary } from "@/features/earnings/view/performance-summary";
+import { LiveOffersBanner } from "@/features/offers/view/live-offers-banner";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import { TodayStrip } from "@/features/work/view/today-strip";
 import { getApiClient } from "@/lib/api/browser";
@@ -112,18 +113,22 @@ export function DashboardHome() {
               </p>
             </section>
 
-            {/* What they already agreed to, before what is newly on offer.
-                "What do I have to do now" outranks "is there more work". */}
+            {/* An offer expires on a timer, so it is the one thing here that
+                earns an interruption — and only when one actually exists. The
+                inbox itself lives at `/offers`; its empty state used to occupy
+                the best space on the app for the whole time nothing was on
+                offer, which is most of the time. */}
+            <LiveOffersBanner />
+
+            {/* What the Partner opens the app to find out: how today is going.
+                The full job list is a tab away rather than dumped here. */}
+            <div className="border-t border-line pt-5">
+              <PerformanceSummary />
+            </div>
+
             <div className="border-t border-line pt-5">
               <TodayStrip />
             </div>
-
-            <section className="border-t border-line pt-5">
-              <h2 className="text-base font-bold text-text">New offers</h2>
-              <div className="mt-3">
-                <OfferInbox />
-              </div>
-            </section>
           </>
         ) : (
           <SwitchToPartner inline />

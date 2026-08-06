@@ -57,3 +57,29 @@ export function usePartnerPayoutAccount() {
     retry: false,
   });
 }
+
+/* -------------------------------------------------------------------------
+   Performance (contract 1.19.0)
+   ------------------------------------------------------------------------- */
+
+export type PartnerPerformance = Schemas["PartnerPerformance"];
+
+/**
+ * How the Partner is doing — today, this month, and the trend behind them.
+ *
+ * Distinct from `usePartnerBalance`, which answers "what am I owed". Both are
+ * aggregates over the same ledger; folding them together would make a screen
+ * that wants today's total pull a full balance breakdown it never renders.
+ *
+ * The daily series is computed server-side on purpose. Grouping the ledger in
+ * the browser silently under-reports the moment a Partner has more entries than
+ * fit in one page, and a revenue chart that quietly drops rows is worse than no
+ * chart.
+ */
+export function usePartnerPerformance() {
+  return useQuery({
+    queryKey: queryKeys.partnerMoney.performance(),
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/performance/")),
+    ...EXPIRING_STATE,
+  });
+}
