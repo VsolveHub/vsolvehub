@@ -4,7 +4,7 @@ import { describeError } from "@vsolve/query";
 import { Badge, ErrorState, Skeleton } from "@vsolve/ui";
 
 import { useBookingGroup } from "@/features/bookings/queries";
-import { Money } from "@/features/booking/group/view/money";
+import { Money } from "@/features/checkout/view/money";
 
 import { useOrder, type Order, type TaxDocument } from "../queries";
 

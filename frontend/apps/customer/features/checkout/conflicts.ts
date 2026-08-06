@@ -210,6 +210,19 @@ export function isPlanStale(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "fulfilment_plan_stale";
 }
 
+/**
+ * `scheduling_groups_changed` — the visits the customer picked times for are not
+ * the visits this cart makes now.
+ *
+ * Recovery is always "ask again", never a local repair. Group keys are derived
+ * from membership, so this fires whenever the cart moved underneath a chosen
+ * schedule — and silently reassigning those times would put a visit at a slot
+ * nobody agreed to.
+ */
+export function isSchedulingGroupsChanged(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "scheduling_groups_changed";
+}
+
 /** `quote_expired` — the quote aged out before it was used. */
 export function isQuoteExpired(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "quote_expired";

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { GroupBookingWorkspace } from "@/features/booking/group/view/workspace";
+import { CartWorkspace } from "@/features/cart/view/cart-workspace";
 
 /**
  * The booking route.
@@ -27,10 +27,10 @@ import { GroupBookingWorkspace } from "@/features/booking/group/view/workspace";
  * result, and indexing it would compete with the catalog page that is.
  */
 export const metadata: Metadata = {
-  title: "Your booking",
+  title: "Your cart",
   robots: { index: false, follow: true },
 };
 
 export default function CartPage() {
-  return <GroupBookingWorkspace />;
+  return <CartWorkspace />;
 }

@@ -95,6 +95,10 @@ export interface QuoteReviewProps {
   visitCount: number;
   professionalCount: number;
   isConfirming: boolean;
+  /** The confirm button's wording. Defaults to the neutral, non-payment phrasing. */
+  confirmLabel?: string;
+  /** A sentence under the button. Use it to say what confirming does *not* do. */
+  confirmNote?: string;
   /** Set when the confirmation itself failed, already described for a person. */
   errorMessage: string | null;
   onConfirm: () => void;
@@ -108,6 +112,8 @@ export function QuoteReview({
   visitCount,
   professionalCount,
   isConfirming,
+  confirmLabel = "Confirm booking",
+  confirmNote,
   errorMessage,
   onConfirm,
   onBack,
@@ -175,12 +181,20 @@ export function QuoteReview({
 
       <div className="mt-5 flex flex-wrap gap-3">
         <Button onClick={onConfirm} loading={isConfirming} loadingLabel="Confirming">
-          Confirm this booking
+          {confirmLabel}
         </Button>
         <Button variant="ghost" onClick={onBack} disabled={isConfirming}>
-          Choose a different option
+          Change the times
         </Button>
       </div>
+
+      {/* Load-bearing, not reassurance. Django's lifecycle is assign-then-pay:
+          confirming dispatches offers and charges nothing, and payment opens
+          only once every Partner has committed. Without this sentence the
+          button reads as the end of the flow. */}
+      {confirmNote === undefined ? null : (
+        <p className="mt-3 text-sm text-text-secondary">{confirmNote}</p>
+      )}
     </div>
   );
 }

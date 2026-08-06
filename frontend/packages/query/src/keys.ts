@@ -105,6 +105,29 @@ export const queryKeys = {
     windows: (input: { cartVersion: number; addressId: string }) =>
       [...queryKeys.booking.all, "windows", input] as const,
 
+    /**
+     * How this cart splits into separately-schedulable visits (contract 1.18.0).
+     *
+     * Both inputs belong in the key for the same reason they do on `windows`: the
+     * address decides the service area the grouping is scoped to, and the cart
+     * version decides what work is being grouped. Serving one cart's visits for
+     * another would open a slot picker for a visit that does not exist — and the
+     * key the customer then schedules against would be refused by the server.
+     */
+    schedulingGroups: (input: { cartVersion: number; addressId: string }) =>
+      [...queryKeys.booking.all, "scheduling-groups", input] as const,
+
+    /**
+     * Services one Partner could add to a visit this cart already has.
+     *
+     * Keyed by cart version alone. The suggestion set is derived from what is in
+     * the cart and from compatibility rules; unlike the grouping it is not
+     * area-scoped, so putting an address in the key would fragment the cache
+     * without changing the answer.
+     */
+    suggestions: (cartVersion: number) =>
+      [...queryKeys.booking.all, "suggestions", cartVersion] as const,
+
     /** Every plan set, for invalidation when the cart changes underneath them. */
     planSets: () => [...queryKeys.booking.all, "plan-sets"] as const,
 

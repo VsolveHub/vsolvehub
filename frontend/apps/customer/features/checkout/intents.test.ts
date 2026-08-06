@@ -21,7 +21,10 @@ describe("plan set", () => {
   const intent = {
     cartVersion: 3,
     addressId: "addr-1",
-    preferredStart: "2026-08-03T10:00:00Z",
+    preferredStarts: [
+      { groupKey: "electrician", startsAt: "2026-08-03T10:00:00Z" },
+      { groupKey: "salon", startsAt: "2026-08-06T15:00:00Z" },
+    ],
   };
 
   it("reuses one key across retries of the same intent", () => {
@@ -39,9 +42,38 @@ describe("plan set", () => {
 
     expect(planSetIntentKey({ ...intent, cartVersion: 4 })).not.toBe(base);
     expect(planSetIntentKey({ ...intent, addressId: "addr-2" })).not.toBe(base);
-    expect(planSetIntentKey({ ...intent, preferredStart: "2026-08-04T10:00:00Z" })).not.toBe(
-      base,
-    );
+  });
+
+  it("mints a new key when any one visit moves", () => {
+    const base = planSetIntentKey(intent);
+
+    // Moving the salon appointment must not replay the Friday plan set.
+    expect(
+      planSetIntentKey({
+        ...intent,
+        preferredStarts: [
+          intent.preferredStarts[0]!,
+          { groupKey: "salon", startsAt: "2026-08-07T15:00:00Z" },
+        ],
+      }),
+    ).not.toBe(base);
+  });
+
+  it("mints a new key when a visit is added or dropped", () => {
+    const base = planSetIntentKey(intent);
+
+    expect(
+      planSetIntentKey({ ...intent, preferredStarts: [intent.preferredStarts[0]!] }),
+    ).not.toBe(base);
+  });
+
+  it("ignores the order the visits happen to arrive in", () => {
+    expect(
+      planSetIntentKey({
+        ...intent,
+        preferredStarts: [...intent.preferredStarts].reverse(),
+      }),
+    ).toBe(planSetIntentKey(intent));
   });
 });
 

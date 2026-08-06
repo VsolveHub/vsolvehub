@@ -6,8 +6,8 @@ import { Button } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { duplicateCartItemConflict, cartVersionConflict } from "../group/conflicts";
-import { useAddCartItem, useCart } from "../group/queries";
+import { duplicateCartItemConflict, cartVersionConflict } from "@/features/checkout/conflicts";
+import { useAddCartItem, useCart } from "@/features/checkout/queries";
 import { totalTaskQuantity } from "../model/state";
 import { DuplicateItemDialog } from "./cart-conflict-dialog";
 import { ScopeStage } from "./scope-stage";

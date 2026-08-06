@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
-import { toWindowsView, type WindowsView } from "../adapters";
+import { toWindowsView, type WindowsView } from "@/features/booking/adapters";
 import { cartVersionConflict, type MergeAction } from "./conflicts";
 import { checkoutIntentKey, planQuoteIntentKey, planSetIntentKey } from "./intents";
 
@@ -311,6 +311,57 @@ export function useCandidateStarts(input: WindowsInput | null) {
 }
 
 /* -------------------------------------------------------------------------
+   Scheduling groups
+   ------------------------------------------------------------------------- */
+
+export type SchedulingGroup = Schemas["SchedulingGroup"];
+
+export interface SchedulingGroupsInput {
+  cartVersion: number;
+  addressId: string;
+}
+
+/**
+ * The visits this cart splits into, published before any time is chosen.
+ *
+ * This is what the slot picker renders: one row per visit, each taking its own
+ * start. The client does not decide which services share a professional — that
+ * is a compatibility rule Django owns, and a second implementation in the browser
+ * would eventually offer a visit the planner refuses to build.
+ *
+ * `VOLATILE_STATE` because the grouping is derived from effective-dated rules
+ * Operations can retire; a cached answer is a claim the server has stopped
+ * standing behind. Keyed by cart version *and* address, because both change the
+ * answer and serving one cart's visits for another produces `group_key`s the
+ * plan-set command will refuse.
+ */
+export function useSchedulingGroups(input: SchedulingGroupsInput | null) {
+  return useQuery({
+    queryKey: queryKeys.booking.schedulingGroups({
+      cartVersion: input?.cartVersion ?? 0,
+      addressId: input?.addressId ?? "",
+    }),
+    queryFn: async () =>
+      (
+        await request(() =>
+          getApiClient().POST("/api/v1/cart/scheduling-groups/", {
+            body: {
+              address_id: input!.addressId,
+              expected_cart_version: input!.cartVersion,
+            },
+          }),
+        )
+      ).groups,
+    enabled: input !== null,
+    ...VOLATILE_STATE,
+    retry: (failureCount, error) =>
+      error instanceof ApiRequestError && (error.status === 409 || error.status === 404)
+        ? false
+        : failureCount < 2,
+  });
+}
+
+/* -------------------------------------------------------------------------
    Fulfilment plans
    ------------------------------------------------------------------------- */
 
@@ -321,8 +372,15 @@ export type PlanUnit = Schemas["PlanUnit"];
 export interface CreatePlanSetInput {
   cartVersion: number;
   addressId: string;
-  /** An ISO instant the server itself published as a candidate start. */
-  preferredStart: string;
+  /**
+   * One chosen start per published visit.
+   *
+   * Every group Django published must appear exactly once. A missing one is
+   * refused with `scheduling_groups_changed` rather than defaulted — the server
+   * will not pick a time on the customer's behalf for work they never scheduled,
+   * and neither does this client.
+   */
+  preferredStarts: readonly { groupKey: string; startsAt: string }[];
 }
 
 /**
@@ -344,7 +402,10 @@ export function useCreatePlanSet() {
           body: {
             address_id: input.addressId,
             expected_cart_version: input.cartVersion,
-            preferred_start: input.preferredStart,
+            preferred_starts: input.preferredStarts.map((entry) => ({
+              group_key: entry.groupKey,
+              starts_at: entry.startsAt,
+            })),
           },
         }),
       ),

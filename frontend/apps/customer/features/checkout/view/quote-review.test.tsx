@@ -140,7 +140,7 @@ describe("a quote that can no longer be used", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(message);
     // No confirm action at all — a disabled one still reads as "almost there".
-    expect(screen.queryByRole("button", { name: /confirm this booking/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /confirm booking/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /go back to my booking/i }));
     expect(props.onStartOver).toHaveBeenCalledTimes(1);
@@ -156,7 +156,7 @@ describe("a quote that can no longer be used", () => {
 describe("confirming", () => {
   it("confirms once and marks the action busy rather than freezing the page", () => {
     const props = renderReview();
-    fireEvent.click(screen.getByRole("button", { name: /confirm this booking/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm booking/i }));
     expect(props.onConfirm).toHaveBeenCalledTimes(1);
 
     renderReview({ isConfirming: true });
@@ -238,5 +238,21 @@ describe("the confirmed Booking Group", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(/cannot show it yet/i);
     expect(screen.queryByText(/your booking is confirmed/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("confirming is not paying", () => {
+  it("says what confirming does not do when checkout passes a note", () => {
+    renderReview({
+      confirmNote: "You will pay after we have assigned your professionals.",
+    });
+
+    expect(screen.getByText(/pay after we have assigned/i)).toBeInTheDocument();
+  });
+
+  it("does not offer to pay", () => {
+    renderReview();
+
+    expect(screen.queryByRole("button", { name: /^pay/i })).not.toBeInTheDocument();
   });
 });

@@ -30,14 +30,26 @@ import { getStableIdempotencyKey } from "@vsolve/api-client";
  * id below, so a body change can never travel under an unchanged key.
  */
 
-/** Plan-set creation. Every field of the published request body is in the id. */
+/**
+ * Plan-set creation. Every field of the published request body is in the id.
+ *
+ * Since 1.18.0 that means **every** chosen start, not one. Two schedules over the
+ * same cart and address are different intents — moving the salon appointment from
+ * Friday to Saturday must produce a different plan set, not replay the Friday one
+ * — so all of them are folded in. Sorting first keeps the key stable against the
+ * order the rows happen to arrive in.
+ */
 export function planSetIntentKey(input: {
   cartVersion: number;
   addressId: string;
-  preferredStart: string;
+  preferredStarts: readonly { groupKey: string; startsAt: string }[];
 }): string {
+  const starts = input.preferredStarts
+    .map((entry) => `${entry.groupKey}@${entry.startsAt}`)
+    .sort()
+    .join("|");
   return getStableIdempotencyKey(
-    `plan-set:${input.cartVersion}:${input.addressId}:${input.preferredStart}`,
+    `plan-set:${input.cartVersion}:${input.addressId}:${starts}`,
   );
 }
 

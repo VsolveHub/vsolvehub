@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.17.0)
- * Checksum: d970125e6329430a
+ * Source:   contracts/openapi/v1.yaml (version 1.18.0)
+ * Checksum: 54461ed3f446b805
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -546,6 +546,62 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["cart_merge_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cart/scheduling-groups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description How the current cart splits into separately-schedulable visits.
+         *
+         *     A read, not a command: nothing is reserved, priced or persisted. It exists
+         *     because the Customer has to be shown *how many* start times to pick before
+         *     picking any, and the plan-set command cannot answer that — it takes the times
+         *     as input.
+         *
+         *     Serviceability is resolved here for the same reason the planner resolves it: a
+         *     cart that straddles two service areas, or contains something this address
+         *     cannot be served, has no visits rather than empty ones. The refusal carries the
+         *     same per-item reasons the planner raises, so one screen renders both.
+         */
+        post: operations["cart_scheduling_groups_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cart/suggestions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Services one Partner could add to a visit this cart already has.
+         *
+         *     `POST` rather than `GET` because the answer is derived from the caller's own
+         *     cart, which is resolved from the session rather than the URL. A `GET` would
+         *     imply a cacheable address for something that differs per caller.
+         *
+         *     Open to anonymous callers for the same reason the cart itself is: a suggestion
+         *     is a catalog read, and asking someone to log in before we will tell them what
+         *     else a professional could do is a worse product for no privacy gain.
+         */
+        post: operations["cart_suggestions_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2506,6 +2562,17 @@ export interface components {
             expected_session_cart_version: number;
             decisions: components["schemas"]["CartMergeDecisionRequest"][];
         };
+        /**
+         * @description Services one Partner could add to a visit this cart already has.
+         *
+         *     `suggestions` reuses the catalog's own `ServiceCard`, so the cart renders the
+         *     same card the catalog does rather than a second, drifting shape. An empty list
+         *     is a real answer and the client renders nothing for it.
+         */
+        CartSuggestions: {
+            cart_version: number;
+            suggestions: components["schemas"]["ServiceCard"][];
+        };
         CaseNoteRequestRequest: {
             body: string;
             /** @default false */
@@ -2880,12 +2947,22 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description Plan a cart against one start time **per visit**.
+         *
+         *     `preferred_starts` replaced a single `preferred_start` in 1.18.0. One time for
+         *     the whole cart made "electrician on Monday, salon on Friday" inexpressible:
+         *     every unit was derived by cascading a single clock forward.
+         *
+         *     Every group the server publishes must carry a start, and no group may carry
+         *     two. A missing one is refused rather than defaulted, because defaulting picks
+         *     a time on the Customer's behalf for work they never scheduled.
+         */
         FulfilmentPlanSetCreateRequest: {
             /** Format: uuid */
             address_id: string;
             expected_cart_version: number;
-            /** Format: date-time */
-            preferred_start: string;
+            preferred_starts: components["schemas"]["PreferredStartRequest"][];
         };
         /**
          * @description * `ACTIVE` - Active
@@ -4084,6 +4161,12 @@ export interface components {
             readonly scope_snapshot: unknown;
             readonly configuration_snapshot: unknown;
         };
+        /** @description One visit's chosen start, keyed by the scheduling group it belongs to. */
+        PreferredStartRequest: {
+            group_key: string;
+            /** Format: date-time */
+            starts_at: string;
+        };
         PrivacyRequest: {
             /** Format: uuid */
             readonly id: string;
@@ -4347,6 +4430,28 @@ export interface components {
          * @enum {string}
          */
         ScanStatusEnum: "PENDING" | "CLEAN" | "REJECTED" | "FAILED";
+        /**
+         * @description One separately-schedulable visit.
+         *
+         *     `key` is opaque to the client and is sent back with the chosen start. It
+         *     identifies the visit by its membership, so a cart edit produces different keys
+         *     and the server can refuse a schedule aimed at visits that no longer exist.
+         */
+        SchedulingGroup: {
+            key: string;
+            label: string;
+            estimated_duration_minutes: number;
+            cart_item_ids: string[];
+        };
+        SchedulingGroups: {
+            cart_version: number;
+            groups: components["schemas"]["SchedulingGroup"][];
+        };
+        SchedulingGroupsRequestRequest: {
+            /** Format: uuid */
+            address_id: string;
+            expected_cart_version: number;
+        };
         ScopeAmendment: {
             /** Format: uuid */
             readonly id: string;
@@ -6210,6 +6315,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cart_scheduling_groups_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulingGroupsRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SchedulingGroupsRequestRequest"];
+                "multipart/form-data": components["schemas"]["SchedulingGroupsRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulingGroups"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cart_suggestions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CartSuggestions"];
                 };
             };
         };

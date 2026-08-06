@@ -5,7 +5,7 @@ import { Button, Dialog, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Money } from "@/features/booking/group/view/money";
+import { Money } from "@/features/checkout/view/money";
 
 import {
   isCancellationRefused,

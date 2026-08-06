@@ -439,7 +439,7 @@ describe("idempotent commands", () => {
     const input = {
       cartVersion: 3,
       addressId: "addr-1",
-      preferredStart: "2026-08-03T10:00:00Z",
+      preferredStarts: [{ groupKey: "electrician", startsAt: "2026-08-03T10:00:00Z" }],
     };
 
     result.current.mutate(input);
@@ -489,14 +489,17 @@ describe("idempotent commands", () => {
     const base = {
       cartVersion: 3,
       addressId: "addr-1",
-      preferredStart: "2026-08-03T10:00:00Z",
+      preferredStarts: [{ groupKey: "electrician", startsAt: "2026-08-03T10:00:00Z" }],
     };
 
     result.current.mutate(base);
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(1));
     result.current.mutate({ ...base, cartVersion: 4 });
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(2));
-    result.current.mutate({ ...base, preferredStart: "2026-08-03T14:00:00Z" });
+    result.current.mutate({
+      ...base,
+      preferredStarts: [{ groupKey: "electrician", startsAt: "2026-08-03T14:00:00Z" }],
+    });
     await waitFor(() => expect(client.POST).toHaveBeenCalledTimes(3));
 
     const keys = client.POST.mock.calls.map(

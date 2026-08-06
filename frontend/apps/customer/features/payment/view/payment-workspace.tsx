@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { useBookingGroup } from "@/features/bookings/queries";
-import { Money } from "@/features/booking/group/view/money";
+import { Money } from "@/features/checkout/view/money";
 
 import { paymentPhase, canReconcile, type PaymentAttempt } from "../model/outcome";
 import { handoffTarget, openProviderCheckout } from "../model/provider-handoff";

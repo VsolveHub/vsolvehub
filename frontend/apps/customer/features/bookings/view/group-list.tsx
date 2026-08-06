@@ -5,7 +5,7 @@ import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 
-import { Money } from "@/features/booking/group/view/money";
+import { Money } from "@/features/checkout/view/money";
 
 import {
   isCursorContractFailure,
