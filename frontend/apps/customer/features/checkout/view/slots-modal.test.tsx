@@ -29,23 +29,29 @@ const SALON: SchedulingGroup = {
 };
 
 const WINDOWS: WindowsView = {
-  serverNow: "2026-08-10T04:00:00Z",
   estimatedDurationMinutes: 30,
-  availabilityIsPreliminary: true,
+  isEmpty: false,
+  isPreliminary: true,
   days: [
     {
+      date: "2026-08-10",
       label: "Mon 10 Aug",
-      isToday: false,
+      dayOfMonth: "10",
+      hasAvailability: true,
       windows: [
         {
+          id: "win-1",
           startsAt: "2026-08-10T04:30:00Z",
-          label: "10:00 am",
+          startLabel: "10:00 am",
+          label: "10:00 am – 11:00 am",
           isAvailable: true,
           unavailableLabel: null,
         },
         {
+          id: "win-2",
           startsAt: "2026-08-10T08:30:00Z",
-          label: "2:00 pm",
+          startLabel: "2:00 pm",
+          label: "2:00 pm – 3:00 pm",
           isAvailable: true,
           unavailableLabel: null,
         },
@@ -127,7 +133,7 @@ describe("confirming a complete schedule", () => {
     fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
     expect(props.onConfirm).toHaveBeenCalledTimes(1);
-    const chosen = props.onConfirm.mock.calls[0]![0] as ReadonlyMap<string, string>;
+    const chosen = vi.mocked(props.onConfirm).mock.calls[0]![0] as ReadonlyMap<string, string>;
     expect(chosen.get("key-electrician")).toBe("2026-08-10T04:30:00Z");
     expect(chosen.get("key-salon")).toBe("2026-08-10T08:30:00Z");
   });
@@ -138,7 +144,7 @@ describe("confirming a complete schedule", () => {
     chooseSlot("Electrician", /10:00 am/i);
     fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
 
-    const chosen = props.onConfirm.mock.calls[0]![0] as ReadonlyMap<string, string>;
+    const chosen = vi.mocked(props.onConfirm).mock.calls[0]![0] as ReadonlyMap<string, string>;
     expect(chosen.get("key-electrician")).toBe(WINDOWS.days[0]!.windows[0]!.startsAt);
   });
 

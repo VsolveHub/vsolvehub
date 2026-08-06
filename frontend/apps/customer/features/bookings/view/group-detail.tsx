@@ -16,13 +16,11 @@ import {
   type BookingGroup,
   type FulfilmentUnit,
 } from "../queries";
+import { AssignmentProgress } from "./assignment-progress";
 import {
   GROUP_STATUS_LABELS,
-  GROUP_STATUS_MEANING,
   GroupStatusBadge,
-  RECOVERY_LABELS,
   UnitStatusBadge,
-  heldUnitCount,
 } from "./group-status";
 
 /**
@@ -233,8 +231,6 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
     );
   }
 
-  const recovery = RECOVERY_LABELS[group.recovery_action];
-  const held = heldUnitCount(group);
   const canCancel = !isTerminal(group);
 
   function describeCancelFailure(error: unknown): string {
@@ -261,45 +257,12 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         <GroupStatusBadge group={group} />
       </div>
 
-      {/* The status sentence, and the all-or-nothing rule stated where it
-          matters rather than buried in terms. */}
-      <p className="mt-4 rounded-card border border-line bg-surface-sunken p-4 text-sm text-text">
-        {GROUP_STATUS_MEANING[group.status]}
-      </p>
-
-      {group.units.length > 1 && !isTerminal(group) ? (
-        <p className="mt-2 text-sm text-text-secondary">
-          {held} of {group.units.length} visits have a professional held. They are booked
-          together or not at all.
-        </p>
-      ) : null}
-
-      {/* Server-published, never inferred from status. */}
-      {recovery !== null ? (
-        <p className="mt-3 text-sm font-medium text-text" data-testid="recovery-action">
-          {recovery}
-        </p>
-      ) : null}
-
-      {group.recovery_action === "REPLAN" ? (
-        <div className="mt-3">
-          <Link href="/cart" className={buttonStyles({ variant: "outline" })}>
-            Choose a new arrangement
-          </Link>
-        </div>
-      ) : null}
-
-      {/* The server said payment is due, so the server's own instruction gets a
-          control. Gated on `recovery_action` and on the checkout the group now
-          publishes (contract 1.14.0) — not on the status string, and never on a
-          checkout id this client remembered from the tab that confirmed. */}
-      {group.recovery_action === "PAYMENT_REQUIRED" && group.checkout_id !== null ? (
-        <div className="mt-3">
-          <Link href={`/bookings/${group.id}/pay`} className={buttonStyles({})}>
-            Continue to payment
-          </Link>
-        </div>
-      ) : null}
+      {/* The wait between Confirm and Pay is a step of the flow, not a
+          footnote: how far the search has got, the all-or-nothing rule stated
+          where it matters, and the one control the server is asking for. */}
+      <div className="mt-4">
+        <AssignmentProgress group={group} />
+      </div>
 
       {/* Paid. The receipt is reachable for as long as the order exists, which
           outlives every state the group above will pass through. */}
