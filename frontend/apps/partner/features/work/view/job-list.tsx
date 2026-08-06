@@ -74,7 +74,9 @@ export function JobList() {
   const jobs = jobsQuery.data ?? [];
 
   return (
-    <div>
+    // `PartnerShell` owns no width and no landmark — each page brings its own, or
+    // it renders edge-to-edge on a desktop. `max-w-2xl` matches the signed-in home.
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
       <h1 className="text-lg font-bold text-text">Your jobs</h1>
 
       {/* Big, icon-led tabs. A tap target this size survives gloves and a
@@ -132,7 +134,7 @@ export function JobList() {
           </ul>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 

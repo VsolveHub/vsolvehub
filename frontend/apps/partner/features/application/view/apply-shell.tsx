@@ -21,7 +21,7 @@ import { APPLICATION_STEPS, stepIndexOf } from "../model/steps";
  */
 export function ApplyShell({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-4">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-4">
       <ApplySteps />
       <main className="mt-6">{children}</main>
     </div>

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { PartnerShell } from "@/features/session/partner-shell";
 import { WorkPanel } from "@/features/work/view/work-panel";
 
 /**
@@ -13,7 +12,11 @@ import { WorkPanel } from "@/features/work/view/work-panel";
  * work list were the same list, which stops being true the moment they hold two
  * jobs and are offered a third.
  *
- * Behind the shared shell, `force-dynamic`, never indexed.
+ * The shell comes from `app/jobs/layout.tsx`. It used to be mounted here too,
+ * which — once the layout existed — rendered two headers and two bottom
+ * navigations on the same screen.
+ *
+ * `force-dynamic`, never indexed.
  */
 export const dynamic = "force-dynamic";
 
@@ -30,16 +33,17 @@ export default async function JobPage({
   const { bookingId } = await params;
 
   return (
-    <PartnerShell>
-      <main className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
-        <Link href="/offers" className="text-sm font-semibold text-text-link hover:underline">
-          ← Back to your offers
-        </Link>
-        <h1 className="mt-4 text-2xl font-bold text-text">Your job</h1>
-        <div className="mt-4">
-          <WorkPanel bookingId={bookingId} />
-        </div>
-      </main>
-    </PartnerShell>
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
+      {/* Back to the job list, not the offer inbox. Arriving here means the job
+          was already accepted, so the inbox is where it came from rather than
+          where it belongs. */}
+      <Link href="/jobs" className="text-sm font-semibold text-text-link hover:underline">
+        ← All jobs
+      </Link>
+      <h1 className="mt-4 text-lg font-bold text-text">Your job</h1>
+      <div className="mt-4">
+        <WorkPanel bookingId={bookingId} />
+      </div>
+    </main>
   );
 }

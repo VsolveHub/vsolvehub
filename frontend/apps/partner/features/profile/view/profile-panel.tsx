@@ -79,36 +79,56 @@ const TONE_STYLES: Record<"good" | "wait" | "stop", string> = {
   stop: "border-critical-200 bg-critical-50 text-critical",
 };
 
+/**
+ * The page container.
+ *
+ * `PartnerShell` deliberately provides no width and no `<main>` — "each page owns
+ * that landmark" — so a screen that forgets one renders edge-to-edge across a
+ * desktop viewport. `max-w-2xl` matches the signed-in home; this is a phone-first
+ * app and a 1900px-wide profile row is unreadable.
+ */
+function Page({ children }: { children: ReactNode }) {
+  return (
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
+      <div className="flex flex-col gap-4">{children}</div>
+    </main>
+  );
+}
+
 export function ProfilePanel() {
   const profileQuery = usePartnerProfile();
 
   if (profileQuery.isPending) {
     return (
-      <div className="flex flex-col gap-4">
+      <Page>
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-48 w-full" />
-      </div>
+      </Page>
     );
   }
 
   if (profileQuery.isError) {
-    return isNoProfileYet(profileQuery.error) ? (
-      <ErrorState
-        severity="warning"
-        title="You do not have a Partner profile yet"
-        message="Finish your application and we will set one up."
-        actionLabel="Open my application"
-        onAction={() => {
-          window.location.href = "/apply";
-        }}
-      />
-    ) : (
-      <ErrorState
-        title="We could not load your profile"
-        message={describeError(profileQuery.error, "read").message}
-        actionLabel="Try again"
-        onAction={() => void profileQuery.refetch()}
-      />
+    return (
+      <Page>
+        {isNoProfileYet(profileQuery.error) ? (
+          <ErrorState
+            severity="warning"
+            title="You do not have a Partner profile yet"
+            message="Finish your application and we will set one up."
+            actionLabel="Open my application"
+            onAction={() => {
+              window.location.href = "/apply";
+            }}
+          />
+        ) : (
+          <ErrorState
+            title="We could not load your profile"
+            message={describeError(profileQuery.error, "read").message}
+            actionLabel="Try again"
+            onAction={() => void profileQuery.refetch()}
+          />
+        )}
+      </Page>
     );
   }
 
@@ -117,7 +137,7 @@ export function ProfilePanel() {
   const status = approval === null ? null : (APPROVAL_COPY[approval] ?? null);
 
   return (
-    <div className="flex flex-col gap-4">
+    <Page>
       <Card className="flex items-center gap-4 p-5">
         <span
           aria-hidden
@@ -216,7 +236,7 @@ export function ProfilePanel() {
           </Link>
         </div>
       </Card>
-    </div>
+    </Page>
   );
 }
 
