@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateAuthGuard } from "./session";
+import { evaluateAuthGuard, type CurrentUser } from "./session";
 
 /**
  * "Granted but not selected" is not the same refusal as "not granted".
@@ -15,11 +15,16 @@ import { evaluateAuthGuard } from "./session";
  * on a picker.
  */
 
-const USER = {
+/** Typed rather than cast: the tests below spread it to vary `roles`, and a `never` cannot be
+ * spread — which is how this file typechecked green under a cached turbo run and red on a fresh
+ * one. */
+const USER: CurrentUser = {
   id: "user-1",
   phone_number: "+919810000001",
+  full_name: "Test Operator",
+  email: "operator@example.com",
   roles: ["customer", "operations"],
-} as never;
+};
 
 describe("granted but not selected is its own refusal", () => {
   it("reports role_not_selected when the grant is held and another role is active", () => {
@@ -41,7 +46,7 @@ describe("granted but not selected is its own refusal", () => {
     // no-access screen. Collapsing them would have the app silently try to switch to a role it
     // cannot have, and show a spinner where it should show an explanation.
     const decision = evaluateAuthGuard({
-      user: { ...USER, roles: ["customer"] } as never,
+      user: { ...USER, roles: ["customer"] },
       isPending: false,
       error: null,
       requiredRoles: ["operations"],
@@ -89,7 +94,7 @@ describe("the automatic switch cannot obtain a role", () => {
     // and unrevoked. `role_not_selected` is only ever returned *after* the grant check has
     // passed, so the request the app makes is always for something the user already has.
     const withoutGrant = evaluateAuthGuard({
-      user: { ...USER, roles: ["customer"] } as never,
+      user: { ...USER, roles: ["customer"] },
       isPending: false,
       error: null,
       requiredRoles: ["operations"],
