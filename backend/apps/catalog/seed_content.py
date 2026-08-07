@@ -216,6 +216,61 @@ def content_for_trade(trade_slug: str) -> TradeContent:
     return PERSONAL_CARE
 
 
+def _charm(paise: int) -> int:
+    """Round a scaled price down to the ₹x9 the rest of the catalog uses.
+
+    Scaled prices land on numbers nobody would choose — ₹419.86 — and a ladder that reads as
+    arithmetic rather than as pricing invites the reader to reverse the multiplier.
+    """
+
+    return (paise // 1000) * 1000 + 900
+
+
+def _ladder(
+    prefix: str,
+    base_paise: int,
+    base_minutes: int,
+    steps: tuple[tuple[str, str, int, int], ...],
+) -> tuple[VariantSeed, ...]:
+    """A priced ladder over one axis.
+
+    The multipliers live with the ladder rather than in each entry so the whole thing moves when
+    a base price is corrected — these bases are proposals, and a hand-written ladder would have
+    to be re-derived by hand every time one changed.
+    """
+
+    return tuple(
+        VariantSeed(
+            name=f"{prefix} — {label}",
+            code=code,
+            price_paise=_charm(base_paise * price_pct // 100),
+            minutes=max(1, base_minutes * minute_pct // 100),
+            description=description,
+        )
+        for label, code, price_pct, minute_pct, description in (
+            (label, code, price_pct, minute_pct, "") for label, code, price_pct, minute_pct in steps
+        )
+    )
+
+
+#: Hair length. The axis every salon actually prices colour and treatment on, because product
+#: quantity and time both scale with it and neither scales with anything else on the menu.
+HAIR_LENGTH_STEPS = (
+    ("Short hair", "short", 100, 100),
+    ("Medium hair", "medium", 130, 130),
+    ("Long hair", "long", 165, 165),
+)
+
+#: Wax type. Taken from the source list, which names Normal, Rica and Chocolate against every
+#: waxing service and prices them only as "Included" and "Extra Premium" — a real choice the
+#: document already makes, with the numbers left for us to set.
+WAX_TYPE_STEPS = (
+    ("Normal wax", "normal", 100, 100),
+    ("Chocolate wax", "chocolate", 140, 115),
+    ("Rica wax", "rica", 170, 115),
+)
+
+
 def _bhk(prefix: str, base_paise: int, base_minutes: int) -> tuple[VariantSeed, ...]:
     """A home-size ladder for one cleaning service.
 
@@ -468,10 +523,68 @@ SERVICE_VARIANTS: dict[str, tuple[VariantSeed, ...]] = {
         VariantSeed("6 to 9 kg", "upto-9kg", 44_900, 55),
         VariantSeed("Above 9 kg", "above-9kg", 69_900, 70),
     ),
+    # ---- Beautician ---------------------------------------------------------------------------
+    # Hair length and wax type are handled as ladders below. These are the remaining Beautician
+    # services whose axis is neither: area for a facial, and hands against feet for nails.
+    "beauty-face-cleanup": (
+        VariantSeed("Face", "face", 29_900, 45),
+        VariantSeed("Face and neck", "face-neck", 39_900, 60),
+        VariantSeed("Face, neck and back", "face-neck-back", 59_900, 90),
+    ),
+    "beauty-gel-nail-polish": (
+        VariantSeed("Hands", "hands", 49_900, 60),
+        VariantSeed("Feet", "feet", 49_900, 60),
+        VariantSeed("Hands and feet", "hands-feet", 89_900, 105),
+    ),
+    "beauty-nail-art": (
+        VariantSeed("Two nails", "two-nails", 19_900, 30),
+        VariantSeed("Full set", "full-set", 59_900, 75),
+    ),
+    "beauty-body-massage": (
+        VariantSeed("60 minutes", "60-min", 99_900, 60),
+        VariantSeed("90 minutes", "90-min", 139_900, 90),
+    ),
 }
 
 #: Home Cleaning services sold by home size. Kept apart from `SERVICE_VARIANTS` only so the
 #: ladder is generated once rather than written out five times per service.
+#: Hair services sold by length. Cuts, colour, treatments and chemical work all scale with it;
+#: a blow dry and a trim are short enough that length changes the price less than the booking
+#: overhead does, so they keep one price.
+for _slug, _label, _price, _minutes in (
+    ("beauty-hair-cut", "Hair cut", 19_900, 45),
+    ("beauty-hair-styling", "Hair styling", 29_900, 45),
+    ("beauty-global-hair-color", "Global colour", 99_900, 120),
+    ("beauty-root-touch-up", "Root touch-up", 79_900, 60),
+    ("beauty-highlights", "Highlights", 149_900, 150),
+    ("beauty-balayage", "Balayage", 299_900, 180),
+    ("beauty-ombre", "Ombre", 299_900, 180),
+    ("beauty-hair-spa", "Hair spa", 99_900, 60),
+    ("beauty-dandruff-treatment", "Dandruff treatment", 99_900, 60),
+    ("beauty-hair-fall-treatment", "Hair fall treatment", 99_900, 60),
+    ("beauty-scalp-treatment", "Scalp treatment", 99_900, 60),
+    ("beauty-hair-smoothening", "Smoothening", 299_900, 180),
+    ("beauty-hair-straightening", "Straightening", 399_900, 180),
+    ("beauty-keratin-treatment", "Keratin", 399_900, 180),
+    ("beauty-hair-botox-treatment", "Hair botox", 499_900, 180),
+    ("beauty-hair-rebonding", "Rebonding", 399_900, 210),
+    ("beauty-hair-extension", "Extension", 499_900, 180),
+):
+    SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, HAIR_LENGTH_STEPS)
+
+#: Waxing sold by wax type, the choice the source list already names.
+for _slug, _label, _price, _minutes in (
+    ("beauty-full-arms-wax", "Full arms", 29_900, 30),
+    ("beauty-half-arms-wax", "Half arms", 19_900, 20),
+    ("beauty-full-legs-wax", "Full legs", 39_900, 45),
+    ("beauty-half-legs-wax", "Half legs", 24_900, 30),
+    ("beauty-underarms-wax", "Underarms", 14_900, 15),
+    ("beauty-full-body-wax", "Full body", 99_900, 90),
+    ("beauty-bikini-wax", "Bikini", 79_900, 45),
+    ("beauty-face-wax", "Face", 19_900, 20),
+):
+    SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, WAX_TYPE_STEPS)
+
 for _slug, _label, _price, _minutes in (
     ("home-basic-cleaning", "Basic cleaning", 149_900, 180),
     ("home-deep-cleaning", "Deep cleaning", 299_900, 300),
