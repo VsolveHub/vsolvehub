@@ -174,7 +174,7 @@ def partner_available_during(
     if exception is not None:
         if not exception.is_available or exception.starts_at is None or exception.ends_at is None:
             return False
-        return _availability_window_contains(
+        return availability_window_contains(
             local_start,
             local_end,
             starts_at=exception.starts_at,
@@ -188,7 +188,7 @@ def partner_available_during(
         is_active=True,
     )
     return any(
-        _availability_window_contains(
+        availability_window_contains(
             local_start,
             local_end,
             starts_at=rule.starts_at,
@@ -199,7 +199,7 @@ def partner_available_during(
     )
 
 
-def _availability_window_contains(
+def availability_window_contains(
     local_start: datetime,
     local_end: datetime,
     *,
