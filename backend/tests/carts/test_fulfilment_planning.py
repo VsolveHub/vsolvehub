@@ -202,8 +202,21 @@ def test_compatible_services_create_sequential_and_independent_alternatives() ->
         slug="fan-installation",
         cart_version=int(first["version"]),
     )
+    # Two Partners, where this test used to seed one. The independent-visits
+    # alternative splits the cart into two visits which — at the single preferred
+    # start these tests hand every group — land back to back. One Partner cannot
+    # take both: a reservation occupies the visit plus M1_TURNAROUND_MINUTES, so the
+    # second visit overlaps the first's occupied range. Before BE-3,
+    # `_has_cross_visit_conflict` compared bare durations, judged them
+    # non-overlapping and published an alternative that collided at accept time
+    # behind "another professional has accepted". Staffing it properly is what
+    # makes this test about plan structure again rather than about that bug.
     _partner(
         suffix="11",
+        variant_slugs=("switch-socket-repair", "fan-installation"),
+    )
+    _partner(
+        suffix="13",
         variant_slugs=("switch-socket-repair", "fan-installation"),
     )
 
