@@ -175,6 +175,15 @@ M1_CONCURRENT_PARTNER_LIMIT = 2
 M1_SEQUENTIAL_UNIT_MAX_MINUTES = 240
 M1_FULFILMENT_PLAN_LIMIT = 3
 M1_FULFILMENT_PLAN_TTL_SECONDS = 15 * 60
+# Dynamic reachability (spec 2026-08-07-work-based-slot-booking-design.md §7)
+# replaces the flat M1_TODAY_LEAD_TIME_MINUTES for slots where a partner has a
+# usable location fix. M1_TODAY_LEAD_TIME_MINUTES stays as the fallback ceiling
+# for an area with nobody reachably located.
+M1_COMMIT_WINDOW_MINUTES = 15
+M1_DEFAULT_TRAVEL_MINUTES = 30
+# Reservations occupy the visit plus this gap, so a Partner is never offered two
+# jobs back to back with no travel time between them (spec §5, D7).
+M1_TURNAROUND_MINUTES = 20
 
 # M1 booking-fulfilment clocks (05-initial-configuration.md).
 M1_LATE_ARRIVAL_GRACE_MINUTES = 15

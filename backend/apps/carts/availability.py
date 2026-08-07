@@ -24,18 +24,21 @@ The three questions a slot's capacity depends on, and where each is answered:
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.utils import timezone
 from psycopg.types.range import Range
 
 from apps.assignments.models import Reservation
-from apps.locations.models import ServiceArea
+from apps.locations.models import Address, ServiceArea
 from apps.partners.models import (
     PartnerApplication,
     PartnerAvailabilityException,
@@ -49,6 +52,13 @@ from apps.partners.selectors import availability_window_contains
 #: offered two jobs with no travel time between them. One global constant rather
 #: than a per-Partner setting: see the design's D7.
 TURNAROUND_MINUTES_SETTING = "M1_TURNAROUND_MINUTES"
+
+#: Conservative city-traffic average used for `earliest_reachable`. A fixed
+#: constant, not a routing dependency — see the design's §7 and §15.3, which
+#: treats per-area calibration as a follow-up once `PartnerLocation` history
+#: accumulates.
+_URBAN_AVERAGE_SPEED_KMPH = 24
+_EARTH_RADIUS_KM = 6371
 
 
 def _turnaround_minutes() -> int:
@@ -65,6 +75,7 @@ class AvailabilitySnapshot:
 
     area: ServiceArea
     partner_ids: tuple[UUID, ...]
+    destination: tuple[Decimal, Decimal] | None
     _partners: dict[UUID, PartnerProfile]
     _rules: dict[UUID, tuple[PartnerAvailabilityRule, ...]]
     _exceptions: dict[UUID, tuple[PartnerAvailabilityException, ...]]
@@ -88,16 +99,25 @@ class AvailabilitySnapshot:
         return len(self.free_partner_ids(starts_at=starts_at, duration_minutes=duration_minutes))
 
     def location_fix(self, partner_id: UUID) -> PartnerLocation | None:
-        """The Partner's latest known position, or None when they have never reported one.
+        """The Partner's latest known position, or None when there isn't a usable one.
 
         Free of charge — `latest_location` is a one-to-one primary-key relation
-        pulled in by `select_related` when the snapshot loaded.
+        pulled in by `select_related` when the snapshot loaded. A fix past
+        `PARTNER_LOCATION_STALE_SECONDS` is worthless for reachability — the
+        Partner has typically gone offline since it was captured, and `go_offline`
+        leaves the row in place rather than deleting it.
         """
 
         partner = self._partners.get(partner_id)
         if partner is None:
             return None
-        return getattr(partner, "latest_location", None)
+        location: PartnerLocation | None = getattr(partner, "latest_location", None)
+        if location is None:
+            return None
+        age = timezone.now() - location.captured_at
+        if age < timedelta(0) or age > timedelta(seconds=settings.PARTNER_LOCATION_STALE_SECONDS):
+            return None
+        return location
 
     def _is_reserved(self, partner_id: UUID, *, starts_at: datetime, duration_minutes: int) -> bool:
         occupied_end = starts_at + timedelta(minutes=duration_minutes + _turnaround_minutes())
@@ -161,17 +181,24 @@ def load_snapshot(
     area: ServiceArea,
     horizon_start: datetime,
     horizon_end: datetime,
+    destination: Address | None = None,
 ) -> AvailabilitySnapshot:
     """Resolve capacity inputs for one area and skill set over a date range.
 
     Four queries regardless of how many slots are later probed: the Partner set,
-    their rules, their exceptions, and their reservations.
+    their rules, their exceptions, and their reservations. `destination` is the
+    Customer's address — carried through for `earliest_reachable` (§7) rather
+    than queried again; it costs nothing extra because the caller already holds
+    the `Address` row.
     """
 
     partners = _eligible_partners(variant_ids=variant_ids, area=area)
     return AvailabilitySnapshot(
         area=area,
         partner_ids=tuple(partners),
+        destination=(destination.latitude, destination.longitude)
+        if destination is not None
+        else None,
         _partners=partners,
         _rules=_rules_by_partner(partners.values(), area=area),
         _exceptions=_exceptions_by_partner(partners.values(), area=area),
@@ -179,6 +206,46 @@ def load_snapshot(
             partners, horizon_start=horizon_start, horizon_end=horizon_end
         ),
     )
+
+
+def earliest_reachable(
+    *, snapshot: AvailabilitySnapshot, partner_id: UUID, now: datetime
+) -> datetime:
+    """The soonest instant this Partner could plausibly start a visit from `now`.
+
+    Replaces the flat `M1_TODAY_LEAD_TIME_MINUTES` (spec §7) with a per-Partner
+    estimate: a fixed commit window (covering search + accept-and-prepare grace)
+    plus travel time from their last fresh location fix. Falls back to a
+    conservative per-area default when there is no usable fix or no destination
+    to travel to — an empty or fully-offline area then behaves exactly as it
+    does today.
+    """
+
+    commit = timedelta(minutes=settings.M1_COMMIT_WINDOW_MINUTES)
+    fix = snapshot.location_fix(partner_id)
+    if fix is None or snapshot.destination is None:
+        return now + commit + timedelta(minutes=settings.M1_DEFAULT_TRAVEL_MINUTES)
+    return now + commit + timedelta(minutes=_travel_minutes(fix, snapshot.destination))
+
+
+def _travel_minutes(fix: PartnerLocation, destination: tuple[Decimal, Decimal]) -> int:
+    """Straight-line distance at a fixed urban average speed — no routing dependency."""
+
+    distance_km = _haversine_km(
+        float(fix.latitude),
+        float(fix.longitude),
+        float(destination[0]),
+        float(destination[1]),
+    )
+    return math.ceil(distance_km / _URBAN_AVERAGE_SPEED_KMPH * 60)
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return 2 * _EARTH_RADIUS_KM * math.asin(math.sqrt(a))
 
 
 def _eligible_partners(
