@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { subscribeToOfferEvents, type OfferCreatedPayload } from "./live-events";
+import {
+  createOfferDeduper,
+  subscribeToOfferEvents,
+  type OfferCreatedPayload,
+} from "./live-events";
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -72,5 +76,41 @@ describe("subscribeToOfferEvents", () => {
     const instance = MockEventSource.instances[MockEventSource.instances.length - 1]!;
     instance.emit("offer_created", "not-json");
     expect(onOfferCreated).not.toHaveBeenCalled();
+  });
+});
+
+describe("createOfferDeduper", () => {
+  /**
+   * The contract's requirement on this side of the wire. The server replays 30
+   * seconds of history to every new connection so an offer arriving between the
+   * list fetch and the stream connecting is never missed; the price is that a
+   * reconnect re-delivers recent events, and reconnects are routine because the
+   * server caps connection lifetime.
+   */
+  it("reports an offer once, however many times the server replays it", () => {
+    const isFirstSighting = createOfferDeduper();
+
+    expect(isFirstSighting("offer-123")).toBe(true);
+    expect(isFirstSighting("offer-123")).toBe(false);
+    expect(isFirstSighting("offer-123")).toBe(false);
+  });
+
+  it("treats distinct offers as distinct", () => {
+    const isFirstSighting = createOfferDeduper();
+
+    expect(isFirstSighting("offer-123")).toBe(true);
+    expect(isFirstSighting("offer-456")).toBe(true);
+  });
+
+  it("forgets offers old enough that no replay could still carry them", () => {
+    let now = 0;
+    const isFirstSighting = createOfferDeduper(() => now);
+
+    expect(isFirstSighting("offer-123")).toBe(true);
+    now += 6 * 60_000;
+
+    // Not a correctness risk — an offer this old has long expired — but it is
+    // what keeps the map bounded by arrival rate instead of session length.
+    expect(isFirstSighting("offer-123")).toBe(true);
   });
 });

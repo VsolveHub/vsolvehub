@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider, SessionSync } from "@vsolve/query";
+import { ToastProvider } from "@vsolve/ui";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -43,7 +44,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <QueryProvider>
           <SessionSync />
-          {children}
+          {/* The offer inbox announces a live offer through `useToast`, which
+              throws without this. Mounted at the root so the live region exists
+              before any message arrives, per the WAI-ARIA pattern the provider
+              implements. */}
+          <ToastProvider>{children}</ToastProvider>
         </QueryProvider>
       </body>
     </html>
