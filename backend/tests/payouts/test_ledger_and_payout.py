@@ -194,10 +194,14 @@ def test_nothing_delivered_earns_nothing_rather_than_a_zero_line() -> None:
 
 def test_a_held_booking_earns_but_is_not_yet_payable() -> None:
     booked = create_booked_group(key_prefix="ledger-held")
+    # The hold is applied before the visit settles, which is when a payout-holding case is
+    # actually opened. Completing a visit now settles the earning itself, so a hold added
+    # afterwards would be asserting a different scenario — money released, then held — and
+    # `settle_booking_earning` would correctly return the entry it already wrote.
+    Booking.objects.filter(id=booked.booking.id).update(payout_hold=True)
     _deliver(booked, key="ledger-held")
     booking = booked.booking
-    booking.payout_hold = True
-    booking.save(update_fields=("payout_hold",))
+    booking.refresh_from_db()
 
     entry = settle_booking_earning(booking_id=booking.id)
 
@@ -471,11 +475,12 @@ def test_a_partner_with_no_payable_account_is_reported_not_silently_skipped() ->
 
 def test_a_held_entry_is_not_swept_into_a_batch() -> None:
     booked = create_booked_group(key_prefix="held-not-swept")
+    # Held before it settles — see `test_a_held_booking_earns_but_is_not_yet_payable`.
+    Booking.objects.filter(id=booked.booking.id).update(payout_hold=True)
     _deliver(booked, key="held-not-swept")
     _verified_account(booked)
     booking = booked.booking
-    booking.payout_hold = True
-    booking.save(update_fields=("payout_hold",))
+    booking.refresh_from_db()
     settle_booking_earning(booking_id=booking.id)
 
     batch = propose_payout_batch(

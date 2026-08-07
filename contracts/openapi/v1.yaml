@@ -9754,7 +9754,7 @@ components:
           readOnly: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusD12Enum'
+          - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
           readOnly: true
         reviewed_at:
           type: string
@@ -10552,7 +10552,7 @@ components:
           nullable: true
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusD12Enum'
+          - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
           readOnly: true
         review_reason:
           type: string
@@ -10621,6 +10621,18 @@ components:
       required:
       - expires_at
       - review_url
+    PartnerDocumentStatusEnum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - SUPERSEDED
+      type: string
+      description: |-
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `SUPERSEDED` - Superseded
     PartnerDocumentUpload:
       type: object
       properties:
@@ -13020,18 +13032,6 @@ components:
       required:
       - code
       - expected_version
-    StatusD12Enum:
-      enum:
-      - PENDING
-      - APPROVED
-      - REJECTED
-      - SUPERSEDED
-      type: string
-      description: |-
-        * `PENDING` - Pending review
-        * `APPROVED` - Approved
-        * `REJECTED` - Rejected
-        * `SUPERSEDED` - Superseded
     StepUpSession:
       type: object
       properties:

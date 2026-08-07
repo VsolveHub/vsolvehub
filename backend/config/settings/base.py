@@ -257,6 +257,12 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
+        # Named when the Partner directory added a second serializer over `PartnerDocument`.
+        # Two `status` fields on one model made the generator disambiguate both, renaming
+        # `PartnerDocumentStatusEnum` to a positional `StatusD12Enum` and breaking the partner
+        # app's documents step — the same silent-rename trap as `CompletionResponseDecisionEnum`
+        # below.
+        "PartnerDocumentStatusEnum": "apps.partners.models.PartnerDocument.Status",
         "QuoteLineKindEnum": "apps.carts.models.QuoteLine.Kind",
         "PrivacyRequestKindEnum": "apps.identity.models.PrivacyRequest.Kind",
         "ScopeAmendmentStatusEnum": "apps.fulfilment.models.ScopeAmendment.Status",

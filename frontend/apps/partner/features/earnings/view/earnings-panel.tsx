@@ -3,7 +3,12 @@
 import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
 import { AlertTriangle, CheckCircle2, ChevronDown, Hourglass, Landmark } from "lucide-react";
 
-import { usePartnerBalance, usePartnerLedger, usePartnerPayoutAccount } from "../queries";
+import {
+  usePartnerBalance,
+  usePartnerLedger,
+  usePartnerPayoutAccount,
+  usePartnerPerformance,
+} from "../queries";
 import { EarningsChart, toDailyEarnings } from "./earnings-chart";
 
 /**
@@ -48,6 +53,7 @@ export function EarningsPanel() {
   const balance = usePartnerBalance();
   const ledger = usePartnerLedger();
   const account = usePartnerPayoutAccount();
+  const performance = usePartnerPerformance();
 
   if (balance.isPending) {
     return (
@@ -135,7 +141,22 @@ export function EarningsPanel() {
       <Card className="p-5">
         <h2 className="text-base font-bold text-text">How you are doing</h2>
         <div className="mt-3">
-          <EarningsChart days={toDailyEarnings(entries)} />
+          {/* The series is the server's, not a regrouping of the ledger page this screen
+              happens to hold — see `toDailyEarnings`. Its own loading and failure states are
+              rendered here rather than falling back to the ledger, because a chart drawn from
+              a partial source is the failure this replaced. */}
+          {performance.isError ? (
+            <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm text-text-secondary">
+              We could not load your last 7 days just now. Your balance above is still correct.
+            </p>
+          ) : performance.isPending ? (
+            <p className="flex items-center gap-2 p-4 text-sm text-text-secondary">
+              <Spinner size="sm" />
+              Loading your last 7 days…
+            </p>
+          ) : (
+            <EarningsChart days={toDailyEarnings(performance.data?.daily ?? [])} />
+          )}
         </div>
       </Card>
 

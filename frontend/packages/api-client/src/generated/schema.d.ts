@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 0ba901c83c78efb8
+ * Checksum: 87b25f3d3a43f3bd
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -3819,7 +3819,7 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly kind: components["schemas"]["PartnerDocumentKindEnum"];
-            readonly status: components["schemas"]["StatusD12Enum"];
+            readonly status: components["schemas"]["PartnerDocumentStatusEnum"];
             /** Format: date-time */
             readonly reviewed_at: string | null;
             /** Format: date-time */
@@ -4105,7 +4105,7 @@ export interface components {
             readonly scan_status: components["schemas"]["ScanStatusEnum"];
             /** Format: date-time */
             readonly scanned_at: string | null;
-            readonly status: components["schemas"]["StatusD12Enum"];
+            readonly status: components["schemas"]["PartnerDocumentStatusEnum"];
             readonly review_reason: string;
             /** Format: date-time */
             readonly uploaded_at: string;
@@ -4133,6 +4133,14 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
         };
+        /**
+         * @description * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `SUPERSEDED` - Superseded
+         * @enum {string}
+         */
+        PartnerDocumentStatusEnum: "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
         PartnerDocumentUpload: {
             /** Format: uuid */
             readonly id: string;
@@ -5072,14 +5080,6 @@ export interface components {
             expected_version: number;
             code: string;
         };
-        /**
-         * @description * `PENDING` - Pending review
-         *     * `APPROVED` - Approved
-         *     * `REJECTED` - Rejected
-         *     * `SUPERSEDED` - Superseded
-         * @enum {string}
-         */
-        StatusD12Enum: "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;

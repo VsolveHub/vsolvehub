@@ -34,6 +34,7 @@ from apps.fulfilment.services import (
     locked_booking_context,
 )
 from apps.identity.models import User
+from apps.payouts.services import settle_booking_earning
 
 REFUND_REASON_PARTIAL_COMPLETION = "partial_completion"
 
@@ -261,6 +262,19 @@ def _settle_submission(
         _refund_unperformed_work(
             booking=booking, unit=unit, submission=submission, idempotency_key=idempotency_key
         )
+    # Delivered work earns money. `settle_booking_earning` existed but was called only by the
+    # demo seed, so every job completed through the app paid the Partner nothing and their
+    # earnings screen showed a balance that stopped moving while they kept working.
+    #
+    # Called here and again in `dispute_completion`, which reaches `DISPUTED` through its own
+    # `apply_transition` rather than through this function. Two call sites is the honest count;
+    # they are the two places a Booking reaches a terminal settlement.
+    #
+    # After the transition, not before: the settlement re-reads the Booking's status and
+    # `payout_hold` to decide whether the money is `AVAILABLE` or held `PENDING`, and before the
+    # transition both still say what they said a moment ago. Idempotent by database constraint
+    # (`payouts_one_earning_per_booking`), so a replayed command cannot pay twice.
+    settle_booking_earning(booking_id=booking.id, actor=actor)
     return booking
 
 
@@ -355,7 +369,7 @@ def dispute_completion(
                 id__in=disputed_outcome_ids, completion_submission=submission
             )
         )
-    return apply_transition(
+    booking = apply_transition(
         group=group,
         unit=unit,
         booking=booking,
@@ -367,6 +381,12 @@ def dispute_completion(
         context={"submission_id": str(submission.id)},
         extra_booking_fields={"payout_hold": True},
     )
+    # A disputed visit still earns. The Partner did the work and reported it; whether the
+    # Customer is right is what the dispute decides, and refusing to record the earning would
+    # pre-judge that. `settle_booking_earning` reads the hold and files it `PENDING`, so the
+    # money is visible to the Partner as owed-but-not-payable rather than missing.
+    settle_booking_earning(booking_id=booking.id, actor=booking.customer)
+    return booking
 
 
 def _has_completion_evidence(booking: Booking) -> bool:

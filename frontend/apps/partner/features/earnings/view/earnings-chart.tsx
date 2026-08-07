@@ -2,7 +2,9 @@
 
 import { formatMoney } from "@vsolve/ui";
 
-import type { LedgerEntry } from "../queries";
+import type { PartnerPerformance } from "../queries";
+
+type ServerDailyPerformance = PartnerPerformance["daily"][number];
 
 /**
  * What this Partner earned, day by day.
@@ -28,11 +30,9 @@ import type { LedgerEntry } from "../queries";
  * The whole chart is seven rectangles. A charting library would be a dependency,
  * a bundle, and a theme to fight, for geometry that is four lines of arithmetic.
  *
- * Every rupee comes from the server's `net_paise`. Nothing here computes an
- * amount; it only groups entries by the day the server stamped them.
+ * Every rupee comes from the server's `net_paise`, already bucketed per day by
+ * `/partner/performance/`. Nothing here computes or groups an amount.
  */
-
-const DAYS_SHOWN = 7;
 
 export interface DailyEarning {
   /** Local `YYYY-MM-DD`, used as the identity of a column. */
@@ -42,40 +42,28 @@ export interface DailyEarning {
 }
 
 /**
- * Groups ledger entries into the last `DAYS_SHOWN` local days.
+ * Adapts the server's daily series into columns.
  *
- * Days with nothing in them are kept as zero rather than dropped: a gap that
- * closes up would make an empty Tuesday look like it never happened, and "I did
- * not work Tuesday" is exactly what the reader is looking for.
+ * Labelling only — no grouping and no arithmetic. The series arrives already
+ * bucketed by `/partner/performance/`, one row per local day including the empty
+ * ones, over the same seven days this chart draws.
+ *
+ * This used to group the ledger here instead, and that was wrong in a way that
+ * looked right: the client holds one page of the ledger, so the moment a Partner
+ * had more entries than fit in a page the chart silently dropped the rest and
+ * drew a quieter week than they actually worked. A revenue chart that
+ * under-reports is worse than no chart, because nobody can tell.
+ *
+ * The date is parsed as local noon rather than midnight. A `YYYY-MM-DD` parsed
+ * as midnight UTC lands on the previous evening west of Greenwich, which would
+ * label every column with the wrong weekday.
  */
-export function toDailyEarnings(entries: readonly LedgerEntry[]): DailyEarning[] {
-  const byDay = new Map<string, number>();
-  for (const entry of entries) {
-    const day = localDay(new Date(entry.created_at));
-    byDay.set(day, (byDay.get(day) ?? 0) + entry.net_paise);
-  }
-
-  const today = new Date();
-  const days: DailyEarning[] = [];
-  for (let offset = DAYS_SHOWN - 1; offset >= 0; offset -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - offset);
-    const key = localDay(date);
-    days.push({
-      date: key,
-      label: date.toLocaleDateString(undefined, { weekday: "short" }),
-      netPaise: byDay.get(key) ?? 0,
-    });
-  }
-  return days;
-}
-
-function localDay(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
+export function toDailyEarnings(daily: readonly ServerDailyPerformance[]): DailyEarning[] {
+  return daily.map((row) => ({
+    date: row.date,
+    label: new Date(`${row.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" }),
+    netPaise: row.net_paise,
+  }));
 }
 
 export function EarningsChart({ days }: { days: readonly DailyEarning[] }) {
