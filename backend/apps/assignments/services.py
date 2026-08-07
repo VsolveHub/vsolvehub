@@ -192,7 +192,8 @@ def accept_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffer:
     quote = checkout.quote
     occupied = Range(
         quote.requested_start,
-        quote.requested_start + timedelta(minutes=quote.estimated_duration_minutes),
+        quote.requested_start
+        + timedelta(minutes=quote.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
         "[)",
     )
     try:

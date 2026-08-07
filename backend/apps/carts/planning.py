@@ -168,9 +168,13 @@ def _eligible_partner_ids(
             service_links__variant=entry.item.variant,
             service_links__is_active=True,
         )
+    # Widened by the turnaround buffer so this probe agrees with both what a
+    # reservation actually occupies (Task 5) and the grid's own snapshot
+    # (`availability.AvailabilitySnapshot._is_reserved`) — a Partner the grid
+    # shows as free must be a Partner this probe can actually book.
     occupied_range = Range(
         starts_at,
-        starts_at + timedelta(minutes=duration_minutes),
+        starts_at + timedelta(minutes=duration_minutes + settings.M1_TURNAROUND_MINUTES),
         "[)",
     )
     reserved_partner_ids = set(

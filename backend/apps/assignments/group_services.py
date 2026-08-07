@@ -311,7 +311,8 @@ def accept_unit_offer(*, offer_id: UUID, partner: PartnerProfile) -> PartnerOffe
         raise ValueError("You are no longer available for this Fulfilment Unit.")
     occupied = Range(
         unit.requested_start,
-        unit.requested_start + timedelta(minutes=unit.estimated_duration_minutes),
+        unit.requested_start
+        + timedelta(minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
         "[)",
     )
     try:

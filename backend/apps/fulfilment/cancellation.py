@@ -345,7 +345,8 @@ def _reschedule_locked_unit(
     old_requested_start = unit.requested_start
     new_range = Range(
         new_requested_start,
-        new_requested_start + timedelta(minutes=unit.estimated_duration_minutes),
+        new_requested_start
+        + timedelta(minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
         "[)",
     )
     if booking.reservation_id is not None:
