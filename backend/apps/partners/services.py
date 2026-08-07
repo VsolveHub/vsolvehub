@@ -15,6 +15,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.assignments.suspension import release_future_work
 from apps.catalog.models import Service, ServiceVariant
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import Role, User, UserRole
@@ -1104,6 +1105,12 @@ def transition_partner_application(
             ended_at__isnull=True,
         ).update(ended_at=timezone.now(), end_reason=end_reason)
         cache.delete(presence_cache_key(application.partner_id))
+        # Spec §18: ending presence alone is not enough — release future held work so an
+        # offboarded Partner cannot keep a start OTP and a Thursday slot.
+        release_future_work(
+            partner=application.partner,
+            reason=reason or f"application_{target_status.lower()}",
+        )
     return application
 
 
