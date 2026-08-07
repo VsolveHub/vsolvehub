@@ -273,20 +273,27 @@ export function useMergeCart() {
 export interface WindowsInput {
   cartVersion: number;
   addressId: string;
+  /**
+   * Which visit's grid to fetch. Required once a cart makes more than one
+   * visit — the server refuses an ungrouped request in that case rather than
+   * guessing (spec 2026-08-07-work-based-slot-booking-design.md §9) — and
+   * harmless to pass on a single-visit cart too.
+   */
+  groupKey: string | null;
 }
 
 /**
- * Server-authored candidate start times for the current cart and address.
+ * Server-authored candidate start times for one visit of the current cart and
+ * address.
  *
  * Used as the source of `preferred_start`, which the plan-set command requires
  * as a customer input. Only the server's own `starts_at` values are offered, so
  * no time is composed here; the opaque signed window id belongs to the superseded
  * single-item quote flow and is deliberately not read.
  *
- * The availability flags are honest for what they are: they rule out times that
- * are past, too soon or outside operating hours for *any* work. They are not a
- * multi-item capacity promise, and the screen says so — the plan set is what
- * answers whether the whole cart fits.
+ * The availability flags are honest for what they are: capacity, duration, and
+ * skill set are all this specific visit's own — the plan set is still what
+ * answers whether every visit in the cart fits together.
  *
  * `VOLATILE_STATE`, because a cached list of times is a claim the server has
  * stopped standing behind.
@@ -296,12 +303,16 @@ export function useCandidateStarts(input: WindowsInput | null) {
     queryKey: queryKeys.booking.windows({
       cartVersion: input?.cartVersion ?? 0,
       addressId: input?.addressId ?? "",
+      groupKey: input?.groupKey ?? null,
     }),
     queryFn: async () =>
       toWindowsView(
         await request(() =>
           getApiClient().POST("/api/v1/booking/windows/", {
-            body: { address_id: input!.addressId },
+            body: {
+              address_id: input!.addressId,
+              ...(input!.groupKey ? { group_key: input!.groupKey } : {}),
+            },
           }),
         ),
       ),

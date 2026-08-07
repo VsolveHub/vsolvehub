@@ -406,11 +406,24 @@ describe("query key isolation", () => {
   it("keys candidate start times by cart version as well as address", () => {
     // A list of times fetched for a two-service cart is not the answer for a
     // three-service one.
-    expect(queryKeys.booking.windows({ cartVersion: 3, addressId: "a" })).not.toEqual(
-      queryKeys.booking.windows({ cartVersion: 4, addressId: "a" }),
+    expect(
+      queryKeys.booking.windows({ cartVersion: 3, addressId: "a", groupKey: null }),
+    ).not.toEqual(queryKeys.booking.windows({ cartVersion: 4, addressId: "a", groupKey: null }));
+    expect(
+      queryKeys.booking.windows({ cartVersion: 3, addressId: "a", groupKey: null }),
+    ).not.toEqual(queryKeys.booking.windows({ cartVersion: 3, addressId: "b", groupKey: null }));
+  });
+
+  it("keys candidate start times by scheduling group, so one visit's grid never serves another's", () => {
+    expect(
+      queryKeys.booking.windows({ cartVersion: 3, addressId: "a", groupKey: "key-electrician" }),
+    ).not.toEqual(
+      queryKeys.booking.windows({ cartVersion: 3, addressId: "a", groupKey: "key-salon" }),
     );
-    expect(queryKeys.booking.windows({ cartVersion: 3, addressId: "a" })).not.toEqual(
-      queryKeys.booking.windows({ cartVersion: 3, addressId: "b" }),
+    expect(
+      queryKeys.booking.windows({ cartVersion: 3, addressId: "a", groupKey: null }),
+    ).not.toEqual(
+      queryKeys.booking.windows({ cartVersion: 3, addressId: "a", groupKey: "key-electrician" }),
     );
   });
 

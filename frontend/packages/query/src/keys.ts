@@ -95,14 +95,17 @@ export const queryKeys = {
     cart: () => [...queryKeys.booking.all, "cart"] as const,
 
     /**
-     * Candidate start times for one cart and one address.
+     * Candidate start times for one cart, one address, and — on a cart with
+     * more than one visit — one scheduling group (contract 1.19.0).
      *
-     * Both belong in the key. The address decides the service area and its
-     * operating hours; the cart version decides what work has to fit inside
-     * them. Serving one cart's times for another is a fabricated availability
-     * claim, which is the same failure as serving one address's.
+     * All three belong in the key. The address decides the service area and
+     * its operating hours; the cart version decides what work has to fit
+     * inside them; the group key decides *which visit's* duration and skill
+     * set the grid was computed for. Omitting the group key would let
+     * TanStack Query serve one visit's cached windows for another — the
+     * original single-item-grid bug in a new costume.
      */
-    windows: (input: { cartVersion: number; addressId: string }) =>
+    windows: (input: { cartVersion: number; addressId: string; groupKey: string | null }) =>
       [...queryKeys.booking.all, "windows", input] as const,
 
     /**

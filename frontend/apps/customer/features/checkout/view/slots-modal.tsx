@@ -3,9 +3,7 @@
 import { Button, Dialog, ErrorState, SkeletonRegion } from "@vsolve/ui";
 import { useState } from "react";
 
-import type { WindowsView } from "@/features/booking/adapters";
-
-import type { SchedulingGroup } from "../queries";
+import { useCandidateStarts, type SchedulingGroup } from "../queries";
 import { formatServiceDuration } from "./duration";
 import { PreferredStartPicker } from "./preferred-start-picker";
 
@@ -32,6 +30,16 @@ import { PreferredStartPicker } from "./preferred-start-picker";
  * group, and it is right to: defaulting picks a time on the customer's behalf
  * for work they never scheduled. The button mirrors that refusal instead of
  * letting them walk into it.
+ *
+ * ## Why each visit fetches its own grid
+ *
+ * `POST /booking/windows/` computes duration, skill set, and capacity from one
+ * scheduling group (spec 2026-08-07-work-based-slot-booking-design.md §9) — a
+ * cart with more than one visit refuses an ungrouped request rather than
+ * guessing which one to answer for. So this component, not its parent, holds
+ * the `useCandidateStarts` call: it is the one that knows which group is
+ * currently being edited, and fetches fresh the moment editing switches to a
+ * different one.
  */
 
 export interface SlotsModalProps {
@@ -39,11 +47,9 @@ export interface SlotsModalProps {
   groups: readonly SchedulingGroup[];
   /** Chosen starts so far, so reopening shows what is already picked. */
   value: ReadonlyMap<string, string>;
-  /** Candidate starts for the visit being scheduled, from the server. */
-  windows: WindowsView | undefined;
-  isLoadingWindows: boolean;
-  windowsError: boolean;
-  onRetryWindows: () => void;
+  /** Identifies the cart and address whose windows are being requested. */
+  cartVersion: number;
+  addressId: string;
   onConfirm: (starts: ReadonlyMap<string, string>) => void;
   onDismiss: () => void;
 }
@@ -65,10 +71,8 @@ export function SlotsModal(props: SlotsModalProps) {
 function SlotsModalBody({
   groups,
   value,
-  windows,
-  isLoadingWindows,
-  windowsError,
-  onRetryWindows,
+  cartVersion,
+  addressId,
   onConfirm,
   onDismiss,
 }: SlotsModalProps) {
@@ -77,6 +81,19 @@ function SlotsModalBody({
 
   const editing = groups.find((group) => group.key === editingKey) ?? null;
   const isComplete = groups.length > 0 && groups.every((group) => chosen.has(group.key));
+
+  /**
+   * Fetched only while a specific visit is being edited, and re-fetched from
+   * scratch the moment `editing` switches to a different group — the query key
+   * carries the group key (Task 8), so TanStack Query never serves one visit's
+   * cached grid for another.
+   */
+  const startsQuery = useCandidateStarts(
+    editing ? { cartVersion, addressId, groupKey: editing.key } : null,
+  );
+  const windows = startsQuery.data;
+  const isLoadingWindows = startsQuery.isPending;
+  const windowsError = startsQuery.isError;
 
   function choose(groupKey: string, startsAt: string) {
     setChosen((current) => new Map(current).set(groupKey, startsAt));
@@ -115,7 +132,7 @@ function SlotsModalBody({
             title="We could not load start times"
             message="Nothing has been booked. This is a problem on our side — try again in a moment."
             actionLabel="Try again"
-            onAction={onRetryWindows}
+            onAction={() => void startsQuery.refetch()}
           />
         ) : (
           <SkeletonRegion loading={isLoadingWindows} label="Loading available start times">

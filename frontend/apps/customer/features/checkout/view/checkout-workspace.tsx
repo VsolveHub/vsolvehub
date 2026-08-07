@@ -26,7 +26,6 @@ import {
 } from "../conflicts";
 import { describeConfirmFailure, describeItemFailure, describeQuoteFailure } from "../reasons";
 import {
-  useCandidateStarts,
   useCart,
   useCreateCheckout,
   useCreatePlanQuote,
@@ -126,17 +125,6 @@ export function CheckoutWorkspace() {
    * "there are visits and none are scheduled" simply *is* the open state.
    */
   const slotsOpen = slotsOverride ?? (groups.length > 0 && chosenStarts.size === 0);
-
-  /**
-   * Candidate start times, fetched only while the picker is actually open.
-   *
-   * `VOLATILE_STATE` on the query means a cached list is a claim the server has
-   * stopped standing behind, so asking before the modal opens would show times
-   * that have moved on by the time anyone looks at them.
-   */
-  const startsQuery = useCandidateStarts(
-    cart && addressId !== null && slotsOpen ? { cartVersion: cart.version, addressId } : null,
-  );
 
   const createPlanSet = useCreatePlanSet();
   const createQuote = useCreatePlanQuote();
@@ -526,10 +514,8 @@ export function CheckoutWorkspace() {
         open={slotsOpen}
         groups={groups}
         value={chosenStarts}
-        windows={startsQuery.data}
-        isLoadingWindows={startsQuery.isPending}
-        windowsError={startsQuery.isError}
-        onRetryWindows={() => void startsQuery.refetch()}
+        cartVersion={cart?.version ?? 0}
+        addressId={addressId ?? ""}
         onConfirm={handleSchedule}
         onDismiss={() => setSlotsOverride(false)}
       />
