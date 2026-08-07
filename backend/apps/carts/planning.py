@@ -346,8 +346,15 @@ def _has_cross_visit_conflict(unit_inputs: list[UnitInput]) -> bool:
     `M1_FULFILMENT_UNIT_LIMIT` bounds this at a handful of units per cart.
     """
 
+    # Widened by the turnaround buffer, because what a Partner is *occupied* for is
+    # the visit plus travel — `_eligible_partner_ids` above, `accept_unit_offer` and
+    # `directly_assign` in `assignments.group_services`, and the `Reservation`
+    # exclusion constraint itself all use this same widened range. Comparing bare
+    # durations here let two exactly back-to-back visits (5:00-5:40 and 5:40-6:40)
+    # read as non-overlapping, so the plan passed and the reservation then collided
+    # at accept time behind a misleading "another professional has accepted".
     ranges = [
-        (starts_at, starts_at + timedelta(minutes=duration))
+        (starts_at, starts_at + timedelta(minutes=duration + settings.M1_TURNAROUND_MINUTES))
         for _, starts_at, duration, *_ in unit_inputs
     ]
     eligible = [entry[5] for entry in unit_inputs]
