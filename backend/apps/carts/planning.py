@@ -326,16 +326,44 @@ def _groups_can_run_in_parallel(
     )
 
 
-def _has_distinct_capacity(candidate_sets: tuple[tuple[UUID, ...], ...]) -> bool:
-    def assign(index: int, used: frozenset[UUID]) -> bool:
-        if index == len(candidate_sets):
-            return True
-        return any(
-            candidate not in used and assign(index + 1, used | {candidate})
-            for candidate in candidate_sets[index]
-        )
+def _time_ranges_overlap(left: tuple[datetime, datetime], right: tuple[datetime, datetime]) -> bool:
+    return left[0] < right[1] and right[0] < left[1]
 
-    return assign(0, frozenset())
+
+def _has_cross_visit_conflict(unit_inputs: list[UnitInput]) -> bool:
+    """True when no assignment of distinct Partners can cover every unit (spec §9).
+
+    Partners are single-threaded, so two visits at overlapping times can never
+    share one — every group of units that are *pairwise* overlapping (a clique in
+    the interval-overlap graph) needs at least as many eligible Partners between
+    them as units in the group (Hall's marriage theorem). Restricting the search
+    to cliques rather than every subset is exact here, because time overlap is an
+    interval constraint: two units that do not themselves overlap never need
+    distinct Partners just because a third unit overlaps both of them.
+
+    A plain brute-force scan over cliques rather than a matching library, because
+    `M1_FULFILMENT_UNIT_LIMIT` bounds this at a handful of units per cart.
+    """
+
+    ranges = [
+        (starts_at, starts_at + timedelta(minutes=duration))
+        for _, starts_at, duration, *_ in unit_inputs
+    ]
+    eligible = [entry[5] for entry in unit_inputs]
+    indices = range(len(unit_inputs))
+    for size in range(2, len(unit_inputs) + 1):
+        for subset in combinations(indices, size):
+            if not all(
+                _time_ranges_overlap(ranges[left], ranges[right])
+                for left, right in combinations(subset, 2)
+            ):
+                continue
+            union: set[UUID] = set()
+            for index in subset:
+                union.update(eligible[index])
+            if len(union) < size:
+                return True
+    return False
 
 
 def _candidate_alternatives(
@@ -592,9 +620,7 @@ def _price_alternative(
         unit_inputs.append(
             (group, starts_at, duration, task_subtotal, minimum_adjustment, eligible)
         )
-    if proposal.simultaneous and not _has_distinct_capacity(
-        tuple(entry[5] for entry in unit_inputs)
-    ):
+    if _has_cross_visit_conflict(unit_inputs):
         return None
     service_totals = tuple(entry[3] + entry[4] for entry in unit_inputs)
     service_total = sum(service_totals)
