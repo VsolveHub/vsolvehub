@@ -81,15 +81,71 @@ def _set_group_status(group: BookingGroup, status: str) -> None:
     group.save(update_fields=("status", "version", "updated_at"))
 
 
+#: Offer statuses that still bind a Partner to a unit, and so must not survive the
+#: group being compensated. `COMMITTED` belongs here: compensation released its
+#: reservation and failed its unit, so leaving the offer `COMMITTED` left the Partner
+#: holding a job for a booking that no longer exists — and `COMMITTED` is not one of
+#: the statuses the offer list filters out, so they could still see it.
+LIVE_OFFER_STATUSES = (
+    PartnerOffer.Status.OFFERED,
+    PartnerOffer.Status.ACCEPTED_PENDING_UNDO,
+    PartnerOffer.Status.COMMITTED,
+)
+
+
+def _notify_lost_commitments(group: BookingGroup, *, terminal_status: str) -> None:
+    """Tell every Partner who was holding work in this group that it is gone.
+
+    Keyed on live *reservations* rather than on offers, because that is the one set
+    that covers both commitment mechanisms: the same-day offer path holds one from
+    `accept_unit_offer`, and the advance path holds one from `directly_assign`, which
+    creates no offer at all. A merely `OFFERED` Partner has no reservation and gets
+    nothing — they never took the job, so "your job was cancelled" would be a lie.
+
+    `partner.job_cancelled` has been declared transactional since notifications were
+    built and was never fired by anything. `directly_assign` tells a Partner the job
+    is theirs; nothing told them when it stopped being theirs.
+
+    One query for the whole group, then one `request_notification` per lost unit.
+    Compensation is terminal and runs once per group, so this is not a hot path.
+    """
+
+    held = Reservation.objects.filter(
+        fulfilment_unit__booking_group=group,
+        status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+    ).select_related("fulfilment_unit", "partner")
+    for reservation in held:
+        unit = reservation.fulfilment_unit
+        if unit is None:
+            # `Reservation.fulfilment_unit` is nullable for the legacy checkout-scoped
+            # path; filtering on `fulfilment_unit__booking_group` already excludes
+            # those rows, so this only narrows the type.
+            continue
+        request_notification(
+            recipient_id=reservation.partner.user_id,
+            purpose="partner.job_cancelled",
+            channel="PUSH",
+            template_code="partner_job_cancelled",
+            context={
+                "fulfilment_unit_id": str(unit.id),
+                "requested_start": unit.requested_start.isoformat(),
+                "reason": terminal_status,
+            },
+            idempotency_key=f"unit-cancelled:{unit.id}:{reservation.partner_id}",
+        )
+
+
 def _compensate_group(group: BookingGroup, *, terminal_status: str) -> None:
     now = timezone.now()
+    # Before anything is released, while the rows still say who held what.
+    _notify_lost_commitments(group, terminal_status=terminal_status)
     Reservation.objects.select_for_update().filter(
         fulfilment_unit__booking_group=group,
         status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
     ).update(status=Reservation.Status.RELEASED, released_at=now)
     PartnerOffer.objects.select_for_update().filter(
         fulfilment_unit__booking_group=group,
-        status__in=(PartnerOffer.Status.OFFERED, PartnerOffer.Status.ACCEPTED_PENDING_UNDO),
+        status__in=LIVE_OFFER_STATUSES,
     ).update(status=PartnerOffer.Status.REVOKED, responded_at=now)
     for unit in group.units.select_for_update().exclude(
         status__in=(FulfilmentUnit.Status.CANCELLED, FulfilmentUnit.Status.COMPLETED)
