@@ -17,6 +17,7 @@ from django.utils import timezone
 from psycopg.types.range import Range
 
 from apps.assignments.models import Reservation
+from apps.carts.availability import arrival_window_for_duration
 from apps.carts.exceptions import (
     FulfilmentPlanStaleApiError,
     FulfilmentPlanUnavailableApiError,
@@ -919,7 +920,10 @@ def create_fulfilment_plan_set(
                 service_area=service_area,
                 position=position,
                 requested_start=unit_input.starts_at,
-                arrival_window_minutes=settings.M1_ARRIVAL_WINDOW_MINUTES,
+                # Per unit, from that unit's own duration — a plan mixing a
+                # 30-minute visit with a 3-hour one gives each the width the grid
+                # offered it, not one width borrowed from the plan as a whole.
+                arrival_window_minutes=arrival_window_for_duration(unit_input.duration_minutes),
                 estimated_duration_minutes=unit_input.duration_minutes,
                 task_subtotal_paise=unit_input.task_subtotal_paise,
                 minimum_visit_adjustment_paise=unit_input.minimum_adjustment_paise,
@@ -1014,6 +1018,12 @@ def create_plan_quote(*, customer: User, plan: FulfilmentPlan) -> Quote:
     cancellation = CancellationPolicy.objects.get(id=cancellation_data["id"])
     units = list(locked_plan.units.prefetch_related("items").order_by("position"))
     first_unit = units[0]
+    # The plan-level Quote's `requested_start` is the earliest unit's start, so its
+    # arrival window is that same unit's — not a width derived from the summed
+    # duration, which would put a two-visit plan of two short jobs into the long
+    # tier and promise the Customer a wider window than either visit was offered.
+    # The per-visit truth stays on each QuoteUnit below.
+    earliest_unit = min(units, key=lambda unit: unit.requested_start)
     quote = Quote.objects.create(
         fulfilment_plan=locked_plan,
         cart_version=cart.version,
@@ -1027,8 +1037,8 @@ def create_plan_quote(*, customer: User, plan: FulfilmentPlan) -> Quote:
         total_paise=locked_plan.total_paise,
         currency=locked_plan.currency,
         estimated_duration_minutes=sum(unit.estimated_duration_minutes for unit in units),
-        requested_start=min(unit.requested_start for unit in units),
-        arrival_window_minutes=settings.M1_ARRIVAL_WINDOW_MINUTES,
+        requested_start=earliest_unit.requested_start,
+        arrival_window_minutes=earliest_unit.arrival_window_minutes,
         task_rate_snapshot={"selected_plan_id": str(locked_plan.id)},
         pricing_policy=pricing,
         pricing_policy_snapshot=pricing_data,

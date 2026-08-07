@@ -164,6 +164,22 @@ M1_PAYMENT_WINDOW_SECONDS = 300
 M1_TODAY_LEAD_TIME_MINUTES = 120
 M1_SCHEDULED_MAX_DAYS = 7
 M1_ARRIVAL_WINDOW_MINUTES = 60
+# Duration-aware arrival windows (spec §4). A 60-minute grid offered for every
+# service promises a 40-minute switch repair the same vagueness as a 3-hour deep
+# clean. Three tiers rather than a continuous function of duration, so a 41- and a
+# 44-minute job never render visibly different grids for a difference nobody asked
+# about. Widths are the grid step as well as the window, so slots stay contiguous.
+# 45: at or under three quarters of an hour the visit is short enough that half an
+# hour of arrival vagueness is already most of the job — offer a tighter promise.
+M1_ARRIVAL_WINDOW_SHORT_THRESHOLD_MINUTES = 45
+# 120: past two hours the visit dominates the day, and a one-hour promise the
+# partner cannot honour after a long preceding job is worse than an honest two.
+M1_ARRIVAL_WINDOW_LONG_THRESHOLD_MINUTES = 120
+M1_ARRIVAL_WINDOW_SHORT_MINUTES = 30
+# The standard tier is today's flat M1_ARRIVAL_WINDOW_MINUTES, kept identical so
+# the ordinary catalog's grid is unchanged by the tiering.
+M1_ARRIVAL_WINDOW_STANDARD_MINUTES = 60
+M1_ARRIVAL_WINDOW_LONG_MINUTES = 120
 M1_WINDOW_TOKEN_TTL_SECONDS = 15 * 60
 M1_QUOTE_TTL_SECONDS = 15 * 60
 M1_PARTNER_OFFER_TIMEOUT_SECONDS = 45

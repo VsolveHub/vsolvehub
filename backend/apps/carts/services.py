@@ -12,7 +12,11 @@ from django.core import signing
 from django.db import transaction
 from django.utils import timezone
 
-from apps.carts.availability import load_snapshot, reachability_by_partner
+from apps.carts.availability import (
+    arrival_window_for_duration,
+    load_snapshot,
+    reachability_by_partner,
+)
 from apps.carts.exceptions import (
     BookingWindowGroupRequiredApiError,
     CartItemLimitReachedApiError,
@@ -62,7 +66,12 @@ WINDOW_SIGNING_SALT = "carts.booking-window.v1"
 #: Bumped when the signed window payload's `scope_key` moved from meaning
 #: "a single cart item" to "a scheduling group" (spec §9) — a mismatched
 #: version refuses cleanly instead of misreading an old field.
-WINDOW_SIGNING_VERSION = 2
+#: Bumped to 3 when the signed payload gained `window_minutes` (duration-aware
+#: arrival windows). Window ids issued before a deploy are refused rather than
+#: read with a missing field — they are 15-minute tokens, so the blast radius is
+#: one grid refresh, and guessing a width for them is exactly the silent
+#: substitution the field exists to prevent.
+WINDOW_SIGNING_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -662,6 +671,7 @@ def _signed_window_id(
     scope_key: str,
     address: Address,
     starts_at: datetime,
+    window_minutes: int,
 ) -> str:
     """Sign a window's identity against the scope it was generated for.
 
@@ -669,6 +679,14 @@ def _signed_window_id(
     or a scheduling group's key for the group-aware grid (spec §9) — either way it
     is what `_window_start_from_id` checks the caller's own scope against, so a
     window generated for one visit cannot be redeemed against another.
+
+    `window_minutes` is signed alongside the start because the width is now
+    derived from the visit's duration (`arrival_window_for_duration`) rather than
+    being one global constant. A scheduling group's key is a function of its cart
+    item ids alone, so editing an item's scope keeps the key and its already-issued
+    window ids valid while changing the duration underneath them. Carrying the
+    promised width in the token lets `create_quote` refuse a window the grid would
+    no longer draw, instead of silently booking a wider one than was shown.
     """
 
     return signing.dumps(
@@ -677,6 +695,7 @@ def _signed_window_id(
             "scope_key": scope_key,
             "address_id": str(address.id),
             "starts_at": starts_at.isoformat(),
+            "window_minutes": int(window_minutes),
         },
         salt=WINDOW_SIGNING_SALT,
         compress=True,
@@ -688,7 +707,9 @@ def _window_start_from_id(
     window_id: str,
     scope_key: str,
     address: Address,
-) -> datetime:
+) -> tuple[datetime, int]:
+    """The start and the promised arrival-window width this id was signed for."""
+
     try:
         payload = signing.loads(
             window_id,
@@ -706,10 +727,13 @@ def _window_start_from_id(
         starts_at_value = payload.get("starts_at")
         if not isinstance(starts_at_value, str):
             raise ValueError
+        window_minutes = payload.get("window_minutes")
+        if not isinstance(window_minutes, int) or isinstance(window_minutes, bool):
+            raise ValueError
         starts_at = datetime.fromisoformat(starts_at_value)
         if timezone.is_naive(starts_at):
             raise ValueError
-        return starts_at
+        return starts_at, window_minutes
     except (signing.BadSignature, signing.SignatureExpired, TypeError, ValueError) as exc:
         raise WindowNoLongerAvailableApiError from exc
 
@@ -781,6 +805,10 @@ def create_booking_windows(
     # Reachability depends on the Partner and `now`, not on the slot — resolved once
     # here rather than recomputing the same haversine inside the innermost loop.
     reachable_at = reachability_by_partner(snapshot=snapshot, now=now)
+    # One derived width for the whole grid: the loop step, each window's `ends_at`
+    # and the signed id all read this, so the step and the window can never drift
+    # apart and leave gaps or overlaps between adjacent slots.
+    window_minutes = arrival_window_for_duration(duration)
     days: list[BookingWindowDay] = []
     for day_offset in range(settings.M1_SCHEDULED_MAX_DAYS + 1):
         local_date = today + timedelta(days=day_offset)
@@ -790,7 +818,7 @@ def create_booking_windows(
             local_date=local_date,
         ):
             starts_at = opens_at
-            while starts_at + timedelta(minutes=settings.M1_ARRIVAL_WINDOW_MINUTES) <= closes_at:
+            while starts_at + timedelta(minutes=window_minutes) <= closes_at:
                 free = snapshot.free_partner_ids(starts_at=starts_at, duration_minutes=duration)
                 unavailable_reason: str | None
                 # Precedence fixed by spec §5: the first matching reason wins.
@@ -810,15 +838,16 @@ def create_booking_windows(
                             scope_key=group.key,
                             address=address,
                             starts_at=starts_at,
+                            window_minutes=window_minutes,
                         ),
                         starts_at=starts_at,
-                        ends_at=starts_at + timedelta(minutes=settings.M1_ARRIVAL_WINDOW_MINUTES),
+                        ends_at=starts_at + timedelta(minutes=window_minutes),
                         is_available=unavailable_reason is None,
                         unavailable_reason=unavailable_reason,
                         capacity=len(free) if unavailable_reason is None else 0,
                     ),
                 )
-                starts_at += timedelta(minutes=settings.M1_ARRIVAL_WINDOW_MINUTES)
+                starts_at += timedelta(minutes=window_minutes)
         days.append(
             BookingWindowDay(
                 date=local_date,
@@ -871,11 +900,18 @@ def create_quote(
     )
     if group is None:
         raise WindowNoLongerAvailableApiError
-    requested_start = _window_start_from_id(
+    requested_start, promised_window_minutes = _window_start_from_id(
         window_id=window_id,
         scope_key=group.key,
         address=address,
     )
+    # The grid drew this window against the duration the visit had at the time.
+    # If the Customer edited the item's scope since, the duration — and with it the
+    # tier — can have moved while the scheduling group's key stayed the same. Refuse
+    # rather than book a width the Customer was never shown; the client re-fetches
+    # the grid on this error and the Customer picks again from honest slots.
+    if promised_window_minutes != arrival_window_for_duration(duration):
+        raise WindowNoLongerAvailableApiError
     decision = check_serviceability(
         postal_code=address.postal_code,
         variant_id=item.variant_id,
@@ -932,7 +968,7 @@ def create_quote(
         currency=task_rate.currency,
         estimated_duration_minutes=duration,
         requested_start=requested_start,
-        arrival_window_minutes=settings.M1_ARRIVAL_WINDOW_MINUTES,
+        arrival_window_minutes=promised_window_minutes,
         arrival_window_id=window_id,
         task_rate_snapshot={
             "task_code": task_rate.task_code,

@@ -65,6 +65,28 @@ def _turnaround_minutes() -> int:
     return int(getattr(settings, TURNAROUND_MINUTES_SETTING, 0))
 
 
+def arrival_window_for_duration(duration_minutes: int) -> int:
+    """The arrival window a visit of this duration should be offered in.
+
+    The single implementation of the tiering rule, for the same reason
+    `schedule_covers` is the single implementation of the schedule rule: the grid
+    (`carts.services.create_booking_windows`) and the value locked onto the
+    booking (`carts.services.create_quote`, `carts.planning.create_plan_set`)
+    must never disagree about how wide a window is. A Customer who picked a
+    30-minute window must not end up with `arrival_window_minutes=60` on their
+    Fulfilment Unit.
+
+    Pure and query-free — it reads settings and nothing else, so it is safe to
+    call inside the grid's slot loop.
+    """
+
+    if duration_minutes <= settings.M1_ARRIVAL_WINDOW_SHORT_THRESHOLD_MINUTES:
+        return int(settings.M1_ARRIVAL_WINDOW_SHORT_MINUTES)
+    if duration_minutes <= settings.M1_ARRIVAL_WINDOW_LONG_THRESHOLD_MINUTES:
+        return int(settings.M1_ARRIVAL_WINDOW_STANDARD_MINUTES)
+    return int(settings.M1_ARRIVAL_WINDOW_LONG_MINUTES)
+
+
 @dataclass(frozen=True, slots=True)
 class AvailabilitySnapshot:
     """Everything a slot grid needs, resolved for one area and one skill set.
