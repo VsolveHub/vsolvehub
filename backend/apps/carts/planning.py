@@ -22,6 +22,7 @@ from apps.carts.exceptions import (
     FulfilmentPlanUnavailableApiError,
     SchedulingGroupsChangedApiError,
 )
+from apps.carts.item_inputs import assert_window_time_is_current, current_item_inputs
 from apps.carts.models import (
     Cart,
     CartItem,
@@ -34,7 +35,6 @@ from apps.carts.models import (
     QuoteUnit,
     ServiceCompatibilityRule,
 )
-from apps.carts.services import _assert_window_time_is_current, _current_item_inputs
 from apps.catalog.models import A1VariantConfiguration
 from apps.identity.models import User
 from apps.locations.models import Address, ServiceArea
@@ -113,7 +113,7 @@ def _planning_items(cart: Cart) -> tuple[PlanningItem, ...]:
         raise ValueError("The active cart exceeds the configured planning limit.")
     result: list[PlanningItem] = []
     for item in items:
-        configuration, rate, scope, duration = _current_item_inputs(item)
+        configuration, rate, scope, duration = current_item_inputs(item)
         result.append(
             PlanningItem(
                 item=item,
@@ -788,7 +788,7 @@ def create_fulfilment_plan_set(
         items=items,
     )
     for starts_at in submitted.values():
-        _assert_window_time_is_current(
+        assert_window_time_is_current(
             starts_at=starts_at,
             area_timezone=service_area.timezone,
             now=now,

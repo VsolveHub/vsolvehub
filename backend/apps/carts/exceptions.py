@@ -120,6 +120,27 @@ class FulfilmentPlanStaleApiError(APIException):
     )
 
 
+class BookingWindowGroupRequiredApiError(APIException):
+    """The cart makes more than one visit, so a single ungrouped grid is ambiguous.
+
+    Refused rather than defaulting to the first visit — that is the exact bug this
+    endpoint exists to fix (spec 2026-08-07-work-based-slot-booking-design.md §9):
+    a multi-visit cart silently reusing one visit's duration and skill set for
+    every visit's grid.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_code = "booking_window_group_required"
+    error_code = "booking_window_group_required"
+    safe_message = (
+        "This booking has more than one visit. Choose which visit's arrival windows to show."
+    )
+
+    def __init__(self, *, group_keys: list[str]) -> None:
+        self.api_details = {"group_keys": group_keys}
+        super().__init__(detail=self.safe_message, code=self.default_code)
+
+
 class SchedulingGroupsChangedApiError(APIException):
     """The visits the Customer picked times for are not the visits this cart makes now.
 

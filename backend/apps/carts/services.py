@@ -12,14 +12,22 @@ from django.core import signing
 from django.db import transaction
 from django.utils import timezone
 
+from apps.carts.availability import earliest_reachable, load_snapshot
 from apps.carts.exceptions import (
+    BookingWindowGroupRequiredApiError,
     CartItemLimitReachedApiError,
     CartItemNotFoundApiError,
     CartMergeConflictApiError,
     CartVersionConflictApiError,
     DuplicateCartItemApiError,
     QuoteExpiredApiError,
+    SchedulingGroupsChangedApiError,
     WindowNoLongerAvailableApiError,
+)
+from apps.carts.item_inputs import (
+    assert_window_time_is_current,
+    current_item_inputs,
+    validate_scope,
 )
 from apps.carts.models import (
     BookingGroup,
@@ -31,6 +39,11 @@ from apps.carts.models import (
     FulfilmentUnit,
     FulfilmentUnitLine,
     Quote,
+)
+from apps.carts.planning import (
+    SchedulingGroup,
+    resolve_cart_service_area,
+    scheduling_groups,
 )
 from apps.catalog.models import A1VariantConfiguration, ServiceVariant
 from apps.foundation.services import enqueue_outbox_event
@@ -46,6 +59,10 @@ from apps.pricing.selectors import (
 )
 
 WINDOW_SIGNING_SALT = "carts.booking-window.v1"
+#: Bumped when the signed window payload's `scope_key` moved from meaning
+#: "a single cart item" to "a scheduling group" (spec §9) — a mismatched
+#: version refuses cleanly instead of misreading an old field.
+WINDOW_SIGNING_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +72,7 @@ class BookingWindow:
     ends_at: datetime
     is_available: bool
     unavailable_reason: str | None
+    capacity: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,7 +321,7 @@ def _validated_variant_inputs(
         quantity=quantity,
         reject_conflicting_quantity=reject_conflicting_quantity,
     )
-    _validate_scope(schema=configuration.scope_schema, scope=normalized_scope)
+    validate_scope(schema=configuration.scope_schema, scope=normalized_scope)
     task_rate = current_task_rate(variant=variant, task_code=variant.service.slug)
     if task_rate is None:
         raise ValueError("The selected task has no current rate.")
@@ -529,34 +547,6 @@ def clear_booked_cart_items(*, quote: Quote) -> Cart | None:
     return locked_cart
 
 
-def _validate_scope(*, schema: dict[str, object], scope: dict[str, object]) -> None:
-    questions = schema.get("questions")
-    if not isinstance(questions, list):
-        raise ValueError("The selected task has an invalid scope configuration.")
-    definitions: dict[str, dict[str, object]] = {}
-    for question in questions:
-        if not isinstance(question, dict) or not isinstance(question.get("code"), str):
-            raise ValueError("The selected task has an invalid scope configuration.")
-        definitions[question["code"]] = question
-    unknown = set(scope).difference(definitions)
-    if unknown:
-        raise ValueError("Scope includes a question that is not configured for this task.")
-    for code, definition in definitions.items():
-        value = scope.get(code)
-        if definition.get("required") and code not in scope:
-            raise ValueError(f"Scope question '{code}' is required.")
-        if value is None:
-            continue
-        if definition.get("kind") == "INTEGER":
-            if isinstance(value, bool) or not isinstance(value, int):
-                raise ValueError(f"Scope question '{code}' requires an integer value.")
-            minimum = definition.get("minimum")
-            if isinstance(minimum, int) and value < minimum:
-                raise ValueError(f"Scope question '{code}' is below its minimum value.")
-        elif definition.get("kind") not in {"TEXT", "BOOLEAN", "SELECT"}:
-            raise ValueError("The selected task has an unsupported scope configuration.")
-
-
 def _scope_with_quantity(
     *,
     schema: dict[str, object],
@@ -625,7 +615,7 @@ def replace_cart_item(
         scope=scope,
         quantity=quantity,
     )
-    _validate_scope(schema=configuration.scope_schema, scope=scope)
+    validate_scope(schema=configuration.scope_schema, scope=scope)
     task_rate = current_task_rate(variant=variant, task_code=variant.service.slug)
     if task_rate is None:
         raise ValueError("The selected task has no current rate.")
@@ -666,37 +656,24 @@ def replace_cart_item(
     return item
 
 
-def _current_item_inputs(
-    item: CartItem,
-) -> tuple[A1VariantConfiguration, TaskRate, dict[str, object], int]:
-    configuration = A1VariantConfiguration.objects.filter(
-        variant=item.variant,
-        status=A1VariantConfiguration.Status.ACTIVE,
-    ).first()
-    if configuration is None:
-        raise ValueError("The selected task is no longer available for booking.")
-    scope = {entry.code: entry.value for entry in item.scope_values.all()}
-    _validate_scope(schema=configuration.scope_schema, scope=scope)
-    task_rate = current_task_rate(
-        variant=item.variant,
-        task_code=item.variant.service.slug,
-    )
-    if task_rate is None:
-        raise ValueError("The selected task has no current rate.")
-    duration = task_rate.base_duration_minutes + task_rate.marginal_duration_minutes * item.quantity
-    return configuration, task_rate, scope, duration
-
-
 def _signed_window_id(
     *,
-    item: CartItem,
+    scope_key: str,
     address: Address,
     starts_at: datetime,
 ) -> str:
+    """Sign a window's identity against the scope it was generated for.
+
+    `scope_key` is a single cart item's id for the legacy single-item quote flow,
+    or a scheduling group's key for the group-aware grid (spec §9) — either way it
+    is what `_window_start_from_id` checks the caller's own scope against, so a
+    window generated for one visit cannot be redeemed against another.
+    """
+
     return signing.dumps(
         {
-            "v": 1,
-            "item_id": str(item.id),
+            "v": WINDOW_SIGNING_VERSION,
+            "scope_key": scope_key,
             "address_id": str(address.id),
             "starts_at": starts_at.isoformat(),
         },
@@ -708,7 +685,7 @@ def _signed_window_id(
 def _window_start_from_id(
     *,
     window_id: str,
-    item: CartItem,
+    scope_key: str,
     address: Address,
 ) -> datetime:
     try:
@@ -719,9 +696,9 @@ def _window_start_from_id(
         )
         if not isinstance(payload, dict):
             raise ValueError
-        if payload.get("v") != 1:
+        if payload.get("v") != WINDOW_SIGNING_VERSION:
             raise ValueError
-        if payload.get("item_id") != str(item.id):
+        if payload.get("scope_key") != scope_key:
             raise ValueError
         if payload.get("address_id") != str(address.id):
             raise ValueError
@@ -736,18 +713,30 @@ def _window_start_from_id(
         raise WindowNoLongerAvailableApiError from exc
 
 
-def _assert_window_time_is_current(
+def _resolve_scheduling_group(
     *,
-    starts_at: datetime,
-    area_timezone: str,
-    now: datetime,
-) -> None:
-    local_now = now.astimezone(ZoneInfo(area_timezone))
-    local_start = starts_at.astimezone(ZoneInfo(area_timezone))
-    if starts_at < now + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES):
-        raise WindowNoLongerAvailableApiError
-    if local_start.date() > local_now.date() + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS):
-        raise WindowNoLongerAvailableApiError
+    cart: Cart,
+    area: ServiceArea,
+    group_key: str | None,
+    at: datetime,
+) -> SchedulingGroup:
+    """The one visit this grid is for.
+
+    A cart with several visits (spec §9) cannot answer "what's the duration and
+    skill set for this grid" without knowing which one — reusing the first
+    visit's numbers for every visit is the exact bug this replaces. `group_key`
+    absent is only unambiguous when there is exactly one visit to mean.
+    """
+
+    groups = scheduling_groups(cart=cart, area=area, at=at)
+    if group_key is None:
+        if len(groups) == 1:
+            return groups[0]
+        raise BookingWindowGroupRequiredApiError(group_keys=[group.key for group in groups])
+    for group in groups:
+        if group.key == group_key:
+            return group
+    raise SchedulingGroupsChangedApiError
 
 
 def create_booking_windows(
@@ -755,31 +744,40 @@ def create_booking_windows(
     customer: User,
     cart: Cart,
     address: Address,
+    group_key: str | None = None,
 ) -> BookingWindows:
     now = timezone.now()
     if address.customer_id != customer.id or address.archived_at is not None:
         raise PermissionError("Use one of the Customer's active addresses.")
-    item = (
+    area = resolve_cart_service_area(cart=cart, address=address)
+    group = _resolve_scheduling_group(cart=cart, area=area, group_key=group_key, at=now)
+    group_items = list(
         CartItem.objects.select_related("variant__service", "task_rate", "configuration")
         .prefetch_related("scope_values")
-        .filter(cart=cart)
-        .first()
+        .filter(cart=cart, id__in=group.cart_item_ids)
     )
-    if item is None:
+    if not group_items:
         raise ValueError("Add a service to your booking before choosing an arrival window.")
-    _configuration, _task_rate, _scope, duration = _current_item_inputs(item)
-    decision = check_serviceability(
-        postal_code=address.postal_code,
-        variant_id=item.variant_id,
-    )
-    if not decision.is_serviceable or decision.service_area is None:
-        raise ValueError(decision.reason_code or "Address is not serviceable.")
+    duration = 0
+    variant_ids: set[UUID] = set()
+    for group_item in group_items:
+        _configuration, _task_rate, _scope, item_duration = current_item_inputs(group_item)
+        duration += item_duration
+        variant_ids.add(group_item.variant_id)
     area = ServiceArea.objects.prefetch_related(
         "operating_windows",
         "operating_exceptions",
-    ).get(id=decision.service_area.id)
+    ).get(id=area.id)
     zone = ZoneInfo(area.timezone)
     today = now.astimezone(zone).date()
+    horizon_end = now + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS + 1)
+    snapshot = load_snapshot(
+        variant_ids=variant_ids,
+        area=area,
+        horizon_start=now,
+        horizon_end=horizon_end,
+        destination=address,
+    )
     days: list[BookingWindowDay] = []
     for day_offset in range(settings.M1_SCHEDULED_MAX_DAYS + 1):
         local_date = today + timedelta(days=day_offset)
@@ -790,17 +788,27 @@ def create_booking_windows(
         ):
             starts_at = opens_at
             while starts_at + timedelta(minutes=settings.M1_ARRIVAL_WINDOW_MINUTES) <= closes_at:
-                unavailable_reason: str | None = None
+                free = snapshot.free_partner_ids(starts_at=starts_at, duration_minutes=duration)
+                unavailable_reason: str | None
+                # Precedence fixed by spec §5: the first matching reason wins.
                 if starts_at <= now:
                     unavailable_reason = "PAST"
-                elif starts_at < now + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES):
+                elif not free:
+                    unavailable_reason = "NO_CAPACITY"
+                elif not any(
+                    earliest_reachable(snapshot=snapshot, partner_id=partner_id, now=now)
+                    <= starts_at
+                    for partner_id in free
+                ):
                     unavailable_reason = "TOO_SOON"
                 elif starts_at + timedelta(minutes=duration) > closes_at:
                     unavailable_reason = "OUTSIDE_OPERATING_WINDOW"
+                else:
+                    unavailable_reason = None
                 windows.append(
                     BookingWindow(
                         id=_signed_window_id(
-                            item=item,
+                            scope_key=group.key,
                             address=address,
                             starts_at=starts_at,
                         ),
@@ -808,6 +816,7 @@ def create_booking_windows(
                         ends_at=starts_at + timedelta(minutes=settings.M1_ARRIVAL_WINDOW_MINUTES),
                         is_available=unavailable_reason is None,
                         unavailable_reason=unavailable_reason,
+                        capacity=len(free) if unavailable_reason is None else 0,
                     ),
                 )
                 starts_at += timedelta(minutes=settings.M1_ARRIVAL_WINDOW_MINUTES)
@@ -844,12 +853,27 @@ def create_quote(
     )
     if item is None:
         raise ValueError("Add a service to your booking before requesting a quote.")
-    configuration, task_rate, scope, duration = _current_item_inputs(item)
+    configuration, task_rate, scope, duration = current_item_inputs(item)
     if address.customer_id != customer.id or address.archived_at is not None:
         raise PermissionError("Use one of the Customer's active addresses.")
+    # The window was signed against the scheduling group the item belongs to
+    # (`create_booking_windows`), not the item id directly — the same visit can
+    # combine several cart items (spec §9), so this resolves the same way rather
+    # than duplicating the grouping rule.
+    grouping_area = resolve_cart_service_area(cart=locked_cart, address=address)
+    group = next(
+        (
+            candidate
+            for candidate in scheduling_groups(cart=locked_cart, area=grouping_area, at=now)
+            if item.id in candidate.cart_item_ids
+        ),
+        None,
+    )
+    if group is None:
+        raise WindowNoLongerAvailableApiError
     requested_start = _window_start_from_id(
         window_id=window_id,
-        item=item,
+        scope_key=group.key,
         address=address,
     )
     decision = check_serviceability(
@@ -860,7 +884,7 @@ def create_quote(
     )
     if not decision.is_serviceable or decision.service_area is None:
         raise WindowNoLongerAvailableApiError
-    _assert_window_time_is_current(
+    assert_window_time_is_current(
         starts_at=requested_start,
         area_timezone=decision.service_area.timezone,
         now=now,
@@ -1013,7 +1037,7 @@ def create_checkout(  # noqa: PLR0912
         raise QuoteExpiredApiError
     if locked_quote.address.archived_at is not None:
         raise WindowNoLongerAvailableApiError
-    _assert_window_time_is_current(
+    assert_window_time_is_current(
         starts_at=locked_quote.requested_start,
         area_timezone=locked_quote.service_area.timezone,
         now=now,
