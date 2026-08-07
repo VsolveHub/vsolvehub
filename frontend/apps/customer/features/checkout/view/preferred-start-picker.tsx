@@ -88,7 +88,9 @@ export function PreferredStartPicker({
                 onSelect={onSelect}
                 title={window.label}
                 description={
-                  window.isAvailable ? null : (window.unavailableLabel ?? "Not available")
+                  window.isAvailable
+                    ? [window.durationLabel, window.scarcityLabel].filter(Boolean).join(" · ")
+                    : (window.unavailableLabel ?? "Not available")
                 }
               />
             ))}

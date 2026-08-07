@@ -326,6 +326,9 @@ export function bookingWindow(
     ends_at: iso(60 * 60 * 5),
     is_available: true,
     unavailable_reason: null,
+    // >1 by default so the common case is not accidentally read as scarce; a
+    // scarcity test overrides this explicitly.
+    capacity: 2,
     ...overrides,
   };
 }

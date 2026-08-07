@@ -15,7 +15,7 @@ describe("windows adapter", () => {
       fixtures.bookingWindow({ is_available: false, unavailable_reason: "NO_CAPACITY" }),
     );
     expect(view.isAvailable).toBe(false);
-    expect(view.unavailableLabel).toBe("Fully booked");
+    expect(view.unavailableLabel).toBe("No pros available");
   });
 
   it("names the Today lead time rather than saying only 'unavailable'", () => {

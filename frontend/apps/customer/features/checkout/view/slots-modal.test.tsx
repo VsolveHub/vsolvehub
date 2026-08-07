@@ -46,6 +46,8 @@ const WINDOWS: WindowsView = {
           label: "10:00 am – 11:00 am",
           isAvailable: true,
           unavailableLabel: null,
+          durationLabel: "about 30 min",
+          scarcityLabel: null,
         },
         {
           id: "win-2",
@@ -54,6 +56,8 @@ const WINDOWS: WindowsView = {
           label: "2:00 pm – 3:00 pm",
           isAvailable: true,
           unavailableLabel: null,
+          durationLabel: "about 30 min",
+          scarcityLabel: null,
         },
       ],
     },

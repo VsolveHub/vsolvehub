@@ -47,6 +47,21 @@ export interface WindowView {
   isAvailable: boolean;
   /** Why it cannot be booked. Null when it can. */
   unavailableLabel: string | null;
+  /**
+   * "about 40 min" — the job itself, not the arrival window.
+   *
+   * The window label already states the arrival window's own span (e.g.
+   * "11:00 am – 12:00 pm"); a customer choosing between windows also needs to
+   * know how long the professional will actually be there once they arrive.
+   */
+  durationLabel: string;
+  /**
+   * "Only 1 pro left" when exactly one professional could still take this
+   * window. Null otherwise — for an available window with room to spare,
+   * naming the exact count would read as a manufactured sense of urgency
+   * rather than information the customer can act on.
+   */
+  scarcityLabel: string | null;
 }
 
 export interface WindowDayView {
@@ -100,8 +115,15 @@ function formatTime(instant: string): string {
   return timeFormatter.format(new Date(instant)).toLowerCase();
 }
 
+/** Below this, naming the exact headcount is worth surfacing to the customer. */
+const SOLE_REMAINING_PARTNER_CAPACITY = 1;
+
 const UNAVAILABLE_LABELS: Record<WindowUnavailableReason, string> = {
-  NO_CAPACITY: "Fully booked",
+  // Covers both "every Partner is already booked" and "nobody works this
+  // slot at all" (spec 2026-08-07-work-based-slot-booking-design.md §5) — the
+  // grid cannot tell the customer apart from here, and both read the same:
+  // there is nobody who can take this window.
+  NO_CAPACITY: "No pros available",
   OUTSIDE_OPERATING_WINDOW: "Outside service hours",
   // The 120-minute Today lead time. Named concretely because "unavailable"
   // alone makes a customer retry the same window.
@@ -109,7 +131,10 @@ const UNAVAILABLE_LABELS: Record<WindowUnavailableReason, string> = {
   PAST: "Passed",
 };
 
-export function toWindowView(window: PublishedWindow): WindowView {
+export function toWindowView(
+  window: PublishedWindow,
+  estimatedDurationMinutes = 0,
+): WindowView {
   return {
     id: window.id,
     startsAt: window.starts_at,
@@ -120,6 +145,11 @@ export function toWindowView(window: PublishedWindow): WindowView {
       ? null
       : (window.unavailable_reason && UNAVAILABLE_LABELS[window.unavailable_reason]) ??
         "Not available",
+    durationLabel: `about ${estimatedDurationMinutes} min`,
+    scarcityLabel:
+      window.is_available && window.capacity === SOLE_REMAINING_PARTNER_CAPACITY
+        ? "Only 1 pro left"
+        : null,
   };
 }
 
@@ -151,8 +181,12 @@ function isoDateIn(instant: Date): string {
   }).format(instant);
 }
 
-function toDayView(day: PublishedWindowDay, serverNow: string): WindowDayView {
-  const windows = day.windows.map(toWindowView);
+function toDayView(
+  day: PublishedWindowDay,
+  serverNow: string,
+  estimatedDurationMinutes: number,
+): WindowDayView {
+  const windows = day.windows.map((window) => toWindowView(window, estimatedDurationMinutes));
 
   return {
     date: day.date,
@@ -167,7 +201,9 @@ function toDayView(day: PublishedWindowDay, serverNow: string): WindowDayView {
 }
 
 export function toWindowsView(response: PublishedWindows): WindowsView {
-  const days = response.days.map((day) => toDayView(day, response.server_now));
+  const days = response.days.map((day) =>
+    toDayView(day, response.server_now, response.estimated_duration_minutes),
+  );
 
   return {
     days,
