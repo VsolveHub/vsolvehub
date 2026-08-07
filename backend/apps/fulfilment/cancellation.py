@@ -20,6 +20,7 @@ from django.utils import timezone
 from psycopg.types.range import Range
 
 from apps.assignments.models import Reservation
+from apps.carts.availability import load_snapshot
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, FulfilmentUnit
 from apps.commerce.models import Booking, Refund
@@ -28,7 +29,7 @@ from apps.fulfilment.exceptions import (
     OutsideServiceableAreaApiError,
     PartnerUnavailableApiError,
 )
-from apps.fulfilment.models import BookingStatusHistory, WorkSession
+from apps.fulfilment.models import BookingOtp, BookingStatusHistory, WorkSession
 from apps.fulfilment.refunds import create_partial_refunds, refundable_unit_allocations
 from apps.fulfilment.services import (
     TERMINAL_BOOKING_STATUSES,
@@ -41,6 +42,7 @@ from apps.fulfilment.services import (
 )
 from apps.locations.models import Address
 from apps.locations.services import check_serviceability
+from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
 
 REFUND_REASON_CUSTOMER_CANCELLATION = "customer_cancellation"
@@ -284,13 +286,79 @@ def _earliest_reschedule_start() -> Any:
     return timezone.now() + timedelta(minutes=settings.M1_RESCHEDULE_MIN_NOTICE_MINUTES)
 
 
+def _partner_has_other_reservation(
+    *,
+    partner: PartnerProfile,
+    starts_at: Any,
+    duration_minutes: int,
+    exclude_reservation_id: UUID | None,
+) -> bool:
+    occupied_end = starts_at + timedelta(minutes=duration_minutes + settings.M1_TURNAROUND_MINUTES)
+    conflicts = Reservation.objects.filter(
+        partner=partner,
+        status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+        occupied_range__overlap=Range(starts_at, occupied_end, "[)"),
+    )
+    if exclude_reservation_id is not None:
+        conflicts = conflicts.exclude(id=exclude_reservation_id)
+    return conflicts.exists()
+
+
+def _resolve_reschedule_partner(
+    *, unit: FulfilmentUnit, booking: Booking, new_requested_start: Any
+) -> PartnerProfile:
+    """Prefer the original Partner; re-match when they are busy; refuse only when nobody can.
+
+    Spec §17: a reschedule is a re-booking, not an edit of one person's calendar.
+    The Booking's own reservation is ignored when judging the original Partner — moving
+    that row is exactly what the write half does.
+    """
+
+    duration = unit.estimated_duration_minutes
+    if partner_available_during(
+        partner=booking.partner,
+        service_area=unit.service_area,
+        starts_at=new_requested_start,
+        duration_minutes=duration,
+    ) and not _partner_has_other_reservation(
+        partner=booking.partner,
+        starts_at=new_requested_start,
+        duration_minutes=duration,
+        exclude_reservation_id=booking.reservation_id,
+    ):
+        return booking.partner
+
+    variant_ids = tuple(
+        unit.lines.filter(cart_item__isnull=False)
+        .order_by("position")
+        .values_list("cart_item__variant_id", flat=True)
+        .distinct()
+    )
+    snapshot = load_snapshot(
+        variant_ids=variant_ids,
+        area=unit.service_area,
+        horizon_start=new_requested_start,
+        horizon_end=new_requested_start
+        + timedelta(minutes=duration + settings.M1_TURNAROUND_MINUTES),
+        destination=unit.booking_group.address,
+    )
+    free_ids = snapshot.free_partner_ids(starts_at=new_requested_start, duration_minutes=duration)
+    # The original Partner's own reservation still occupies the slot in the snapshot —
+    # exclude them so we do not "re-match" onto themselves after the availability check failed.
+    alternatives = [partner_id for partner_id in free_ids if partner_id != booking.partner_id]
+    if not alternatives:
+        raise PartnerUnavailableApiError
+    return PartnerProfile.objects.get(id=alternatives[0])
+
+
 def _guard_unit_reschedulable(
     *, unit: FulfilmentUnit, booking: Booking, new_requested_start: Any
-) -> None:
+) -> PartnerProfile:
     """Everything that must be true before any part of a reschedule is written.
 
     Split out from the write half so the group-wide command can check every unit first and
     refuse as a whole, rather than moving three visits and discovering the fourth cannot move.
+    Returns the Partner who will serve the new time (original preferred, then re-match).
     """
 
     if booking.status not in RESCHEDULABLE_BOOKING_STATUSES:
@@ -324,13 +392,9 @@ def _guard_unit_reschedulable(
                 "cancellation fee ladder shows what applies — and book a new time."
             )
         )
-    if not partner_available_during(
-        partner=booking.partner,
-        service_area=unit.service_area,
-        starts_at=new_requested_start,
-        duration_minutes=unit.estimated_duration_minutes,
-    ):
-        raise PartnerUnavailableApiError
+    return _resolve_reschedule_partner(
+        unit=unit, booking=booking, new_requested_start=new_requested_start
+    )
 
 
 def _reschedule_locked_unit(
@@ -338,18 +402,45 @@ def _reschedule_locked_unit(
     unit: FulfilmentUnit,
     booking: Booking,
     new_requested_start: Any,
+    partner: PartnerProfile,
     idempotency_key: str,
 ) -> Booking:
     """Move one already-locked, already-guarded unit and its Booking to a new start."""
 
     old_requested_start = unit.requested_start
+    old_partner_id = booking.partner_id
+    partner_changed = partner.id != booking.partner_id
     new_range = Range(
         new_requested_start,
         new_requested_start
         + timedelta(minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
         "[)",
     )
-    if booking.reservation_id is not None:
+    if partner_changed:
+        if booking.reservation_id is not None:
+            old_reservation = Reservation.objects.select_for_update().get(id=booking.reservation_id)
+            if old_reservation.status != Reservation.Status.RELEASED:
+                old_reservation.release()
+        try:
+            reservation = Reservation.objects.create(
+                fulfilment_unit=unit,
+                partner=partner,
+                occupied_range=new_range,
+                status=Reservation.Status.CONFIRMED,
+                expires_at=new_requested_start
+                + timedelta(
+                    minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES
+                ),
+            )
+        except IntegrityError as exc:
+            raise PartnerUnavailableApiError from exc
+        booking.partner = partner
+        booking.reservation = reservation
+        # The original Partner must not keep a usable start code for this visit.
+        BookingOtp.objects.filter(booking=booking, consumed_at__isnull=True).update(
+            expires_at=timezone.now()
+        )
+    elif booking.reservation_id is not None:
         reservation = Reservation.objects.select_for_update().get(id=booking.reservation_id)
         reservation.occupied_range = new_range
         try:
@@ -363,7 +454,17 @@ def _reschedule_locked_unit(
     unit.save(update_fields=("requested_start", "version", "updated_at"))
     booking.scheduled_start = new_requested_start
     booking.version += 1
-    booking.save(update_fields=("scheduled_start", "version", "updated_at"))
+    update_fields = ["scheduled_start", "version", "updated_at"]
+    if partner_changed:
+        update_fields.extend(["partner", "reservation"])
+    booking.save(update_fields=update_fields)
+    context: dict[str, Any] = {
+        "old_requested_start": old_requested_start.isoformat(),
+        "new_requested_start": new_requested_start.isoformat(),
+    }
+    if partner_changed:
+        context["old_partner_id"] = str(old_partner_id)
+        context["new_partner_id"] = str(partner.id)
     record_transition(
         booking=booking,
         actor=booking.customer,
@@ -371,10 +472,7 @@ def _reschedule_locked_unit(
         from_status=booking.status,
         to_status=booking.status,
         idempotency_key=idempotency_key,
-        context={
-            "old_requested_start": old_requested_start.isoformat(),
-            "new_requested_start": new_requested_start.isoformat(),
-        },
+        context=context,
     )
     return booking
 
@@ -388,23 +486,25 @@ def reschedule_booking(
     new_requested_start: Any,
     idempotency_key: str = "",
 ) -> Booking:
-    """Move a not-yet-started Booking to a new start, keeping the same Partner.
+    """Move a not-yet-started Booking to a new start.
 
-    M1 boundary, documented rather than silently incomplete: a reschedule inside the fee-bearing
-    cancellation window is refused outright (a full re-match is out of scope here) — the Customer
-    cancels (paying the same fee they would anyway) and books again. A late Partner waives this:
-    the short-notice reschedule is free, exactly like the short-notice cancellation.
+    Prefers the original Partner; re-matches when they are busy (spec §17). Fee policy is
+    unchanged — a reschedule inside the fee-bearing window is still refused (or waived when
+    the Partner is late).
     """
 
     _group, unit, booking = locked_booking_context(booking_id)
     if booking.customer_id != customer_id:
         raise PermissionError("This Booking belongs to another Customer.")
     guard_booking_version(booking, expected_version)
-    _guard_unit_reschedulable(unit=unit, booking=booking, new_requested_start=new_requested_start)
+    partner = _guard_unit_reschedulable(
+        unit=unit, booking=booking, new_requested_start=new_requested_start
+    )
     return _reschedule_locked_unit(
         unit=unit,
         booking=booking,
         new_requested_start=new_requested_start,
+        partner=partner,
         idempotency_key=idempotency_key,
     )
 
@@ -813,11 +913,14 @@ def reschedule_booked_group(
         planned.append((unit, booking, unit.requested_start + shift))
 
     # Every guard for every unit, before any write. A refusal here is a refusal, not a rollback.
+    partners: list[PartnerProfile] = []
     for unit, booking, new_start in planned:
-        _guard_unit_reschedulable(unit=unit, booking=booking, new_requested_start=new_start)
+        partners.append(
+            _guard_unit_reschedulable(unit=unit, booking=booking, new_requested_start=new_start)
+        )
 
     outcomes: list[UnitRescheduleOutcome] = []
-    for unit, booking, new_start in planned:
+    for (unit, booking, new_start), partner in zip(planned, partners, strict=True):
         old_start = unit.requested_start
         # Per-unit keys for the same reason `cancel_booked_group` derives them: one key across
         # the group would make every unit's audit row indistinguishable from its siblings'.
@@ -826,6 +929,7 @@ def reschedule_booked_group(
             unit=unit,
             booking=booking,
             new_requested_start=new_start,
+            partner=partner,
             idempotency_key=unit_key,
         )
         outcomes.append(
