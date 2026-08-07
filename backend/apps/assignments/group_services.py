@@ -177,7 +177,7 @@ def _create_offer(
             equipment = configuration.get("required_equipment", [])
             if isinstance(equipment, list):
                 requirements.update(str(value) for value in equipment)
-    return PartnerOffer.objects.create(
+    offer = PartnerOffer.objects.create(
         fulfilment_unit=unit,
         partner=candidate,
         attempt=attempt,
@@ -200,6 +200,31 @@ def _create_offer(
             },
         },
     )
+    # The published `partner.offer_created` event contract. Documented in
+    # `contracts/proposals/partner-offer-events.md`; the SSE stream in
+    # `apps.notifications.streaming` serialises exactly this `context` dict as its
+    # `offer_created` frame, and the Partner app reads these four keys. Adding a key
+    # here is additive; renaming or removing one is a contract change.
+    #
+    #     {"offer_id": uuid, "fulfilment_unit_id": uuid,
+    #      "requested_start": iso8601, "expires_at": iso8601}
+    #
+    # Keyed on the offer, not the unit: a redispatched unit gets a genuinely new
+    # offer with a new deadline, and that is a new thing to be told about.
+    request_notification(
+        recipient_id=candidate.user_id,
+        purpose="partner.offer_created",
+        channel="PUSH",
+        template_code="partner_offer_created",
+        context={
+            "offer_id": str(offer.id),
+            "fulfilment_unit_id": str(unit.id),
+            "requested_start": unit.requested_start.isoformat(),
+            "expires_at": offer.expires_at.isoformat(),
+        },
+        idempotency_key=f"offer-created:{offer.id}",
+    )
+    return offer
 
 
 @transaction.atomic

@@ -40,6 +40,11 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "payment.receipt",
         "refund.issued",
         "partner.offer",
+        # A Partner who is online is telling us they want same-day work. Letting a
+        # preference silently mute the only signal that work arrived would leave
+        # them online, waiting, and never told — going offline is the control for
+        # not being offered work, not a notification toggle.
+        "partner.offer_created",
         "partner.job_assigned",
         "partner.job_cancelled",
         "partner.payout_paid",
