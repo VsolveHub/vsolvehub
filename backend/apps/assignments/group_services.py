@@ -10,9 +10,14 @@ from psycopg.types.range import Range
 
 from apps.assignments.exceptions import OfferReservationConflictApiError
 from apps.assignments.models import AssignmentAttempt, PartnerOffer, Reservation
-from apps.assignments.ranking import evaluate_unit_candidates, unit_variant_ids
+from apps.assignments.ranking import (
+    evaluate_unit_candidates,
+    is_same_day_unit,
+    unit_variant_ids,
+)
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
+from apps.notifications.services import request_notification
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
 
@@ -223,16 +228,39 @@ def create_manual_unit_offer(*, unit_id: UUID, partner_id: UUID) -> PartnerOffer
     return offer
 
 
+def _unit_is_partner_committed(unit: FulfilmentUnit) -> bool:
+    """Whether a unit has a Partner locked in for payment — offer-commit or direct assign.
+
+    Same-day path: a `COMMITTED` offer. Advance path: a live reservation with no offer
+    round-trip in flight. An accepted-but-not-committed offer still has a live offer
+    status, so it is not treated as committed here.
+    """
+
+    if PartnerOffer.objects.filter(
+        fulfilment_unit=unit,
+        status=PartnerOffer.Status.COMMITTED,
+    ).exists():
+        return True
+    has_live_offer = PartnerOffer.objects.filter(
+        fulfilment_unit=unit,
+        status__in=(
+            PartnerOffer.Status.OFFERED,
+            PartnerOffer.Status.ACCEPTED_PENDING_UNDO,
+        ),
+    ).exists()
+    if has_live_offer:
+        return False
+    return Reservation.objects.filter(
+        fulfilment_unit=unit,
+        status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+    ).exists()
+
+
 def _sync_group_state(group: BookingGroup) -> None:
     units = list(group.units.all())
     if not units or group.status in GROUP_TERMINAL_STATUSES:
         return
-    committed_units = set(
-        PartnerOffer.objects.filter(
-            fulfilment_unit__booking_group=group,
-            status=PartnerOffer.Status.COMMITTED,
-        ).values_list("fulfilment_unit_id", flat=True)
-    )
+    committed_units = {unit.id for unit in units if _unit_is_partner_committed(unit)}
     if len(committed_units) == len(units):
         for unit in units:
             _set_unit_status(unit, FulfilmentUnit.Status.PAYMENT_PENDING)
@@ -256,6 +284,92 @@ def _sync_group_state(group: BookingGroup) -> None:
         _set_group_status(group, BookingGroup.Status.MATCHING)
 
 
+def _dispatch_unit(
+    *, group: BookingGroup, unit: FulfilmentUnit
+) -> PartnerOffer | Reservation | None:
+    """Same-day units keep the offer/accept path; advance units are assigned directly.
+
+    Making an offline Partner eligible (Task 10) while still offering with a 45-second
+    TTL would leave advance bookings unreachable. Direct assignment is the commitment
+    mechanism for the advance gate (spec §11.2).
+    """
+
+    if is_same_day_unit(unit=unit):
+        return _create_offer(group=group, unit=unit)
+    return directly_assign(unit=unit)
+
+
+def directly_assign(*, unit: FulfilmentUnit) -> Reservation | None:
+    """Lock the best-ranked eligible Partner onto an advance unit without an offer round-trip.
+
+    Writes a `TENTATIVE` reservation with the payment-window expiry — the same hold the
+    offer-commit path leaves before payment. `CONFIRMED` is reserved for post-payment
+    capacity confirmation in `commerce.services`; writing it here would break initiate-payment.
+    """
+
+    group = unit.booking_group
+    if _blocks_offer_action(group, unit):
+        return None
+    post_booking_recovery = _is_post_booking_recovery(group, unit)
+    ranking = evaluate_unit_candidates(unit)
+    candidates = list(ranking.ordered)
+    if not candidates:
+        if not post_booking_recovery:
+            _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
+        return None
+    now = timezone.now()
+    occupied = Range(
+        unit.requested_start,
+        unit.requested_start
+        + timedelta(minutes=unit.estimated_duration_minutes + settings.M1_TURNAROUND_MINUTES),
+        "[)",
+    )
+    for candidate in candidates:
+        attempt_count = AssignmentAttempt.objects.filter(fulfilment_unit=unit).count()
+        if attempt_count >= settings.M1_PARTNER_SEARCH_CANDIDATE_LIMIT:
+            break
+        AssignmentAttempt.objects.create(
+            fulfilment_unit=unit,
+            candidate=candidate,
+            rank=attempt_count + 1,
+            eligibility_snapshot={
+                "service_area_id": str(unit.service_area_id),
+                "variant_ids": [str(value) for value in unit_variant_ids(unit)],
+                "requested_start": unit.requested_start.isoformat(),
+                "estimated_duration_minutes": unit.estimated_duration_minutes,
+                "commitment": "direct_assignment",
+            },
+            ranking_snapshot=ranking.provenance(unit=unit, selected=candidate),
+        )
+        try:
+            reservation = Reservation.objects.create(
+                fulfilment_unit=unit,
+                partner=candidate,
+                occupied_range=occupied,
+                expires_at=now + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS),
+                status=Reservation.Status.TENTATIVE,
+            )
+        except IntegrityError:
+            continue
+        _set_unit_status(unit, FulfilmentUnit.Status.HELD)
+        _sync_group_state(group)
+        request_notification(
+            recipient_id=candidate.user_id,
+            purpose="partner.job_assigned",
+            channel="PUSH",
+            template_code="partner_job_assigned",
+            context={
+                "fulfilment_unit_id": str(unit.id),
+                "requested_start": unit.requested_start.isoformat(),
+            },
+            idempotency_key=f"direct-assign:{unit.id}:{candidate.id}",
+        )
+        return reservation
+    if not post_booking_recovery:
+        _compensate_group(group, terminal_status=BookingGroup.Status.REPLAN_REQUIRED)
+    return None
+
+
 @transaction.atomic
 def start_group_dispatch(*, group_id: UUID) -> BookingGroup:
     group = BookingGroup.objects.select_for_update().get(id=group_id)
@@ -273,7 +387,7 @@ def start_group_dispatch(*, group_id: UUID) -> BookingGroup:
     )
     for unit in units:
         _set_unit_status(unit, FulfilmentUnit.Status.MATCHING)
-        if _create_offer(group=group, unit=unit) is None:
+        if _dispatch_unit(group=group, unit=unit) is None:
             break
     group.refresh_from_db()
     return group
@@ -434,7 +548,7 @@ def reconcile_group_dispatch(*, group_id: UUID) -> BookingGroup:
             .first()
         )
         if offer is None and unit.status == FulfilmentUnit.Status.MATCHING:
-            _create_offer(group=group, unit=unit)
+            _dispatch_unit(group=group, unit=unit)
         elif offer is not None and (
             offer.status == PartnerOffer.Status.OFFERED and offer.expires_at <= now
         ):

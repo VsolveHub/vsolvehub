@@ -40,6 +40,7 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "payment.receipt",
         "refund.issued",
         "partner.offer",
+        "partner.job_assigned",
         "partner.job_cancelled",
         "partner.payout_paid",
     }
