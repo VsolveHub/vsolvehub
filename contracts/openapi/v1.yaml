@@ -6678,7 +6678,11 @@ components:
           oneOf:
           - $ref: '#/components/schemas/UnavailableReasonEnum'
           - $ref: '#/components/schemas/NullEnum'
+        capacity:
+          type: integer
+          readOnly: true
       required:
+      - capacity
       - ends_at
       - id
       - is_available
@@ -6732,6 +6736,9 @@ components:
         address_id:
           type: string
           format: uuid
+        group_key:
+          type: string
+          minLength: 1
       required:
       - address_id
     CancellationBand:

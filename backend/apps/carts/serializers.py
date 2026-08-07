@@ -542,6 +542,7 @@ class QuoteCreateSerializer(serializers.Serializer[dict[str, object]]):
 
 class BookingWindowsRequestSerializer(serializers.Serializer[dict[str, object]]):
     address_id = serializers.UUIDField()
+    group_key = serializers.CharField(required=False, allow_blank=False)
 
 
 class BookingWindowSerializer(serializers.Serializer[BookingWindow]):
@@ -554,6 +555,7 @@ class BookingWindowSerializer(serializers.Serializer[BookingWindow]):
         read_only=True,
         allow_null=True,
     )
+    capacity = serializers.IntegerField(read_only=True)
 
 
 class BookingWindowDaySerializer(serializers.Serializer[BookingWindowDay]):

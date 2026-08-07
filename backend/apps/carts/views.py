@@ -610,6 +610,7 @@ class BookingWindowsView(APIView):
                 customer=user,
                 cart=cart,
                 address=address,
+                group_key=serializer.validated_data.get("group_key"),
             )
         except PermissionError as exc:
             raise PermissionDenied(str(exc)) from exc

@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: c2d6f76fe254661e
+ * Checksum: 12442d775dd86a55
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2580,6 +2580,7 @@ export interface components {
             readonly ends_at: string;
             readonly is_available: boolean;
             readonly unavailable_reason: (components["schemas"]["UnavailableReasonEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly capacity: number;
         };
         BookingWindowDay: {
             /** Format: date */
@@ -2597,6 +2598,7 @@ export interface components {
         BookingWindowsRequestRequest: {
             /** Format: uuid */
             address_id: string;
+            group_key?: string;
         };
         CancellationBand: {
             readonly code: string;
