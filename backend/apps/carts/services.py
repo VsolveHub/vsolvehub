@@ -12,7 +12,7 @@ from django.core import signing
 from django.db import transaction
 from django.utils import timezone
 
-from apps.carts.availability import earliest_reachable, load_snapshot
+from apps.carts.availability import load_snapshot, reachability_by_partner
 from apps.carts.exceptions import (
     BookingWindowGroupRequiredApiError,
     CartItemLimitReachedApiError,
@@ -752,19 +752,18 @@ def create_booking_windows(
         raise PermissionError("Use one of the Customer's active addresses.")
     area = resolve_cart_service_area(cart=cart, address=address)
     group = _resolve_scheduling_group(cart=cart, area=area, group_key=group_key, at=now)
-    group_items = list(
-        CartItem.objects.select_related("variant__service", "task_rate", "configuration")
-        .prefetch_related("scope_values")
-        .filter(cart=cart, id__in=group.cart_item_ids)
+    # `_resolve_scheduling_group` already ran every item through `current_item_inputs`
+    # to build the group — that is where `estimated_duration_minutes` comes from, and
+    # it is also where a missing configuration or rate raises. Recomputing it here
+    # would re-validate the same items at two queries apiece for no new answer.
+    duration = group.estimated_duration_minutes
+    variant_ids: set[UUID] = set(
+        CartItem.objects.filter(cart=cart, id__in=group.cart_item_ids).values_list(
+            "variant_id", flat=True
+        )
     )
-    if not group_items:
+    if not variant_ids:
         raise ValueError("Add a service to your booking before choosing an arrival window.")
-    duration = 0
-    variant_ids: set[UUID] = set()
-    for group_item in group_items:
-        _configuration, _task_rate, _scope, item_duration = current_item_inputs(group_item)
-        duration += item_duration
-        variant_ids.add(group_item.variant_id)
     area = ServiceArea.objects.prefetch_related(
         "operating_windows",
         "operating_exceptions",
@@ -779,6 +778,9 @@ def create_booking_windows(
         horizon_end=horizon_end,
         destination=address,
     )
+    # Reachability depends on the Partner and `now`, not on the slot — resolved once
+    # here rather than recomputing the same haversine inside the innermost loop.
+    reachable_at = reachability_by_partner(snapshot=snapshot, now=now)
     days: list[BookingWindowDay] = []
     for day_offset in range(settings.M1_SCHEDULED_MAX_DAYS + 1):
         local_date = today + timedelta(days=day_offset)
@@ -796,11 +798,7 @@ def create_booking_windows(
                     unavailable_reason = "PAST"
                 elif not free:
                     unavailable_reason = "NO_CAPACITY"
-                elif not any(
-                    earliest_reachable(snapshot=snapshot, partner_id=partner_id, now=now)
-                    <= starts_at
-                    for partner_id in free
-                ):
+                elif not any(reachable_at[partner_id] <= starts_at for partner_id in free):
                     unavailable_reason = "TOO_SOON"
                 elif starts_at + timedelta(minutes=duration) > closes_at:
                     unavailable_reason = "OUTSIDE_OPERATING_WINDOW"

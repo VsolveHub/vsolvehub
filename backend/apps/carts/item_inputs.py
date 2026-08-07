@@ -79,7 +79,19 @@ def assert_window_time_is_current(
 ) -> None:
     local_now = now.astimezone(ZoneInfo(area_timezone))
     local_start = starts_at.astimezone(ZoneInfo(area_timezone))
-    if starts_at < now + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES):
+    # The floor is the commit window, not the old flat lead time.
+    #
+    # `M1_TODAY_LEAD_TIME_MINUTES` used to stand in for "could anyone actually get
+    # there" — a question `earliest_reachable` now answers per Partner, from their
+    # real location. Keeping the flat value here would reject slots the grid had
+    # just published as bookable: a reachable Partner opens a slot 30 minutes out,
+    # and this guard would refuse the quote for it with a 409.
+    #
+    # What survives is the one bound no Partner can beat regardless of distance —
+    # search plus accept-and-prepare. Whether a Partner is *actually* free is not
+    # this guard's job; `_eligible_partner_ids` enforces that and answers
+    # `no_eligible_capacity`.
+    if starts_at < now + timedelta(minutes=settings.M1_COMMIT_WINDOW_MINUTES):
         raise WindowNoLongerAvailableApiError
     if local_start.date() > local_now.date() + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS):
         raise WindowNoLongerAvailableApiError

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Collection, Iterable
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -132,47 +132,94 @@ class AvailabilitySnapshot:
     def _schedule_allows(
         self, partner_id: UUID, *, starts_at: datetime, duration_minutes: int
     ) -> bool:
-        zone = ZoneInfo(self.area.timezone)
-        local_start = starts_at.astimezone(zone)
-        local_end = local_start + timedelta(minutes=duration_minutes)
-
-        # A dated exception replaces the weekly rules for that day outright — it is
-        # how a Partner takes leave, so falling back to the rules would book them
-        # on a day they said they were away.
-        exception = next(
-            (
-                candidate
-                for candidate in self._exceptions.get(partner_id, ())
-                if candidate.date == local_start.date()
-            ),
-            None,
+        return schedule_covers(
+            area=self.area,
+            rules=self._rules.get(partner_id, ()),
+            exceptions=self._exceptions.get(partner_id, ()),
+            starts_at=starts_at,
+            duration_minutes=duration_minutes,
         )
-        if exception is not None:
-            if (
-                not exception.is_available
-                or exception.starts_at is None
-                or exception.ends_at is None
-            ):
-                return False
-            return availability_window_contains(
-                local_start,
-                local_end,
-                starts_at=exception.starts_at,
-                ends_at=exception.ends_at,
-                ends_next_day=exception.ends_next_day,
-            )
 
-        return any(
-            availability_window_contains(
-                local_start,
-                local_end,
-                starts_at=rule.starts_at,
-                ends_at=rule.ends_at,
-                ends_next_day=rule.ends_next_day,
-            )
-            for rule in self._rules.get(partner_id, ())
-            if rule.weekday == local_start.weekday()
+
+def schedule_covers(
+    *,
+    area: ServiceArea,
+    rules: Collection[PartnerAvailabilityRule],
+    exceptions: Collection[PartnerAvailabilityException],
+    starts_at: datetime,
+    duration_minutes: int,
+) -> bool:
+    """Whether an already-loaded schedule covers one occupied range.
+
+    The single in-memory implementation of the published-schedule rule. Both the
+    slot grid and dispatch ranking go through here, so neither can drift from the
+    other about what a Partner's calendar says.
+    """
+
+    zone = ZoneInfo(area.timezone)
+    local_start = starts_at.astimezone(zone)
+    local_end = local_start + timedelta(minutes=duration_minutes)
+
+    # A dated exception replaces the weekly rules for that day outright — it is
+    # how a Partner takes leave, so falling back to the rules would book them
+    # on a day they said they were away.
+    exception = next(
+        (candidate for candidate in exceptions if candidate.date == local_start.date()),
+        None,
+    )
+    if exception is not None:
+        if not exception.is_available or exception.starts_at is None or exception.ends_at is None:
+            return False
+        return availability_window_contains(
+            local_start,
+            local_end,
+            starts_at=exception.starts_at,
+            ends_at=exception.ends_at,
+            ends_next_day=exception.ends_next_day,
         )
+
+    return any(
+        availability_window_contains(
+            local_start,
+            local_end,
+            starts_at=rule.starts_at,
+            ends_at=rule.ends_at,
+            ends_next_day=rule.ends_next_day,
+        )
+        for rule in rules
+        if rule.weekday == local_start.weekday()
+    )
+
+
+def schedule_available_partner_ids(
+    *,
+    partner_ids: Collection[UUID],
+    area: ServiceArea,
+    starts_at: datetime,
+    duration_minutes: int,
+) -> frozenset[UUID]:
+    """Which of `partner_ids` have published schedules covering one occupied range.
+
+    Two queries for the whole pool, where `partners.selectors.partner_available_during`
+    costs two *per Partner*. Dispatch ranking scans an entire service area, so the
+    per-Partner form turns one dispatch into hundreds of round trips.
+    """
+
+    if not partner_ids:
+        return frozenset()
+    rules = _rules_by_partner(partner_ids, area=area)
+    exceptions = _exceptions_by_partner(partner_ids, area=area)
+    return frozenset(
+        partner_id
+        for partner_id in partner_ids
+        if schedule_covers(
+            area=area,
+            rules=rules.get(partner_id, ()),
+            exceptions=exceptions.get(partner_id, ()),
+            starts_at=starts_at,
+            duration_minutes=duration_minutes,
+        )
+    )
 
 
 def load_snapshot(
@@ -200,8 +247,8 @@ def load_snapshot(
         if destination is not None
         else None,
         _partners=partners,
-        _rules=_rules_by_partner(partners.values(), area=area),
-        _exceptions=_exceptions_by_partner(partners.values(), area=area),
+        _rules=_rules_by_partner(partners, area=area),
+        _exceptions=_exceptions_by_partner(partners, area=area),
         _reserved=_reserved_by_partner(
             partners, horizon_start=horizon_start, horizon_end=horizon_end
         ),
@@ -226,6 +273,24 @@ def earliest_reachable(
     if fix is None or snapshot.destination is None:
         return now + commit + timedelta(minutes=settings.M1_DEFAULT_TRAVEL_MINUTES)
     return now + commit + timedelta(minutes=_travel_minutes(fix, snapshot.destination))
+
+
+def reachability_by_partner(
+    *, snapshot: AvailabilitySnapshot, now: datetime
+) -> dict[UUID, datetime]:
+    """`earliest_reachable` for every Partner in the snapshot, resolved once.
+
+    Reachability is a function of the Partner and `now` — never of the slot being
+    considered. Calling `earliest_reachable` from inside a slot loop therefore
+    repeats the same haversine for every candidate start: on a seven-day grid that
+    is around a hundred identical computations per Partner, per request. Callers
+    that scan a grid should build this map once and index it.
+    """
+
+    return {
+        partner_id: earliest_reachable(snapshot=snapshot, partner_id=partner_id, now=now)
+        for partner_id in snapshot.partner_ids
+    }
 
 
 def _travel_minutes(fix: PartnerLocation, destination: tuple[Decimal, Decimal]) -> int:
@@ -275,11 +340,11 @@ def _eligible_partners(
 
 
 def _rules_by_partner(
-    partners: Iterable[PartnerProfile], *, area: ServiceArea
+    partner_ids: Collection[UUID], *, area: ServiceArea
 ) -> dict[UUID, tuple[PartnerAvailabilityRule, ...]]:
     grouped: dict[UUID, list[PartnerAvailabilityRule]] = defaultdict(list)
     rules = PartnerAvailabilityRule.objects.filter(
-        partner__in=list(partners),
+        partner_id__in=list(partner_ids),
         service_area=area,
         is_active=True,
     )
@@ -289,11 +354,11 @@ def _rules_by_partner(
 
 
 def _exceptions_by_partner(
-    partners: Iterable[PartnerProfile], *, area: ServiceArea
+    partner_ids: Collection[UUID], *, area: ServiceArea
 ) -> dict[UUID, tuple[PartnerAvailabilityException, ...]]:
     grouped: dict[UUID, list[PartnerAvailabilityException]] = defaultdict(list)
     exceptions = PartnerAvailabilityException.objects.filter(
-        partner__in=list(partners),
+        partner_id__in=list(partner_ids),
         service_area=area,
     )
     for exception in exceptions:

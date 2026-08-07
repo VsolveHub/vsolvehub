@@ -20,7 +20,7 @@ from rest_framework.test import APIClient
 
 from apps.assignments.group_services import accept_unit_offer, reconcile_group_dispatch
 from apps.assignments.models import PartnerOffer
-from apps.carts.models import BookingGroup
+from apps.carts.models import BookingGroup, CheckoutSession
 from apps.commerce.models import Booking
 from apps.identity.models import User
 from tests.assignments.test_group_dispatch import _checkout, _quote
@@ -69,7 +69,12 @@ def test_group_projection_carries_the_checkout_that_owns_it() -> None:
     for field in PAYMENT_ENTRY_FIELDS:
         assert field in body, f"{field} is missing from the group projection"
     assert body["checkout_id"] == checkout["id"]
-    assert body["checkout_version"] == checkout["version"]
+    # Compared against the checkout's current version, not the one its creation
+    # response carried: an advance visit is direct-assigned synchronously, so the
+    # session has already moved on by the time the projection is read. What this
+    # guards is that the projection publishes the live version rather than a stale
+    # one, and re-reading is the honest way to assert that.
+    assert body["checkout_version"] == CheckoutSession.objects.get(id=checkout["id"]).version
     # Nothing has been paid, so there is no order to point at yet.
     assert body["order_id"] is None
 

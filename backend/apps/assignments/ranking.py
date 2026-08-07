@@ -16,7 +16,7 @@ same horizon as reachability: `requested_start <= now + M1_TODAY_LEAD_TIME_MINUT
 """
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Final
 from uuid import UUID
 
@@ -25,9 +25,9 @@ from django.db import models
 from django.utils import timezone
 
 from apps.assignments.models import AssignmentAttempt
+from apps.carts.availability import schedule_available_partner_ids
 from apps.carts.models import FulfilmentUnit
 from apps.partners.models import PartnerApplication, PartnerOnlineSession, PartnerProfile
-from apps.partners.selectors import partner_available_during
 
 RANKING_POLICY: Final[str] = "service_area_stable_uuid"
 RANKING_POLICY_VERSION: Final[int] = 1
@@ -106,7 +106,7 @@ def unit_variant_ids(unit: FulfilmentUnit) -> tuple[UUID, ...]:
     )
 
 
-def is_same_day_unit(*, unit: FulfilmentUnit, now=None) -> bool:
+def is_same_day_unit(*, unit: FulfilmentUnit, now: datetime | None = None) -> bool:
     """Same horizon as reachability (§7): within today's lead-time window from `now`."""
 
     clock = timezone.now() if now is None else now
@@ -116,11 +116,11 @@ def is_same_day_unit(*, unit: FulfilmentUnit, now=None) -> bool:
 def _exclusions_for(
     *,
     candidate: PartnerProfile,
-    unit: FulfilmentUnit,
     required: frozenset[str],
     attempted: frozenset[str],
     online_partner_ids: frozenset[UUID],
     require_online: bool,
+    schedule_available_ids: frozenset[UUID],
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     application = getattr(candidate, "application", None)
@@ -133,15 +133,11 @@ def _exclusions_for(
         reasons.append(ExclusionReason.ALREADY_ATTEMPTED)
     if require_online and candidate.id not in online_partner_ids:
         reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
-    # Availability is read last and only for otherwise-eligible candidates: it is the one
-    # check that costs a query per Partner, and a Partner excluded for the wrong service
-    # does not need their calendar opened.
-    if not reasons and not partner_available_during(
-        partner=candidate,
-        service_area=unit.service_area,
-        starts_at=unit.requested_start,
-        duration_minutes=unit.estimated_duration_minutes,
-    ):
+    # Availability is read last so a Partner excluded for the wrong service is not also
+    # reported as unavailable. The membership test is free: schedules for the whole pool
+    # were resolved in two queries by the caller, where the per-Partner selector costs
+    # two queries each and turns one dispatch into hundreds of round trips.
+    if not reasons and candidate.id not in schedule_available_ids:
         reasons.append(ExclusionReason.UNAVAILABLE_AT_START)
     return tuple(reasons)
 
@@ -166,26 +162,33 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
         .distinct()
         .order_by("id")
     )
+    pool_ids = [partner.id for partner in pool]
     require_online = is_same_day_unit(unit=unit)
     online_partner_ids: frozenset[UUID] = frozenset()
-    if require_online and pool:
+    if require_online and pool_ids:
         online_partner_ids = frozenset(
             PartnerOnlineSession.objects.filter(
-                partner_id__in=[partner.id for partner in pool],
+                partner_id__in=pool_ids,
                 ended_at__isnull=True,
             ).values_list("partner_id", flat=True)
         )
+    schedule_available_ids = schedule_available_partner_ids(
+        partner_ids=pool_ids,
+        area=unit.service_area,
+        starts_at=unit.requested_start,
+        duration_minutes=unit.estimated_duration_minutes,
+    )
     return UnitRanking(
         evaluations=tuple(
             CandidateEvaluation(
                 partner=candidate,
                 exclusions=_exclusions_for(
                     candidate=candidate,
-                    unit=unit,
                     required=required,
                     attempted=attempted,
                     online_partner_ids=online_partner_ids,
                     require_online=require_online,
+                    schedule_available_ids=schedule_available_ids,
                 ),
             )
             for candidate in pool

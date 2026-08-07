@@ -55,7 +55,6 @@ from apps.commerce.models import Booking
 from apps.foundation.services import CommandResult, ResponseBody, execute_idempotent
 from apps.fulfilment import completion as completion_services
 from apps.fulfilment import recovery_services
-from apps.fulfilment.quality_dispute import open_quality_dispute
 from apps.fulfilment.amendments import (
     approve_scope_amendment,
     decline_scope_amendment,
@@ -71,6 +70,7 @@ from apps.fulfilment.cancellation import (
 from apps.fulfilment.evidence import record_work_evidence, request_work_evidence_upload
 from apps.fulfilment.models import ScopeAmendment
 from apps.fulfilment.otp import operations_assisted_start, request_start_otp, verify_start_otp
+from apps.fulfilment.quality_dispute import open_quality_dispute
 from apps.fulfilment.serializers import (
     AmendmentApprovalResultSerializer,
     AssistedStartRequestSerializer,
@@ -549,7 +549,7 @@ class CustomerCompletionDisputeView(APIView):
 class CustomerQualityDisputeView(APIView):
     """72-hour quality dispute after auto-finalisation (spec §12).
 
-    Distinct from `CustomerCompletionDisputeView`, which covers the 0–24h window while a
+    Distinct from `CustomerCompletionDisputeView`, which covers the 0-24h window while a
     completion response is still pending. This path only opens once the visit was
     auto-finalised, and it holds the Partner payout without touching `cancel_booking`.
     """

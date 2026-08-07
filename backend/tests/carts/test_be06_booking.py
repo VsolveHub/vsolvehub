@@ -12,6 +12,7 @@ from apps.carts.exceptions import CartItemLimitReachedApiError
 from apps.carts.models import Cart, CartItem, Quote
 from apps.carts.services import replace_cart_item
 from apps.catalog.models import ServiceVariant
+from tests.carts.test_checkout import seed_available_partner
 from apps.identity.models import User
 from apps.locations.models import ServiceAreaOperatingWindow
 
@@ -40,6 +41,10 @@ def _address_payload(*, label: str = "Home") -> dict[str, object]:
 
 def _booking_context() -> tuple[APIClient, User, dict[str, Any], dict[str, Any]]:
     call_command("seed_technician_catalog")
+    # The grid publishes real capacity now, so a world with no Partners has no
+    # bookable window to pick. These tests are about window signing, staleness and
+    # quote completeness, not staffing.
+    seed_available_partner()
     customer = User.objects.create_user(phone_number="+919876543210")
     client = APIClient()
     client.force_authenticate(customer)

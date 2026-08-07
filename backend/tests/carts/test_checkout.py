@@ -1,3 +1,4 @@
+from datetime import time
 from http import HTTPStatus
 
 import pytest
@@ -6,9 +7,44 @@ from rest_framework.test import APIClient
 
 from apps.catalog.models import ServiceVariant
 from apps.identity.models import ConsentReceipt, Role, User, UserRole
+from apps.locations.models import ServiceArea
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerAvailabilityRule,
+    PartnerProfile,
+    PartnerService,
+    PartnerServiceArea,
+)
 from tests.helpers import force_role_client
 
 pytestmark = pytest.mark.django_db
+
+
+def seed_available_partner(*, slug: str = "switch-socket-repair") -> PartnerProfile:
+    """One approved Partner who can actually serve the window these tests book.
+
+    The booking-windows grid publishes real capacity, so a world with no Partners
+    has no bookable slots — correctly. Checkout tests are about quoting and
+    idempotency, not about staffing, so they seed the one Partner that makes a
+    window exist rather than asserting against an empty pool.
+    """
+
+    area = ServiceArea.objects.get(slug="hyderabad-500032")
+    user = User.objects.create_user(phone_number="+919000000001")
+    partner = PartnerProfile.objects.create(user=user, display_name="Checkout Partner")
+    PartnerApplication.objects.create(partner=partner, status=PartnerApplication.Status.APPROVED)
+    for variant in ServiceVariant.objects.filter(service__slug=slug):
+        PartnerService.objects.create(partner=partner, variant=variant)
+    PartnerServiceArea.objects.create(partner=partner, service_area=area)
+    for weekday in range(7):
+        PartnerAvailabilityRule.objects.create(
+            partner=partner,
+            service_area=area,
+            weekday=weekday,
+            starts_at=time(8),
+            ends_at=time(20),
+        )
+    return partner
 
 
 def _address_payload() -> dict[str, object]:
@@ -64,6 +100,7 @@ def _customer_quote(*, customer: User) -> tuple[APIClient, str]:
 
 def test_checkout_is_server_quoted_and_idempotent() -> None:
     call_command("seed_technician_catalog")
+    seed_available_partner()
     customer = User.objects.create_user(phone_number="+919876543210")
     client, quote_id = _customer_quote(customer=customer)
 
@@ -97,6 +134,7 @@ def test_checkout_is_server_quoted_and_idempotent() -> None:
 
 def test_assisted_checkout_requires_customer_consent_and_uses_same_quote() -> None:
     call_command("seed_technician_catalog")
+    seed_available_partner()
     customer = User.objects.create_user(phone_number="+919876543210")
     _, quote_id = _customer_quote(customer=customer)
     operations = User.objects.create_user(phone_number="+919876543211", is_staff=True)
