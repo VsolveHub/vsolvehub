@@ -1,4 +1,4 @@
-"""Seed the priced Technician and Beautician task catalog from the reviewed price list.
+"""Seed the priced Technician, Beautician, Home and Pet task catalog.
 
 ## Why this is a second command
 
@@ -28,9 +28,13 @@ they are dispatchable, fixed-price and finish in one visit, which is the test.
 
 ## Prices
 
-`unit_price_paise` is the **lower bound** of the source range, rounded down to the ₹x9 the rest
-of the catalog uses — 199-349 becomes ₹199, 3000-8000 becomes ₹2,999. It reads as "from", which
-is the only honest thing to show before a professional has seen the job.
+Technician and Beautician come from the reviewed source list. Home and Pet do **not** — that
+list prices neither of them, so every Home and Pet figure is a proposal, flagged again at the
+block that defines them.
+
+Where a source range exists, `unit_price_paise` is its **lower bound**, rounded down to the ₹x9
+the rest of the catalog uses — 199-349 becomes ₹199, 3000-8000 becomes ₹2,999. It reads as
+"from", which is the only honest thing to show before a professional has seen the job.
 
 ## Durations are estimates, and are the one invented number here
 
@@ -626,6 +630,313 @@ BEAUTICIAN_TRADES: tuple[TradeSeed, ...] = (
     ),
 )
 
+# ----------------------------------------------------------------------------------------------
+# Home and Pet services
+#
+# UNREVIEWED PRICING. Every price below is a proposal, not a figure from the source list — that
+# list carries no price and no unit for any Home or Pet row. They are Hyderabad market rates in
+# the same "from" and charm-price shape as the rest of the catalog, and they are the numbers most
+# likely to be wrong in this file. Correct them here; nothing computes a price from anything else.
+#
+# The same task-visit filter applies, and it removes more here than it did for the trades above:
+#
+# * Maid Services and Elder Care are recurring placements of a person, not a fixed visit. Selling
+#   "Full Time Maid" as a one-off task visit would promise something the dispatch engine cannot
+#   deliver, and the money model behind it is a different one.
+# * Home Shifting and Pet Taxi are priced by volume and distance, which nobody knows before a
+#   survey.
+# * Storage Services and Pet Boarding rent space by the night; that is the accommodation model.
+# * Borewell work needs a rig and is priced by depth.
+# * Annual Maintenance Contract is a subscription.
+# * Pet Shop is retail, Pet Adoption is not a paid service, and Pet Insurance is advice.
+# ----------------------------------------------------------------------------------------------
+
+CLEANING_KIT = (
+    "vacuum cleaner",
+    "microfibre cloths",
+    "scrubbing pads",
+    "graded cleaning agents",
+    "step ladder",
+)
+CLEANING_UNSAFE = (
+    "unsafe working height with no anchor",
+    "live electrical fitting in the wet zone",
+    "visible mould or biohazard requiring specialist clearance",
+)
+PET_KIT = ("sanitised grooming tools", "non-slip mat", "pet-safe products", "muzzle and lead")
+PET_UNSAFE = (
+    "aggressive animal that cannot be safely handled alone",
+    "visible injury, distress or suspected illness",
+    "no vaccination record available",
+)
+
+HOME_TRADES: tuple[TradeSeed, ...] = (
+    TradeSeed(
+        "Home Cleaning",
+        "home-cleaning",
+        15,
+        CLEANING_KIT,
+        CLEANING_UNSAFE,
+        (
+            TaskSeed("Basic Home Cleaning", "home-basic-cleaning", 149_900, 180),
+            TaskSeed("Deep Home Cleaning", "home-deep-cleaning", 299_900, 300),
+            TaskSeed("Move In Cleaning", "home-move-in-cleaning", 349_900, 300),
+            TaskSeed("Move Out Cleaning", "home-move-out-cleaning", 349_900, 300),
+            TaskSeed("Villa Cleaning", "home-villa-cleaning", 499_900, 360),
+            TaskSeed("Apartment Cleaning", "home-apartment-cleaning", 199_900, 210),
+            TaskSeed("Office Cleaning", "home-office-cleaning", 249_900, 240),
+            TaskSeed("Kitchen Deep Cleaning", "home-kitchen-deep-cleaning", 149_900, 150),
+            TaskSeed("Bathroom Deep Cleaning", "home-bathroom-deep-cleaning", 79_900, 90),
+            TaskSeed("Balcony Cleaning", "home-balcony-cleaning", 59_900, 60),
+            TaskSeed("Terrace Cleaning", "home-terrace-cleaning", 99_900, 90),
+            TaskSeed("Window Cleaning", "home-window-cleaning", 49_900, 60),
+            TaskSeed("Glass Cleaning", "home-glass-cleaning", 49_900, 60),
+            TaskSeed("Fan Cleaning", "home-fan-cleaning", 29_900, 45),
+            TaskSeed("Wall Cleaning", "home-wall-cleaning", 99_900, 120),
+            TaskSeed("Floor Scrubbing", "home-floor-scrubbing", 149_900, 150),
+            TaskSeed("Marble Polishing", "home-marble-polishing", 299_900, 240),
+            TaskSeed("Tile Cleaning", "home-tile-cleaning", 129_900, 120),
+        ),
+    ),
+    TradeSeed(
+        "Sofa & Carpet Cleaning",
+        "sofa-carpet-cleaning",
+        15,
+        (*CLEANING_KIT, "upholstery extractor", "shampoo applicator"),
+        CLEANING_UNSAFE,
+        (
+            TaskSeed("Sofa Shampooing", "sofa-shampooing", 99_900, 90),
+            TaskSeed("Carpet Cleaning", "carpet-cleaning", 79_900, 75),
+            TaskSeed("Curtain Cleaning", "curtain-cleaning", 59_900, 60),
+            TaskSeed("Mattress Cleaning", "mattress-cleaning", 79_900, 60),
+            TaskSeed("Upholstery Cleaning", "upholstery-cleaning", 89_900, 75),
+        ),
+    ),
+    TradeSeed(
+        "Pest Control",
+        "pest-control",
+        15,
+        ("licensed pesticide kit", "sprayer", "respirator and gloves", "bait stations"),
+        (
+            "infant, pregnancy or medical condition in the treated space",
+            "no ventilation for the chemicals required",
+            "food preparation area that cannot be cleared",
+        ),
+        (
+            TaskSeed("Cockroach Control", "pest-cockroach-control", 89_900, 60),
+            TaskSeed("Termite Control", "pest-termite-control", 299_900, 180),
+            TaskSeed("Bed Bug Control", "pest-bed-bug-control", 149_900, 90),
+            TaskSeed("Mosquito Control", "pest-mosquito-control", 99_900, 60),
+            TaskSeed("Ant Control", "pest-ant-control", 79_900, 45),
+            TaskSeed("Rat Control", "pest-rat-control", 99_900, 60),
+            TaskSeed("Lizard Control", "pest-lizard-control", 79_900, 45),
+            TaskSeed("General Pest Control", "pest-general-control", 129_900, 90),
+        ),
+    ),
+    TradeSeed(
+        "Water Tank Cleaning",
+        "water-tank-cleaning",
+        15,
+        ("submersible pump", "pressure washer", "sanitising agent", "confined-space lighting"),
+        (
+            "confined space with no second person present",
+            "structural damage to the tank",
+            "no safe means of draining the tank",
+        ),
+        (
+            TaskSeed("Overhead Tank Cleaning", "tank-overhead-cleaning", 99_900, 90),
+            TaskSeed("Underground Tank Cleaning", "tank-underground-cleaning", 149_900, 120),
+            TaskSeed("Sump Cleaning", "tank-sump-cleaning", 129_900, 105),
+        ),
+    ),
+    TradeSeed(
+        "Septic Tank Services",
+        "septic-tank-services",
+        20,
+        ("suction hose", "protective suit and respirator", "drain rods", "high-pressure jet"),
+        (
+            "confined space entry without a permit",
+            "gas build-up in the chamber",
+            "no safe disposal route for the waste",
+        ),
+        (
+            TaskSeed("Septic Tank Cleaning", "septic-tank-cleaning", 299_900, 150),
+            TaskSeed("Drain Cleaning", "septic-drain-cleaning", 99_900, 90),
+            TaskSeed("Sewer Line Cleaning", "septic-sewer-line-cleaning", 199_900, 120),
+        ),
+    ),
+    TradeSeed(
+        "Laundry Services",
+        "laundry-services",
+        10,
+        ("collection bags", "garment tags", "stain treatment kit"),
+        ("garment with no care label and a delicate finish", "items already colour-bleeding"),
+        (
+            TaskSeed("Washing", "laundry-washing", 9_900, 30),
+            TaskSeed("Ironing", "laundry-ironing", 4_900, 20),
+            TaskSeed("Dry Cleaning", "laundry-dry-cleaning", 19_900, 30),
+            TaskSeed("Steam Iron", "laundry-steam-iron", 7_900, 20),
+            TaskSeed("Shoe Cleaning", "laundry-shoe-cleaning", 29_900, 45),
+            TaskSeed("Bag Cleaning", "laundry-bag-cleaning", 34_900, 45),
+        ),
+    ),
+    TradeSeed(
+        "Gardening",
+        "gardening",
+        15,
+        ("secateurs", "lawn mower", "rake and shears", "green waste bags"),
+        (
+            "tree work near live overhead lines",
+            "unsafe working height with no anchor",
+            "unstable ground or retaining wall",
+        ),
+        (
+            TaskSeed("Garden Cleaning", "garden-cleaning", 79_900, 90),
+            TaskSeed("Lawn Mowing", "garden-lawn-mowing", 59_900, 60),
+            TaskSeed("Plant Maintenance", "garden-plant-maintenance", 49_900, 60),
+            TaskSeed("Tree Trimming", "garden-tree-trimming", 149_900, 120),
+            TaskSeed("Landscape Maintenance", "garden-landscape-maintenance", 199_900, 180),
+        ),
+    ),
+    TradeSeed(
+        "Swimming Pool Services",
+        "swimming-pool-services",
+        20,
+        ("pool vacuum", "skimmer net", "water test kit", "dosing chemicals"),
+        (
+            "unfenced pool with children present",
+            "electrical fault in the pump housing",
+            "water chemistry outside safe handling limits",
+        ),
+        (
+            TaskSeed("Pool Cleaning", "pool-cleaning", 199_900, 120),
+            TaskSeed("Pool Maintenance", "pool-maintenance", 299_900, 150),
+            TaskSeed("Pool Water Treatment", "pool-water-treatment", 149_900, 90),
+        ),
+    ),
+    TradeSeed(
+        "Chimney & Exhaust",
+        "chimney-exhaust",
+        15,
+        ("degreasing agent", "scraper set", "drop sheets", "screwdriver set"),
+        ("gas appliance that cannot be isolated", "unsafe working height over a hob"),
+        (
+            TaskSeed("Chimney Cleaning", "chimney-cleaning", 89_900, 90),
+            TaskSeed("Kitchen Exhaust Cleaning", "kitchen-exhaust-cleaning", 69_900, 75),
+        ),
+    ),
+    TradeSeed(
+        "Home Organization",
+        "home-organization",
+        10,
+        ("labelling kit", "storage boxes", "measuring tape"),
+        ("items the customer has not authorised anyone to move or discard",),
+        (
+            TaskSeed("Wardrobe Organization", "organize-wardrobe", 99_900, 120),
+            TaskSeed("Kitchen Organization", "organize-kitchen", 119_900, 150),
+            TaskSeed("Store Room Organization", "organize-store-room", 99_900, 120),
+            TaskSeed("Decluttering Service", "organize-decluttering", 149_900, 180),
+        ),
+    ),
+    TradeSeed(
+        "Home Inspection",
+        "home-inspection",
+        15,
+        ("moisture meter", "torch", "measuring tape", "camera"),
+        (
+            "structurally unsafe area that cannot be entered",
+            "no access to the areas being reported on",
+        ),
+        (
+            TaskSeed("Property Inspection", "inspection-property", 199_900, 120),
+            TaskSeed("Pre-Purchase Home Inspection", "inspection-pre-purchase", 299_900, 180),
+            TaskSeed("Rental Inspection", "inspection-rental", 149_900, 90),
+        ),
+    ),
+    TradeSeed(
+        "Home Maintenance",
+        "home-maintenance",
+        10,
+        ("general tool kit", "cordless drill", "sealant and fixings"),
+        ("work requiring a licensed trade the visit is not staffed for",),
+        (
+            TaskSeed("Handyman Service", "handyman-service", 49_900, 60),
+            TaskSeed("Emergency Home Service", "handyman-emergency-service", 79_900, 60),
+        ),
+    ),
+)
+
+PET_TRADES: tuple[TradeSeed, ...] = (
+    TradeSeed(
+        "Pet Grooming",
+        "pet-grooming",
+        15,
+        (*PET_KIT, "clippers", "pet dryer"),
+        PET_UNSAFE,
+        (
+            TaskSeed("Dog Grooming", "pet-dog-grooming", 99_900, 90),
+            TaskSeed("Cat Grooming", "pet-cat-grooming", 89_900, 75),
+            TaskSeed("Pet Bath & Spa", "pet-bath-and-spa", 69_900, 60),
+            TaskSeed("Pet Hair Trimming", "pet-hair-trimming", 59_900, 45),
+            TaskSeed("Pet Nail Clipping", "pet-nail-clipping", 29_900, 20),
+            TaskSeed("Pet Ear Cleaning", "pet-ear-cleaning", 29_900, 20),
+            TaskSeed("Pet Teeth Cleaning", "pet-teeth-cleaning", 49_900, 30),
+        ),
+    ),
+    TradeSeed(
+        "Veterinary",
+        "veterinary",
+        15,
+        ("veterinary bag", "thermometer and stethoscope", "cold chain vaccine carrier"),
+        (
+            *PET_UNSAFE,
+            "condition needing clinic equipment a home visit does not carry",
+        ),
+        (
+            TaskSeed("General Check-up", "vet-general-checkup", 49_900, 30),
+            TaskSeed("Vaccination", "vet-vaccination", 69_900, 30),
+            TaskSeed("Emergency Vet Visit", "vet-emergency-visit", 149_900, 60),
+            TaskSeed("Surgery Consultation", "vet-surgery-consultation", 99_900, 45),
+            TaskSeed("Deworming", "vet-deworming", 39_900, 20),
+        ),
+    ),
+    TradeSeed(
+        "Pet Walking",
+        "pet-walking",
+        5,
+        ("lead and harness", "waste bags", "water bottle"),
+        PET_UNSAFE,
+        (TaskSeed("Dog Walking", "pet-dog-walking", 29_900, 45),),
+    ),
+    TradeSeed(
+        "Pet Sitting",
+        "pet-sitting",
+        10,
+        ("feeding schedule", "waste bags", "emergency contact sheet"),
+        PET_UNSAFE,
+        (TaskSeed("Home Pet Sitting", "pet-home-sitting", 79_900, 240),),
+    ),
+    TradeSeed(
+        "Pet Training",
+        "pet-training",
+        10,
+        ("clicker", "training treats", "long lead"),
+        PET_UNSAFE,
+        (
+            TaskSeed("Dog Training", "pet-dog-training", 99_900, 60),
+            TaskSeed("Puppy Training", "pet-puppy-training", 89_900, 60),
+        ),
+    ),
+    TradeSeed(
+        "Pet Photography",
+        "pet-photography",
+        15,
+        ("camera and lens kit", "portable lighting", "backdrop", "treats"),
+        PET_UNSAFE,
+        (TaskSeed("Pet Photoshoot", "pet-photoshoot", 249_900, 90),),
+    ),
+)
+
 CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
     (
         "technician",
@@ -643,11 +954,27 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         "beauty-personal-care",
         BEAUTICIAN_TRADES,
     ),
+    (
+        "home-services",
+        "Home Services",
+        "Cleaning, pest control and upkeep delivered at your address.",
+        "home",
+        "home-care-service",
+        HOME_TRADES,
+    ),
+    (
+        "pet-services",
+        "Pet Services",
+        "Grooming, veterinary and care visits for pets at home.",
+        "paw-print",
+        "pet-care-service",
+        PET_TRADES,
+    ),
 )
 
 
 class Command(BaseCommand):
-    help = "Seed the priced Technician and Beautician task catalog. Adds; never prunes."
+    help = "Seed the priced Technician, Beautician, Home and Pet task catalog. Adds; never prunes."
 
     @transaction.atomic
     def handle(self, *_args: object, **_options: object) -> None:

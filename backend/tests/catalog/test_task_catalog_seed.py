@@ -16,7 +16,7 @@ from apps.pricing.models import TaskRate
 
 pytestmark = pytest.mark.django_db
 
-EXPECTED_TRADES = 23
+EXPECTED_TRADES = 41
 
 
 def _seeded_slugs() -> set[str]:
@@ -111,8 +111,34 @@ def test_each_task_carries_an_active_scope_and_safety_configuration() -> None:
         assert configuration.scope_schema["questions"], variant.service.slug
 
 
-def test_both_categories_are_seeded_active() -> None:
+def test_all_four_categories_are_seeded_active() -> None:
     call_command("seed_task_catalog")
 
-    assert Category.objects.filter(slug="technician", is_active=True).exists()
-    assert Category.objects.filter(slug="beautician", is_active=True).exists()
+    for slug in ("technician", "beautician", "home-services", "pet-services"):
+        assert Category.objects.filter(slug=slug, is_active=True).exists(), slug
+
+
+def test_recurring_and_survey_priced_work_is_not_sold_as_a_task_visit() -> None:
+    """The filter that matters most, because these fail *after* somebody has paid.
+
+    A maid placement or a house move cannot be delivered by "one professional, one visit, this
+    price" — dispatch would staff it, the customer would be charged, and nobody could honour it.
+    They belong to other booking models, so they are absent rather than approximated.
+    """
+
+    call_command("seed_task_catalog")
+
+    for excluded in (
+        "full-time-maid",
+        "part-time-maid",
+        "live-in-maid",
+        "elder-care-attendant",
+        "nanny-service",
+        "house-shifting",
+        "office-shifting",
+        "household-storage",
+        "dog-boarding",
+        "pet-pickup-drop",
+        "annual-home-maintenance-contract",
+    ):
+        assert not Service.objects.filter(slug=excluded).exists(), excluded
