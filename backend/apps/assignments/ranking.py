@@ -9,18 +9,24 @@ rather than silent absence from a queryset.
 The pool is bounded to the unit's service area on purpose. A wider pool would be both
 unbounded to compute and a disclosure of Partner identities with no bearing on the job.
 The boundary is written into the document so a reader can see where the explanation stops.
+
+Same-day units also require an active `PartnerOnlineSession` (spec §11.1). Advance
+units do not — nobody toggles online on Sunday for a Tuesday job. The boundary is the
+same horizon as reachability: `requested_start <= now + M1_TODAY_LEAD_TIME_MINUTES`.
 """
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Final
 from uuid import UUID
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 from apps.assignments.models import AssignmentAttempt
 from apps.carts.models import FulfilmentUnit
-from apps.partners.models import PartnerApplication, PartnerProfile
+from apps.partners.models import PartnerApplication, PartnerOnlineSession, PartnerProfile
 from apps.partners.selectors import partner_available_during
 
 RANKING_POLICY: Final[str] = "service_area_stable_uuid"
@@ -32,6 +38,7 @@ class ExclusionReason(models.TextChoices):
     VARIANT_NOT_OFFERED = "variant_not_offered", "Variant not offered"
     ALREADY_ATTEMPTED = "already_attempted", "Already attempted for this unit"
     UNAVAILABLE_AT_START = "unavailable_at_start", "Unavailable at the requested start"
+    OFFLINE_FOR_SAME_DAY = "OFFLINE_FOR_SAME_DAY", "Offline for a same-day visit"
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,12 +106,21 @@ def unit_variant_ids(unit: FulfilmentUnit) -> tuple[UUID, ...]:
     )
 
 
+def is_same_day_unit(*, unit: FulfilmentUnit, now=None) -> bool:
+    """Same horizon as reachability (§7): within today's lead-time window from `now`."""
+
+    clock = timezone.now() if now is None else now
+    return unit.requested_start <= clock + timedelta(minutes=settings.M1_TODAY_LEAD_TIME_MINUTES)
+
+
 def _exclusions_for(
     *,
     candidate: PartnerProfile,
     unit: FulfilmentUnit,
     required: frozenset[str],
     attempted: frozenset[str],
+    online_partner_ids: frozenset[UUID],
+    require_online: bool,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
     application = getattr(candidate, "application", None)
@@ -115,6 +131,8 @@ def _exclusions_for(
         reasons.append(ExclusionReason.VARIANT_NOT_OFFERED)
     if str(candidate.id) in attempted:
         reasons.append(ExclusionReason.ALREADY_ATTEMPTED)
+    if require_online and candidate.id not in online_partner_ids:
+        reasons.append(ExclusionReason.OFFLINE_FOR_SAME_DAY)
     # Availability is read last and only for otherwise-eligible candidates: it is the one
     # check that costs a query per Partner, and a Partner excluded for the wrong service
     # does not need their calendar opened.
@@ -138,7 +156,7 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
             "candidate_id", flat=True
         )
     )
-    pool = (
+    pool = list(
         PartnerProfile.objects.filter(
             service_area_links__service_area=unit.service_area,
             service_area_links__is_active=True,
@@ -148,6 +166,15 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
         .distinct()
         .order_by("id")
     )
+    require_online = is_same_day_unit(unit=unit)
+    online_partner_ids: frozenset[UUID] = frozenset()
+    if require_online and pool:
+        online_partner_ids = frozenset(
+            PartnerOnlineSession.objects.filter(
+                partner_id__in=[partner.id for partner in pool],
+                ended_at__isnull=True,
+            ).values_list("partner_id", flat=True)
+        )
     return UnitRanking(
         evaluations=tuple(
             CandidateEvaluation(
@@ -157,6 +184,8 @@ def evaluate_unit_candidates(unit: FulfilmentUnit) -> UnitRanking:
                     unit=unit,
                     required=required,
                     attempted=attempted,
+                    online_partner_ids=online_partner_ids,
+                    require_online=require_online,
                 ),
             )
             for candidate in pool
