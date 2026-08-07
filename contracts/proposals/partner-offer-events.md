@@ -96,11 +96,38 @@ Keepalives, so intermediate proxies do not judge an idle connection dead:
 A comment frame carries no event and the client ignores it. `EventSource` does this
 natively.
 
-**Connection lifetime is capped** (see BE-6 for the number). The server closes; the
-browser's `EventSource` reconnects on its own. Clients must not treat a close as an
-error, and must not implement their own reconnect loop on top of `EventSource`'s.
+The first thing a new connection sends is `: connected`, so a client can tell an open
+stream from a stalled one without waiting a poll interval.
 
-**Only events addressed to the authenticated Partner are ever sent.**
+**Connection lifetime is capped** at `M1_OFFER_STREAM_MAX_SECONDS` (300). The server
+closes; the browser's `EventSource` reconnects on its own. Clients must not treat a
+close as an error, and must not implement their own reconnect loop on top of
+`EventSource`'s.
+
+**Only events addressed to the authenticated Partner are ever sent.** A suppressed
+intent — an engaged kill switch — is never streamed.
+
+### De-duplicate on `offer_id`
+
+An offer created between the client's list fetch and its stream connecting belongs to
+neither. So a new connection **replays** `M1_OFFER_STREAM_REPLAY_SECONDS` (30) of
+history, which means a client that reconnects can legitimately receive an
+`offer_created` it has already seen.
+
+This is not a bug to work around; it is the trade the endpoint makes so an offer is
+never silently missed. **Clients must treat `offer_id` as the identity of the event
+and ignore one they have already handled.** Since the handler's job is "invalidate the
+offers query and show a toast", a duplicate is harmless once de-duplicated, and a
+*missed* offer is not recoverable inside a 45-second window.
+
+### Latency and cost
+
+A partner learns about an offer within `M1_OFFER_STREAM_POLL_SECONDS` (2) — under 5%
+of the 45-second offer clock.
+
+Each open stream occupies **one WSGI worker thread** for its whole life. That is the
+ceiling on this design: past roughly a worker pool's worth of concurrently-online
+partners, this needs a real ASGI/push transport, and the answer is not a larger cap.
 
 ### Scope limit — read this before building against it
 

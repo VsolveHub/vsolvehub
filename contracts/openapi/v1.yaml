@@ -1125,7 +1125,7 @@ paths:
       description: |-
         72-hour quality dispute after auto-finalisation (spec §12).
 
-        Distinct from `CustomerCompletionDisputeView`, which covers the 0–24h window while a
+        Distinct from `CustomerCompletionDisputeView`, which covers the 0-24h window while a
         completion response is still pending. This path only opens once the visit was
         auto-finalised, and it holds the Partner payout without touching `cancel_booking`.
       parameters:
@@ -5428,6 +5428,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/offers/stream/:
+    get:
+      operationId: partner_offer_stream
+      description: |-
+        `GET /api/v1/partner/offers/stream/` — see the contract proposal.
+
+        Same authentication and permissions as `GET /api/v1/partner/offers/`.
+        `EventSource` cannot send custom headers, so this relies on the session cookie
+        the partner app already holds — which is also why the permission check happens
+        here, before the generator, rather than inside it.
+      tags:
+      - Partner
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          description: 'A `text/event-stream` of `offer_created` events. Each event''s
+            `data` is the notification context documented in contracts/proposals/partner-offer-events.md:
+            `offer_id`, `fulfilment_unit_id`, `requested_start`, `expires_at`. Comment
+            lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS
+            and the client reconnects.'
   /api/v1/partner/payout-account/:
     get:
       operationId: partner_payout_account_retrieve

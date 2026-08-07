@@ -181,6 +181,20 @@ M1_ARRIVAL_WINDOW_SHORT_MINUTES = 30
 M1_ARRIVAL_WINDOW_STANDARD_MINUTES = 60
 M1_ARRIVAL_WINDOW_LONG_MINUTES = 120
 M1_WINDOW_TOKEN_TTL_SECONDS = 15 * 60
+# Partner offer event stream (contracts/proposals/partner-offer-events.md).
+# 2: the offer clock is M1_PARTNER_OFFER_TIMEOUT_SECONDS (45), so a two-second
+# poll costs a partner at most 4% of their window — small next to the seconds a
+# human takes to read the card, and cheap enough to hold open.
+M1_OFFER_STREAM_POLL_SECONDS = 2
+# 300: every open stream occupies one WSGI worker thread for its whole life, so
+# the connection is capped rather than held forever and `EventSource` reconnects
+# on its own. Five minutes bounds a leaked connection's cost without making
+# reconnects frequent enough to matter.
+M1_OFFER_STREAM_MAX_SECONDS = 300
+# 30: an offer created between the client's list fetch and its stream connecting
+# belongs to neither, so a connection replays this far back. Clients de-duplicate
+# on `offer_id`; the contract document says so.
+M1_OFFER_STREAM_REPLAY_SECONDS = 30
 M1_QUOTE_TTL_SECONDS = 15 * 60
 M1_PARTNER_OFFER_TIMEOUT_SECONDS = 45
 M1_PARTNER_SEARCH_CANDIDATE_LIMIT = 3
