@@ -9,6 +9,7 @@ import { useBookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/checkout/view/money";
 
 import { paymentPhase, canReconcile, type PaymentAttempt } from "../model/outcome";
+import { SimulatedCapture } from "./simulated-capture";
 import { handoffTarget, openProviderCheckout } from "../model/provider-handoff";
 import {
   isNoAttemptStarted,
@@ -370,6 +371,13 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
             {phase === "not-charged" ? "Try payment again" : "Continue to payment"}
           </Button>
         </div>
+      ) : null}
+
+      {/* Only while a payment is genuinely outstanding. The control removes
+          itself entirely in any environment where Django does not publish the
+          endpoint. */}
+      {phase === "awaiting-customer" || phase === "not-charged" ? (
+        <SimulatedCapture attempt={attempt} />
       ) : null}
 
       <p className="mt-4 text-sm text-text-secondary">

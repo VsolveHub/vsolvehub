@@ -5665,6 +5665,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/payment-attempts/{attempt_id}/simulate-capture/:
+    post:
+      operationId: payment_attempt_simulate_capture
+      description: |-
+        Marks a payment captured with no gateway. Development only.
+
+        Published so the flow is drivable end to end without provider credentials.
+        It is fail-closed three ways — a settings flag off by default, a production
+        start-up guard that refuses to boot with it on, and a check that the attempt's
+        own provider is `fake` — and it runs the *real* capture path rather than
+        setting a status, so everything capture triggers actually happens.
+
+        `404` rather than `403` when disabled: an environment that does not do this
+        should not advertise that the door exists.
+      parameters:
+      - in: path
+        name: attempt_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Payments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttempt'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/payment-webhooks/razorpay/:
     post:
       operationId: payment_webhooks_razorpay_create

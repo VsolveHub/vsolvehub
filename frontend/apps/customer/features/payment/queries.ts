@@ -262,3 +262,46 @@ export function useTaxDocument(documentId: string | null) {
 export function serverNow(): Date {
   return new Date(serverClock.now());
 }
+
+/**
+ * Marks this payment captured with no gateway involved. Development only.
+ *
+ * Django publishes this endpoint only when `PAYMENTS_ALLOW_SIMULATED_CAPTURE` is
+ * on, refuses to boot with it on in production, and additionally requires the
+ * attempt's own provider to be `fake`. A `404` therefore means "this environment
+ * does not do that" rather than a failure, which is why the control below hides
+ * itself on one.
+ *
+ * It runs the real capture path server-side, so the poll that follows sees the
+ * same states a genuine provider webhook would produce. Nothing here shortcuts
+ * the outcome — `usePaymentAttempt` is still the only thing entitled to say what
+ * happened.
+ */
+export function useSimulateCapture() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (attemptId: string) =>
+      request(() =>
+        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+          params: { path: { attempt_id: attemptId } },
+        }),
+      ),
+    onSuccess: (attempt) => {
+      queryClient.setQueryData(queryKeys.payment.attempt(attempt.id), attempt);
+      queryClient.setQueryData(queryKeys.payment.forCheckout(attempt.checkout_id), attempt);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.booking.group(attempt.booking_group_id),
+      });
+      // Capture clears the booked items, so the cart the customer returns to has
+      // moved on.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.booking.cart() });
+    },
+    retry: false,
+  });
+}
+
+/** `404` from simulated capture: this environment does not offer it. */
+export function isSimulatedCaptureUnavailable(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 404;
+}

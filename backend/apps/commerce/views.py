@@ -5,13 +5,14 @@ import json
 from typing import cast
 from uuid import UUID
 
+from django.conf import settings
 from django.db.models import Prefetch
 from django.db.models.query import QuerySet
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -35,6 +36,7 @@ from apps.commerce.services import (
     reconcile_refund,
     record_verified_webhook,
     request_unit_refund,
+    simulate_capture,
 )
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
@@ -124,6 +126,51 @@ class PaymentAttemptDetailView(APIView):
     @extend_schema(tags=["Payments"], responses={200: PaymentAttemptSerializer})
     def get(self, request: Request, attempt_id: UUID) -> Response:
         user = cast(User, request.user)
+        attempt = get_object_or_404(
+            _payment_attempt_queryset(),
+            id=attempt_id,
+            checkout__customer=user,
+        )
+        return Response(PaymentAttemptSerializer(attempt).data)
+
+
+class SimulatedCaptureView(APIView):
+    """Marks a payment captured with no gateway. Development only.
+
+    Published so the flow is drivable end to end without provider credentials.
+    It is fail-closed three ways — a settings flag off by default, a production
+    start-up guard that refuses to boot with it on, and a check that the attempt's
+    own provider is `fake` — and it runs the *real* capture path rather than
+    setting a status, so everything capture triggers actually happens.
+
+    `404` rather than `403` when disabled: an environment that does not do this
+    should not advertise that the door exists.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Payments"],
+        operation_id="payment_attempt_simulate_capture",
+        request=None,
+        responses={
+            200: PaymentAttemptSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, attempt_id: UUID) -> Response:
+        if not settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE:
+            raise NotFound()
+        user = cast(User, request.user)
+        try:
+            simulate_capture(attempt_id=attempt_id, customer_id=user.id)
+        except PaymentAttempt.DoesNotExist as exc:
+            raise NotFound() from exc
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc)) from exc
+        except ValueError as exc:
+            raise ValidationError(str(exc), code="payment_not_ready") from exc
         attempt = get_object_or_404(
             _payment_attempt_queryset(),
             id=attempt_id,

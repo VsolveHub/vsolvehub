@@ -1049,3 +1049,56 @@ def reconcile_refund(*, refund_id: UUID) -> Refund:
             )
             return locked
     return _apply_refund_provider_result(provider_refund, refund_id=refund.id)
+
+
+@transaction.atomic
+def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
+    """Marks a payment captured with no gateway involved. Development only.
+
+    ## Why this routes through `apply_provider_payment`
+
+    It would be one line to set `attempt.status = CAPTURED` and return. That line
+    would also skip confirming the reservations, creating the `Order` and its
+    `Booking`s, issuing the tax document, clearing the booked cart items, and the
+    `capture_without_capacity` compensation — every one of which is triggered by
+    the real capture path. A stub that produces a "paid" booking nothing
+    downstream agrees is paid is worse than no stub: it makes development diverge
+    from production precisely where the money is.
+
+    So this fabricates the one thing that is genuinely missing — a provider
+    saying "captured" — and hands it to the same function a webhook would.
+
+    ## Three independent locks
+
+    The settings flag is fail-closed and `production.py` refuses to boot with it
+    on. Beyond that, the attempt's own provider must be `fake`: even if the flag
+    were somehow enabled against a real environment, a Razorpay attempt cannot be
+    captured through here. And the attempt must belong to the caller.
+    """
+    if not settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE:
+        raise PermissionError("Simulated capture is disabled in this environment.")
+
+    attempt = (
+        PaymentAttempt.objects.select_for_update(of=("self",))
+        .select_related("checkout")
+        .get(id=attempt_id)
+    )
+    # Ownership runs through the checkout, which is where it is recorded — the
+    # attempt itself carries no customer.
+    if attempt.checkout is None or attempt.checkout.customer_id != customer_id:
+        raise PermissionError("This payment belongs to another Customer.")
+    if attempt.provider != FakePaymentProvider.code:
+        raise PermissionError("Only a fake-provider payment can be captured by hand.")
+    if attempt.status in PAYMENT_FINAL_STATES:
+        # Already settled. Idempotent by re-reading rather than by charging again.
+        return Order.objects.filter(booking_group_id=attempt.booking_group_id).first()
+    if not attempt.provider_order_id:
+        raise ValueError("This payment has no provider order yet.")
+
+    payment = FakePaymentProvider.record_payment(
+        provider_payment_id=f"fake_pay_{attempt.id.hex}",
+        provider_order_id=attempt.provider_order_id,
+        amount_paise=attempt.amount_paise,
+        currency=attempt.currency,
+    )
+    return apply_provider_payment(payment=payment, provider_code=FakePaymentProvider.code)

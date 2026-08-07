@@ -284,6 +284,12 @@ OPERATIONS_STEP_UP_TTL_SECONDS = env.int("OPERATIONS_STEP_UP_TTL_SECONDS", defau
 
 PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="unconfigured")
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
+#: Lets a caller mark their own payment captured without a real provider.
+#:
+#: Fail-closed, and `production.py` refuses it outright. It exists so a developer
+#: can drive a booking through capture — and everything capture triggers — with no
+#: gateway credentials. Mirrors `PAYOUTS_ALLOW_FAKE_PROVIDER` on the payouts side.
+PAYMENTS_ALLOW_SIMULATED_CAPTURE = env.bool("PAYMENTS_ALLOW_SIMULATED_CAPTURE", default=False)
 RAZORPAY_API_BASE_URL = env("RAZORPAY_API_BASE_URL", default="https://api.razorpay.com/v1")
 RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
