@@ -250,6 +250,26 @@ describe("cancelling", () => {
     await screen.findByText(/this booking was cancelled/i);
 
     expect(screen.queryByRole("button", { name: /cancel this booking/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh now/i })).not.toBeInTheDocument();
+  });
+
+  it("removes refresh and cancellation controls entirely after the partner is on the way", async () => {
+    client.GET.mockResolvedValue(
+      ok(
+        group({
+          status: "MATCHING",
+          units: [
+            unit({ id: "fu-1", position: 0, status: "BOOKED", booking_status: "EN_ROUTE" }),
+          ],
+        }),
+      ),
+    );
+
+    renderDetail();
+    await screen.findByText(/your professional is on the way or work is in progress/i);
+
+    expect(screen.queryByRole("button", { name: /cancel this booking/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /refresh now/i })).not.toBeInTheDocument();
   });
 });
 

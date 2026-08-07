@@ -6337,6 +6337,26 @@ components:
       - message
       - request_id
       - retryable
+    AssignedProfessional:
+      type: object
+      description: |-
+        The person coming, as the Customer may see them.
+
+        Deliberately thin. A Partner's phone number, documents and application are
+        theirs; what a Customer needs is who is arriving and what they do. There is
+        no rating here because the platform has no review model yet — publishing a
+        number with nothing behind it would be worse than publishing none.
+      properties:
+        display_name:
+          type: string
+        headline:
+          type: string
+        experience_years:
+          type: integer
+      required:
+      - display_name
+      - experience_years
+      - headline
     AssistedCheckoutCreateRequest:
       type: object
       properties:
@@ -7990,6 +8010,17 @@ components:
           format: uuid
           nullable: true
           readOnly: true
+        booking_status:
+          nullable: true
+          readOnly: true
+          oneOf:
+          - $ref: '#/components/schemas/BookingStatusEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        professional:
+          allOf:
+          - $ref: '#/components/schemas/AssignedProfessional'
+          nullable: true
+          readOnly: true
         lines:
           type: array
           items:
@@ -8002,10 +8033,12 @@ components:
       required:
       - arrival_window_minutes
       - booking_id
+      - booking_status
       - estimated_duration_minutes
       - id
       - lines
       - position
+      - professional
       - starts_at
       - state_deadline
       - status

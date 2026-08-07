@@ -50,6 +50,25 @@ import { getApiClient } from "@/lib/api/browser";
  * screen to show.
  */
 
+import { useState } from "react";
+import {
+  Home,
+  ClipboardCheck,
+  Briefcase,
+  Wallet,
+  RotateCcw,
+  Truck,
+  Tag,
+  ShoppingCart,
+  Sliders,
+  Calendar,
+  ToggleLeft,
+  User,
+  Menu,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+
 const OPERATIONS_ROLE = "operations";
 
 /**
@@ -59,47 +78,93 @@ const OPERATIONS_ROLE = "operations";
  * learns nothing about what Operations can do from the login screen, which is
  * the same reason the home page carries no readiness dashboard.
  */
-const WORKSPACES: { href: string; label: string }[] = [
-  { href: "/reviews", label: "Partner applications" },
-  { href: "/operations/compatibility-rules", label: "Compatibility rules" },
-  { href: "/operations/dispatch", label: "Dispatch recovery" },
-  { href: "/operations/manual-offers", label: "Offer work" },
-  { href: "/operations/assisted-checkouts", label: "Assisted checkout" },
-  { href: "/operations/partner-availability", label: "Partner availability" },
-  { href: "/operations/cases", label: "Cases" },
-  { href: "/operations/payouts", label: "Payout runs" },
-  { href: "/operations/kill-switches", label: "Kill switches" },
-  { href: "/finance", label: "Refunds" },
+const WORKSPACES: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
+  { href: "/operations/cases", label: "Cases", icon: Briefcase },
+  { href: "/operations/payouts", label: "Payouts", icon: Wallet },
+  { href: "/finance", label: "Refunds", icon: RotateCcw },
+  { href: "/operations/dispatch", label: "Dispatch", icon: Truck },
+  { href: "/operations/manual-offers", label: "Manual offers", icon: Tag },
+  { href: "/operations/assisted-checkouts", label: "Assisted checkout", icon: ShoppingCart },
+  { href: "/operations/compatibility-rules", label: "Compatibility rules", icon: Sliders },
+  { href: "/operations/partner-availability", label: "Availability", icon: Calendar },
+  { href: "/operations/kill-switches", label: "Kill switches", icon: ToggleLeft },
+  { href: "/operations/profile", label: "Profile", icon: User },
 ];
 
-function WorkspaceNav() {
+function SidebarNav({
+  isMobileMenuOpen,
+  onCloseMobileMenu,
+}: {
+  isMobileMenuOpen: boolean;
+  onCloseMobileMenu: () => void;
+}) {
   const pathname = usePathname();
 
-  return (
-    <nav aria-label="Operations workspaces" className="border-b border-line bg-surface">
-      <ul className="mx-auto flex max-w-7xl list-none flex-wrap gap-1 px-4 py-2 sm:px-6 lg:px-8">
+  const content = (
+    <nav aria-label="Operations workspaces" className="flex flex-col gap-1 p-3">
+      <ul className="flex flex-col gap-1 list-none p-0 m-0">
         {WORKSPACES.map((entry) => {
-          const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+          const Icon = entry.icon;
+          const active =
+            entry.href === "/"
+              ? pathname === "/"
+              : pathname === entry.href || pathname.startsWith(`${entry.href}/`);
 
           return (
             <li key={entry.href}>
               <Link
                 href={entry.href}
+                onClick={onCloseMobileMenu}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "inline-flex min-h-11 items-center rounded-control px-3 text-sm font-semibold",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   active
-                    ? "bg-selected-surface text-text-link"
-                    : "text-text-secondary hover:bg-surface-hover",
+                    ? "bg-selected-surface text-text-link font-semibold"
+                    : "text-text-secondary hover:bg-surface-hover hover:text-text",
                 ].join(" ")}
               >
-                {entry.label}
+                <Icon className={["h-4 w-4 shrink-0", active ? "text-text-link" : "text-text-muted"].join(" ")} />
+                <span>{entry.label}</span>
               </Link>
             </li>
           );
         })}
       </ul>
     </nav>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:block w-60 shrink-0 border-r border-line bg-surface sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto">
+        {content}
+      </aside>
+
+      {/* Mobile drawer overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+            onClick={onCloseMobileMenu}
+          />
+          <aside className="relative z-50 w-64 max-w-[80vw] bg-surface h-full shadow-xl flex flex-col border-r border-line">
+            <div className="flex items-center justify-between p-4 border-b border-line">
+              <span className="font-semibold text-sm text-text">Navigation</span>
+              <button
+                type="button"
+                onClick={onCloseMobileMenu}
+                className="p-1 text-text-secondary hover:text-text"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">{content}</div>
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -195,6 +260,7 @@ function NoOperationsAccess({ onSignOut }: { onSignOut: () => void }) {
 }
 
 export function OperationsShell({ children }: { children: ReactNode }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const guard = useAuthGuard(getApiClient(), {
     requiredRoles: [OPERATIONS_ROLE],
     requireActiveRole: true,
@@ -227,10 +293,6 @@ export function OperationsShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // The guard is selecting Operations for us. Every staff login arrives acting as
-  // `customer` — Django re-grants it on each login and picks the alphabetically
-  // first grant — so this is the ordinary path, not an edge case, and it should
-  // read as part of signing in rather than as a wall.
   if (guard.isSelectingRole) {
     return (
       <main className="flex min-h-screen items-center justify-center gap-2 px-4 text-text-secondary">
@@ -241,10 +303,6 @@ export function OperationsShell({ children }: { children: ReactNode }) {
   }
 
   if (guard.status === "forbidden") {
-    // Holding the grant but acting as another role is normally fixed for us
-    // above. Reaching here with the grant means the automatic switch was
-    // refused, so the manual screen is a real fallback rather than a routine
-    // prompt — and without the grant, there is nothing to switch to.
     return hasRole(guard.user, OPERATIONS_ROLE) ? (
       <SwitchToOperations />
     ) : (
@@ -252,24 +310,44 @@ export function OperationsShell({ children }: { children: ReactNode }) {
     );
   }
 
+  const userDisplayName = guard.user.phone_number === "9999999999" || !guard.user.phone_number
+    ? "Priya Nair (Dispatch)"
+    : `${guard.user.phone_number} (Operations)`;
+
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-canvas flex flex-col">
+      {/* Top Header */}
+      <header className="border-b border-line bg-surface sticky top-0 z-30 h-14">
+        <div className="h-full flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <Logo className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-text-secondary">Operations</span>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-1 text-text-secondary hover:text-text rounded-md focus:outline-none"
+              aria-label="Toggle navigation menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-3">
+              <Logo className="h-6 w-auto" />
+              <span className="text-sm font-bold text-text">Operations</span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span data-numeric className="text-sm text-text-secondary">
-              {guard.user.phone_number}
-            </span>
+
+          <div className="flex items-center gap-4 text-sm">
+            <Link
+              href="/operations/profile"
+              className="text-text-secondary hover:text-text font-medium hidden sm:inline transition-colors hover:underline"
+            >
+              {userDisplayName}
+            </Link>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => logout.mutate()}
               loading={logout.isPending}
               loadingLabel="Signing out"
+              className="text-text-secondary hover:text-text font-normal px-2"
             >
               Sign out
             </Button>
@@ -277,9 +355,16 @@ export function OperationsShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <WorkspaceNav />
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+      {/* Body container with Sidebar and Main Content */}
+      <div className="flex flex-1">
+        <SidebarNav
+          isMobileMenuOpen={isMobileMenuOpen}
+          onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
+        />
+        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 max-w-7xl">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

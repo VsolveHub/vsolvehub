@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: e71fec44d65d1618
+ * Checksum: c2d6f76fe254661e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2127,6 +2127,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payment-attempts/{attempt_id}/simulate-capture/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Marks a payment captured with no gateway. Development only.
+         *
+         *     Published so the flow is drivable end to end without provider credentials.
+         *     It is fail-closed three ways — a settings flag off by default, a production
+         *     start-up guard that refuses to boot with it on, and a check that the attempt's
+         *     own provider is `fake` — and it runs the *real* capture path rather than
+         *     setting a status, so everything capture triggers actually happens.
+         *
+         *     `404` rather than `403` when disabled: an environment that does not do this
+         *     should not advertise that the door exists.
+         */
+        post: operations["payment_attempt_simulate_capture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-webhooks/razorpay/": {
         parameters: {
             query?: never;
@@ -2412,6 +2440,19 @@ export interface components {
             readonly details: unknown;
             readonly retryable: boolean;
             readonly request_id: string | null;
+        };
+        /**
+         * @description The person coming, as the Customer may see them.
+         *
+         *     Deliberately thin. A Partner's phone number, documents and application are
+         *     theirs; what a Customer needs is who is arriving and what they do. There is
+         *     no rating here because the platform has no review model yet — publishing a
+         *     number with nothing behind it would be worse than publishing none.
+         */
+        AssignedProfessional: {
+            display_name: string;
+            headline: string;
+            experience_years: number;
         };
         AssistedCheckoutCreateRequest: {
             /** Format: uuid */
@@ -3059,6 +3100,8 @@ export interface components {
             readonly state_deadline: string | null;
             /** Format: uuid */
             readonly booking_id: string | null;
+            readonly booking_status: (components["schemas"]["BookingStatusEnum"] | components["schemas"]["NullEnum"]) | null;
+            readonly professional: components["schemas"]["AssignedProfessional"] | null;
             readonly lines: components["schemas"]["FulfilmentUnitLine"][];
             readonly total: components["schemas"]["Money"];
         };
@@ -4148,6 +4191,7 @@ export interface components {
             readonly purpose: components["schemas"]["PurposeEnum"];
             readonly provider: string;
             readonly provider_public_key: string | null;
+            readonly simulated_capture_available: boolean;
             readonly provider_order_id: string;
             readonly status: components["schemas"]["PaymentAttemptStatusEnum"];
             readonly reconciliation_state: components["schemas"]["ReconciliationStateEnum"];
@@ -10485,6 +10529,43 @@ export interface operations {
                 };
             };
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    payment_attempt_simulate_capture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentAttempt"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

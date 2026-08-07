@@ -126,16 +126,18 @@ describe("the workspaces", () => {
     const hrefs = Array.from(nav.querySelectorAll("a")).map((link) => link.getAttribute("href"));
 
     expect(hrefs).toEqual([
+      "/",
       "/reviews",
-      "/operations/compatibility-rules",
+      "/operations/cases",
+      "/operations/payouts",
+      "/finance",
       "/operations/dispatch",
       "/operations/manual-offers",
       "/operations/assisted-checkouts",
+      "/operations/compatibility-rules",
       "/operations/partner-availability",
-      "/operations/cases",
-      "/operations/payouts",
       "/operations/kill-switches",
-      "/finance",
+      "/operations/profile",
     ]);
   });
 

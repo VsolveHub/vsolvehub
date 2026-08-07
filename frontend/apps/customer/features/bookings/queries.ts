@@ -75,6 +75,27 @@ export function isTerminal(group: BookingGroup): boolean {
   return TERMINAL_STATUSES.includes(group.status);
 }
 
+const ON_THE_WAY_STATUSES: readonly string[] = [
+  "EN_ROUTE",
+  "ARRIVED",
+  "IN_PROGRESS",
+  "COMPLETION_SUBMITTED",
+  "COMPLETED",
+  "PARTIALLY_COMPLETED",
+  "DISPUTED",
+  "ABORTED",
+];
+
+/** Check if partner has set off (EN_ROUTE) or work/booking is in progress or completed. */
+export function isPartnerOnTheWayOrBeyond(group: BookingGroup): boolean {
+  if (group.status === "COMPLETED" || isTerminal(group)) {
+    return true;
+  }
+  return group.units.some((unit) =>
+    unit.booking_status ? ON_THE_WAY_STATUSES.includes(unit.booking_status) : false,
+  );
+}
+
 /** `400 cursor_invalid` — restart from page one rather than truncating silently. */
 export function isCursorInvalid(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "cursor_invalid";

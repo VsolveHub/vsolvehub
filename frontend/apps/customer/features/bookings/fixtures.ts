@@ -39,6 +39,11 @@ export function unit(overrides: Partial<Schemas["FulfilmentUnit"]> = {}) {
     // group has been paid for. A test wanting the "Track this visit" link
     // supplies both a booked status and an id, so the two cannot drift apart.
     booking_id: null,
+    // Null for the same reason `booking_id` is: nobody is assigned until the
+    // group has been paid for, and a fixture that names a professional early
+    // would let a test assert a card the product must not render.
+    booking_status: null,
+    professional: null,
     lines: [unitLine()],
     total: money(31742),
     ...overrides,

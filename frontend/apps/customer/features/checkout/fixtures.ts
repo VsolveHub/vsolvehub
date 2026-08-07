@@ -187,6 +187,8 @@ export function fulfilmentUnit(overrides: Partial<Schemas["FulfilmentUnit"]> = {
     // no Booking, and a fixture that always supplied one would let a test pass
     // against a link the real projection cannot yet produce.
     booking_id: null,
+    booking_status: null,
+    professional: null,
     lines: [fulfilmentUnitLine()],
     total: money(31742),
     ...overrides,

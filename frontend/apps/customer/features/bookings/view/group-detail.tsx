@@ -7,9 +7,14 @@ import { useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
 
+import { ProfessionalCard } from "./professional-card";
+import { VisitProgress } from "./visit-progress";
+import { VisitStartCode } from "./visit-start-code";
+
 import {
   isCancellationRefused,
   isGroupVersionConflict,
+  isPartnerOnTheWayOrBeyond,
   isTerminal,
   useBookingGroup,
   useCancelBookingGroup,
@@ -38,12 +43,16 @@ import {
  * singleton progression path and is deliberately never called from here; the
  * boundary test asserts that it stays that way.
  *
- * ## Partner identity is absent by construction
+ * ## What the Customer is told about the Partner
  *
- * The Customer projection carries no Partner name, phone or rating, so there is
- * nothing to hide here — the safety property lives in the contract. What this
- * component must not do is invent a stand-in ("your professional is on the way")
- * for someone who has not accepted, so unit copy stays about the *unit*.
+ * Since contract 1.20.0 a unit publishes `professional` — display name, a
+ * headline built from their approved services, and years of experience — but
+ * only once a Booking exists. Somebody letting a stranger into their home is
+ * entitled to know who is arriving.
+ *
+ * `null` until assignment, and this component must not invent a stand-in for
+ * someone who has not accepted — unit copy stays about the *unit* until there is
+ * a real person to name.
  */
 
 function formatWhen(instant: string): string {
@@ -77,7 +86,7 @@ function UnitCard({
   const deadline = useServerCountdown(unit.state_deadline, 1000);
 
   return (
-    <li className="rounded-card border border-line bg-surface p-4">
+    <li className="rounded-card border border-line bg-surface p-4 transition-all hover:border-line-strong shadow-xs">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-text">
           Visit {index + 1} of {total}
@@ -93,9 +102,6 @@ function UnitCard({
 
       {deadline && !deadline.isExpired ? (
         <p className="mt-1 text-sm text-text-secondary">
-          {/* Server-clock derived. The digits are hidden from assistive tech and
-              replaced with a coarse phrase, so a screen reader is not read a new
-              number every second. */}
           <span aria-hidden data-numeric>
             {deadline.display}
           </span>
@@ -104,7 +110,26 @@ function UnitCard({
         </p>
       ) : null}
 
-      <ul className="mt-3 flex flex-col gap-1 text-sm">
+      {/* Where the visit has got to, and who is bringing it. */}
+      {unit.booking_status ? (
+        <div className="mt-3">
+          <VisitProgress status={unit.booking_status} />
+        </div>
+      ) : null}
+
+      {unit.booking_id && unit.booking_status ? (
+        <div className="mt-3">
+          <VisitStartCode bookingId={unit.booking_id} status={unit.booking_status} />
+        </div>
+      ) : null}
+
+      {unit.professional ? (
+        <div className="mt-3">
+          <ProfessionalCard professional={unit.professional} />
+        </div>
+      ) : null}
+
+      <ul className="mt-4 flex flex-col gap-1 border-t border-line pt-3 text-sm">
         {unit.lines.map((line) => (
           <li key={line.id} className="flex justify-between gap-3">
             <span className="text-text">
@@ -125,9 +150,7 @@ function UnitCard({
         <Money value={unit.total} className="tabular-nums" />
       </p>
 
-      {/* Only once the unit has become a real Booking. Before capture there is no
-          visit to open, and `booking_id` is null — rendering a link to nothing is
-          how a customer ends up on a 403 wondering what they did wrong. */}
+      {/* Only once the unit has become a real Booking. */}
       {unit.booking_id ? (
         <Link
           href={`/bookings/${groupId}/visits/${unit.booking_id}`}
@@ -140,15 +163,19 @@ function UnitCard({
   );
 }
 
+const CANCELLATION_REASONS = [
+  "Wait time is too long / Schedule conflict",
+  "Booked by mistake",
+  "Found an alternative service provider",
+  "Pricing or budget concerns",
+  "Need to change service details or address",
+  "Other reason",
+];
+
 /**
- * The cancellation confirmation.
- *
- * A dialog rather than an inline button because cancelling releases holds that
- * Partners have already answered, and it cannot be undone from here. It states
- * what happens to the *whole* booking, since under `ALL_OR_NOTHING` there is no
- * such thing as cancelling one visit.
+ * Cancellation support dialog & feedback collection mockup.
  */
-function CancelDialog({
+function CancelSupportDialog({
   group,
   isOpen,
   isCancelling,
@@ -160,37 +187,102 @@ function CancelDialog({
   isOpen: boolean;
   isCancelling: boolean;
   errorMessage: string | null;
-  onConfirm: () => void;
+  onConfirm: (reason: string, feedback: string) => void;
   onClose: () => void;
 }) {
+  const assignedProfessional = group.units.find((u) => u.professional != null)?.professional;
+  const isPartnerAssigned = Boolean(assignedProfessional);
+  const [selectedReason, setSelectedReason] = useState(CANCELLATION_REASONS[0]);
+  const [feedbackText, setFeedbackText] = useState("");
+
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(next) => {
         if (!next && !isCancelling) onClose();
       }}
-      // Dismissing mid-request would leave the customer unsure whether it went
-      // through, which is the one case the platform says not to make dismissable.
       dismissable={!isCancelling}
       title="Cancel this booking?"
       description={`All ${group.units.length} ${
         group.units.length === 1 ? "visit" : "visits"
       } will be cancelled together. Nothing has been charged, so there is nothing to refund.`}
     >
-      <div className="p-5">
-        <p className="text-sm text-text-secondary">
-          Any professional we have already held for you will be released. If you want these
-          services later you will need to book again, and the price may differ.
-        </p>
+      <div className="p-5 space-y-4">
+        {/* Partner assignment context */}
+        <div className="rounded-md border border-line bg-surface-sunken p-3 text-sm">
+          <div className="flex items-center justify-between font-semibold text-text">
+            <span>Assignment Status</span>
+            <span
+              className={`inline-block rounded px-2 py-0.5 text-xs font-bold ${
+                isPartnerAssigned ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {isPartnerAssigned ? "Partner Assigned" : "Searching for Partner"}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-text-secondary">
+            {isPartnerAssigned
+              ? `Professional ${assignedProfessional?.display_name} is reserved for your service. Cancelling now will release their hold.`
+              : "We are matching your request with nearby service professionals."}
+          </p>
+        </div>
+
+        {/* Cancellation reason feedback selection */}
+        <div>
+          <label className="block text-sm font-semibold text-text mb-2">
+            Why do you want to cancel?
+          </label>
+          <div className="space-y-1.5">
+            {CANCELLATION_REASONS.map((reason) => (
+              <label
+                key={reason}
+                className={`flex items-center gap-3 rounded-md border p-2.5 text-sm cursor-pointer transition-colors ${
+                  selectedReason === reason
+                    ? "border-brand-600 bg-brand-50/20 font-medium"
+                    : "border-line bg-surface hover:bg-surface-sunken"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="cancellation-reason"
+                  checked={selectedReason === reason}
+                  onChange={() => setSelectedReason(reason)}
+                  className="accent-brand-600"
+                />
+                <span>{reason}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Detailed feedback text */}
+        <div>
+          <label htmlFor="cancellation-feedback" className="block text-sm font-semibold text-text mb-1">
+            Additional Feedback (Optional)
+          </label>
+          <textarea
+            id="cancellation-feedback"
+            rows={2}
+            className="w-full rounded-md border border-line bg-surface p-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-brand-600"
+            placeholder="Help us improve by telling us what went wrong..."
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+          />
+        </div>
 
         {errorMessage !== null ? (
-          <p className="mt-4 text-sm text-critical" role="alert">
+          <p className="text-sm text-critical" role="alert">
             {errorMessage}
           </p>
         ) : null}
 
-        <div className="mt-5 flex flex-wrap gap-3">
-          <Button variant="danger" onClick={onConfirm} loading={isCancelling} loadingLabel="Cancelling">
+        <div className="mt-5 flex flex-wrap gap-3 pt-2 border-t border-line">
+          <Button
+            variant="danger"
+            onClick={() => onConfirm(selectedReason, feedbackText)}
+            loading={isCancelling}
+            loadingLabel="Cancelling"
+          >
             Cancel this booking
           </Button>
           <Button variant="outline" onClick={onClose} disabled={isCancelling}>
@@ -231,7 +323,9 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
     );
   }
 
-  const canCancel = !isTerminal(group);
+  const isPartnerOnTheWay = isPartnerOnTheWayOrBeyond(group);
+  const canCancel = !isTerminal(group) && !isPartnerOnTheWay;
+  const canRefresh = !isTerminal(group) && !isPartnerOnTheWay;
 
   function describeCancelFailure(error: unknown): string {
     if (isGroupVersionConflict(error)) {
@@ -244,62 +338,61 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-text">
-            {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Booked {formatWhen(group.created_at)}
+    <div className="space-y-4">
+      {/* Header section with status badge */}
+      <div className="rounded-card border border-line bg-surface p-5 shadow-xs">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-text">
+              {group.units.length} {group.units.length === 1 ? "visit" : "visits"}
+            </h1>
+            <p className="mt-1 text-sm text-text-secondary">
+              Booked {formatWhen(group.created_at)}
+            </p>
+          </div>
+          <GroupStatusBadge group={group} />
+        </div>
+
+        <div className="mt-4">
+          <AssignmentProgress group={group} />
+        </div>
+
+        {group.order_id !== null ? (
+          <div className="mt-4">
+            <Link
+              href={`/bookings/${group.id}/receipt`}
+              className={buttonStyles({ variant: "outline" })}
+            >
+              View your receipt
+            </Link>
+          </div>
+        ) : null}
+
+        {expiry && !expiry.isExpired && !isTerminal(group) ? (
+          <p className="mt-3 text-sm text-text-secondary">
+            <span aria-hidden data-numeric>
+              {expiry.display}
+            </span>
+            <span className="sr-only">{expiry.announce}</span>
+            <span> before this booking expires if we cannot fill every visit</span>
           </p>
-        </div>
-        <GroupStatusBadge group={group} />
-      </div>
+        ) : null}
 
-      {/* The wait between Confirm and Pay is a step of the flow, not a
-          footnote: how far the search has got, the all-or-nothing rule stated
-          where it matters, and the one control the server is asking for. */}
-      <div className="mt-4">
-        <AssignmentProgress group={group} />
-      </div>
-
-      {/* Paid. The receipt is reachable for as long as the order exists, which
-          outlives every state the group above will pass through. */}
-      {group.order_id !== null ? (
-        <div className="mt-3">
-          <Link
-            href={`/bookings/${group.id}/receipt`}
-            className={buttonStyles({ variant: "outline" })}
-          >
-            View your receipt
-          </Link>
-        </div>
-      ) : null}
-
-      {expiry && !expiry.isExpired && !isTerminal(group) ? (
-        <p className="mt-3 text-sm text-text-secondary">
-          <span aria-hidden data-numeric>
-            {expiry.display}
-          </span>
-          <span className="sr-only">{expiry.announce}</span>
-          <span> before this booking expires if we cannot fill every visit</span>
+        <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
+          {groupQuery.isFetching
+            ? "Checking for updates…"
+            : groupQuery.isError
+              ? "We could not check for updates just now."
+              : isTerminal(group)
+                ? "This booking is finished, so it will not change again."
+                : isPartnerOnTheWay
+                  ? "Your professional is on the way or work is in progress."
+                  : "Updating automatically. You can close this page — it keeps going without it."}
         </p>
-      ) : null}
+      </div>
 
-      {/* Freshness, stated rather than implied. A screen that silently stopped
-          updating would look identical to one that is up to date. */}
-      <p className="mt-3 text-xs text-text-secondary" aria-live="polite">
-        {groupQuery.isFetching
-          ? "Checking for updates…"
-          : groupQuery.isError
-            ? "We could not check for updates just now."
-            : isTerminal(group)
-              ? "This booking is finished, so it will not change again."
-              : "Updating automatically. You can close this page — it keeps going without it."}
-      </p>
-
-      <ul className="mt-5 flex flex-col gap-3">
+      {/* Unit list */}
+      <ul className="flex flex-col gap-3">
         {group.units.map((unit, index) => (
           <UnitCard
             key={unit.id}
@@ -311,21 +404,22 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         ))}
       </ul>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
-          Refresh now
-        </Button>
-        {canCancel ? (
-          <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
-            Cancel this booking
-          </Button>
-        ) : null}
-      </div>
+      {/* Action controls: Refresh & Cancel only available BEFORE partner is on the way & before terminal state */}
+      {canRefresh || canCancel ? (
+        <div className="mt-6 flex flex-wrap gap-3">
+          {canRefresh ? (
+            <Button variant="outline" onClick={() => void groupQuery.refetch()} disabled={groupQuery.isFetching}>
+              Refresh now
+            </Button>
+          ) : null}
+          {canCancel ? (
+            <Button variant="ghost" onClick={() => setIsCancelOpen(true)}>
+              Cancel this booking
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
-      {/* Only once the dialog has closed. `showModal()` makes this inert while
-          the dialog is open, so a second copy of the same message is unreadable
-          and unreachable there — and is then announced twice the moment the
-          dialog goes away. The dialog carries its own copy. */}
       {cancelGroup.isError && !isCancelOpen ? (
         <p className="mt-3 text-sm text-critical" role="alert">
           {describeCancelFailure(cancelGroup.error)}
@@ -336,12 +430,12 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
         Reference <span className="font-mono tabular-nums">{group.id}</span>
       </p>
 
-      <CancelDialog
+      <CancelSupportDialog
         group={group}
         isOpen={isCancelOpen}
         isCancelling={cancelGroup.isPending}
         errorMessage={cancelGroup.isError ? describeCancelFailure(cancelGroup.error) : null}
-        onConfirm={() =>
+        onConfirm={(_reason, _feedback) =>
           cancelGroup.mutate(
             { groupId: group.id, expectedVersion: group.version },
             { onSuccess: () => setIsCancelOpen(false) },

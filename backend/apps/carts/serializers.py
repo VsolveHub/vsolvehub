@@ -23,6 +23,8 @@ from apps.carts.models import (
 )
 from apps.carts.services import BookingWindow, BookingWindowDay, BookingWindows
 from apps.catalog.serializers import ServiceCardSerializer
+from apps.commerce.models import Booking
+from apps.partners.models import PartnerProfile
 from common.serializers import MoneySerializer
 
 
@@ -731,12 +733,44 @@ class FulfilmentUnitLineSerializer(serializers.ModelSerializer[FulfilmentUnitLin
         return {"amount_paise": line.amount_paise, "currency": line.currency}
 
 
+def _professional_headline(partner: PartnerProfile) -> str:
+    """A one-line credential: what this Partner is approved to do.
+
+    Built from their active service links rather than a free-text title, so it
+    cannot claim a skill Operations has not approved. Empty when they have none,
+    and the view renders nothing rather than an empty pair of quotes.
+    """
+    names = sorted(
+        {link.variant.service.name for link in partner.service_links.all() if link.is_active}
+    )
+    if not names:
+        return ""
+    return names[0] if len(names) == 1 else f"{names[0]} +{len(names) - 1} more"
+
+
+class AssignedProfessionalSerializer(serializers.Serializer[dict[str, object]]):
+    """The person coming, as the Customer may see them.
+
+    Deliberately thin. A Partner's phone number, documents and application are
+    theirs; what a Customer needs is who is arriving and what they do. There is
+    no rating here because the platform has no review model yet — publishing a
+    number with nothing behind it would be worse than publishing none.
+    """
+
+    display_name = serializers.CharField()
+    #: What they are approved to do, for a one-line credential under the name.
+    headline = serializers.CharField(allow_blank=True)
+    experience_years = serializers.IntegerField()
+
+
 class FulfilmentUnitSerializer(serializers.ModelSerializer[FulfilmentUnit]):
     lines = FulfilmentUnitLineSerializer(many=True, read_only=True)
     starts_at = serializers.DateTimeField(source="requested_start", read_only=True)
     total = serializers.SerializerMethodField()
     state_deadline = serializers.SerializerMethodField()
     booking_id = serializers.SerializerMethodField()
+    professional = serializers.SerializerMethodField()
+    booking_status = serializers.SerializerMethodField()
 
     class Meta:
         model = FulfilmentUnit
@@ -750,10 +784,51 @@ class FulfilmentUnitSerializer(serializers.ModelSerializer[FulfilmentUnit]):
             "estimated_duration_minutes",
             "state_deadline",
             "booking_id",
+            "booking_status",
+            "professional",
             "lines",
             "total",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.ChoiceField(choices=Booking.Status.choices, allow_null=True))
+    def get_booking_status(unit: FulfilmentUnit) -> str | None:
+        """How far the actual visit has got.
+
+        A unit's own status stops at `BOOKED` — everything after that (`EN_ROUTE`,
+        `ARRIVED`, `IN_PROGRESS`, `COMPLETED`) belongs to the Booking. Without
+        this the group screen can say a visit is booked but never that somebody is
+        on their way, which is the only question a Customer waiting at home is
+        actually asking.
+
+        `null` until the unit becomes a Booking at capture.
+        """
+        booking = getattr(unit, "booking", None)
+        return None if booking is None else str(booking.status)
+
+    @staticmethod
+    @extend_schema_field(AssignedProfessionalSerializer(allow_null=True))
+    def get_professional(unit: FulfilmentUnit) -> dict[str, object] | None:
+        """Who is coming, once somebody actually is.
+
+        `null` until a Booking exists — before capture nobody is assigned, and a
+        placeholder professional is exactly the kind of invented certainty that
+        makes a Customer plan around a person who may never turn up.
+
+        Read from the Booking rather than a held Reservation for the same reason:
+        a reservation can still be released, and the Customer should not be shown
+        a name that is not yet a commitment.
+        """
+        booking = getattr(unit, "booking", None)
+        if booking is None:
+            return None
+        partner = booking.partner
+        return {
+            "display_name": partner.display_name,
+            "headline": _professional_headline(partner),
+            "experience_years": partner.experience_years,
+        }
 
     @staticmethod
     @extend_schema_field(serializers.UUIDField(allow_null=True))

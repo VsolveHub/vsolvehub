@@ -135,7 +135,12 @@ class BookingGroupCollectionView(APIView):
             # entry fields (proposal 0011); without them the list costs two extra
             # queries per row.
             .select_related("quote", "checkout", "order")
-            .prefetch_related("units__lines", "units__offers", "units__reservations")
+            .prefetch_related(
+                "units__lines",
+                "units__offers",
+                "units__reservations",
+                "units__booking__partner__service_links__variant__service",
+            )
         )
         paginator = BookingGroupCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -157,7 +162,10 @@ class BookingGroupDetailView(APIView):
     def get(self, request: Request, group_id: UUID) -> Response:
         group = get_object_or_404(
             BookingGroup.objects.select_related("checkout", "order").prefetch_related(
-                "units__lines", "units__offers", "units__reservations"
+                "units__lines",
+                "units__offers",
+                "units__reservations",
+                "units__booking__partner__service_links__variant__service",
             ),
             id=group_id,
             customer=request.user,
