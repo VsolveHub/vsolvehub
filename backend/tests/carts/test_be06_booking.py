@@ -12,9 +12,9 @@ from apps.carts.exceptions import CartItemLimitReachedApiError
 from apps.carts.models import Cart, CartItem, Quote
 from apps.carts.services import replace_cart_item
 from apps.catalog.models import ServiceVariant
-from tests.carts.test_checkout import seed_available_partner
 from apps.identity.models import User
 from apps.locations.models import ServiceAreaOperatingWindow
+from tests.carts.test_checkout import seed_available_partner
 
 pytestmark = pytest.mark.django_db
 EXPECTED_BOOKING_DAY_COUNT = 8
