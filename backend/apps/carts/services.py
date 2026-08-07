@@ -87,6 +87,7 @@ class BookingWindows:
     server_now: datetime
     estimated_duration_minutes: int
     availability_is_preliminary: bool
+    timezone: str
     days: tuple[BookingWindowDay, ...]
 
 
@@ -831,6 +832,7 @@ def create_booking_windows(
         server_now=now,
         estimated_duration_minutes=duration,
         availability_is_preliminary=True,
+        timezone=area.timezone,
         days=tuple(days),
     )
 

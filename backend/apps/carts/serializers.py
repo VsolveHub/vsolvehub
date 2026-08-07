@@ -568,6 +568,7 @@ class BookingWindowsSerializer(serializers.Serializer[BookingWindows]):
     server_now = serializers.DateTimeField(read_only=True)
     estimated_duration_minutes = serializers.IntegerField(read_only=True)
     availability_is_preliminary = serializers.BooleanField(read_only=True)
+    timezone = serializers.CharField(read_only=True)
     days = BookingWindowDaySerializer(many=True, read_only=True)
 
 

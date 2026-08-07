@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 12442d775dd86a55
+ * Checksum: 2b99fe5dc27b8e5e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -409,6 +409,29 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["booking_completion_dispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/quality-dispute/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description 72-hour quality dispute after auto-finalisation (spec §12).
+         *
+         *     Distinct from `CustomerCompletionDisputeView`, which covers the 0–24h window while a
+         *     completion response is still pending. This path only opens once the visit was
+         *     auto-finalised, and it holds the Partner payout without touching `cancel_booking`.
+         */
+        post: operations["booking_quality_dispute"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2593,6 +2616,7 @@ export interface components {
             readonly server_now: string;
             readonly estimated_duration_minutes: number;
             readonly availability_is_preliminary: boolean;
+            readonly timezone: string;
             readonly days: components["schemas"]["BookingWindowDay"][];
         };
         BookingWindowsRequestRequest: {
@@ -6123,6 +6147,68 @@ export interface operations {
                 "application/json": components["schemas"]["DisputeCompletionRequestRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["DisputeCompletionRequestRequest"];
                 "multipart/form-data": components["schemas"]["DisputeCompletionRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_quality_dispute: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReasonedCommandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReasonedCommandRequest"];
+                "multipart/form-data": components["schemas"]["ReasonedCommandRequest"];
             };
         };
         responses: {
