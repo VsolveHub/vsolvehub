@@ -544,6 +544,87 @@ SERVICE_VARIANTS: dict[str, tuple[VariantSeed, ...]] = {
         VariantSeed("60 minutes", "60-min", 99_900, 60),
         VariantSeed("90 minutes", "90-min", 139_900, 90),
     ),
+    # ---- Home services ------------------------------------------------------------------------
+    # Size ladders live below; these are the axes that are not size.
+    "pest-bed-bug-control": (
+        VariantSeed("1 room", "1-room", 149_900, 90),
+        VariantSeed("2 rooms", "2-rooms", 209_900, 120),
+        VariantSeed("3 rooms or more", "3-rooms", 279_900, 165),
+    ),
+    # Seats, not rooms. It is the number the owner can count.
+    "sofa-shampooing": (
+        VariantSeed("Up to 3 seats", "upto-3-seat", 99_900, 90),
+        VariantSeed("4 to 5 seats", "upto-5-seat", 139_900, 120),
+        VariantSeed("6 to 8 seats", "upto-8-seat", 189_900, 150),
+    ),
+    "carpet-cleaning": (
+        VariantSeed("Small rug", "small", 79_900, 60),
+        VariantSeed("Medium carpet", "medium", 119_900, 90),
+        VariantSeed("Large carpet", "large", 169_900, 120),
+    ),
+    "mattress-cleaning": (
+        VariantSeed("Single", "single", 79_900, 60),
+        VariantSeed("Double or queen", "double", 109_900, 75),
+        VariantSeed("King", "king", 139_900, 90),
+    ),
+    "home-kitchen-deep-cleaning": (
+        VariantSeed("Standard kitchen", "standard", 149_900, 150),
+        VariantSeed("Large or modular kitchen", "large", 219_900, 210),
+    ),
+    "home-office-cleaning": (
+        VariantSeed("Up to 10 seats", "upto-10-seat", 249_900, 240),
+        VariantSeed("11 to 30 seats", "upto-30-seat", 449_900, 360),
+        VariantSeed("Above 30 seats", "above-30-seat", 799_900, 480),
+    ),
+    # Chimney type decides whether the filters come out or the whole hood does.
+    "chimney-cleaning": (
+        VariantSeed("Wall mounted", "wall-mounted", 89_900, 90),
+        VariantSeed("Island or auto-clean", "island", 129_900, 120),
+    ),
+    "garden-lawn-mowing": (
+        VariantSeed("Up to 500 sq ft", "upto-500sqft", 59_900, 60),
+        VariantSeed("500 to 1,500 sq ft", "upto-1500sqft", 99_900, 90),
+        VariantSeed("Above 1,500 sq ft", "above-1500sqft", 159_900, 135),
+    ),
+    # Height, because above about fifteen feet this stops being a ladder job.
+    "garden-tree-trimming": (
+        VariantSeed("Up to 10 feet", "upto-10ft", 149_900, 120),
+        VariantSeed("10 to 20 feet", "upto-20ft", 249_900, 180),
+        VariantSeed("Above 20 feet", "above-20ft", 399_900, 240),
+    ),
+    # Garment type, because a blanket and a shirt are not the same machine or the same time.
+    "laundry-dry-cleaning": (
+        VariantSeed("Shirt or trousers", "shirt", 19_900, 30),
+        VariantSeed("Saree or suit", "saree-suit", 39_900, 40),
+        VariantSeed("Coat or sherwani", "coat", 59_900, 50),
+        VariantSeed("Blanket or quilt", "blanket", 79_900, 60),
+    ),
+    "inspection-property": (
+        VariantSeed("Up to 2 BHK", "upto-2bhk", 199_900, 120),
+        VariantSeed("3 BHK", "3-bhk", 269_900, 150),
+        VariantSeed("4 BHK or villa", "4-bhk", 379_900, 195),
+    ),
+    "inspection-pre-purchase": (
+        VariantSeed("Up to 2 BHK", "upto-2bhk", 299_900, 180),
+        VariantSeed("3 BHK", "3-bhk", 399_900, 225),
+        VariantSeed("4 BHK or villa", "4-bhk", 549_900, 285),
+    ),
+    # ---- Pet services -------------------------------------------------------------------------
+    # Duration, which is the whole of what is being bought.
+    "pet-dog-walking": (
+        VariantSeed("30 minutes", "30-min", 29_900, 30),
+        VariantSeed("60 minutes", "60-min", 44_900, 60),
+    ),
+    "pet-home-sitting": (
+        VariantSeed("Half day", "half-day", 79_900, 240),
+        VariantSeed("Full day", "full-day", 139_900, 480),
+    ),
+    # Vaccine, not pet: the dose is the cost, and an owner books a named shot.
+    "vet-vaccination": (
+        VariantSeed("Core vaccine", "core", 69_900, 30),
+        VariantSeed("Rabies", "rabies", 59_900, 30),
+        VariantSeed("Annual booster", "booster", 89_900, 30),
+    ),
 }
 
 #: Home Cleaning services sold by home size. Kept apart from `SERVICE_VARIANTS` only so the
@@ -572,6 +653,33 @@ for _slug, _label, _price, _minutes in (
 ):
     SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, HAIR_LENGTH_STEPS)
 
+#: Home size for pest control. Flatter than the cleaning ladder on purpose: treatment scales with
+#: the area sprayed, but the callout, the mixing and the safety briefing do not, so a 4 BHK is
+#: not four times a 1 BHK.
+PEST_SIZE_STEPS = (
+    ("1 BHK", "1-bhk", 100, 100),
+    ("2 BHK", "2-bhk", 130, 125),
+    ("3 BHK", "3-bhk", 160, 150),
+    ("4 BHK or villa", "4-bhk", 200, 180),
+)
+
+#: Tank and pool capacity. The only thing that changes a cleaning visit to a vessel is how much
+#: is in it and how long it takes to drain, refill and sanitise.
+CAPACITY_STEPS = (
+    ("Up to 1,000 litres", "upto-1000l", 100, 100),
+    ("1,000 to 3,000 litres", "upto-3000l", 145, 140),
+    ("Above 3,000 litres", "above-3000l", 200, 185),
+)
+
+#: Pet size. Coat area and handling time both scale with it, and it is the thing an owner can
+#: state accurately without being asked to name a breed.
+PET_SIZE_STEPS = (
+    ("Small breed", "small", 100, 100),
+    ("Medium breed", "medium", 130, 120),
+    ("Large breed", "large", 170, 155),
+)
+
+
 #: Waxing sold by wax type, the choice the source list already names.
 for _slug, _label, _price, _minutes in (
     ("beauty-full-arms-wax", "Full arms", 29_900, 30),
@@ -584,6 +692,36 @@ for _slug, _label, _price, _minutes in (
     ("beauty-face-wax", "Face", 19_900, 20),
 ):
     SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, WAX_TYPE_STEPS)
+
+#: Pest treatment sold by home size.
+for _slug, _label, _price, _minutes in (
+    ("pest-cockroach-control", "Cockroach control", 89_900, 60),
+    ("pest-termite-control", "Termite control", 299_900, 180),
+    ("pest-mosquito-control", "Mosquito control", 99_900, 60),
+    ("pest-ant-control", "Ant control", 79_900, 45),
+    ("pest-rat-control", "Rat control", 99_900, 60),
+    ("pest-lizard-control", "Lizard control", 79_900, 45),
+    ("pest-general-control", "General pest control", 129_900, 90),
+):
+    SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, PEST_SIZE_STEPS)
+
+#: Vessels sold by capacity.
+for _slug, _label, _price, _minutes in (
+    ("tank-overhead-cleaning", "Overhead tank", 99_900, 90),
+    ("tank-underground-cleaning", "Underground tank", 149_900, 120),
+    ("tank-sump-cleaning", "Sump", 129_900, 105),
+    ("septic-tank-cleaning", "Septic tank", 299_900, 150),
+    ("pool-cleaning", "Pool cleaning", 199_900, 120),
+    ("pool-maintenance", "Pool maintenance", 299_900, 150),
+):
+    SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, CAPACITY_STEPS)
+
+#: Grooming sold by pet size.
+for _slug, _label, _price, _minutes in (
+    ("pet-bath-and-spa", "Bath and spa", 69_900, 60),
+    ("pet-hair-trimming", "Hair trimming", 59_900, 45),
+):
+    SERVICE_VARIANTS[_slug] = _ladder(_label, _price, _minutes, PET_SIZE_STEPS)
 
 for _slug, _label, _price, _minutes in (
     ("home-basic-cleaning", "Basic cleaning", 149_900, 180),
