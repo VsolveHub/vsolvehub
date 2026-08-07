@@ -25,6 +25,7 @@
  * client relies on, and it is correct either way.
  */
 
+import type { Schemas } from "@vsolve/api-client";
 import { describeError } from "@vsolve/query";
 
 import {
@@ -102,6 +103,52 @@ export function describePlanReasons(value: unknown): string[] {
   return readReasonCodes(value).map(describePlanReason);
 }
 
+/**
+ * Customer-facing wording for when a plan set is no longer usable.
+ *
+ * Reads reason codes defensively from `planSet` fields (`decisive_reasons`,
+ * `reason_codes`, `item_failures`, `plans`), mapping codes through
+ * `describeItemFailure` or `describePlanReason`. If no reason codes exist,
+ * falls back to generic copy.
+ */
+export function describePlanSetFailure(planSet: Schemas["FulfilmentPlanSet"] | null): string {
+  const genericCopy =
+    "Your booking changed after this price was worked out. Nothing has been booked or charged.";
+
+  if (!planSet) {
+    return genericCopy;
+  }
+
+  const raw = planSet as Record<string, unknown>;
+  const codes = [
+    ...readReasonCodes(raw.decisive_reasons),
+    ...readReasonCodes(raw.reason_codes),
+    ...(Array.isArray(raw.item_failures)
+      ? raw.item_failures.flatMap((entry) =>
+          typeof entry === "string"
+            ? [entry]
+            : typeof entry === "object" && entry !== null && "reason" in entry && typeof entry.reason === "string"
+              ? [entry.reason]
+              : typeof entry === "object" && entry !== null && "code" in entry && typeof entry.code === "string"
+                ? [entry.code]
+                : [],
+        )
+      : []),
+  ];
+
+  if (codes.length === 0) {
+    return genericCopy;
+  }
+
+  const uniqueCodes = Array.from(new Set(codes));
+  return uniqueCodes
+    .map((code) => {
+      if (code in ITEM_FAILURE_REASONS) return describeItemFailure(code);
+      return describePlanReason(code);
+    })
+    .join(" ");
+}
+
 /** A refusal the customer is shown, and where the message belongs. */
 export interface RemovalFailure {
   message: string;
@@ -159,6 +206,12 @@ export function describeQuoteFailure(error: unknown): string {
     return (
       "Those options were worked out before your booking changed, so we could not price " +
       "them. We have taken you back to pick a time again — nothing has been booked or charged."
+    );
+  }
+  if (isIdempotencyKeyReused(error)) {
+    return (
+      "Your booking changed after this quote was started, so we did not reuse it. " +
+      "Go back and start again — nothing has been booked or charged."
     );
   }
   return describeError(error, "mutation").message;

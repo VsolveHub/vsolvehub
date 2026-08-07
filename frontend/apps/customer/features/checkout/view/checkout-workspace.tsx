@@ -24,7 +24,12 @@ import {
   planUnavailable,
   type PlanItemFailure,
 } from "../conflicts";
-import { describeConfirmFailure, describeItemFailure, describeQuoteFailure } from "../reasons";
+import {
+  describeConfirmFailure,
+  describeItemFailure,
+  describePlanSetFailure,
+  describeQuoteFailure,
+} from "../reasons";
 import {
   useCart,
   useCreateCheckout,
@@ -440,7 +445,7 @@ export function CheckoutWorkspace() {
               <ErrorState
                 severity="warning"
                 title="These options are no longer current"
-                message="Your booking changed after this price was worked out. Nothing has been booked or charged."
+                message={describePlanSetFailure(planSet)}
                 actionLabel="Work out fresh options"
                 onAction={rescheduleFromScratch}
               />
