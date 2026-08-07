@@ -316,6 +316,158 @@ SERVICE_VARIANTS: dict[str, tuple[VariantSeed, ...]] = {
         VariantSeed("Bathroom or floor trap", "bathroom", 29_900, 60),
         VariantSeed("Main line", "main-line", 49_900, 90),
     ),
+    # ---- Electrician -------------------------------------------------------------------------
+    # Module count is what a board job is actually measured in, and it is the number the
+    # customer can read off their own wall before booking.
+    "electrician-switch-board-replacement": (
+        VariantSeed("Up to 4 modules", "upto-4", 14_900, 45),
+        VariantSeed("5 to 8 modules", "upto-8", 21_900, 60),
+        VariantSeed("9 to 12 modules", "upto-12", 29_900, 75),
+    ),
+    # Fitting type, not brand: a bulb swap and a panel light are different amounts of work.
+    "light-led-installation": (
+        VariantSeed("Bulb or tube light", "bulb", 12_900, 30),
+        VariantSeed("Panel or downlight", "panel", 19_900, 45),
+        VariantSeed("Cove or profile light", "cove", 34_900, 75),
+    ),
+    # Weight decides whether this is a one-person job and whether the ceiling needs an anchor.
+    "electrician-chandelier-installation": (
+        VariantSeed("Up to 10 kg", "upto-10kg", 49_900, 90),
+        VariantSeed("10 to 25 kg", "upto-25kg", 89_900, 120),
+        VariantSeed("Over 25 kg", "over-25kg", 149_900, 180),
+    ),
+    # Way count is stamped on the box.
+    "electrician-db-board-installation": (
+        VariantSeed("4 way", "4-way", 49_900, 90),
+        VariantSeed("8 way", "8-way", 69_900, 105),
+        VariantSeed("12 way and above", "12-way", 99_900, 135),
+    ),
+    "electrician-mcb-installation": (
+        VariantSeed("Single pole MCB", "single-pole", 14_900, 30),
+        VariantSeed("Double pole MCB", "double-pole", 19_900, 40),
+        VariantSeed("RCCB or isolator", "rccb", 29_900, 60),
+    ),
+    "electrician-inverter-installation": (
+        VariantSeed("Up to 900 VA", "upto-900va", 49_900, 90),
+        VariantSeed("1 to 1.5 KVA", "upto-1-5kva", 69_900, 110),
+        VariantSeed("Above 1.5 KVA", "above-1-5kva", 99_900, 140),
+    ),
+    # Motor horsepower changes the cable, the starter and the time.
+    "electrician-water-motor-wiring": (
+        VariantSeed("Up to 1 HP", "upto-1hp", 29_900, 60),
+        VariantSeed("1 to 2 HP", "upto-2hp", 39_900, 75),
+        VariantSeed("Above 2 HP", "above-2hp", 54_900, 100),
+    ),
+    "electrician-bore-motor-connection": (
+        VariantSeed("Up to 1 HP", "upto-1hp", 49_900, 90),
+        VariantSeed("1 to 3 HP", "upto-3hp", 69_900, 115),
+        VariantSeed("Above 3 HP", "above-3hp", 99_900, 150),
+    ),
+    # ---- Plumber -----------------------------------------------------------------------------
+    "tap-repair": (
+        VariantSeed("Basin or sink tap", "basin", 19_900, 45),
+        VariantSeed("Wall mixer", "mixer", 24_900, 55),
+        VariantSeed("Diverter or concealed valve", "diverter", 39_900, 90),
+    ),
+    "plumber-tap-installation": (
+        VariantSeed("Standard tap", "standard", 14_900, 30),
+        VariantSeed("Wall mixer", "mixer", 24_900, 50),
+        VariantSeed("Sensor tap", "sensor", 39_900, 75),
+    ),
+    # A concealed cistern means opening the wall panel; an external one does not.
+    "wc-flush-repair": (
+        VariantSeed("External cistern", "external", 24_900, 45),
+        VariantSeed("Concealed cistern", "concealed", 44_900, 90),
+    ),
+    "plumber-wc-installation": (
+        VariantSeed("Floor mounted", "floor-mounted", 49_900, 120),
+        VariantSeed("Wall hung with frame", "wall-hung", 99_900, 180),
+    ),
+    "plumber-basin-installation": (
+        VariantSeed("Pedestal basin", "pedestal", 29_900, 90),
+        VariantSeed("Counter-top basin", "counter-top", 39_900, 105),
+        VariantSeed("Wall hung basin", "wall-hung", 49_900, 120),
+    ),
+    "plumber-motor-installation": (
+        VariantSeed("Up to 1 HP", "upto-1hp", 49_900, 120),
+        VariantSeed("1 to 2 HP", "upto-2hp", 69_900, 145),
+        VariantSeed("Above 2 HP", "above-2hp", 99_900, 180),
+    ),
+    # ---- Carpenter ---------------------------------------------------------------------------
+    "carpenter-door-installation": (
+        VariantSeed("Flush door", "flush", 49_900, 120),
+        VariantSeed("Panel or moulded door", "panel", 69_900, 150),
+        VariantSeed("WPC or PVC door", "wpc", 89_900, 180),
+    ),
+    "carpenter-bed-assembly": (
+        VariantSeed("Single bed", "single", 29_900, 75),
+        VariantSeed("Double or queen bed", "double", 39_900, 100),
+        VariantSeed("King bed with storage", "king-storage", 59_900, 140),
+    ),
+    "carpenter-tv-unit-installation": (
+        VariantSeed("Wall mount only", "wall-mount", 49_900, 75),
+        VariantSeed("Floor-standing unit", "floor-unit", 79_900, 120),
+    ),
+    # ---- AC ----------------------------------------------------------------------------------
+    "ac-split-installation": (
+        VariantSeed("Up to 1 ton", "1-ton", 149_900, 120),
+        VariantSeed("1.5 ton", "1-5-ton", 169_900, 135),
+        VariantSeed("2 ton and above", "2-ton", 199_900, 150),
+    ),
+    "ac-window-installation": (
+        VariantSeed("Up to 1 ton", "1-ton", 99_900, 90),
+        VariantSeed("1.5 ton and above", "1-5-ton", 119_900, 105),
+    ),
+    "ac-uninstallation": (
+        VariantSeed("Window AC", "window", 49_900, 45),
+        VariantSeed("Split AC", "split", 69_900, 75),
+    ),
+    "ac-jet-wash": (
+        VariantSeed("Up to 1 ton", "1-ton", 119_900, 90),
+        VariantSeed("1.5 ton", "1-5-ton", 139_900, 100),
+        VariantSeed("2 ton and above", "2-ton", 159_900, 110),
+    ),
+    "ac-shifting": (
+        VariantSeed("Window AC", "window", 199_900, 150),
+        VariantSeed("Split AC", "split", 299_900, 210),
+    ),
+    # ---- RO ----------------------------------------------------------------------------------
+    "ro-installation": (
+        VariantSeed("Wall mounted", "wall-mounted", 49_900, 90),
+        VariantSeed("Under the sink", "under-sink", 79_900, 120),
+    ),
+    "ro-filter-replacement": (
+        VariantSeed("Sediment or carbon filter", "sediment-carbon", 29_900, 45),
+        VariantSeed("RO membrane", "membrane", 59_900, 60),
+        VariantSeed("Full filter set", "full-set", 99_900, 90),
+    ),
+    # ---- Gas stove ---------------------------------------------------------------------------
+    "gas-stove-repair": (
+        VariantSeed("2 burner", "2-burner", 19_900, 45),
+        VariantSeed("3 burner", "3-burner", 24_900, 55),
+        VariantSeed("4 burner and above", "4-burner", 34_900, 70),
+    ),
+    # ---- CCTV --------------------------------------------------------------------------------
+    # Channel count is on the unit and decides the wiring run.
+    "cctv-dvr-installation": (
+        VariantSeed("4 channel", "4-channel", 49_900, 60),
+        VariantSeed("8 channel", "8-channel", 69_900, 80),
+        VariantSeed("16 channel", "16-channel", 99_900, 110),
+    ),
+    # ---- Mobile ------------------------------------------------------------------------------
+    # Device tier, because the part dominates the price and a single figure would be a guess
+    # for most phones. Still a "from" price — the exact part is quoted after inspection.
+    "mobile-screen-replacement": (
+        VariantSeed("Budget phone", "budget", 29_900, 60),
+        VariantSeed("Mid-range phone", "mid-range", 79_900, 60),
+        VariantSeed("Flagship phone", "flagship", 199_900, 75),
+    ),
+    # ---- Fire safety -------------------------------------------------------------------------
+    "fire-extinguisher-refilling": (
+        VariantSeed("Up to 4 kg", "upto-4kg", 29_900, 45),
+        VariantSeed("6 to 9 kg", "upto-9kg", 44_900, 55),
+        VariantSeed("Above 9 kg", "above-9kg", 69_900, 70),
+    ),
 }
 
 #: Home Cleaning services sold by home size. Kept apart from `SERVICE_VARIANTS` only so the
