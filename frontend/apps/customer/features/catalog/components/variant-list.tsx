@@ -1,4 +1,5 @@
-import { Badge, formatMoney } from "@vsolve/ui";
+import Link from "next/link";
+import { Badge, buttonStyles, formatMoney } from "@vsolve/ui";
 
 import type { ServiceDetail } from "../queries";
 
@@ -18,7 +19,29 @@ import type { ServiceDetail } from "../queries";
  * not to a catalogue card.
  */
 
-export function VariantList({ variants }: { variants: ServiceDetail["variants"] }) {
+/**
+ * Each row books itself.
+ *
+ * A service can now be sold several ways at several prices — a repair against a 32-amp
+ * replacement, a 1 BHK against a villa — and a list that showed those prices while offering one
+ * shared button made the reader choose twice: once here, and again inside the workspace, with no
+ * sign the first choice had been carried. The link carries `?variant=<code>`, which
+ * `/book/[service]` already resolves.
+ *
+ * A link, not a button: middle-click and "open in new tab" then behave the way the browser
+ * promises, and comparing two options in two tabs is exactly what somebody does here.
+ */
+export function VariantList({
+  variants,
+  serviceSlug,
+}: {
+  variants: ServiceDetail["variants"];
+  serviceSlug: string;
+}) {
+  // One variant is not a choice. The page's own primary action already books it, so a second
+  // control saying the same thing would imply an option that is not there.
+  const isChoice = variants.length > 1;
+
   return (
     <ul className="mt-3 divide-y divide-line rounded-card border border-line bg-surface">
       {variants.map((variant) => (
@@ -50,6 +73,15 @@ export function VariantList({ variants }: { variants: ServiceDetail["variants"] 
               <Badge tone="neutral" className="mt-1">
                 Min {formatMoney(variant.minimum_service_subtotal.amount_paise)}
               </Badge>
+            ) : null}
+
+            {isChoice ? (
+              <Link
+                href={`/book/${serviceSlug}?variant=${encodeURIComponent(variant.code)}`}
+                className={buttonStyles({ size: "sm", variant: "secondary", className: "mt-2" })}
+              >
+                Book<span className="sr-only"> {variant.name}</span>
+              </Link>
             ) : null}
           </div>
         </li>

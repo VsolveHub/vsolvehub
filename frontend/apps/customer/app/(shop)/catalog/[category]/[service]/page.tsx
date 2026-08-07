@@ -8,6 +8,7 @@ import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
 import { ServiceJsonLd } from "@/features/catalog/components/service-json-ld";
 import { VariantList } from "@/features/catalog/components/variant-list";
 import { PolicyList } from "@/features/catalog/components/policy-list";
+import { ProcessSteps } from "@/features/catalog/components/process-steps";
 
 type PageProps = { params: Promise<{ category: string; service: string }> };
 
@@ -46,6 +47,10 @@ export default async function ServiceDetailPage({ params }: PageProps) {
   // A service reachable under the wrong category would be a duplicate URL for
   // the same content. 404 rather than render it twice.
   if (service.category_slug !== categorySlug) notFound();
+
+  // Split out here rather than inside `PolicyList`, which groups the three kinds a customer
+  // reads as bullet lists. A numbered sequence is a different shape and gets its own section.
+  const processSteps = service.policies.filter((policy) => policy.kind === "PROCESS");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -103,7 +108,19 @@ export default async function ServiceDetailPage({ params }: PageProps) {
           <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-text-secondary">
             What you can book
           </h2>
-          <VariantList variants={service.variants} />
+          <VariantList variants={service.variants} serviceSlug={service.slug} />
+        </section>
+      ) : null}
+
+      {/* Before the inclusions on purpose. "What happens, and when do I get to say no" is the
+          question somebody has while deciding; "what does the price cover" is the one they have
+          once they have decided to. */}
+      {processSteps.length > 0 ? (
+        <section className="border-t border-line py-6">
+          <h2 className="text-sm font-bold uppercase tracking-[0.08em] text-text-secondary">
+            Our process
+          </h2>
+          <ProcessSteps steps={processSteps} />
         </section>
       ) : null}
 
