@@ -114,6 +114,17 @@ class PartnerOfferListView(APIView):
                     PartnerOffer.Status.REVOKED,
                 )
             )
+            # An offer whose clock ran out but which `reconcile_group_dispatch` has
+            # not swept yet is still stored as `OFFERED`. `accept_unit_offer` checks
+            # `expires_at` independently and refuses it, so reading the stored status
+            # alone shows a Partner something as acceptable that accepting would
+            # reject. This makes the read side agree with the write side.
+            #
+            # It does NOT replace the sweep: `reconcile_group_dispatch` is what
+            # actually expires the row, releases the reservation and redispatches the
+            # unit. Removing that task because this filter exists would leave capacity
+            # held by a dead offer forever.
+            .exclude(status=PartnerOffer.Status.OFFERED, expires_at__lte=timezone.now())
             .select_related("fulfilment_unit")
             .prefetch_related("fulfilment_unit__lines")
         )
