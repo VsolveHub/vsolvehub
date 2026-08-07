@@ -5,8 +5,10 @@ from uuid import UUID
 
 from celery import shared_task
 from django.conf import settings
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
+from apps.assignments.models import PartnerOffer
 from apps.commerce.models import Booking
 from apps.fulfilment.completion import auto_finalize_completion
 from apps.fulfilment.services import declare_booking_late, is_partner_late
@@ -74,3 +76,30 @@ def sweep_completion_auto_finalize() -> int:
         auto_finalize_one_completion.delay(str(booking.id))
         swept += 1
     return swept
+
+
+@shared_task
+def sweep_unacknowledged_assignments() -> int:
+    """Flag directly-assigned advance jobs that remain unacknowledged ~24h before the visit.
+
+    Flags only — never silently reassigns. Re-dispatch is an Operations-visible action
+    (spec §11.3). Direct assignment is detected as a Booking whose Fulfilment Unit never
+    had a PartnerOffer row.
+    """
+
+    now = timezone.now()
+    horizon = now + timedelta(hours=24)
+    had_offer = PartnerOffer.objects.filter(fulfilment_unit_id=OuterRef("fulfilment_unit_id"))
+    candidates = (
+        Booking.objects.filter(
+            status=Booking.Status.CONFIRMED,
+            assignment_acknowledged_at__isnull=True,
+            needs_redispatch=False,
+            scheduled_start__gt=now,
+            scheduled_start__lte=horizon,
+            fulfilment_unit__isnull=False,
+        )
+        .annotate(had_offer=Exists(had_offer))
+        .filter(had_offer=False)
+    )
+    return candidates.update(needs_redispatch=True)

@@ -110,6 +110,10 @@ class Booking(models.Model):
     # Partner ledger before releasing a payout — this is the documented seam, not a fabricated
     # OperationsCase.
     payout_hold = models.BooleanField(default=False)
+    # Direct-assignment safeguards (spec §11.3): the Partner acknowledges the advance job,
+    # and an unacknowledged job near the visit is flagged for Operations re-dispatch.
+    assignment_acknowledged_at = models.DateTimeField(null=True, blank=True)
+    needs_redispatch = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
