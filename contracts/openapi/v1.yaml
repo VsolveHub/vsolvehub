@@ -10806,6 +10806,9 @@ components:
           type: string
           nullable: true
           readOnly: true
+        simulated_capture_available:
+          type: boolean
+          readOnly: true
         provider_order_id:
           type: string
           readOnly: true
@@ -10861,6 +10864,7 @@ components:
       - purpose
       - quote_id
       - reconciliation_state
+      - simulated_capture_available
       - status
       - updated_at
       - version

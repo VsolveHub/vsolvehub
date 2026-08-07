@@ -21,13 +21,14 @@ import { isSimulatedCaptureUnavailable, useSimulateCapture, type PaymentAttempt 
  * is what makes that obvious in the first second. It is deliberately not styled
  * as the primary action even though it is the only one that works here.
  *
- * ## Why it hides itself rather than erroring
+ * ## Why availability is a server field, not a 404
  *
- * Django publishes the endpoint only where the flag is on, and refuses to boot
- * with the flag on in production. A `404` is therefore "this environment does not
- * do that", not a failure — so the control disappears rather than showing an
- * error nobody can act on. The one place it must never render is exactly the
- * place the server will not answer it.
+ * `simulated_capture_available` is published on the attempt. Rendering the panel
+ * everywhere and discovering by 404 that it does not apply would mean it appears
+ * — briefly, but really — on production. The server knows both halves of the
+ * answer (the flag, and whether this attempt is on the fake provider), so it
+ * says so. Same reasoning as `recovery_action`: publish the decision, do not make
+ * the client infer it.
  *
  * ## Why the confirmation exists
  *
@@ -39,7 +40,9 @@ export function SimulatedCapture({ attempt }: { attempt: PaymentAttempt }) {
   const [isConfirming, setIsConfirming] = useState(false);
   const capture = useSimulateCapture();
 
-  // The server said this environment does not offer it. Say nothing further.
+  // The server decides. `isSimulatedCaptureUnavailable` still guards the race
+  // where the flag is turned off between the read and the click.
+  if (!attempt.simulated_capture_available) return null;
   if (isSimulatedCaptureUnavailable(capture.error)) return null;
 
   return (

@@ -350,8 +350,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
 
       {phase === "awaiting-provider" ? (
         <p className="mt-4 text-sm text-text-secondary">
-          This payment cannot be completed in the browser on this environment. Please contact
-          support with this page open.
+          This payment cannot be completed in the browser on this environment.
         </p>
       ) : null}
 
@@ -373,10 +372,20 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
         </div>
       ) : null}
 
-      {/* Only while a payment is genuinely outstanding. The control removes
-          itself entirely in any environment where Django does not publish the
-          endpoint. */}
-      {phase === "awaiting-customer" || phase === "not-charged" ? (
+      {/* Every phase where money is still owed — including `awaiting-provider`,
+          which is exactly the state a fake provider produces and the one this
+          control exists for. Gating it on `awaiting-customer` was backwards:
+          `canHandOff` requires `provider_public_key`, the fake provider has
+          none, so the button was hidden precisely when nothing else could
+          complete the payment.
+
+          `paid` and `ambiguous` are excluded because there is nothing to
+          capture; `expired` because the reservation is already gone and
+          capturing would land in `capture_without_capacity` compensation. */}
+      {phase === "preparing" ||
+      phase === "awaiting-customer" ||
+      phase === "awaiting-provider" ||
+      phase === "not-charged" ? (
         <SimulatedCapture attempt={attempt} />
       ) : null}
 

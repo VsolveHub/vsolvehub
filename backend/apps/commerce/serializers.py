@@ -16,6 +16,7 @@ from apps.commerce.models import (
     TaxDocument,
     TaxDocumentLine,
 )
+from apps.commerce.providers import FakePaymentProvider
 from common.serializers import MoneySerializer
 
 
@@ -60,6 +61,7 @@ class PaymentAttemptSerializer(serializers.ModelSerializer[PaymentAttempt]):
     amount = serializers.SerializerMethodField()
     allocations = PaymentAllocationSerializer(many=True, read_only=True)
     provider_public_key = serializers.SerializerMethodField()
+    simulated_capture_available = serializers.SerializerMethodField()
 
     class Meta:
         model = PaymentAttempt
@@ -71,6 +73,7 @@ class PaymentAttemptSerializer(serializers.ModelSerializer[PaymentAttempt]):
             "purpose",
             "provider",
             "provider_public_key",
+            "simulated_capture_available",
             "provider_order_id",
             "status",
             "reconciliation_state",
@@ -83,6 +86,22 @@ class PaymentAttemptSerializer(serializers.ModelSerializer[PaymentAttempt]):
             "updated_at",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_simulated_capture_available(attempt: PaymentAttempt) -> bool:
+        """Whether this attempt can be marked captured without a provider.
+
+        Published rather than inferred. The alternative is a client that renders
+        a "mark as paid" control everywhere and discovers by 404 that it does not
+        apply — which means the control appears, briefly, on production. The
+        server already knows both halves of the answer; saying so is the same
+        reasoning that publishes `recovery_action` instead of deriving it from a
+        status.
+        """
+        return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and (
+            attempt.provider == FakePaymentProvider.code
+        )
 
     @staticmethod
     @extend_schema_field(MoneySerializer)
