@@ -28,6 +28,7 @@ from apps.fulfilment.views import (
     CustomerBookingRescheduleView,
     CustomerCompletionConfirmView,
     CustomerCompletionDisputeView,
+    CustomerQualityDisputeView,
     CustomerStartOtpView,
     OperationsAssistedStartView,
     OperationsBookingDetailView,
@@ -74,6 +75,11 @@ urlpatterns = [
         "bookings/<uuid:booking_id>/completion/dispute/",
         CustomerCompletionDisputeView.as_view(),
         name="booking-completion-dispute",
+    ),
+    path(
+        "bookings/<uuid:booking_id>/quality-dispute/",
+        CustomerQualityDisputeView.as_view(),
+        name="booking-quality-dispute",
     ),
     path(
         "scope-amendments/<uuid:amendment_id>/approve/",

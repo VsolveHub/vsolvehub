@@ -55,6 +55,7 @@ from apps.commerce.models import Booking
 from apps.foundation.services import CommandResult, ResponseBody, execute_idempotent
 from apps.fulfilment import completion as completion_services
 from apps.fulfilment import recovery_services
+from apps.fulfilment.quality_dispute import open_quality_dispute
 from apps.fulfilment.amendments import (
     approve_scope_amendment,
     decline_scope_amendment,
@@ -538,6 +539,50 @@ class CustomerCompletionDisputeView(APIView):
         result = execute_idempotent(
             actor=user,
             operation="fulfilment.completion_dispute",
+            key=key,
+            request_payload={"booking_id": str(booking.id), **serializer.validated_data},
+            command=command,
+        )
+        return _replayable(result, lambda: _customer_projection(booking.id))
+
+
+class CustomerQualityDisputeView(APIView):
+    """72-hour quality dispute after auto-finalisation (spec §12).
+
+    Distinct from `CustomerCompletionDisputeView`, which covers the 0–24h window while a
+    completion response is still pending. This path only opens once the visit was
+    auto-finalised, and it holds the Partner payout without touching `cancel_booking`.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=[FULFILMENT_TAG],
+        operation_id="booking_quality_dispute",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ReasonedCommandSerializer,
+        responses={200: CustomerBookingSerializer, **_ERRORS_4XX},
+    )
+    def post(self, request: Request, booking_id: UUID) -> Response:
+        serializer = ReasonedCommandSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = cast(User, request.user)
+        booking = _customer_booking(booking_id, user)
+        key = _required_key(request)
+
+        def command() -> tuple[int, ResponseBody]:
+            open_quality_dispute(
+                booking_id=booking.id,
+                customer_id=user.id,
+                reason=serializer.validated_data["reason"],
+                expected_version=serializer.validated_data["expected_version"],
+                idempotency_key=key,
+            )
+            return status.HTTP_200_OK, _customer_projection(booking.id)
+
+        result = execute_idempotent(
+            actor=user,
+            operation="fulfilment.quality_dispute",
             key=key,
             request_payload={"booking_id": str(booking.id), **serializer.validated_data},
             command=command,

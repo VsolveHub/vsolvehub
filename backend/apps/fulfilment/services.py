@@ -56,16 +56,24 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     Booking.Status.ABORTED: frozenset(
         {Booking.Status.PARTIALLY_COMPLETED, Booking.Status.DISPUTED}
     ),
-    Booking.Status.COMPLETED: frozenset(),
-    Booking.Status.PARTIALLY_COMPLETED: frozenset(),
+    # Quality dispute (spec §12) re-opens a settled visit inside the 72h window —
+    # only to DISPUTED, never back into the cancellation fee ladder.
+    Booking.Status.COMPLETED: frozenset({Booking.Status.DISPUTED}),
+    Booking.Status.PARTIALLY_COMPLETED: frozenset({Booking.Status.DISPUTED}),
     Booking.Status.DISPUTED: frozenset(),
     Booking.Status.CANCELLED: frozenset(),
 }
 
-# Derived, never hand-listed, so it cannot drift from the machine above: a Booking is finished
-# exactly when nothing can move it any further.
+# Settled outcomes for cancellation / group projection. COMPLETED (and partial) can still
+# open a quality dispute into DISPUTED within 72h, so "terminal for cancel" is not the same
+# as "no further transitions at all".
 TERMINAL_BOOKING_STATUSES = frozenset(
-    status for status, allowed in ALLOWED_TRANSITIONS.items() if not allowed
+    {
+        Booking.Status.COMPLETED,
+        Booking.Status.PARTIALLY_COMPLETED,
+        Booking.Status.DISPUTED,
+        Booking.Status.CANCELLED,
+    }
 )
 
 # `carts.FulfilmentUnit.Status` stays coarse: every fine-grained "still in flight" Booking status
@@ -121,6 +129,7 @@ class BookingCommand:
     CONFIRM_COMPLETION = "CONFIRM_COMPLETION"
     DISPUTE_COMPLETION = "DISPUTE_COMPLETION"
     AUTO_FINALIZE_COMPLETION = "AUTO_FINALIZE_COMPLETION"
+    OPEN_QUALITY_DISPUTE = "OPEN_QUALITY_DISPUTE"
     CANCEL = "CANCEL"
     RESCHEDULE = "RESCHEDULE"
     ADDRESS_CHANGE = "ADDRESS_CHANGE"
