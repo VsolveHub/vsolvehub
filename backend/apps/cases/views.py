@@ -24,8 +24,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.cases.models import OperationsCase
+from apps.cases.selectors import case_queue_summary
 from apps.cases.serializers import (
     CaseNoteRequestSerializer,
+    CaseQueueSummarySerializer,
     EscalateCaseRequestSerializer,
     OpenCaseRequestSerializer,
     OperationsCaseListSerializer,
@@ -88,6 +90,45 @@ def _replayable(result: CommandResult, projection: Callable[[], ResponseBody]) -
     return response
 
 
+class OperationsCaseSummaryView(APIView):
+    """The home screen's numbers, counted server-side.
+
+    A read, so no idempotency key and no version — but still `IsOperationsUser`, because queue
+    depth by team is itself operational information and `record_access_event` should see who
+    asked.
+    """
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_cases_summary",
+        responses={200: CaseQueueSummarySerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        summary = case_queue_summary(viewer=cast(User, request.user))
+        return Response(
+            CaseQueueSummarySerializer(
+                {
+                    "server_now": timezone.now(),
+                    "breaching_sla": summary.breaching_sla,
+                    "oldest_overdue_minutes": summary.oldest_overdue_minutes,
+                    "mine_open": summary.mine_open,
+                    "mine_due_soon": summary.mine_due_soon,
+                    "holding_payout": summary.holding_payout,
+                    "teams": [
+                        {
+                            "owner_team": team.owner_team,
+                            "open": team.open,
+                            "unclaimed": team.unclaimed,
+                        }
+                        for team in summary.teams
+                    ],
+                }
+            ).data
+        )
+
+
 class OperationsCaseListView(APIView):
     """The queue, filtered the way somebody actually works it.
 
@@ -106,6 +147,14 @@ class OperationsCaseListView(APIView):
             OpenApiParameter("owner_team", str, description="Filter by owning team."),
             OpenApiParameter("kind", str, description="Filter by case kind."),
             OpenApiParameter("overdue", bool, description="Only cases past their SLA deadline."),
+            OpenApiParameter(
+                "owner",
+                str,
+                description=(
+                    "`me` for cases the caller has claimed, `unclaimed` for cases no one has. "
+                    "Resolved against the session, never a caller-supplied id."
+                ),
+            ),
             OpenApiParameter("cursor", str, description="Opaque page cursor."),
         ],
         responses={200: OperationsCasePageSerializer, 403: ApiErrorSerializer},
@@ -123,6 +172,14 @@ class OperationsCaseListView(APIView):
             queryset = queryset.filter(due_at__lt=timezone.now()).exclude(
                 status__in=(OperationsCase.Status.RESOLVED, OperationsCase.Status.CANCELLED)
             )
+        # Resolved from the session rather than from a caller-supplied id on purpose: "whose
+        # queue may I read" is an authorization question, and an `owner=<uuid>` parameter would
+        # let any Operations user enumerate another's workload through a filter.
+        owner = params.get("owner")
+        if owner == "me":
+            queryset = queryset.filter(owner=cast(User, request.user))
+        elif owner == "unclaimed":
+            queryset = queryset.filter(owner__isnull=True)
 
         paginator = CaseCursorPagination()
         page = paginator.paginate_queryset(queryset, request, self)

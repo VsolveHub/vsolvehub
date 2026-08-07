@@ -9,10 +9,17 @@ from apps.cases.views import (
     OperationsCaseListView,
     OperationsCaseNoteView,
     OperationsCaseResolveView,
+    OperationsCaseSummaryView,
 )
 
 urlpatterns = [
     path("operations/cases/", OperationsCaseListView.as_view(), name="operations-cases"),
+    # Before the `<uuid:case_id>` route so `summary` is never read as a case id.
+    path(
+        "operations/cases/summary/",
+        OperationsCaseSummaryView.as_view(),
+        name="operations-cases-summary",
+    ),
     path(
         "operations/cases/<uuid:case_id>/",
         OperationsCaseDetailView.as_view(),

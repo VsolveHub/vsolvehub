@@ -2229,6 +2229,12 @@ paths:
           type: boolean
         description: Only cases past their SLA deadline.
       - in: query
+        name: owner
+        schema:
+          type: string
+        description: '`me` for cases the caller has claimed, `unclaimed` for cases
+          no one has. Resolved against the session, never a caller-supplied id.'
+      - in: query
         name: owner_team
         schema:
           type: string
@@ -2609,6 +2615,32 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/summary/:
+    get:
+      operationId: operations_cases_summary
+      description: |-
+        The home screen's numbers, counted server-side.
+
+        A read, so no idempotency key and no version — but still `IsOperationsUser`, because queue
+        depth by team is itself operational information and `record_access_event` should see who
+        asked.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseQueueSummary'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -7076,6 +7108,42 @@ components:
           default: false
       required:
       - body
+    CaseQueueSummary:
+      type: object
+      description: |-
+        The Operations home screen, counted over the whole queue rather than one page.
+
+        Every field here is an aggregate the console cannot compute for itself: the case list is
+        cursor-paginated, so a client counting its own rows would publish "the first fifty" as a
+        total. `server_now` travels with the counts because the screen renders relative deadlines,
+        and a clock-skewed browser would otherwise turn a real number into a wrong one.
+      properties:
+        server_now:
+          type: string
+          format: date-time
+        breaching_sla:
+          type: integer
+        oldest_overdue_minutes:
+          type: integer
+          nullable: true
+        mine_open:
+          type: integer
+        mine_due_soon:
+          type: integer
+        holding_payout:
+          type: integer
+        teams:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamQueue'
+      required:
+      - breaching_sla
+      - holding_payout
+      - mine_due_soon
+      - mine_open
+      - oldest_overdue_minutes
+      - server_now
+      - teams
     Category:
       type: object
       properties:
@@ -12833,6 +12901,19 @@ components:
       - quantity
       - tax
       - total
+    TeamQueue:
+      type: object
+      properties:
+        owner_team:
+          $ref: '#/components/schemas/OperationsCaseTeamEnum'
+        open:
+          type: integer
+        unclaimed:
+          type: integer
+      required:
+      - open
+      - owner_team
+      - unclaimed
     UnavailableReasonEnum:
       enum:
       - PAST

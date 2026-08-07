@@ -390,7 +390,18 @@ export const queryKeys = {
       ownerTeam?: string;
       kind?: string;
       overdue?: boolean;
+      owner?: string;
     }) => [...queryKeys.operations.all, "cases", filters] as const,
+
+    /**
+     * The home screen's queue counts.
+     *
+     * Under `cases` rather than beside it, so claiming or resolving a case — which already
+     * invalidates `[...all, "cases"]` — moves the dashboard's numbers with it. A dashboard
+     * that kept reporting a case as unclaimed after you claimed it is the stale-data problem
+     * this endpoint was built to end.
+     */
+    caseQueueSummary: () => [...queryKeys.operations.all, "cases", "summary"] as const,
 
     /** One case with its full audit trail. Refetched on its own after a conflict. */
     case: (caseId: string) => [...queryKeys.operations.all, "case", caseId] as const,

@@ -29,11 +29,33 @@ export type OperationsCaseRow = Schemas["OperationsCaseList"];
 export type CaseStatus = Schemas["OperationsCaseStatusEnum"];
 export type CaseSeverity = Schemas["OperationsCaseSeverityEnum"];
 
+export type CaseQueueSummary = Schemas["CaseQueueSummary"];
+
 export interface CaseFilters {
   status?: string;
   ownerTeam?: string;
   kind?: string;
   overdue?: boolean;
+  /** `me` or `unclaimed`. Resolved server-side against the session — never an id. */
+  owner?: string;
+}
+
+/**
+ * The counts behind the Operations home screen.
+ *
+ * Served by Django rather than reduced from the case list, because the list is cursor
+ * paginated: counting its rows here would publish "the first fifty" as a total and show a calm
+ * dashboard over a queue that is drowning.
+ */
+export function useCaseQueueSummary() {
+  return useQuery({
+    queryKey: queryKeys.operations.caseQueueSummary(),
+    queryFn: () => request(() => getApiClient().GET("/api/v1/operations/cases/summary/", {})),
+    // The same short window the kill-switch board uses. This screen is read to decide what to
+    // pick up next, and a minute-old queue depth sends somebody to an empty queue.
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
 }
 
 export function useOperationsCases(filters: CaseFilters = {}) {
@@ -48,6 +70,7 @@ export function useOperationsCases(filters: CaseFilters = {}) {
               ...(filters.ownerTeam ? { owner_team: filters.ownerTeam } : {}),
               ...(filters.kind ? { kind: filters.kind } : {}),
               ...(filters.overdue ? { overdue: true } : {}),
+              ...(filters.owner ? { owner: filters.owner } : {}),
               ...(pageParam ? { cursor: pageParam } : {}),
             },
           },

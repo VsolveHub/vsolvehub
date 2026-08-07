@@ -168,3 +168,27 @@ class OperationsCasePageSerializer(serializers.Serializer[dict[str, Any]]):
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = OperationsCaseListSerializer(many=True)
+
+
+class TeamQueueSerializer(serializers.Serializer[dict[str, Any]]):
+    owner_team = serializers.ChoiceField(choices=OperationsCase.Team.choices)
+    open = serializers.IntegerField()
+    unclaimed = serializers.IntegerField()
+
+
+class CaseQueueSummarySerializer(serializers.Serializer[dict[str, Any]]):
+    """The Operations home screen, counted over the whole queue rather than one page.
+
+    Every field here is an aggregate the console cannot compute for itself: the case list is
+    cursor-paginated, so a client counting its own rows would publish "the first fifty" as a
+    total. `server_now` travels with the counts because the screen renders relative deadlines,
+    and a clock-skewed browser would otherwise turn a real number into a wrong one.
+    """
+
+    server_now = serializers.DateTimeField()
+    breaching_sla = serializers.IntegerField()
+    oldest_overdue_minutes = serializers.IntegerField(allow_null=True)
+    mine_open = serializers.IntegerField()
+    mine_due_soon = serializers.IntegerField()
+    holding_payout = serializers.IntegerField()
+    teams = TeamQueueSerializer(many=True)

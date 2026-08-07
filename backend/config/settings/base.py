@@ -221,6 +221,9 @@ M1_CUSTOMER_WAIT_MINUTES = 10
 M1_CUSTOMER_CONTACT_ATTEMPT_MINUTES = (0, 5)
 M1_START_OTP_TTL_SECONDS = 5 * 60
 M1_START_OTP_MAX_ATTEMPTS = 5
+# 60: what "nearing deadline" means on the Operations home screen. An hour is the point a case
+# stops being something to schedule and starts being something to pick up now.
+M1_CASE_DUE_SOON_MINUTES = 60
 M1_COMPLETION_RESPONSE_HOURS = 24
 M1_QUALITY_DISPUTE_WINDOW_HOURS = 72
 M1_SCOPE_AMENDMENT_RESPONSE_MINUTES = 30

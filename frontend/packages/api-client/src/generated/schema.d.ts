@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 2b99fe5dc27b8e5e
+ * Checksum: 5cb099bab3b91e7a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -427,7 +427,7 @@ export interface paths {
         /**
          * @description 72-hour quality dispute after auto-finalisation (spec §12).
          *
-         *     Distinct from `CustomerCompletionDisputeView`, which covers the 0–24h window while a
+         *     Distinct from `CustomerCompletionDisputeView`, which covers the 0-24h window while a
          *     completion response is still pending. This path only opens once the visit was
          *     auto-finalised, and it holds the Partner payout without touching `cancel_booking`.
          */
@@ -1038,6 +1038,29 @@ export interface paths {
          *     a rule that differs per kind.
          */
         post: operations["operations_case_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The home screen's numbers, counted server-side.
+         *
+         *     A read, so no idempotency key and no version — but still `IsOperationsUser`, because queue
+         *     depth by team is itself operational information and `record_access_event` should see who
+         *     asked.
+         */
+        get: operations["operations_cases_summary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1971,6 +1994,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/offers/stream/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET /api/v1/partner/offers/stream/` — see the contract proposal.
+         *
+         *     Same authentication and permissions as `GET /api/v1/partner/offers/`.
+         *     `EventSource` cannot send custom headers, so this relies on the session cookie
+         *     the partner app already holds — which is also why the permission check happens
+         *     here, before the generator, rather than inside it.
+         */
+        get: operations["partner_offer_stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/payout-account/": {
         parameters: {
             query?: never;
@@ -2717,6 +2764,24 @@ export interface components {
             body: string;
             /** @default false */
             is_communication: boolean;
+        };
+        /**
+         * @description The Operations home screen, counted over the whole queue rather than one page.
+         *
+         *     Every field here is an aggregate the console cannot compute for itself: the case list is
+         *     cursor-paginated, so a client counting its own rows would publish "the first fifty" as a
+         *     total. `server_now` travels with the counts because the screen renders relative deadlines,
+         *     and a clock-skewed browser would otherwise turn a real number into a wrong one.
+         */
+        CaseQueueSummary: {
+            /** Format: date-time */
+            server_now: string;
+            breaching_sla: number;
+            oldest_overdue_minutes: number | null;
+            mine_open: number;
+            mine_due_soon: number;
+            holding_payout: number;
+            teams: components["schemas"]["TeamQueue"][];
         };
         Category: {
             /** Format: uuid */
@@ -4961,6 +5026,11 @@ export interface components {
             readonly quantity: number;
             readonly total: components["schemas"]["Money"];
             readonly tax: components["schemas"]["Money"];
+        };
+        TeamQueue: {
+            owner_team: components["schemas"]["OperationsCaseTeamEnum"];
+            open: number;
+            unclaimed: number;
         };
         /**
          * @description * `PAST` - PAST
@@ -7222,6 +7292,8 @@ export interface operations {
                 kind?: string;
                 /** @description Only cases past their SLA deadline. */
                 overdue?: boolean;
+                /** @description `me` for cases the caller has claimed, `unclaimed` for cases no one has. Resolved against the session, never a caller-supplied id. */
+                owner?: string;
                 /** @description Filter by owning team. */
                 owner_team?: string;
                 /** @description Filter by case status. */
@@ -7584,6 +7656,33 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_cases_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseQueueSummary"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10304,6 +10403,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApiError"];
                 };
+            };
+        };
+    };
+    partner_offer_stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A `text/event-stream` of `offer_created` events. Each event's `data` is the notification context documented in contracts/proposals/partner-offer-events.md: `offer_id`, `fulfilment_unit_id`, `requested_start`, `expires_at`. Comment lines are keepalives. The server closes the connection after M1_OFFER_STREAM_MAX_SECONDS and the client reconnects. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
