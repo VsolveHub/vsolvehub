@@ -4,7 +4,16 @@
 
 **Goal:** Make the customer's slot grid tell the truth — real partner capacity per slot, the real work estimate alongside the arrival window, per-visit grids in multi-service carts — and open same-day inventory that a flat 120-minute lead time currently blocks.
 
-**Architecture:** One bulk availability snapshot (three queries for the whole 7-day horizon) becomes the single source of truth for slot capacity, shared by the window grid and plan-set creation so the two can never disagree. Slot bookability is a pure predicate over that snapshot; the `NO_CAPACITY` reason code and the `estimated_duration_minutes` field that already exist end-to-end are finally emitted and rendered.
+**Architecture:** One bulk availability snapshot (**four** queries for the whole 7-day horizon, independent of slot count) becomes the single source of truth for slot capacity, shared by the window grid and plan-set creation so the two can never disagree. Slot bookability is a pure predicate over that snapshot; the `NO_CAPACITY` reason code and the `estimated_duration_minutes` field that already exist end-to-end are finally emitted and rendered.
+
+> **Critical constraint discovered during plan review (2026-08-07):** `partner_available_during()`
+> issues **two queries per call** (`selectors.py:169` exception lookup keyed on `date=`,
+> `selectors.py:184` rules lookup keyed on `weekday=`). Both vary per slot and neither is
+> prefetchable. **The snapshot must not call it.** Instead prefetch `availability_rules` and
+> `availability_exceptions` once and evaluate them in memory using the existing pure helper
+> `_availability_window_contains()` (`selectors.py:200`), which already takes only
+> `(local_start, local_end, starts_at, ends_at, ends_next_day)`. This is reuse, not duplication —
+> the shared predicate lives in that helper.
 
 **Tech Stack:** Django 5 + DRF + drf-spectacular (backend), Next.js App Router + TanStack Query + Tailwind v4 (frontend), pytest, vitest, Playwright.
 
@@ -161,10 +170,54 @@ def load_snapshot(*, variant_ids, area, horizon_start, horizon_end):
     )
 ```
 
-`free_partner_ids` filters `partner_ids` by no-overlap against `_reserved[pid]` and then `partner_available_during(...)`; `capacity` returns its length.
+`free_partner_ids` filters `partner_ids` by no-overlap against `_reserved[pid]`, then by in-memory schedule evaluation. `capacity` returns its length.
 
-The availability-rule prefetch is the third query — add
-`.prefetch_related("availability_rules", "availability_exceptions")` to `candidates` and confirm against the related names on `PartnerAvailabilityRule` / `PartnerAvailabilityException` before relying on them.
+**Do not call `partner_available_during()` here** — see the architecture note at the top of this plan. It costs two queries per call and would turn this into ~400 queries. Prefetch instead (related names verified against `partners/models.py:417-497`):
+
+```python
+candidates = candidates.select_related("latest_location").prefetch_related(
+    "availability_rules",       # PartnerAvailabilityRule.partner related_name
+    "availability_exceptions",  # PartnerAvailabilityException.partner related_name
+)
+```
+
+`latest_location` is a `OneToOneField` primary-key relation (`partners/models.py:534-539`), so `select_related` costs **zero** extra queries — Task 2 gets its location data free.
+
+Then reuse the existing pure helper rather than reimplementing the window rule:
+
+```python
+from apps.partners.selectors import _availability_window_contains
+
+def _schedule_allows(self, partner, *, starts_at, duration_minutes) -> bool:
+    zone = ZoneInfo(self.area.timezone)
+    local_start = starts_at.astimezone(zone)
+    local_end = local_start + timedelta(minutes=duration_minutes)
+    exception = next(
+        (e for e in partner.availability_exceptions.all()
+         if e.service_area_id == self.area.id and e.date == local_start.date()),
+        None,
+    )
+    if exception is not None:
+        if not exception.is_available or exception.starts_at is None or exception.ends_at is None:
+            return False
+        return _availability_window_contains(
+            local_start, local_end,
+            starts_at=exception.starts_at, ends_at=exception.ends_at,
+            ends_next_day=exception.ends_next_day,
+        )
+    return any(
+        _availability_window_contains(
+            local_start, local_end,
+            starts_at=rule.starts_at, ends_at=rule.ends_at, ends_next_day=rule.ends_next_day,
+        )
+        for rule in partner.availability_rules.all()
+        if rule.service_area_id == self.area.id
+        and rule.weekday == local_start.weekday()
+        and rule.is_active
+    )
+```
+
+This mirrors `partner_available_during` branch for branch — exception wins over rules, missing window means unavailable — so the two can never disagree. Promote `_availability_window_contains` to a public name (`availability_window_contains`) as part of this step rather than importing an underscore-private symbol across apps.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -184,7 +237,9 @@ def test_snapshot_query_count_is_independent_of_slot_count(
     django_assert_num_queries, area, electrician, switch_variant
 ):
     start = timezone.now() + timedelta(days=1)
-    with django_assert_num_queries(3):
+    # 4 = candidates (+select_related latest_location) | availability_rules
+    #     | availability_exceptions | reservations
+    with django_assert_num_queries(4):
         snapshot = load_snapshot(
             variant_ids=[switch_variant.id],
             area=area,
@@ -195,7 +250,7 @@ def test_snapshot_query_count_is_independent_of_slot_count(
             snapshot.capacity(starts_at=start + timedelta(hours=hour), duration_minutes=40)
 ```
 
-If this reports more than 3, a lazy relation is leaking — fix the prefetch, do not raise the number.
+The number that matters is that it does not grow with the 100 iterations. If it reports more than 4, a lazy relation is leaking — **fix the prefetch, do not raise the number.** The most likely cause is a surviving `partner_available_during()` call.
 
 - [ ] **Step 7: Commit**
 

@@ -168,18 +168,32 @@ changes from *"Fully booked"* to *"No pros available"*.
 
 ## 6. Bulk capacity algorithm
 
-Naively this is `days × slots × partners` queries. It must not be. **Three queries for the entire
+Naively this is `days × slots × partners` queries. It must not be. **Four queries for the entire
 7-day grid**, then pure in-memory computation:
 
-1. **Eligible partner set** — one query. Filters already exist in
-   `planning._eligible_partner_ids()`: approved application, active service-area link, active
-   service link per required variant.
-2. **Their availability rules + exceptions** — one prefetch across the whole partner set.
-3. **All active reservations** for those partners overlapping the 7-day horizon — one range query.
+1. **Eligible partner set** — one query, with `select_related("latest_location")`. `PartnerLocation`
+   is a `OneToOneField` primary-key relation, so the location data §7 needs is free. Filters already
+   exist in `planning._eligible_partner_ids()`: approved application, active service-area link,
+   active service link per required variant.
+2. **Availability rules** — one prefetch (`availability_rules`).
+3. **Availability exceptions** — one prefetch (`availability_exceptions`).
+4. **All active reservations** for those partners overlapping the 7-day horizon — one range query.
 
-Slot count then stops mattering. This is the same logic `_eligible_partner_ids` runs today, hoisted
-out of its per-start shape into a bulk one. Both call sites must share the predicate so the grid and
-plan-set creation can never disagree.
+Slot count then stops mattering.
+
+**`partner_available_during()` must not be called from the snapshot.** It issues two queries per
+call — an exception lookup keyed on `date=` and a rules lookup keyed on `weekday=`
+(`partners/selectors.py:169,184`) — both varying per slot and neither prefetchable. Evaluating 100
+slots through it costs hundreds of queries and destroys the guarantee above.
+
+The shared predicate is instead `_availability_window_contains()`
+(`partners/selectors.py:200`), already a pure function of
+`(local_start, local_end, starts_at, ends_at, ends_next_day)`. The snapshot evaluates prefetched
+rules and exceptions through it, mirroring `partner_available_during`'s branch order — exception
+wins over rules, no matching window means unavailable. Promote it to a public name when the
+snapshot starts importing it across app boundaries.
+
+The grid and plan-set creation must both go through the snapshot so they can never disagree.
 
 **Caching:** the response is `VOLATILE_STATE` on the frontend and must stay so. A short server-side
 cache (≤30 s) keyed on `(area, variant-set, duration, address)` is permitted; anything longer
