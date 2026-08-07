@@ -6,6 +6,8 @@ from apps.partners.views import (
     OperationsPartnerApplicationDetailView,
     OperationsPartnerApplicationQueueView,
     OperationsPartnerApplicationTransitionView,
+    OperationsPartnerDetailView,
+    OperationsPartnerDirectoryView,
     OperationsPartnerDocumentAccessView,
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
@@ -92,6 +94,16 @@ urlpatterns = [
         "operations/partner-documents/<uuid:document_id>/review/",
         OperationsPartnerDocumentReviewView.as_view(),
         name="operations-partner-document-review",
+    ),
+    path(
+        "operations/partners/",
+        OperationsPartnerDirectoryView.as_view(),
+        name="operations-partner-directory",
+    ),
+    path(
+        "operations/partners/<uuid:partner_id>/",
+        OperationsPartnerDetailView.as_view(),
+        name="operations-partner-detail",
     ),
     path(
         "operations/partners/<uuid:partner_id>/availability/",

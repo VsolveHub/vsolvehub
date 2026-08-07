@@ -348,6 +348,19 @@ export const queryKeys = {
       unassigned?: boolean;
     }) => [...queryKeys.operations.all, "partner-application-queue", filters] as const,
     /**
+     * The Partner directory — everyone who works here, not just who is awaiting review.
+     *
+     * Filters are in the key for the same reason the review queue's are: a skill-filtered
+     * directory and an unfiltered one are different answers and must not share a cache entry.
+     */
+    partnerDirectory: (filters: { status?: string; skills?: string[] }) =>
+      [...queryKeys.operations.all, "partner-directory", filters] as const,
+
+    /** One Partner's management record. Keyed by id — several are open at once. */
+    partnerRecord: (partnerId: string) =>
+      [...queryKeys.operations.all, "partner-record", partnerId] as const,
+
+    /**
      * One Partner application under review.
      *
      * Keyed by id, unlike `partner.application()` which is always the caller's

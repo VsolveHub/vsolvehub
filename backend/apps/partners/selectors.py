@@ -1,6 +1,7 @@
 """Bounded Partner read services."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
@@ -8,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 from django.utils import timezone
 
 from apps.identity.models import User
@@ -21,6 +22,9 @@ from apps.partners.models import (
     PartnerDocument,
     PartnerLocation,
     PartnerProfile,
+    PartnerService,
+    PartnerServiceArea,
+    PartnerSkill,
     Skill,
 )
 
@@ -118,6 +122,96 @@ def operations_partner_application_queue(
     if unassigned:
         queryset = queryset.filter(review_assigned_to__isnull=True)
     return queryset.order_by("submitted_at", "id")
+
+
+def operations_partner_directory(
+    *,
+    status: str | None = None,
+    skill_codes: Sequence[str] = (),
+) -> QuerySet[PartnerProfile]:
+    """Every Partner on the platform, filtered the way a manager browses them.
+
+    Distinct from `operations_partner_application_queue`, which is a *worklist*: it shows the
+    handful of applications awaiting a decision, defaults to the three in-review statuses and is
+    ordered by how long somebody has been waiting. This is a *directory* — it shows approved,
+    suspended and offboarded Partners too, because "who works for us" is a different question
+    from "what needs reviewing today", and answering it from the review queue would hide every
+    Partner already approved.
+
+    Skills filter as a union rather than an intersection: picking Electrical and Plumbing in a
+    directory means "show me either", which is how a person reads a multi-select. The
+    intersection reading belongs to dispatch, where a visit genuinely needs every skill at once
+    (`carts.availability._eligible_partners`), and the two must not be confused — this one is
+    browsing, that one is staffing.
+
+    Two queries regardless of page size: the page itself, and one prefetch for the skill chips.
+    Counts are annotated rather than prefetched, so a Partner serving forty areas costs the same
+    as one serving one.
+    """
+
+    queryset = (
+        PartnerProfile.objects.select_related("application", "user")
+        .prefetch_related(
+            Prefetch(
+                "skill_links",
+                queryset=PartnerSkill.objects.filter(is_active=True).select_related("skill"),
+            ),
+        )
+        .annotate(
+            service_count=Count(
+                "service_links", filter=Q(service_links__is_active=True), distinct=True
+            ),
+            service_area_count=Count(
+                "service_area_links", filter=Q(service_area_links__is_active=True), distinct=True
+            ),
+        )
+    )
+    if status is not None:
+        queryset = queryset.filter(application__status=status)
+    if skill_codes:
+        queryset = queryset.filter(
+            skill_links__skill__code__in=list(skill_codes),
+            skill_links__is_active=True,
+        )
+    # `distinct` because the skill join multiplies rows for a Partner holding several of the
+    # filtered skills — without it the directory lists the same person once per matching skill.
+    return queryset.distinct().order_by("display_name", "id")
+
+
+def operations_partner_detail(partner_id: uuid.UUID) -> PartnerProfile | None:
+    """One Partner, with everything the management screen shows and nothing it does not.
+
+    Document *rows* are prefetched for their kind and status; their contents are not, and this
+    projection deliberately publishes no URL for them. Revealing a document stays behind
+    `OperationsPartnerDocumentAccessView`, which mints a short-lived link and records who looked
+    — a management screen that rendered them inline would route around that audit entirely.
+    """
+
+    return (
+        PartnerProfile.objects.filter(id=partner_id)
+        .select_related("application", "application__reviewed_by", "user")
+        .prefetch_related(
+            Prefetch(
+                "skill_links",
+                queryset=PartnerSkill.objects.filter(is_active=True).select_related("skill"),
+            ),
+            Prefetch(
+                "service_links",
+                queryset=PartnerService.objects.filter(is_active=True).select_related(
+                    "variant__service"
+                ),
+            ),
+            Prefetch(
+                "service_area_links",
+                queryset=PartnerServiceArea.objects.filter(is_active=True).select_related(
+                    "service_area"
+                ),
+            ),
+            "application__documents",
+            "application__transitions",
+        )
+        .first()
+    )
 
 
 def operations_partner_application_detail(

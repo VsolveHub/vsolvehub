@@ -4,7 +4,7 @@ import uuid
 from http import HTTPStatus
 from typing import cast
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import APIException, NotFound
 from rest_framework.pagination import CursorPagination
@@ -24,6 +24,8 @@ from apps.partners.selectors import (
     applicant_skills,
     operations_partner_application_detail,
     operations_partner_application_queue,
+    operations_partner_detail,
+    operations_partner_directory,
     partner_application_for_user,
     partner_profile_for_user,
     partner_schedule,
@@ -35,6 +37,10 @@ from apps.partners.serializers import (
     OperationsApplicationQueuePageSerializer,
     OperationsApplicationQueueQuerySerializer,
     OperationsDocumentReviewSerializer,
+    OperationsPartnerDetailSerializer,
+    OperationsPartnerDirectoryItemSerializer,
+    OperationsPartnerDirectoryPageSerializer,
+    OperationsPartnerDirectoryQuerySerializer,
     OperationsPartnerScheduleUpdateSerializer,
     OperationsTransitionSerializer,
     PartnerApplicationSerializer,
@@ -486,6 +492,17 @@ class OperationsApplicationCursorPagination(CursorPagination):
     ordering = ("submitted_at", "id")
 
 
+class OperationsPartnerDirectoryCursorPagination(CursorPagination):
+    """Ordered by name, matching the directory's own ordering.
+
+    `CursorPagination` reads its ordering from itself, not from the queryset — a paginator whose
+    ordering disagreed with the queryset's would page inconsistently.
+    """
+
+    page_size = 25
+    ordering = ("display_name", "id")
+
+
 class OperationsPartnerApplicationQueueView(APIView):
     permission_classes = (IsOperationsUser,)
 
@@ -514,6 +531,101 @@ class OperationsPartnerApplicationQueueView(APIView):
         return paginator.get_paginated_response(
             OperationsApplicationQueueItemSerializer(page, many=True).data,
         )
+
+
+class OperationsPartnerDirectoryView(APIView):
+    """Everyone who works for us, not just everyone awaiting a decision.
+
+    Deliberately a second surface rather than a widened review queue. The queue is a worklist —
+    it defaults to the three in-review statuses and orders by how long somebody has waited. This
+    is a directory: it lists approved, suspended and offboarded Partners too, ordered by name,
+    because "find me this Partner" and "what should I review next" are different jobs and one
+    screen doing both serves neither.
+    """
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        tags=["Operations"],
+        operation_id="operations_partner_directory_list",
+        parameters=[
+            OpenApiParameter("status", str, description="Filter by application status."),
+            OpenApiParameter(
+                "skill",
+                str,
+                many=True,
+                description=(
+                    "Repeatable skill code. A Partner matching *any* supplied skill is listed — "
+                    "a directory multi-select reads as a union."
+                ),
+            ),
+            OpenApiParameter("cursor", str, description="Opaque page cursor."),
+        ],
+        responses={
+            200: OperationsPartnerDirectoryPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request) -> Response:
+        # `getlist` rather than the serializer's own read: a plain `Serializer` sees only the
+        # last value of a repeated query parameter, so `?skill=a&skill=b` would silently filter
+        # on `b` alone.
+        payload: dict[str, object] = {
+            key: value for key, value in request.query_params.items() if key != "skill"
+        }
+        payload["skill"] = request.query_params.getlist("skill")
+        serializer = OperationsPartnerDirectoryQuerySerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        queryset = operations_partner_directory(
+            status=cast(str | None, data.get("status")),
+            skill_codes=cast(list[str], data.get("skill") or []),
+        )
+        paginator = OperationsPartnerDirectoryCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(
+            OperationsPartnerDirectoryItemSerializer(page, many=True).data,
+        )
+
+
+class OperationsPartnerDetailView(APIView):
+    """One Partner's management record.
+
+    Carries the same two guards the application detail does, for the same reasons: a reviewer
+    may not open their own record, and every read is recorded — this projection names a person
+    and summarises their documents, so who looked is itself a fact worth keeping.
+    """
+
+    permission_classes = (IsOperationsUser,)
+
+    @extend_schema(
+        tags=["Operations"],
+        operation_id="operations_partner_detail_retrieve",
+        responses={
+            200: OperationsPartnerDetailSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, partner_id: uuid.UUID) -> Response:
+        partner = operations_partner_detail(partner_id)
+        if partner is None:
+            raise NotFound("Partner was not found.")
+        actor = cast(User, request.user)
+        if partner.user_id == actor.id:
+            error = PartnerSelfReviewError(object_type="partner", object_id=partner.id)
+            _audit_self_review_denial(actor=actor, error=error)
+            _raise_api_error(error)
+        record_access_event(
+            actor=actor,
+            subject_user=partner.user,
+            action="operations.partner.read",
+            object_type="partner",
+            object_id=partner.id,
+            request_id=get_request_id() or "",
+        )
+        return Response(OperationsPartnerDetailSerializer(partner).data)
 
 
 class OperationsPartnerApplicationDetailView(APIView):

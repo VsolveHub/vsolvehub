@@ -64,6 +64,7 @@ import {
   Calendar,
   ToggleLeft,
   User,
+  Users,
   Menu,
   X,
   type LucideIcon,
@@ -80,6 +81,10 @@ const OPERATIONS_ROLE = "operations";
  */
 const WORKSPACES: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Home", icon: Home },
+  // "Partners" is the directory — everyone, any status. `/reviews` still owns deciding on an
+  // application and is reachable from a partner's record; it is not a second nav entry, because
+  // a reviewer arrives at it from the person they are reviewing.
+  { href: "/operations/partners", label: "Partners", icon: Users },
   { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
   { href: "/operations/cases", label: "Cases", icon: Briefcase },
   { href: "/operations/payouts", label: "Payouts", icon: Wallet },

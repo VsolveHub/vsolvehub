@@ -3627,6 +3627,98 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/partners/:
+    get:
+      operationId: operations_partner_directory_list
+      description: |-
+        Everyone who works for us, not just everyone awaiting a decision.
+
+        Deliberately a second surface rather than a widened review queue. The queue is a worklist —
+        it defaults to the three in-review statuses and orders by how long somebody has waited. This
+        is a directory: it lists approved, suspended and offboarded Partners too, ordered by name,
+        because "find me this Partner" and "what should I review next" are different jobs and one
+        screen doing both serves neither.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque page cursor.
+      - in: query
+        name: skill
+        schema:
+          type: array
+          items:
+            type: string
+        description: Repeatable skill code. A Partner matching *any* supplied skill
+          is listed — a directory multi-select reads as a union.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by application status.
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPartnerDirectoryPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/partners/{partner_id}/:
+    get:
+      operationId: operations_partner_detail_retrieve
+      description: |-
+        One Partner's management record.
+
+        Carries the same two guards the application detail does, for the same reasons: a reviewer
+        may not open their own record, and every read is recorded — this projection names a person
+        and summarises their documents, so who looked is itself a fact worth keeping.
+      parameters:
+      - in: path
+        name: partner_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsPartnerDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/partners/{partner_id}/availability/:
     put:
       operationId: operations_partners_availability_update
@@ -9476,6 +9568,209 @@ components:
           maxLength: 2000
       required:
       - decision
+    OperationsPartnerDetail:
+      type: object
+      description: One Partner, for the management screen.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        biography:
+          type: string
+          readOnly: true
+        experience_years:
+          type: integer
+          readOnly: true
+        application_id:
+          type: string
+          format: uuid
+          readOnly: true
+        application_status:
+          type: string
+          readOnly: true
+        application_version:
+          type: integer
+          readOnly: true
+        change_request_message:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerSkillChip'
+          readOnly: true
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerSkillChip'
+          readOnly: true
+        service_areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerSkillChip'
+          readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsPartnerDocumentState'
+          readOnly: true
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerApplicationTransition'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application_id
+      - application_status
+      - application_version
+      - biography
+      - change_request_message
+      - created_at
+      - display_name
+      - documents
+      - experience_years
+      - id
+      - reviewed_at
+      - service_areas
+      - services
+      - skills
+      - submitted_at
+      - transitions
+    OperationsPartnerDirectoryItem:
+      type: object
+      description: |-
+        One directory row.
+
+        Carries the application's *status* but none of its contents. Deciding on an application is
+        the review surface's job, behind its own audit; this row exists so somebody can find a
+        Partner.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        experience_years:
+          type: integer
+          readOnly: true
+        application_id:
+          type: string
+          format: uuid
+          readOnly: true
+        application_status:
+          type: string
+          readOnly: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerSkillChip'
+          readOnly: true
+        service_count:
+          type: integer
+          readOnly: true
+        service_area_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application_id
+      - application_status
+      - created_at
+      - display_name
+      - experience_years
+      - id
+      - reviewed_at
+      - service_area_count
+      - service_count
+      - skills
+      - submitted_at
+    OperationsPartnerDirectoryPage:
+      type: object
+      properties:
+        next:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsPartnerDirectoryItem'
+          readOnly: true
+      required:
+      - next
+      - previous
+      - results
+    OperationsPartnerDocumentState:
+      type: object
+      description: |-
+        A document's existence and verdict — never its contents.
+
+        No URL and no storage key, by design. Revealing a document goes through
+        `OperationsPartnerDocumentAccessView`, which mints a short-lived link and records who
+        looked; publishing one here would route around that audit.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/PartnerDocumentKindEnum'
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusD12Enum'
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        uploaded_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - kind
+      - reviewed_at
+      - status
+      - uploaded_at
     OperationsPartnerScheduleUpdateRequest:
       type: object
       properties:
@@ -10257,7 +10552,7 @@ components:
           nullable: true
         status:
           allOf:
-          - $ref: '#/components/schemas/PartnerDocumentStatusEnum'
+          - $ref: '#/components/schemas/StatusD12Enum'
           readOnly: true
         review_reason:
           type: string
@@ -10326,18 +10621,6 @@ components:
       required:
       - expires_at
       - review_url
-    PartnerDocumentStatusEnum:
-      enum:
-      - PENDING
-      - APPROVED
-      - REJECTED
-      - SUPERSEDED
-      type: string
-      description: |-
-        * `PENDING` - Pending review
-        * `APPROVED` - Approved
-        * `REJECTED` - Rejected
-        * `SUPERSEDED` - Superseded
     PartnerDocumentUpload:
       type: object
       properties:
@@ -10803,6 +11086,19 @@ components:
       - name
       - slug
       - timezone
+    PartnerSkillChip:
+      type: object
+      description: A code/name pair, for the chips the directory renders.
+      properties:
+        code:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+      required:
+      - code
+      - name
     PartnerSkillOption:
       type: object
       properties:
@@ -12724,6 +13020,18 @@ components:
       required:
       - code
       - expected_version
+    StatusD12Enum:
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - SUPERSEDED
+      type: string
+      description: |-
+        * `PENDING` - Pending review
+        * `APPROVED` - Approved
+        * `REJECTED` - Rejected
+        * `SUPERSEDED` - Superseded
     StepUpSession:
       type: object
       properties:

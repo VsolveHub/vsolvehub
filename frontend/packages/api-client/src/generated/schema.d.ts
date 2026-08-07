@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 5cb099bab3b91e7a
+ * Checksum: 0ba901c83c78efb8
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1366,6 +1366,54 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["operations_partner_documents_review_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/partners/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Everyone who works for us, not just everyone awaiting a decision.
+         *
+         *     Deliberately a second surface rather than a widened review queue. The queue is a worklist —
+         *     it defaults to the three in-review statuses and orders by how long somebody has waited. This
+         *     is a directory: it lists approved, suspended and offboarded Partners too, ordered by name,
+         *     because "find me this Partner" and "what should I review next" are different jobs and one
+         *     screen doing both serves neither.
+         */
+        get: operations["operations_partner_directory_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/partners/{partner_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description One Partner's management record.
+         *
+         *     Carries the same two guards the application detail does, for the same reasons: a reviewer
+         *     may not open their own record, and every read is recorded — this projection names a person
+         *     and summarises their documents, so who looked is itself a fact worth keeping.
+         */
+        get: operations["operations_partner_detail_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3704,6 +3752,79 @@ export interface components {
             decision: components["schemas"]["OperationsDocumentReviewDecisionEnum"];
             reason?: string;
         };
+        /** @description One Partner, for the management screen. */
+        OperationsPartnerDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly display_name: string;
+            readonly biography: string;
+            readonly experience_years: number;
+            /** Format: uuid */
+            readonly application_id: string;
+            readonly application_status: string;
+            readonly application_version: number;
+            readonly change_request_message: string;
+            /** Format: date-time */
+            readonly submitted_at: string;
+            /** Format: date-time */
+            readonly reviewed_at: string;
+            readonly skills: components["schemas"]["PartnerSkillChip"][];
+            readonly services: components["schemas"]["PartnerSkillChip"][];
+            readonly service_areas: components["schemas"]["PartnerSkillChip"][];
+            readonly documents: components["schemas"]["OperationsPartnerDocumentState"][];
+            readonly transitions: components["schemas"]["PartnerApplicationTransition"][];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description One directory row.
+         *
+         *     Carries the application's *status* but none of its contents. Deciding on an application is
+         *     the review surface's job, behind its own audit; this row exists so somebody can find a
+         *     Partner.
+         */
+        OperationsPartnerDirectoryItem: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly display_name: string;
+            readonly experience_years: number;
+            /** Format: uuid */
+            readonly application_id: string;
+            readonly application_status: string;
+            /** Format: date-time */
+            readonly submitted_at: string;
+            /** Format: date-time */
+            readonly reviewed_at: string;
+            readonly skills: components["schemas"]["PartnerSkillChip"][];
+            readonly service_count: number;
+            readonly service_area_count: number;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        OperationsPartnerDirectoryPage: {
+            /** Format: uri */
+            readonly next: string | null;
+            /** Format: uri */
+            readonly previous: string | null;
+            readonly results: components["schemas"]["OperationsPartnerDirectoryItem"][];
+        };
+        /**
+         * @description A document's existence and verdict — never its contents.
+         *
+         *     No URL and no storage key, by design. Revealing a document goes through
+         *     `OperationsPartnerDocumentAccessView`, which mints a short-lived link and records who
+         *     looked; publishing one here would route around that audit.
+         */
+        OperationsPartnerDocumentState: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["PartnerDocumentKindEnum"];
+            readonly status: components["schemas"]["StatusD12Enum"];
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+            /** Format: date-time */
+            readonly uploaded_at: string;
+        };
         OperationsPartnerScheduleUpdateRequest: {
             rules: components["schemas"]["PartnerAvailabilityRuleInputRequest"][];
             exceptions: components["schemas"]["PartnerAvailabilityExceptionInputRequest"][];
@@ -3984,7 +4105,7 @@ export interface components {
             readonly scan_status: components["schemas"]["ScanStatusEnum"];
             /** Format: date-time */
             readonly scanned_at: string | null;
-            readonly status: components["schemas"]["PartnerDocumentStatusEnum"];
+            readonly status: components["schemas"]["StatusD12Enum"];
             readonly review_reason: string;
             /** Format: date-time */
             readonly uploaded_at: string;
@@ -4012,14 +4133,6 @@ export interface components {
             /** Format: date-time */
             readonly expires_at: string;
         };
-        /**
-         * @description * `PENDING` - Pending review
-         *     * `APPROVED` - Approved
-         *     * `REJECTED` - Rejected
-         *     * `SUPERSEDED` - Superseded
-         * @enum {string}
-         */
-        PartnerDocumentStatusEnum: "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
         PartnerDocumentUpload: {
             /** Format: uuid */
             readonly id: string;
@@ -4199,6 +4312,11 @@ export interface components {
             readonly name: string;
             readonly timezone: string;
             readonly is_accepting_partners: boolean;
+        };
+        /** @description A code/name pair, for the chips the directory renders. */
+        PartnerSkillChip: {
+            readonly code: string;
+            readonly name: string;
         };
         PartnerSkillOption: {
             readonly code: string;
@@ -4954,6 +5072,14 @@ export interface components {
             expected_version: number;
             code: string;
         };
+        /**
+         * @description * `PENDING` - Pending review
+         *     * `APPROVED` - Approved
+         *     * `REJECTED` - Rejected
+         *     * `SUPERSEDED` - Superseded
+         * @enum {string}
+         */
+        StatusD12Enum: "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
         StepUpSession: {
             /** Format: date-time */
             readonly stepped_up_at: string;
@@ -8662,6 +8788,85 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_directory_list: {
+        parameters: {
+            query?: {
+                /** @description Opaque page cursor. */
+                cursor?: string;
+                /** @description Repeatable skill code. A Partner matching *any* supplied skill is listed — a directory multi-select reads as a union. */
+                skill?: string[];
+                /** @description Filter by application status. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPartnerDirectoryPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_partner_detail_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPartnerDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
