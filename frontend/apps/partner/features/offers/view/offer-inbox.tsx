@@ -18,6 +18,7 @@ import {
   usePartnerOffers,
   type Offer,
 } from "../queries";
+import { useOfferLiveEvents } from "../live-events";
 import { OfferCard } from "./offer-card";
 
 /**
@@ -121,6 +122,9 @@ export function OfferInbox() {
   const queryClient = useQueryClient();
   const offersQuery = usePartnerOffers();
 
+  const livePollPaused = offersQuery.data ? isTraversingHistory(offersQuery.data) : false;
+  useOfferLiveEvents(Boolean(offersQuery.data && !livePollPaused));
+
   function restartFromPageOne() {
     void queryClient.resetQueries({ queryKey: queryKeys.partner.offers() });
   }
@@ -129,14 +133,6 @@ export function OfferInbox() {
 
   const offers = offersQuery.data?.pages.flatMap((page) => page.results) ?? [];
   const listError = offersQuery.error;
-  /**
-   * Live updates stop while the Partner reads back through older pages.
-   *
-   * Said out loud rather than left to be noticed. A poller that has stopped
-   * looks exactly like one that is up to date, and the difference matters here:
-   * the offers on this screen have deadlines.
-   */
-  const livePollPaused = offersQuery.data ? isTraversingHistory(offersQuery.data) : false;
 
   if (offersQuery.isError && offers.length === 0) {
     const restartable =

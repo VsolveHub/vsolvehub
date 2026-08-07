@@ -380,6 +380,7 @@ export function bookingWindows(
     server_now: iso(0),
     estimated_duration_minutes: 60,
     availability_is_preliminary: false,
+    timezone: "Asia/Kolkata",
     days: [bookingWindowDay()],
     ...overrides,
   };

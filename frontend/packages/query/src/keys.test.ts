@@ -33,7 +33,7 @@ describe("scheduling group keys", () => {
 
   it("does not collide with the windows key at the same inputs", () => {
     expect(queryKeys.booking.schedulingGroups({ cartVersion: 1, addressId: address })).not.toEqual(
-      queryKeys.booking.windows({ cartVersion: 1, addressId: address }),
+      queryKeys.booking.windows({ cartVersion: 1, addressId: address, groupKey: null }),
     );
   });
 });
