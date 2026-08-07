@@ -72,6 +72,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.catalog.seed_content import SERVICE_VARIANTS, VariantSeed, content_for_trade
 from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.pricing.models import ServiceRate, TaskRate
 
@@ -1003,7 +1004,7 @@ class Command(BaseCommand):
                     },
                 )
                 for task_order, task in enumerate(trade.tasks, start=1):
-                    variants.append(
+                    variants.extend(
                         self._seed_task(
                             subcategory=subcategory,
                             trade=trade,
@@ -1013,6 +1014,7 @@ class Command(BaseCommand):
                         )
                     )
 
+        variants.extend(self._adopt_services_owned_elsewhere())
         self._link_service_area(variants)
         self.stdout.write(
             self.style.SUCCESS(
@@ -1029,7 +1031,7 @@ class Command(BaseCommand):
         task: TaskSeed,
         order: int,
         tax_code: str,
-    ) -> ServiceVariant:
+    ) -> list[ServiceVariant]:
         description = f"{task.name} carried out at your address by a verified {trade.name}."
         service, _ = Service.objects.update_or_create(
             slug=task.slug,
@@ -1042,21 +1044,65 @@ class Command(BaseCommand):
                 "display_order": order,
             },
         )
+        self._seed_service_content(service=service, trade=trade)
+
+        # A service with declared variants is sold as those and nothing else; one without keeps
+        # the single `standard` variant it has always had. `/book/[service]` resolves
+        # `?variant=<code>` and falls back to the first, so both shapes book identically.
+        options = SERVICE_VARIANTS.get(task.slug) or (
+            VariantSeed("Standard service", "standard", task.price_paise, task.minutes),
+        )
+        variants = [
+            self._seed_variant(
+                service=service,
+                trade=trade,
+                task=task,
+                option=option,
+                position=position,
+                tax_code=tax_code,
+                fallback_description=description,
+            )
+            for position, option in enumerate(options, start=1)
+        ]
+        # Anything left from an earlier run with a different variant set is retired rather than
+        # deleted: a variant may already be referenced by a quote or a booking, and PROTECT would
+        # refuse the delete anyway. Deactivating takes it out of the catalog and leaves history
+        # explicable.
+        ServiceVariant.objects.filter(service=service).exclude(
+            code__in=[option.code for option in options]
+        ).update(is_active=False)
+        return variants
+
+    def _seed_variant(
+        self,
+        *,
+        service: Service,
+        trade: TradeSeed,
+        task: TaskSeed,
+        option: VariantSeed,
+        position: int,
+        tax_code: str,
+        fallback_description: str,
+        # Read off the existing variant when adopting a service another command owns, so
+        # adding options never silently re-routes which trade gets dispatched.
+        skill_code: str | None = None,
+    ) -> ServiceVariant:
         variant, _ = ServiceVariant.objects.update_or_create(
             service=service,
-            code="standard",
+            code=option.code,
             defaults={
-                "name": "Standard service",
-                "description": description,
+                "name": option.name,
+                "description": option.description or fallback_description,
+                "display_order": position,
                 "pricing_strategy": ServiceVariant.PricingStrategy.FIXED,
                 "booking_archetype": ServiceVariant.BookingArchetype.A1_TASK_VISIT,
-                "minimum_duration_minutes": task.minutes,
-                "recommended_duration_minutes": task.minutes,
-                "duration_increment_minutes": task.minutes,
-                "maximum_duration_minutes": task.minutes,
+                "minimum_duration_minutes": option.minutes,
+                "recommended_duration_minutes": option.minutes,
+                "duration_increment_minutes": option.minutes,
+                "maximum_duration_minutes": option.minutes,
                 # Dispatch matches on this. It is the subcategory slug, so a Partner who holds
                 # the "electrician" skill is eligible for every electrician task and nothing else.
-                "required_skill_code": trade.slug,
+                "required_skill_code": skill_code or trade.slug,
                 "tax_category_code": tax_code,
                 "is_active": True,
             },
@@ -1065,7 +1111,7 @@ class Command(BaseCommand):
             variant=variant,
             effective_from=SEED_RATE_EFFECTIVE_FROM,
             defaults={
-                "amount_paise": task.price_paise,
+                "amount_paise": option.price_paise,
                 "currency": "INR",
                 "effective_to": None,
                 "is_active": True,
@@ -1073,14 +1119,17 @@ class Command(BaseCommand):
         )
         TaskRate.objects.update_or_create(
             variant=variant,
-            task_code=task.slug,
+            # One task code per *variant*, not per service: a 32-amp replacement and a
+            # repair are different work at different prices, and sharing a code would make
+            # the quote unable to say which was bought.
+            task_code=f"{task.slug}:{option.code}" if option.code != "standard" else task.slug,
             effective_from=SEED_RATE_EFFECTIVE_FROM,
             defaults={
-                "unit_price_paise": task.price_paise,
+                "unit_price_paise": option.price_paise,
                 # Setup is charged once for the visit; the work time repeats per unit ordered,
                 # so two taps cost one trip and two jobs' worth of work.
                 "base_duration_minutes": trade.setup_minutes,
-                "marginal_duration_minutes": task.minutes,
+                "marginal_duration_minutes": option.minutes,
                 "currency": "INR",
                 "effective_to": None,
                 "is_active": True,
@@ -1106,16 +1155,121 @@ class Command(BaseCommand):
                 },
             },
         )
-        ServicePolicy.objects.update_or_create(
-            service=service,
-            kind=ServicePolicy.Kind.GOOD_TO_KNOW,
-            display_order=1,
-            defaults={
-                "text": "Extra time or parts are charged only after your approval.",
-                "is_active": True,
-            },
-        )
         return variant
+
+    def _adopt_services_owned_elsewhere(self) -> list[ServiceVariant]:
+        """Give the six `seed_technician_catalog` services the same content and variants.
+
+        Those predate this command and are deliberately not re-declared here — the test suite is
+        built on their slugs and prices, and duplicating them would be two definitions of one
+        service. But a customer does not know which command wrote a page, and "Switch / Socket
+        Repair" showing no process, no inclusions and one price while every neighbouring service
+        shows all three is the catalog contradicting itself.
+
+        So content is written for every active service this command did not seed, and variants
+        are applied where `SERVICE_VARIANTS` declares them. The skill and tax codes are read off
+        the existing variant rather than guessed, so nothing about how the service dispatches or
+        is taxed changes.
+        """
+
+        owned = {task.slug for entry in CATALOG for trade in entry[5] for task in trade.tasks}
+        adopted: list[ServiceVariant] = []
+
+        for service in (
+            Service.objects.filter(status=Service.Status.ACTIVE)
+            .exclude(slug__in=owned)
+            .select_related("subcategory")
+        ):
+            existing = service.variants.filter(is_active=True).order_by("display_order").first()
+            if existing is None:
+                continue
+            rate = TaskRate.objects.filter(variant=existing, is_active=True).first()
+            if rate is None:
+                continue
+
+            trade = TradeSeed(
+                name=service.subcategory.name,
+                slug=service.subcategory.slug,
+                setup_minutes=rate.base_duration_minutes,
+                equipment=(),
+                unsafe=(),
+                tasks=(),
+            )
+            self._seed_service_content(service=service, trade=trade)
+
+            options = SERVICE_VARIANTS.get(service.slug)
+            if options is None:
+                continue
+            task = TaskSeed(
+                name=service.name,
+                slug=service.slug,
+                price_paise=rate.unit_price_paise,
+                minutes=existing.recommended_duration_minutes,
+            )
+            for position, option in enumerate(options, start=1):
+                adopted.append(
+                    self._seed_variant(
+                        service=service,
+                        trade=trade,
+                        task=task,
+                        option=option,
+                        position=position,
+                        tax_code=existing.tax_category_code,
+                        fallback_description=service.short_description,
+                        skill_code=existing.required_skill_code,
+                    )
+                )
+            # The original `standard` variant is retired only once a replacement set exists, so
+            # a service is never left with nothing bookable.
+            service.variants.exclude(code__in=[option.code for option in options]).update(
+                is_active=False
+            )
+
+        return adopted
+
+    @staticmethod
+    def _seed_service_content(*, service: Service, trade: TradeSeed) -> None:
+        """The process steps, inclusions and exclusions shown on the service page.
+
+        Rewritten on every run rather than merged. This copy is a template the trade owns, so a
+        line that disappears from the template must disappear from the page — a merge would
+        leave a retired promise on screen with nothing generating it.
+
+        `is_active=False` rather than a delete, because a policy line is the wording a customer
+        was shown when they booked, and a dispute is argued from it.
+        """
+
+        content = content_for_trade(trade.slug)
+        ServicePolicy.objects.filter(service=service).update(is_active=False)
+
+        rows: list[tuple[str, str, str, int]] = [
+            (ServicePolicy.Kind.PROCESS, step.title, step.text, order)
+            for order, step in enumerate(content.process, start=1)
+        ]
+        rows += [
+            (ServicePolicy.Kind.INCLUDED, "", text, order)
+            for order, text in enumerate(content.included, start=1)
+        ]
+        rows += [
+            (ServicePolicy.Kind.EXCLUDED, "", text, order)
+            for order, text in enumerate(content.excluded, start=1)
+        ]
+        rows.append(
+            (
+                ServicePolicy.Kind.GOOD_TO_KNOW,
+                "",
+                "Extra time or parts are charged only after your approval.",
+                1,
+            )
+        )
+
+        for kind, title, text, order in rows:
+            ServicePolicy.objects.update_or_create(
+                service=service,
+                kind=kind,
+                display_order=order,
+                defaults={"title": title, "text": text, "is_active": True},
+            )
 
     @staticmethod
     def _link_service_area(variants: list[ServiceVariant]) -> None:

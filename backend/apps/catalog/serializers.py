@@ -177,7 +177,10 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
 class ServicePolicySerializer(serializers.ModelSerializer[ServicePolicy]):
     class Meta:
         model = ServicePolicy
-        fields = ("id", "kind", "text")
+        # `display_order` is published because PROCESS steps are numbered on screen, and a
+        # client re-deriving that from array position would renumber the list the first time
+        # one step was switched off.
+        fields = ("id", "kind", "title", "text", "display_order")
         read_only_fields = fields
 
 

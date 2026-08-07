@@ -77,7 +77,12 @@ function SlotsModalBody({
   onDismiss,
 }: SlotsModalProps) {
   const [chosen, setChosen] = useState<ReadonlyMap<string, string>>(value);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(() => {
+    if (groups.length === 1) {
+      return groups[0].key;
+    }
+    return null;
+  });
 
   const editing = groups.find((group) => group.key === editingKey) ?? null;
   const isComplete = groups.length > 0 && groups.every((group) => chosen.has(group.key));
@@ -96,8 +101,13 @@ function SlotsModalBody({
   const windowsError = startsQuery.isError;
 
   function choose(groupKey: string, startsAt: string) {
-    setChosen((current) => new Map(current).set(groupKey, startsAt));
-    setEditingKey(null);
+    const next = new Map(chosen).set(groupKey, startsAt);
+    setChosen(next);
+    if (groups.length === 1) {
+      onConfirm(next);
+    } else {
+      setEditingKey(null);
+    }
   }
 
   return (
@@ -116,7 +126,16 @@ function SlotsModalBody({
       }
       footer={
         editing ? (
-          <Button variant="ghost" onClick={() => setEditingKey(null)}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (groups.length === 1) {
+                onDismiss();
+              } else {
+                setEditingKey(null);
+              }
+            }}
+          >
             Back
           </Button>
         ) : (

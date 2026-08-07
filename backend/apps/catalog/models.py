@@ -264,10 +264,19 @@ class ServicePolicy(models.Model):
         INCLUDED = "INCLUDED", "Included"
         EXCLUDED = "EXCLUDED", "Not included"
         GOOD_TO_KNOW = "GOOD_TO_KNOW", "Good to know"
+        #: One numbered step of "how this visit works", ordered by `display_order`.
+        #:
+        #: Here rather than in its own model because a step is the same shape as every other
+        #: policy line — a sentence about the service, ordered, switchable off — and the only
+        #: thing it needed that the others did not was a short heading.
+        PROCESS = "PROCESS", "Process step"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="policies")
     kind = models.CharField(max_length=20, choices=Kind.choices)
+    #: The step's heading — "Inspection", "Quote approval". Blank for every other kind, which
+    #: is a bullet rather than a titled block.
+    title = models.CharField(max_length=120, blank=True)
     text = models.CharField(max_length=400)
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)

@@ -33,10 +33,19 @@ export function PreferredStartPicker({
   selectedStart,
   onSelect,
 }: PreferredStartPickerProps) {
-  const [dayIndex, setDayIndex] = useState<number | null>(null);
   const bookableDays = windows.days.filter((day) =>
     day.windows.some((window) => window.isAvailable),
   );
+
+  const [dayIndex, setDayIndex] = useState<number | null>(() => {
+    if (selectedStart) {
+      const idx = bookableDays.findIndex((d) =>
+        d.windows.some((w) => w.startsAt === selectedStart),
+      );
+      if (idx !== -1) return idx;
+    }
+    return bookableDays.length > 0 ? 0 : null;
+  });
 
   if (bookableDays.length === 0) {
     return (

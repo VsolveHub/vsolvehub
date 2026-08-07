@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 87b25f3d3a43f3bd
+ * Checksum: 5c598fd3f94756f6
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -4975,15 +4975,18 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly kind: components["schemas"]["ServicePolicyKindEnum"];
+            readonly title: string;
             readonly text: string;
+            readonly display_order: number;
         };
         /**
          * @description * `INCLUDED` - Included
          *     * `EXCLUDED` - Not included
          *     * `GOOD_TO_KNOW` - Good to know
+         *     * `PROCESS` - Process step
          * @enum {string}
          */
-        ServicePolicyKindEnum: "INCLUDED" | "EXCLUDED" | "GOOD_TO_KNOW";
+        ServicePolicyKindEnum: "INCLUDED" | "EXCLUDED" | "GOOD_TO_KNOW" | "PROCESS";
         ServiceQuestion: {
             /** Format: uuid */
             readonly id: string;

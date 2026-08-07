@@ -12766,23 +12766,33 @@ components:
           allOf:
           - $ref: '#/components/schemas/ServicePolicyKindEnum'
           readOnly: true
+        title:
+          type: string
+          readOnly: true
         text:
           type: string
           readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
       required:
+      - display_order
       - id
       - kind
       - text
+      - title
     ServicePolicyKindEnum:
       enum:
       - INCLUDED
       - EXCLUDED
       - GOOD_TO_KNOW
+      - PROCESS
       type: string
       description: |-
         * `INCLUDED` - Included
         * `EXCLUDED` - Not included
         * `GOOD_TO_KNOW` - Good to know
+        * `PROCESS` - Process step
     ServiceQuestion:
       type: object
       properties:

@@ -53,6 +53,7 @@ function windowsResponse(
     server_now: "2026-08-10T00:00:00Z",
     estimated_duration_minutes: 30,
     availability_is_preliminary: true,
+    timezone: "Asia/Kolkata",
     days: [
       {
         date: "2026-08-10",
@@ -137,7 +138,8 @@ function renderModal(overrides: Partial<Parameters<typeof SlotsModal>[0]> = {}) 
 async function chooseSlot(groupLabel: string, timeLabel: RegExp) {
   fireEvent.click(screen.getByRole("button", { name: new RegExp(`select ${groupLabel}`, "i") }));
   await waitFor(() => expect(screen.getByRole("radio", { name: timeLabel })).toBeInTheDocument());
-  fireEvent.click(screen.getByRole("button", { name: /mon 10 aug/i }));
+  const dayButton = screen.queryByRole("button", { name: /mon 10 aug|today/i });
+  if (dayButton) fireEvent.click(dayButton);
   fireEvent.click(screen.getByRole("radio", { name: timeLabel }));
 }
 
@@ -223,12 +225,14 @@ describe("confirming a complete schedule", () => {
     expect(chosen.get("key-salon")).toBe("2026-08-10T08:30:00Z");
   });
 
-  it("sends back the untouched instant the server published", async () => {
+  it("sends back the untouched instant the server published when selecting slot for a single service", async () => {
     const props = renderModal({ groups: [ELECTRICIAN] });
 
-    await chooseSlot("Electrician", /10:00 am/i);
-    fireEvent.click(screen.getByRole("button", { name: /^confirm$/i }));
+    // Single group opens directly into the time slot picker with Tomorrow preselected
+    expect(await screen.findByRole("radio", { name: /10:00 am/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /10:00 am/i }));
 
+    expect(props.onConfirm).toHaveBeenCalledTimes(1);
     const chosen = vi.mocked(props.onConfirm).mock.calls[0]![0] as ReadonlyMap<string, string>;
     expect(chosen.get("key-electrician")).toBe(ELECTRICIAN_WINDOWS.days[0]!.windows[0]!.starts_at);
   });
