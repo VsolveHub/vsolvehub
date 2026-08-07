@@ -14,6 +14,7 @@ from apps.carts.services import replace_cart_item
 from apps.catalog.models import ServiceVariant
 from apps.identity.models import User
 from apps.locations.models import ServiceAreaOperatingWindow
+from apps.pricing.models import TaskRate
 from tests.carts.test_checkout import seed_available_partner
 
 pytestmark = pytest.mark.django_db
@@ -104,19 +105,18 @@ def test_booking_windows_are_server_authored_and_quote_is_complete() -> None:
     assert quote["version"] == 1
     assert quote["estimated_duration_minutes"] == SWITCH_VISIT_DURATION_MINUTES
     assert quote["arrival_window"]["id"] == _first_available_window(windows)["id"]
+    # No `minimum_visit_topup` line: the minimum visit charge is ₹49 and this task is ₹129, so
+    # there is nothing to top up. The line is still produced for work priced below the floor —
+    # `test_a_task_below_the_minimum_visit_charge_is_topped_up` covers that — but no seeded
+    # service is, so quoting one is the exception rather than the shape to assert here.
     assert quote["lines"] == [
         {
             "code": "task.switch-socket-repair",
             "label": "Switch / Socket Repair x 1",
             "amount": {"amount_paise": 12_900, "currency": "INR"},
         },
-        {
-            "code": "minimum_visit_topup",
-            "label": "Minimum visit charge top-up",
-            "amount": {"amount_paise": 7_000, "currency": "INR"},
-        },
     ]
-    assert quote["subtotal"] == {"amount_paise": 19_900, "currency": "INR"}
+    assert quote["subtotal"] == {"amount_paise": 12_900, "currency": "INR"}
     assert quote["platform_fee"]["amount"] == {
         "amount_paise": 2_900,
         "currency": "INR",
@@ -124,10 +124,11 @@ def test_booking_windows_are_server_authored_and_quote_is_complete() -> None:
     assert quote["tax"] == {
         "code": "tax.gst",
         "label": "GST (included in total)",
-        "amount": {"amount_paise": 3_478, "currency": "INR"},
+        # 18% of the ₹158 total, inclusive: (15800*1800 + 5900) // 11800.
+        "amount": {"amount_paise": 2_410, "currency": "INR"},
         "included_in_total": True,
     }
-    assert quote["total"] == {"amount_paise": 22_800, "currency": "INR"}
+    assert quote["total"] == {"amount_paise": 15_800, "currency": "INR"}
     assert [band["fee"]["amount_paise"] for band in quote["cancellation_policy"]["bands"]] == [
         0,
         4_900,
@@ -135,6 +136,43 @@ def test_booking_windows_are_server_authored_and_quote_is_complete() -> None:
         14_900,
     ]
     assert quote["expires_at"] > quote["server_now"]
+
+
+def test_a_task_below_the_minimum_visit_charge_is_topped_up() -> None:
+    """The floor still works; nothing seeded is under it any more.
+
+    Lowering the minimum visit charge to ₹49 put every current service above it, so the ordinary
+    quote no longer carries a top-up line. That is a pricing decision, not the removal of a
+    feature — this drives the rate under the floor to prove the top-up still fires, because a
+    rule nothing exercises is a rule that quietly stops working.
+    """
+
+    client, _customer, address, windows = _booking_context()
+    # Below the ₹49 floor. Changed on the rate rather than the policy, so the assertion is about
+    # cheap work meeting the floor rather than about the floor being moved for the test.
+    TaskRate.objects.filter(variant__service__slug="switch-socket-repair", is_active=True).update(
+        unit_price_paise=2_900
+    )
+
+    quote = client.post(
+        "/api/v1/quotes/",
+        {"address_id": address["id"], "window_id": _first_available_window(windows)["id"]},
+        format="json",
+    ).json()
+
+    assert quote["lines"] == [
+        {
+            "code": "task.switch-socket-repair",
+            "label": "Switch / Socket Repair x 1",
+            "amount": {"amount_paise": 2_900, "currency": "INR"},
+        },
+        {
+            "code": "minimum_visit_topup",
+            "label": "Minimum visit charge top-up",
+            "amount": {"amount_paise": 2_000, "currency": "INR"},
+        },
+    ]
+    assert quote["subtotal"] == {"amount_paise": 4_900, "currency": "INR"}
 
 
 def test_tampered_or_stale_window_is_rejected_with_stable_conflict() -> None:

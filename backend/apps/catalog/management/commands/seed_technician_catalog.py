@@ -148,7 +148,14 @@ class Command(BaseCommand):
             code="m1-technician",
             version=1,
             defaults={
-                "minimum_service_subtotal_paise": 19_900,
+                # ₹49. Lowered from ₹199 so a genuinely small job can be sold at a genuinely
+                # small price — a ₹69 switch repair displayed as ₹199 because of the floor made
+                # every cheap variant look identical, which is the opposite of offering them.
+                #
+                # The floor still exists and still tops up, but at ₹49 no seeded task is below
+                # it, so `minimum_visit_topup` no longer appears on any current quote. Keep that
+                # in mind before adding a service priced under ₹49: it will be sold at ₹49.
+                "minimum_service_subtotal_paise": 4_900,
                 "gst_rate_basis_points": 1_800,
                 "platform_fee_mode": PricingPolicy.PlatformFeeMode.FIXED,
                 "platform_fee_value": 2_900,

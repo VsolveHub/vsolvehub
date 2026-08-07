@@ -645,18 +645,27 @@ class QuoteSerializer(serializers.ModelSerializer[Quote]):
         quantity = int(inputs["quantity"])
         task_code = str(rate["task_code"])
         label = str(rate["label"])
-        return [
+        lines: list[dict[str, object]] = [
             {
                 "code": f"task.{task_code}",
                 "label": f"{label} x {quantity}",
                 "amount": self._money(quote, quote.task_subtotal_paise),
             },
-            {
-                "code": "minimum_visit_topup",
-                "label": "Minimum visit charge top-up",
-                "amount": self._money(quote, quote.minimum_visit_adjustment_paise),
-            },
         ]
+        # Only when it actually tops something up. This line used to be non-zero on most quotes,
+        # so always emitting it was harmless; lowering the minimum visit charge to ₹49 put every
+        # current service above the floor, which would have put a ₹0 line on every bill. A
+        # charge of nothing is not a charge, and a customer reading one is being asked to work
+        # out that it means nothing.
+        if quote.minimum_visit_adjustment_paise > 0:
+            lines.append(
+                {
+                    "code": "minimum_visit_topup",
+                    "label": "Minimum visit charge top-up",
+                    "amount": self._money(quote, quote.minimum_visit_adjustment_paise),
+                }
+            )
+        return lines
 
     @extend_schema_field(MoneySerializer)
     def get_subtotal(self, quote: Quote) -> dict[str, object]:
