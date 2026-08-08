@@ -68,26 +68,49 @@ describe("a refused pricing", () => {
 });
 
 describe("an unusable plan set", () => {
-  it("routes known failure reason codes through the reason table", () => {
-    const ps = { ...planSet(), decisive_reasons: ["no_eligible_capacity"] };
-    const message = describePlanSetFailure(ps);
-    expect(message).toBe(
-      "No professional is available for this job at the time you asked for.",
-    );
+  /**
+   * These used to bolt `decisive_reasons` onto the fixture and assert the result. The fixture is
+   * declared `satisfies Schemas["FulfilmentPlanSet"]` and has no such field, and neither does
+   * the server's payload — so the tests passed against a shape nobody publishes while the real
+   * function returned its fallback for every input. `status` is what the plan set actually
+   * carries, so it is what these assert on.
+   */
+
+  it("tells a timed-out set it can simply be re-priced", () => {
+    const message = describePlanSetFailure({ ...planSet(), status: "EXPIRED" });
+
+    expect(message).toMatch(/15 minutes/i);
+    expect(message).toMatch(/nothing has been booked or charged/i);
+    // The recovery is the point: nothing changed, so the same choices should return.
+    expect(message).toMatch(/fresh times/i);
   });
 
-  it("humanises an unmapped reason code rather than breaking or showing blank", () => {
-    const ps = { ...planSet(), decisive_reasons: ["unmapped_planner_code"] };
-    const message = describePlanSetFailure(ps);
-    expect(message).toBe("Unmapped planner code");
+  it("does not tell a timed-out set that the booking changed", () => {
+    // The old fallback said exactly this for a timeout, which sends the customer looking for an
+    // edit they never made.
+    const message = describePlanSetFailure({ ...planSet(), status: "EXPIRED" });
+
+    expect(message).not.toMatch(/booking changed/i);
   });
 
-  it("falls back to the generic copy when no reason code is attached", () => {
-    const ps = { ...planSet(), decisive_reasons: [] };
-    const message = describePlanSetFailure(ps);
-    expect(message).toBe(
-      "Your booking changed after this price was worked out. Nothing has been booked or charged.",
-    );
+  it("tells an invalidated set the booking moved underneath it", () => {
+    const message = describePlanSetFailure({ ...planSet(), status: "INVALIDATED" });
+
+    expect(message).toMatch(/booking changed/i);
+    expect(message).toMatch(/nothing has been booked or charged/i);
+  });
+
+  it("says nothing extra was charged when the set was already used", () => {
+    const message = describePlanSetFailure({ ...planSet(), status: "SELECTED" });
+
+    expect(message).toMatch(/already been used/i);
+    expect(message).toMatch(/nothing extra/i);
+  });
+
+  it("claims only what is certain when there is no plan set at all", () => {
+    const message = describePlanSetFailure(null);
+
+    expect(message).toBe("These options are no longer current. Nothing has been booked or charged.");
   });
 });
 

@@ -106,47 +106,40 @@ export function describePlanReasons(value: unknown): string[] {
 /**
  * Customer-facing wording for when a plan set is no longer usable.
  *
- * Reads reason codes defensively from `planSet` fields (`decisive_reasons`,
- * `reason_codes`, `item_failures`, `plans`), mapping codes through
- * `describeItemFailure` or `describePlanReason`. If no reason codes exist,
- * falls back to generic copy.
+ * Branches on `planSet.status`, which is the actual reason it stopped being usable and the only
+ * one published on this object. That matters because the two cases are different problems with
+ * different recoveries: a set that timed out can be re-priced unchanged, while one invalidated
+ * by a cart edit is answering a question the customer has since changed.
+ *
+ * This used to read `decisive_reasons`, `reason_codes` and `item_failures` off the plan set.
+ * None of the three exist there — `decisive_reasons` is on each plan, `reason_codes` is on each
+ * unit, and `item_failures` travels on the creation error, which `checkout-workspace` already
+ * renders separately through `describeItemFailure`. So the lookup always found nothing and
+ * always returned the fallback, and the fallback happened to be the invalidated wording, which
+ * is why a timeout read as "your booking changed" when nothing had.
  */
 export function describePlanSetFailure(planSet: Schemas["FulfilmentPlanSet"] | null): string {
-  const genericCopy =
-    "Your booking changed after this price was worked out. Nothing has been booked or charged.";
-
-  if (!planSet) {
-    return genericCopy;
+  switch (planSet?.status) {
+    case "EXPIRED":
+      return (
+        "These options were held for 15 minutes and that time has passed. Nothing has been " +
+        "booked or charged — ask for fresh times and the same choices should still be there."
+      );
+    case "INVALIDATED":
+      return (
+        "Your booking changed after this price was worked out, so these options no longer " +
+        "match it. Nothing has been booked or charged."
+      );
+    case "SELECTED":
+      return (
+        "These options have already been used for a booking. Nothing extra has been booked " +
+        "or charged."
+      );
+    default:
+      // `null`, or an ACTIVE set the caller decided was unusable for a reason of its own. Says
+      // only what is certainly true rather than guessing at which of the above happened.
+      return "These options are no longer current. Nothing has been booked or charged.";
   }
-
-  const raw = planSet as Record<string, unknown>;
-  const codes = [
-    ...readReasonCodes(raw.decisive_reasons),
-    ...readReasonCodes(raw.reason_codes),
-    ...(Array.isArray(raw.item_failures)
-      ? raw.item_failures.flatMap((entry) =>
-          typeof entry === "string"
-            ? [entry]
-            : typeof entry === "object" && entry !== null && "reason" in entry && typeof entry.reason === "string"
-              ? [entry.reason]
-              : typeof entry === "object" && entry !== null && "code" in entry && typeof entry.code === "string"
-                ? [entry.code]
-                : [],
-        )
-      : []),
-  ];
-
-  if (codes.length === 0) {
-    return genericCopy;
-  }
-
-  const uniqueCodes = Array.from(new Set(codes));
-  return uniqueCodes
-    .map((code) => {
-      if (code in ITEM_FAILURE_REASONS) return describeItemFailure(code);
-      return describePlanReason(code);
-    })
-    .join(" ");
 }
 
 /** A refusal the customer is shown, and where the message belongs. */
