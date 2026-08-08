@@ -24,6 +24,14 @@ import type { Cart } from "@/features/checkout/queries";
  * and naming what is still to come is honest. Showing this as a final price and then producing
  * a different one at checkout is the thing that makes people abandon a booking.
  *
+ * ## Every service is named
+ *
+ * One "Services" line hid which of them cost what, which is the first question anybody has when
+ * a total surprises them. Each cart line is listed by name, then the services total, then each
+ * charge on top of it, then the amount payable. Nothing is folded: the gap between what the work
+ * costs and what is due is exactly the thing customers ask about, so it is itemised rather than
+ * left to be derived.
+ *
  * The visit top-up appears only when it is charged. A ₹0 line is not a charge, and asking
  * somebody to work out that it means nothing is worse than not showing it.
  */
@@ -42,7 +50,7 @@ export function CartSummary({
       className="rounded-card border border-line bg-surface p-5 lg:sticky lg:top-6"
     >
       <h2 id="cart-summary-heading" className="text-base font-bold text-text">
-        Price details
+        Payment summary
       </h2>
 
       {estimate === null || estimate === undefined ? (
@@ -54,9 +62,29 @@ export function CartSummary({
         </p>
       ) : (
         <dl className="mt-4 space-y-2.5 text-sm">
-          <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-text-secondary">Services</dt>
-            <dd data-numeric className="font-medium text-text">
+          {/* One row per service, named. A single "Services" line hides which of them cost what,
+              which is the first question anybody has when a total surprises them. */}
+          {cart.items.map((item) => (
+            <div key={item.id} className="flex items-baseline justify-between gap-3">
+              <dt className="min-w-0 text-text-secondary">
+                {item.service_name}
+                {item.quantity > 1 ? (
+                  <span className="text-text-muted"> × {item.quantity}</span>
+                ) : null}
+              </dt>
+              <dd data-numeric className="shrink-0 font-medium text-text">
+                {/* Null when the line has no live rate. A dash rather than ₹0, which would say
+                    the work is free. */}
+                {item.amount === null || item.amount === undefined
+                  ? "—"
+                  : formatMoney(item.amount.amount_paise)}
+              </dd>
+            </div>
+          ))}
+
+          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2.5">
+            <dt className="font-semibold text-text">Total amount</dt>
+            <dd data-numeric className="font-semibold text-text">
               {formatMoney(estimate.subtotal.amount_paise)}
             </dd>
           </div>
@@ -75,6 +103,8 @@ export function CartSummary({
             </div>
           ) : null}
 
+          {/* Named, never folded into the total. The gap between what the services cost and
+              what is payable is exactly the thing a customer asks about. */}
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-text-secondary">Platform fee</dt>
             <dd data-numeric className="font-medium text-text">
@@ -83,7 +113,7 @@ export function CartSummary({
           </div>
 
           <div className="flex items-baseline justify-between gap-3 border-t border-line pt-3">
-            <dt className="font-bold text-text">Total</dt>
+            <dt className="font-bold text-text">Amount to pay</dt>
             <dd data-numeric className="text-lg font-bold text-text">
               {formatMoney(estimate.total.amount_paise)}
             </dd>
