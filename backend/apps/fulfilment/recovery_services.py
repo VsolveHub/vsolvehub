@@ -15,6 +15,7 @@ from django.db import transaction
 from apps.assignments.group_services import create_manual_unit_offer
 from apps.assignments.models import PartnerOffer, Reservation
 from apps.commerce.models import Booking
+from apps.foundation.services import enqueue_outbox_event
 from apps.fulfilment.exceptions import BookingCommandInvalidApiError
 from apps.fulfilment.services import (
     BookingCommand,
@@ -71,7 +72,30 @@ def release_booking_partner(
     reservation = Reservation.objects.select_for_update().get(id=booking.reservation_id)
     if reservation.status != Reservation.Status.RELEASED:
         reservation.release()
+    request_booking_replacement(booking)
     return booking
+
+
+def request_booking_replacement(booking: Booking) -> None:
+    """Ask for a replacement search, after this transaction commits.
+
+    Through the outbox rather than by calling `attempt_booking_replacement` inline, for the
+    reason the outbox exists: the release itself must not be able to fail because the search
+    did. A Partner pressing "I cannot make it" is entitled to have that recorded even if every
+    candidate query times out, and an event the worker retries is what separates the two.
+
+    The key carries `booking.version`, so a Booking that is released, recovered and released
+    again raises a genuinely new event instead of being de-duplicated against the first one and
+    silently never searched for.
+    """
+
+    enqueue_outbox_event(
+        aggregate_type="booking",
+        aggregate_id=booking.id,
+        event_type="booking.replacement_requested",
+        idempotency_key=f"replacement:{booking.id}:{booking.version}",
+        payload={"booking_id": str(booking.id)},
+    )
 
 
 def start_partner_recovery_offer(*, unit_id: UUID, partner_id: UUID) -> PartnerOffer:
@@ -79,6 +103,62 @@ def start_partner_recovery_offer(*, unit_id: UUID, partner_id: UUID) -> PartnerO
     same manual-offer path BE-07 already built for pre-payment recovery."""
 
     return create_manual_unit_offer(unit_id=unit_id, partner_id=partner_id)
+
+
+@transaction.atomic
+def adopt_replacement_reservation(
+    *,
+    booking_id: UUID,
+    reservation_id: UUID,
+    actor: User | None = None,
+    idempotency_key: str = "",
+    context: dict[str, object] | None = None,
+) -> Booking:
+    """Point a Booking awaiting recovery at the replacement Partner's reservation.
+
+    Shared by both routes into a recovery, because they arrive holding different things. A
+    same-day replacement comes through offer / accept / commit and hands over the reservation
+    its offer created; an advance one is locked in by `directly_assign`, which returns a bare
+    `Reservation` with no offer round-trip to hang anything off. The Booking rewrite is the
+    same either way, so it lives here once.
+
+    The reservation is `CONFIRMED` rather than left `TENTATIVE`. A tentative hold exists to
+    survive a payment window, and this Booking's payment was captured at the original checkout
+    — there is no second payment coming, so a hold that expires would strand the visit again.
+    """
+
+    group, unit, booking = locked_booking_context(booking_id)
+    reservation = Reservation.objects.select_for_update().get(id=reservation_id)
+    if reservation.fulfilment_unit_id != unit.id:
+        raise BookingCommandInvalidApiError(
+            reason="This reservation is not for this Booking's Fulfilment Unit."
+        )
+    if booking.status == Booking.Status.CONFIRMED and booking.reservation_id == reservation.id:
+        return booking
+    if booking.status != Booking.Status.RECOVERY_REQUIRED:
+        raise BookingCommandInvalidApiError(
+            reason=f"A Booking in {booking.status} is not awaiting Partner recovery."
+        )
+    if reservation.status != Reservation.Status.CONFIRMED:
+        reservation.status = Reservation.Status.CONFIRMED
+        reservation.released_at = None
+        reservation.save(update_fields=("status", "released_at"))
+    return apply_transition(
+        group=group,
+        unit=unit,
+        booking=booking,
+        to_status=Booking.Status.CONFIRMED,
+        command=BookingCommand.RECOVER_PARTNER,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        context={"new_partner_id": str(reservation.partner_id), **(context or {})},
+        extra_booking_fields={
+            "partner": reservation.partner,
+            "reservation": reservation,
+            "scheduled_start": unit.requested_start,
+            "estimated_duration_minutes": unit.estimated_duration_minutes,
+        },
+    )
 
 
 @transaction.atomic
@@ -92,7 +172,7 @@ def recover_booking_partner(
 ) -> Booking:
     """Rewrite the Booking's partner/reservation/schedule once the replacement's offer commits."""
 
-    group, unit, booking = locked_booking_context(booking_id)
+    _group, unit, booking = locked_booking_context(booking_id)
     # `reservation` is nullable on `PartnerOffer` (it is only set once the replacement accepts),
     # so it cannot be `select_related` under `select_for_update` — Postgres refuses `FOR UPDATE`
     # on the nullable side of an outer join. Lock the offer row alone; the reservation is locked
@@ -115,20 +195,11 @@ def recover_booking_partner(
         )
     if offer.status != PartnerOffer.Status.COMMITTED or offer.reservation_id is None:
         raise BookingCommandInvalidApiError(reason="This replacement offer has not committed yet.")
-    new_reservation = Reservation.objects.select_for_update().get(id=offer.reservation_id)
-    return apply_transition(
-        group=group,
-        unit=unit,
-        booking=booking,
-        to_status=Booking.Status.CONFIRMED,
-        command=BookingCommand.RECOVER_PARTNER,
+    # The offer is validated; the rewrite itself is the shared one.
+    return adopt_replacement_reservation(
+        booking_id=booking.id,
+        reservation_id=offer.reservation_id,
         actor=operator,
         idempotency_key=idempotency_key,
-        context={"offer_id": str(offer.id), "new_partner_id": str(offer.partner_id)},
-        extra_booking_fields={
-            "partner": offer.partner,
-            "reservation": new_reservation,
-            "scheduled_start": unit.requested_start,
-            "estimated_duration_minutes": unit.estimated_duration_minutes,
-        },
+        context={"offer_id": str(offer.id)},
     )

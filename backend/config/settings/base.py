@@ -232,6 +232,32 @@ M1_SCOPE_AMENDMENT_RESPONSE_MINUTES = 30
 # A guard that only required a *future* time let a Customer 24h out drop the visit to twenty
 # minutes away, make the Partner unreachably late, and waive their own cancellation fee.
 M1_RESCHEDULE_MIN_NOTICE_MINUTES = 120
+# 4: how long before the visit a Customer may still move it, free of charge.
+#
+# Deliberately its own number rather than "whatever the free cancellation band is". Reschedule
+# used to piggyback on the fee ladder's 24-hour boundary, which made a visit fourteen hours out
+# unmovable — and pushed a Customer who only wanted a different time into cancelling and paying
+# a fee to rebook the same work. The two decisions are not the same: cancelling releases the
+# Partner and loses the job, while rescheduling keeps both and only re-times them, so it can be
+# allowed far closer to the visit than a fee-free cancellation can.
+#
+# Four hours, not less, because a reschedule is a re-booking: the original Partner is preferred
+# but a new one may have to be found, and inside four hours there is not enough of the working
+# day left to find anybody. Past this point the honest answer is to cancel under the fee ladder.
+M1_RESCHEDULE_FREE_NOTICE_HOURS = 4
+# Post-payment Partner recovery. 60: the search stops this long before the visit, so a Customer
+# who is going to be refunded finds out with an hour to make other plans rather than at the door.
+M1_REPLACEMENT_DEADLINE_MINUTES = env.int("M1_REPLACEMENT_DEADLINE_MINUTES", default=60)
+# 180: inside three hours of the visit the search cycles candidates faster, because a silent
+# Partner is the expensive case — three of them at the full 45-second offer clock burns most of
+# the remaining time. Eligibility is never relaxed; a Partner who does not offer the variant
+# still cannot do the job. Only the clock moves.
+M1_REPLACEMENT_URGENT_MINUTES = env.int("M1_REPLACEMENT_URGENT_MINUTES", default=180)
+# 30: two thirds of M1_PARTNER_OFFER_TIMEOUT_SECONDS. Still long enough for a Partner with the
+# app open to read the job and answer, short enough that three candidates fit in 90 seconds.
+M1_REPLACEMENT_URGENT_OFFER_TTL_SECONDS = env.int(
+    "M1_REPLACEMENT_URGENT_OFFER_TTL_SECONDS", default=30
+)
 M1_CANCELLATION_BAND_MORE_THAN_24H = "more-than-24-hours"
 M1_CANCELLATION_BAND_24_TO_2H = "24-to-2-hours"
 M1_CANCELLATION_BAND_LESS_THAN_2H = "less-than-2-hours"
@@ -240,7 +266,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.18.0",
+    "VERSION": "1.20.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -455,6 +481,12 @@ CELERY_BEAT_SCHEDULE = {
     },
     "sweep-late-bookings": {
         "task": "apps.fulfilment.tasks.sweep_late_bookings",
+        "schedule": 60.0,
+    },
+    "sweep-bookings-awaiting-replacement": {
+        "task": "apps.fulfilment.tasks.sweep_bookings_awaiting_replacement",
+        # 60s. The release itself starts the search through the outbox; this only catches the
+        # cases nothing else will — an offer that expired, and a Partner who never answered.
         "schedule": 60.0,
     },
     "sweep-completion-auto-finalize": {

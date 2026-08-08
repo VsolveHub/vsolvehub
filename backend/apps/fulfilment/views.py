@@ -51,6 +51,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.carts.models import BookingGroup
+from apps.carts.serializers import BookingWindowsSerializer
 from apps.commerce.models import Booking
 from apps.foundation.services import CommandResult, ResponseBody, execute_idempotent
 from apps.fulfilment import completion as completion_services
@@ -66,6 +67,7 @@ from apps.fulfilment.cancellation import (
     change_booking_group_address,
     reschedule_booked_group,
     reschedule_booking,
+    reschedule_windows,
 )
 from apps.fulfilment.evidence import record_work_evidence, request_work_evidence_upload
 from apps.fulfilment.models import ScopeAmendment
@@ -307,6 +309,28 @@ class CustomerBookingCancelView(APIView):
             command=command,
         )
         return Response(result.body, status=result.status_code)
+
+
+class CustomerBookingRescheduleWindowsView(APIView):
+    """The slot grid for moving a visit — the same grid the Customer chose from at checkout.
+
+    `GET`, and cart-free: everything it needs is on the Booking. The checkout equivalent is a
+    `POST` because its answer is derived from the caller's session cart, which is not
+    addressable in a URL; this one is genuinely a read of one identified visit.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=[FULFILMENT_TAG],
+        operation_id="booking_reschedule_windows",
+        responses={200: BookingWindowsSerializer, **_ERRORS_4XX},
+    )
+    def get(self, request: Request, booking_id: UUID) -> Response:
+        user = cast(User, request.user)
+        booking = _customer_booking(booking_id, user)
+        windows = reschedule_windows(booking_id=booking.id, customer_id=user.id)
+        return Response(BookingWindowsSerializer(windows).data)
 
 
 class CustomerBookingRescheduleView(APIView):

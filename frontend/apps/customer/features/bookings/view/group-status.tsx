@@ -87,8 +87,9 @@ export const UNIT_STATUS_LABELS: Record<Schemas["FulfilmentUnitStatusEnum"], str
   BOOKED: "Booked",
   // The visit is paid for and the professional fell through — a release, a
   // no-show or an abort. It is not a failure and it is not cancelled: the visit
-  // still stands and a replacement is being found.
-  RECOVERY_REQUIRED: "Finding a replacement",
+  // still stands and Django is assigning someone else, or refunding it in full
+  // if it cannot. "Finding" described a search nobody had started yet.
+  RECOVERY_REQUIRED: "Assigning a new professional",
   CANCELLED: "Cancelled",
   FAILED: "No professional found",
   COMPLETED: "Completed",

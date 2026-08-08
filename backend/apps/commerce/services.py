@@ -46,12 +46,32 @@ PAYMENT_FINAL_STATES = {
 
 
 def _allocate_exact(total: int, weights: list[int]) -> list[int]:
-    if total < 0 or not weights or sum(weights) <= 0:
-        raise ValueError("A positive allocation basis is required.")
+    """Split `total` across `weights` so the parts sum to exactly `total`.
+
+    No part may exceed its own weight, and a weight of zero receives nothing. That is a
+    correctness requirement, not a rounding preference: the only caller splits a Quote's
+    tax across the invoice lines, and `commerce_document_line_tax_lte_total` refuses a
+    line taxed above its own amount.
+
+    The rounding remainder used to be handed out from index 0 regardless of basis. Every
+    Quote carries a ₹0 `minimum_visit_topup` line — nothing is priced below the ₹49 floor
+    any more, so the top-up is always zero — and once a cart held enough lines for the
+    remainder to reach one, that ₹0 line was assigned a paise of tax. Postgres rejected
+    the row, the `IntegrityError` escaped `_materialize_captured_group`, and the whole
+    capture rolled back as a 500 on a payment the provider had already taken.
+    """
+
     denominator = sum(weights)
+    if total < 0 or not weights or denominator <= 0 or total > denominator:
+        raise ValueError("A positive allocation basis at least as large as the total is required.")
     allocations = [total * weight // denominator for weight in weights]
-    for index in range(total - sum(allocations)):
-        allocations[index % len(allocations)] += 1
+    remainder = total - sum(allocations)
+    for index, weight in enumerate(weights):
+        if remainder == 0:
+            break
+        share = min(weight - allocations[index], remainder)
+        allocations[index] += share
+        remainder -= share
     return allocations
 
 

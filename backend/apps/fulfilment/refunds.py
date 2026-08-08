@@ -31,16 +31,26 @@ from apps.foundation.services import enqueue_outbox_event
 RefundableParts = list[tuple[PaymentAllocation, int]]
 
 
-def refundable_unit_allocations(*, unit: FulfilmentUnit) -> RefundableParts:
+def refundable_unit_allocations(
+    *, unit: FulfilmentUnit, for_update: bool = True
+) -> RefundableParts:
     """Every live `PaymentAllocation` for this unit, with how much of each is still refundable.
 
     Ordered oldest attempt first, so a refund smaller than the unit's total comes out of the
     original capture before it touches a later amendment payment.
+
+    `for_update=False` is for *reading* the number — the cancellation preview a Customer is
+    shown before they decide. A read has no transaction to hold a lock in (Django refuses
+    `SELECT ... FOR UPDATE` in autocommit), and locking a payment row because somebody opened a
+    sheet would block the refund that sheet might be about to cause. Every path that goes on to
+    write a `Refund` keeps the default and takes the lock.
     """
 
+    queryset = PaymentAllocation.objects.all()
+    if for_update:
+        queryset = queryset.select_for_update()
     allocations = list(
-        PaymentAllocation.objects.select_for_update()
-        .select_related("payment_attempt")
+        queryset.select_related("payment_attempt")
         .filter(fulfilment_unit=unit)
         .order_by("payment_attempt__created_at", "payment_attempt_id", "position", "id")
     )

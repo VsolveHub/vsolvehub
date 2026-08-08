@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 18e3bc02bac961e2
+ * Source:   contracts/openapi/v1.yaml (version 1.20.0)
+ * Checksum: 5a4ba930c193b0d5
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -448,6 +448,29 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["booking_reschedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/reschedule-windows/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The slot grid for moving a visit — the same grid the Customer chose from at checkout.
+         *
+         *     `GET`, and cart-free: everything it needs is on the Booking. The checkout equivalent is a
+         *     `POST` because its answer is derived from the caller's session cart, which is not
+         *     addressable in a URL; this one is genuinely a read of one identified visit.
+         */
+        get: operations["booking_reschedule_windows"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2597,6 +2620,8 @@ export interface components {
             /** Format: date-time */
             readonly session_expires_at: string;
         };
+        /** @enum {unknown} */
+        BlankEnum: "";
         Booking: {
             /** Format: uuid */
             readonly id: string;
@@ -2728,6 +2753,21 @@ export interface components {
             readonly code: string;
             readonly version: number;
             readonly bands: components["schemas"]["CancellationBand"][];
+            readonly reschedule_free_notice_hours: number;
+        };
+        /**
+         * @description What cancelling this visit would cost and return, as of now.
+         *
+         *     Every figure is the server's. A browser cannot read the frozen band ladder or the live
+         *     payment allocations, so a client that computed either would be inventing the number it then
+         *     asked the Customer to accept.
+         */
+        CancellationPreview: {
+            band_code: string;
+            fee_paise: number;
+            fee_waiver: string;
+            refund_paise: number;
+            currency: string;
         };
         Cart: {
             /** Format: uuid */
@@ -3046,7 +3086,7 @@ export interface components {
             /** Format: date-time */
             readonly scheduled_start: string;
             readonly estimated_duration_minutes: number;
-            readonly partner_display_name: string;
+            readonly partner_display_name: string | null;
             /** Format: date-time */
             readonly en_route_at: string | null;
             /** Format: date-time */
@@ -3059,6 +3099,8 @@ export interface components {
             readonly work_tasks: components["schemas"]["WorkTask"][];
             readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
             readonly completion: components["schemas"]["CompletionSubmission"] | null;
+            readonly cancellation_preview: components["schemas"]["CancellationPreview"] | null;
+            readonly reschedule_preview: components["schemas"]["ReschedulePreview"] | null;
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -3394,6 +3436,11 @@ export interface components {
             /** Format: date-time */
             server_now: string;
         };
+        /**
+         * @description * `partner` - partner
+         * @enum {string}
+         */
+        IntendedRoleEnum: "partner";
         /**
          * @description A switch, with both signatures and both timestamps.
          *
@@ -3898,6 +3945,8 @@ export interface components {
         OtpRequestRequest: {
             phone_number: string;
             device_identifier?: string;
+            /** @default  */
+            intended_role: components["schemas"]["IntendedRoleEnum"] | components["schemas"]["BlankEnum"];
         };
         OtpVerifyRequest: {
             /** Format: uuid */
@@ -4844,6 +4893,20 @@ export interface components {
             /** Format: date-time */
             new_requested_start: string;
         };
+        /**
+         * @description Whether a visit may be moved right now, and why not when it may not.
+         *
+         *     Published rather than derived client-side because the rule reads the frozen quote-time
+         *     cancellation ladder: a visit is movable only while its *free* band still applies. That
+         *     snapshot never leaves the server, so a client can only guess — and guessing here means
+         *     offering a picker that refuses every slot in it.
+         */
+        ReschedulePreview: {
+            is_available: boolean;
+            unavailable_reason: string;
+            /** Format: date-time */
+            earliest_start: string;
+        };
         ResolveCaseRequestRequest: {
             expected_version: number;
             resolution: string;
@@ -5584,6 +5647,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OtpIssued"];
+                };
+            };
+            /** @description `intended_role` was set and this number holds no such account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
             429: {
@@ -6507,6 +6579,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerBooking"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_reschedule_windows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingWindows"];
                 };
             };
             400: {

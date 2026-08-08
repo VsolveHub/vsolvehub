@@ -41,6 +41,15 @@ class OtpVerificationError(RuntimeError):
     """Generic error that does not reveal which OTP condition failed."""
 
 
+class NoAccountForRoleError(RuntimeError):
+    """Raised when an OTP is requested for a role the phone number does not hold.
+
+    Only ever raised when the caller opted in with `intended_role` — e.g. the
+    Partner app, where signing in requires an application to already exist.
+    The Customer app never passes it, since self-service signup is the point.
+    """
+
+
 @dataclass(frozen=True)
 class IssuedOtp:
     challenge: OtpChallenge
@@ -63,11 +72,32 @@ def issue_login_otp(
     phone_number: str,
     request_ip: str,
     device_identifier: str = "",
+    intended_role: str = "",
 ) -> IssuedOtp:
     canonical_phone = normalize_phone_number(phone_number)
     phone_hash = keyed_hash(canonical_phone)
     ip_hash = keyed_hash(request_ip)
     device_hash = keyed_hash(device_identifier) if device_identifier else ""
+
+    # Counted before the role check so probing phone numbers for a role costs the same
+    # budget as requesting real codes for them — the check is not a free-standing oracle.
+    _increment_rate_counter(
+        f"otp:phone:{phone_hash}",
+        settings.OTP_PHONE_RATE_LIMIT,
+    )
+    _increment_rate_counter(
+        f"otp:ip:{ip_hash}",
+        settings.OTP_IP_RATE_LIMIT,
+    )
+
+    if intended_role and not (
+        UserRole.objects.filter(
+            user__phone_number=canonical_phone,
+            role__code=intended_role,
+            revoked_at__isnull=True,
+        ).exists()
+    ):
+        raise NoAccountForRoleError(intended_role)
 
     cooldown_key = f"otp:cooldown:{phone_hash}"
     try:
@@ -80,15 +110,6 @@ def issue_login_otp(
         raise OtpDeliveryError("OTP rate limiter is unavailable.") from exc
     if not cooldown_acquired:
         raise OtpRateLimitError(settings.OTP_RESEND_COOLDOWN_SECONDS)
-
-    _increment_rate_counter(
-        f"otp:phone:{phone_hash}",
-        settings.OTP_PHONE_RATE_LIMIT,
-    )
-    _increment_rate_counter(
-        f"otp:ip:{ip_hash}",
-        settings.OTP_IP_RATE_LIMIT,
-    )
 
     maximum_code = 10**settings.OTP_CODE_LENGTH
     code = f"{secrets.randbelow(maximum_code):0{settings.OTP_CODE_LENGTH}d}"

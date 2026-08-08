@@ -13,6 +13,7 @@ from django.utils import timezone
 from apps.assignments.models import Reservation
 from apps.commerce.models import Booking
 from apps.fulfilment.models import BookingOtp
+from apps.fulfilment.recovery_services import request_booking_replacement
 from apps.fulfilment.services import BookingCommand, apply_transition, locked_booking_context
 from apps.partners.models import PartnerProfile
 
@@ -61,5 +62,9 @@ def release_future_work(*, partner: PartnerProfile, reason: str) -> tuple[Bookin
         BookingOtp.objects.filter(booking=booking, consumed_at__isnull=True).update(
             expires_at=timezone.now()
         )
+        # A suspension is the more damaging orphan of the two: one decision strands every
+        # future booking this Partner held at once, so each of them needs its own search
+        # started rather than a queue of visits nobody is looking for.
+        request_booking_replacement(booking)
         released.append(booking)
     return tuple(released)

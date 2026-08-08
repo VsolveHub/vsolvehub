@@ -7,12 +7,16 @@ import {
   canCancel,
   canRequestStartOtp,
   canRespondToCompletion,
+  canReschedule,
+  rescheduleBlockedReason,
   useConfirmCompletion,
   useDisputeCompletion,
   useRequestStartOtp,
   useVisit,
   type Visit,
 } from "../queries";
+import { CancelVisitSheet } from "./cancel-visit-sheet";
+import { RescheduleVisitSheet } from "./reschedule-visit-sheet";
 import { VISIT_STATUS_DESCRIPTIONS, VisitStatusBadge } from "./visit-status";
 
 /**
@@ -188,6 +192,71 @@ function CompletionDecision({ visit }: { visit: Visit }) {
   );
 }
 
+/**
+ * The two changes a customer can make to a booked visit, offered where the visit is.
+ *
+ * They used to be a sentence pointing at "the booking below", which pointed at a screen that
+ * had no controls either — so a customer whose professional had stepped back could read that
+ * cancelling was possible and find nowhere to do it.
+ *
+ * Which one is prominent depends on what happened. On an ordinary visit, rescheduling is the
+ * gentler answer and cancelling is the fallback. On a visit whose professional released,
+ * `canReschedule` is false — there is nobody to move — so cancelling stands alone.
+ */
+function VisitActions({ visit }: { visit: Visit }) {
+  const [cancelling, setCancelling] = useState(false);
+  const [rescheduling, setRescheduling] = useState(false);
+  const offersReschedule = canReschedule(visit);
+  const offersCancel = canCancel(visit);
+  // Shown only when there is still something the customer can do here. On a finished visit
+  // "you cannot reschedule this" is noise under a status that already says it is over.
+  const blockedReason = offersReschedule ? "" : rescheduleBlockedReason(visit);
+
+  if (!offersCancel && !offersReschedule) return null;
+
+  return (
+    <section aria-labelledby="visit-actions" className="mt-6 border-t border-line pt-5">
+      <h3 id="visit-actions" className="sr-only">
+        Change this visit
+      </h3>
+      <div className="flex flex-wrap gap-3">
+        {offersReschedule ? (
+          <Button variant="outline" onClick={() => setRescheduling(true)}>
+            Reschedule
+          </Button>
+        ) : null}
+        {offersCancel ? (
+          <Button variant="ghost" onClick={() => setCancelling(true)}>
+            Cancel this visit
+          </Button>
+        ) : null}
+      </div>
+      {/*
+        Said before the customer picks anything, not after. The refusal used to arrive only on
+        submit, at the bottom of a slot grid they had just chosen from — every slot in which was
+        going to be rejected, because this rule is about how close the *current* visit is, not
+        how soon the new time would be.
+      */}
+      {blockedReason ? (
+        <p className="mt-3 text-sm leading-6 text-text-secondary">{blockedReason}</p>
+      ) : null}
+      {visit.status === "RECOVERY_REQUIRED" ? (
+        <p className="mt-3 text-sm leading-6 text-text-secondary">
+          You do not have to decide now — if we cannot find anyone, we cancel this visit and
+          refund it in full on our own.
+        </p>
+      ) : null}
+
+      {offersCancel ? (
+        <CancelVisitSheet visit={visit} open={cancelling} onOpenChange={setCancelling} />
+      ) : null}
+      {offersReschedule ? (
+        <RescheduleVisitSheet visit={visit} open={rescheduling} onOpenChange={setRescheduling} />
+      ) : null}
+    </section>
+  );
+}
+
 export function VisitPanel({ bookingId }: { bookingId: string }) {
   const visit = useVisit(bookingId);
 
@@ -222,18 +291,22 @@ export function VisitPanel({ bookingId }: { bookingId: string }) {
             {VISIT_STATUS_DESCRIPTIONS[data.status]}
           </p>
         </div>
-        <Readout label="Professional" value={data.partner_display_name} />
+        {/*
+          Absent while a replacement is being found. Django sends `null` there because the
+          Partner on the Booking row is the one who stepped back, and a "Professional" readout
+          naming them under a status that says somebody else is being assigned is a straight
+          contradiction. The status line above already explains what is happening.
+        */}
+        {data.partner_display_name ? (
+          <Readout label="Professional" value={data.partner_display_name} />
+        ) : null}
       </div>
 
       <VisitTasks visit={data} />
       {canRequestStartOtp(data) ? <StartCodePrompt visit={data} /> : null}
       {canRespondToCompletion(data) ? <CompletionDecision visit={data} /> : null}
 
-      {canCancel(data) ? (
-        <p className="mt-6 text-sm text-text-secondary">
-          Need to change this visit? Cancellation and rescheduling are on the booking below.
-        </p>
-      ) : null}
+      <VisitActions visit={data} />
     </Card>
   );
 }

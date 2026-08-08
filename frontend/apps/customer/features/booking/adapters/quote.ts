@@ -52,6 +52,15 @@ export interface QuoteView {
   /** Raw paise, for the pay action. Never used for display arithmetic. */
   totalPaise: number;
   cancellationBands: CancellationBandView[];
+  /**
+   * How many hours before the visit it can still be moved for free.
+   *
+   * From the server, alongside the fee bands, because it is the same disclosure: a customer
+   * deciding whether the fee ladder matters needs to know that moving the visit is the other
+   * option and is free. Hardcoding the number here would put the policy in two places and this
+   * would be the copy that went stale.
+   */
+  rescheduleFreeNoticeHours: number;
   /** "a1-standard v3" — identifies the exact terms this price was quoted under. */
   cancellationPolicyVersion: string;
 }
@@ -85,6 +94,7 @@ export function toQuoteView(quote: Schemas["Quote"]): QuoteView {
       feeLabel: formatMoney(band.fee.amount_paise),
       isFree: band.fee.amount_paise === 0,
     })),
+    rescheduleFreeNoticeHours: quote.cancellation_policy.reschedule_free_notice_hours,
     cancellationPolicyVersion: `${quote.cancellation_policy.code} v${quote.cancellation_policy.version}`,
   };
 }

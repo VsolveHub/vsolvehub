@@ -3,35 +3,46 @@
 import { Button, EmptyState } from "@vsolve/ui";
 import { useState } from "react";
 
-import { ChoiceCard } from "@/features/booking/view/choice-card";
-import type { WindowsView } from "@/features/booking/adapters";
+import { ChoiceCard } from "./choice-card";
+import type { WindowsView } from "../adapters";
 
 /**
  * When the customer would like **one visit** to start.
  *
- * Since contract 1.18.0 the plan-set command takes a start per scheduling group,
- * and this picker supplies exactly one of them — the slots modal mounts it once
- * per visit. Only instants the server itself published are offered; the times
- * below are the service area's own operating slots for this cart and address,
- * not a grid assembled in the browser.
+ * Only instants the server itself published are offered — the times below are the service
+ * area's own operating slots, not a grid assembled in the browser.
  *
- * The wording is careful about what those times mean. They rule out what is
- * past, too soon or outside operating hours; they are **not** a promise that the
- * whole cart fits, because only the planner can answer that. Presenting them as
- * availability would be a capacity claim nobody made, and the plan set is one
- * request away.
+ * ## Two callers, one picker
+ *
+ * Checkout mounts it once per scheduling group to choose a start before booking. The visit
+ * screen mounts it to choose a *new* start for a visit already booked. Both render the same
+ * `BookingWindows` payload from the same `build_arrival_window_grid`, so they share this
+ * component rather than growing a second one that drifts.
+ *
+ * What genuinely differs between them is the sentence underneath, because the two grids
+ * promise different things — one precedes a quote, the other precedes a move of a paid visit.
+ * That is `footnote`, and it has no default: a caller that forgets it would inherit the other
+ * caller's promise, which is exactly the kind of quiet wrongness this component should not be
+ * able to produce.
+ *
+ * The wording of both is careful about what the times mean. They rule out what is past, too
+ * soon or outside operating hours; they are **not** a promise that everything fits, because
+ * only the planner (checkout) or the reschedule command (visit) can answer that.
  */
 
 export interface PreferredStartPickerProps {
   windows: WindowsView;
   selectedStart: string | null;
   onSelect: (startsAt: string) => void;
+  /** The sentence under the grid. Required — see the note above on why there is no default. */
+  footnote: string;
 }
 
 export function PreferredStartPicker({
   windows,
   selectedStart,
   onSelect,
+  footnote,
 }: PreferredStartPickerProps) {
   const bookableDays = windows.days.filter((day) =>
     day.windows.some((window) => window.isAvailable),
@@ -107,10 +118,7 @@ export function PreferredStartPicker({
         </fieldset>
       )}
 
-      <p className="mt-4 text-sm text-text-secondary">
-        This is when you would like us to start. We will show you exactly how it can be
-        arranged, and what it costs, before anything is confirmed.
-      </p>
+      <p className="mt-4 text-sm text-text-secondary">{footnote}</p>
     </div>
   );
 }

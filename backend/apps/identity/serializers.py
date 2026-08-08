@@ -31,6 +31,16 @@ class OtpRequestSerializer(serializers.Serializer[dict[str, object]]):
         max_length=128,
         write_only=True,
     )
+    # Opt-in only. Customer sign-in never sends this — self-service signup is the point
+    # there — but the Partner app does, since a Partner account only ever exists because
+    # someone applied, so "no account" is worth saying before a code is sent for nothing.
+    intended_role = serializers.ChoiceField(
+        choices=["partner"],
+        required=False,
+        allow_blank=True,
+        default="",
+        write_only=True,
+    )
 
 
 @extend_schema_serializer(

@@ -6,6 +6,7 @@ import {
   canRespondToCompletion,
   canReschedule,
   isVisitSettled,
+  rescheduleBlockedReason,
   isVisitTerminal,
   type Visit,
   type VisitStatus,
@@ -37,6 +38,30 @@ function visit(status: VisitStatus): Visit {
   return { status } as Visit;
 }
 
+/** A visit Django says may be moved. */
+function reschedulable(base: Visit): Visit {
+  return {
+    ...base,
+    reschedule_preview: {
+      is_available: true,
+      unavailable_reason: "",
+      earliest_start: "2026-08-09T10:00:00+05:30",
+    },
+  } as Visit;
+}
+
+/** A visit Django refuses to move, with the sentence it refuses with. */
+function blocked(base: Visit, reason: string): Visit {
+  return {
+    ...base,
+    reschedule_preview: {
+      is_available: false,
+      unavailable_reason: reason,
+      earliest_start: "2026-08-09T10:00:00+05:30",
+    },
+  } as Visit;
+}
+
 describe("what a customer may do", () => {
   it("offers cancel for every status the server still accepts one from", () => {
     // Mirrors `CUSTOMER_CANCELLABLE_STATUSES`. `RECOVERY_REQUIRED` is included:
@@ -62,10 +87,30 @@ describe("what a customer may do", () => {
     expect(canCancel(visit("ABORTED"))).toBe(false);
   });
 
-  it("only offers reschedule before the visit starts", () => {
-    const reschedulable = ALL_STATUSES.filter((status) => canReschedule(visit(status)));
+  it("offers reschedule only when the server says it is on offer", () => {
+    // Not derived from the status, and this is the case that proves why it cannot be. A visit
+    // fourteen hours out is `CONFIRMED` and still unreschedulable: Django refuses once the
+    // visit is inside its fee-bearing cancellation band, read from the frozen quote-time
+    // ladder that never reaches the browser. Reading the status alone opened a slot picker in
+    // which every slot would have been refused on submit.
+    expect(canReschedule(reschedulable(visit("CONFIRMED")))).toBe(true);
+    expect(canReschedule(blocked(visit("CONFIRMED"), "Too close to the visit."))).toBe(false);
+  });
 
-    expect(reschedulable).toEqual(["CONFIRMED", "EN_ROUTE"]);
+  it("surfaces the server's own reason when reschedule is refused", () => {
+    const tooClose = blocked(visit("CONFIRMED"), "Too close to the visit.");
+
+    expect(rescheduleBlockedReason(tooClose)).toBe("Too close to the visit.");
+    expect(rescheduleBlockedReason(reschedulable(visit("CONFIRMED")))).toBe("");
+  });
+
+  it("never offers reschedule when the server sent no answer at all", () => {
+    // A visit with no `reschedule_preview` — a Booking with no Fulfilment Unit — is a question
+    // Django declined to answer, and the safe reading of silence is "not on offer" rather than
+    // a picker whose every slot fails.
+    for (const status of ALL_STATUSES) {
+      expect(canReschedule(visit(status))).toBe(false);
+    }
   });
 
   it("only offers the start code once the professional is there", () => {

@@ -39,6 +39,12 @@ export function LoginScreen() {
   // Only once there is a session. Asking Django for an application while nobody
   // is signed in spends a guaranteed refusal on every visit to this screen.
   const application = usePartnerApplication({ enabled: isAuthenticated });
+  // Deliberately no `intendedRole: "partner"` here: this is the same form a
+  // first-time applicant uses ("Not a Partner yet? Apply to join", below) —
+  // `homeForApplication` sends anyone with no application at all to `/apply`
+  // straight after this OTP succeeds. Gating the OTP itself on already holding
+  // the Partner role would lock out every new applicant on their very first
+  // sign-in, since nobody holds that role before they have applied once.
   const flow = useOtpFlow(getApiClient());
 
   const next = safeNextPath(searchParams.get("next"));

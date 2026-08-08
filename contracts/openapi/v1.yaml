@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.18.0
+  version: 1.20.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -239,6 +239,12 @@ paths:
                     development_code: null
                   summary: OTP issued
           description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`intended_role` was set and this number holds no such account.'
         '429':
           content:
             application/json:
@@ -1230,6 +1236,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerBooking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/bookings/{booking_id}/reschedule-windows/:
+    get:
+      operationId: booking_reschedule_windows
+      description: |-
+        The slot grid for moving a visit — the same grid the Customer chose from at checkout.
+
+        `GET`, and cart-free: everything it needs is on the Booking. The checkout equivalent is a
+        `POST` because its answer is derived from the caller's session cart, which is not
+        addressable in a URL; this one is genuinely a read of one identified visit.
+      parameters:
+      - in: path
+        name: booking_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Fulfilment
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingWindows'
           description: ''
         '400':
           content:
@@ -6633,6 +6690,9 @@ components:
       - active_role
       - session_expires_at
       - user
+    BlankEnum:
+      enum:
+      - ''
     Booking:
       type: object
       properties:
@@ -6992,10 +7052,39 @@ components:
           items:
             $ref: '#/components/schemas/CancellationBand'
           readOnly: true
+        reschedule_free_notice_hours:
+          type: integer
+          readOnly: true
       required:
       - bands
       - code
+      - reschedule_free_notice_hours
       - version
+    CancellationPreview:
+      type: object
+      description: |-
+        What cancelling this visit would cost and return, as of now.
+
+        Every figure is the server's. A browser cannot read the frozen band ladder or the live
+        payment allocations, so a client that computed either would be inventing the number it then
+        asked the Customer to accept.
+      properties:
+        band_code:
+          type: string
+        fee_paise:
+          type: integer
+        fee_waiver:
+          type: string
+        refund_paise:
+          type: integer
+        currency:
+          type: string
+      required:
+      - band_code
+      - currency
+      - fee_paise
+      - fee_waiver
+      - refund_paise
     Cart:
       type: object
       properties:
@@ -7011,11 +7100,17 @@ components:
           items:
             $ref: '#/components/schemas/CartItemDetail'
           readOnly: true
+        estimate:
+          allOf:
+          - $ref: '#/components/schemas/CartPriceSummary'
+          nullable: true
+          readOnly: true
         updated_at:
           type: string
           format: date-time
           readOnly: true
       required:
+      - estimate
       - id
       - items
       - updated_at
@@ -7086,6 +7181,11 @@ components:
         quantity:
           type: integer
           readOnly: true
+        amount:
+          allOf:
+          - $ref: '#/components/schemas/Money'
+          nullable: true
+          readOnly: true
         scope:
           type: object
           additionalProperties: {}
@@ -7101,6 +7201,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - amount
       - created_at
       - id
       - quantity
@@ -7170,6 +7271,45 @@ components:
       - decisions
       - expected_customer_cart_version
       - expected_session_cart_version
+    CartMoney:
+      type: object
+      properties:
+        amount_paise:
+          type: integer
+        currency:
+          type: string
+      required:
+      - amount_paise
+      - currency
+    CartPriceSummary:
+      type: object
+      description: |-
+        What the cart costs right now, as an estimate.
+
+        Named `estimate` on the wire and nowhere called a quote. A `Quote` needs an address and a
+        chosen arrival window and is the only number anybody is held to; this applies the same
+        policy and the same arithmetic to what a cart actually knows, so the two agree unless
+        something real differs.
+
+        `minimum_visit_topup` is published rather than folded into the subtotal, because a customer
+        who sees a ₹49 floor added to a ₹29 job is owed the reason.
+      properties:
+        subtotal:
+          $ref: '#/components/schemas/CartMoney'
+        minimum_visit_topup:
+          $ref: '#/components/schemas/CartMoney'
+        platform_fee:
+          $ref: '#/components/schemas/CartMoney'
+        tax:
+          $ref: '#/components/schemas/CartMoney'
+        total:
+          $ref: '#/components/schemas/CartMoney'
+      required:
+      - minimum_visit_topup
+      - platform_fee
+      - subtotal
+      - tax
+      - total
     CartSuggestions:
       type: object
       description: |-
@@ -7725,6 +7865,7 @@ components:
           readOnly: true
         partner_display_name:
           type: string
+          nullable: true
           readOnly: true
         en_route_at:
           type: string
@@ -7764,6 +7905,16 @@ components:
           - $ref: '#/components/schemas/CompletionSubmission'
           nullable: true
           readOnly: true
+        cancellation_preview:
+          allOf:
+          - $ref: '#/components/schemas/CancellationPreview'
+          nullable: true
+          readOnly: true
+        reschedule_preview:
+          allOf:
+          - $ref: '#/components/schemas/ReschedulePreview'
+          nullable: true
+          readOnly: true
         server_now:
           type: string
           format: date-time
@@ -7771,6 +7922,7 @@ components:
       required:
       - active_amendment
       - arrived_at
+      - cancellation_preview
       - cancellation_reason
       - cancelled_at
       - completion
@@ -7780,6 +7932,7 @@ components:
       - id
       - late_declared_at
       - partner_display_name
+      - reschedule_preview
       - scheduled_start
       - server_now
       - status
@@ -8651,6 +8804,11 @@ components:
       - server_now
       - shift_seconds
       - units
+    IntendedRoleEnum:
+      enum:
+      - partner
+      type: string
+      description: '* `partner` - partner'
     KillSwitch:
       type: object
       description: |-
@@ -9920,6 +10078,12 @@ components:
           type: string
           writeOnly: true
           maxLength: 128
+        intended_role:
+          writeOnly: true
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/IntendedRoleEnum'
+          - $ref: '#/components/schemas/BlankEnum'
       required:
       - phone_number
     OtpVerifyRequest:
@@ -12326,6 +12490,27 @@ components:
       required:
       - expected_version
       - new_requested_start
+    ReschedulePreview:
+      type: object
+      description: |-
+        Whether a visit may be moved right now, and why not when it may not.
+
+        Published rather than derived client-side because the rule reads the frozen quote-time
+        cancellation ladder: a visit is movable only while its *free* band still applies. That
+        snapshot never leaves the server, so a client can only guess — and guessing here means
+        offering a picker that refuses every slot in it.
+      properties:
+        is_available:
+          type: boolean
+        unavailable_reason:
+          type: string
+        earliest_start:
+          type: string
+          format: date-time
+      required:
+      - earliest_start
+      - is_available
+      - unavailable_reason
     ResolveCaseRequestRequest:
       type: object
       properties:
@@ -12649,12 +12834,18 @@ components:
           allOf:
           - $ref: '#/components/schemas/Money'
           readOnly: true
+        bookable_variant_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
         cover:
           allOf:
           - $ref: '#/components/schemas/ServiceMedia'
           nullable: true
           readOnly: true
       required:
+      - bookable_variant_id
       - category_slug
       - cover
       - id
@@ -12690,6 +12881,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/Money'
           readOnly: true
+        bookable_variant_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
         cover:
           allOf:
           - $ref: '#/components/schemas/ServiceMedia'
@@ -12713,6 +12909,7 @@ components:
             $ref: '#/components/schemas/ServiceMedia'
           readOnly: true
       required:
+      - bookable_variant_id
       - category_slug
       - cover
       - id

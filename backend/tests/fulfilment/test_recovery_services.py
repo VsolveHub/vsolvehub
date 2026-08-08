@@ -357,7 +357,12 @@ def test_recover_booking_partner_wrong_version_is_a_typed_conflict() -> None:
         expected_version=booked.booking.version,
     )
     replacement = _replacement_partner("switch-socket-repair")
-    offer = _committed_replacement_offer(unit_id=booked.unit.id, partner=replacement)
+    # Accepted, deliberately not committed. Committing is now what *finishes* a recovery — the
+    # Booking is already CONFIRMED by the time a committed offer exists — so calling this
+    # command afterwards is an idempotent no-op rather than a conflict. The version guard
+    # still protects an operator acting on a stale view, which is what this asserts.
+    offer = start_partner_recovery_offer(unit_id=booked.unit.id, partner_id=replacement.id)
+    accept_unit_offer(offer_id=offer.id, partner=replacement)
 
     with pytest.raises(BookingVersionConflictApiError):
         recover_booking_partner(

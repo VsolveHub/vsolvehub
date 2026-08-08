@@ -152,6 +152,7 @@ export function ReviewStage({
           <CancellationLadder
             bands={quote.cancellationBands}
             policyVersion={quote.cancellationPolicyVersion}
+            rescheduleFreeNoticeHours={quote.rescheduleFreeNoticeHours}
           />
         </div>
       ) : null}

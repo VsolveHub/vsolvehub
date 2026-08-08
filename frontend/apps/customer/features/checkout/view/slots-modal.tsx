@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { useCandidateStarts, type SchedulingGroup } from "../queries";
 import { formatServiceDuration } from "./duration";
-import { PreferredStartPicker } from "./preferred-start-picker";
+import { PreferredStartPicker } from "@/features/booking/view/preferred-start-picker";
 
 /**
  * One start time per visit.
@@ -160,6 +160,7 @@ function SlotsModalBody({
                 windows={windows}
                 selectedStart={chosen.get(editing.key) ?? null}
                 onSelect={(startsAt) => choose(editing.key, startsAt)}
+                footnote="This is when you would like us to start. We will show you exactly how it can be arranged, and what it costs, before anything is confirmed."
               />
             ) : null}
           </SkeletonRegion>

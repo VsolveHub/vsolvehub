@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Any, cast
 
+from django.conf import settings
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -656,6 +657,14 @@ class CancellationPolicySerializer(serializers.Serializer[dict[str, object]]):
     code = serializers.CharField(read_only=True)
     version = serializers.IntegerField(read_only=True)
     bands = CancellationBandSerializer(many=True, read_only=True)
+    #: How many hours before the visit it can still be moved, free of charge.
+    #:
+    #: Published beside the cancellation ladder because it is the same disclosure and the same
+    #: moment: F2 requires the Customer be told what changing their mind costs *before* they
+    #: pay, and "you can move it instead" is half of that answer. It sits on the policy object
+    #: rather than in frontend copy for the reason the bands do — copy in the browser is the
+    #: half that goes stale when the number moves.
+    reschedule_free_notice_hours = serializers.IntegerField(read_only=True)
 
 
 class QuoteArrivalWindowSerializer(serializers.Serializer[dict[str, object]]):
@@ -773,6 +782,7 @@ class QuoteSerializer(serializers.ModelSerializer[Quote]):
         return {
             "code": snapshot["code"],
             "version": snapshot["version"],
+            "reschedule_free_notice_hours": settings.M1_RESCHEDULE_FREE_NOTICE_HOURS,
             "bands": [
                 {
                     "code": band["code"],
@@ -895,9 +905,16 @@ class FulfilmentUnitSerializer(serializers.ModelSerializer[FulfilmentUnit]):
         Read from the Booking rather than a held Reservation for the same reason:
         a reservation can still be released, and the Customer should not be shown
         a name that is not yet a commitment.
+
+        `RECOVERY_REQUIRED` is `null` too, and for the strongest version of that
+        reason. `Booking.partner` still points at whoever stepped back — the column
+        is only rewritten when a replacement is adopted — so publishing it while a
+        replacement is being searched for shows the Customer a card reading "Home
+        Cleaning Pro" directly under a badge reading "Assigning a new professional".
+        The two contradict each other and the card is the one that is wrong.
         """
         booking = getattr(unit, "booking", None)
-        if booking is None:
+        if booking is None or booking.status == Booking.Status.RECOVERY_REQUIRED:
             return None
         partner = booking.partner
         return {

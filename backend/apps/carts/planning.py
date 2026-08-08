@@ -552,9 +552,12 @@ def _allocate(total: int, weights: tuple[int, ...]) -> tuple[int, ...]:
     if denominator <= 0:
         raise ValueError("Money allocation requires a positive service subtotal.")
     allocations = [total * weight // denominator for weight in weights]
-    remainder = total - sum(allocations)
-    for index in range(remainder):
-        allocations[index % len(allocations)] += 1
+    # Only a unit that contributed to the basis can absorb a rounding paise. Handing one
+    # to a zero-subtotal unit puts a charge on a line the Customer was never quoted, and
+    # is the same defect that made `_allocate_exact` tax a ₹0 invoice line.
+    carriers = [index for index, weight in enumerate(weights) if weight > 0]
+    for position in range(total - sum(allocations)):
+        allocations[carriers[position % len(carriers)]] += 1
     return tuple(allocations)
 
 

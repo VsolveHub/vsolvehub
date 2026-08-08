@@ -218,6 +218,35 @@ class CompletionSubmissionSerializer(serializers.ModelSerializer[CompletionSubmi
 # --------------------------------------------------------------------------------------------
 
 
+class CancellationPreviewSerializer(serializers.Serializer[Any]):
+    """What cancelling this visit would cost and return, as of now.
+
+    Every figure is the server's. A browser cannot read the frozen band ladder or the live
+    payment allocations, so a client that computed either would be inventing the number it then
+    asked the Customer to accept.
+    """
+
+    band_code = serializers.CharField()
+    fee_paise = serializers.IntegerField()
+    fee_waiver = serializers.CharField(allow_blank=True)
+    refund_paise = serializers.IntegerField()
+    currency = serializers.CharField()
+
+
+class ReschedulePreviewSerializer(serializers.Serializer[Any]):
+    """Whether a visit may be moved right now, and why not when it may not.
+
+    Published rather than derived client-side because the rule reads the frozen quote-time
+    cancellation ladder: a visit is movable only while its *free* band still applies. That
+    snapshot never leaves the server, so a client can only guess — and guessing here means
+    offering a picker that refuses every slot in it.
+    """
+
+    is_available = serializers.BooleanField()
+    unavailable_reason = serializers.CharField(allow_blank=True)
+    earliest_start = serializers.DateTimeField()
+
+
 class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
     """One visit, as the Customer who paid for it sees it.
 
@@ -232,6 +261,8 @@ class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
     work_tasks = serializers.SerializerMethodField()
     active_amendment = serializers.SerializerMethodField()
     completion = serializers.SerializerMethodField()
+    cancellation_preview = serializers.SerializerMethodField()
+    reschedule_preview = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -252,12 +283,27 @@ class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
             "work_tasks",
             "active_amendment",
             "completion",
+            "cancellation_preview",
+            "reschedule_preview",
             "server_now",
         )
         read_only_fields = fields
 
-    @extend_schema_field(serializers.CharField())
-    def get_partner_display_name(self, instance: Booking) -> str:
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_partner_display_name(self, instance: Booking) -> str | None:
+        """`null` while a replacement is being found, because nobody is coming yet.
+
+        `Booking.partner` still holds the Partner who released — that column is rewritten only
+        when `adopt_replacement_reservation` lands a replacement — so reading it during recovery
+        names the one person who is definitely not turning up, directly under a status that says
+        somebody else is being assigned.
+
+        Operations' projection deliberately keeps naming them: who dropped the job is the whole
+        point of the case they are working.
+        """
+
+        if instance.status == Booking.Status.RECOVERY_REQUIRED:
+            return None
         return instance.partner.display_name
 
     @extend_schema_field(WorkTaskSerializer(many=True))
@@ -283,6 +329,40 @@ class CustomerBookingSerializer(serializers.ModelSerializer[Booking]):
             .first()
         )
         return None if submission is None else CompletionSubmissionSerializer(submission).data
+
+    @extend_schema_field(CancellationPreviewSerializer(allow_null=True))
+    def get_cancellation_preview(self, instance: Booking) -> Any:
+        """Priced here rather than in the browser, and `null` when cancelling is not on offer.
+
+        Imported inside the method: `fulfilment.cancellation` imports this module's siblings and
+        a module-scope import closes the loop.
+        """
+
+        from apps.fulfilment.cancellation import preview_cancellation  # noqa: PLC0415
+
+        unit = instance.fulfilment_unit
+        if unit is None:
+            return None
+        preview = preview_cancellation(unit=unit, booking=instance)
+        return None if preview is None else CancellationPreviewSerializer(preview).data
+
+    @extend_schema_field(ReschedulePreviewSerializer(allow_null=True))
+    def get_reschedule_preview(self, instance: Booking) -> Any:
+        """Whether this visit can be moved, and the sentence to show when it cannot.
+
+        Two things the client cannot work out for itself, and got wrong when it tried. The
+        notice rule is keyed on the *frozen quote-time* fee ladder — a visit is movable only
+        while its free cancellation band still applies — and no browser holds that snapshot.
+        A client guessing from `status` alone offers Reschedule on a visit fourteen hours out
+        and lands the Customer on a grid where every slot is refused.
+        """
+
+        from apps.fulfilment.cancellation import preview_reschedule  # noqa: PLC0415
+
+        unit = instance.fulfilment_unit
+        if unit is None:
+            return None
+        return ReschedulePreviewSerializer(preview_reschedule(unit=unit, booking=instance)).data
 
     @extend_schema_field(serializers.DateTimeField())
     def get_server_now(self, _instance: Booking) -> str:

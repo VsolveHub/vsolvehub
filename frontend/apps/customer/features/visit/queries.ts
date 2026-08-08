@@ -1,9 +1,10 @@
 "use client";
 
 import { ApiRequestError, getStableIdempotencyKey, request, type Schemas } from "@vsolve/api-client";
-import { EXPIRING_STATE, boundedPoll, queryKeys } from "@vsolve/query";
+import { EXPIRING_STATE, VOLATILE_STATE, boundedPoll, queryKeys } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { toWindowsView, type WindowsView } from "@/features/booking/adapters";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
@@ -99,9 +100,25 @@ export function canCancel(visit: Visit): boolean {
   return CANCELLABLE_STATUSES.includes(visit.status);
 }
 
-/** Only a visit that has not started can be moved. */
+/**
+ * Whether to offer Reschedule — the server's answer, not a guess from the status.
+ *
+ * This is the one control on this screen that the client genuinely cannot decide. The rule is
+ * not "has it started": Django also refuses a reschedule once the visit is inside its
+ * *fee-bearing* cancellation band, read from the frozen quote-time ladder that never leaves the
+ * server. A visit fourteen hours out is `CONFIRMED` and unmovable, and a client reading the
+ * status alone offered a slot picker in which every single slot would be refused.
+ *
+ * So the whole decision comes from `reschedule_preview`, along with the sentence to show when
+ * the answer is no.
+ */
 export function canReschedule(visit: Visit): boolean {
-  return visit.status === "CONFIRMED" || visit.status === "EN_ROUTE";
+  return visit.reschedule_preview?.is_available ?? false;
+}
+
+/** Why Reschedule is not on offer. Empty when it is. */
+export function rescheduleBlockedReason(visit: Visit): string {
+  return visit.reschedule_preview?.unavailable_reason ?? "";
 }
 
 export function canRespondToCompletion(visit: Visit): boolean {
@@ -194,6 +211,35 @@ export function useCancelVisit() {
     // what lets them decide again against what is actually true now.
     onError: (_error, input) => cache.refetchVisit(input.bookingId),
     retry: false,
+  });
+}
+
+/**
+ * The slots this visit could move to — the same grid the customer chose from at checkout.
+ *
+ * Django builds both from one `build_arrival_window_grid`, so the times, widths, day range and
+ * unavailable reasons are identical by construction rather than by two implementations
+ * agreeing. What this one additionally knows is that the visit exists: it is scoped to the
+ * booked Fulfilment Unit, it discounts the visit's own reservation so it does not block itself,
+ * and it marks slots inside the minimum-notice window `TOO_SOON` instead of offering times the
+ * reschedule command would refuse.
+ *
+ * `VOLATILE_STATE`, for the same reason as the checkout grid: a cached list of open times is a
+ * claim the server has stopped standing behind.
+ */
+export function useRescheduleWindows(bookingId: string | null) {
+  return useQuery<WindowsView>({
+    queryKey: queryKeys.booking.rescheduleWindows(bookingId ?? ""),
+    queryFn: async () =>
+      toWindowsView(
+        await request(() =>
+          getApiClient().GET("/api/v1/bookings/{booking_id}/reschedule-windows/", {
+            params: { path: { booking_id: bookingId! } },
+          }),
+        ),
+      ),
+    enabled: bookingId !== null,
+    ...VOLATILE_STATE,
   });
 }
 

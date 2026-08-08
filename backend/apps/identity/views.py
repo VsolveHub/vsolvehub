@@ -17,7 +17,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.identity.delivery import OtpDeliveryError
-from apps.identity.exceptions import InvalidOtpApiError, OtpThrottled, OtpUnavailableApiError
+from apps.identity.exceptions import (
+    InvalidOtpApiError,
+    NoAccountForRoleApiError,
+    OtpThrottled,
+    OtpUnavailableApiError,
+)
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User, UserSession
 from apps.identity.serializers import (
@@ -39,6 +44,7 @@ from apps.identity.serializers import (
     UserSessionSerializer,
 )
 from apps.identity.services import (
+    NoAccountForRoleError,
     OtpRateLimitError,
     OtpVerificationError,
     create_authenticated_session,
@@ -82,6 +88,10 @@ class OtpRequestView(APIView):
         request=OtpRequestSerializer,
         responses={
             202: OtpIssuedSerializer,
+            404: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`intended_role` was set and this number holds no such account.",
+            ),
             429: OpenApiResponse(
                 response=ApiErrorSerializer,
                 examples=[OTP_RATE_LIMIT_EXAMPLE],
@@ -99,11 +109,14 @@ class OtpRequestView(APIView):
                 phone_number=data["phone_number"],
                 request_ip=_request_ip(request),
                 device_identifier=data.get("device_identifier", ""),
+                intended_role=data.get("intended_role", ""),
             )
         except OtpRateLimitError as exc:
             raise OtpThrottled(wait=exc.retry_after_seconds) from exc
         except OtpDeliveryError as exc:
             raise OtpUnavailableApiError from exc
+        except NoAccountForRoleError as exc:
+            raise NoAccountForRoleApiError from exc
 
         payload: dict[str, object] = {
             "challenge_id": issued.challenge.id,

@@ -251,6 +251,7 @@ def load_snapshot(
     horizon_start: datetime,
     horizon_end: datetime,
     destination: Address | None = None,
+    exclude_reservation_id: UUID | None = None,
 ) -> AvailabilitySnapshot:
     """Resolve capacity inputs for one area and skill set over a date range.
 
@@ -272,7 +273,10 @@ def load_snapshot(
         _rules=_rules_by_partner(partners, area=area),
         _exceptions=_exceptions_by_partner(partners, area=area),
         _reserved=_reserved_by_partner(
-            partners, horizon_start=horizon_start, horizon_end=horizon_end
+            partners,
+            horizon_start=horizon_start,
+            horizon_end=horizon_end,
+            exclude_reservation_id=exclude_reservation_id,
         ),
     )
 
@@ -393,19 +397,29 @@ def _reserved_by_partner(
     *,
     horizon_start: datetime,
     horizon_end: datetime,
+    exclude_reservation_id: UUID | None = None,
 ) -> dict[UUID, tuple[tuple[datetime, datetime], ...]]:
     """Active reservations per Partner, as plain interval tuples.
 
     Only `TENTATIVE` and `CONFIRMED` count, matching the statuses the database's
     exclusion constraint treats as live. A `RELEASED` row is history.
+
+    `exclude_reservation_id` drops one hold from the picture, and exists for exactly one
+    caller: the grid a Customer picks a *new* time from when rescheduling a visit that is
+    already booked. That visit's own reservation is about to be moved or released, so counting
+    it would have the visit block itself — its current slot would read `NO_CAPACITY` and, in a
+    one-Partner area, so would every slot near it.
     """
 
     grouped: dict[UUID, list[tuple[datetime, datetime]]] = defaultdict(list)
-    rows = Reservation.objects.filter(
+    reservations = Reservation.objects.filter(
         partner_id__in=list(partners),
         status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
         occupied_range__overlap=Range(horizon_start, horizon_end, "[)"),
-    ).values_list("partner_id", "occupied_range")
+    )
+    if exclude_reservation_id is not None:
+        reservations = reservations.exclude(id=exclude_reservation_id)
+    rows = reservations.values_list("partner_id", "occupied_range")
     for partner_id, occupied in rows:
         grouped[partner_id].append((occupied.lower, occupied.upper))
     return {partner_id: tuple(spans) for partner_id, spans in grouped.items()}

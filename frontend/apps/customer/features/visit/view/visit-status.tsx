@@ -36,7 +36,7 @@ export const VISIT_STATUS_LABELS: Record<VisitStatus, string> = {
   PARTIALLY_COMPLETED: "Partly completed",
   DISPUTED: "Reported — under review",
   ABORTED: "Stopped",
-  RECOVERY_REQUIRED: "Finding a replacement professional",
+  RECOVERY_REQUIRED: "Assigning a new professional",
   CANCELLED: "Cancelled",
 };
 
@@ -58,7 +58,8 @@ export const VISIT_STATUS_DESCRIPTIONS: Record<VisitStatus, string> = {
   DISPUTED: "We are looking into what you reported. Payment to the professional is on hold.",
   ABORTED: "Work stopped before it was finished. We are settling what was done.",
   RECOVERY_REQUIRED:
-    "Your professional had to step back. We are finding a replacement — you can also cancel.",
+    "Your professional had to step back. We are assigning someone else now — if we cannot, " +
+    "this visit is cancelled and refunded in full automatically.",
   CANCELLED: "This visit was cancelled.",
 };
 

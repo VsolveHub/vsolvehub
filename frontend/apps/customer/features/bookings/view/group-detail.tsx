@@ -129,6 +129,18 @@ function UnitCard({
         </div>
       ) : null}
 
+      {/*
+        Django sends no `professional` while a replacement is being found, because the one on
+        the Booking row is whoever stepped back. This says so rather than leaving the space
+        blank, and it is where the empty card used to contradict the badge above it.
+      */}
+      {unit.status === "RECOVERY_REQUIRED" ? (
+        <p className="mt-3 rounded-control bg-surface-sunken p-3 text-sm leading-6 text-text-secondary">
+          Your professional had to step back. We are assigning someone else now — if we cannot,
+          this visit is cancelled and refunded in full automatically.
+        </p>
+      ) : null}
+
       <ul className="mt-4 flex flex-col gap-1 border-t border-line pt-3 text-sm">
         {unit.lines.map((line) => (
           <li key={line.id} className="flex justify-between gap-3">

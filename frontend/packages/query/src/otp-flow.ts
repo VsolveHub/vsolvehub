@@ -40,7 +40,7 @@ export type OtpPhase = "phone" | "code" | "authenticated";
 
 /** A failure that belongs in a banner rather than under a field. */
 export interface OtpFailure {
-  kind: "rate_limited" | "delivery_unavailable" | "network" | "unexpected";
+  kind: "rate_limited" | "delivery_unavailable" | "no_account_for_role" | "network" | "unexpected";
   title: string;
   message: string;
   severity: "error" | "warning";
@@ -73,6 +73,15 @@ export interface OtpFlowOptions {
    * say how many digits are coming.
    */
   codeLength?: number;
+  /**
+   * Asks Django to refuse the request up front when this number holds no such
+   * account, instead of sending a code nobody can use to sign in anywhere.
+   *
+   * Omit for self-service sign-in (the Customer app): there, "no account yet"
+   * is not a failure, it is the first login. Only pass this where an account
+   * can only exist because someone already applied — today, `"partner"`.
+   */
+  intendedRole?: "partner";
   /** Called once Django has established the session cookie. */
   onAuthenticated?: (session: AuthenticatedSession) => void;
 }
@@ -116,6 +125,19 @@ export function describeOtpFailure(error: unknown): OtpFailure {
           "Too many codes have been requested for this number. " +
           "Wait a little before trying again.",
         severity: "warning",
+        reference,
+      };
+    }
+
+    if (code === "no_account_for_role") {
+      return {
+        kind: "no_account_for_role",
+        title: "No Partner account found",
+        message:
+          "We could not find a Partner account for this number. Apply to " +
+          "become a Partner, or sign in with the number your Partner " +
+          "account uses.",
+        severity: "error",
         reference,
       };
     }
@@ -255,6 +277,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
     deviceLabel,
     minimumPhoneDigits = 10,
     codeLength: fallbackCodeLength = 6,
+    intendedRole,
     onAuthenticated,
   } = options;
 
@@ -315,6 +338,10 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
         {
           phone_number: phoneNumber,
           ...(deviceIdentifier ? { device_identifier: deviceIdentifier } : {}),
+          // Generated as non-optional because the field carries a server-side
+          // default; sent explicitly here so a caller that doesn't ask for a
+          // role check still gets Customer's ordinary self-service sign-in.
+          intended_role: intendedRole ?? "",
         },
         {
           onSuccess: (issued) => {
@@ -339,7 +366,7 @@ export function useOtpFlow(apiClient: ApiClient, options: OtpFlowOptions = {}): 
         },
       );
     },
-    [deviceIdentifier, requestOtp],
+    [deviceIdentifier, intendedRole, requestOtp],
   );
 
   const onPhoneChange = useCallback((value: string) => {

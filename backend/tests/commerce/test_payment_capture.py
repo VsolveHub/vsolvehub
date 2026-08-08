@@ -84,10 +84,14 @@ def _payment_ready_group(
     assert checkout_response.status_code == HTTPStatus.CREATED
     checkout = CheckoutSession.objects.get(id=checkout_response.json()["id"])
     group = BookingGroup.objects.get(id=checkout.booking_group_id)
+    # A unit reaches PARTNER_COMMITTED by one of two routes, and which one it takes is the
+    # planner's decision, not this fixture's. A same-day unit is offered to a Partner who
+    # accepts; an advance unit is assigned directly and is held the moment it is dispatched.
+    # `_preferred_start` is tomorrow morning, so these are advance units — but drive whichever
+    # route appears, so the fixture survives the planner's default horizon moving again.
     offers = list(
         PartnerOffer.objects.filter(fulfilment_unit__booking_group=group).select_related("partner")
     )
-    assert offers
     for offer in offers:
         accepted = accept_unit_offer(offer_id=offer.id, partner=offer.partner)
         accepted.undo_deadline = timezone.now() - timedelta(seconds=1)
@@ -95,6 +99,14 @@ def _payment_ready_group(
     reconcile_group_dispatch(group_id=group.id)
     checkout.refresh_from_db()
     group.refresh_from_db()
+    # The commitment itself, however it was reached: every unit holding a live Partner.
+    assert (
+        Reservation.objects.filter(
+            fulfilment_unit__booking_group=group,
+            status=Reservation.Status.TENTATIVE,
+        ).count()
+        == group.units.count()
+    )
     assert checkout.status == CheckoutSession.Status.PARTNER_COMMITTED
     assert group.status == BookingGroup.Status.PAYMENT_PENDING
     return client, customer, checkout, group

@@ -34,6 +34,10 @@ TRANSACTIONAL_PURPOSES = frozenset(
     {
         "booking.confirmed",
         "booking.cancelled",
+        # A visit that was paid for and could not be staffed. Cancelled *by us*, refunded in
+        # full — the one message a Customer must never be able to mute, because the visit they
+        # are expecting is not happening and nothing else will tell them.
+        "booking.replacement_unavailable",
         "booking.partner_en_route",
         "booking.start_otp",
         "booking.completed",

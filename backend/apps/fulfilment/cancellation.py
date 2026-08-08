@@ -23,6 +23,7 @@ from apps.assignments.models import Reservation
 from apps.carts.availability import load_snapshot
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, FulfilmentUnit
+from apps.carts.services import build_arrival_window_grid
 from apps.commerce.models import Booking, Refund
 from apps.fulfilment.exceptions import (
     BookingCommandInvalidApiError,
@@ -40,7 +41,7 @@ from apps.fulfilment.services import (
     locked_booking_context,
     record_transition,
 )
-from apps.locations.models import Address
+from apps.locations.models import Address, ServiceArea
 from apps.locations.services import check_serviceability
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
@@ -160,6 +161,48 @@ def customer_can_cancel(booking: Booking) -> bool:
     return True
 
 
+@dataclass(frozen=True, slots=True)
+class CancellationPreview:
+    """What cancelling this visit would cost and return, priced now, by the server.
+
+    Exists so the Customer's confirm step can state a number instead of a warning. The client
+    must never derive either figure: the fee comes from the frozen quote-time band ladder and
+    the refund from live `PaymentAllocation` rows, and a browser has neither. It is a quote of
+    the current moment, not a promise — crossing a band boundary between opening the sheet and
+    confirming changes it, and `cancel_booking` recomputes it authoritatively either way.
+    """
+
+    band_code: str
+    fee_paise: int
+    #: Empty unless the fee was waived; `FEE_WAIVER_PARTNER_RELEASED` / `_PARTNER_LATE`.
+    fee_waiver: str
+    refund_paise: int
+    currency: str
+
+
+def preview_cancellation(*, unit: FulfilmentUnit, booking: Booking) -> CancellationPreview | None:
+    """`None` when this visit is not the Customer's to cancel — the same answer, not zeroes.
+
+    A visit whose Partner released mid-job is the case that matters: it is neither cancellable
+    nor finished, and reporting a fee of zero and a full refund for it would describe an
+    outcome the Customer cannot have.
+    """
+
+    if not customer_can_cancel(booking):
+        return None
+    band, fee_paise, waiver = _cancellation_fee(unit=unit, booking=booking)
+    refundable = sum(
+        amount for _allocation, amount in refundable_unit_allocations(unit=unit, for_update=False)
+    )
+    return CancellationPreview(
+        band_code=band["code"],
+        fee_paise=fee_paise,
+        fee_waiver=waiver,
+        refund_paise=max(0, refundable - fee_paise),
+        currency=unit.currency,
+    )
+
+
 def _uncancellable_reason(booking: Booking) -> str:
     if booking.status == Booking.Status.RECOVERY_REQUIRED:
         return (
@@ -277,9 +320,106 @@ RESCHEDULABLE_BOOKING_STATUSES = (Booking.Status.CONFIRMED, Booking.Status.EN_RO
 
 
 def _reschedule_notice_ok(*, unit: FulfilmentUnit, booking: Booking) -> bool:
+    """Whether there is still enough notice to move this visit rather than cancel it.
+
+    Its own boundary — `M1_RESCHEDULE_FREE_NOTICE_HOURS` — and no longer the fee ladder's.
+    Reading the free cancellation band meant reschedule closed 24 hours out, which sent a
+    Customer who only wanted a different time into cancelling and paying a fee to rebook the
+    same work. Cancelling releases the Partner and loses the job; rescheduling keeps both and
+    re-times them, so it can stay open much closer to the visit.
+
+    Rescheduling is free at any point it is allowed at all. There is no fee ladder here and
+    deliberately no second one: a Customer either has enough notice to move the visit or they
+    do not, and charging them for the privilege of keeping the booking would be charging for
+    the outcome the platform prefers.
+
+    The Partner-late waiver stays and comes first. A Partner who has not turned up has already
+    broken the notice this rule is protecting.
+    """
+
     if is_partner_late(booking=booking, unit=unit):
         return True
-    return bool(select_cancellation_band(unit=unit, booking=booking)["fee_paise"] == 0)
+    hours_until_start = (unit.requested_start - timezone.now()).total_seconds() / 3600
+    return hours_until_start > settings.M1_RESCHEDULE_FREE_NOTICE_HOURS
+
+
+#: Why a reschedule is refused, and the sentence the Customer is shown for it.
+#:
+#: The strings live here, next to the guards that raise them, so the refusal at submit and the
+#: warning before the Customer ever picks a slot are literally the same sentence. They used to
+#: be two: the command refused with this text while the screen offered a full grid of times,
+#: every one of which was going to be rejected.
+RESCHEDULE_BLOCKED_SETTLED = "This visit is already finished and cannot be rescheduled."
+RESCHEDULE_BLOCKED_RECOVERY = (
+    "We are assigning a new professional to this visit. Once someone is assigned you can move "
+    "it — or cancel now for a full refund."
+)
+RESCHEDULE_BLOCKED_STARTED = (
+    "Only a visit that has not started can be rescheduled. This one is already under way, and "
+    "is settled through its completion report."
+)
+#: Interpolated with the notice window so the sentence cannot drift from the setting that
+#: decides it — the previous copy said "this close to the visit" and named no number at all,
+#: which left a Customer no way to know whether waiting or acting was the mistake.
+RESCHEDULE_BLOCKED_TOO_CLOSE_TEMPLATE = (
+    "Visits can be moved free of charge up to {hours} hours before they start, and this one is "
+    "closer than that. You can still cancel — the cancellation fee shows what applies — and "
+    "book a new time."
+)
+
+
+def _too_close_reason() -> str:
+    return RESCHEDULE_BLOCKED_TOO_CLOSE_TEMPLATE.format(
+        hours=settings.M1_RESCHEDULE_FREE_NOTICE_HOURS
+    )
+
+
+def _reschedule_blocked_reason(*, unit: FulfilmentUnit, booking: Booking) -> str:
+    """Empty when the visit may be moved; otherwise the reason, in the Customer's words.
+
+    Both checks are about the visit's *current* start, not the new one the Customer is about to
+    pick — which is the distinction that made this worth publishing. The notice rule asks how
+    close the existing visit is; the minimum-notice floor on the grid asks how soon the new
+    time is. A visit fourteen hours away fails the first while every slot in the grid passes
+    the second, so a screen that only knew about the second offered a page of times that were
+    all going to be refused.
+    """
+
+    if booking.status in TERMINAL_BOOKING_STATUSES:
+        return RESCHEDULE_BLOCKED_SETTLED
+    if booking.status == Booking.Status.RECOVERY_REQUIRED:
+        # Not "already under way" — the opposite. There is nobody to move yet, which is a wait
+        # rather than a refusal, and the copy has to say which of the two it is.
+        return RESCHEDULE_BLOCKED_RECOVERY
+    if booking.status not in RESCHEDULABLE_BOOKING_STATUSES:
+        return RESCHEDULE_BLOCKED_STARTED
+    if not _reschedule_notice_ok(unit=unit, booking=booking):
+        return _too_close_reason()
+    return ""
+
+
+@dataclass(frozen=True, slots=True)
+class ReschedulePreview:
+    """Whether this visit can be moved at all, decided by the server before anything is picked.
+
+    `earliest_start` is published even when `is_available` is false: it is the floor the picker
+    would use, and sending it unconditionally keeps the field's meaning constant rather than
+    making the client handle a hole.
+    """
+
+    is_available: bool
+    #: Empty when available. Otherwise the same sentence the command would refuse with.
+    unavailable_reason: str
+    earliest_start: Any
+
+
+def preview_reschedule(*, unit: FulfilmentUnit, booking: Booking) -> ReschedulePreview:
+    reason = _reschedule_blocked_reason(unit=unit, booking=booking)
+    return ReschedulePreview(
+        is_available=not reason,
+        unavailable_reason=reason,
+        earliest_start=_earliest_reschedule_start(),
+    )
 
 
 def _earliest_reschedule_start() -> Any:
@@ -362,9 +502,7 @@ def _guard_unit_reschedulable(
     """
 
     if booking.status not in RESCHEDULABLE_BOOKING_STATUSES:
-        raise BookingCommandInvalidApiError(
-            reason="Only a Booking that has not started can be rescheduled."
-        )
+        raise BookingCommandInvalidApiError(reason=RESCHEDULE_BLOCKED_STARTED)
     if new_requested_start < _earliest_reschedule_start():
         # A minimum *notice* guard, not merely a future-time one. Both directions are exploits
         # and they are the same exploit.
@@ -386,12 +524,7 @@ def _guard_unit_reschedulable(
             )
         )
     if not _reschedule_notice_ok(unit=unit, booking=booking):
-        raise BookingCommandInvalidApiError(
-            reason=(
-                "Reschedule is not available this close to the visit. Cancel instead — the "
-                "cancellation fee ladder shows what applies — and book a new time."
-            )
-        )
+        raise BookingCommandInvalidApiError(reason=_too_close_reason())
     return _resolve_reschedule_partner(
         unit=unit, booking=booking, new_requested_start=new_requested_start
     )
@@ -475,6 +608,81 @@ def _reschedule_locked_unit(
         context=context,
     )
     return booking
+
+
+def reschedule_windows(*, booking_id: UUID, customer_id: UUID) -> Any:
+    """The arrival-window grid a Customer picks a new time from, for a visit already booked.
+
+    The same grid as before booking, built by the same `build_arrival_window_grid` — not a
+    second, similar one. What differs is only what a *booked* visit knows that a cart does not,
+    and each difference is a correction rather than a relaxation:
+
+    * **Scope is the unit, not the cart.** Variants, duration, service area and address come off
+      the `FulfilmentUnit` that was actually booked. The customer's cart has since moved on and
+      says nothing about this visit.
+    * **This visit's own hold is excluded.** Its reservation is about to be moved or released,
+      so counting it would have the visit block itself out of its own slot — and in a
+      one-Partner area, out of every slot near it.
+    * **Minimum notice is applied.** `reschedule_booking` refuses a new start inside
+      `M1_RESCHEDULE_MIN_NOTICE_MINUTES`, so those slots are marked `TOO_SOON` here rather than
+      offered and then rejected.
+
+    Window ids are the ISO start instant, unsigned, and that is deliberate. The signed token in
+    the checkout grid binds a slot to a price and a cart; a reschedule reprices nothing, and
+    `reschedule_booking` takes a time and re-runs every guard itself. Signing an id that no
+    command verifies would be security theatre.
+    """
+
+    # Read, so no `locked_booking_context`: locking a Booking and its whole ancestry because
+    # somebody opened a slot picker would hold rows for as long as they browsed, and the answer
+    # is preliminary either way — `reschedule_booking` re-checks availability under its own
+    # locks and the exclusion constraint has the final say.
+    booking = Booking.objects.select_related("fulfilment_unit__booking_group__address").get(
+        id=booking_id
+    )
+    unit = booking.fulfilment_unit
+    if booking.customer_id != customer_id:
+        raise PermissionError("This Booking belongs to another Customer.")
+    if unit is None:
+        raise BookingCommandInvalidApiError(
+            reason="This Booking has no Fulfilment Unit and cannot be rescheduled."
+        )
+    # Refused here too, not only at submit. A grid served for a visit that cannot be moved is a
+    # page of times every one of which would be rejected, and the endpoint would be the thing
+    # that made that page possible.
+    blocked = _reschedule_blocked_reason(unit=unit, booking=booking)
+    if blocked:
+        raise BookingCommandInvalidApiError(reason=blocked)
+    variant_ids = set(
+        unit.lines.filter(cart_item__isnull=False)
+        .values_list("cart_item__variant_id", flat=True)
+        .distinct()
+    )
+    if not variant_ids:
+        raise BookingCommandInvalidApiError(
+            reason="This visit has no service lines and cannot be rescheduled."
+        )
+    now = timezone.now()
+    area = ServiceArea.objects.prefetch_related("operating_windows", "operating_exceptions").get(
+        id=unit.service_area_id
+    )
+    duration = unit.estimated_duration_minutes
+    snapshot = load_snapshot(
+        variant_ids=variant_ids,
+        area=area,
+        horizon_start=now,
+        horizon_end=now + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS + 1),
+        destination=unit.booking_group.address,
+        exclude_reservation_id=booking.reservation_id,
+    )
+    return build_arrival_window_grid(
+        area=area,
+        snapshot=snapshot,
+        duration=duration,
+        now=now,
+        window_id=lambda starts_at, _window_minutes: starts_at.isoformat(),
+        not_before=_earliest_reschedule_start(),
+    )
 
 
 @transaction.atomic

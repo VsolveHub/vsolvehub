@@ -45,9 +45,9 @@ class Command(BaseCommand):
     def handle(self, *_args: Any, **options: Any) -> None:
         commit = bool(options["commit"])
         earned_booking_ids = set(
-            PartnerLedgerEntry.objects.filter(
-                kind=PartnerLedgerEntry.Kind.EARNING
-            ).values_list("booking_id", flat=True)
+            PartnerLedgerEntry.objects.filter(kind=PartnerLedgerEntry.Kind.EARNING).values_list(
+                "booking_id", flat=True
+            )
         )
         candidates = (
             Booking.objects.filter(status__in=SETTLED_STATUSES)

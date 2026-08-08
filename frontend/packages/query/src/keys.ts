@@ -169,6 +169,17 @@ export const queryKeys = {
      */
     visits: () => [...queryKeys.booking.groups(), "visits"] as const,
     visit: (bookingId: string) => [...queryKeys.booking.visits(), bookingId] as const,
+
+    /**
+     * Slots one already-booked visit could move to (contract 1.20.0).
+     *
+     * Scoped to the booking and nothing else, unlike `windows` above: this grid is derived
+     * from the Fulfilment Unit that was actually booked — its own variants, duration, area,
+     * address and existing hold — so there is no cart version or address to key on. The
+     * customer's cart has moved on since and says nothing about this visit.
+     */
+    rescheduleWindows: (bookingId: string) =>
+      [...queryKeys.booking.visit(bookingId), "reschedule-windows"] as const,
   },
 
   /**

@@ -102,7 +102,12 @@ describe("quote adapter", () => {
     const policy = fixtures.cancellationPolicy();
     const short = toQuoteView(
       fixtures.quote({
-        cancellation_policy: { code: "test-two-band", version: 99, bands: policy.bands.slice(0, 2) },
+        cancellation_policy: {
+          code: "test-two-band",
+          version: 99,
+          reschedule_free_notice_hours: policy.reschedule_free_notice_hours,
+          bands: policy.bands.slice(0, 2),
+        },
       }),
     );
     expect(full.cancellationBands).toHaveLength(4);

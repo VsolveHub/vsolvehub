@@ -411,6 +411,10 @@ export function cancellationPolicy(
   return {
     code: "a1-standard",
     version: 3,
+    // Free reschedule window, published beside the ladder. Its own boundary, not the ladder's
+    // free band: cancelling loses the job, moving it keeps it, so a move stays allowed much
+    // closer to the visit than a fee-free cancellation does.
+    reschedule_free_notice_hours: 4,
     // The frozen M1 ladder: four fixed fees, not percentages, and visible
     // before search and payment.
     bands: [

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from uuid import UUID
@@ -13,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.carts.availability import (
+    AvailabilitySnapshot,
     arrival_window_for_duration,
     load_snapshot,
     reachability_by_partner,
@@ -792,8 +794,6 @@ def create_booking_windows(
         "operating_windows",
         "operating_exceptions",
     ).get(id=area.id)
-    zone = ZoneInfo(area.timezone)
-    today = now.astimezone(zone).date()
     horizon_end = now + timedelta(days=settings.M1_SCHEDULED_MAX_DAYS + 1)
     snapshot = load_snapshot(
         variant_ids=variant_ids,
@@ -802,6 +802,49 @@ def create_booking_windows(
         horizon_end=horizon_end,
         destination=address,
     )
+    return build_arrival_window_grid(
+        area=area,
+        snapshot=snapshot,
+        duration=duration,
+        now=now,
+        window_id=lambda starts_at, window_minutes: _signed_window_id(
+            scope_key=group.key,
+            address=address,
+            starts_at=starts_at,
+            window_minutes=window_minutes,
+        ),
+    )
+
+
+def build_arrival_window_grid(
+    *,
+    area: ServiceArea,
+    snapshot: AvailabilitySnapshot,
+    duration: int,
+    now: datetime,
+    window_id: Callable[[datetime, int], str],
+    not_before: datetime | None = None,
+) -> BookingWindows:
+    """The arrival-window grid, built once and shared by everything that offers slots.
+
+    Two callers, one grid: choosing a window before booking, and choosing a new one when
+    rescheduling a visit that is already booked. They differ in exactly two things — what they
+    can sign a window id with, and how much notice they demand — so those are parameters and
+    everything else is identical by construction. The alternative is two loops that agree until
+    the day one of them is edited, which is the bug this codebase already shipped once when two
+    paths computed schedule coverage differently.
+
+    `not_before` marks slots inside a minimum-notice window `TOO_SOON` rather than hiding them.
+    A customer looking for tomorrow morning should see that this evening exists and is too
+    close, not find an unexplained hole in the grid.
+
+    The loop itself touches no database: `free_partner_ids` reads the snapshot in memory, and
+    the operating windows were prefetched onto `area` by the caller. Query count is whatever
+    `load_snapshot` cost — four — and does not grow with the number of slots probed.
+    """
+
+    zone = ZoneInfo(area.timezone)
+    today = now.astimezone(zone).date()
     # Reachability depends on the Partner and `now`, not on the slot — resolved once
     # here rather than recomputing the same haversine inside the innermost loop.
     reachable_at = reachability_by_partner(snapshot=snapshot, now=now)
@@ -824,6 +867,8 @@ def create_booking_windows(
                 # Precedence fixed by spec §5: the first matching reason wins.
                 if starts_at <= now:
                     unavailable_reason = "PAST"
+                elif not_before is not None and starts_at < not_before:
+                    unavailable_reason = "TOO_SOON"
                 elif not free:
                     unavailable_reason = "NO_CAPACITY"
                 elif not any(reachable_at[partner_id] <= starts_at for partner_id in free):
@@ -834,12 +879,7 @@ def create_booking_windows(
                     unavailable_reason = None
                 windows.append(
                     BookingWindow(
-                        id=_signed_window_id(
-                            scope_key=group.key,
-                            address=address,
-                            starts_at=starts_at,
-                            window_minutes=window_minutes,
-                        ),
+                        id=window_id(starts_at, window_minutes),
                         starts_at=starts_at,
                         ends_at=starts_at + timedelta(minutes=window_minutes),
                         is_available=unavailable_reason is None,

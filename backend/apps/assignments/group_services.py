@@ -17,6 +17,7 @@ from apps.assignments.ranking import (
 )
 from apps.carts.exceptions import BookingGroupConflictApiError
 from apps.carts.models import BookingGroup, CheckoutSession, FulfilmentUnit
+from apps.commerce.models import Booking
 from apps.notifications.services import request_notification
 from apps.partners.models import PartnerProfile
 from apps.partners.selectors import partner_available_during
@@ -40,17 +41,34 @@ def _partner_available(*, partner: PartnerProfile, unit: FulfilmentUnit) -> bool
     )
 
 
-def _is_post_booking_recovery(group: BookingGroup, unit: FulfilmentUnit) -> bool:
-    """A `BOOKED` group is terminal for the pre-payment dispatch sweep, but not for
-    `apps.fulfilment.recovery_services` manually re-offering a `RECOVERY_REQUIRED` unit a
-    replacement Partner after the original one released post-booking. This is the one case a
-    `BOOKED` group is still allowed through the manual-offer / accept / commit path.
+def _unit_awaits_booking_recovery(unit: FulfilmentUnit) -> bool:
+    """Whether this unit's Booking is waiting for a replacement Partner.
+
+    Read from the `Booking` rather than from `unit.status`, because the unit's status is a
+    *projection* of the Booking's (`fulfilment.services.UNIT_STATUS_BY_BOOKING_STATUS`) and the
+    dispatch path overwrites it directly on the way past — `HELD` when a candidate accepts,
+    `MATCHING` when one declines. Reading the projection meant a recovery stopped looking like
+    one as soon as the first candidate answered.
     """
 
-    return (
-        group.status == BookingGroup.Status.BOOKED
-        and unit.status == FulfilmentUnit.Status.RECOVERY_REQUIRED
-    )
+    return Booking.objects.filter(
+        fulfilment_unit=unit,
+        status=Booking.Status.RECOVERY_REQUIRED,
+    ).exists()
+
+
+def _is_post_booking_recovery(group: BookingGroup, unit: FulfilmentUnit) -> bool:
+    """A `BOOKED` group is terminal for the pre-payment dispatch sweep, but not for replacing a
+    Partner who released after payment — the manual-offer / accept / commit path stays open for
+    that one case, and `fulfilment.replacement` drives it automatically.
+
+    The first offer of a recovery was never the problem: the unit still reads `RECOVERY_REQUIRED`
+    when it is created. The *second* was. A declined candidate left the unit `MATCHING`, so the
+    chain to the next candidate asked this question and was told no — and the search went silent
+    after one refusal.
+    """
+
+    return group.status == BookingGroup.Status.BOOKED and _unit_awaits_booking_recovery(unit)
 
 
 def _blocks_offer_action(group: BookingGroup, unit: FulfilmentUnit) -> bool:
@@ -67,6 +85,14 @@ def _eligible_candidates(unit: FulfilmentUnit) -> list[PartnerProfile]:
 
 def _set_unit_status(unit: FulfilmentUnit, status: str) -> None:
     if unit.status == status:
+        return
+    if _unit_awaits_booking_recovery(unit):
+        # While a Booking waits for a replacement, its unit reads `RECOVERY_REQUIRED` and
+        # nothing on the dispatch path may say otherwise. `HELD` and `MATCHING` describe a
+        # unit hunting its *first* Partner before anyone has paid; writing either here tells
+        # the Customer's screen the visit is unbooked, and tells the next dispatch pass this
+        # is not a recovery. The Booking's own transition sets the projection back through
+        # `fulfilment.services.apply_transition` when the replacement lands.
         return
     unit.status = status
     unit.version += 1
@@ -171,6 +197,7 @@ def _create_offer(
     group: BookingGroup,
     unit: FulfilmentUnit,
     selected_candidate: PartnerProfile | None = None,
+    offer_ttl_seconds: int | None = None,
 ) -> PartnerOffer | None:
     post_booking_recovery = _is_post_booking_recovery(group, unit)
     if _blocks_offer_action(group, unit):
@@ -203,7 +230,16 @@ def _create_offer(
         },
         ranking_snapshot=ranking.provenance(unit=unit, selected=candidate),
     )
-    offer_timeout = timezone.now() + timedelta(seconds=settings.M1_PARTNER_OFFER_TIMEOUT_SECONDS)
+    # `offer_ttl_seconds` is the only thing a caller may shorten, and only a post-booking
+    # replacement search passes it — see `fulfilment.replacement._replacement_offer_ttl_seconds`.
+    # It moves the clock and nothing else: eligibility, ranking and the candidate limit are
+    # identical, so a hurried search never offers the job to somebody who cannot do it.
+    ttl_seconds = (
+        settings.M1_PARTNER_OFFER_TIMEOUT_SECONDS
+        if offer_ttl_seconds is None
+        else offer_ttl_seconds
+    )
+    offer_timeout = timezone.now() + timedelta(seconds=ttl_seconds)
     # A `BOOKED` group's own `expires_at` is its long-past checkout deadline, not a bound that
     # should ever cap a post-booking recovery offer.
     deadline = offer_timeout if post_booking_recovery else min(group.expires_at, offer_timeout)
@@ -365,18 +401,26 @@ def _sync_group_state(group: BookingGroup) -> None:
         _set_group_status(group, BookingGroup.Status.MATCHING)
 
 
-def _dispatch_unit(
-    *, group: BookingGroup, unit: FulfilmentUnit
+def dispatch_unit(
+    *,
+    group: BookingGroup,
+    unit: FulfilmentUnit,
+    offer_ttl_seconds: int | None = None,
 ) -> PartnerOffer | Reservation | None:
     """Same-day units keep the offer/accept path; advance units are assigned directly.
 
     Making an offline Partner eligible (Task 10) while still offering with a 45-second
     TTL would leave advance bookings unreachable. Direct assignment is the commitment
     mechanism for the advance gate (spec §11.2).
+
+    Public because the post-payment replacement search in `fulfilment.replacement` drives the
+    *same* engine rather than a second one: one ranking, one candidate limit, one offer shape.
+    The two return types are the two commitment mechanisms and the caller has to tell them
+    apart — an offer is a question, a reservation is already an answer.
     """
 
     if is_same_day_unit(unit=unit):
-        return _create_offer(group=group, unit=unit)
+        return _create_offer(group=group, unit=unit, offer_ttl_seconds=offer_ttl_seconds)
     return directly_assign(unit=unit)
 
 
@@ -468,7 +512,7 @@ def start_group_dispatch(*, group_id: UUID) -> BookingGroup:
     )
     for unit in units:
         _set_unit_status(unit, FulfilmentUnit.Status.MATCHING)
-        if _dispatch_unit(group=group, unit=unit) is None:
+        if dispatch_unit(group=group, unit=unit) is None:
             break
     group.refresh_from_db()
     return group
@@ -539,6 +583,23 @@ def _commit_locked_unit_offer(
         raise ValueError("This Fulfilment Unit offer cannot be committed.")
     offer.status = PartnerOffer.Status.COMMITTED
     offer.save(update_fields=("status",))
+    if _is_post_booking_recovery(group, unit):
+        # Committing *is* the recovery. There is no payment window to extend the hold through —
+        # the money was captured at the original checkout — and no operator waiting to press a
+        # second button, which is what the manual flow relied on. Imported here rather than at
+        # module scope: `fulfilment.recovery_services` imports this module.
+        from apps.fulfilment.recovery_services import adopt_replacement_reservation  # noqa: PLC0415
+
+        booking_id = Booking.objects.values_list("id", flat=True).get(
+            fulfilment_unit=unit,
+            status=Booking.Status.RECOVERY_REQUIRED,
+        )
+        adopt_replacement_reservation(
+            booking_id=booking_id,
+            reservation_id=offer.reservation_id,
+            context={"offer_id": str(offer.id)},
+        )
+        return offer
     reservation = Reservation.objects.select_for_update().get(id=offer.reservation_id)
     reservation.expires_at = timezone.now() + timedelta(seconds=settings.M1_PAYMENT_WINDOW_SECONDS)
     reservation.save(update_fields=("expires_at",))
@@ -629,7 +690,7 @@ def reconcile_group_dispatch(*, group_id: UUID) -> BookingGroup:
             .first()
         )
         if offer is None and unit.status == FulfilmentUnit.Status.MATCHING:
-            _dispatch_unit(group=group, unit=unit)
+            dispatch_unit(group=group, unit=unit)
         elif offer is not None and (
             offer.status == PartnerOffer.Status.OFFERED and offer.expires_at <= now
         ):

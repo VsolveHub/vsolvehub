@@ -24,16 +24,23 @@ import type { CancellationBandView } from "../adapters";
 export interface CancellationLadderProps {
   bands: CancellationBandView[];
   policyVersion: string;
+  /** Server-published. See `QuoteView.rescheduleFreeNoticeHours`. */
+  rescheduleFreeNoticeHours: number;
 }
 
-export function CancellationLadder({ bands, policyVersion }: CancellationLadderProps) {
+export function CancellationLadder({
+  bands,
+  policyVersion,
+  rescheduleFreeNoticeHours,
+}: CancellationLadderProps) {
   if (bands.length === 0) return null;
 
   return (
     <section className="rounded-card border border-line bg-surface p-4">
       <h3 className="text-sm font-semibold text-text">If you cancel</h3>
       <p className="mt-1 text-sm text-text-secondary">
-        These amounts are for this booking.
+        These amounts are for this booking. Changing the time is free up to{" "}
+        {rescheduleFreeNoticeHours} hours before we arrive — you only pay a fee if you cancel.
       </p>
 
       <ul className="mt-3 flex flex-col gap-2">

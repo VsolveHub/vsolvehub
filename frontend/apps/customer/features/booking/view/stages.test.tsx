@@ -376,6 +376,7 @@ describe("cancellation ladder", () => {
       <CancellationLadder
         bands={view.cancellationBands}
         policyVersion={view.cancellationPolicyVersion}
+        rescheduleFreeNoticeHours={view.rescheduleFreeNoticeHours}
       />,
     );
     expect(screen.getAllByRole("listitem")).toHaveLength(4);
@@ -391,6 +392,7 @@ describe("cancellation ladder", () => {
       <CancellationLadder
         bands={view.cancellationBands}
         policyVersion={view.cancellationPolicyVersion}
+        rescheduleFreeNoticeHours={view.rescheduleFreeNoticeHours}
       />,
     );
     expect(screen.getByText("Free")).toBeInTheDocument();
@@ -405,6 +407,7 @@ describe("cancellation ladder", () => {
       <CancellationLadder
         bands={view.cancellationBands}
         policyVersion={view.cancellationPolicyVersion}
+        rescheduleFreeNoticeHours={view.rescheduleFreeNoticeHours}
       />,
     );
     expect(screen.getAllByRole("listitem")).toHaveLength(2);

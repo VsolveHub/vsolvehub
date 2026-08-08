@@ -4,7 +4,7 @@ Authentication policy belongs in services. Models enforce durable shape and uniq
 """
 
 import uuid
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
@@ -39,6 +39,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         self.phone_number = normalize_phone_number(self.phone_number)
         if self.email:
             self.email = self.__class__.objects.normalize_email(self.email)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # `clean()` only runs via `full_clean()`, which `update_or_create()` and other raw
+        # `save()` callers skip. Normalizing here too means no code path — seed scripts
+        # included — can persist a phone number libphonenumber wouldn't accept.
+        self.phone_number = normalize_phone_number(self.phone_number)
+        if self.email:
+            self.email = self.__class__.objects.normalize_email(self.email)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.phone_number

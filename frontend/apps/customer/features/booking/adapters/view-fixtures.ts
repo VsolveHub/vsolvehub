@@ -53,6 +53,7 @@ export function twoBandQuoteViewFixture(): QuoteView {
       cancellation_policy: {
         code: "test-two-band",
         version: 99,
+        reschedule_free_notice_hours: policy.reschedule_free_notice_hours,
         bands: policy.bands.slice(0, 2),
       },
     }),

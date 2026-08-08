@@ -26,6 +26,7 @@ from apps.fulfilment.views import (
     CustomerBookingCancelView,
     CustomerBookingDetailView,
     CustomerBookingRescheduleView,
+    CustomerBookingRescheduleWindowsView,
     CustomerCompletionConfirmView,
     CustomerCompletionDisputeView,
     CustomerQualityDisputeView,
@@ -55,6 +56,11 @@ urlpatterns = [
         "bookings/<uuid:booking_id>/cancel/",
         CustomerBookingCancelView.as_view(),
         name="booking-cancel",
+    ),
+    path(
+        "bookings/<uuid:booking_id>/reschedule-windows/",
+        CustomerBookingRescheduleWindowsView.as_view(),
+        name="booking-reschedule-windows",
     ),
     path(
         "bookings/<uuid:booking_id>/reschedule/",
