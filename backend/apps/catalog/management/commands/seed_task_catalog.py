@@ -63,6 +63,7 @@ from datetime import UTC, datetime
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Count, Q
 
 from apps.catalog.models import (
     A1VariantConfiguration,
@@ -72,7 +73,12 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
-from apps.catalog.seed_content import SERVICE_VARIANTS, VariantSeed, content_for_trade
+from apps.catalog.seed_content import (
+    SERVICE_VARIANTS,
+    VariantSeed,
+    category_for_trade,
+    content_for_trade,
+)
 from apps.locations.models import ServiceArea, ServiceAreaService
 from apps.pricing.models import ServiceRate, TaskRate
 
@@ -120,7 +126,11 @@ PLUMBING_UNSAFE = (
     "corroded pipe at risk of failure",
 )
 
-TECHNICIAN_TRADES: tuple[TradeSeed, ...] = (
+#: Every trade that started life under Technician, in one place. Which category each ends up
+#: in is decided below by `CATEGORY_FOR_TRADE`, not by which tuple it is written in — the map
+#: is shared with `seed_technician_catalog`, and a trade listed in one and moved in the other
+#: is exactly the drift that would duplicate a subcategory.
+_TECHNICIAN_SOURCE: tuple[TradeSeed, ...] = (
     TradeSeed(
         "Electrician",
         "electrician",
@@ -430,6 +440,23 @@ BEAUTY_UNSAFE = (
     "declared allergy to the products required",
     "recent cosmetic procedure at the same site",
 )
+
+
+def _trades_for(category_slug: str) -> tuple[TradeSeed, ...]:
+    """The Technician-origin trades that belong to one category."""
+
+    return tuple(
+        trade
+        for trade in _TECHNICIAN_SOURCE
+        if category_for_trade(trade.slug, "technician") == category_slug
+    )
+
+
+ELECTRICIAN_TRADES = _trades_for("electrician")
+PLUMBER_TRADES = _trades_for("plumber")
+AC_TRADES = _trades_for("ac-services")
+TECHNICIAN_TRADES = _trades_for("technician")
+
 
 BEAUTICIAN_TRADES: tuple[TradeSeed, ...] = (
     TradeSeed(
@@ -948,6 +975,30 @@ CATALOG: tuple[tuple[str, str, str, str, str, tuple[TradeSeed, ...]], ...] = (
         TECHNICIAN_TRADES,
     ),
     (
+        "electrician",
+        "Electrician",
+        "Wiring, fittings, fans and power faults, fixed in one visit.",
+        "zap",
+        "technician-home-service",
+        ELECTRICIAN_TRADES,
+    ),
+    (
+        "plumber",
+        "Plumber",
+        "Taps, leaks, drains and fittings, fixed in one visit.",
+        "droplet",
+        "technician-home-service",
+        PLUMBER_TRADES,
+    ),
+    (
+        "ac-services",
+        "AC Services",
+        "Installation, servicing, gas and repair for split and window units.",
+        "wind",
+        "technician-home-service",
+        AC_TRADES,
+    ),
+    (
         "beautician",
         "Beautician",
         "Salon-grade beauty and grooming services delivered at home.",
@@ -1015,6 +1066,7 @@ class Command(BaseCommand):
                     )
 
         variants.extend(self._adopt_services_owned_elsewhere())
+        self._retire_empty_subcategories()
         self._link_service_area(variants)
         self.stdout.write(
             self.style.SUCCESS(
@@ -1226,6 +1278,28 @@ class Command(BaseCommand):
             )
 
         return adopted
+
+    @staticmethod
+    def _retire_empty_subcategories() -> None:
+        """Switch off any subcategory left with nothing active in it.
+
+        Moving Electrician, Plumber and AC out of Technician left their old rows behind: the
+        subcategory is unique on `(category, slug)`, so seeding them under a new category creates
+        a new row and re-points the services, and the original stays as an empty duplicate slug.
+        A category page would then render a heading with no services under it.
+
+        Deactivated rather than deleted, because `Service.subcategory` is `PROTECT` and because a
+        subcategory that once held a service is part of how an old booking is explained. Written
+        as "empty means off" rather than as a list of the three that moved, so the next move
+        cleans up after itself.
+        """
+
+        Subcategory.objects.annotate(
+            live=Count(
+                "services",
+                filter=Q(services__status=Service.Status.ACTIVE),
+            )
+        ).filter(live=0, is_active=True).update(is_active=False)
 
     @staticmethod
     def _seed_service_content(*, service: Service, trade: TradeSeed) -> None:

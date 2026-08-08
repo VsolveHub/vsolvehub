@@ -17,6 +17,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.catalog.seed_content import category_for_trade
 from apps.locations.models import (
     PostalCode,
     ServiceArea,
@@ -211,7 +212,7 @@ class Command(BaseCommand):
                     "display_order": order,
                 },
             )
-        category, _ = Category.objects.update_or_create(
+        Category.objects.update_or_create(
             slug="technician",
             defaults={
                 "name": "Technician",
@@ -227,6 +228,12 @@ class Command(BaseCommand):
             start=1,
         ):
             subcategory_name, services = definition
+            # `Subcategory` is unique on `(category, slug)`, so pinning these to Technician while
+            # `seed_task_catalog` put Electrician and Plumber in categories of their own would
+            # not fail — it would create a second subcategory of the same slug here and pull
+            # these six services back under it. One shared map decides, and both commands read
+            # it.
+            category = self._category_for(category_for_trade(subcategory_slug, "technician"))
             subcategory, _ = Subcategory.objects.update_or_create(
                 category=category,
                 slug=subcategory_slug,
@@ -341,6 +348,26 @@ class Command(BaseCommand):
             action="store_true",
             help="Deprecated compatibility flag; M1 always seeds the reviewed Hyderabad area.",
         )
+
+    @staticmethod
+    def _category_for(slug: str) -> Category:
+        """The category a trade lives in, created if `seed_task_catalog` has not run yet.
+
+        Named from the slug rather than left blank so a database seeded by this command alone
+        still reads correctly; `seed_task_catalog` overwrites the copy with the reviewed wording
+        when it runs.
+        """
+
+        category, _ = Category.objects.get_or_create(
+            slug=slug,
+            defaults={
+                "name": slug.replace("-", " ").title(),
+                "icon_key": "wrench",
+                "display_order": 1,
+                "is_active": True,
+            },
+        )
+        return category
 
     @staticmethod
     def _deactivate_out_of_scope_catalog(*, active_slugs: set[str]) -> None:

@@ -21,6 +21,31 @@ that does not behaves exactly as it does today.
 
 from dataclasses import dataclass
 
+#: Which category each trade sits in.
+#:
+#: Shared because two commands seed subcategories — `seed_technician_catalog` owns the six M1
+#: services, `seed_task_catalog` owns the rest — and `Subcategory` is unique on
+#: `(category, slug)`, not on slug alone. If the two disagreed about where "electrician" lives,
+#: neither would fail: the second would quietly create a *second* electrician subcategory under
+#: its own category and take that trade's services with it. One map, read by both.
+#:
+#: Electrician, Plumber and AC are top-level categories rather than Technician subcategories.
+#: The split is merchandising, not modelling — categories carry no behaviour here, dispatch
+#: matches on `required_skill_code` which is the *trade* slug and is unchanged. It exists because
+#: those three were bigger than whole categories sitting beside them, and nobody looking for a
+#: plumber starts by thinking "technician".
+CATEGORY_FOR_TRADE: dict[str, str] = {
+    "electrician": "electrician",
+    "plumber": "plumber",
+    "ac-technician": "ac-services",
+}
+
+
+def category_for_trade(trade_slug: str, default: str) -> str:
+    """The category a trade belongs to, falling back to its block's own category."""
+
+    return CATEGORY_FOR_TRADE.get(trade_slug, default)
+
 
 @dataclass(frozen=True, slots=True)
 class ProcessStep:
