@@ -131,6 +131,7 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
     subcategory_slug = serializers.CharField(source="subcategory.slug", read_only=True)
     starting_price = serializers.SerializerMethodField()
     cover = serializers.SerializerMethodField()
+    bookable_variant_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Service
@@ -142,9 +143,28 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
             "category_slug",
             "subcategory_slug",
             "starting_price",
+            "bookable_variant_id",
             "cover",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_bookable_variant_id(service: Service) -> str | None:
+        """The variant to add when there is only one, and `None` when there is a choice.
+
+        What makes a one-tap Add honest. With a single active variant there is nothing to
+        decide — the scope is a quantity that defaults to one — so adding it invents nothing.
+        With several, picking on the customer's behalf would put a price on screen for a job
+        they never described: a 32-amp replacement when they meant a repair, a villa clean when
+        they meant a 1 BHK. Published as null in that case so the client sends them to choose
+        rather than guessing here or, worse, guessing in the browser.
+        """
+
+        variants = _public_variants(service)
+        if len(variants) != 1:
+            return None
+        return str(variants[0].id)
 
     @staticmethod
     @extend_schema_field(MoneySerializer)

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatMoney } from "@vsolve/ui";
+import { Button, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 
 import type { ServiceCard } from "../queries";
@@ -15,13 +15,19 @@ import type { ServiceCard } from "../queries";
  * why it does not re-apply the per-visit minimum. That is a real saving, and the
  * reason this section earns its space.
  *
- * ## Why these are links, not "Add" buttons
+ * ## Add here, choose there
  *
- * A `ServiceCard` names a service, not a variant, and a variant needs its scope
- * answered — how many switches, which room — before it can be priced. A one-tap
- * Add would have to pick a variant and invent a scope on the customer's behalf,
- * then show them a price for something they never described. The card opens the
- * service instead, where those questions get asked.
+ * A `ServiceCard` names a service, not a variant, so whether one tap is honest
+ * depends on whether there is anything to decide. The server answers that with
+ * `bookable_variant_id`: set when exactly one variant is active, null when there
+ * are several.
+ *
+ * With one variant, Add adds it at quantity one — the scope is a quantity that
+ * already defaults to one, so nothing is invented and the cart is where the
+ * customer was already standing. With several, the card opens the service
+ * instead: picking between a repair and a 32-amp replacement, or a 1 BHK and a
+ * villa, is the customer's decision, and guessing it would put a price on screen
+ * for a job they never described.
  *
  * Renders `null` when the list is empty. There is deliberately no fallback row:
  * a cart with nothing compatible has nothing to say here, and filling the gap
@@ -30,9 +36,17 @@ import type { ServiceCard } from "../queries";
  */
 export interface CartSuggestionsProps {
   suggestions: readonly ServiceCard[];
+  onAdd: (variantId: string) => void;
+  addingVariantId: string | null;
+  isAdding: boolean;
 }
 
-export function CartSuggestions({ suggestions }: CartSuggestionsProps) {
+export function CartSuggestions({
+  suggestions,
+  onAdd,
+  addingVariantId,
+  isAdding,
+}: CartSuggestionsProps) {
   if (suggestions.length === 0) return null;
 
   return (
@@ -49,10 +63,13 @@ export function CartSuggestions({ suggestions }: CartSuggestionsProps) {
           the classic way a phone layout starts scrolling sideways. */}
       <ul className="mt-4 flex gap-3 overflow-x-auto pb-2" data-testid="cart-suggestions">
         {suggestions.map((card) => (
-          <li key={card.slug} className="w-56 shrink-0">
+          <li
+            key={card.slug}
+            className="flex w-56 shrink-0 flex-col rounded-card border border-line bg-surface p-4"
+          >
             <Link
               href={`/catalog/${card.category_slug}/${card.slug}`}
-              className="group flex h-full flex-col rounded-card border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-hover"
+              className="group min-w-0"
             >
               <h3 className="text-balance text-sm font-semibold text-text group-hover:text-text-link">
                 {card.name}
@@ -60,8 +77,10 @@ export function CartSuggestions({ suggestions }: CartSuggestionsProps) {
               <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
                 {card.short_description}
               </p>
+            </Link>
 
-              <div className="mt-auto flex items-baseline gap-2 pt-3">
+            <div className="mt-auto pt-3">
+              <div className="flex items-baseline gap-2">
                 <span className="text-[0.6875rem] uppercase tracking-[0.08em] text-text-muted">
                   Starts at
                 </span>
@@ -69,7 +88,29 @@ export function CartSuggestions({ suggestions }: CartSuggestionsProps) {
                   {formatMoney(card.starting_price.amount_paise)}
                 </span>
               </div>
-            </Link>
+
+              {card.bookable_variant_id !== null ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2 w-full"
+                  // Only this card's button shows the spinner. A shared flag would put one on
+                  // every card and imply the whole strip was busy.
+                  loading={isAdding && addingVariantId === card.bookable_variant_id}
+                  disabled={isAdding}
+                  onClick={() => onAdd(card.bookable_variant_id as string)}
+                >
+                  Add<span className="sr-only"> {card.name} to your cart</span>
+                </Button>
+              ) : (
+                <Link
+                  href={`/catalog/${card.category_slug}/${card.slug}`}
+                  className="mt-2 block rounded-md border border-line-strong px-3 py-1.5 text-center text-xs font-semibold text-text hover:bg-surface-hover"
+                >
+                  Choose an option<span className="sr-only"> for {card.name}</span>
+                </Link>
+              )}
+            </div>
           </li>
         ))}
       </ul>

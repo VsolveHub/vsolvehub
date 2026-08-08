@@ -18,13 +18,14 @@ import {
   useUpdateCartItem,
   type Cart,
   type CartItem,
-} from "@/features/checkout/queries";
+  useAddCartItem,} from "@/features/checkout/queries";
 import { CartItems, CartVersionNote } from "@/features/checkout/view/cart-items";
 import { MergeDialog } from "@/features/checkout/view/merge-dialog";
 import { RemoveCartItemDialog } from "@/features/checkout/view/remove-dialog";
 
 import { useCartSuggestions } from "../queries";
 import { CartSuggestions } from "./cart-suggestions";
+import { CartSummary } from "./cart-summary";
 
 /**
  * The cart.
@@ -77,6 +78,9 @@ export function CartWorkspace() {
   const cart: Cart | undefined = cartQuery.data;
 
   const suggestionsQuery = useCartSuggestions(cart?.version ?? null);
+  const addItem = useAddCartItem();
+  // Which card is mid-flight, so only that button spins rather than the whole strip.
+  const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
   const suggestions = suggestionsQuery.data ?? [];
 
   const updateItem = useUpdateCartItem();
@@ -101,7 +105,7 @@ export function CartWorkspace() {
   const isEmpty = cart !== undefined && cart.items.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
+    <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6">
       <h1 className="text-xl font-bold text-text">Your cart</h1>
 
       {cartQuery.isPending ? (
@@ -139,7 +143,11 @@ export function CartWorkspace() {
             <CartVersionNote cart={cart} />
           </div>
 
-          <div className="mt-6">
+          {/* Items on the left, money and the single action on the right. Stacked below `lg`,
+              where a sticky side panel would eat the screen the list needs. */}
+          <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start">
+            <div className="min-w-0">
+          <div>
             <CartItems
               cart={cart}
               pendingItemIds={pendingItemId === null ? [] : [pendingItemId]}
@@ -183,31 +191,28 @@ export function CartWorkspace() {
             </p>
           ) : null}
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            {session.isAuthenticated ? (
-              <Link href="/checkout" className={buttonStyles({})}>
-                Proceed to checkout
-              </Link>
-            ) : (
-              <Link
-                href={`/login?next=${encodeURIComponent("/checkout")}`}
-                className={buttonStyles({})}
-              >
-                Log in to continue
-              </Link>
-            )}
-            <Link href="/catalog" className={buttonStyles({ variant: "outline" })}>
-              Add another service
-            </Link>
-          </div>
+          <CartSuggestions
+            suggestions={suggestions}
+            isAdding={addItem.isPending}
+            addingVariantId={addingVariantId}
+            onAdd={(variantId) => {
+              setAddingVariantId(variantId);
+              addItem.mutate(
+                { expectedCartVersion: cart.version, variantId, quantity: 1 },
+                { onSettled: () => setAddingVariantId(null) },
+              );
+            }}
+          />
 
-          {session.isAuthenticated ? null : (
-            <p className="mt-2 text-sm text-text-secondary">
-              Your cart is saved and will still be here after you log in.
+          {addItem.isError ? (
+            <p className="mt-3 text-sm text-critical" role="alert">
+              {describeError(addItem.error, "mutation").message}
             </p>
-          )}
+          ) : null}
+            </div>
 
-          <CartSuggestions suggestions={suggestions} />
+            <CartSummary cart={cart} isAuthenticated={session.isAuthenticated} />
+          </div>
         </>
       ) : null}
 

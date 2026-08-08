@@ -22,6 +22,7 @@ export function cartItem(overrides: Partial<Schemas["CartItemDetail"]> = {}) {
     variant_id: "variant-1",
     service_slug: "fan-installation",
     service_name: "Fan installation",
+    amount: { amount_paise: 24_900, currency: "INR" },
     variant_name: "Ceiling fan",
     quantity: 1,
     scope: {},
@@ -37,6 +38,13 @@ export function cart(overrides: Partial<Schemas["Cart"]> = {}) {
     id: "cart-1",
     version: 3,
     items: [cartItem()],
+    estimate: {
+      subtotal: { amount_paise: 24_900, currency: "INR" },
+      minimum_visit_topup: { amount_paise: 0, currency: "INR" },
+      platform_fee: { amount_paise: 2_900, currency: "INR" },
+      tax: { amount_paise: 4_241, currency: "INR" },
+      total: { amount_paise: 27_800, currency: "INR" },
+    },
     updated_at: "2026-08-02T09:00:00Z",
     ...overrides,
   } satisfies Schemas["Cart"];

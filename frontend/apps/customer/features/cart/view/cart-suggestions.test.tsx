@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ServiceCard } from "../queries";
 import { CartSuggestions } from "./cart-suggestions";
@@ -7,10 +7,10 @@ import { CartSuggestions } from "./cart-suggestions";
 /**
  * The suggestion strip.
  *
- * The heading promises "the same professional, the same visit". These tests pin
- * the two things that keep that promise honest: an empty answer renders nothing
- * at all, and a card links to the service rather than pretending it can be added
- * without answering its scope questions.
+ * The heading promises "the same professional, the same visit". These tests pin what keeps that
+ * promise honest: an empty answer renders nothing at all, a service with one variant can be
+ * added in a tap, and a service with several sends the customer to choose rather than picking
+ * for them.
  */
 
 const FAN: ServiceCard = {
@@ -20,13 +20,14 @@ const FAN: ServiceCard = {
   short_description: "Ceiling and wall fans fitted and tested.",
   category_slug: "technician",
   subcategory_slug: "electrician",
+  bookable_variant_id: "variant-fan-1",
   starting_price: { amount_paise: 29900, currency: "INR" },
   cover: null,
 };
 
 describe("when the server suggests nothing", () => {
   it("renders nothing at all rather than a fallback list", () => {
-    const { container } = render(<CartSuggestions suggestions={[]} />);
+    const { container } = render(<CartSuggestions suggestions={[]} onAdd={() => {}} addingVariantId={null} isAdding={false} />);
 
     expect(container).toBeEmptyDOMElement();
   });
@@ -34,14 +35,14 @@ describe("when the server suggests nothing", () => {
 
 describe("when the server suggests something", () => {
   it("says why these are worth adding", () => {
-    render(<CartSuggestions suggestions={[FAN]} />);
+    render(<CartSuggestions suggestions={[FAN]} onAdd={() => {}} addingVariantId={null} isAdding={false} />);
 
     expect(screen.getByRole("heading", { name: /add to the same visit/i })).toBeInTheDocument();
     expect(screen.getByText(/no second visit fee/i)).toBeInTheDocument();
   });
 
   it("links to the service so its scope can be answered", () => {
-    render(<CartSuggestions suggestions={[FAN]} />);
+    render(<CartSuggestions suggestions={[FAN]} onAdd={() => {}} addingVariantId={null} isAdding={false} />);
 
     expect(screen.getByRole("link", { name: /fan installation/i })).toHaveAttribute(
       "href",
@@ -50,15 +51,56 @@ describe("when the server suggests something", () => {
   });
 
   it("shows the server's own starting price and never computes one", () => {
-    render(<CartSuggestions suggestions={[FAN]} />);
+    render(<CartSuggestions suggestions={[FAN]} onAdd={() => {}} addingVariantId={null} isAdding={false} />);
 
     expect(screen.getByText("₹299")).toBeInTheDocument();
     expect(screen.getByText(/starts at/i)).toBeInTheDocument();
   });
 
-  it("does not offer a one-tap add, which would invent a variant and a scope", () => {
-    render(<CartSuggestions suggestions={[FAN]} />);
+  it("adds a single-variant service in one tap, with the variant the server named", () => {
+    const onAdd = vi.fn();
+    render(
+      <CartSuggestions suggestions={[FAN]} onAdd={onAdd} addingVariantId={null} isAdding={false} />,
+    );
 
-    expect(screen.queryByRole("button", { name: /add/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /add/i }));
+
+    // The id comes from `bookable_variant_id`. Choosing one here would be the browser deciding
+    // what was bought.
+    expect(onAdd).toHaveBeenCalledWith("variant-fan-1");
+  });
+
+  it("sends a multi-variant service to choose rather than picking one", () => {
+    const choice = { ...FAN, bookable_variant_id: null };
+    render(
+      <CartSuggestions suggestions={[choice]} onAdd={() => {}} addingVariantId={null} isAdding={false} />,
+    );
+
+    // No Add: a repair and a 32-amp replacement are different jobs at different prices, and
+    // guessing would put a price on screen for work the customer never described.
+    expect(screen.queryByRole("button", { name: /^add/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /choose an option/i })).toHaveAttribute(
+      "href",
+      "/catalog/technician/fan-installation",
+    );
+  });
+
+  it("spins only the card being added, not the whole strip", () => {
+    const second = { ...FAN, slug: "tap-repair", name: "Tap Repair", bookable_variant_id: "v2" };
+    render(
+      <CartSuggestions
+        suggestions={[FAN, second]}
+        onAdd={() => {}}
+        addingVariantId="variant-fan-1"
+        isAdding
+      />,
+    );
+
+    const buttons = screen.getAllByRole("button", { name: /add/i });
+    expect(buttons).toHaveLength(2);
+    // Only the card being added reports itself busy...
+    expect(buttons.filter((button) => button.getAttribute("aria-busy") === "true")).toHaveLength(1);
+    // ...but both are blocked, so a second tap cannot race the first request's cart version.
+    expect(buttons.every((button) => button.hasAttribute("disabled"))).toBe(true);
   });
 });

@@ -21,10 +21,12 @@ from apps.carts.models import (
     QuoteUnit,
     ServiceCompatibilityRule,
 )
+from apps.carts.pricing_preview import cart_price_summary
 from apps.carts.services import BookingWindow, BookingWindowDay, BookingWindows
 from apps.catalog.serializers import ServiceCardSerializer
 from apps.commerce.models import Booking
 from apps.partners.models import PartnerProfile
+from apps.pricing.selectors import current_task_rate
 from common.serializers import MoneySerializer
 
 
@@ -47,6 +49,7 @@ class CartItemDetailSerializer(serializers.ModelSerializer[CartItem]):
     service_name = serializers.CharField(source="variant.service.name", read_only=True)
     variant_name = serializers.CharField(source="variant.name", read_only=True)
     scope = serializers.SerializerMethodField()
+    amount = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
@@ -58,6 +61,7 @@ class CartItemDetailSerializer(serializers.ModelSerializer[CartItem]):
             "service_name",
             "variant_name",
             "quantity",
+            "amount",
             "scope",
             "scope_schema_snapshot",
             "created_at",
@@ -70,13 +74,55 @@ class CartItemDetailSerializer(serializers.ModelSerializer[CartItem]):
     def get_scope(item: CartItem) -> dict[str, object]:
         return {entry.code: entry.value for entry in item.scope_values.all()}
 
+    @staticmethod
+    @extend_schema_field(MoneySerializer(allow_null=True))
+    def get_amount(item: CartItem) -> dict[str, object] | None:
+        """What this line costs at today's rate, before the visit-level floor and fees.
+
+        `None` when the variant has no live rate. A cart line that cannot be priced has no
+        price; rendering ₹0 would tell somebody the work is free.
+        """
+
+        rate = current_task_rate(variant=item.variant, task_code=item.variant.service.slug)
+        if rate is None:
+            return None
+        return {
+            "amount_paise": rate.unit_price_paise * item.quantity,
+            "currency": rate.currency,
+        }
+
+
+class CartMoneySerializer(serializers.Serializer[dict[str, object]]):
+    amount_paise = serializers.IntegerField()
+    currency = serializers.CharField()
+
+
+class CartPriceSummarySerializer(serializers.Serializer[dict[str, object]]):
+    """What the cart costs right now, as an estimate.
+
+    Named `estimate` on the wire and nowhere called a quote. A `Quote` needs an address and a
+    chosen arrival window and is the only number anybody is held to; this applies the same
+    policy and the same arithmetic to what a cart actually knows, so the two agree unless
+    something real differs.
+
+    `minimum_visit_topup` is published rather than folded into the subtotal, because a customer
+    who sees a ₹49 floor added to a ₹29 job is owed the reason.
+    """
+
+    subtotal = CartMoneySerializer()
+    minimum_visit_topup = CartMoneySerializer()
+    platform_fee = CartMoneySerializer()
+    tax = CartMoneySerializer()
+    total = CartMoneySerializer()
+
 
 class CartSerializer(serializers.ModelSerializer[Cart]):
     items = serializers.SerializerMethodField()
+    estimate = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
-        fields = ("id", "version", "items", "updated_at")
+        fields = ("id", "version", "items", "estimate", "updated_at")
         read_only_fields = fields
 
     @staticmethod
@@ -88,6 +134,24 @@ class CartSerializer(serializers.ModelSerializer[Cart]):
             .prefetch_related("scope_values")
         )
         return cast(list[dict[str, object]], CartItemDetailSerializer(items, many=True).data)
+
+    @staticmethod
+    @extend_schema_field(CartPriceSummarySerializer(allow_null=True))
+    def get_estimate(cart: Cart) -> dict[str, object] | None:
+        summary = cart_price_summary(cart)
+        if summary is None:
+            return None
+
+        def money(paise: int) -> dict[str, object]:
+            return {"amount_paise": paise, "currency": summary.currency}
+
+        return {
+            "subtotal": money(summary.task_subtotal_paise),
+            "minimum_visit_topup": money(summary.minimum_visit_adjustment_paise),
+            "platform_fee": money(summary.platform_fee_paise),
+            "tax": money(summary.tax_paise),
+            "total": money(summary.total_paise),
+        }
 
 
 class CartItemCreateSerializer(serializers.Serializer[dict[str, object]]):

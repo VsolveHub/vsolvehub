@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.18.0)
- * Checksum: 5c598fd3f94756f6
+ * Checksum: 18e3bc02bac961e2
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2734,6 +2734,7 @@ export interface components {
             readonly id: string;
             readonly version: number;
             readonly items: components["schemas"]["CartItemDetail"][];
+            readonly estimate: components["schemas"]["CartPriceSummary"] | null;
             /** Format: date-time */
             readonly updated_at: string;
         };
@@ -2764,6 +2765,7 @@ export interface components {
             readonly service_name: string;
             readonly variant_name: string;
             readonly quantity: number;
+            readonly amount: components["schemas"]["Money"] | null;
             readonly scope: {
                 [key: string]: unknown;
             };
@@ -2796,6 +2798,28 @@ export interface components {
             expected_customer_cart_version: number;
             expected_session_cart_version: number;
             decisions: components["schemas"]["CartMergeDecisionRequest"][];
+        };
+        CartMoney: {
+            amount_paise: number;
+            currency: string;
+        };
+        /**
+         * @description What the cart costs right now, as an estimate.
+         *
+         *     Named `estimate` on the wire and nowhere called a quote. A `Quote` needs an address and a
+         *     chosen arrival window and is the only number anybody is held to; this applies the same
+         *     policy and the same arithmetic to what a cart actually knows, so the two agree unless
+         *     something real differs.
+         *
+         *     `minimum_visit_topup` is published rather than folded into the subtotal, because a customer
+         *     who sees a ₹49 floor added to a ₹29 job is owed the reason.
+         */
+        CartPriceSummary: {
+            subtotal: components["schemas"]["CartMoney"];
+            minimum_visit_topup: components["schemas"]["CartMoney"];
+            platform_fee: components["schemas"]["CartMoney"];
+            tax: components["schemas"]["CartMoney"];
+            total: components["schemas"]["CartMoney"];
         };
         /**
          * @description Services one Partner could add to a visit this cart already has.
@@ -4940,6 +4964,8 @@ export interface components {
             readonly category_slug: string;
             readonly subcategory_slug: string;
             readonly starting_price: components["schemas"]["Money"];
+            /** Format: uuid */
+            readonly bookable_variant_id: string | null;
             readonly cover: components["schemas"]["ServiceMedia"] | null;
         };
         ServiceDetail: {
@@ -4951,6 +4977,8 @@ export interface components {
             readonly category_slug: string;
             readonly subcategory_slug: string;
             readonly starting_price: components["schemas"]["Money"];
+            /** Format: uuid */
+            readonly bookable_variant_id: string | null;
             readonly cover: components["schemas"]["ServiceMedia"] | null;
             description?: string;
             readonly variants: components["schemas"]["ServiceVariantConfiguration"][];

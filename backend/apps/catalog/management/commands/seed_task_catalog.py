@@ -60,11 +60,14 @@ reviewed decision per pair, not a bulk import.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import combinations
+from uuid import UUID
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 
+from apps.carts.models import ServiceCompatibilityRule
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
@@ -1066,12 +1069,15 @@ class Command(BaseCommand):
                     )
 
         variants.extend(self._adopt_services_owned_elsewhere())
+        self._retire_stale_task_codes()
         self._retire_empty_subcategories()
         self._link_service_area(variants)
+        rules = self._seed_within_trade_compatibility()
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded {len(variants)} task-priced services across "
-                f"{sum(len(entry[5]) for entry in CATALOG)} trades."
+                f"{sum(len(entry[5]) for entry in CATALOG)} trades, "
+                f"{rules} within-trade compatibility rules."
             )
         )
 
@@ -1171,10 +1177,12 @@ class Command(BaseCommand):
         )
         TaskRate.objects.update_or_create(
             variant=variant,
-            # One task code per *variant*, not per service: a 32-amp replacement and a
-            # repair are different work at different prices, and sharing a code would make
-            # the quote unable to say which was bought.
-            task_code=f"{task.slug}:{option.code}" if option.code != "standard" else task.slug,
+            # The service slug, for every variant. `current_task_rate` filters on the variant
+            # *and* this code, so each variant already gets its own priced row — the code does
+            # not need to be unique across them, and making it unique broke the lookup: a
+            # suffixed code meant `_validated_variant_inputs` found no rate and every
+            # multi-variant service refused to go in the cart at all.
+            task_code=task.slug,
             effective_from=SEED_RATE_EFFECTIVE_FROM,
             defaults={
                 "unit_price_paise": option.price_paise,
@@ -1278,6 +1286,88 @@ class Command(BaseCommand):
             )
 
         return adopted
+
+    @staticmethod
+    def _retire_stale_task_codes() -> None:
+        """Switch off any rate whose code is not its service's slug.
+
+        An earlier run suffixed the code with the variant (`switch-socket-repair:replace-32a`),
+        which `current_task_rate` could never match — it looks up the variant *and* the service
+        slug. Those rows are left behind by a corrected run, and an active rate nobody can find
+        is exactly the state that made the service unbookable, so they are retired here rather
+        than left for the next person to puzzle over.
+
+        Deactivated, not deleted: a rate is what somebody was charged, and `TaskRate` is
+        referenced by quotes that must stay explicable.
+        """
+
+        TaskRate.objects.filter(is_active=True).exclude(
+            task_code=F("variant__service__slug")
+        ).update(is_active=False)
+
+    @staticmethod
+    def _seed_within_trade_compatibility() -> int:
+        """Declare that one Partner can do two jobs from the same trade in one visit.
+
+        Cart suggestions read `SAME_PARTNER_SEQUENTIAL` rules and nothing else, deliberately —
+        the heading promises the same professional in the same visit, so the platform's own merge
+        decision is the only thing entitled to fill it. With no rules there is nothing to
+        suggest, which is why 501 of 507 services suggested nothing at all: only the six M1
+        services had ever been paired.
+
+        Within a trade this is not a merchandising guess. `required_skill_code` is the trade
+        slug, so a Partner approved for a trade is already eligible for every service in it —
+        the rule restates a fact dispatch and the availability grid both rely on. It is also the
+        rule `seed_technician_catalog` already applies to its six: same subcategory, sequential.
+
+        Cross-trade pairs are still not seeded. `PARALLEL_ALLOWED` means a *second* Partner and
+        therefore a second visit and a second minimum-visit floor, and asserting that an
+        electrician and a beautician should share a booking is a decision per pair, not a bulk
+        import. Absent a rule the planner falls back to independent visits, which is the safe
+        answer.
+
+        Bounded by construction: pairs are formed inside a trade, never across the catalog. All
+        509 variants paired freely would be 129,286 rules; by trade it is a few thousand.
+        """
+
+        created = 0
+        variants = list(
+            ServiceVariant.objects.filter(
+                is_active=True, service__status=Service.Status.ACTIVE
+            ).select_related("service")
+        )
+        by_trade: dict[UUID, list[ServiceVariant]] = {}
+        for variant in variants:
+            by_trade.setdefault(variant.service.subcategory_id, []).append(variant)
+
+        for trade_variants in by_trade.values():
+            for first, second in combinations(trade_variants, 2):
+                # Two variants of the *same* service are alternatives, not companions. Pairing
+                # them would let the planner merge "short hair" with "long hair" into one visit
+                # and suggest a service the cart already holds.
+                if first.service_id == second.service_id:
+                    continue
+                # Ordered by id so a rerun updates the row it wrote rather than adding its
+                # mirror image.
+                left, right = sorted((first, second), key=lambda variant: str(variant.id))
+                _, was_created = ServiceCompatibilityRule.objects.update_or_create(
+                    left_variant=left,
+                    right_variant=right,
+                    version=1,
+                    defaults={
+                        "mode": ServiceCompatibilityRule.Mode.SAME_PARTNER_SEQUENTIAL,
+                        "dependency": ServiceCompatibilityRule.Dependency.NONE,
+                        "conditions": {},
+                        "effective_from": SEED_RATE_EFFECTIVE_FROM,
+                        "effective_to": None,
+                        "is_active": True,
+                        "lifecycle_status": ServiceCompatibilityRule.LifecycleStatus.ACTIVE,
+                        "change_reason": "Same trade: one Partner holds the skill for both.",
+                        "review_reason": "Derived from required_skill_code, not reviewed per pair.",
+                    },
+                )
+                created += int(was_created)
+        return created
 
     @staticmethod
     def _retire_empty_subcategories() -> None:

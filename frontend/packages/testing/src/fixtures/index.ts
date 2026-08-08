@@ -154,6 +154,7 @@ export function serviceCard(
     category_slug: "technician",
     subcategory_slug: "electrical",
     starting_price: money(19900),
+    bookable_variant_id: "8a1f0c22-6d3e-4b71-9f52-1c0d7e4a9b83",
     cover: null,
     ...overrides,
   };
