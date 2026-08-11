@@ -118,8 +118,10 @@ navigation and actions only for approved lifecycle capabilities.
 
 - [~] `M2-FE-110` Contextual navigation rendered from authenticated workspace keys through the typed
   registry. Backend authorizes keys/actions; frontend owns routes, labels and icons. —
-  `workspace/registry.ts` resolved in `session/partner-shell.tsx`. Grants arrive as a prop defaulting
-  to none, so no unpublished query is mounted; see the wiring note below.
+  `workspace/registry.ts` resolved in `session/partner-shell.tsx`, reading **`GET
+  /api/v1/partner/workspaces/` for real** through `workspace/queries.ts` (contract 1.21.0). Asked for
+  only once the session holds the Partner role, so `/apply` does not spend a guaranteed 403. All
+  seven registry destinations are mounted as routes — see the routing note below.
 - [~] `M2-FE-111` Preserve M1 Home/Offers/Jobs for A1 while adding A3 Workforce and A5 Project
   workspaces only when authorized. Do not rename lifecycle records to a generic "job" or "work item".
 - [~] `M2-FE-112` Workspace switcher for Partners with materially different capabilities; invitation,
@@ -170,11 +172,50 @@ navigation and actions only for approved lifecycle capabilities.
   count and a noun in adjacent elements with no separator, which engines disagree about — announced as
   "3shifts today" wherever they decide no space belongs. The link now carries an explicit `aria-label`.
 
-**Wiring still open (not a gap — sequencing).** `partner-shell.tsx` takes `workspaceGrants` as a prop
-defaulting to empty, because `GET /partner/workspaces/` was unpublished when the shell was written.
-Contract **1.21.0 now publishes it**, so mounting the read in `packages/query/src/workspace.ts` and
-composing the registration views into routes is the first work of the next wave. Until then no A3/A5
-route exists and the M2 views are unmounted — which is why FE-101..109 read `[~]` and not `[x]`.
+### Wiring and routes — 2026-08-12
+
+The prop is gone. `partner-shell.tsx` reads `GET /api/v1/partner/workspaces/` through
+`features/workspace/queries.ts`, and all seven registry destinations are mounted:
+
+| Route | What renders | Why |
+|---|---|---|
+| `/workforce`, `/projects` | `WorkspaceHome` — label, description, the payment sentence for the mode Django sent, and the destinations this grant authorizes | Real, grant-driven. No counts: nothing publishes them, and a `0` that means "unread" is worse than no number |
+| `/workforce/crew` | `WorkspacePending` | Proposal 0013's crew endpoints are unpublished. `CrewRoster` is built and tested but takes `onAdd`/`onArchive` with nothing to call — an "Add someone" button that silently does nothing is worse than saying the screen is not built |
+| `/workforce/shifts`, `/projects/stages` | `WorkspacePending` | No endpoint (`FE-501..508`, `FE-601..607`) |
+| `/workforce/enquiries`, `/projects/enquiries` | `WorkspacePending` | The **endpoint is published**; the screen is `FE-301..304` next wave. The client is behind the server here, and the copy says so rather than claiming the feature is switched off |
+
+**Why the pending routes exist at all.** Django grants `enquiry.view` and `attendance.confirm` today,
+so the registry renders those tabs today. Without a route the tab 404s inside a Partner's own
+workspace, which reads as the app being broken. `WorkspacePending` holds no data, promises no date,
+and does not claim nothing is waiting — an enquiry may well be. Each wave replaces a route file;
+nothing has to be removed from the registry.
+
+**Decisions worth keeping:**
+
+- **An unread grant list is `null`, never `[]`.** They render the same tab bar and mean opposite
+  things: `[]` is Django saying "approved for nothing" (the ordinary state of a Partner who
+  registered this morning), `null` is no answer at all, which `session-guard.ts` turns into
+  `UNVERIFIED` and refuses every command against. Collapsing them would fail *open* — a dropped
+  connection would read as a suspension nobody applied.
+- **A refused read does not retry.** 401/403 means the session does not hold the Partner role;
+  asking twice walks into the same refusal and delays the honest screen.
+- **`SESSION_STATE` freshness**, so an Operations suspension lands on the next window focus rather
+  than at the next login. That is the mechanism `M2-FE-113` was written against, now real.
+- **Route files stayed server components.** `export const dynamic` and `metadata` are ignored in a
+  `"use client"` module, and the first cut of these pages was prerendered as static, indexable HTML.
+  They are `force-dynamic` + `robots: noindex` like the rest of the authenticated tree, verified in
+  the build output (`ƒ` on all seven).
+- **`boundary.test.ts` caught the wiring**, as designed: `/api/v1/partner/workspaces/` was on its
+  unpublished-paths list, and the entry was retired under the file's own rule now that the generated
+  client carries the operation.
+
+**Verified 2026-08-12:** `vitest run` **1399 tests / 103 files green** (partner: 314, up from 294),
+`eslint . --max-warnings 0` clean, `turbo run typecheck` 9 of 9, and `turbo run build --filter=partner`
+succeeds with all seven routes dynamic.
+
+**Still not `[x]`:** `FE-105` is unstarted, the registration views (`capability/`, `crew/`) are still
+composed into no route, and four of the seven destinations render their pending state rather than
+their feature. Those are Waves B2 and B3.
 
 ---
 
@@ -300,7 +341,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 
 | Wave | Scope | Built `[~]` | Integrated `[x]` | Evidence |
 |---|---|---|---|---|
-| B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-11 — 1379/1379 frontend tests, lint clean, 9/9 typecheck at contract 1.21.0. `FE-105` not started; nothing mounted to a route, so nothing exceeds `[~]`. |
+| B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-12 — 1399/1399 frontend tests, lint clean, 9/9 typecheck, partner build green. `GET /partner/workspaces/` wired and all 7 registry routes mounted. `FE-105` not started; the registration views are still route-less, so nothing exceeds `[~]`. |
 | B2 | `FE-301..313` | `[ ]` | `[ ]` | |
 | B3 | `FE-501..508`, `FE-601..607` | `[ ]` | `[ ]` | |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |

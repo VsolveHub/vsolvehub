@@ -236,9 +236,16 @@ clean at `--max-warnings 0`, `pnpm typecheck` **9 of 9** with `contract:check` a
 which also clears the `apps/partner` typecheck failure recorded in [task.md](task.md) against
 `express-path.ts`.
 
-`M2-FE-105` is not started. Nothing here exceeds `[~]`: the M2 views are built but composed into no
-route, because `GET /partner/workspaces/` was unpublished when the shell was written. Contract 1.21.0
-publishes it now, so mounting that read is the first work of the next wave.
+`M2-FE-105` is not started.
+
+**Updated 2026-08-12 — the workspaces read is wired.** `partner-shell.tsx` reads `GET
+/api/v1/partner/workspaces/` (contract 1.21.0) and all seven registry destinations are mounted as
+`force-dynamic`, `robots: noindex` routes, so no authorized tab can 404. `/workforce` and `/projects`
+render real grant-driven homes; the other five render an honest not-built-yet state, because their
+screens are Waves B2 and B3 (`/workforce/enquiries` and `/projects/enquiries` have a published
+endpoint and an unwritten screen — the copy says exactly that). 1399/1399 tests, lint clean, 9/9
+typecheck, partner build green. Nothing here exceeds `[~]`: the registration views built for
+`FE-101..109` are still composed into no route.
 
 ## FE2 - Customer requirement (free)
 

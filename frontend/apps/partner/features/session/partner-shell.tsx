@@ -1,6 +1,6 @@
 "use client";
 
-import { hasRole, useAuthGuard, useLogout, useSwitchRole, type WorkspaceGrant } from "@vsolve/query";
+import { hasRole, useAuthGuard, useLogout, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import {
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
 import { WorkspaceSwitcher } from "@/features/workspace/workspace-switcher";
+import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 /**
  * The signed-in Partner shell: one gate and one navigation for every screen
@@ -137,37 +138,34 @@ export interface PartnerShellProps {
    * `IsAuthenticated` alone.
    */
   requirePartnerRole?: boolean;
-  /**
-   * Approved M2 lifecycle capabilities, as Django published them.
-   *
-   * A prop rather than a hook because `M2-BE-114`'s endpoint is not published
-   * yet. Defaulting to none is the correct behaviour for every Partner today —
-   * an A1 task partner holds no M2 capability and sees exactly the navigation
-   * they see now — and it is the same rendering a suspended or still-under-review
-   * capability must produce, since neither authorizes anything.
-   *
-   * The shell deliberately cannot tell those three apart. Distinguishing "not
-   * applied", "under review" and "suspended" needs the capability-status read
-   * requested in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`;
-   * inferring it from an empty grant list would put a review banner in front of
-   * every existing Partner.
-   */
-  workspaceGrants?: readonly WorkspaceGrant[];
 }
 
-const NO_GRANTS: readonly WorkspaceGrant[] = [];
-
-export function PartnerShell({
-  children,
-  requirePartnerRole = false,
-  workspaceGrants = NO_GRANTS,
-}: PartnerShellProps) {
+export function PartnerShell({ children, requirePartnerRole = false }: PartnerShellProps) {
   const guard = useAuthGuard(
     getApiClient(),
     requirePartnerRole
       ? { requiredRoles: [PARTNER_ROLE], requireActiveRole: true }
       : {},
   );
+
+  /**
+   * Approved M2 lifecycle capabilities, as Django published them.
+   *
+   * Asked for only once the session is known to hold the Partner role. `/apply`
+   * mounts this shell for people who do not have it yet — that is the whole
+   * point of the onboarding branch — and asking there spends a guaranteed 403 on
+   * every page view.
+   *
+   * An empty answer and an unread one both render the M1 navigation, and the
+   * shell deliberately cannot tell "not applied", "under review" and "suspended"
+   * apart from each other. Distinguishing them needs the capability-status read
+   * in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`;
+   * inferring it from an empty grant list would put a review banner in front of
+   * every existing Partner.
+   */
+  const workspaceGrants = usePartnerWorkspaceGrants({
+    enabled: guard.status === "authenticated" && hasRole(guard.user, PARTNER_ROLE),
+  });
   const logout = useLogout(getApiClient());
   const pathname = usePathname();
   const router = useRouter();
@@ -243,8 +241,11 @@ export function PartnerShell({
   }
 
   // Resolved after the guard, so a signed-out or forbidden visitor never has
-  // navigation computed for a session they do not hold.
-  const workspaces = resolveWorkspaces(workspaceGrants);
+  // navigation computed for a session they do not hold. An unread grant list is
+  // the M1 navigation: the tab bar is the one surface where "approved for
+  // nothing" and "we could not ask" are allowed to look the same, because
+  // neither authorizes a tab. The screens behind them tell the difference.
+  const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
   const workspace = activeWorkspace(workspaces, pathname);
   const navItems = navigationFor(workspace);
 

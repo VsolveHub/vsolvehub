@@ -64,8 +64,11 @@ function offendersUnder(root: string, subdirectory: string, label: string): stri
  * the literal never appears in source anyway.
  */
 const UNPUBLISHED_PATHS = [
-  // Proposal 0012 §A1 — the navigation read. Specified, unpublished.
-  "/api/v1/partner/workspaces/",
+  // `/api/v1/partner/workspaces/` was here until contract 1.21.0 published it.
+  // Removed under this file's own rule — the generated client carries the
+  // operation now, so `features/workspace/queries.ts` calls it through the typed
+  // client and the path is checked by the compiler rather than by this list.
+  //
   // Proposal 0013 — the whole Partner capability, gate and crew surface.
   "/api/v1/partner/business-profile/",
   "/api/v1/partner/capability-options/",
