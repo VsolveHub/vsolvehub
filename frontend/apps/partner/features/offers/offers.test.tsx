@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { queryKeys } from "@vsolve/query";
+import { ToastProvider } from "@vsolve/ui";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -33,7 +34,16 @@ function ok<T>(data: T) {
 let queryClient: QueryClient;
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  // `ToastProvider` because the inbox's live-event hook calls `useToast`, which
+  // throws without one — deliberately, so a layout that stopped mounting the
+  // provider fails loudly instead of silently dropping every new-offer toast.
+  // The app mounts it at the partner layout root; a test that renders the inbox
+  // without it is testing an arrangement that does not ship.
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
 beforeEach(() => {

@@ -1,18 +1,19 @@
 "use client";
 
-import { hasRole, useAuthGuard, useLogout, useSwitchRole } from "@vsolve/query";
+import { hasRole, useAuthGuard, useLogout, useSwitchRole, type WorkspaceGrant } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn } from "@vsolve/ui";
-import {
-  Briefcase,
-  Home,
-  UserCircle,
-  Wallet,
-} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import {
+  activeWorkspace,
+  navigationFor,
+  resolveWorkspaces,
+  type WorkspaceNavItem,
+} from "@/features/workspace/registry";
+import { WorkspaceSwitcher } from "@/features/workspace/workspace-switcher";
 
 /**
  * The signed-in Partner shell: one gate and one navigation for every screen
@@ -43,17 +44,6 @@ import { getApiClient } from "@/lib/api/browser";
  */
 
 export const PARTNER_ROLE = "partner";
-
-/** Every signed-in destination, in the order they appear in the bottom tab bar. */
-const NAV = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/earnings", label: "Money", icon: Wallet },
-  // Was `/apply`, which opened the onboarding form. An application is a
-  // submission under review; a profile is the record of a person who works here,
-  // and the Account tab has to lead to the second one.
-  { href: "/profile", label: "You", icon: UserCircle },
-] as const;
 
 function ShellMessage({ children }: { children: ReactNode }) {
   return (
@@ -147,9 +137,31 @@ export interface PartnerShellProps {
    * `IsAuthenticated` alone.
    */
   requirePartnerRole?: boolean;
+  /**
+   * Approved M2 lifecycle capabilities, as Django published them.
+   *
+   * A prop rather than a hook because `M2-BE-114`'s endpoint is not published
+   * yet. Defaulting to none is the correct behaviour for every Partner today —
+   * an A1 task partner holds no M2 capability and sees exactly the navigation
+   * they see now — and it is the same rendering a suspended or still-under-review
+   * capability must produce, since neither authorizes anything.
+   *
+   * The shell deliberately cannot tell those three apart. Distinguishing "not
+   * applied", "under review" and "suspended" needs the capability-status read
+   * requested in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`;
+   * inferring it from an empty grant list would put a review banner in front of
+   * every existing Partner.
+   */
+  workspaceGrants?: readonly WorkspaceGrant[];
 }
 
-export function PartnerShell({ children, requirePartnerRole = false }: PartnerShellProps) {
+const NO_GRANTS: readonly WorkspaceGrant[] = [];
+
+export function PartnerShell({
+  children,
+  requirePartnerRole = false,
+  workspaceGrants = NO_GRANTS,
+}: PartnerShellProps) {
   const guard = useAuthGuard(
     getApiClient(),
     requirePartnerRole
@@ -230,6 +242,12 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     );
   }
 
+  // Resolved after the guard, so a signed-out or forbidden visitor never has
+  // navigation computed for a session they do not hold.
+  const workspaces = resolveWorkspaces(workspaceGrants);
+  const workspace = activeWorkspace(workspaces, pathname);
+  const navItems = navigationFor(workspace);
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* ---- Top bar ---- */}
@@ -252,13 +270,20 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             Sign Out
           </Button>
         </div>
+
+        {/* Renders nothing until a Partner actually holds an M2 capability. */}
+        {workspaces.length > 0 ? (
+          <div className="mx-auto max-w-2xl px-3 pb-2">
+            <WorkspaceSwitcher workspaces={workspaces} active={workspace} />
+          </div>
+        ) : null}
       </header>
 
       {/* ---- Page content ---- */}
       <ShellContent>{children}</ShellContent>
 
       {/* ---- Bottom tab bar ---- */}
-      <BottomTabBar />
+      <BottomTabBar items={navItems} />
     </div>
   );
 }
@@ -269,9 +294,28 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
  * Fixed to the bottom of the viewport. Uses Lucide icons for visual clarity.
  * The active tab gets a navy pill background with white text and icon; inactive
  * tabs use muted text. All tabs are 44px minimum touch targets.
+ *
+ * Items are passed in rather than read from a module constant: which
+ * destinations exist depends on what Django authorized, and a component that
+ * decided that for itself would be deciding authorization from the client.
  */
-function BottomTabBar() {
+function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
   const pathname = usePathname();
+
+  /**
+   * Longest matching prefix, resolved once rather than per item.
+   *
+   * A workspace nests its own routes under its home — `/workforce` and
+   * `/workforce/crew` are both tabs — so a plain per-item prefix test lights up
+   * two tabs at once and emits two `aria-current="page"` elements in one nav,
+   * which is invalid and leaves a screen-reader user with no idea where they
+   * are.
+   */
+  const currentHref = items.reduce<string | null>((best, item) => {
+    const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    if (!matches) return best;
+    return best === null || item.href.length > best.length ? item.href : best;
+  }, null);
 
   return (
     <nav
@@ -279,9 +323,8 @@ function BottomTabBar() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
     >
       <ul className="mx-auto flex max-w-2xl list-none justify-around p-0">
-        {NAV.map((item) => {
-          const isCurrent =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+        {items.map((item) => {
+          const isCurrent = item.href === currentHref;
           const Icon = item.icon;
 
           return (

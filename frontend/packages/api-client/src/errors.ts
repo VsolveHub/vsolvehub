@@ -101,6 +101,70 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   partner_self_review_forbidden: "contact_support",
   partner_not_operationally_eligible: "contact_support",
   partner_presence_unavailable: "retry",
+
+  // ---------------------------------------------------------------------------
+  // M2 — workforce (A3) and project (A5) requirements, quotes and engagements.
+  //
+  // The full code set is fixed by M2/07-state-machines-and-permissions.md §8, so
+  // unlike the M1 domains above these are mapped ahead of the endpoints rather
+  // than one at a time. That table *is* the contract: a code absent from it is
+  // not a code Django may send, so there is no guessing here — only transcription.
+  //
+  // Two mappings are worth their reasoning:
+  //
+  //  - Every progressive-KYC gate (`m2_kyc_required` and its siblings) is
+  //    `fix_input`, not `contact_support`. Django is refusing because a form is
+  //    unfinished, and the Partner completes it themselves; sending them to
+  //    support would be telling someone their account is broken when they are
+  //    four fields from working. `m2_capability_suspended` is the opposite case
+  //    and stays `contact_support`.
+  //  - `m2_unlock_payment_pending` is `await_confirmation`. It arrives as 202,
+  //    not an error status, and it is the one code where offering "Try again"
+  //    would invite a second INR 149 charge for one unlock.
+  // ---------------------------------------------------------------------------
+
+  // Requirement lifecycle
+  m2_requirement_not_found: "contact_support",
+  m2_requirement_expired: "choose_again",
+  m2_requirement_locked: "choose_again",
+  m2_requirement_duplicate: "choose_again",
+  m2_lifecycle_not_supported: "contact_support",
+
+  // Invitations and capacity
+  m2_invitation_expired: "choose_again",
+  m2_invitation_slots_exhausted: "choose_again",
+  m2_capacity_unavailable: "choose_again",
+
+  // Capability and the progressive registration gates
+  m2_capability_not_approved: "contact_support",
+  m2_capability_suspended: "contact_support",
+  m2_kyc_required: "fix_input",
+  m2_payout_details_required: "fix_input",
+  m2_crew_roster_required: "fix_input",
+  m2_crew_conflict: "choose_again",
+
+  // Proposals
+  m2_proposal_below_wage_floor: "fix_input",
+  m2_proposal_invalid_shape: "fix_input",
+  m2_proposal_not_selectable: "choose_again",
+  m2_proposal_slot_conflict: "contact_support",
+
+  // Unlock and selection
+  m2_unlock_not_available: "await_confirmation",
+  m2_unlock_required: "add_payment_method",
+  m2_unlock_payment_pending: "await_confirmation",
+  m2_rejection_cap_reached: "contact_support",
+  m2_selection_conflict: "choose_again",
+  m2_reconfirmation_expired: "choose_again",
+
+  // Engagement stages and amendments
+  m2_stage_not_funded: "add_payment_method",
+  m2_stage_disputed: "contact_support",
+  m2_amendment_required: "contact_support",
+  m2_cancellation_needs_confirmation: "await_confirmation",
+
+  // Adapters
+  m2_provider_unavailable: "retry",
 };
 
 /**

@@ -194,4 +194,143 @@ export function isFieldError(error: unknown): error is ApiRequestError {
   );
 }
 
+/* ---------------------------------------------------------------------------
+   Error categories (M2-FE-009)
+   --------------------------------------------------------------------------- */
+
+/**
+ * Where a failure belongs on screen.
+ *
+ * `describeError` above answers "what do I say"; this answers "where does it
+ * go". They are separate questions and conflating them is why the same refusal
+ * appears as a red banner on one screen and an inline field message on another.
+ *
+ * The categories are the seven the M2 plan names, and each one has exactly one
+ * treatment:
+ *
+ * | Category | Treatment |
+ * |---|---|
+ * | `field` | Message under the offending input; no banner |
+ * | `stale` | Refetch, then re-render — the screen is showing an old world |
+ * | `pending` | Non-error waiting state; never an error banner, never a retry |
+ * | `expired` | The action is gone for good; offer the next honest step |
+ * | `conflict` | Someone else got there first; re-read and choose again |
+ * | `forbidden` | Fail closed; do not soften into a retry |
+ * | `outage` | Transient; a retry affordance is truthful |
+ * | `unexpected` | Everything else, including non-API faults |
+ *
+ * ## Why `pending` is a category and not a severity
+ *
+ * `m2_unlock_payment_pending` arrives while INR 149 is in flight. Rendering it
+ * beside genuine failures is how a customer concludes the payment failed and
+ * pays a second time for one unlock. It is a state, not a fault, and the
+ * category is what keeps it out of the error surface entirely.
+ *
+ * ## An open contract question
+ *
+ * `m2_unlock_payment_pending` is specified as **202** in
+ * `M2/07-state-machines-and-permissions.md` §8. A 202 is `response.ok`, so
+ * whether it reaches this function at all depends on how the published OpenAPI
+ * declares it: as an error response it throws and lands here; as a success
+ * response it returns through `unwrap` as ordinary data and never does. Raised
+ * as an open question in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`.
+ * Until it is answered this classifies the thrown form only — no speculative
+ * payload sniffing.
+ */
+export type ErrorCategory =
+  | "field"
+  | "stale"
+  | "pending"
+  | "expired"
+  | "conflict"
+  | "forbidden"
+  | "outage"
+  | "unexpected";
+
+/**
+ * Codes whose category the status alone would get wrong.
+ *
+ * Only entries that genuinely disagree with `categorizeByStatus` belong here.
+ * A code that a 409 already classifies as `conflict` is left out rather than
+ * restated — a second copy of an agreeing rule is one more thing to keep in
+ * sync, and it hides the ones that matter.
+ */
+const CATEGORY_BY_CODE: Record<string, ErrorCategory> = {
+  // Version conflicts are the screen being out of date, not two people racing.
+  // The fix is a refetch and a re-render, not "choose something else".
+  partner_application_version_conflict: "stale",
+
+  // 202, and a waiting state rather than a failure. See the note above.
+  m2_unlock_payment_pending: "pending",
+  // Not yet purchasable because no usable quote exists — the customer waits for
+  // vendors, they have not done anything wrong.
+  m2_unlock_not_available: "pending",
+  // Both parties must confirm; the first confirmation succeeded and is waiting.
+  m2_cancellation_needs_confirmation: "pending",
+
+  // 409s that are a deadline passing rather than a race. The distinction is the
+  // recovery: a conflict is re-read and retry, an expiry never comes back.
+  m2_requirement_expired: "expired",
+  m2_invitation_expired: "expired",
+  m2_reconfirmation_expired: "expired",
+
+  // 409 because the record moved on, but the screen is what is out of date.
+  m2_requirement_locked: "stale",
+  m2_proposal_not_selectable: "stale",
+
+  // The progressive-KYC gates are 403 but they are unfinished forms, not
+  // denials, and routing them to a locked-out screen is how a Partner four
+  // fields from working concludes their account is broken.
+  m2_kyc_required: "field",
+  m2_payout_details_required: "field",
+  m2_crew_roster_required: "field",
+};
+
+function categorizeByStatus(status: number): ErrorCategory {
+  if (status === 400 || status === 422) return "field";
+  if (status === 401 || status === 403) return "forbidden";
+  if (status === 404) return "forbidden";
+  if (status === 409) return "conflict";
+  if (status === 408 || status === 425 || status === 429) return "outage";
+  if (status >= 500) return "outage";
+  return "unexpected";
+}
+
+/**
+ * Classifies a thrown API failure into the one surface that should show it.
+ *
+ * Code first, then status. The code is the server's own name for what happened
+ * and outranks the status class it happened to be carried on — several M2
+ * refusals share status 409 while needing three different screens.
+ */
+export function categorizeError(error: unknown): ErrorCategory {
+  if (error instanceof ApiRequestError) {
+    const byCode = CATEGORY_BY_CODE[error.code];
+    if (byCode) return byCode;
+    // A validation envelope with addressable fields belongs under the inputs
+    // whatever status carried it.
+    if (Object.keys(error.fieldErrors).length > 0) return "field";
+    return categorizeByStatus(error.status);
+  }
+
+  // Never reached the server, or reached something that is not the API. Both are
+  // transient infrastructure faults from the user's point of view.
+  if (error instanceof ApiNetworkError) return "outage";
+  if (error instanceof ApiContractError) {
+    return error.isTransportRetryable ? "outage" : "unexpected";
+  }
+
+  return "unexpected";
+}
+
+/**
+ * True when the category means "we are waiting", not "this failed".
+ *
+ * The guard a payment screen checks before it is allowed to render anything
+ * that looks like a failure.
+ */
+export function isPendingCategory(category: ErrorCategory): boolean {
+  return category === "pending";
+}
+
 export { isApiClientError };

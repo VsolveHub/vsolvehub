@@ -16,6 +16,8 @@ export type { SelectProps } from "./select";
 // Containers
 export { Card, StatCard } from "./card";
 export { Dialog, Sheet } from "./dialog";
+export { ConfirmAction } from "./confirm-action";
+export type { ConfirmActionProps } from "./confirm-action";
 
 // Feedback and status
 export { Badge } from "./badge";
@@ -30,6 +32,26 @@ export { ToastProvider, useToast } from "./toast";
 
 // Navigation
 export { Stepper } from "./stepper";
+
+// Record and summary primitives shared by the M2 requirement, quote, engagement
+// and Operations surfaces. Each renders server-supplied, server-authorized
+// values — none of them decide what a reader is allowed to see.
+export { Timeline, TimelineEvent } from "./timeline";
+export type { TimelineEventProps, TimelineProps, TimelineTone } from "./timeline";
+export { AttachmentList } from "./attachment-list";
+export type {
+  Attachment,
+  AttachmentKind,
+  AttachmentListProps,
+  AttachmentStatus,
+} from "./attachment-list";
+export { AddressSummary, ScheduleSummary, PersonCount, FactList } from "./summary";
+export type {
+  AddressSummaryProps,
+  FactListProps,
+  PersonCountProps,
+  ScheduleSummaryProps,
+} from "./summary";
 
 // Authentication. Presentational only — pair with `useOtpFlow` from @vsolve/query.
 export { OtpForm } from "./otp-form";

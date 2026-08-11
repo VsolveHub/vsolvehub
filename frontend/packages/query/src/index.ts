@@ -25,13 +25,26 @@ export type { Countdown } from "./countdown";
 
 export { shouldRetryQuery, shouldRetryMutation, queryRetryDelay } from "./retry";
 
-export { describeError, isFieldError } from "./error-presentation";
+export { describeError, isFieldError, categorizeError, isPendingCategory } from "./error-presentation";
 export type {
+  ErrorCategory,
   ErrorPresentation,
   OperationKind,
   RecoveryAction,
   StateChange,
 } from "./error-presentation";
+
+// M2 (A3 workforce / A5 project). Keys are kept out of `queryKeys` until the
+// contract publishes their endpoints — see the header of `m2-keys.ts`.
+export { m2QueryKeys, M2_FRESHNESS, M2_INVALIDATION, invalidateForM2Command } from "./m2-keys";
+export type { M2Command, M2CommandContext } from "./m2-keys";
+
+export {
+  parseWorkspaceGrants,
+  findWorkspaceGrant,
+  hasWorkspaceAction,
+} from "./workspace";
+export type { WorkspaceGrant } from "./workspace";
 
 export { createTabChannel, getTabChannel } from "./cross-tab";
 export type { TabChannel, TabMessage, TabMessageListener } from "./cross-tab";
