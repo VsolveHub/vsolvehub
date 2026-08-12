@@ -70,11 +70,18 @@ export const m2QueryKeys = {
     /**
      * Probable duplicates for a draft, keyed by the inputs that decide the answer.
      *
-     * Customer, address, date and category are what `M2-BE-206` matches on, so
+     * Customer, address, date and variant are what `M2-BE-206` matches on, so
      * all of them belong in the key: omitting the date would offer a merge with
      * last month's request.
+     *
+     * The three slots were named `serviceBy`/`categorySlug` before the endpoint
+     * published. `GET /requirements/duplicate-check/` in fact matches on
+     * `address_id`, `requested_start` (a date-*time*, within ±3 days) and
+     * `variant_id`, so the cache was always keyed on the right three inputs
+     * under two wrong labels. Renamed at the wave gate per the §7 request —
+     * a key whose labels lie about what it caches is a trap for the next reader.
      */
-    duplicates: (input: { addressId: string; serviceBy: string; categorySlug: string }) =>
+    duplicates: (input: { addressId: string; requestedStart: string; variantId: string }) =>
       [...m2QueryKeys.requirements.all, "duplicates", input] as const,
   },
 

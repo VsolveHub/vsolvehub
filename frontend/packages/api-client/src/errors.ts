@@ -121,6 +121,12 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   //  - `m2_unlock_payment_pending` is `await_confirmation`. It arrives as 202,
   //    not an error status, and it is the one code where offering "Try again"
   //    would invite a second INR 149 charge for one unlock.
+  //    `m2_visit_plan_payment_pending` (revision 3) is the A5 twin of exactly
+  //    that hazard and is mapped the same way for the same reason.
+  //
+  // Codes below the frozen 29 were added by the integrator at a wave gate from
+  // the change requests in `frontend-execution-plan.md` §7 — the five revision 3
+  // visit codes from 07 §8, plus the codes Django published outside that table.
   // ---------------------------------------------------------------------------
 
   // Requirement lifecycle
@@ -142,20 +148,56 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   m2_payout_details_required: "fix_input",
   m2_crew_roster_required: "fix_input",
   m2_crew_conflict: "choose_again",
+  m2_business_type_invalid: "fix_input",
+  m2_capability_already_requested: "choose_again",
+  // Published as `..._not_allowed`, and it has existed since 10 August. Proposal
+  // 0013 guessed `m2_capability_transition_invalid`; renaming a live code to match
+  // a guess would have been a breaking change bought for nothing.
+  m2_capability_transition_not_allowed: "contact_support",
+
+  // Attachments
+  m2_attachment_invalid: "fix_input",
+  m2_attachment_unavailable: "retry",
 
   // Proposals
   m2_proposal_below_wage_floor: "fix_input",
   m2_proposal_invalid_shape: "fix_input",
   m2_proposal_not_selectable: "choose_again",
   m2_proposal_slot_conflict: "contact_support",
+  // `contact_support`, deliberately, and NOT the `fix_input` requested in the
+  // execution plan §7 on 2026-08-12. That request was written when the vendor
+  // still supplied `wage_floor_skill` and `wage_floor_state_code` on the
+  // proposal — inputs they could correct. `M2-BE-317` removed both from the HTTP
+  // surface so a vendor can no longer influence their own statutory floor: the
+  // server derives the skill from the variant configuration and the state from
+  // the service area. The refusal now means "Operations has not mapped a floor
+  // for this variant and area", which is nothing a vendor can fix from the
+  // composer. Sending them to a rate field they cannot make right would be the
+  // dead end `fix_input` exists to prevent.
+  m2_wage_floor_unavailable: "contact_support",
 
-  // Unlock and selection
+  // A3 unlock and selection
   m2_unlock_not_available: "await_confirmation",
   m2_unlock_required: "add_payment_method",
   m2_unlock_payment_pending: "await_confirmation",
   m2_rejection_cap_reached: "contact_support",
   m2_selection_conflict: "choose_again",
   m2_reconfirmation_expired: "choose_again",
+
+  // A5 visit plan and site visits (revision 3, ADR-0008)
+  //
+  // `m2_visit_plan_not_chargeable` is `await_confirmation` rather than an error
+  // the Customer acts on: the plan becomes chargeable when a *vendor* confirms a
+  // slot, so the only correct next step is to wait. `m2_visit_not_completed` is
+  // `fix_input` because it reaches the vendor in the on-site composer, and the
+  // offending input is which visit the estimate is filed against — a visit that
+  // never happened cannot carry an estimate, and that is the vendor's own next
+  // action (confirm arrival, complete the visit), not a support case.
+  m2_visit_plan_required: "fix_input",
+  m2_visit_plan_not_chargeable: "await_confirmation",
+  m2_visit_plan_payment_pending: "await_confirmation",
+  m2_visit_slot_unavailable: "choose_again",
+  m2_visit_not_completed: "fix_input",
 
   // Engagement stages and amendments
   m2_stage_not_funded: "add_payment_method",

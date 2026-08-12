@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.20.0)
- * Checksum: 5a4ba930c193b0d5
+ * Source:   contracts/openapi/v1.yaml (version 1.23.0)
+ * Checksum: 30cdd09a1425706a
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1959,6 +1959,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/business-profile/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The Partner's business identity. **`404` when none exists, and that is the ordinary state for every M1 Partner** — the client renders the individual default and offers the step rather than showing an error. */
+        get: operations["m2_partner_business_profile_read"];
+        /** @description Create or replace. A `PUT` rather than a `PATCH` because the three business types have genuinely different required fields, and a partial update is how a Partner switching from agency to individual keeps a registration number the database forbids. */
+        put: operations["m2_partner_business_profile_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/capabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every capability this Partner holds, in any status. **This is the read that tells "not applied" from "under review" from "suspended"** — an empty workspace-grant list cannot, and inferring a review banner from one would show it to every existing M1 Partner. `REJECTED` is Operations' refusal; `WITHDRAWN` is the Partner's own exit. */
+        get: operations["m2_partner_capability_list"];
+        put?: never;
+        post: operations["m2_partner_capability_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/capabilities/{capability_id}/submit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The Partner's own submit and resubmit (`M2-BE-110`).
+         *
+         *     The button that was missing. Until now a capability sitting in `CHANGES_REQUIRED` could only be
+         *     moved by Operations, so a Partner who fixed exactly what was asked had no way to say so and
+         *     the correction cycle depended on somebody noticing. Reaching `UNDER_REVIEW` from `REQUESTED` is
+         *     the first submit and from `CHANGES_REQUIRED` the resubmit; they are one command because they
+         *     are one act.
+         */
+        post: operations["m2_partner_capability_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/capabilities/{capability_id}/withdraw/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The Partner's own exit. Distinct from Operations' `REJECTED` refusal, which the Partner cannot cause and this route cannot reach. Neither status blocks a fresh request for the same variant. */
+        post: operations["m2_partner_capability_withdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/capability-options/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Business types with their consequences, and the lifecycle capabilities open for request. All copy is server-authored: `lifecycle_explanation` is the sentence that decides whether a Partner understands what they are signing up to, and `asks_for` names the fields one form should render so the client needs no archetype branch. */
+        get: operations["m2_partner_capability_option_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description This Partner's roster. Publishes **no `crew_member_id`** — identity is global, and handing the global id to one agency would let two agencies compare rosters and discover a worker is on both. `phone_masked` shows four digits; the number itself is never stored, so this is not a redaction but the whole of what exists. */
+        get: operations["m2_partner_crew_list"];
+        put?: never;
+        /** @description Add a worker. **`201` for a new membership, `200` for a reinstated one**, so the UI can say "we put Ramesh back on your roster" instead of silently succeeding on a name the Partner thought was gone. */
+        post: operations["m2_partner_crew_add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew/{membership_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Skills and the supervisor flag. `display_name` is **not** editable: it belongs to the global crew member, and one agency renaming a person would rename them on every other roster. */
+        patch: operations["m2_partner_crew_update"];
+        trace?: never;
+    };
+    "/api/v1/partner/crew/{membership_id}/archive/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Take a worker off this roster. **Does not yet refuse when the worker holds a future assignment**: crew assignment is per stage and the stage model arrives with `M2-BE-522`, so there is nothing to read. A guard against a table that does not exist would be a check that always passes. */
+        post: operations["m2_partner_crew_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew/{membership_id}/availability/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Mark one worker off, or back on, for one date. Exception-shaped rather than a weekly calendar because that is what a supervisor actually knows: the default is available, and what gets recorded is the wedding on the 14th. `assert_crew_available` refuses an assignment on a day marked unavailable, naming the person. */
+        put: operations["m2_partner_crew_availability_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/demand-preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Live requirement summaries in the areas this Partner serves, masked. **Customer name, phone, full address, building number and the exact budget are absent from the response.** `id` is a preview identifier — a keyed hash, not a requirement primary key — and resolves on no other route. Ineligible demand is returned with a hint rather than hidden: hiding it would make an empty screen the first thing most new Partners see. An empty list is a real answer ("nothing in your area right now"), never a `404`. */
+        get: operations["m2_partner_demand_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/earnings/": {
         parameters: {
             query?: never;
@@ -1976,6 +2156,181 @@ export interface paths {
          */
         get: operations["partner_earnings_retrieve"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_partner_enquiry_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/{invitation_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_partner_enquiry_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/{invitation_id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_partner_enquiry_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/{invitation_id}/attachments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Short-lived signed links to the requirement's **checked** attachments. Access lasts as long as the invitation holds a quote slot, and ends when it is declined, expired or withdrawn — only the selected vendor keeps it. Expiry is reported as `has_access: false` on a `200`, not as an error: the vendor still owns their enquiry record, and an empty list without that flag would read as 'the Customer attached nothing'. No link is minted once access has lapsed, because a signed URL is a bearer credential and hiding a button is not revocation. */
+        get: operations["m2_partner_enquiry_attachment_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/{invitation_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_partner_enquiry_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/{invitation_id}/questions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_partner_enquiry_question_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/enquiries/{invitation_id}/site-visits/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Request a paid site visit. The fee is what makes a vendor willing to travel before winning the job; free visits are not offered. Charging the fee is not built until BE4 — this records the request and its fee. */
+        post: operations["m2_partner_site_visit_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/gates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The three progressive gates, each with the reason it is being asked for and the one action that clears it. **Advisory**: the commands enforce these at the moment they run, and this read only decides what the UI explains beforehand. A client treating it as authoritative would block somebody whose KYC completed thirty seconds ago. `blocks` names actions, never screens — an unsatisfied gate never hides demand. */
+        get: operations["m2_partner_gate_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/insurance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The worker-insurance declaration in force today. **`404` when none is declared, which is the ordinary state and not an error.** `verified_at` is read-only and set only by Operations: a client must render an unverified declaration as *declared*, never as *insured*, because the difference is who carries the liability if a worker is hurt. */
+        get: operations["m2_partner_insurance_read"];
+        /** @description Declare or replace. A replacement clears `verified_at`: swapping a checked policy for an unchecked one must not keep the badge. */
+        put: operations["m2_partner_insurance_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/languages/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The languages this vendor can actually work in (`M2-BE-301`).
+         *
+         *     Eligibility input, not profile decoration. A requirement carries the language its answers and
+         *     voice note are in, and sending it to a vendor who cannot read it produces a silent non-response
+         *     that looks exactly like a dead account. **Declaring nothing is not a mismatch** — matching only
+         *     excludes on a declaration that contradicts the requirement, so no existing Partner is dropped
+         *     from a pool for never having filled this in.
+         */
+        get: operations["m2_partner_language_list"];
+        /** @description Replace the whole set. A merge would make removing a language impossible from the only screen that edits them. Tags are compared on their primary subtag, so `te-IN` and `te` are one language. */
+        put: operations["m2_partner_language_set"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2220,6 +2575,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/workspaces/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The Partner's approved lifecycle capabilities as `{workspace_key, commercial_mode, actions[]}`. Drives navigation and nothing else: no routes, no labels, no icons. A Partner with no approved capability receives `200 {"workspaces": []}` — that is a real, common state (registered, not yet reviewed), not an error. Suspension is expressed by omitting the workspace or reducing its actions, never by an error, so navigation degrades in place rather than blanking mid-session. */
+        get: operations["m2_partner_workspace_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payment-attempts/": {
         parameters: {
             query?: never;
@@ -2344,6 +2716,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proposals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Submit a quote, or a revision that supersedes this vendor's previous one. Proposals are append-only: a revision never overwrites what the Customer was originally offered. The archetype decides which fields are required and the server enforces it. */
+        post: operations["m2_proposal_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{proposal_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_proposal_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proposals/{proposal_id}/withdraw/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_proposal_withdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quotes/": {
         parameters: {
             query?: never;
@@ -2370,6 +2791,171 @@ export interface paths {
         get: operations["refunds_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_requirement_list"];
+        put?: never;
+        post: operations["m2_requirement_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_requirement_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["m2_requirement_update"];
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/attachments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Turn a completed upload into an attachment, after verifying what actually arrived. */
+        post: operations["m2_requirement_attachment_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/attachments/{attachment_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Remove an attachment and delete the stored object. Refused after the requirement leaves DRAFT, because a vendor was invited against a snapshot and removing a photograph they quoted on rewrites the question after the answer. An `INFECTED` attachment is removable in any state. */
+        delete: operations["m2_requirement_attachment_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/attachments/uploads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Ask for a signed upload URL. The server names the object key and records the size, media type and SHA-256 the client declares; finalization streams the stored object back and refuses anything that does not match. `scan_status` is `PENDING` on arrival because the object does not exist yet. */
+        post: operations["m2_requirement_attachment_upload_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/teasers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pre-unlock quote teasers. This payload is sent to a Customer who has paid nothing, so vendor name, contact, scope, line items and the exact total are absent from the response — not merely unrendered. */
+        get: operations["m2_quote_teaser_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/submit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["m2_requirement_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/timeline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_requirement_timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/duplicate-check/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["m2_requirement_duplicate_check"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/questions/{question_id}/answer/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The Customer's half of structured clarification. */
+        post: operations["m2_requirement_question_answer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2481,6 +3067,46 @@ export interface paths {
         get: operations["services_configuration_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-visits/{site_visit_id}/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Only the vendor closes a visit, because only the vendor attended it.
+         *
+         *     Scheduling takes both parties; completion is a report of what happened, and the party that
+         *     travelled is the one who can make it. A Customer who disagrees with the outcome has the
+         *     clarification timeline and, from Wave C6, a case — not a competing completion.
+         */
+        post: operations["m2_site_visit_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-visits/{site_visit_id}/schedule/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Put a time on a requested visit, or move one already scheduled. Either party may call it: the vendor proposes a slot they can travel in, the Customer confirms a time somebody will be on site, and neither can do it alone. */
+        post: operations["m2_site_visit_schedule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2614,6 +3240,40 @@ export interface components {
             expected_version: number;
             outage_reason: string;
         };
+        AttachmentFinalizeRequest: {
+            /** Format: uuid */
+            upload_id: string;
+        };
+        /** @description The signed-upload grant. Bytes go to storage, never through Django. */
+        AttachmentUploadGrant: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: string;
+            /** Format: uri */
+            readonly upload_url: string;
+            readonly upload_token: string;
+            /** Format: date-time */
+            readonly upload_expires_at: string;
+            readonly scan_status: string;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description What the client declares before any bytes exist.
+         *
+         *     The checksum is required, and it is the point of the whole handshake: finalization streams the
+         *     stored object back and compares it against these three values, so an upload that swapped the
+         *     file after presigning is refused rather than stored. Without them "verify the upload" would mean
+         *     "believe the client".
+         */
+        AttachmentUploadRequestRequest: {
+            kind: components["schemas"]["RequirementAttachmentKindEnum"];
+            content_type: string;
+            size_bytes: number;
+            sha256: string;
+            /** @default  */
+            language: string;
+        };
         AuthenticatedSession: {
             readonly user: components["schemas"]["User"];
             readonly active_role: string;
@@ -2744,6 +3404,11 @@ export interface components {
             address_id: string;
             group_key?: string;
         };
+        BusinessTypeOption: {
+            readonly value: string;
+            readonly label: string;
+            readonly consequence: string;
+        };
         CancellationBand: {
             readonly code: string;
             readonly condition_text: string;
@@ -2768,6 +3433,57 @@ export interface components {
             fee_waiver: string;
             refund_paise: number;
             currency: string;
+        };
+        CapabilityOption: {
+            /** Format: uuid */
+            readonly variant_id: string;
+            readonly variant_name: string;
+            readonly category_name: string;
+            readonly workspace_key: string;
+            readonly commercial_mode: string;
+            readonly lifecycle_explanation: string;
+            readonly requires_insurance: boolean;
+            readonly asks_for: string[];
+            readonly registration_questions: unknown[];
+            readonly already_requested: boolean;
+        };
+        CapabilityOptions: {
+            readonly business_types: components["schemas"]["BusinessTypeOption"][];
+            readonly capabilities: components["schemas"]["CapabilityOption"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        CapabilityRequestRequest: {
+            /** Format: uuid */
+            variant_id: string;
+            max_crew_size?: number | null;
+            max_project_value_paise?: number | null;
+            service_area_ids?: string[];
+            registration_answers?: unknown;
+        };
+        /**
+         * @description Submit or resubmit one capability for review.
+         *
+         *     `registration_answers` is optional so a resubmit that only fixed a document does not have to
+         *     resend the answers. Sending them replaces the stored set and revalidates it.
+         */
+        CapabilitySubmitRequest: {
+            registration_answers?: unknown;
+        };
+        /**
+         * @description The last decision on a capability, with its date and reason.
+         *
+         *     Published without an `actor_kind`, deliberately. `PartnerCapabilityTransition.actor` is null
+         *     both for a Partner's own action and for a system job, so a computed actor would confidently
+         *     mislabel the case the client most needs to get right. The **status** now answers who:
+         *     `REJECTED` is Operations and `WITHDRAWN` is the Partner. See proposal 0013 section "Answered".
+         */
+        CapabilityTransitionSummary: {
+            readonly to_status: string;
+            readonly reason_code: string;
+            readonly reason: string;
+            /** Format: date-time */
+            readonly occurred_at: string;
         };
         Cart: {
             /** Format: uuid */
@@ -3065,6 +3781,56 @@ export interface components {
          * @enum {string}
          */
         ContentTypeEnum: "image/jpeg" | "image/png" | "application/pdf";
+        CrewAvailability: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date */
+            readonly date: string;
+            readonly is_available: boolean;
+            readonly reason: string;
+            /** Format: date-time */
+            readonly recorded_at: string;
+        };
+        CrewAvailabilityWriteRequest: {
+            /** Format: date */
+            date: string;
+            is_available: boolean;
+            reason?: string;
+        };
+        CrewList: {
+            readonly members: components["schemas"]["CrewMember"][];
+        };
+        /**
+         * @description One worker on this Partner's roster.
+         *
+         *     **`crew_member_id` is deliberately absent.** Identity is global - `CrewMember.identity_hash` -
+         *     and publishing the global id to one agency would let two agencies correlate rosters and discover
+         *     that a worker is on both. `membership_id` is per-Partner and is what every command takes.
+         *
+         *     `phone_masked` rather than the number. The Partner supplied it, so this is not a leak in the
+         *     quote-teaser sense, but the roster is read on a shared site phone and an unmasked list is a
+         *     contact export waiting to happen. The Partner who needs the full number already has it.
+         */
+        CrewMember: {
+            /** Format: uuid */
+            readonly membership_id: string;
+            readonly display_name: string;
+            readonly phone_masked: string;
+            readonly status: string;
+            readonly is_supervisor: boolean;
+            readonly skill_codes: string[];
+            /** Format: date-time */
+            readonly documents_verified_at: string | null;
+            /** Format: date-time */
+            readonly added_at: string;
+        };
+        CrewMemberCreateRequest: {
+            display_name: string;
+            phone_e164: string;
+            skill_codes?: string[];
+            /** @default false */
+            is_supervisor: boolean;
+        };
         CsrfToken: {
             readonly csrf_token: string;
         };
@@ -3106,6 +3872,33 @@ export interface components {
         };
         CustomerContactAttemptRequestRequest: {
             outcome: string;
+        };
+        DemandPreview: {
+            readonly summaries: components["schemas"]["DemandSummary"][];
+            readonly matched_service_count: number;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description **This payload goes to a Partner who has completed no KYC.**
+         *
+         *     An explicit field list, like `QuoteTeaserSerializer` and for the mirrored reason. Absent by
+         *     requirement, not by omission: customer name, phone, full address, building number, the exact
+         *     budget, and any identifier that resolves to a requirement this Partner was not invited to.
+         *
+         *     `id` is a keyed hash rather than the requirement's primary key. An unapproved account holding
+         *     real requirement ids is one lookup away from the record the moment any endpoint accepts one, and
+         *     "no endpoint accepts one today" is not a property that survives the next endpoint.
+         */
+        DemandSummary: {
+            readonly id: string;
+            readonly headline: string;
+            readonly area_label: string;
+            /** Format: date */
+            readonly starts_on: string | null;
+            readonly workspace_key: string;
+            readonly is_eligible: boolean;
+            readonly eligibility_hint: string;
         };
         /**
          * @description * `NONE` - No ordering dependency
@@ -3187,6 +3980,82 @@ export interface components {
             /** @default  */
             target: string;
             reason: string;
+        };
+        EnquiryDeclineRequest: {
+            reason_code: string;
+        };
+        /**
+         * @description An enquiry list row.
+         *
+         *     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
+         *     against, and re-reading the requirement would silently move the goalposts under a quote in
+         *     progress. Customer identity and address are absent before acceptance by design.
+         */
+        EnquiryDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly requirement_id: string;
+            readonly category_slug: string;
+            readonly archetype: string;
+            readonly status: components["schemas"]["VendorInvitationStatusEnum"];
+            readonly wave: number;
+            /** Format: date-time */
+            readonly requested_start: string;
+            /** Format: date */
+            readonly service_by: string;
+            readonly language: string;
+            /** Format: date-time */
+            readonly responds_by: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly answers: unknown;
+            readonly additional_details: string;
+            readonly budget_min_paise: number | null;
+            readonly budget_max_paise: number | null;
+            readonly decline_reason_code: string;
+            readonly questions: components["schemas"]["RequirementQuestion"][];
+            readonly site_visits: components["schemas"]["SiteVisit"][];
+        };
+        /**
+         * @description An enquiry list row.
+         *
+         *     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
+         *     against, and re-reading the requirement would silently move the goalposts under a quote in
+         *     progress. Customer identity and address are absent before acceptance by design.
+         */
+        EnquirySummary: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly requirement_id: string;
+            readonly category_slug: string;
+            readonly archetype: string;
+            readonly status: components["schemas"]["VendorInvitationStatusEnum"];
+            readonly wave: number;
+            /** Format: date-time */
+            readonly requested_start: string;
+            /** Format: date */
+            readonly service_by: string;
+            readonly language: string;
+            /** Format: date-time */
+            readonly responds_by: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description The Partner enquiry inbox's page envelope.
+         *
+         *     The same correction as `RequirementSummaryPageSerializer`, and it closes a second gap Session B
+         *     logged: no `cursor` parameter was published, so a Partner with more than twenty enquiries saw a
+         *     silently truncated inbox with no way to page past it.
+         */
+        EnquirySummaryPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["EnquirySummary"][];
         };
         EscalateCaseRequestRequest: {
             expected_version: number;
@@ -3349,6 +4218,13 @@ export interface components {
          * @enum {string}
          */
         FulfilmentUnitStatusEnum: "PLANNED" | "MATCHING" | "HELD" | "PAYMENT_PENDING" | "BOOKED" | "RECOVERY_REQUIRED" | "CANCELLED" | "FAILED" | "COMPLETED" | "PARTIALLY_COMPLETED" | "DISPUTED";
+        /**
+         * @description * `SUBMIT_APPLICATION` - Submit the Partner application
+         *     * `ADD_PAYOUT_ACCOUNT` - Add a payout account
+         *     * `ADD_CREW_MEMBER` - Add a crew member
+         * @enum {string}
+         */
+        GateNextActionEnum: "SUBMIT_APPLICATION" | "ADD_PAYOUT_ACCOUNT" | "ADD_CREW_MEMBER";
         GroupAddressChangeRequestRequest: {
             expected_version: number;
             /** Format: uuid */
@@ -3470,6 +4346,8 @@ export interface components {
         /**
          * @description * `NOTIFICATIONS` - All outbound notifications
          *     * `SMS` - SMS channel
+         *     * `WHATSAPP` - WhatsApp channel
+         *     * `VOICE` - Voice call channel
          *     * `PAYMENTS` - Payment collection
          *     * `PAYOUTS` - Partner payouts
          *     * `DISPATCH` - Partner dispatch
@@ -3477,7 +4355,7 @@ export interface components {
          *     * `SERVICE` - One service
          * @enum {string}
          */
-        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE";
+        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE";
         /**
          * @description A correction, which is always a new entry rather than an edit.
          *
@@ -4137,6 +5015,80 @@ export interface components {
             /** Format: date-time */
             server_now: string;
         };
+        PartnerBusinessProfile: {
+            readonly business_type: components["schemas"]["PartnerBusinessTypeEnum"];
+            readonly legal_name: string;
+            readonly registration_number: string;
+            readonly gst_registered: boolean;
+            readonly gstin: string;
+            readonly years_in_operation: number;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /**
+         * @description A full replace, not a merge.
+         *
+         *     `business_type` is required and is **read, never inferred** - not from the capability requested,
+         *     not from the services selected. The three types carry different tax, liability and payout
+         *     consequences, so the Partner states which one they are and the platform does not guess.
+         */
+        PartnerBusinessProfileWriteRequest: {
+            business_type: components["schemas"]["PartnerBusinessTypeEnum"];
+            legal_name?: string;
+            registration_number?: string;
+            /** @default false */
+            gst_registered: boolean;
+            gstin?: string;
+            years_in_operation?: number;
+        };
+        /**
+         * @description * `INDIVIDUAL` - Individual
+         *     * `WORKFORCE_AGENCY` - Workforce agency
+         *     * `PROJECT_VENDOR` - Project vendor
+         * @enum {string}
+         */
+        PartnerBusinessTypeEnum: "INDIVIDUAL" | "WORKFORCE_AGENCY" | "PROJECT_VENDOR";
+        /**
+         * @description One capability in any status. The read that distinguishes the navigation states.
+         *
+         *     `/partner/workspaces/` answers *what may I do* and stays empty and cheap for the great majority
+         *     of Partners who hold no capability at all. This answers *where does my application stand*, which
+         *     is why the two are separate reads: an empty grant list cannot tell "not applied" from "under
+         *     review" from "suspended", and inferring a review banner from it would show one to every existing
+         *     M1 Partner.
+         */
+        PartnerCapability: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly variant_id: string;
+            readonly variant_name: string;
+            readonly workspace_key: string;
+            readonly commercial_mode: string;
+            readonly status: string;
+            readonly review_notes: string;
+            readonly suspension_reason_code: string;
+            readonly requires_insurance: boolean;
+            readonly max_crew_size: number | null;
+            readonly max_project_value_paise: number | null;
+            readonly service_area_ids: string[];
+            readonly registration_answers: unknown;
+            /** Format: date-time */
+            readonly expires_at: string | null;
+            readonly expired_document_kinds: string[];
+            /** Format: date */
+            readonly documents_expiring_on: string | null;
+            readonly last_transition: components["schemas"]["CapabilityTransitionSummary"] | null;
+            /** Format: date-time */
+            readonly reviewed_at: string | null;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        PartnerCapabilityList: {
+            readonly capabilities: components["schemas"]["PartnerCapability"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
         PartnerConsent: {
             /** Format: uuid */
             readonly id: string;
@@ -4246,6 +5198,35 @@ export interface components {
             longitude: string;
             accuracy_m: number;
             consent_version: string;
+        };
+        PartnerInsurance: {
+            readonly insurer_name: string;
+            readonly policy_reference: string;
+            readonly coverage_paise: number;
+            readonly covers_workmen_compensation: boolean;
+            /** Format: date */
+            readonly valid_from: string;
+            /** Format: date */
+            readonly valid_to: string;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+        };
+        PartnerInsuranceWriteRequest: {
+            insurer_name: string;
+            policy_reference: string;
+            coverage_paise: number;
+            /** @default false */
+            covers_workmen_compensation: boolean;
+            /** Format: date */
+            valid_from: string;
+            /** Format: date */
+            valid_to: string;
+        };
+        PartnerLanguageList: {
+            readonly language_tags: string[];
+        };
+        PartnerLanguageWriteRequest: {
+            language_tags: string[];
         };
         /**
          * @description One line of a Partner's statement.
@@ -4429,6 +5410,17 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * @description Skills and the supervisor flag only.
+         *
+         *     `display_name` is **not** editable here. It belongs to the global `CrewMember`, which several
+         *     agencies may share, so one agency renaming a person would rename them on every other roster.
+         *     Read-only with the reason stated beats editable-and-scoped, which a later caller can forget.
+         */
+        PatchedCrewMemberUpdateRequest: {
+            skill_codes?: string[];
+            is_supervisor?: boolean;
+        };
         PatchedPartnerApplicationUpdateRequest: {
             expected_version?: number;
             display_name?: string;
@@ -4457,6 +5449,26 @@ export interface components {
          */
         PatchedPartnerProfileUpdateRequest: {
             display_name?: string;
+        };
+        /**
+         * @description Partial update, one screen at a time, for save-and-resume.
+         *
+         *     Every field is optional and `None` means "not sent" rather than "clear this", matching
+         *     `services.update_draft`, which skips `None` for exactly that reason.
+         */
+        PatchedRequirementUpdateRequest: {
+            answers?: unknown;
+            /** Format: uuid */
+            address_id?: string | null;
+            /** Format: date-time */
+            requested_start?: string | null;
+            flexibility_days?: number;
+            /** Format: date */
+            service_by?: string | null;
+            budget_min_paise?: number | null;
+            budget_max_paise?: number | null;
+            additional_details?: string;
+            language?: string;
         };
         PaymentAllocation: {
             /** Format: uuid */
@@ -4693,6 +5705,18 @@ export interface components {
          * @enum {string}
          */
         PrivacyStatusEnum: "RECEIVED" | "IN_REVIEW" | "COMPLETED" | "REJECTED";
+        ProbableDuplicate: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly summary: string;
+            readonly status: string;
+            readonly mergeable: boolean;
+        };
+        ProbableDuplicateList: {
+            readonly probable_duplicates: components["schemas"]["ProbableDuplicate"][];
+        };
         /**
          * @description * `PENDING` - Pending scan
          *     * `CLEAN` - Clean
@@ -4700,6 +5724,114 @@ export interface components {
          * @enum {string}
          */
         ProcessingStatusEnum: "PENDING" | "CLEAN" | "FAILED";
+        ProgressiveGate: {
+            readonly gate: components["schemas"]["ProgressiveGateEnum"];
+            readonly is_satisfied: boolean;
+            readonly blocks: string[];
+            readonly reason: string;
+            readonly next_action: (components["schemas"]["GateNextActionEnum"] | components["schemas"]["NullEnum"]) | null;
+        };
+        /**
+         * @description * `KYC` - Identity verification
+         *     * `PAYOUT_DETAILS` - Payout account
+         *     * `CREW_ROSTER` - Crew roster
+         * @enum {string}
+         */
+        ProgressiveGateEnum: "KYC" | "PAYOUT_DETAILS" | "CREW_ROSTER";
+        /**
+         * @description **Advisory.** The commands enforce these; this read only decides what the UI explains first.
+         *
+         *     A client treating it as authoritative would block somebody whose KYC completed thirty seconds
+         *     ago and admit somebody suspended thirty seconds ago.
+         */
+        ProgressiveGateList: {
+            readonly gates: components["schemas"]["ProgressiveGate"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description A vendor's own quote, read back to that vendor.
+         *
+         *     Not the Customer-facing quote view — that requires an active unlock and arrives with BE4.
+         */
+        Proposal: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly requirement: string;
+            /** Format: uuid */
+            readonly invitation: string;
+            /** @default 1 */
+            readonly revision: number;
+            readonly status: components["schemas"]["ProposalStatusEnum"];
+            readonly usability: components["schemas"]["ProposalUsabilityEnum"];
+            readonly rate_paise_per_worker_day: number | null;
+            readonly minimum_days: number | null;
+            readonly worker_count: number | null;
+            readonly total_paise: number;
+            readonly tax_paise: number;
+            readonly tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
+            readonly commission_treatment: string;
+            readonly inclusions: unknown;
+            readonly exclusions: unknown;
+            readonly stages: unknown;
+            readonly warranty_terms: string;
+            /** Format: date-time */
+            readonly valid_until: string | null;
+            /** Format: date-time */
+            readonly vendor_confirmed_at: string | null;
+            /** Format: date-time */
+            readonly submitted_at: string;
+        };
+        /**
+         * @description Both composers in one shape; the domain validates which fields the archetype requires.
+         *
+         *     Deliberately not two serializers. `proposals.submit_proposal` already runs `_assert_a3_shape`
+         *     or `_assert_a5_shape` against the requirement's own archetype, and a second archetype check
+         *     here would be a copy of that rule which could disagree with it. A vendor sending A5 stages on
+         *     an A3 requirement gets one refusal, from the layer that knows.
+         */
+        ProposalCreateRequest: {
+            /** Format: uuid */
+            invitation_id: string;
+            total_paise: number;
+            tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
+            /** @default 0 */
+            tax_paise: number;
+            rate_paise_per_worker_day?: number | null;
+            minimum_days?: number | null;
+            worker_count?: number | null;
+            stages?: unknown[];
+            inclusions?: string[];
+            exclusions?: string[];
+            warranty_terms?: string;
+            /** Format: date-time */
+            valid_until?: string | null;
+            commission_treatment?: string;
+        };
+        /**
+         * @description * `SUBMITTED` - Submitted
+         *     * `SUPERSEDED` - Superseded
+         *     * `WITHDRAWN` - Withdrawn
+         *     * `EXPIRED` - Expired
+         *     * `SELECTED` - Selected
+         *     * `REJECTED` - Rejected
+         * @enum {string}
+         */
+        ProposalStatusEnum: "SUBMITTED" | "SUPERSEDED" | "WITHDRAWN" | "EXPIRED" | "SELECTED" | "REJECTED";
+        /**
+         * @description * `INCLUSIVE` - Tax included in the total
+         *     * `EXCLUSIVE` - Tax added to the total
+         * @enum {string}
+         */
+        ProposalTaxBasisEnum: "INCLUSIVE" | "EXCLUSIVE";
+        /**
+         * @description * `USABLE` - Usable
+         *     * `OUT_OF_BUDGET` - Outside the stated budget
+         *     * `INCOMPLETE` - Incomplete
+         * @enum {string}
+         */
+        ProposalUsabilityEnum: "USABLE" | "OUT_OF_BUDGET" | "INCOMPLETE";
         /**
          * @description The floor every state-changing fulfilment command sits on.
          *
@@ -4725,6 +5857,12 @@ export interface components {
          * @enum {string}
          */
         PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION";
+        QuestionAnswerRequest: {
+            answer: string;
+        };
+        QuestionCreateRequest: {
+            question: string;
+        };
         Quote: {
             /** Format: uuid */
             readonly id: string;
@@ -4773,6 +5911,29 @@ export interface components {
             readonly label: string;
             readonly amount: components["schemas"]["Money"];
             readonly included_in_total: boolean;
+        };
+        /**
+         * @description **This payload goes to a Customer who has paid nothing.**
+         *
+         *     An explicit field list rather than a `ModelSerializer`, because the difference between the two
+         *     is one `fields` edit away from shipping a vendor's name to an unpaid Customer. The price
+         *     *band* is the point: enough to judge whether unlocking is worth it, not enough to act on.
+         */
+        QuoteTeaser: {
+            /** Format: uuid */
+            readonly proposal_id: string;
+            readonly vendor_type: string;
+            readonly is_verified: boolean;
+            readonly price_band_low_paise: number;
+            readonly price_band_high_paise: number;
+            readonly is_out_of_budget: boolean;
+        };
+        QuoteTeaserList: {
+            readonly teasers: components["schemas"]["QuoteTeaser"][];
+            readonly usable_quote_count: number;
+            readonly unlock_available: boolean;
+            /** Format: date-time */
+            readonly server_now: string;
         };
         RankedCandidate: {
             /** Format: uuid */
@@ -4880,6 +6041,150 @@ export interface components {
             scope: components["schemas"]["KillSwitchScopeEnum"];
             /** @default  */
             target: string;
+        };
+        RequirementAttachment: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["RequirementAttachmentKindEnum"];
+            readonly scan_status: string;
+            readonly scan_failure_reason: string;
+            readonly size_bytes: number;
+            readonly language: string;
+        };
+        /**
+         * @description * `IMAGE` - Image
+         *     * `VIDEO` - Video
+         *     * `AUDIO` - Audio
+         *     * `VOICE_NOTE` - Voice note
+         *     * `DOCUMENT` - Document
+         * @enum {string}
+         */
+        RequirementAttachmentKindEnum: "IMAGE" | "VIDEO" | "AUDIO" | "VOICE_NOTE" | "DOCUMENT";
+        RequirementCreateRequest: {
+            /** Format: uuid */
+            variant_id: string;
+            answers?: unknown;
+            /** @default en-IN */
+            language: string;
+        };
+        /**
+         * @description The full record the four-screen flow reads after every write.
+         *
+         *     `inferred_lifecycle` is published but is never rendered as an archetype name — `GAP-006` is
+         *     explicit that the Customer describes what they need and the platform works out the lifecycle.
+         *     `lifecycle_explanation` is the sentence they actually see.
+         */
+        RequirementDraft: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RequirementStatusEnum"];
+            readonly category_slug: string;
+            readonly inferred_lifecycle: string;
+            readonly lifecycle_explanation: string | null;
+            readonly answers: unknown;
+            readonly missing_required_answers: string[];
+            /** Format: uuid */
+            readonly address_id: string | null;
+            /** Format: date-time */
+            readonly requested_start: string | null;
+            readonly flexibility_days: number;
+            readonly is_date_flexible: boolean;
+            /** Format: date */
+            readonly service_by: string | null;
+            readonly budget_min_paise: number | null;
+            readonly budget_max_paise: number | null;
+            readonly language: string;
+            readonly additional_details: string;
+            readonly attachments: components["schemas"]["RequirementAttachment"][];
+            readonly server_now: string;
+        };
+        RequirementQuestion: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly invitation: string;
+            readonly question: string;
+            readonly answer: string;
+            /** Format: date-time */
+            readonly asked_at: string;
+            /** Format: date-time */
+            readonly answered_at: string | null;
+        };
+        /**
+         * @description * `DRAFT` - Draft
+         *     * `MATCHING` - Matching
+         *     * `QUOTES_READY` - Quotes ready
+         *     * `UNLOCKED` - Unlocked
+         *     * `SELECTED` - Selected
+         *     * `ENGAGED` - Engaged
+         *     * `CLOSED_NO_SUPPLY` - Closed: no supply
+         *     * `CLOSED_SLA_BREACH` - Closed: delivery promise missed
+         *     * `CLOSED_EXPIRED` - Closed: needed-by date passed
+         *     * `CLOSED_ABANDONED` - Closed: abandoned
+         *     * `CLOSED_COMPLETE` - Closed: complete
+         *     * `CLOSED_CANCELLED` - Closed: cancelled
+         * @enum {string}
+         */
+        RequirementStatusEnum: "DRAFT" | "MATCHING" | "QUOTES_READY" | "UNLOCKED" | "SELECTED" | "ENGAGED" | "CLOSED_NO_SUPPLY" | "CLOSED_SLA_BREACH" | "CLOSED_EXPIRED" | "CLOSED_ABANDONED" | "CLOSED_COMPLETE" | "CLOSED_CANCELLED";
+        RequirementSubmitRequest: {
+            /** @default false */
+            allow_duplicate: boolean;
+        };
+        RequirementSubmitted: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: string;
+            /** Format: date */
+            readonly service_by: string | null;
+            /** Format: date-time */
+            readonly quote_delivery_deadline_at: string | null;
+            readonly is_free: boolean;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /** @description A `My requests` row. */
+        RequirementSummary: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RequirementStatusEnum"];
+            readonly category_slug: string;
+            readonly lifecycle_explanation: string | null;
+            /** Format: date */
+            readonly service_by: string | null;
+            /** Format: date-time */
+            readonly quote_delivery_deadline_at: string;
+            readonly teaser_count: number;
+            readonly closure_reason: string | null;
+            /** Format: date-time */
+            readonly last_activity_at: string;
+        };
+        /**
+         * @description The page envelope `My requests` has always been sent, now also declared.
+         *
+         *     Until 13 August the operation declared a bare array and the view returned this envelope, so a
+         *     client generated from the contract threw on its first real request and every consumer had to
+         *     hand-write a narrowing around the generated type. The shape is
+         *     `carts.serializers.BookingGroupPageSerializer`'s, because there is no reason for two page
+         *     envelopes in one API.
+         */
+        RequirementSummaryPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["RequirementSummary"][];
+        };
+        RequirementTimeline: {
+            readonly events: components["schemas"]["RequirementTimelineEvent"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        RequirementTimelineEvent: {
+            readonly id: string;
+            /** Format: date-time */
+            readonly at: string;
+            readonly type: string;
+            readonly detail: unknown;
         };
         /**
          * @description The floor every state-changing fulfilment command sits on.
@@ -5139,6 +6444,38 @@ export interface components {
             /** Format: date-time */
             readonly session_expires_at: string | null;
         };
+        SiteVisit: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["SiteVisitStatusEnum"];
+            readonly fee_paise: number;
+            readonly adjusts_against_final_price: boolean;
+            /** Format: date-time */
+            readonly scheduled_for: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
+        };
+        SiteVisitCompleteRequest: {
+            outcome_notes?: string;
+        };
+        SiteVisitRequestRequest: {
+            fee_paise: number;
+            /** @default true */
+            adjusts_against_final_price: boolean;
+        };
+        SiteVisitScheduleRequest: {
+            /** Format: date-time */
+            scheduled_for: string;
+        };
+        /**
+         * @description * `REQUESTED` - Requested
+         *     * `SCHEDULED` - Scheduled
+         *     * `COMPLETED` - Completed
+         *     * `CANCELLED` - Cancelled
+         *     * `NO_SHOW` - No show
+         * @enum {string}
+         */
+        SiteVisitStatusEnum: "REQUESTED" | "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
         /**
          * @description * `MANUAL` - Manual
          *     * `REVERSE_GEOCODED` - Reverse geocoded
@@ -5309,6 +6646,47 @@ export interface components {
             readonly expires_at: string;
             readonly is_current: boolean;
         };
+        /**
+         * @description One of the Customer's checked files, as a short-lived signed link.
+         *
+         *     `download_url` is a bearer credential — anyone holding it holds the file — which is why it is
+         *     minted per read and expires in minutes rather than being stored anywhere.
+         */
+        VendorAttachment: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: string;
+            readonly size_bytes: number;
+            readonly language: string;
+            /** Format: uri */
+            readonly download_url: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        /**
+         * @description Attachments this vendor may see, and whether they still may.
+         *
+         *     `has_access` is `false` once the invitation was declined, expired or withdrawn and this vendor
+         *     was not selected. It is published as a state on a `200` rather than as an error because the
+         *     vendor is entitled to their own enquiry record either way, and because "there are no
+         *     photographs" and "you may no longer see the photographs" are different things to render.
+         */
+        VendorAttachmentList: {
+            readonly has_access: boolean;
+            readonly attachments: components["schemas"]["VendorAttachment"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description * `INVITED` - Invited
+         *     * `ACCEPTED` - Accepted
+         *     * `QUOTED` - Quoted
+         *     * `DECLINED` - Declined
+         *     * `EXPIRED` - Expired
+         *     * `WITHDRAWN` - Withdrawn
+         * @enum {string}
+         */
+        VendorInvitationStatusEnum: "INVITED" | "ACCEPTED" | "QUOTED" | "DECLINED" | "EXPIRED" | "WITHDRAWN";
         VersionedBatchCommandRequest: {
             expected_version: number;
         };
@@ -5395,6 +6773,29 @@ export interface components {
          * @enum {string}
          */
         WorkTaskKindEnum: "ORIGINAL" | "AMENDMENT";
+        /**
+         * @description `{workspace_key, commercial_mode, actions[]}` and nothing else.
+         *
+         *     No routes, no labels, no icons: the backend authorises, the frontend owns presentation. The
+         *     key is opaque — a client that does not recognise one renders nothing rather than a generic
+         *     tab, because a tab whose screens are not in the bundle is an unrecoverable dead end.
+         */
+        WorkspaceGrant: {
+            readonly workspace_key: components["schemas"]["WorkspaceKeyEnum"];
+            readonly commercial_mode: string;
+            readonly actions: string[];
+        };
+        WorkspaceGrantList: {
+            readonly workspaces: components["schemas"]["WorkspaceGrant"][];
+        };
+        /**
+         * @description * `LEGACY` - Legacy
+         *     * `A1_TASK_VISIT` - A1 task visit
+         *     * `A3_TIME_BLOCK` - A3 time block
+         *     * `A5_CUSTOM_PROJECT` - A5 custom project
+         * @enum {string}
+         */
+        WorkspaceKeyEnum: "LEGACY" | "A1_TASK_VISIT" | "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
     };
     responses: never;
     parameters: never;
@@ -10547,6 +11948,578 @@ export interface operations {
             };
         };
     };
+    m2_partner_business_profile_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBusinessProfile"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_business_profile_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerBusinessProfileWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerBusinessProfileWriteRequest"];
+                "multipart/form-data": components["schemas"]["PartnerBusinessProfileWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerBusinessProfile"];
+                };
+            };
+            /** @description `m2_business_type_invalid` for a registration number on an `INDIVIDUAL`, or a GSTIN without `gst_registered`. Both are model constraints. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_capability_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerCapabilityList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_capability_request: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapabilityRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CapabilityRequestRequest"];
+                "multipart/form-data": components["schemas"]["CapabilityRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerCapability"];
+                };
+            };
+            /** @description `m2_lifecycle_not_supported` when the variant carries no A3/A5 archetype. Show "we do not cover this yet" and return to the options list, not a field error. `m2_business_type_invalid` when the registration answers do not satisfy the variant's published question schema, or when a requested service area is not one the Partner works in — the capability can only narrow their coverage, never add to it. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_capability_already_requested` when a live request exists for this variant — the recovery is "open the one you have", not "try something else". `idempotency_in_progress` means wait and re-read, never resend under a new key. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_capability_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                capability_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CapabilitySubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CapabilitySubmitRequest"];
+                "multipart/form-data": components["schemas"]["CapabilitySubmitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerCapability"];
+                };
+            };
+            /** @description `m2_business_type_invalid` when the registration answers do not satisfy the variant's published question schema. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_capability_transition_not_allowed` from any status other than `REQUESTED` or `CHANGES_REQUIRED`. A capability already `UNDER_REVIEW` returns `200` unchanged rather than refusing — resubmitting is not an error. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_capability_withdraw: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                capability_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerCapability"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_capability_option_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityOptions"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_add: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewMemberCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewMemberCreateRequest"];
+                "multipart/form-data": components["schemas"]["CrewMemberCreateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMember"];
+                };
+            };
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMember"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_capability_not_approved` when the Partner holds no approved workforce capability. The roster is not a general address book. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCrewMemberUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCrewMemberUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCrewMemberUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMember"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMember"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_crew_availability_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewAvailabilityWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewAvailabilityWriteRequest"];
+                "multipart/form-data": components["schemas"]["CrewAvailabilityWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewAvailability"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_demand_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemandPreview"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     partner_earnings_retrieve: {
         parameters: {
             query?: never;
@@ -10565,6 +12538,503 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_enquiry_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquirySummaryPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_enquiry_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_enquiry_accept: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryDetail"];
+                };
+            };
+            /** @description `m2_kyc_required` — identity verification is gated here, at the first accept, rather than at registration. `m2_capability_not_approved` and `m2_capability_suspended` when the lifecycle capability is not live. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_invitation_expired`, `m2_invitation_slots_exhausted`, `m2_proposal_slot_conflict` when a linked account already holds a slot, or `m2_capacity_unavailable` when the vendor already has work booked on these dates — either another M2 enquiry they accepted or an A1 booking on the shared availability grid. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_enquiry_attachment_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorAttachmentList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_attachment_unavailable` when the storage adapter is down. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_enquiry_decline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnquiryDeclineRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EnquiryDeclineRequest"];
+                "multipart/form-data": components["schemas"]["EnquiryDeclineRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnquiryDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_enquiry_question_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuestionCreateRequest"];
+                "multipart/form-data": components["schemas"]["QuestionCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestion"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_site_visit_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteVisitRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SiteVisitRequestRequest"];
+                "multipart/form-data": components["schemas"]["SiteVisitRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVisit"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_gate_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressiveGateList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_insurance_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInsurance"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_insurance_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerInsuranceWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerInsuranceWriteRequest"];
+                "multipart/form-data": components["schemas"]["PartnerInsuranceWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerInsurance"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_language_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerLanguageList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_partner_language_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartnerLanguageWriteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PartnerLanguageWriteRequest"];
+                "multipart/form-data": components["schemas"]["PartnerLanguageWriteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartnerLanguageList"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11015,6 +13485,33 @@ export interface operations {
             };
         };
     };
+    m2_partner_workspace_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceGrantList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     payment_attempts_create: {
         parameters: {
             query?: never;
@@ -11240,6 +13737,153 @@ export interface operations {
             };
         };
     };
+    m2_proposal_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalCreateRequest"];
+                "multipart/form-data": components["schemas"]["ProposalCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            /** @description `m2_proposal_invalid_shape` when the quote does not match the requirement's lifecycle or the stage totals do not reconcile; `m2_proposal_below_wage_floor` when an A3 daily rate is under the statutory floor for the requirement's own state and skill. **Neither the state nor the skill is accepted from the caller** — both are derived from the requirement, so a vendor cannot influence the floor they are measured against. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_wage_floor_unavailable` when Operations has not mapped this variant to a wage-floor skill, has not set a state code on the service area, or has loaded no floor for that pair. This **fails closed** — an A3 quote is refused rather than accepted unchecked, because brokering labour below the statutory minimum is a violation the platform carries, not only the vendor. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_proposal_withdraw: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     quotes_create: {
         parameters: {
             query?: never;
@@ -11290,6 +13934,523 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Refund"];
+                };
+            };
+        };
+    };
+    m2_requirement_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementSummaryPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RequirementCreateRequest"];
+                "multipart/form-data": components["schemas"]["RequirementCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementDraft"];
+                };
+            };
+            /** @description `m2_lifecycle_not_supported` when the service has no active A3/A5 configuration. The Customer sees 'we do not cover this yet' and a route back to the catalog, not a validation error on a field they cannot see. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementDraft"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedRequirementUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedRequirementUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedRequirementUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementDraft"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_locked` once the requirement has left DRAFT and vendors have seen it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_attachment_finalize: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachmentFinalizeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttachmentFinalizeRequest"];
+                "multipart/form-data": components["schemas"]["AttachmentFinalizeRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementAttachment"];
+                };
+            };
+            /** @description `m2_attachment_invalid` when the stored object does not match the size, media type or checksum the client declared, when the upload expired, or when it has already been finalized. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_attachment_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_attachment_upload_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachmentUploadRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AttachmentUploadRequestRequest"];
+                "multipart/form-data": components["schemas"]["AttachmentUploadRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentUploadGrant"];
+                };
+            };
+            /** @description `m2_attachment_invalid` for an unsupported media type, an oversized file, a malformed checksum, or more attachments than one requirement may carry. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_locked` once the requirement has left DRAFT — a photograph appearing after a vendor quoted is a scope change, not an attachment. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_attachment_unavailable` when the storage adapter is down. Retryable, and the only retryable error on this path. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_teaser_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteTeaserList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RequirementSubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RequirementSubmitRequest"];
+                "multipart/form-data": components["schemas"]["RequirementSubmitRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementSubmitted"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_duplicate` (show the duplicate and offer a merge before allowing `allow_duplicate`), `m2_requirement_expired`, or `idempotency_in_progress` — wait and re-read, never resend under a new key. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_timeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementTimeline"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_duplicate_check: {
+        parameters: {
+            query: {
+                address_id: string;
+                requested_start: string;
+                variant_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbableDuplicateList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_requirement_question_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionAnswerRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuestionAnswerRequest"];
+                "multipart/form-data": components["schemas"]["QuestionAnswerRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestion"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -11515,6 +14676,108 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_site_visit_complete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                site_visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SiteVisitCompleteRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SiteVisitCompleteRequest"];
+                "multipart/form-data": components["schemas"]["SiteVisitCompleteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVisit"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when the visit was never scheduled. A visit with no agreed time cannot have happened. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_site_visit_schedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                site_visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteVisitScheduleRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SiteVisitScheduleRequest"];
+                "multipart/form-data": components["schemas"]["SiteVisitScheduleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVisit"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` once the visit is completed or cancelled. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
