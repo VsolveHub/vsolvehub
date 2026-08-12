@@ -160,6 +160,29 @@ export default defineConfig({
       },
     },
     {
+      /**
+       * M2 Wave B2 — the Partner enquiry inbox and the two quote composers.
+       *
+       * Its own project for the same reason as `partner-shell`: it installs
+       * contract-shaped M2 routes for every test, and neither the
+       * contract-independent Partner specs nor the A1 offer suite may inherit
+       * them.
+       *
+       * The pattern is the whole `m2-partner-*` family rather than this one
+       * file, so the remaining B-column Partner specs mount without editing this
+       * config again. `m2-ops-*` needs a separate entry at Wave 4 because it
+       * runs against the admin origin on 3002, and Session A's `m2-customer-*`
+       * needs one against 3000 — a shared entry would point half the suite at
+       * the wrong server.
+       */
+      name: "partner-m2",
+      testMatch: /m2-partner-.*\.e2e\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3001",
+      },
+    },
+    {
       name: "admin-chromium",
       testMatch: /admin\.e2e\.ts/,
       use: {

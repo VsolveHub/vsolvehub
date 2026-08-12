@@ -10,14 +10,32 @@
 > You are Session B on the M2 frontend — the **Partner application** (`frontend/apps/partner`) and
 > the **Operations application** (`frontend/apps/admin`; its physical name is `admin`, its product
 > label is Operations, and you must not create `apps/operations`). Read
-> `Django_Next.js_Plan/M2/frontend-execution-plan.md` first: §2 (why nothing can reach `[x]` yet),
-> §3 (the file-ownership map and the frozen list) and §4 (repo setup). Then read this file,
+> `Django_Next.js_Plan/M2/frontend-execution-plan.md` first: §2 (what is and is not published, and
+> what that caps), §3 (the file-ownership map and the frozen list) and §4 (repo setup). Then read
+> `task.md` §"Verification convention" — you do not run tests. Then read this file,
 > `frontend-session-b.md`, and work it wave by wave.
 >
-> **Where you are.** Nothing in your column is built yet. Wave 0 left you two files:
-> `apps/partner/features/workspace/registry.ts` and `workspace-switcher.tsx`. The registry is yours
-> but **frozen in shape** — extend it only through its typed entries, never by adding lifecycle
-> inference. Start at `M2-FE-101`.
+> **Where you are — updated 2026-08-12.** Wave B1 is **14 of 15 built and wired**, which makes yours
+> the only M2 column with a live endpoint behind it. `features/{capability,crew,workspace}/` holds
+> the four-step express path to masked demand, the three progressive gates, business type, the
+> capability picker, the insurance declaration, the crew roster, six review states, and the
+> capability-driven shell — registry, switcher and mid-session guard — wired into `partner-shell.tsx`.
+> That shell reads `GET /api/v1/partner/workspaces/` at contract 1.21.0 through
+> `features/workspace/queries.ts`, and all **7 registry destinations are mounted** as `force-dynamic`,
+> `robots: noindex` routes. `/workforce` and `/projects` render real grant-driven homes; the other
+> five render an honest not-built-yet state. The registry is yours but **frozen in shape** — extend it
+> only through its typed entries, never by adding lifecycle inference.
+>
+> Three decisions in `queries.ts` are load-bearing and Session A has been told to copy them, so do not
+> quietly change them: an unread grant list is `null` and never `[]` (collapsing them fails *open* — a
+> dropped connection would read as a suspension nobody applied); a 401/403 is not resent; and
+> freshness is `SESSION_STATE`, so an Operations suspension lands on window focus rather than at next
+> login.
+>
+> **Still open in B1:** `FE-105`, and the `capability/` and `crew/` views are route-less — necessarily,
+> since every endpoint they need is proposal 0013 and unpublished.
+>
+> **Start Wave B2 (`FE-301..313`). It is not blocked.**
 >
 > **The rule your whole column turns on.** The UI must never infer a lifecycle from a role,
 > profession, skill or category name. Navigation comes from `{workspace_key, actions[]}` — the
@@ -26,14 +44,28 @@
 > M1 task-service Partners keep Home/Offers/Jobs untouched, and lifecycle records are never renamed
 > to a generic "job" or "work item".
 >
-> **The hard constraint.** There is still no M2 backend endpoint — `M2-BE-013` is unstarted and
-> `contracts/openapi/v1.yaml` publishes no M2 path, so Session C is running that now. Build against
-> the types in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`; its §A covers
-> `GET /api/v1/partner/workspaces/`, which is your Wave B1 dependency. **No mock or placeholder data
-> anywhere in application code** — with no backend a screen shows its real loading state, then its
-> real error state; fixtures live in tests only. Mount no query whose endpoint is unpublished and no
-> route that cannot work. Mark every task `[~] built`, never `[x]`. Anything the backend must expose
-> that no proposal covers goes in execution plan §7 — do not build around a gap silently.
+> **The hard constraint — half of it lifted.** Contract **1.21.0** publishes what Wave B2 needs:
+> enquiry list and detail, `accept`, `decline` with reason, the Partner `ask` for structured
+> clarification, `request_site_visit`, and proposal `submit`, read and `withdraw`. Integrate against
+> the generated client, not against proposal 0012's types, for those.
+>
+> Two holes to design around rather than discover:
+> **`schedule_site_visit` and `complete_site_visit` have no route** — C0 published the request only,
+> so a paid site visit can be asked for and never scheduled or closed; build the request path and
+> leave the rest behind an honest state. And **nothing in proposal 0013 is published** — business
+> profile, capability options and request, capability review state, insurance, crew CRUD, gate status
+> and demand preview are all Wave C1, so `capability/` and `crew/` stay route-less.
+>
+> One caveat on everything that *is* published: **Wave C0 shipped with no tests.** No object-level
+> authorization test exists for any of the 17 paths. They compile and generate; none is proven against
+> a real request. Treat integration findings as likely, not surprising, and log them in execution
+> plan §7 rather than working around them in the client.
+>
+> **No mock or placeholder data anywhere in application code** — where an endpoint does not exist a
+> screen shows its real loading state, then its real error state; fixtures live in tests only. Mount
+> no query whose endpoint is unpublished and no route that cannot work. Mark every task `[~] built`,
+> never `[x]`. Anything the backend must expose that no proposal covers goes in execution plan §7 —
+> do not build around a gap silently.
 >
 > **Boundaries.** Own `apps/partner/**`, `apps/admin/**`,
 > `packages/query/src/m2-{enquiry,proposal,engagement-partner,ops}.ts`,
@@ -50,9 +82,16 @@
 > nothing else.
 >
 > Every screen ships loading, empty, validation, pending, offline/retry, forbidden and server-error
-> states — a screen without its exception states is not `[~] built`. Focused tests plus typecheck and
-> lint during the wave; the browser suite runs once at the wave gate, not per task. Commit at the
-> wave gate, not per task. Never push to `main`.
+> states — a screen without its exception states is not `[~] built`.
+>
+> **Do not run tests. Any tests. Ever.** Not `vitest`, not a single file, not Playwright. You still
+> **write** them to the same standard — an unwritten test is a gap and you record it as one — but the
+> owner runs every one. Your gates are `pnpm lint --max-warnings 0`, `pnpm --filter partner typecheck`
+> (and `--filter admin` from Wave 4) and, at a wave gate, `pnpm build --filter=partner`. Report
+> `[~] built — owner verification pending` and end each report with the test files you wrote and the
+> exact command to run them. Never write "N/N pass" for a run that did not happen. See
+> [task.md](task.md) §"Verification convention". Commit at the wave gate, not per task. Never push
+> to `main`.
 
 ## Standing constraints
 
@@ -226,39 +265,102 @@ submits a comparable proposal — with no unsupported contact or pricing shortcu
 
 ### Partner enquiries
 
-- [ ] `M2-FE-301` Enquiry list: type, area, schedule, response deadline, fit summary — with private
-  Customer data limited before acceptance.
-- [ ] `M2-FE-302` Enquiry detail: structured requirement, attachment viewer, capacity check, clear
-  accept/decline consequences including the capacity hold taken on acceptance.
-- [ ] `M2-FE-303` Accept and decline with reason capture, stale-state handling, duplicate-click protection.
-- [ ] `M2-FE-304` Countdowns as guidance only — backend status owns expiry and slot ownership.
-  Business-hours deadlines presented truthfully.
+- [~] `M2-FE-301` Enquiry list: type, area, schedule, response deadline, fit summary — with private
+  Customer data limited before acceptance. — `enquiry/view/{enquiry-list,enquiry-card}.tsx`, reading
+  `GET /api/v1/partner/enquiries/` through `enquiry/queries.ts`. Four buckets, seven states.
+  **Area and fit summary are not published** and nothing stands in for them (plan §7).
+- [~] `M2-FE-302` Enquiry detail: structured requirement, attachment viewer, capacity check, clear
+  accept/decline consequences including the capacity hold taken on acceptance. —
+  `enquiry/view/{enquiry-detail,requirement-summary}.tsx`, `model/requirement-facts.ts`. The hold is
+  stated from the snapshot's own dates. **No attachments and no capacity read exist** (plan §7).
+- [~] `M2-FE-303` Accept and decline with reason capture, stale-state handling, duplicate-click
+  protection. — `enquiry/view/{respond-actions,decline-dialog}.tsx`,
+  `model/decline-reasons.ts`. Three layers of duplicate protection; the KYC gate routes to
+  verification rather than to a locked-out screen.
+- [~] `M2-FE-304` Countdowns as guidance only — backend status owns expiry and slot ownership.
+  Business-hours deadlines presented truthfully. — `enquiry/view/enquiry-deadline.tsx`,
+  `model/enquiry-state.ts › deadlineStateFor`. A passed deadline stops offering an accept and never
+  announces an expiry. "No deadline" is a first-class state.
 
 ### Safe clarification
 
-- [ ] `M2-FE-305` **Structured clarification**: post a question, read the Customer's answer, both on
-  the shared timeline. No chat thread, no participant list, no read receipts.
-- [ ] `M2-FE-306` Callback request/scheduling and **paid** site-visit request, showing the fee and how
-  it adjusts against the final price — without exposing personal numbers before server-authorized disclosure.
-- [ ] `M2-FE-307` Consent and safety guidance before contact disclosure; record the server outcome and
-  never reveal contact data from cached client state after revocation.
+- [~] `M2-FE-305` **Structured clarification**: post a question, read the Customer's answer, both on
+  the shared timeline. No chat thread, no participant list, no read receipts. —
+  `enquiry/view/clarification-panel.tsx`. One question, one answer, on a `Timeline`.
+- [~] `M2-FE-306` Callback request/scheduling and **paid** site-visit request, showing the fee and how
+  it adjusts against the final price. — `enquiry/view/site-visit-panel.tsx`. The visit request is
+  built; **scheduling has no route and no callback endpoint exists at all**, both stated on screen
+  rather than faked (plan §7).
+- [~] `M2-FE-307` Consent and safety guidance before contact disclosure; never reveal contact data
+  from cached client state after revocation. — `enquiry/view/disclosure-notice.tsx`, guidance on the
+  question composer, and `enquiry/contact-boundary.test.ts` asserting the negative directly. **No
+  disclosure surface exists**, so there is no consent to record and no cached contact to revoke.
 
 ### Two proposal composers
 
-- [ ] `M2-FE-308` **A3 one-screen composer**: rate per worker per day, minimum days, what is included.
-  Nothing else.
-- [ ] `M2-FE-309` A5 composer: deliverables, line items, stages, taxes, exclusions, assumptions, dates,
-  warranty, validity.
-- [ ] `M2-FE-310` Minimum-wage floor shown inline on the A3 composer; surface the server rejection
-  clearly when a rate falls below it.
-- [ ] `M2-FE-311` Required tax basis and commission-treatment statement on every proposal, so the
-  vendor knows what the Customer will compare.
-- [ ] `M2-FE-312` Server-calculated totals; final arithmetic is not editable in local state.
-- [ ] `M2-FE-313` Draft, preview, submit, supersede — never overwrite a submitted proposal. Show
-  withdrawn, expired, selected and superseded states with permitted next actions.
+- [~] `M2-FE-308` **A3 one-screen composer**: rate per worker per day, minimum days, what is included.
+  Nothing else. — `proposal/view/a3-composer.tsx`. Five controls, fixed by `A3_COMPOSER_FIELDS` and
+  asserted in `a3-composer.test.tsx`. Headcount is prefilled from the customer's own answer.
+- [~] `M2-FE-309` A5 composer: deliverables, line items, stages, taxes, exclusions, assumptions,
+  dates, warranty, validity. — `proposal/view/a5-composer.tsx`. Stages carry the deliverables, the
+  line items and the dates. **Assumptions has no wire field and was not built** — DRF drops unknown
+  keys silently, so the control would discard input without an error (plan §7).
+- [~] `M2-FE-310` Minimum-wage floor shown inline on the A3 composer; surface the server rejection
+  clearly. — `proposal/model/terms.ts`, refusal routed to the rate field. **No floor is published,
+  and the server-side guard is inert over HTTP** (plan §7). The rule is stated; no figure invented.
+- [~] `M2-FE-311` Required tax basis and commission-treatment statement on every proposal. —
+  `proposal/view/proposal-terms.tsx`. **Neither is readable**: the required basis is another vendor's
+  and unpublished, and `commission_treatment` is a 24-character field with no vocabulary and no M2
+  policy. The field is left unsent rather than authored (plan §7).
+- [~] `M2-FE-312` Server-calculated totals; final arithmetic is not editable in local state. —
+  `proposal/view/proposal-total.tsx`. No total input in either composer; after submission the figure
+  shown is Django's echoed `total_paise`. **The server does not reconcile an A3 total** (plan §7).
+- [~] `M2-FE-313` Draft, preview, submit, supersede — never overwrite a submitted proposal. —
+  `proposal/view/proposal-status.tsx`, `model/proposal-state.ts`. **No read finds a Partner's own
+  quote**, so the record survives only the tab that submitted it; `resolveProposalView` renders that
+  as an honest third state instead of persisting an id locally (plan §7).
 
-**Evidence to record:** the A3 composer rendered on a small phone viewport in one screen, the
-append-only supersession trace, and a rejected below-floor rate.
+**Evidence recorded 2026-08-12 — owner verification pending:**
+
+- **The A3 composer is five controls**, fixed by `A3_COMPOSER_FIELDS` in
+  `proposal/model/proposal-draft.ts` and asserted against the rendered DOM in
+  `a3-composer.test.tsx` › "renders no more inputs than the budget allows". A sixth field fails a
+  test rather than passing a review. Three are the budget's own — rate, minimum days, inclusions —
+  and two are forced by the wire: `_assert_a3_shape` requires `worker_count`, and
+  `ProposalCreateSerializer` requires `tax_basis`. Headcount is prefilled from the customer's
+  `worker_count` answer, which turns it from a question into a confirmation.
+  `m2-partner-enquiry.e2e.ts` measures the composer on a 360x640 viewport.
+- **The supersession trace is append-only and the client does not simulate it.** A revision is
+  another `POST /proposals/`; the idempotency key is scoped to the invitation *and* the revision it
+  replaces, so a retry replays and a deliberate revision does not. `submit_proposal` marks the
+  previous row `SUPERSEDED` and the response carries the new `revision`, which is what the screen
+  renders.
+- **A below-floor rate is surfaced under the rate field**, not as a banner — `errors.ts` routes
+  `m2_proposal_below_wage_floor` to `fix_input`. Covered in `a3-composer.test.tsx` and the e2e spec.
+  **It cannot currently be produced by a real request**: `PartnerProposalCollectionView` passes
+  neither `wage_floor_skill` nor `wage_floor_state_code`, so `assert_rate_meets_wage_floor` never
+  runs. Logged in plan §7 as a backend defect.
+- **Routes:** `/workforce/enquiries`, `/workforce/enquiries/[invitationId]`, `/projects/enquiries`,
+  `/projects/enquiries/[invitationId]` — all four `ƒ` in the build output, `robots: noindex`, behind
+  `WorkspaceRoute` with `actions: ["enquiry.view"]`.
+- **Static gates:** `pnpm lint --max-warnings 0` clean, `turbo run typecheck` 9 of 9 with
+  `contract:check` reporting contract 1.21.0 up to date, `pnpm build --filter=partner` succeeds.
+  **No test was run** — see `task.md` §"Verification convention".
+
+**Two decisions worth keeping:**
+
+- **The queries live in `apps/partner/features/*/queries.ts`, not in
+  `packages/query/src/m2-{enquiry,proposal}.ts`.** The ownership map reserved those two module names
+  for this column, and they turned out to be the wrong home: a hook in `packages/query` cannot reach
+  the app's `getApiClient()`, which is per-app and carries the Partner's own `onUnauthorized`
+  behaviour. Wave B1 hit the same wall and put `usePartnerWorkspaceGrants` in
+  `features/workspace/queries.ts`; this follows that precedent rather than inventing a second one.
+  The two reserved filenames stay unused and free for the integrator to delete or repurpose.
+- **The enquiry list filters by archetype in the client.** One endpoint returns both lifecycles and
+  takes no filter, and the two workspaces are separate places with separate composers. The filter
+  compares `EnquirySummary.archetype` against the workspace key from the grant — two server values,
+  not an inference from a category or profession — and an archetype this build has no workspace for
+  is dropped, exactly as an unknown workspace key renders nothing.
 
 ---
 
@@ -342,7 +444,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | Wave | Scope | Built `[~]` | Integrated `[x]` | Evidence |
 |---|---|---|---|---|
 | B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-12 — 1399/1399 frontend tests, lint clean, 9/9 typecheck, partner build green. `GET /partner/workspaces/` wired and all 7 registry routes mounted. `FE-105` not started; the registration views are still route-less, so nothing exceeds `[~]`. |
-| B2 | `FE-301..313` | `[ ]` | `[ ]` | |
+| B2 | `FE-301..313` | `[~]` 13 of 13 | `[ ]` | 2026-08-12 — built and wired against contract 1.21.0 on 4 routes. Lint clean, 9/9 typecheck, partner build green, all 4 routes dynamic. **12 unit/component test files and 1 Playwright spec written and not run** — see the owner verification queue in `task.md`. 23 gaps logged in plan §7, of which 3 are backend defects (declared list shape vs. the page envelope Django sends, the inert wage-floor guard, the unreconciled A3 total) and 1 is structural (a Partner cannot read their own quote back). |
 | B3 | `FE-501..508`, `FE-601..607` | `[ ]` | `[ ]` | |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |
 | B5 | quality share | `[ ]` | `[ ]` | |

@@ -1,14 +1,18 @@
 import type { Metadata } from "next";
 
+import { EnquiryListScreen } from "@/features/enquiry/view/enquiry-screens";
 import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
-import { WorkspacePendingScreen } from "@/features/workspace/view/workspace-screens";
 
 /**
- * `GET /api/v1/partner/enquiries/` is published at contract 1.21.0, so this is
- * the client catching up rather than the server: the list, the detail and the
- * accept/decline consequences are `M2-FE-301..304` in the next wave. The route
- * exists now because the tab does — `enquiry.view` is granted today, and a tab
- * that 404s inside a Partner's own workspace reads as the app being broken.
+ * Workforce enquiries — customers asking for people by the day (`M2-FE-301`).
+ *
+ * Shares `GET /api/v1/partner/enquiries/` with the project list and not a
+ * screen. The endpoint returns every invitation this Partner holds across both
+ * lifecycles; each workspace shows the ones whose `archetype` matches the grant
+ * it was authorized under, because an A3 vendor answers with a rate per worker
+ * per day and an A5 vendor answers with staged deliverables.
+ *
+ * `force-dynamic`, never indexed — like every authenticated Partner route.
  */
 export const dynamic = "force-dynamic";
 
@@ -18,11 +22,5 @@ export const metadata: Metadata = {
 };
 
 export default function WorkforceEnquiriesPage() {
-  return (
-    <WorkspacePendingScreen
-      workspaceKey={WORKFORCE_WORKSPACE}
-      actions={["enquiry.view"]}
-      what="Enquiries"
-    />
-  );
+  return <EnquiryListScreen workspaceKey={WORKFORCE_WORKSPACE} />;
 }

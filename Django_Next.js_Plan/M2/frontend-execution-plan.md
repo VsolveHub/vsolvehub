@@ -1,0 +1,477 @@
+# M2 Frontend Execution Plan — parallel and sequential split
+
+**Owner:** Claude
+**Purpose:** run the M2 frontend as **two concurrent sessions without file conflicts**, and make the
+sequential spine explicit so nothing is started before the thing it depends on exists.
+**Source of tasks:** [03-frontend-tasks.md](03-frontend-tasks.md) — task IDs are not re-issued here.
+**Master status:** [task.md](task.md)
+
+| File | Who reads it |
+|---|---|
+| This file | Both sessions + whoever integrates. Ownership map, conflict rules, sync gates. |
+| [frontend-session-a.md](frontend-session-a.md) | **Session A — Customer application** |
+| [frontend-session-b.md](frontend-session-b.md) | **Session B — Partner + Operations applications** |
+
+---
+
+## 1. The one thing that is actually sequential
+
+Everything else is a false dependency. The real spine is:
+
+```text
+Wave 0  FE0 foundation (M2-FE-001..011)          <- SINGLE SESSION. Blocks everything.
+          |
+          +---------------------------+
+          |                           |
+Wave 1-4  Session A (Customer)        Session B (Partner + Operations)
+          |                           |
+          +---------------------------+
+          |
+Wave 5   Cross-app release (M2-FE-801, 805, 806, 809, 810, 811)  <- SINGLE SESSION again.
+```
+
+**Wave 0 cannot be parallelised.** It writes the shared files — query keys, error table, workspace
+grants, shared components, analytics names, the contract proposal. Two sessions editing those at once
+is exactly the conflict this plan exists to prevent. It is in flight now; the fan-out starts when its
+gate passes (§6).
+
+**Wave 5 cannot be parallelised.** It is cross-app by definition: one permission matrix, one redaction
+pass, one flow-weight audit, one CI gate, one feature-flag surface.
+
+Between them, Session A and Session B share **no source file**. The split is by application:
+
+| | Session A | Session B |
+|---|---|---|
+| Application | `frontend/apps/customer` | `frontend/apps/partner`, `frontend/apps/admin` |
+| Task groups | FE2, FE4, FE5A-customer, FE5B-customer, FE6-cases | FE1, FE3, FE5A-partner, FE5B-partner, FE6-queues |
+| Task count | 49 | 48 |
+
+---
+
+## 2. Contract reality — partially published since 11 August 2026
+
+> **Superseded premise.** This section used to read "there is no backend HTTP surface". That was
+> true until Wave C0 landed. It is no longer. Kept as a heading rather than deleted because the
+> two-state tracking rule below is still how every task is marked.
+
+`contracts/openapi/v1.yaml` is at **1.21.0 and carries 17 M2 paths** — requirement capture, quote
+teasers, clarification, Partner enquiries, proposals and `GET /partner/workspaces/`. The generated
+client contains them and `pnpm typecheck` is green across all 9 packages.
+
+**What is still unpublished, and therefore still caps its tasks at `[~]`:**
+
+| Surface | Wave | Consequence for the frontend |
+|---|---|---|
+| Attachment upload (`M2-BE-202`) | C1 | The Details screen's upload path has no server. The record is published read-only. |
+| All of proposal 0013 — business profile, capability options/request/review-state, insurance, crew CRUD, gate status, demand preview | C1 | Session B's whole `/apply` express path and crew roster are route-less by necessity. |
+| Unlock checkout and state, unlocked quotes, selection, rejection, re-validation | C2 (BE4) | Session A's Wave A2 has no domain layer to integrate against, let alone an endpoint. |
+| Engagement and stage spine | C3 | Wave 3 in both columns. |
+| Operations queues, cases, assisted capture | C6 | Wave 4 in both columns. |
+
+**One caveat that applies to everything already published.** C0 shipped with lint, strict types, a
+migration check and schema validation — and **no tests**. No object-level authorization test exists
+for any of the 17 paths. They compile and generate; none is proven against a real request. Treat
+integration findings as likely, not surprising.
+
+The frontend completion standard in `03-frontend-tasks.md` requires the generated client and real
+backend states, so a task reaches `[x]` only once it is re-pointed and verified against real server
+states — publication alone does not promote it.
+
+Both sessions therefore track two states per task:
+
+| Mark | Means |
+|---|---|
+| `[~] built` | Screen, states and logic built against the approved contract proposal or the generated client; wired to a typed seam; unit/component tests **written**; lint and typecheck green. |
+| `[x] integrated` | Re-pointed at the generated OpenAPI client, verified against real backend states, all seven UI states proved, a11y and responsive checked — **and the owner has run the tests**. |
+
+> **Sessions do not run tests, effective 12 August 2026.** Write them; the owner runs them. Static
+> gates (`pnpm lint`, `pnpm typecheck`, `pnpm build`) are still required before reporting a wave.
+> A session may never self-promote a task to `[x]` on test grounds. See [task.md](task.md)
+> §"Verification convention" for the full rule and the reasoning.
+
+Rules while any part of the backend is still absent:
+
+1. Build against the types in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`
+   and `0013-m2-partner-capability-crew-and-gates.md` (and any later M2 proposal). Do not invent
+   endpoint shapes privately — add them to the proposal.
+2. **No mock or placeholder data anywhere in application code.** Where the endpoint does not exist
+   the screen shows its real loading state, then its real error state. Fixtures live in tests only.
+3. No query may use a key from `m2-keys.ts` until its endpoint is published — that module says so
+   itself. Until then the hooks exist but are not mounted on a route that claims to work. The keys
+   for the 17 published paths are now free to mount; everything in the table above is not.
+4. When the contract lands, integration is a **re-point, not a rewrite**. If a task cannot be
+   re-pointed in a single file change, its seam was drawn wrong — fix the seam, not the screen.
+
+---
+
+## 3. File ownership map — the conflict contract
+
+A session may create, edit or delete **only** the paths it owns. No exceptions without a handoff
+note in §7.
+
+### Owned exclusively
+
+| Path | Owner |
+|---|---|
+| `frontend/apps/customer/**` | **A** |
+| `frontend/apps/partner/**` | **B** |
+| `frontend/apps/admin/**` | **B** (until Wave 4 — then split by feature folder, below) |
+| `frontend/packages/query/src/m2-requirement.ts` | A |
+| `frontend/packages/query/src/m2-quotes.ts` | A |
+| `frontend/packages/query/src/m2-engagement-customer.ts` | A |
+| `frontend/packages/query/src/m2-enquiry.ts` | B |
+| `frontend/packages/query/src/m2-proposal.ts` | B |
+| `frontend/packages/query/src/m2-engagement-partner.ts` | B |
+| `frontend/packages/query/src/m2-ops.ts` | B |
+| `frontend/e2e/m2-customer-*.e2e.ts` | A |
+| `frontend/e2e/m2-partner-*.e2e.ts`, `m2-ops-*.e2e.ts` | B |
+| `Django_Next.js_Plan/M2/frontend-session-a.md` | A |
+| `Django_Next.js_Plan/M2/frontend-session-b.md` | B |
+
+The customer/partner engagement split is deliberate. Both roles read the same `Engagement` and
+`EngagementStage` spine, but through role-scoped endpoints with different permitted actions. Two thin
+hook files that share one key factory and one generated type beat one shared file two sessions fight
+over. If real duplication appears at the Wave 4 sync, the integrator folds it — that is a ten-minute
+job then, and a week of merge conflicts now.
+
+### Wave 4 admin split (`frontend/apps/admin`)
+
+Predefined so the two sessions never open the same folder:
+
+| Folder | Owner | Tasks |
+|---|---|---|
+| `features/m2-requests/**` | B | `M2-FE-701..705` — queues, unified timeline, transition audit, privileged actions, assisted quote capture |
+| `features/m2-cases/**` | A | `M2-FE-706..711` — case intake, remedies, refund/payout states, dual-confirmation cancellation, leakage signals, ops-touches measure |
+| `app/operations/**` route files | **B only.** A hands route stubs to B at the Wave 4 sync. | — |
+
+### Frozen after Wave 0 — read-only for both sessions
+
+| Path | Why |
+|---|---|
+| `frontend/packages/query/src/m2-keys.ts` | The key factory and freshness tiers. A private edit desynchronises every invalidation. |
+| `frontend/packages/query/src/freshness.ts` | Tier definitions. |
+| `frontend/packages/api-client/src/errors.ts` | The 29 M2 codes + category layer. |
+| `frontend/packages/query/src/error-presentation.ts` | The one error mapping layer. |
+| `frontend/packages/api-client/src/generated/**` | Generated. Never hand-edited. |
+| `frontend/packages/ui/src/**` | Shared components. See the promotion rule below. |
+| `contracts/proposals/**` | Append a new numbered proposal; never rewrite another session's. |
+
+Need a change to a frozen file? **Do not edit it.** Log the request in §7, keep building against the
+current shape, and the integrator lands it at the next sync gate. A frozen file changing under a
+running session is how both sessions end up wrong at once.
+
+### Shared barrels — append-only, in your own marked block
+
+`frontend/packages/query/src/index.ts` and `frontend/packages/ui/src/index.ts` must carry these
+markers before fan-out (Wave 0 closing task). Each session appends only inside its own block:
+
+```ts
+// --- M2 customer surface (session A) ---
+// --- M2 partner + operations surface (session B) ---
+```
+
+One export line per module, appended at the end of your block. Textual conflicts become impossible
+because the two blocks never touch.
+
+### New shared component rule
+
+Do **not** add to `packages/ui` mid-wave. Build it inside your own app under
+`features/<area>/view/`. If the other session needs the same thing, log it in §7 and the integrator
+promotes it to `packages/ui` at a sync gate. Two sessions inventing the same `<Timeline>` in the same
+package on the same day is the single most likely way this plan fails.
+
+---
+
+## 4. Repository setup — pick one
+
+### Option 1 (recommended): two worktrees, two branches
+
+Full isolation: separate `node_modules` state, separate `.next` build locks, separate git index, no
+turbo cache contention. Both branch from the M2 branch and merge back into it — **never into `main`**.
+
+```bash
+git -C C:/dev/vsolve worktree add ../vsolve-fe-customer -b feat/m2-fe-customer feat/m2-workforce-projects
+```
+
+```bash
+git -C C:/dev/vsolve worktree add ../vsolve-fe-partner -b feat/m2-fe-partner feat/m2-workforce-projects
+```
+
+Cost: each worktree needs its own `pnpm install`, and the dev server runs from whichever tree is being
+looked at. Merge both back into `feat/m2-workforce-projects` at each sync gate.
+
+### Option 2: one tree, one branch, strict ownership
+
+Simpler for running a single dev server. The ownership map above already makes file conflicts
+impossible; what remains is process contention. Then:
+
+- **Never `git add -A` or `git add .`** — stage only paths you own, by explicit path.
+- Do not run `pnpm build` or `pnpm dev` in both sessions at once; `.next` and turbo caches collide.
+- `pnpm lint` and `pnpm typecheck` are safe concurrently but slow; prefer filtered runs
+  (`pnpm --filter @vsolve/customer typecheck`).
+
+Commits stay rare either way — build the wave, commit at the wave gate, not per task.
+
+---
+
+## 5. Wave-by-wave schedule
+
+| Wave | Session A (Customer) | Session B (Partner + Ops) | Parallel? |
+|---|---|---|---|
+| **0** | — | — | **No.** Foundation session only. `M2-FE-001..011`. |
+| **1** | A1 · Requirement + tracking — `FE-201..215` | B1 · Registration + workspace — `FE-101..115` | Yes |
+| **2** | A2 · Teasers, unlock, selection, engagement — `FE-401..418` | B2 · Enquiries, clarification, proposals — `FE-301..313` | Yes |
+| **3** | A3 · Customer fulfilment — `FE-509..512`, `FE-608..613` | B3 · Partner fulfilment — `FE-501..508`, `FE-601..607` | Yes |
+| **4** | A4 · Ops cases and money — `FE-706..711` | B4 · Ops queues and actions — `FE-701..705` | Yes, split by feature folder |
+| **5** | — | — | **No.** `FE-801, 805, 806, 809, 810, 811` + all gates. |
+
+Waves are a **sync cadence, not a race**. Neither session waits for the other to start its next wave;
+they only re-converge at the gates. If one session runs ahead it takes the next wave in its own
+column, never a task from the other column.
+
+### Why these pairings are safe
+
+- **Wave 1** touches disjoint apps and disjoint query modules. The only shared thing is the workspace
+  registry, and that is B's file already (`apps/partner/features/workspace/`), consumed by nobody in A.
+- **Wave 2** looks coupled — A's quote comparison renders B's proposals — but they meet only through
+  the contract, not through code. A reads a proposal; B writes one. Different apps, different
+  endpoints, different files.
+- **Wave 3** is the one to watch. Both build against the same `Engagement`/`EngagementStage` spine, so
+  a misread of the state machine shows up twice. Both sessions read
+  [07-state-machines-and-permissions.md](07-state-machines-and-permissions.md) as the authority, and
+  the Wave 3 gate diffs the two implementations for state-name drift.
+- **Wave 4** is folder-split inside one app. B owns the route files; A works entirely inside
+  `features/m2-cases/**` and hands its route needs to B at the gate.
+
+---
+
+## 6. Gates — the only points where the sessions synchronise
+
+Each gate is run by whoever is integrating. Nothing crosses a gate on a claim; it crosses on evidence.
+
+### Gate 0 — fan-out gate (blocks Waves 1+)
+
+- [ ] `M2-FE-001..005` route and navigation IA document exists and is approved.
+- [ ] `M2-FE-006` contract proposal `0012-m2-capability-and-requirement-surface.md` written and filed.
+- [ ] `M2-FE-007` workspace registry + switcher; unknown key renders nothing.
+- [ ] `M2-FE-008` shared components landed in `packages/ui`.
+- [ ] `M2-FE-009` 29 error codes + category layer.
+- [ ] `M2-FE-010` keys, freshness tiers, command→invalidation map.
+- [ ] `M2-FE-011` analytics naming + redaction rules.
+- [ ] Barrel marker comments added to both shared `index.ts` files (§3).
+- [ ] `pnpm lint` and `pnpm typecheck` pass.
+- [ ] `task.md` and `03-frontend-tasks.md` updated with evidence.
+- [ ] `03-frontend-tasks.md` header links this plan and both session files; `task.md` links this plan
+      from its delivery-sequence section. **Deliberately left to the foundation session** — those two
+      files were being written while this plan was drafted, and a concurrent edit would have been the
+      first conflict this plan is supposed to prevent.
+
+### Gate 1 / 2 / 3 — wave sync
+
+- [ ] Both columns at `[~] built` for the wave, with per-task evidence in the session file.
+- [ ] Branches merged into `feat/m2-workforce-projects` (Option 1) or both columns committed (Option 2).
+- [ ] `pnpm lint` + `pnpm typecheck` pass **on the merged tree**, not just per session.
+- [ ] Handoff log (§7) drained: frozen-file changes landed, shared components promoted.
+- [ ] Gate 3 only: state names, stage transitions and permitted actions diffed across the two
+      implementations against `07-state-machines-and-permissions.md`.
+
+### Gate 4 — Operations gate
+
+- [ ] `features/m2-requests` and `features/m2-cases` compose in one admin shell without duplicate
+      timeline or money components.
+
+### Gate 5 — release gate
+
+The FE7 gate in `03-frontend-tasks.md`, unchanged.
+
+---
+
+## 7. Cross-session logs
+
+Both sessions append here. This is the only file both sessions write, and only ever by appending a
+row — keep edits to one line so a merge stays trivial.
+
+### Frozen-file change requests
+
+| Date | From | File | Change needed | Why | Landed at gate |
+|---|---|---|---|---|---|
+| 2026-08-11 | B | `packages/api-client/src/errors.ts` | Add `m2_business_type_invalid` (`fix_input`), `m2_capability_already_requested` (`choose_again`), `m2_capability_transition_invalid` (`contact_support`) | Proposal 0013 introduces three codes outside the frozen 29. Until they land they fall through to the generic refusal path. | |
+| 2026-08-12 | A | `packages/query/src/m2-keys.ts` | `requirements.duplicates` should take `{addressId, requestedStart, variantId}`, not `{addressId, serviceBy, categorySlug}` | The published `GET /requirements/duplicate-check/` matches on `address_id`, `requested_start` (a date-*time*) and `variant_id`. The key's three slots are still the three inputs that decide the answer, so the cache is correct; only the labels are wrong. `features/requirement/queries.ts` passes the right values under the stale names with a comment. | |
+| 2026-08-12 | A | `e2e/support/responsive.ts` | `RouteUnderTest` needs an optional `setup(page)` hook | Every authenticated route has to install its API before `goto`, or the session gate redirects to `/login` and the readiness check passes against that page instead. Worked around with a `test.describe` + `beforeEach` wrapper, copied from `bookings.e2e.ts` — three specs now carry the same wrapper. | |
+| 2026-08-12 | B | `packages/api-client/src/errors.ts` | Add `m2_wage_floor_unavailable` (`fix_input`) | Contract 1.21.0 documents it on `POST /proposals/` — "no floor is loaded for the state and skill; this fails closed rather than guessing" — and it is not in the frozen 29, so it falls through to the generic refusal path instead of landing under the rate field beside `m2_proposal_below_wage_floor`. A vendor is told "we could not complete this" for something they can fix. | |
+
+### Shared component promotion requests
+
+| Date | From | Component (current path) | Also needed by | Promoted |
+|---|---|---|---|---|
+| | | | | |
+
+### Contract gaps found while building
+
+Anything the backend must expose that no proposal covers. Do not build around it silently.
+
+| Date | From | Task | Missing endpoint / field | Proposal filed |
+|---|---|---|---|---|
+| 2026-08-11 | B | `M2-FE-101` | Masked live requirement summaries — `GET /api/v1/partner/demand-preview/`. Nothing in 0012 lets an unapproved Partner see demand. | `0013` §D2 |
+| 2026-08-11 | B | `M2-FE-102` | Progressive-gate status read — `GET /api/v1/partner/gates/`. The three `assert_*` guards exist in `capabilities.py` but have no read projection, so the client would have to author the "why now" copy. | `0013` §D1 |
+| 2026-08-11 | B | `M2-FE-103` | Business type — `GET`/`PUT /api/v1/partner/business-profile/`. `PartnerBusinessProfile` is migrated; `PartnerApplication` carries no `business_type`. | `0013` §A |
+| 2026-08-11 | B | `M2-FE-104` | Capability options and request — `GET /api/v1/partner/capability-options/`, `POST /api/v1/partner/capabilities/`. Needs server-authored `lifecycle_explanation` and `asks_for` so the client holds no archetype branch. | `0013` §B1–B2 |
+| 2026-08-11 | B | `M2-FE-106` | Worker insurance — `GET`/`PUT /api/v1/partner/insurance/`. `PartnerInsuranceDeclaration` is migrated and unreachable. | `0013` §C |
+| 2026-08-11 | B | `M2-FE-107` | Crew roster CRUD — `GET`/`POST /api/v1/partner/crew/`, `PATCH` and `archive` per membership. Must publish `membership_id` and a masked phone, never the global `crew_member_id`. | `0013` §E |
+| 2026-08-11 | B | `M2-FE-109` | Capability review state — `GET /api/v1/partner/capabilities/`. This is what separates "not applied" / "under review" / "suspended", which `08-frontend-information-architecture.md` §4 lists as not implementable from grants alone. | `0013` §B3 |
+| 2026-08-11 | B | `M2-FE-110` | `GET /api/v1/partner/workspaces/` is specified in 0012 §A1 but unpublished, so the grants query stays unmounted and `PartnerShell` keeps its `workspaceGrants` prop seam. Not a gap — a dependency. | `0012` §A1 |
+| 2026-08-11 | B | `M2-FE-109` | **A rejection is indistinguishable from a withdrawal.** `_ALLOWED_TRANSITIONS` in `capabilities.py` sends both Operations' refusal and the Partner's own exit to `WITHDRAWN`, and 0013 §B3 publishes no actor. "We said no" and "you closed this" need different copy and different next actions. Needs either a `REJECTED` status or an actor/reason on the record. | `0013` §B3 — open question |
+| 2026-08-11 | B | `M2-FE-109` | **No document expiry exists.** `PartnerDocument` (contract 1.20.0) has `status`, `review_reason`, `reviewed_at` and no expiry field, so the expired-document state the task requires has nothing to read. Needs `expires_at` on the document, or a document-validity projection. | not filed — needs a backend decision on where validity lives |
+| 2026-08-11 | A | `M2-FE-207` | **The four optional extras have no wire field.** Proposal 0012 §B and contract 1.21.0 both carry `answers`, `additional_details` and nothing for `callback_preference`, `site_visit_interest`, `access_constraints` or `preferred_communication`. They are not catalogue configuration — the same four for every category — so there is no question schema to render them from either. Built as client-owned shapes in `features/requirement/model/optional-details.ts`, held in the draft, mapped in `adapters/` when a shape lands. Requesting one nullable object per key on `PATCH /requirements/{requirement_id}/`. | not filed — needs a 0012 amendment |
+| 2026-08-12 | B | `M2-FE-301` | **The declared list shape is not the shape Django sends.** `m2_partner_enquiry_list` is declared `EnquirySummary[]`; `PartnerEnquiryCollectionView.get` returns `EnquiryCursorPagination.get_paginated_response(...)`, i.e. `{next, previous, results}`. Code written against the generated type — `data.map(...)` — throws on the first real request and fails no type check. Narrowed at the seam in `features/enquiry/queries.ts › readEnquiryPage`, which accepts both. **`m2_requirement_list` has the same defect** (`RequirementCursorPagination`), so Session A's `My requests` is exposed to it too. | not filed — a schema correction, not a new endpoint |
+| 2026-08-12 | B | `M2-FE-301` | **The enquiry list cannot be paged.** `EnquiryCursorPagination` returns twenty rows, and the operation publishes no `cursor` query parameter, so the typed client has nothing to send. A Partner with more than twenty enquiries sees a truncated inbox. The screen states the truncation rather than hiding it; the parameter is what would remove the notice. | not filed |
+| 2026-08-12 | B | `M2-FE-301` | **Three fields are declared non-null and are nullable in the database.** `requested_start` and `service_by` come from `RequirementSnapshot` (`null=True`); `responds_by` comes from `VendorInvitation` (`null=True`) and is null for every service area with no operating windows or configuration with no SLA hours — `matching._invitation_deadline` returns `None`. None is an edge case. Formatting them as declared prints `Invalid Date` into a live enquiry. Compensated in one adapter, `features/enquiry/model/wire.ts`. | not filed — a schema correction |
+| 2026-08-12 | B | `M2-FE-304` | **No `server_now` on the enquiry reads.** Every other M2 read publishes one — `RequirementDraftSerializer`, `RequirementTimelineSerializer`, `QuoteTeaserListSerializer` — and the enquiry, which is the one read carrying a hard `responds_by` deadline, does not. Countdowns fall back to `Date`-header calibration at RFC 7231's one-second granularity. Adequate for a business-hours deadline, and the wrong place to be the only endpoint without the precise source. | not filed |
+| 2026-08-12 | B | `M2-FE-301` | **No area on an enquiry, at any status.** `EnquirySummary` carries the snapshot's schedule, language and budget; the requirement's address is withheld by design and the *service area* is not published at all. "Where is this" is the biggest decision input on a list row and a vendor cannot see it. A masked area name or pin-code prefix would not disclose the customer. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-301` | **No fit summary.** `VendorInvitation.ranking_provenance` records why this vendor was invited and is never serialised. Needs a server-authored sentence — the client asserting "good fit" from a category slug would be claiming a matching decision it did not make. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-303` | **No decline-reason vocabulary.** `EnquiryDeclineRequest.reason_code` is an unconstrained `SlugField(max_length=80)`; Django stores whatever arrives and only checks it is non-empty. Free text would give Operations four spellings of one fact and teach the matcher nothing. Five codes are authored client-side in `features/enquiry/model/decline-reasons.ts`, marked as client-owned. Needs a published list, ideally aligned to `matching.ExclusionReason`. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-302` | **No capacity read.** `accept_invitation` writes an ACTIVE `CapacityHold` over the requested days and nothing publishes it, nor whether the vendor is already committed on those dates. The consequence of accepting is stated from the snapshot's own dates; the conflict warning the task asks for has nothing to read. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-302` | **No attachments on an enquiry.** `RequirementSnapshot` does not copy them and `EnquiryDetail` publishes none, so the attachment viewer has nothing to view. Downstream of `M2-BE-202` (Wave C1), but the snapshot copy is a separate decision from the upload. | tracked with `M2-BE-202` |
+| 2026-08-12 | B | `M2-FE-302` | **The Partner receives answers with no schema.** `EnquiryDetail.answers` is a raw `JSONField` keyed by question codes; the variant's `question_schema` is published to the Customer's flow and not to the vendor pricing against it. The client de-slugs codes into labels, which is presentation of a server value and not a substitute for the schema. A nested answer value cannot be rendered at all and is counted rather than paraphrased. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-313` | **A Partner cannot read their own quote back.** 1.21.0 publishes `POST /proposals/`, `GET /proposals/{id}/` and withdraw — and nothing that answers "which proposal did I send for this enquiry". `EnquiryDetail` carries `questions` and `site_visits` and no proposal. Once the id leaves the tab, the only readable truth is `status == "QUOTED"`; withdraw, the status states and the supersession trace all become unreachable. `m2QueryKeys.proposals.mine` already exists for this and stays unmounted. **Needs `GET /api/v1/proposals/?requirement=` or a `proposals` field on `EnquiryDetail`.** | `0012` amendment — the largest hole in Wave B2 |
+| 2026-08-12 | B | `M2-FE-310` | **No wage-floor read.** Nothing publishes the statutory floor for a state and skill, so the composer states the rule and shows no figure. `M2-FE-310` asks for it inline; any number on that screen would be this client inventing statutory pay. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-310` | **The wage-floor guard is inert over HTTP.** `proposals.submit_proposal` runs `assert_rate_meets_wage_floor` only when handed `wage_floor_skill` and `wage_floor_state_code`; `ProposalCreateSerializer` carries neither and `PartnerProposalCollectionView` passes neither. So `m2_proposal_below_wage_floor` is documented on the endpoint and **cannot currently be returned by it** — a below-floor A3 rate is accepted. The client surfaces the refusal correctly if it ever arrives. This is a backend defect, not a contract gap. | not filed — needs a backend fix |
+| 2026-08-12 | B | `M2-FE-311` | **The required tax basis is unreadable.** `_required_tax_basis` forces every quote on a requirement onto whichever basis the first vendor used and refuses a mismatch — against a vendor the second one cannot see. Nothing publishes the required basis, so the composer can only warn before and show Django's sentence after. Needs `required_tax_basis` on `EnquiryDetail`. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-311` | **No commission treatment exists to state.** `Proposal.commission_treatment` is `CharField(max_length=24)` with no choices, no default and no published vocabulary, and there is no M2 commission policy — `ServicePricingPolicy.commission_basis_points` belongs to the A1 task lifecycle and is unreachable from a proposal. The field is deliberately left unsent: a 24-character code authored here would be the vocabulary Operations and Finance report on, invented by a client. The composer says the customer compares the total as entered. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-312` | **An A3 total is not reconciled server-side.** `_assert_a5_shape` checks that stage amounts sum to `total_paise`; `_assert_a3_shape` checks only that rate, days and headcount are present. A workforce quote of ₹900/worker/day x 6 x 4 can carry `total_paise: 1` and be stored. The client computes the total and never lets it be typed, which is as far as a client can go. | not filed — needs a backend fix |
+| 2026-08-12 | B | `M2-FE-309` | **No published stage shape.** `ProposalCreateRequest.stages` is `unknown[]` and the domain reads one key, `amount_paise`. Everything a customer needs to read a stage — what it delivers, when it ends — is client-authored, so two vendors can send two incomparable structures and the comparison view has nothing stable to render. Shape used: `{title, deliverable, amount_paise, ends_on}`. Needs a published `ProposalStage`. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-309` | **No field for assumptions.** The task names deliverables, line items, stages, taxes, exclusions, **assumptions**, dates, warranty and validity; the wire carries no assumptions field, and DRF drops unknown keys silently — a control here would discard a vendor's caveats without an error. Not built. Exclusions were not relabelled to stand in: "not included" and "assumed true" are different promises in a dispute. | `0012` amendment |
+| 2026-08-12 | B | `M2-FE-306` | **A paid site visit can be requested and never scheduled or closed.** `schedule_site_visit` and `complete_site_visit` exist in `apps/requirements/proposals.py` and are published on no route, in either app. A requested visit sits at `REQUESTED` permanently. The panel says so rather than rendering a transition nobody can make. | not filed — C0 published the request only |
+| 2026-08-12 | B | `M2-FE-306` | **No callback flow of any kind.** The task pairs callback request and scheduling with the site visit; nothing in 1.21.0, 0012 or 0013 publishes a callback, and a callback is by definition a phone number crossing between two parties who have not been authorized to exchange one. No control was built. | `0012` amendment — or an explicit product decision that there is no callback |
+| 2026-08-12 | B | `M2-FE-307` | **No contact-disclosure surface, so no consent and no revocation.** Nothing in the Partner surface carries customer identity at any status, which makes two of the task's three clauses vacuously true — and the third, "record the server outcome", has no command whose outcome it would be. `features/enquiry/contact-boundary.test.ts` asserts the negative directly so it cannot rot. If disclosure is ever published, that test is what forces a deliberate decision. | not filed — needs a product decision on whether M2 discloses at all |
+| 2026-08-12 | B | `M2-FE-303` | **Two commands take no idempotency key.** `POST .../questions/` and `POST .../site-visits/` declare no `Idempotency-Key`, unlike accept, decline, submit and withdraw. Duplicate protection on both is the client's in-flight guard alone, so a double tap that beats it posts a second question or a second visit request. | not filed |
+| 2026-08-12 | A | `M2-FE-213` | **Confirming Session B's finding independently: `m2_requirement_list` declares `RequirementSummary[]` and `RequirementCollectionView.get` returns `RequirementCursorPagination.get_paginated_response(...)`.** Found from the view rather than from B's row, which is worth recording — two columns reached the same defect from opposite ends and neither type check caught it. Absorbed in one named function, `packages/query/src/m2-requirement.ts › readRequirementList`, which accepts both shapes and whose envelope branch is to be **deleted** when the schema is corrected. `My requests` therefore also has no `cursor` parameter to send and shows at most twenty rows. | not filed — a schema correction, same one as B's |
+| 2026-08-12 | A | `M2-FE-210` | **No merge endpoint exists.** `GAP-004` and `M2-FE-210` both ask for a merge option before a second requirement is created; `merge_duplicate_requirement` is a named command in `m2-keys.ts`'s invalidation table and **no route implements it**, in 1.21.0 or in 0012. The notice offers the honest alternative — open the request that already exists — rather than a button labelled "Add to this one" over an action nothing performs. Needs `POST /api/v1/requirements/{id}/merge/` taking the id being merged in. | `0012` amendment |
+| 2026-08-12 | A | `M2-FE-202` | **The schema the client renders and the schema the server validates are different objects.** Screen 1's questions come from `ServiceVariantConfiguration.questions` (`catalog.ServiceQuestion` rows, the same source the A1 booking workspace reads); `submit_requirement` validates against `M2VariantConfiguration.question_schema`, a JSONField nothing publishes. Their vocabularies differ too — `SINGLE_CHOICE/NUMBER` against `SELECT/INTEGER` — and `validate_scope` refuses an unknown code. A mismatch is invisible until the Customer presses Send on screen 4. The same latent split exists in A1, so this is a pre-existing convention rather than a new defect; it is materially worse here because the M2 flow is four screens long. Needs either the M2 schema published, or an assertion that the two are authored together. | not filed — needs a backend decision on which is canonical |
+| 2026-08-12 | A | `M2-FE-202` | **`MULTIPLE_CHOICE` cannot be answered.** `validate_scope` accepts `INTEGER`, `TEXT`, `BOOLEAN` and `SELECT` only, so a multiple-choice catalogue question on an A3/A5 variant produces an answer the submit command refuses whatever control is rendered. `toQuestionSet` reports it as unsupported and screen 1 says the service is not fully set up rather than rendering a dead end. | not filed |
+| 2026-08-12 | A | `M2-FE-213` | **No display name on a requirement, anywhere.** `RequirementSummary` and `RequirementDraft` both publish `category_slug` — which is `variant.service.slug`, a slug, and misnamed besides — and no service name. `My requests` titles a row by formatting the slug. Needs `service_name` on both projections. | `0012` amendment |
+| 2026-08-12 | A | `M2-FE-215` | **Resolving the 11 August flag: `quote_delivery_deadline_at` *is* on the list projection**, so the delayed-match state works. It is **not** on the detail. `GET /requirements/{id}/` answers with `RequirementDraft`, which carries no deadline, no `teaser_count` and no `closure_reason` — so a direct navigation to `/requests/{id}` shows the state and no countdown and no quote count. Filling them from the list cache would render a deadline read at some earlier moment as though it had just been confirmed, on the one screen whose job is to be truthful about a promise with a clock on it. Needs the three tracking fields on the detail projection, or a `GET /requirements/{id}/summary/`. | `0012` amendment |
+| 2026-08-12 | A | `M2-FE-212` | **`is_free` exists only on the submit *response*.** `M2-FE-212` asks the Customer to be told the requirement is free; the only published field saying so is on `RequirementSubmitted`, i.e. after they have already sent it. Review therefore says nothing about price — the designed honest state — and the promise is made on the outcome panel from the server's own field. Needs `is_free` on `RequirementDraft` so it can be stated before the button rather than after. | `0012` amendment |
+| 2026-08-12 | A | `M2-FE-211` | **There is no edit-after-submission command.** `update_draft` raises `RequirementLockedError` for anything that is not `DRAFT` and no other route amends a requirement, so the *action* half of `M2-FE-211` has nothing behind it. The explanation and the confirmation are built (`view/material-edit-notice.tsx`); `onConfirmEdit` is deliberately not supplied, so the notice states the consequence and routes to support rather than collecting a confirmation that would reach a 409. Needs an amend command that notifies invited vendors and resets `responds_by`. | `0012` amendment |
+| 2026-08-12 | A | `M2-FE-201` | **Nothing says which services accept an M2 request.** `ServiceCard` carries `bookable_variant_id` for the A1 path and no archetype; only `GET /services/{slug}/configuration/` reveals whether an A3/A5 variant exists, and only `M2VariantConfiguration` says whether it is configured. So the category-first picker offers every service and the next screen tells the Customer we do not cover this one. Needs an `accepts_requirements` flag or an archetype list on `ServiceCard`. | `0012` amendment |
+| 2026-08-12 | A | `M2-FE-203` | **`requested_start` is required for submit and was on no screen.** `_assert_submittable` refuses a requirement without "when it should start", and `find_probable_duplicate` matches within ±3 days of it — so `GAP-004` cannot work without one either. Added to screen 2 as a date, encoded to the start of the Customer's local day at the adapter seam, because the wire's field is a date-time and asking someone to name a minute for an unscoped job would be inventing precision. Not a gap in the contract — a gap in the built screen, recorded because the same omission would be invisible until a real submit. | n/a — screen corrected |
+| 2026-08-12 | A | `M2-FE-201` | **The IA's four sub-routes are mounted as one.** `08-frontend-information-architecture.md` §1 lists `/requests/new/what`, `/where-when`, `/details` and `/review`. They are mounted as a single `/requests/new/[service]`, on the `/book/[service]` and `/checkout` precedent: the flow is one reducer, back is a screen change rather than a navigation, and `canNavigateTo` refuses a forward jump — so four URLs would either skip every guard on a pasted `/review` or bounce. The four-screen budget is enforced by `SCREENS.length === 4`, not by a folder count. The IA table should be corrected at a gate. | n/a — IA correction |
+| 2026-08-11 | A | `M2-FE-215` | **`MATCHING` cannot be distinguished from "we are late" without the deadline.** `M2-FE-215` needs a delayed-match state that is neither "on track" nor "SLA breached"; it is derived client-side from `status` plus `quote_delivery_deadline_at` against `serverClock` (`features/requirement/model/request-state.ts`). That only works while the field is on the list projection as well as the detail — if `GET /requirements/` drops it, every row silently reads as on track. Flagged rather than filed: 1.21.0 may already carry it, and the integration pass will confirm. | verify at integration |
+
+### From Session C — the contract is published (11 August 2026)
+
+**`contracts/openapi/v1.yaml` is at 1.21.0 and carries 17 M2 paths.** `M2-BE-013` Wave C0 is done.
+Types are already regenerated and in sync on this branch; run `pnpm contract:generate` if you rebase.
+Both columns can start integrating.
+
+**This answers exactly one row above: `M2-FE-110`.** `GET /api/v1/partner/workspaces/` is live, so
+the grants query can mount and `PartnerShell` can drop its `workspaceGrants` prop seam.
+**Everything else Session B logged is proposal 0013, and none of it is published yet** — business
+profile, capability options and request, capability review state, insurance, crew CRUD, gate status
+and demand preview are all Wave C1. Keep building against 0013's shapes; do not treat 1.21.0 as
+covering them.
+
+**Session A — do this first.** `apps/customer/features/booking/contract-pending/boundary.test.ts`
+lines 71–73 list `/api/v1/requirements/`, `/api/v1/partner/workspaces/` and `/api/v1/proposals/` as
+**unpublished**, and the guard fails the build on any request to them. All three are now live, so
+that guard is stale and is the one thing standing between the built requirement flow and a mounted
+route. Remove those three entries, then mount `app/(flow)/requirements/`.
+
+> **Still open at the 2026-08-12 audit.** Session B did its half — the Partner guard retired
+> `/partner/workspaces/` and the shell consumes the endpoint. The Customer guard is **unchanged**:
+> all three entries are still listed, `features/requirement/` contains **zero** `useQuery`, and
+> `app/(flow)/requirements/` does not exist. This is the single largest piece of finished-but-dark
+> frontend work in M2 — four screens, `My requests`, the timeline and the closure states, all
+> unreachable by a user. It is Session A's next task and it is not blocked on anything.
+
+**Session B — a typecheck failure is waiting for you, and it is not the contract's.**
+`apps/partner/features/capability/adapters/express-path.ts` fails at lines 137, 147 and 200:
+`isStepComplete` takes an `ExpressStepKey` but is handed a whole `ExpressStep` — `step` should be
+`step.key`. `ExpressStepKey` is a local literal union, so the regenerated client did not cause it.
+Session C did not touch the file, per the ownership map. `pnpm typecheck` is red for `apps/partner`
+alone until it is fixed; the other 7 packages are green.
+
+> **Closed 2026-08-12.** Fixed during Wave B1 — all three call sites now pass `step.key`, and
+> `pnpm typecheck` is **9 of 9 green**. Left in place so the handoff log stays append-only.
+
+**Published now:** requirement list/create/read/patch/submit/duplicate-check/timeline · quote
+teasers · Customer answer + Partner ask · enquiry list/read/accept/decline/site-visit · proposal
+submit/read/withdraw · `GET /partner/workspaces/`.
+
+**Not published, do not build against it yet:** attachment upload (`M2-BE-202`, deferred to C1),
+unlock checkout and state, unlocked quotes, selection, rejection, re-validation (all BE4/Wave C2 —
+no domain layer exists to wrap), and all of proposal 0013.
+
+**Three field shapes differ from `contract-pending/types.ts`.** All are adapter-layer one-liners and
+the seam is where they belong — this is the re-point §2 describes, not a rewrite:
+
+| Your type | The wire | Note |
+|---|---|---|
+| `is_date_flexible: boolean` | `flexibility_days: number`, plus `is_date_flexible` | Both published. The integer is the source of truth. |
+| `AttachmentKind: "PHOTO"` | `"IMAGE"` | Map in the adapter. |
+| `ScanStatus` includes `CLEAN`/`INFECTED` | `PENDING \| VERIFIED \| FAILED` | `VERIFIED` is `CLEAN`. There is no `INFECTED` yet — it arrives with the C1 upload command. |
+
+**One answered question.** Proposal 0012's `202` open question is resolved: refusals are always
+`>=400`, so `m2_unlock_payment_pending` will publish as **`409` retryable**, and `202` is reserved
+for genuine acceptance carrying a projection. `errors.ts` already classifies the code correctly;
+only its expected status changes, and not until Wave C2 publishes the unlock.
+
+**One caveat on all of the above.** C0 shipped with **no tests** — lint, strict types, migration
+check and schema validation only. The endpoints compile and generate; none is proven against a real
+request yet. Treat integration findings as likely, not surprising.
+
+---
+
+## 8. Status tracking
+
+Three places, each with one writer — that is what keeps them from fighting:
+
+| Where | Written by | When |
+|---|---|---|
+| `frontend-session-a.md` / `frontend-session-b.md` | That session only | Per task, as it completes |
+| `03-frontend-tasks.md` checkboxes | Either session, **only on its own task IDs** | Per task |
+| `task.md` phase board + verification table | The integrator only | At gates |
+
+Never mark a task from the other session's column, even if you can see it is done. Never mark `[x]`
+without integration evidence (§2). Never mark a wave complete because its files exist.
+
+### Live tracker
+
+Last reconciled against the codebase on **2026-08-12**.
+
+| Wave | A status (Customer) | B status (Partner + Ops) | Gate |
+|---|---|---|---|
+| 0 | — | — | `[~]` built; gate turns on Product/owner approval, not engineering |
+| 1 | `[~]` 15/15 built **and wired** — 4 routes mounted, guard retired, `FE-211` built. Owner verification pending | `[~]` 14/15 built **and wired** — workspaces endpoint consumed, 7 routes mounted. `FE-105` open | `[ ]` |
+| 2 | `[ ]` — blocked on C2/BE4, which has no domain layer | `[~]` 13/13 built **and wired** — enquiry inbox, detail, accept/decline, clarification, site-visit request and both composers on 4 routes. Owner verification pending | `[ ]` |
+| 3 | `[ ]` blocked on C3 | `[ ]` blocked on C3 | `[ ]` |
+| 4 | `[ ]` blocked on C6 | `[ ]` blocked on C6 | `[ ]` |
+| 5 | — | — | `[ ]` |
+
+**Read the asymmetry in Wave 2.** Session B built `FE-301..313` against the published enquiry,
+clarification and proposal paths on 12 August. Session A cannot start `FE-401..418`, because the
+unlock and selection domain layer does not exist yet — that is Wave C2, not a missing serializer.
+
+**Wave A1 wiring closed, 12 August 2026.** The Customer requirement flow is reachable: four routes
+under `app/(flow)/requests/`, `features/requirement/queries.ts` against the generated client,
+`packages/query/src/m2-requirement.ts`, and the three stale entries gone from the Customer boundary
+guard. Eleven rows were added to the gap table above in the process; the two the integrator should
+read first are **no merge endpoint** (`M2-FE-210` asks for one and none exists) and **the two
+question schemas** (`M2-FE-202` — the client renders one and the server validates against another,
+and a mismatch surfaces only when the Customer presses Send on screen 4). Session A's next task is
+`M2-FE-802..808`'s customer share, since Wave A2 remains blocked on C2.
+
+**What Wave B2 found, and what the integrator should read first.** Twenty-three rows were added to
+the gap table above on 12 August. Three of them are not contract gaps but defects that a test would
+have caught and Wave C0 has none:
+
+1. `m2_partner_enquiry_list` and `m2_requirement_list` **declare a bare array and return a DRF page
+   envelope.** Any client written against the generated type throws on its first real request. This
+   hits both columns.
+2. The **wage-floor guard never runs over HTTP** — `ProposalCreateSerializer` carries neither
+   argument `assert_rate_meets_wage_floor` needs, so a below-floor A3 rate is accepted and
+   `m2_proposal_below_wage_floor` cannot be returned by the endpoint that documents it.
+3. **An A3 total is whatever the client sends.** Only the A5 path reconciles.
+
+And one structural hole worth deciding on before Wave 3: **a Partner cannot read their own quote
+back**, so withdraw, the six proposal states and the supersession trace all end when the tab closes.

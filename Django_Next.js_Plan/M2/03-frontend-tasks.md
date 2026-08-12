@@ -7,8 +7,10 @@
 **Execution:** [frontend-execution-plan.md](frontend-execution-plan.md) — ownership map, frozen
 modules and sync gates. Session columns: [A — Customer](frontend-session-a.md) and
 [B — Partner + Operations](frontend-session-b.md). The backend column runs concurrently as
-[backend-session.md](backend-session.md); until its Wave C0 publishes a contract, **no task in this
-file can exceed `[~] built`.**
+[backend-session.md](backend-session.md). **Wave C0 published on 11 August 2026: contract 1.21.0
+carries 17 M2 paths**, so tasks covering those paths may now be integrated. Every other M2 task is
+still capped at `[~] built` — see [frontend-execution-plan.md](frontend-execution-plan.md) §2 for the
+table of what is and is not published, and for the caveat that C0 shipped with no tests.
 **Revision:** 2 - simplified per [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
 
 Continue using the same Partner application and authenticated shell. The backend returns
@@ -29,8 +31,15 @@ A frontend checkbox may be marked `[x]` only when:
 - desktop and mobile layouts are verified, including long Indian names, addresses and currency values;
 - keyboard navigation, visible focus, labels, errors and screen-reader announcements are tested;
 - irreversible and financial actions require explicit confirmation and show truthful pending states;
-- component, integration and critical Playwright tests pass against the documented API behavior;
+- component, integration and critical Playwright tests exist against the documented API behavior;
 - the detailed TODO and [task.md](task.md) are updated with evidence in the same change.
+
+> **Who runs those tests — owner-run since 12 August 2026.** The session **writes** the component,
+> integration and Playwright tests and **does not run them**. See [task.md](task.md) §"Verification
+> convention". A session runs `pnpm lint`, `pnpm typecheck` and, where it matters, `pnpm build` —
+> never `vitest` or Playwright — reports `[~] built — owner verification pending`, and the owner
+> promotes to `[x]` after running them. Screen-reader, keyboard and responsive checks in the list
+> above are likewise **described precisely enough for the owner to reproduce**, not claimed as done.
 
 ## Flow-weight budget
 
@@ -270,7 +279,7 @@ typecheck, partner build green. Nothing here exceeds `[~]`: the registration vie
 - [~] `M2-FE-209` Provide save-and-resume, step validation and back navigation.
 - [~] `M2-FE-210` Show the probable-duplicate warning with a merge option before creating a second
   requirement. `GAP-004`
-- [ ] `M2-FE-211` Explain when an edit after vendor acceptance notifies vendors and resets their
+- [~] `M2-FE-211` Explain when an edit after vendor acceptance notifies vendors and resets their
   deadlines; require explicit confirmation for material edits. `GAP-015`
 - [~] `M2-FE-212` State clearly on submission that the requirement is free and that nothing is charged
   until quotes arrive. `FLOW-01`
@@ -287,43 +296,90 @@ typecheck, partner build green. Nothing here exceeds `[~]`: the registration vie
 **FE2 gate:** A Customer submits a rich mobile-friendly requirement in four screens, pays nothing, and
 understands exactly when and whether they will be asked to pay.
 
+> **Wired 2026-08-12 (Session A).** All fifteen at `[~] built — owner verification pending`. Four
+> routes under `app/(flow)/requests/`, `features/requirement/queries.ts` and
+> `packages/query/src/m2-requirement.ts` against contract 1.21.0; the three stale M2 entries removed
+> from the Customer boundary guard and `contract-pending/` deleted, its rule re-stated as
+> `features/requirement/boundary.test.ts`. Lint clean at `--max-warnings 0`, typecheck 9/9,
+> `build --filter=customer` green. **No tests run** — see [task.md](task.md) §"Verification
+> convention" and its owner queue.
+>
+> Three of the fifteen are capped below `[x]` by the contract rather than by the screen, and each
+> says so on the screen instead of pretending: **`FE-204`/`FE-205`** have no upload command
+> (`M2-BE-202`, Wave C1), so screen 3 offers no file or voice control at all; **`FE-210`** has no
+> merge endpoint, so the duplicate notice links to the existing request rather than claiming to
+> join them; **`FE-211`** has no amend command, so the consequence and the confirmation are built
+> and the confirmation is not supplied. Eleven contract gaps logged in
+> [frontend-execution-plan.md](frontend-execution-plan.md) §7.
+
 ## FE3 - Partner enquiries, clarification and proposals
 
 ### Partner enquiries
 
-- [ ] `M2-FE-301` Add an enquiry list with type, area, schedule, response deadline and fit summary while
+> **Wave B2 built 2026-08-12 — owner verification pending.** All thirteen below are `[~]`: built
+> against the generated client for contract 1.21.0, wired to four `force-dynamic` routes, lint clean,
+> typecheck 9 of 9, `pnpm build --filter=partner` green. **No test was run.** Twelve unit/component
+> files and one Playwright spec were written; the queue rows are in [task.md](task.md)
+> §"Owner verification queue". Twenty-three gaps are
+> logged in [frontend-execution-plan.md](frontend-execution-plan.md) §7 — per-task notes below name
+> the ones that changed what could be built. Per-task evidence in
+> [frontend-session-b.md](frontend-session-b.md) § Wave B2.
+
+- [~] `M2-FE-301` Add an enquiry list with type, area, schedule, response deadline and fit summary while
   limiting private Customer data before acceptance.
-- [ ] `M2-FE-302` Build enquiry detail with the structured requirement, attachment viewer, capacity
+  **Area and fit summary are not published**; nothing stands in for them, and the list states when the
+  server is holding pages the unpublished `cursor` parameter cannot reach.
+- [~] `M2-FE-302` Build enquiry detail with the structured requirement, attachment viewer, capacity
   check and clear accept/decline consequences, including the capacity hold taken on acceptance.
   `GAP-012`
-- [ ] `M2-FE-303` Implement accept and decline with reason capture, stale-state handling and
+  The hold is stated from the snapshot's own dates. **No attachments and no capacity read exist.**
+- [~] `M2-FE-303` Implement accept and decline with reason capture, stale-state handling and
   duplicate-click protection.
-- [ ] `M2-FE-304` Show countdowns as guidance but rely on backend status for expiry and slot ownership;
+  Three layers of duplicate protection: a disabled control, a stable `Idempotency-Key`, `retry: false`.
+  **The decline vocabulary is client-owned** — the server publishes none.
+- [~] `M2-FE-304` Show countdowns as guidance but rely on backend status for expiry and slot ownership;
   present business-hours deadlines truthfully. `GAP-014`
+  A passed deadline stops offering an accept and never announces an expiry. "No deadline" is a real
+  state, not a zero.
 
 ### Safe clarification
 
-- [ ] `M2-FE-305` Build **structured clarification**: post a question, read the Customer's answer, both
+- [~] `M2-FE-305` Build **structured clarification**: post a question, read the Customer's answer, both
   on the shared timeline. Do not build a chat thread, participant list or read receipts. `SIM-07`
-- [ ] `M2-FE-306` Add callback request/scheduling and **paid** site-visit request flows, showing the fee
+- [~] `M2-FE-306` Add callback request/scheduling and **paid** site-visit request flows, showing the fee
   and how it adjusts against the final price, without exposing personal numbers before server-authorized
   disclosure. `SIM-08`
-- [ ] `M2-FE-307` Display consent and safety guidance before contact disclosure; record the server
+  The visit request is built. **Scheduling has no route and no callback endpoint exists at all** —
+  both stated on screen rather than faked.
+- [~] `M2-FE-307` Display consent and safety guidance before contact disclosure; record the server
   outcome and never reveal contact data from cached client state after revocation.
+  **No disclosure surface exists**, so there is no consent to record and no cached contact to revoke.
+  The negative is enforced by `contact-boundary.test.ts` rather than asserted in prose.
 
 ### Two proposal composers
 
-- [ ] `M2-FE-308` Build the **A3 one-screen composer**: rate per worker per day, minimum days, what is
+- [~] `M2-FE-308` Build the **A3 one-screen composer**: rate per worker per day, minimum days, what is
   included. Nothing else. `SIM-11`, `FLOW-08`
-- [ ] `M2-FE-309` Build the A5 composer for deliverables, line items, stages, taxes, exclusions,
+  Five controls, fixed by `A3_COMPOSER_FIELDS` and asserted against the DOM — a sixth fails a test.
+- [~] `M2-FE-309` Build the A5 composer for deliverables, line items, stages, taxes, exclusions,
   assumptions, dates, warranty and validity.
-- [ ] `M2-FE-310` Show the minimum-wage floor inline on the A3 composer and surface the server rejection
+  Stages carry the deliverables, line items and dates. **Assumptions has no wire field and was not
+  built** — DRF drops unknown keys silently, so the control would discard input without an error.
+- [~] `M2-FE-310` Show the minimum-wage floor inline on the A3 composer and surface the server rejection
   clearly when a rate falls below it. `GAP-023`
-- [ ] `M2-FE-311` Show the required tax basis and the commission-treatment statement on every proposal
+  **No floor is published and the server guard is inert over HTTP.** The rule is stated with no figure
+  invented; the refusal is routed to the rate field.
+- [~] `M2-FE-311` Show the required tax basis and the commission-treatment statement on every proposal
   so the vendor knows what the Customer will compare. `GAP-016`, `GAP-017`
-- [ ] `M2-FE-312` Show server-calculated totals and prevent editing the final arithmetic in local state.
-- [ ] `M2-FE-313` Support draft, preview, submit and supersede; never overwrite a submitted proposal.
+  **Neither is readable.** The required basis is another vendor's and unpublished; `commission_treatment`
+  has no vocabulary and no M2 policy, so the field is left unsent rather than authored.
+- [~] `M2-FE-312` Show server-calculated totals and prevent editing the final arithmetic in local state.
+  No total input in either composer; after submission the figure shown is Django's echoed
+  `total_paise`. **The server does not reconcile an A3 total** — only the A5 stage sum is checked.
+- [~] `M2-FE-313` Support draft, preview, submit and supersede; never overwrite a submitted proposal.
   Show withdrawn, expired, selected and superseded states with permitted next actions. `SIM-06`
+  **No read finds a Partner's own quote**, so the record survives only the tab that submitted it. That
+  is rendered as an honest third state rather than papered over with a locally persisted id.
 
 **FE3 Partner gate:** An eligible A3 vendor can respond to a lead on one phone screen, and an A5 vendor
 can submit a comparable proposal, without unsupported contact or pricing shortcuts.
