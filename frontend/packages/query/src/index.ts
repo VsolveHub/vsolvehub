@@ -95,3 +95,23 @@ export type { OtpFailure, OtpFlow, OtpFlowOptions, OtpPhase } from "./otp-flow";
 
 export { AppErrorBoundary } from "./error-boundary";
 export type { AppErrorBoundaryProps } from "./error-boundary";
+
+// --- M2 customer surface (session A) ---
+export {
+  readRequirementList,
+  shouldRetryM2Read,
+  isFreelyEditable,
+  isVendorVisible,
+  isRequirementLocked,
+  isRequirementDuplicate,
+  isLifecycleUnsupported,
+} from "./m2-requirement";
+export type {
+  ProbableDuplicate,
+  RequirementAttachment,
+  RequirementDraft,
+  RequirementSubmitted,
+  RequirementSummary,
+  RequirementTimeline,
+  RequirementTimelineEvent,
+} from "./m2-requirement";

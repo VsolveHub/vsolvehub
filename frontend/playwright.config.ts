@@ -120,6 +120,25 @@ export default defineConfig({
       },
     },
     {
+      /**
+       * M2 Wave A1 — the Customer's requests list and one request's page.
+       *
+       * Its own project for the same reason as `customer-bookings`: it installs
+       * contract-shaped M2 routes for every test, and the contract-independent
+       * customer specs must not inherit them.
+       *
+       * The pattern is the whole `m2-customer-*` family rather than this one
+       * file, so the remaining A-column specs mount without editing this config
+       * again — the slot Session B's `partner-m2` comment anticipated.
+       */
+      name: "customer-m2",
+      testMatch: /m2-customer-.*\.e2e\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://localhost:3000",
+      },
+    },
+    {
       /** FE-09's Partner offer inbox. */
       name: "partner-offers",
       testMatch: /offers\.e2e\.ts/,

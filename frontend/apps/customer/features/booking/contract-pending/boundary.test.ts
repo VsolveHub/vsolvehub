@@ -63,6 +63,22 @@ const UNPUBLISHED_PATHS = [
   // projection, which BE-07 has not published: `GET /checkouts/{id}/` and the
   // recovery/cancel commands the finding screen needs.
   "/api/v1/checkout-sessions/",
+  //
+  // Contract 1.21.0 retired the three M2 entries that stood here.
+  // `/api/v1/requirements/` and `/api/v1/proposals/` are published and the
+  // requirement flow now reaches the first of them through the generated client
+  // (`features/requirement/queries.ts`), which is exactly the condition the note
+  // above sets for deleting an entry. `/api/v1/partner/workspaces/` was never
+  // this app's to call and is now not unpublished either, so the entry had
+  // stopped being a rule and become a mistake — and a guard that is wrong
+  // teaches people to ignore guards, which costs more than this one was worth.
+  //
+  // Attachment upload (`M2-BE-202`, Wave C1) is genuinely still absent and is
+  // deliberately *not* listed. The two rules below already cover it better: a
+  // raw `fetch` to it fails "never calls the API with a raw fetch", and the
+  // generated client cannot type a call to an operation it does not contain. A
+  // bare `/attachments/` entry here would instead fail the build on any comment
+  // that named the path, which is how a guard starts being worked around.
 ];
 
 /**

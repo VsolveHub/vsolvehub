@@ -1,0 +1,125 @@
+/**
+ * What a submitted requirement is *doing*, as the tracking screens read it.
+ *
+ * `M2-FE-215` asks for honest empty, no-supply, delayed-match, SLA-breached and
+ * service-by-expired states with a truthful next step and no fabricated
+ * progress. Four of those five are server statuses. One — delayed match — is
+ * not, and that is the whole reason this module exists.
+ *
+ * ## The unions are re-declared, not imported
+ *
+ * Same rule as `LifecycleVerdict` in `./state.ts`. `contract-pending/types.ts`
+ * declares `RequirementStatus` as *a field the server sends*; this declares it
+ * as *a state the client renders*. They are the same words and different facts,
+ * and the quarantine boundary test enforces that the model cannot reach across
+ * to borrow the other one. The adapter maps between them, and when the contract
+ * publishes only the adapter changes.
+ */
+
+export type RequestStatus =
+  | "DRAFT"
+  | "MATCHING"
+  | "QUOTES_READY"
+  | "UNLOCKED"
+  | "SELECTED"
+  | "ENGAGED"
+  | "CLOSED_NO_SUPPLY"
+  | "CLOSED_SLA_BREACH"
+  | "CLOSED_EXPIRED"
+  | "CLOSED_ABANDONED"
+  | "CLOSED_COMPLETE"
+  | "CLOSED_CANCELLED";
+
+export type RequestClosureReason =
+  | "NO_SUPPLY"
+  | "SLA_BREACH"
+  | "EXPIRED"
+  | "ABANDONED"
+  | "COMPLETE"
+  | "CANCELLED";
+
+/**
+ * The rendered state: every status, plus the one thing a status cannot say.
+ *
+ * ## Why `MATCHING_DELAYED` is derived and not a status
+ *
+ * The quote-delivery deadline (`GAP-002`) is a promise with a clock on it. When
+ * it passes and the requirement is still `MATCHING`, the server has not yet run
+ * whatever closes it as `CLOSED_SLA_BREACH` — and the Customer can see the
+ * deadline has gone, because it is printed on their screen.
+ *
+ * Rendering plain "Finding professionals" then is the fabricated progress
+ * `M2-FE-215` forbids: a reassuring label on a promise already broken. Rendering
+ * "SLA breached" is the opposite failure — asserting a *server* transition that
+ * has not happened, and with it a refund nobody has authorised.
+ *
+ * `MATCHING_DELAYED` is the only honest third thing: our own deadline has
+ * passed, we are still looking, nothing has been decided. It claims no
+ * transition and promises no remedy.
+ */
+export type RequestState = RequestStatus | "MATCHING_DELAYED";
+
+export interface RequestStateInput {
+  status: RequestStatus;
+  /**
+   * Milliseconds until the quote-delivery deadline, or null when there is none.
+   *
+   * Passed in rather than computed, for the reason `isServiceDateUsable` gives:
+   * a function that reads a clock cannot be tested at its boundary. And the
+   * clock that matters here is the *server's* — the caller gets this from
+   * `serverClock` via `useServerCountdown`, never from `Date.now()`.
+   */
+  quoteDeadlineRemainingMs: number | null;
+}
+
+export function requestState({
+  status,
+  quoteDeadlineRemainingMs,
+}: RequestStateInput): RequestState {
+  if (
+    status === "MATCHING" &&
+    quoteDeadlineRemainingMs !== null &&
+    quoteDeadlineRemainingMs <= 0
+  ) {
+    return "MATCHING_DELAYED";
+  }
+  return status;
+}
+
+const CLOSED_STATES: readonly RequestState[] = [
+  "CLOSED_NO_SUPPLY",
+  "CLOSED_SLA_BREACH",
+  "CLOSED_EXPIRED",
+  "CLOSED_ABANDONED",
+  "CLOSED_COMPLETE",
+  "CLOSED_CANCELLED",
+];
+
+/** True when nothing more will happen without the Customer starting something new. */
+export function isClosedState(state: RequestState): boolean {
+  return CLOSED_STATES.includes(state);
+}
+
+/**
+ * Whether a countdown to the quote-delivery deadline is worth showing.
+ *
+ * Only while the promise is live. A ticking clock on a closed requirement is a
+ * screen still counting down to something that already failed to happen, and on
+ * `MATCHING_DELAYED` a negative countdown reads as a debt we are paying off.
+ */
+export function showsQuoteDeadline(state: RequestState): boolean {
+  return state === "MATCHING";
+}
+
+/**
+ * Whether this state means the Customer is owed an explanation from support.
+ *
+ * `M2-FE-213` puts a support action on the list. It is offered everywhere, but
+ * it *leads* here — these are the two states where we, not the Customer and not
+ * the market, are the reason there is nothing to show. `CLOSED_NO_SUPPLY` is
+ * deliberately not one of them: nobody covering the work yet is a fact about
+ * the market, and routing it to support would waste the Customer's call.
+ */
+export function isOurFailure(state: RequestState): boolean {
+  return state === "CLOSED_SLA_BREACH" || state === "MATCHING_DELAYED";
+}
