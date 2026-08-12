@@ -33,16 +33,22 @@ Added under the existing `(flow)` group, beside `/cart`, `/checkout` and `/booki
 | Route | Purpose | Flow-weight |
 |---|---|---|
 | `/requests/new` | Category-first entry. Plain language: hiring people for a period, or commissioning a defined outcome. Never asks the customer to pick an archetype. | — |
-| `/requests/new/what` | Screen 1: service, scale, and the answers the lifecycle is inferred from. | 1 of 4 |
-| `/requests/new/where-when` | Screen 2: location, dates, flexibility, hard `service_by`. | 2 of 4 |
-| `/requests/new/details` | Screen 3: photos, short video, documents, **voice note as a peer of the questions**. | 3 of 4 |
-| `/requests/new/review` | Screen 4: the single confirmation. Submitting happens here. Optional callback, site-visit interest, access constraints and communication preference are reachable *from* this screen, never as extra steps. **For an A5-inferred requirement this screen carries the visit-plan chooser (1/2/3 vendors) — a control, not a fifth screen.** | 4 of 4 |
+| `/requests/new/[service]` | **The four screens, mounted as one route** (corrected 2026-08-13 — see the note below). Screen 1: service, scale, and the answers the lifecycle is inferred from. Screen 2: location, dates, flexibility, hard `service_by`, `requested_start`. Screen 3: photos, short video, documents, **voice note as a peer of the questions**. Screen 4: the single confirmation, where submitting happens — optional callback, site-visit interest, access constraints and communication preference are reachable *from* it, never as extra steps, and **for an A5-inferred requirement it carries the visit-plan chooser (1/2/3 vendors) — a control, not a fifth screen.** | 1–4 of 4 |
 | `/requests` | `My requests`: matching status, teaser count (A3) / visit state (A5), delivery deadline, latest activity. | — |
 | `/requests/[id]` | Request timeline: requirement, matching, aggregate invitation state, questions, visits (A5: the per-slot tracker), quote/estimate delivery, recovery. | — |
 | `/requests/[id]/quotes` | A3: teasers before unlock, full quotes after — one route, two states, so a cached "unlocked" URL cannot outlive a refunded unlock. A5: delivered estimates in full, each linked to its completed visit; **no paywall state exists on this route for A5**. | — |
 | `/requests/[id]/unlock` | A3 only: the INR 149 unlock, against visible delivered value. **Only reachable when a usable quote exists.** 404s on an A5 requirement. | Payment 1 of 1 (A3) |
 | `/requests/[id]/book-visits` | A5 only: the visit-plan checkout, opened when the first vendor holds a slot. **Only reachable while a held slot exists.** 404s on an A3 requirement. | Payment 1 of 2 (A5) |
 | `/requests/[id]/compare` | Accessible side-by-side on the single tax basis, with non-equivalent assumptions shown as such. | — |
+
+> **Correction, 2026-08-13 (Gate 1).** This table listed the four capture screens as four routes —
+> `/requests/new/what`, `/where-when`, `/details`, `/review`. They are built as a single
+> `/requests/new/[service]`, on the `/book/[service]` and `/checkout` precedent already set in this
+> app: the flow is one reducer, Back is a screen change rather than a navigation, and
+> `canNavigateTo` refuses a forward jump. Four URLs would have to either skip every guard on a
+> pasted `/review` or bounce the customer to screen 1, and neither is a route worth having. **The
+> four-screen budget is enforced by `SCREENS.length === 4` in `features/requirement/boundary.test.ts`,
+> not by counting folders** — which is the stronger guarantee, because it fails at build time.
 | `/bookings/[engagementId]` | A3 engagement: schedule, agreed crew composition, daily one-tap attendance confirm/dispute, direct-payment reminder. Under the existing `/bookings` because from the customer's side it is a booking. | — |
 | `/projects` | `My projects`: progress, active stage, funded amount, next action, issue status. | — |
 | `/projects/[engagementId]` | A5 engagement: stages, evidence review, amendments, deliverable acceptance, warranty. | — |
