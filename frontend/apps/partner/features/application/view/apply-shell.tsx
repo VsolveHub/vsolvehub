@@ -5,7 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { APPLICATION_STEPS, stepIndexOf } from "../model/steps";
+import {
+  APPLICATION_STEPS,
+  CAPABILITY_STEPS,
+  capabilityStepIndexOf,
+  stepIndexOf,
+  type ApplicationStep,
+} from "../model/steps";
 
 /**
  * The `/apply/*` step strip.
@@ -23,8 +29,32 @@ export function ApplyShell({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-16 pt-4">
       <ApplySteps />
+      <CapabilitySteps />
       <main className="mt-6">{children}</main>
     </div>
+  );
+}
+
+/**
+ * The specialist-work strip, rendered only while the reader is inside it.
+ *
+ * Four more permanent tabs would be four more things every applicant is told
+ * they have to do, which is the wall `M2-FE-105` removes. Somebody standing on
+ * one of these routes does need to know where they are and how to get back, so
+ * the strip appears exactly there and nowhere else.
+ */
+function CapabilitySteps() {
+  const pathname = usePathname();
+  const currentIndex = capabilityStepIndexOf(pathname);
+  if (currentIndex === -1) return null;
+
+  return (
+    <StepStrip
+      label="Specialist work steps"
+      steps={CAPABILITY_STEPS}
+      currentIndex={currentIndex}
+      className="mt-2"
+    />
   );
 }
 
@@ -38,14 +68,33 @@ export function ApplyShell({ children }: { children: ReactNode }) {
  */
 function ApplySteps() {
   const pathname = usePathname();
-  const currentIndex = stepIndexOf(pathname);
 
+  return (
+    <StepStrip
+      label="Application steps"
+      steps={APPLICATION_STEPS}
+      currentIndex={stepIndexOf(pathname)}
+    />
+  );
+}
+
+function StepStrip({
+  label,
+  steps,
+  currentIndex,
+  className,
+}: {
+  label: string;
+  steps: readonly ApplicationStep[];
+  currentIndex: number;
+  className?: string;
+}) {
   return (
     /* Horizontal on a phone, so the whole path stays visible without the steps
        shrinking to unreadable. */
-    <nav aria-label="Application steps" className="-mx-4 overflow-x-auto px-4">
+    <nav aria-label={label} className={cn("-mx-4 overflow-x-auto px-4", className)}>
       <ul className="flex list-none gap-1 p-0">
-        {APPLICATION_STEPS.map((step, index) => {
+        {steps.map((step, index) => {
           const isCurrent = index === currentIndex;
           return (
             <li key={step.href}>

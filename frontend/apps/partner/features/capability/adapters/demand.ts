@@ -1,6 +1,6 @@
 import { WORKSPACE_REGISTRY } from "@/features/workspace/registry";
 
-import type { DemandPreview, DemandSummary } from "../contract-pending/types";
+import type { DemandPreview, DemandSummary } from "./wire";
 
 /**
  * Masked live demand, as a screen can render it.
@@ -33,7 +33,15 @@ export interface DemandCard {
   readonly headline: string;
   /** A locality. Never a street. */
   readonly areaLabel: string;
-  readonly startsOn: string;
+  /**
+   * When the work starts, or null.
+   *
+   * Nullable on the wire and therefore nullable here. The snapshot a preview is
+   * built from carries `requested_start` as `null=True`, so a requirement whose
+   * customer has not named a date is an ordinary case — and formatting `null`
+   * would print `Invalid Date` onto the first screen a new Partner ever sees.
+   */
+  readonly startsOn: string | null;
   /**
    * The workspace this lead belongs to, named the way the Partner would name it —
    * or null when this build has no screens for the key.

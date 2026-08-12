@@ -30,6 +30,25 @@ import {
  * Nothing in this reducer touches money. The requirement is free.
  */
 
+/**
+ * One attachment as the server holds it, already narrowed by the adapter.
+ *
+ * A view-model rather than the wire shape: `scan_status` is a bare `string` on
+ * the wire and the mapping from it to `state`/`failure` — the mapping that
+ * decides whether a retry button appears — belongs in one place with the rest of
+ * the wire knowledge, not in the reducer.
+ */
+export interface ServerAttachment {
+  attachmentId: string;
+  kind: DraftAttachment["kind"];
+  /** What to call it when no local row remembers the file's own name. */
+  fallbackName: string;
+  byteSize: number;
+  language: string | null;
+  state: "scanning" | "attached" | "failed";
+  failure: DraftAttachment["failure"];
+}
+
 export type RequirementAction =
   | { type: "ANSWER"; questionCode: string; value: unknown }
   /**
@@ -57,6 +76,20 @@ export type RequirementAction =
   | { type: "ADD_ATTACHMENT"; attachment: DraftAttachment }
   | { type: "UPDATE_ATTACHMENT"; id: string; patch: Partial<DraftAttachment> }
   | { type: "REMOVE_ATTACHMENT"; id: string }
+  /**
+   * Reconciles the rows against what the server actually holds.
+   *
+   * The server is the authority for one thing this device cannot know: the scan
+   * verdict. It is also the authority for *existence* — an attachment uploaded
+   * from another tab, or one this draft was resumed with, is real and has to
+   * appear, and one removed elsewhere has to disappear.
+   *
+   * So the local row keeps what only it knows (the file name, which the wire
+   * does not carry at all) and takes everything else from the record. Rows that
+   * have not reached a finalize yet — queued, uploading, or refused before a
+   * byte moved — have no server counterpart and are left alone.
+   */
+  | { type: "SYNC_SERVER_ATTACHMENTS"; attachments: readonly ServerAttachment[] }
   | { type: "SET_LANGUAGE"; language: string | null }
   | { type: "SET_ADDITIONAL_DETAILS"; text: string }
   | { type: "SET_OPTIONAL_DETAIL"; key: string; value: unknown }
@@ -110,6 +143,90 @@ function invalidateVerdict(state: RequirementDraftState): RequirementDraftState 
   return state.verdict === null ? state : { ...state, verdict: null };
 }
 
+/**
+ * Merges the server's attachment records into the rows on screen.
+ *
+ * **Returns the state object unchanged when nothing differs**, and that is the
+ * load-bearing part rather than an optimisation: this action is dispatched from
+ * an effect that runs on every read of the requirement, so a reducer that always
+ * produced a new object would re-render, re-run the effect and never settle.
+ * React bails out of a dispatch that returns the identical state, which is what
+ * makes "reconcile on every render" safe to write.
+ *
+ * Three rules, in order:
+ *
+ * 1. a local row carrying an `attachmentId` the server still has takes the
+ *    record's state, verdict and size, and keeps its own file name — the wire
+ *    carries no `file_name` at all, so the local one is the only real name that
+ *    exists;
+ * 2. a local row whose `attachmentId` the server no longer has is dropped: it
+ *    was removed from another tab, and leaving it would let the Customer press
+ *    Remove on a row that is already gone;
+ * 3. a record with no local row is appended. A resumed draft and a second
+ *    device both produce this, and the alternative — showing only what this tab
+ *    uploaded — is a Customer removing a photograph they cannot see.
+ */
+function syncServerAttachments(
+  state: RequirementDraftState,
+  records: readonly ServerAttachment[],
+): RequirementDraftState {
+  const byId = new Map(records.map((record) => [record.attachmentId, record]));
+  let changed = false;
+
+  const reconciled: DraftAttachment[] = [];
+  for (const attachment of state.attachments) {
+    if (attachment.attachmentId === null) {
+      // Never finalized, so the server has nothing to say about it.
+      reconciled.push(attachment);
+      continue;
+    }
+    const record = byId.get(attachment.attachmentId);
+    if (record === undefined) {
+      changed = true;
+      continue;
+    }
+    byId.delete(attachment.attachmentId);
+    if (
+      attachment.state === record.state &&
+      attachment.failure === record.failure &&
+      attachment.byteSize === record.byteSize
+    ) {
+      reconciled.push(attachment);
+      continue;
+    }
+    changed = true;
+    reconciled.push({
+      ...attachment,
+      state: record.state,
+      failure: record.failure,
+      // The scan verdict replaces whatever the upload said. A row that failed to
+      // finalize and then turned out to exist should not keep the transport's
+      // sentence next to a scan result that contradicts it.
+      failureDetail: null,
+      byteSize: record.byteSize,
+      progress: record.state === "attached" ? 100 : attachment.progress,
+    });
+  }
+
+  for (const record of byId.values()) {
+    changed = true;
+    reconciled.push({
+      id: `server:${record.attachmentId}`,
+      attachmentId: record.attachmentId,
+      kind: record.kind,
+      fileName: record.fallbackName,
+      byteSize: record.byteSize,
+      language: record.language,
+      state: record.state,
+      progress: null,
+      failure: record.failure,
+      failureDetail: null,
+    });
+  }
+
+  return changed ? { ...state, attachments: reconciled } : state;
+}
+
 export function requirementReducer(
   state: RequirementDraftState,
   action: RequirementAction,
@@ -155,6 +272,9 @@ export function requirementReducer(
         ...state,
         attachments: state.attachments.filter((attachment) => attachment.id !== action.id),
       };
+
+    case "SYNC_SERVER_ATTACHMENTS":
+      return syncServerAttachments(state, action.attachments);
 
     case "SET_LANGUAGE":
       return { ...state, language: action.language };

@@ -5,9 +5,15 @@ import { buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { toRequestHeader, toTimelineEvents } from "../adapters";
-import { useRequirement, useRequirementTimeline } from "../queries";
+import { toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
+import {
+  isAlreadyRemoved,
+  useRemoveAttachment,
+  useRequirement,
+  useRequirementTimeline,
+} from "../queries";
 import { MaterialEditNotice, type MaterialEditStance } from "./material-edit-notice";
+import { RequestAttachments } from "./request-attachments";
 import { RequestDetail } from "./request-detail";
 import { titleForSlug } from "./my-requests-screen";
 
@@ -48,6 +54,7 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
   const router = useRouter();
   const requirementQuery = useRequirement(requirementId);
   const timelineQuery = useRequirementTimeline(requirementId);
+  const removeAttachment = useRemoveAttachment();
 
   const draft = requirementQuery.data ?? null;
   const timeline = timelineQuery.data;
@@ -81,6 +88,25 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
 
       {draft !== null ? (
         <div className="mx-auto w-full max-w-2xl px-4 pb-10">
+          {/* The removal affordance the server keeps open in every status, for
+              the one case it keeps it open for: a file the malware scan
+              rejected. See `RequestAttachments`. */}
+          <RequestAttachments
+            rows={toServerAttachmentRows(draft.attachments)}
+            isDraft={isFreelyEditable(draft.status)}
+            onRemove={(attachmentId) =>
+              removeAttachment.mutate({ requirementId, attachmentId })
+            }
+            isRemoving={removeAttachment.isPending}
+            // Already gone is the outcome that was asked for, so it is not shown
+            // as a failure — the refetch that follows drops the row.
+            removeError={
+              removeAttachment.error !== null && !isAlreadyRemoved(removeAttachment.error)
+                ? removeAttachment.error
+                : null
+            }
+          />
+
           <MaterialEditNotice
             stance={stanceFor(draft.status)}
             // Only the free path has a command behind it. `PATCH` refuses a

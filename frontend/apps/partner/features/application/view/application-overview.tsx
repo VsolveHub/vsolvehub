@@ -98,6 +98,29 @@ export function ApplicationOverview() {
       ) : null}
 
       {/*
+        The entry point to the M2 registration surface.
+
+        A quiet link rather than a step in the strip above: workforce and project
+        approval is asked for when a Partner wants it, and adding it to the
+        eight-step path would tell every applicant they have a ninth thing to do.
+        The screen behind it shows an honest empty state when none of their
+        services is open to it, so the link never leads to a promise.
+      */}
+      <div className="border-t border-line pt-4">
+        <h2 className="text-sm font-semibold text-text">Specialist work</h2>
+        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+          Supplying a crew by the day, or quoting for a whole project, is reviewed separately from
+          ordinary jobs. Asking costs nothing and does not affect the work you already do.
+        </p>
+        <Link
+          href="/apply/capabilities"
+          className="mt-3 inline-flex min-h-11 items-center rounded-control border border-line px-5 text-sm font-semibold text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+        >
+          See what you can apply for
+        </Link>
+      </div>
+
+      {/*
         Approval used to end the page.
 
         The only outgoing link was gated on `isEditable`, which is false once an

@@ -55,4 +55,5 @@ The next free number is **0008**.
 | [0004](0004-fail-closed-provider-selection.md) | Fail-closed provider selection | Accepted |
 | [0005](0005-server-clock-calibration.md) | Server clock calibration | Accepted |
 | [0006](0006-outbox-visibility-deadline-recovery.md) | Outbox visibility deadline and recovery | Accepted |
-| [0007](0007-m2-engagement-spine-and-fee-after-value.md) | M2 engagement spine and fee after value | Accepted |
+| [0007](0007-m2-engagement-spine-and-fee-after-value.md) | M2 engagement spine and fee after value | Accepted (A5 fee model superseded by 0008) |
+| [0008](0008-m2-visit-first-estimation-for-a5.md) | M2 visit-first estimation and tiered visit plans for A5 | Accepted |

@@ -1,11 +1,15 @@
 "use client";
 
-import { Badge, Button, Card, EmptyState, Field, Input, cn } from "@vsolve/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, cn } from "@vsolve/ui";
 import { useState } from "react";
 
 import { AsyncSection, type AsyncState } from "@/components/async-section";
 
 import type { CapabilityChoice, CapabilityOptionsView } from "../adapters/capability-options";
+import {
+  unansweredRequired,
+  type RegistrationQuestion,
+} from "../adapters/registration-questions";
 
 /**
  * Asking to be approved for a kind of work.
@@ -39,8 +43,18 @@ import type { CapabilityChoice, CapabilityOptionsView } from "../adapters/capabi
 
 export interface CapabilityPickerProps {
   readonly state: AsyncState<CapabilityOptionsView>;
-  /** Rupees for money asks, a plain count otherwise. The container converts. */
-  readonly onRequest: (input: { variantId: string; asks: Record<string, number> }) => void;
+  /**
+   * Rupees for money asks, a plain count otherwise. The container converts.
+   *
+   * `answers` are the category-specific registration answers, as raw strings —
+   * the adapter types them per question kind, because `validate_scope` refuses a
+   * string where it wants an integer.
+   */
+  readonly onRequest: (input: {
+    variantId: string;
+    asks: Record<string, number>;
+    answers: Record<string, string>;
+  }) => void;
   readonly pendingVariantId?: string | null;
   /** Set when the last request was refused, so the failing card can say so. */
   readonly error?: { readonly variantId: string; readonly message: string } | null;
@@ -84,7 +98,9 @@ export function CapabilityPicker({
                       choice={choice}
                       pending={pendingVariantId === choice.variantId}
                       error={error?.variantId === choice.variantId ? error.message : null}
-                      onRequest={(asks) => onRequest({ variantId: choice.variantId, asks })}
+                      onRequest={(asks, answers) =>
+                        onRequest({ variantId: choice.variantId, asks, answers })
+                      }
                     />
                   </li>
                 ))}
@@ -106,9 +122,10 @@ function CapabilityCard({
   choice: CapabilityChoice;
   pending: boolean;
   error: string | null;
-  onRequest: (asks: Record<string, number>) => void;
+  onRequest: (asks: Record<string, number>, answers: Record<string, string>) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   // `Number("")` is 0, so a blank field and a typed zero converge here — which is
   // correct. Every named field must carry a usable number: "0 workers" is not a
@@ -117,10 +134,12 @@ function CapabilityCard({
   const asks: Record<string, number> = Object.fromEntries(
     choice.asks.map((ask) => [ask.name, askValue(ask.name)]),
   );
-  const isComplete = choice.asks.every((ask) => {
-    const value = askValue(ask.name);
-    return Number.isFinite(value) && value > 0;
-  });
+  const missingAnswers = unansweredRequired(choice.registrationQuestions.questions, answers);
+  const isComplete =
+    choice.asks.every((ask) => {
+      const value = askValue(ask.name);
+      return Number.isFinite(value) && value > 0;
+    }) && missingAnswers.length === 0;
 
   return (
     <Card className="p-4">
@@ -177,6 +196,35 @@ function CapabilityCard({
             </div>
           ) : null}
 
+          {/* Category-specific questions, authored by Operations on the
+              versioned schema. No client-side branch decides which appear —
+              that is the whole reason `registration_questions` is published. */}
+          {choice.registrationQuestions.questions.length > 0 ? (
+            <div className="mt-4 flex flex-col gap-3">
+              {choice.registrationQuestions.questions.map((question) => (
+                <RegistrationAnswerField
+                  key={question.code}
+                  question={question}
+                  value={answers[question.code] ?? ""}
+                  onChange={(value) =>
+                    setAnswers((current) => ({ ...current, [question.code]: value }))
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {/* A question the server asks and this build cannot draw. Named, not
+              hidden: a required question dropped silently produces a refusal
+              nothing on screen explains. */}
+          {choice.registrationQuestions.unsupported.length > 0 ? (
+            <p className="mt-3 rounded-control bg-surface-sunken px-3 py-2 text-sm leading-6 text-text-secondary">
+              This service asks something your app cannot show yet
+              {` (${choice.registrationQuestions.unsupported.join(", ")})`}. Update the app, or ask
+              support to record the answer for you.
+            </p>
+          ) : null}
+
           {error ? (
             <p role="alert" className="mt-3 text-sm text-danger-text">
               {error}
@@ -188,7 +236,7 @@ function CapabilityCard({
             disabled={!isComplete}
             loading={pending}
             loadingLabel="Sending your request"
-            onClick={() => onRequest(asks)}
+            onClick={() => onRequest(asks, answers)}
           >
             Ask to be approved
           </Button>
@@ -202,5 +250,55 @@ function CapabilityCard({
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * One category-specific registration answer.
+ *
+ * Three kinds, because those are the three `validate_scope` accepts and this
+ * build can draw. `SELECT` is refused upstream in
+ * `readRegistrationQuestions` — the stored schema carries no option list, so a
+ * select would be a free-text box whose answer the server then rejects.
+ */
+function RegistrationAnswerField({
+  question,
+  value,
+  onChange,
+}: {
+  question: RegistrationQuestion;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (question.kind === "BOOLEAN") {
+    return (
+      <Field label={question.label} required={question.isRequired}>
+        <Select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="">Choose one</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </Select>
+      </Field>
+    );
+  }
+
+  if (question.kind === "INTEGER") {
+    return (
+      <Field label={question.label} required={question.isRequired}>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={question.minimum ?? undefined}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </Field>
+    );
+  }
+
+  return (
+    <Field label={question.label} required={question.isRequired}>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+    </Field>
   );
 }

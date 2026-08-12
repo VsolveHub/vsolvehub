@@ -124,15 +124,22 @@ function DemandRow({ card }: { card: DemandCard }) {
         <span>{card.areaLabel}</span>
       </p>
 
-      <p className="mt-1 text-sm text-text-secondary">
-        Starts{" "}
-        <time dateTime={card.startsOn}>
-          {new Intl.DateTimeFormat("en-IN", {
-            dateStyle: "medium",
-            timeZone: "Asia/Kolkata",
-          }).format(new Date(card.startsOn))}
-        </time>
-      </p>
+      {/* Nullable on the wire: a customer who has not named a start date is an
+          ordinary case, and "Starts Invalid Date" on the first screen a new
+          Partner sees would be worse than saying nothing. */}
+      {card.startsOn === null ? (
+        <p className="mt-1 text-sm text-text-secondary">No start date given yet</p>
+      ) : (
+        <p className="mt-1 text-sm text-text-secondary">
+          Starts{" "}
+          <time dateTime={card.startsOn}>
+            {new Intl.DateTimeFormat("en-IN", {
+              dateStyle: "medium",
+              timeZone: "Asia/Kolkata",
+            }).format(new Date(card.startsOn))}
+          </time>
+        </p>
+      )}
 
       {card.isEligible ? (
         <p className="mt-3 text-sm font-medium text-success-text">

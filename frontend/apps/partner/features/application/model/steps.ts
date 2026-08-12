@@ -28,6 +28,26 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
 ] as const;
 
 /**
+ * The specialist-work routes added by M2 (`M2-FE-103..106`, `M2-FE-109`).
+ *
+ * A separate list, and deliberately **not** appended to `APPLICATION_STEPS`.
+ * Those eight steps are the path every applicant walks; these four are asked for
+ * only when a Partner applies for workforce or project work, and putting them in
+ * the main strip would show four extra tabs to the overwhelming majority of
+ * Partners who will never need one. That is the up-front wall `M2-FE-105`
+ * exists to remove, rebuilt as navigation.
+ *
+ * `ApplyShell` renders this strip only while the reader is inside it, so it
+ * orients somebody who is here and stays invisible to everybody else.
+ */
+export const CAPABILITY_STEPS: readonly ApplicationStep[] = [
+  { href: "/apply/capabilities", label: "Specialist work" },
+  { href: "/apply/business", label: "How you work" },
+  { href: "/apply/insurance", label: "Worker insurance" },
+  { href: "/apply/demand", label: "Work near you" },
+] as const;
+
+/**
  * Which step a path is on, or -1.
  *
  * Compared exactly rather than by prefix: `/apply` is a prefix of every other
@@ -35,9 +55,16 @@ export const APPLICATION_STEPS: readonly ApplicationStep[] = [
  * trailing slash is tolerated because Next can produce either form.
  */
 export function stepIndexOf(pathname: string): number {
-  const normalised =
-    pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  return APPLICATION_STEPS.findIndex((step) => step.href === normalised);
+  return APPLICATION_STEPS.findIndex((step) => step.href === normalise(pathname));
+}
+
+function normalise(pathname: string): string {
+  return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
+
+/** Which specialist step a path is on, or -1. */
+export function capabilityStepIndexOf(pathname: string): number {
+  return CAPABILITY_STEPS.findIndex((step) => step.href === normalise(pathname));
 }
 
 /** The step after `pathname`, or null at the end of the sequence or off it. */

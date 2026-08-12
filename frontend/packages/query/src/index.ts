@@ -105,10 +105,17 @@ export {
   isRequirementLocked,
   isRequirementDuplicate,
   isLifecycleUnsupported,
+  readScanStatus,
+  isAttachmentUsable,
+  isAttachmentInvalid,
+  isAttachmentUnavailable,
 } from "./m2-requirement";
 export type {
+  AttachmentScanStatus,
+  AttachmentUploadGrant,
   ProbableDuplicate,
   RequirementAttachment,
+  RequirementAttachmentKind,
   RequirementDraft,
   RequirementSubmitted,
   RequirementSummary,

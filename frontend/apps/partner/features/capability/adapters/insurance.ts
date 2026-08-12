@@ -1,4 +1,4 @@
-import type { InsuranceDeclaration, InsuranceDeclarationInput } from "../contract-pending/types";
+import type { InsuranceDeclaration, InsuranceDeclarationInput } from "./wire";
 
 /**
  * The worker insurance and liability declaration.

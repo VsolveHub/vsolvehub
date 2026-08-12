@@ -24,7 +24,13 @@ export const BLOCK_COPY: Record<BlockReason, string> = {
   SERVICE_DATE_BEFORE_START:
     "The date you need this by is before the work starts. Check both dates.",
   ATTACHMENT_STILL_UPLOADING: "One of your files is still uploading. It will only take a moment.",
-  ATTACHMENT_FAILED: "A file did not upload. Retry it or remove it before continuing.",
+  ATTACHMENT_FAILED: "A file was not attached. Try it again, or remove it, before continuing.",
+  // No "try again" in this sentence, deliberately. The file was rejected by the
+  // security check and re-sending the same bytes would be rejected identically;
+  // removal is the only thing that clears it, and the control on the row says
+  // the same.
+  ATTACHMENT_REJECTED:
+    "One of your files did not pass our security check, so it was not attached. Remove it to continue.",
   DUPLICATE_NOT_RESOLVED:
     "You have a similar request open. Merge it or choose to continue with a separate one.",
   OPTIONAL_DETAIL_INCOMPLETE:

@@ -1,5 +1,7 @@
 "use client";
 
+import { ApiClientError, ApiNetworkError } from "@vsolve/api-client";
+import { categorizeError } from "@vsolve/query";
 import { EmptyState, ErrorState, SkeletonRegion } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
@@ -37,6 +39,54 @@ export type AsyncState<T> =
   | { readonly status: "loading" }
   | { readonly status: "failed"; readonly kind: AsyncFailure; readonly reference?: string | null }
   | { readonly status: "ready"; readonly data: T };
+
+/**
+ * One query result, as the state a section can render.
+ *
+ * The mapping is here rather than in each container so the four failure kinds
+ * are decided once. It classifies through `@vsolve/query`'s `categorizeError`,
+ * which is frozen as *the* error-classification layer — this reads its verdict
+ * and picks a screen; it does not make a second judgement.
+ *
+ * `isPending` alone would be wrong: a disabled query is `pending` forever, and
+ * a screen waiting on a query it never enabled would spin until the tab closed.
+ * So a caller that disables a read has to say what it wants shown instead, which
+ * is why `enabled` is an explicit input rather than something inferred.
+ */
+export interface QueryLikeResult<T> {
+  readonly data: T | undefined;
+  readonly isSuccess: boolean;
+  readonly isPending: boolean;
+  readonly error: unknown;
+}
+
+export function asyncStateFrom<TData, TView>(
+  query: QueryLikeResult<TData>,
+  select: (data: TData) => TView,
+): AsyncState<TView> {
+  // `isSuccess` rather than `data !== undefined`: a refetch that fails leaves
+  // the last good answer in `data` while the status goes to error, and rendering
+  // it would keep showing a roster or a capability list the server has stopped
+  // confirming.
+  if (query.isSuccess && query.data !== undefined) {
+    return { status: "ready", data: select(query.data) };
+  }
+
+  if (query.error !== null && query.error !== undefined) {
+    const reference = query.error instanceof ApiClientError ? query.error.requestId : null;
+    if (query.error instanceof ApiNetworkError) {
+      return { status: "failed", kind: "offline", reference };
+    }
+    const category = categorizeError(query.error);
+    return {
+      status: "failed",
+      kind: category === "forbidden" ? "forbidden" : "server",
+      reference,
+    };
+  }
+
+  return { status: "loading" };
+}
 
 interface FailurePresentation {
   readonly title: string;

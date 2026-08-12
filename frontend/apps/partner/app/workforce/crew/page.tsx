@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 
-import { WORKFORCE_WORKSPACE } from "@/features/workspace/registry";
-import { WorkspacePendingScreen } from "@/features/workspace/view/workspace-screens";
+import { CrewRosterScreen } from "@/features/crew/view/crew-screens";
 
 /**
- * The roster view (`features/crew/view/crew-roster.tsx`) is built and tested,
- * and is deliberately not mounted here yet: it takes an `onAdd` and an
- * `onArchive`, and proposal 0013's crew endpoints are unpublished, so there is
- * nothing for either to call. Mounting it against no-op handlers would put an
- * "Add someone" button on screen that silently does nothing — a worse answer
- * than saying the screen is not built.
+ * The crew roster (`M2-FE-107`).
+ *
+ * This route rendered `WorkspacePending` until 13 August, on the reasoning that
+ * an "Add someone" button with nothing to call was worse than saying the screen
+ * was not built. Contract 1.22.0 published `GET`/`POST /partner/crew/` and the
+ * per-membership `PATCH` and `archive` on 12 August, so the button has something
+ * to call and the pending screen is the dishonest option now.
+ *
+ * `force-dynamic`, never indexed — like every authenticated Partner route. A
+ * roster is a list of named people; it is not a search result.
  */
 export const dynamic = "force-dynamic";
 
@@ -19,11 +22,5 @@ export const metadata: Metadata = {
 };
 
 export default function WorkforceCrewPage() {
-  return (
-    <WorkspacePendingScreen
-      workspaceKey={WORKFORCE_WORKSPACE}
-      actions={["crew.manage"]}
-      what="Your crew"
-    />
-  );
+  return <CrewRosterScreen />;
 }

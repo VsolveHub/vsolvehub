@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CrewMemberInput, CrewMemberRecord } from "@/features/capability/contract-pending/types";
+import type { CrewMemberInput, CrewMemberRecord } from "@/features/capability/adapters/wire";
 import {
   canReportAttendance,
   crewProblems,

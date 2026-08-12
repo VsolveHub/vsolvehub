@@ -1,4 +1,4 @@
-import type { GateList, GateName, GateNextAction, GateStatus } from "../contract-pending/types";
+import type { GateList, GateName, GateNextAction, GateStatus } from "./wire";
 
 /**
  * Progressive gates: which one stands in front of an action, and why *now*.
@@ -42,7 +42,15 @@ import type { GateList, GateName, GateNextAction, GateStatus } from "../contract
  * which is how a person concludes something changed.
  */
 
-/** Where each next action leads. Routes are the frontend's, per the registry split. */
+/**
+ * Where each next action leads. Routes are the frontend's, per the registry split.
+ *
+ * Three entries, not the four proposal 0013 §D1 proposed: `CONTACT_SUPPORT` was
+ * not published at 1.22.0, and that is the right call — every live gate has a
+ * screen that clears it, and a gate whose only recovery is "message us" is one
+ * nobody can pass. The difference is logged in `frontend-execution-plan.md` §7
+ * rather than papered over with a fourth route nothing can name.
+ */
 const ACTION_ROUTES: Record<GateNextAction, { href: string; label: string }> = {
   SUBMIT_APPLICATION: { href: "/apply/review", label: "Finish your application" },
   ADD_PAYOUT_ACCOUNT: { href: "/earnings", label: "Add your bank details" },
@@ -50,7 +58,6 @@ const ACTION_ROUTES: Record<GateNextAction, { href: string; label: string }> = {
   // were trying to make. Not at registration — `FLOW-07` is explicit that a crew
   // list is asked for at first assignment and never before.
   ADD_CREW_MEMBER: { href: "/workforce/crew", label: "Add your crew" },
-  CONTACT_SUPPORT: { href: "/profile", label: "Contact support" },
 };
 
 export interface GateExplanation {
@@ -142,7 +149,6 @@ const KNOWN_ACTIONS: readonly GateNextAction[] = [
   "SUBMIT_APPLICATION",
   "ADD_PAYOUT_ACCOUNT",
   "ADD_CREW_MEMBER",
-  "CONTACT_SUPPORT",
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

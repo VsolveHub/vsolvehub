@@ -114,7 +114,12 @@ export function StepUpGate({
             loadingLabel="Sending a code"
             onClick={() =>
               requestCode.mutate(
-                { phone_number: phone },
+                // `""` is the non-partner path, the same value `useOtpFlow`
+                // sends when no role was asked for. An operator stepping up is
+                // already signed in as staff; this challenge re-proves the
+                // person, and sending `"partner"` here would ask Django to
+                // issue a code against a role they do not hold.
+                { phone_number: phone, intended_role: "" },
                 {
                   onSuccess: (issued) => {
                     setChallengeId(issued.challenge_id);

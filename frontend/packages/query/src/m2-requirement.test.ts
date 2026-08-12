@@ -9,6 +9,8 @@ import {
   isVendorVisible,
   readRequirementList,
   shouldRetryM2Read,
+  type RequirementSummary,
+  type RequirementSummaryPage,
 } from "./m2-requirement";
 
 const detail = (code: string, message = "Readable message.") => ({
@@ -19,31 +21,34 @@ const detail = (code: string, message = "Readable message.") => ({
   request_id: "req_m2",
 });
 
-const row = (id: string) => ({ id, status: "MATCHING" });
+const row = (id: string): RequirementSummary => ({
+  id,
+  status: "MATCHING",
+  category_slug: "deep-cleaning",
+  lifecycle_explanation: null,
+  service_by: null,
+  quote_delivery_deadline_at: "2026-08-20T09:00:00Z",
+  teaser_count: 0,
+  closure_reason: null,
+  last_activity_at: "2026-08-13T09:00:00Z",
+});
+
+const page = (...rows: readonly RequirementSummary[]): RequirementSummaryPage => ({
+  next: null,
+  previous: null,
+  results: [...rows],
+});
 
 describe("readRequirementList", () => {
-  it("reads the array the OpenAPI document declares", () => {
-    expect(readRequirementList([row("a"), row("b")]).map((r) => r.id)).toEqual(["a", "b"]);
+  // The bare-array and unreadable-payload cases were deleted with the branches
+  // they covered: contract 1.23.0 declares `RequirementSummaryPage`, so the
+  // envelope is the only shape and `results` is required. See the module note.
+  it("reads the rows out of the page the view returns", () => {
+    expect(readRequirementList(page(row("a"), row("b"))).map((r) => r.id)).toEqual(["a", "b"]);
   });
 
-  it("reads the cursor envelope the view actually returns", () => {
-    // `RequirementCollectionView.get` paginates while its `@extend_schema`
-    // declares a bare list. This branch is the whole reason the function
-    // exists; when the backend fix lands it is the branch that gets deleted.
-    const payload = { next: "cursor=abc", previous: null, results: [row("a")] };
-    expect(readRequirementList(payload).map((r) => r.id)).toEqual(["a"]);
-  });
-
-  it("reads an empty envelope as no rows rather than throwing", () => {
-    expect(readRequirementList({ next: null, previous: null, results: [] })).toEqual([]);
-  });
-
-  it("reads an unrecognisable payload as no rows", () => {
-    // Safe only because the caller decides "empty" from query status, never
-    // from length: a failed read renders its error, not the empty state.
-    expect(readRequirementList(null)).toEqual([]);
-    expect(readRequirementList("nonsense")).toEqual([]);
-    expect(readRequirementList({ detail: "boom" })).toEqual([]);
+  it("reads an empty page as no rows rather than throwing", () => {
+    expect(readRequirementList(page())).toEqual([]);
   });
 });
 

@@ -7,62 +7,54 @@
  * the hook is a call site. What is here is everything both the app and its tests
  * need to agree on, and nothing that needs a component to exercise.
  *
- * ## The list read does not match its own schema, and this module is where that
- * is absorbed
+ * ## The list read once disagreed with its own schema. It no longer does.
  *
- * `GET /api/v1/requirements/` is declared in the OpenAPI document as
- * `RequirementSummary[]`, and the view returns
- * `RequirementCursorPagination.get_paginated_response(...)` — a
- * `{next, previous, results}` envelope. drf-spectacular cannot see a paginator
- * instantiated inside a plain `APIView`, so nothing caught it: the schema
- * validates, the client generates, and `.map` over the response would throw on
- * the first real request.
+ * `GET /api/v1/requirements/` was declared as a bare `RequirementSummary[]`
+ * while the view returned `RequirementCursorPagination.get_paginated_response
+ * (...)` — a `{next, previous, results}` envelope. drf-spectacular cannot see a
+ * paginator instantiated inside a plain `APIView`, so nothing caught it: the
+ * schema validated, the client generated, and `.map` over the response would
+ * have thrown on the first real request.
  *
- * `readRequirementList` accepts either shape rather than picking one. That is a
- * deliberate exception to "do not work around a server defect in the client",
- * made because the alternative is mounting `My requests` in a state that
- * provably cannot work, and taken in one named function with a test rather than
- * spread through a component. **Delete the envelope branch when the C1 fix
- * lands** — the row is in `frontend-execution-plan.md` §7.
+ * **Contract 1.23.0 declares `RequirementSummaryPage`**, so the generated type
+ * is now the truth and the compensating both-shapes narrowing is deleted — the
+ * row is answered in `frontend-execution-plan.md` §7. What remains is a named
+ * accessor rather than an inline `.results`, because the cursor is the half
+ * still to come.
  *
  * The cursor itself is deliberately *not* threaded through. `My requests` is a
  * list somebody arrives at to find one request; page two is a real feature and
- * it is `FE-213`'s to add once the shape is settled, not something to build on
- * top of a projection that is currently wrong.
+ * it is `FE-213`'s to add.
  */
 
 import { ApiRequestError } from "@vsolve/api-client";
 import type { Schemas } from "@vsolve/api-client";
 
 export type RequirementSummary = Schemas["RequirementSummary"];
+export type RequirementSummaryPage = Schemas["RequirementSummaryPage"];
 export type RequirementDraft = Schemas["RequirementDraft"];
 export type RequirementSubmitted = Schemas["RequirementSubmitted"];
 export type RequirementTimeline = Schemas["RequirementTimeline"];
 export type RequirementTimelineEvent = Schemas["RequirementTimelineEvent"];
 export type ProbableDuplicate = Schemas["ProbableDuplicate"];
 export type RequirementAttachment = Schemas["RequirementAttachment"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export type RequirementAttachmentKind = Schemas["RequirementAttachmentKindEnum"];
+export type AttachmentUploadGrant = Schemas["AttachmentUploadGrant"];
 
 /**
- * The `My requests` rows, whichever of the two shapes the server sent.
+ * The `My requests` rows out of the page the server sent.
  *
- * Returns `[]` only for a payload that genuinely carried no rows. An
- * unreadable payload also returns `[]`, and that is safe *here* specifically
- * because the caller distinguishes the two by query status, not by array
- * length: an empty list renders "you have not asked for anything yet" only when
- * the read succeeded, and a failed read renders its own error. This is the
- * opposite of the rule `parseWorkspaceGrants` sits under, where `[]` is an
- * authorization answer and had to stay distinguishable from silence.
+ * Returns `[]` only for a page that genuinely carried no rows — the server
+ * declares `results` as required, so there is no longer an "unreadable payload"
+ * branch to fall through. The caller still distinguishes empty from failed by
+ * query status rather than by array length: an empty list renders "you have not
+ * asked for anything yet" only when the read succeeded, and a failed read
+ * renders its own error. That is the opposite of the rule `parseWorkspaceGrants`
+ * sits under, where `[]` is an authorization answer and had to stay
+ * distinguishable from silence.
  */
-export function readRequirementList(payload: unknown): readonly RequirementSummary[] {
-  if (Array.isArray(payload)) return payload as RequirementSummary[];
-  if (isRecord(payload) && Array.isArray(payload.results)) {
-    return payload.results as RequirementSummary[];
-  }
-  return [];
+export function readRequirementList(page: RequirementSummaryPage): readonly RequirementSummary[] {
+  return page.results;
 }
 
 /**
@@ -149,4 +141,97 @@ export function isRequirementDuplicate(error: unknown): boolean {
  */
 export function isLifecycleUnsupported(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "m2_lifecycle_not_supported";
+}
+
+/* ---------------------------------------------------------------------------
+   Attachments — the scan vocabulary, and the one distinction it turns on
+   --------------------------------------------------------------------------- */
+
+/**
+ * What `RequirementAttachment.scan_status` can carry at contract 1.22.0.
+ *
+ * Declared here as a runtime list rather than taken from the generated client,
+ * because the generated client declares the field as a bare `string`:
+ * `RequirementAttachment.scan_status` is serialised from
+ * `RequirementAttachment.ProcessingStatus` without a named enum, so **the
+ * compiler is checking nothing at all on this field**. A response is bytes, and
+ * the only thing standing between an unrecognised verdict and a component is
+ * `readScanStatus`.
+ *
+ * ## `INFECTED` and `FAILED` are separate on purpose, and the difference is the
+ * whole reason this module knows about attachments
+ *
+ * - **`FAILED`** is the upload going wrong: the stored object's size, media type
+ *   or SHA-256 did not match what the client declared. The bytes are suspect,
+ *   the file is not. **The recovery is to send it again.**
+ * - **`INFECTED`** is the malware scanner's verdict. **The recovery is removal
+ *   and only removal**, which is why `DELETE .../attachments/{id}/` is permitted
+ *   in *any* requirement status while every other attachment write is refused
+ *   once the requirement leaves `DRAFT` — so an infected file is never stuck on
+ *   a live requirement. A retry button on this verdict would invite somebody to
+ *   re-upload malware, and it is the one affordance that must never appear here.
+ *
+ * Collapsing the two into one client-side "scan failed" is exactly the mistake
+ * `apps/requirements/models.py` documents itself against, and it was the shape
+ * this client carried until 1.22.0 published the fourth value.
+ *
+ * It is **not** `CLEAN`. `VERIFIED` is the model's own value; renaming a stored
+ * enum to suit a client label is the wrong direction.
+ */
+export type AttachmentScanStatus = "PENDING" | "VERIFIED" | "INFECTED" | "FAILED";
+
+const SCAN_STATUSES: readonly AttachmentScanStatus[] = [
+  "PENDING",
+  "VERIFIED",
+  "INFECTED",
+  "FAILED",
+];
+
+/**
+ * The verdict, or null when this build does not recognise it.
+ *
+ * Null rather than a default, so every caller has to decide what an unknown
+ * verdict means — and every caller in this codebase decides the same thing:
+ * **not usable**. Defaulting to `PENDING` would show a file as "still being
+ * checked" forever; defaulting to `VERIFIED` would put an unscanned file in
+ * front of a vendor. Failing closed is the only direction that cannot do harm,
+ * and it matches how `isRequestStatus` and the timeline's event types already
+ * treat a value the server learned after this bundle shipped.
+ */
+export function readScanStatus(value: string): AttachmentScanStatus | null {
+  return SCAN_STATUSES.includes(value as AttachmentScanStatus)
+    ? (value as AttachmentScanStatus)
+    : null;
+}
+
+/**
+ * Whether the attachment has cleared its scan and can be shown to a vendor.
+ *
+ * `VERIFIED` and nothing else. `matching.snapshot_requirement` applies the same
+ * rule server-side, which is what makes this safe to render from: the client is
+ * describing a decision the server already took, not taking one.
+ */
+export function isAttachmentUsable(scanStatus: string): boolean {
+  return readScanStatus(scanStatus) === "VERIFIED";
+}
+
+/**
+ * `400 m2_attachment_invalid` — the file itself is the problem.
+ *
+ * Unsupported media type, over the per-kind ceiling, a malformed checksum, more
+ * attachments than one requirement may carry, an expired upload intent, an
+ * already-finalized one, or a stored object that does not match what was
+ * declared. Not retryable **with the same bytes and the same intent**: the
+ * screen has to say which file and why, against that file.
+ */
+export function isAttachmentInvalid(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "m2_attachment_invalid";
+}
+
+/**
+ * `503 m2_attachment_unavailable` — storage is down. The only retryable refusal
+ * on the attachment path, and the contract says so in those words.
+ */
+export function isAttachmentUnavailable(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "m2_attachment_unavailable";
 }

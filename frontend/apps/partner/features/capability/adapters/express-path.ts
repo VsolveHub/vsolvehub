@@ -1,6 +1,6 @@
 import type { Schemas } from "@vsolve/api-client";
 
-import type { BusinessProfile } from "../contract-pending/types";
+import type { BusinessProfile } from "./wire";
 
 /**
  * The short way in: phone, name, one service, one city — then real demand.

@@ -4,6 +4,7 @@ import { AddressSummary, Button, ErrorState, ScheduleSummary } from "@vsolve/ui"
 import { useState } from "react";
 
 import { OPTIONAL_DETAILS, OPTIONAL_DETAIL_LABELS, type Screen } from "../model/screens";
+import type { DraftAttachment } from "../model/state";
 import { BLOCK_COPY } from "./block-copy";
 import { OptionalDetailPanel, summariseOptionalDetail } from "./optional-detail-panels";
 import { useRequirement } from "./requirement-context";
@@ -42,6 +43,34 @@ interface ReviewRow {
   screen: Screen;
 }
 
+/**
+ * What the attachments row says, and why it is not a count of the rows.
+ *
+ * A row exists for every file the Customer chose, including the ones that were
+ * refused and the ones still clearing their scan. "4 attached" over three
+ * verified files and one rejected one is the review screen telling somebody a
+ * photograph went with their request when it did not — which is the exact harm
+ * the scan states exist to prevent, restated as a summary.
+ *
+ * So each group is named separately, and the ones that are not attached are
+ * described as not attached.
+ */
+function attachmentSummary(attachments: readonly DraftAttachment[]): string {
+  if (attachments.length === 0) return "None";
+
+  const attached = attachments.filter((item) => item.state === "attached").length;
+  const checking = attachments.filter((item) => item.state === "scanning").length;
+  const notAttached = attachments.filter(
+    (item) => item.state === "failed" || item.state === "queued" || item.state === "uploading",
+  ).length;
+
+  const parts: string[] = [];
+  parts.push(attached === 1 ? "1 attached" : `${attached} attached`);
+  if (checking > 0) parts.push(`${checking} still being checked`);
+  if (notAttached > 0) parts.push(`${notAttached} not attached`);
+  return parts.join(", ");
+}
+
 export interface ReviewScreenProps {
   categoryName: string;
   addressLines: readonly string[] | null;
@@ -70,8 +99,7 @@ export function ReviewScreen({
   const rows: ReviewRow[] = [
     {
       label: "Attachments",
-      value:
-        state.attachments.length === 0 ? "None" : `${state.attachments.length} attached`,
+      value: attachmentSummary(state.attachments),
       screen: "details",
     },
   ];

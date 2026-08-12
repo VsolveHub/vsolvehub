@@ -1,6 +1,5 @@
 "use client";
 
-import type { Schemas } from "@vsolve/api-client";
 import { describeError, isLifecycleUnsupported } from "@vsolve/query";
 import { ErrorState } from "@vsolve/ui";
 import { useEffect, useState } from "react";
@@ -10,16 +9,21 @@ import {
   toDuplicateView,
   toLifecycleVerdict,
   toQuestionSet,
+  toServerAttachments,
+  type RequirementService,
+  type RequirementVariant,
 } from "../adapters";
 import { clearPersistedRequirement, RequirementProvider, useRequirement } from "./requirement-context";
 import {
   useCreateRequirement,
   useProbableDuplicates,
+  useRequirement as useRequirementRecord,
   useSaveRequirement,
   useSubmitRequirement,
   isRequirementExpired,
   isSubmitInProgress,
 } from "../queries";
+import { useAttachments } from "../use-attachments";
 import { DetailsScreen } from "./details-screen";
 import { DuplicateNotice } from "./duplicate-notice";
 import { RequirementAddressPicker } from "./requirement-address-picker";
@@ -47,7 +51,7 @@ import { WhereWhenScreen } from "./where-when-screen";
  * |---|---|---|
  * | `what` | `POST /requirements/` or `PATCH {answers}` | The answers are what the lifecycle is inferred from, and the response *is* the verdict screen 1 renders. |
  * | `where_when` | `PATCH {address, dates, flexibility}` | Serviceability is resolved server-side from the address, and the duplicate check needs a saved start. |
- * | `details` | `PATCH {additional_details, language}` | Nothing else on that screen can be saved yet — upload is Wave C1. |
+ * | `details` | `PATCH {additional_details, language}` | Attachments write themselves as they are picked — an upload cannot wait for "Next" — so what is left is the text and the language the voice note was recorded in. |
  * | `review` | `POST /submit/` | The one command. |
  *
  * Autosaving on change was the alternative and it is worse here: every answer
@@ -66,9 +70,9 @@ import { WhereWhenScreen } from "./where-when-screen";
 
 export interface RequirementFlowProps {
   /** The service the requirement is for. Its slug is the wire's `category_slug`. */
-  service: Schemas["ServiceDetail"];
+  service: RequirementService;
   /** The A3/A5 variant chosen by the route. Carries screen 1's questions. */
-  variant: Schemas["ServiceVariantConfiguration"];
+  variant: RequirementVariant;
   /** Where a submitted request is followed. Injected — this feature owns no route. */
   requestHrefFor: (requirementId: string) => string;
   browseHref: string;
@@ -136,6 +140,36 @@ function FlowBody({
   useEffect(() => {
     onDuplicatesChange(duplicates.length > 0);
   }, [duplicates.length, onDuplicatesChange]);
+
+  const attachments = useAttachments({
+    requirementId: state.requirementId,
+    attachments: state.attachments,
+    dispatch,
+  });
+
+  /**
+   * The requirement's own record, read only for one thing this device cannot
+   * know: the scan verdict on each attachment.
+   *
+   * Enabled from the moment the draft exists rather than only while a file is in
+   * flight, because a resumed draft arrives with attachments this tab never
+   * uploaded and they have to appear before the Customer can decide about them.
+   * `VOLATILE_STATE` refetches on focus, which is what makes a verdict that
+   * lands while the tab is in the background show up on return.
+   */
+  const record = useRequirementRecord(state.requirementId);
+  const serverAttachments = record.data?.attachments;
+
+  useEffect(() => {
+    if (serverAttachments === undefined) return;
+    // Safe to run on every render: `SYNC_SERVER_ATTACHMENTS` returns the state
+    // object unchanged when nothing differs, and React bails out of a dispatch
+    // that changes nothing.
+    dispatch({
+      type: "SYNC_SERVER_ATTACHMENTS",
+      attachments: toServerAttachments(serverAttachments),
+    });
+  }, [serverAttachments, dispatch]);
 
   const submitted = submitRequirement.data;
 
@@ -279,13 +313,17 @@ function FlowBody({
         />
       ) : state.screen === "details" ? (
         <DetailsScreen
-          // Both null: an attachment needs an upload command and a voice note is
-          // an attachment. `M2-BE-202` is Wave C1, and screen 3 says so rather
-          // than offering a control that drops the file.
-          onAttachFiles={null}
-          onRecordVoice={null}
-          onRemoveAttachment={(id) => dispatch({ type: "REMOVE_ATTACHMENT", id })}
-          onRetryAttachment={() => undefined}
+          onAttachFiles={attachments.attachFiles}
+          onRecordVoice={attachments.attachRecording}
+          onRemoveAttachment={attachments.remove}
+          onRetryAttachment={attachments.retry}
+          previewUrlFor={attachments.previewUrlFor}
+          // An attachment hangs off a requirement, so the draft has to exist
+          // first. Screens 1 and 2 have already created it in every ordinary
+          // path; this is the honest state for someone who reached screen 3
+          // without a saved answer.
+          canAttach={state.requirementId !== null}
+          isBusy={attachments.isRemoving}
         />
       ) : (
         <ReviewScreen

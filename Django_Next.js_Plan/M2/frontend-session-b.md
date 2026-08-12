@@ -93,6 +93,16 @@
 > [task.md](task.md) §"Verification convention". Commit at the wave gate, not per task. Never push
 > to `main`.
 
+> **Revision 3 — visit-first A5 (2026-08-12, ADR-0008).** Two tasks join your column when their
+> endpoints publish (Wave C2): `M2-FE-314` — the A5 enquiry response becomes a **one-screen
+> visit-slot confirmation** (slot picker on the shared availability grid, same pattern as the A1
+> checkout `slots-modal.tsx`) — and `M2-FE-315` — the A5 composer's **on-site mode** (prefilled from
+> the requirement and the visit, completed-visit guard `m2_visit_not_completed` surfaced, phone-first
+> ergonomics). Nothing you have built changes: the A5 composer itself, the enquiry inbox and
+> clarification all stand. The remote A5 quote path is retired at the flow level, so once C2 lands,
+> a proposal submit without a completed visit will be refused for A5 — the composer's mode, not its
+> fields, is what changes. Task detail in `03-frontend-tasks.md` §"A5 visit response".
+
 ## Standing constraints
 
 - **Owned paths only:** `apps/partner/**`, `apps/admin/**`,

@@ -22,13 +22,17 @@
 | Description                                        | Amount          | Status                    |
 | -------------------------------------------------- | --------------- | ------------------------- |
 | Advance (Already Paid)                             | ₹1,00,000       | ✅ Paid                    |
-| **Milestone 0 — Prototype (Demoed & Approved)**    | ₹1,00,000       | 🔵 Approved — **Now Due** |
-| Milestone 1 — Production Core (Backend + Website)  | ₹1,00,000       | Upcoming                  |
-| Milestone 2 — Workforce & Project Services (Web)   | ₹75,000         | Upcoming                  |
+| **Milestone 0 — Prototype (Demoed & Approved)**    | ₹1,00,000       | ✅ Paid                    |
+| **Milestone 1 — Production Core (Backend + Website)** | ₹1,00,000    | 🔵 **In Progress**        |
+| **Milestone 2 — Workforce & Project Services (Web)**  | ₹75,000      | 🔵 **In Progress**        |
 | Milestone 3 — Full Implementation (All Flows + Payments + Wallet) | ₹75,000         | Upcoming                  |
 | Milestone 4 — Apps + Rapido + AI Chatbot + **Single Go-Live** | ₹1,00,000       | Upcoming                  |
 | Final Source Code & Project Handover               | ₹50,000         | Upcoming                  |
 | **Total Project Cost**                             | **₹6,00,000/-** |                           |
+
+**Received to date: ₹2,00,000** (Advance + M0 Prototype) · **Balance: ₹4,00,000**
+
+> **Current status:** Milestones 1 and 2 are running **in parallel**. Both are payable on milestone acceptance.
 
 
 > **How delivery works (important):**
@@ -46,7 +50,7 @@
 ### Prototype — Core Platform Demonstration
 
 **Timeline:** Days 1–15 (Completed)
-**Payment:** ₹1,00,000 — *Approved, now payable*
+**Payment:** ₹1,00,000 — *✅ Paid*
 
 **Delivered & Signed Off:**
 
@@ -61,7 +65,7 @@
 - A working clickable demo (already delivered & approved).
 - **Prototype only** — no production backend, payments, or live deployment.
 
-**Status:** ✅ Delivered & approved → **₹1,00,000 due.**
+**Status:** ✅ Delivered, approved & paid.
 
 ---
 
@@ -69,8 +73,8 @@
 
 ### Production Core — Backend + Website (Fixed-Price Services)
 
-**Timeline:** 1 July 2026 → 31 July 2026
-**Payment:** ₹1,00,000
+**Timeline:** 1 July 2026 → 31 July 2026 — *🔵 In Progress*
+**Payment:** ₹1,00,000 — *Due on milestone acceptance*
 
 > First production build. **Website only — no app, not live.** This is the foundation every later category reuses. The main work is building the **booking engine** for each service.
 
@@ -102,8 +106,8 @@
 
 ### Workforce & Project Services — Web Build
 
-**Timeline:** 1 August 2026 → 15 August 2026  
-**Payment:** ₹75,000
+**Timeline:** 1 August 2026 → 15 August 2026 — *🔵 In Progress (running in parallel with M1)*
+**Payment:** ₹75,000 — *Due on milestone acceptance*
 
 > Same backend/web foundation extended to crew & quote-based categories. **Still build phase — website only, not live.** The main work is the **booking engine** for each service.
 
@@ -249,9 +253,9 @@ Successfully completed only after: all milestones complete · all agreed feature
 | Stage        | Window    | What's Delivered                                                                                              | Live?       | Payment       |
 | ------------ | --------- | ------------------------------------------------------------------------------------------------------------- | ----------- | ------------- |
 | **Advance**  | Paid      | Kickoff                                                                                                       | —           | ₹1,00,000 ✅   |
-| **M0**       | Days 1–15 | Prototype (approved)                                                                                          | Demo only   | ₹1,00,000 🔵  |
-| **M1**       | Jul 1–31  | Backend + DB + APIs + Website + Booking Engines (Tech/Beauty/Home/Pet)                                        | ❌ Not live  | ₹1,00,000     |
-| **M2**       | Aug 1–15  | Booking Engines (Construction/Manpower/Event)                                                                 | ❌ Not live  | ₹75,000       |
+| **M0**       | Days 1–15 | Prototype (approved)                                                                                          | Demo only   | ₹1,00,000 ✅   |
+| **M1**       | Jul 1–31 🔵 In Progress | Backend + DB + APIs + Website + Booking Engines (Tech/Beauty/Home/Pet)                          | ❌ Not live  | ₹1,00,000     |
+| **M2**       | Aug 1–15 🔵 In Progress | Booking Engines (Construction/Manpower/Event) — *parallel with M1*                              | ❌ Not live  | ₹75,000       |
 | **M3**       | Aug 17–Sep 17 | All booking flows + Razorpay + OTP + Wallet/V Coins/Referral + Admin (Rentals/Stay/Jobs) — fully built on staging | ❌ Not live  | ₹75,000       |
 | **M4**       | Sep 20–Oct 10 | Customer App + Partner App + Rapido + AI Chatbot **— single go-live, all 11 live at once**                | ✅ All live  | ₹1,00,000     |
 | **Handover** | Oct 15    | Entire codebase & credentials                                                                                 | —           | ₹50,000       |

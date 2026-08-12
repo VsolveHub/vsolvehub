@@ -1,6 +1,7 @@
 # 7. M2 engagement spine and fee after value
 
-- Status: Accepted
+- Status: Accepted; the A5 fee model is superseded by ADR-0008 (visit-first estimation). The
+  engagement spine, mode-per-archetype and the A3 unlock remain in force.
 - Date: 2026-08-10
 
 ## Context

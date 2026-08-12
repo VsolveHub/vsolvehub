@@ -22,49 +22,122 @@ import { type Screen, nextScreen, screenIndex } from "./screens";
  * feature entirely.
  */
 
+/**
+ * Why an attachment is not attached, as a code so the copy stays with the view.
+ *
+ * ## The one distinction the whole uploader turns on
+ *
+ * The first three are decided here, before a byte moves. The last four are the
+ * server's, and **two of them are the same word in English and opposite
+ * instructions in practice**:
+ *
+ * | Code | Comes from | Recovery |
+ * |---|---|---|
+ * | `EMPTY` / `TOO_LARGE` / `UNSUPPORTED_TYPE` / `TOO_MANY` | this client, before uploading | pick a different file |
+ * | `UPLOAD_FAILED` | the transfer, the presign or storage | **retry** |
+ * | `REFUSED` | the server said no on the file's merits, in its own words | pick a different file |
+ * | `CHECK_FAILED` | scan status `FAILED` — size, media type or checksum mismatch | **retry** |
+ * | `INFECTED` | scan status `INFECTED` — the malware scanner said no | **remove, and never retry** |
+ * | `SCAN_UNKNOWN` | a scan status this build does not recognise | remove; fails closed |
+ *
+ * `SCAN_FAILED` used to be one code covering the last three, because contract
+ * 1.21.0 published only `PENDING | VERIFIED | FAILED`. 1.22.0 published
+ * `INFECTED` beside `FAILED` precisely so a client could stop offering "try
+ * again" for malware, and collapsing them again would put that button back.
+ * `SCAN_UNKNOWN` is not retryable for the same reason: an unrecognised verdict
+ * could be `INFECTED` under a name this bundle predates.
+ */
+export type AttachmentFailure =
+  | "EMPTY"
+  | "TOO_LARGE"
+  | "UNSUPPORTED_TYPE"
+  | "TOO_MANY"
+  | "UPLOAD_FAILED"
+  | "REFUSED"
+  | "CHECK_FAILED"
+  | "INFECTED"
+  | "SCAN_UNKNOWN";
+
+/**
+ * Whether offering "try again" on this failure is honest.
+ *
+ * The single place that decides whether a retry affordance renders. It is a
+ * function rather than a set literal at the call site because getting it wrong
+ * in one component is how `INFECTED` gets a retry button on one screen and not
+ * another.
+ */
+export function isRetryableAttachmentFailure(failure: AttachmentFailure | null): boolean {
+  return failure === "UPLOAD_FAILED" || failure === "CHECK_FAILED";
+}
+
 /** A file the Customer has attached, as the client knows it before upload completes. */
 export interface DraftAttachment {
-  /** Client-side id until the server issues one; replaced by the server id on intent. */
+  /** Client-side, stable for the life of the row — never replaced by the server's. */
   id: string;
+  /**
+   * The server's own id, once the finalize has returned one. Null before that.
+   *
+   * Held separately from `id` rather than replacing it, and that is what makes
+   * a replayed finalize harmless: the row is addressed by its local id
+   * throughout, so a second finalize under the same idempotency key updates the
+   * row it already created instead of appending a duplicate.
+   */
+  attachmentId: string | null;
   /**
    * The wire's vocabulary, not a second one.
    *
    * This said `PHOTO` until contract 1.21.0 published
    * `RequirementAttachmentKindEnum` as `IMAGE | VIDEO | AUDIO | VOICE_NOTE |
    * DOCUMENT`. Renamed rather than mapped at the seam, because these values are
-   * *bound for* that enum — the upload command (`M2-BE-202`, Wave C1) sends
-   * them — so a private synonym would exist only to be translated once, on the
-   * way out, in a direction nothing else travels.
+   * *bound for* that enum — the upload command sends them — so a private
+   * synonym would exist only to be translated once, on the way out, in a
+   * direction nothing else travels.
    *
-   * `AUDIO` is deliberately absent: it is a kind the *server* can send back and
-   * this list is what the file picker on screen 3 can produce, where an audio
-   * file the Customer chose and a voice note they recorded are different things
-   * with different copy. `toServerAttachmentItems` handles all five.
+   * `AUDIO` is here even though the picker cannot produce one: since the
+   * reducer adopts attachments the server already holds (a resumed draft, a
+   * second device), a kind it can send back has to be representable. What the
+   * *picker* offers is narrower and lives in `model/upload.ts`.
    */
-  kind: "IMAGE" | "VIDEO" | "DOCUMENT" | "VOICE_NOTE";
+  kind: "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT" | "VOICE_NOTE";
   fileName: string;
   byteSize: number;
+  /**
+   * BCP-47 tag for a voice note. Null for everything else.
+   *
+   * Carried per attachment rather than only on the requirement because the note
+   * is the thing whose language decides whether a vendor can act on it, and
+   * `AttachmentUploadRequestRequest.language` is a field on the upload for
+   * exactly that reason.
+   */
+  language: string | null;
   /**
    * Upload and scan progress as one union rather than two booleans.
    *
    * `scanning` is a real, visible state and not a detail: an attachment that has
    * uploaded but not cleared the malware scan is neither attached nor failed, and
    * a boolean pair would let a component render the fourth combination that does
-   * not exist.
+   * not exist. **Nothing may render `scanning` as attached** — someone
+   * submitting believing a photo went with it is the harm this state exists to
+   * prevent.
    */
   state: "queued" | "uploading" | "scanning" | "attached" | "failed";
   /** Percent, for the progress indicator. Null until an upload starts. */
   progress: number | null;
+  failure: AttachmentFailure | null;
   /**
-   * Why it failed, as a code so the copy stays with the view.
+   * The server's own sentence about this refusal, when it gave one.
    *
-   * `SCAN_FAILED` replaced `INFECTED` at contract 1.21.0. The published scan
-   * states are `PENDING | VERIFIED | FAILED` and there is no `INFECTED` — the
-   * server does not tell a Customer *why* a file failed its check, and it
-   * should not: "we found malware in your document" is a claim, and the storage
-   * adapter reports a failed scan, which is a fact. The code follows the fact.
+   * A deliberate exception to "codes here, copy in the view". `m2_attachment_
+   * invalid` covers an unsupported media type, an oversized file, a malformed
+   * checksum, a thirteenth attachment and a stored object that did not match —
+   * one code, five different things to do about it — and Django already writes
+   * a user-safe sentence for each. Re-deriving which one it meant from a shared
+   * code would be this client guessing at a decision it was told the answer to.
+   *
+   * Null for anything refused locally, where the client's own copy is better
+   * because it can quote the ceiling.
    */
-  failure: "TOO_LARGE" | "UNSUPPORTED_TYPE" | "SCAN_FAILED" | "UPLOAD_FAILED" | null;
+  failureDetail: string | null;
 }
 
 /**
@@ -173,6 +246,17 @@ export type BlockReason =
   | "SERVICE_DATE_BEFORE_START"
   | "ATTACHMENT_STILL_UPLOADING"
   | "ATTACHMENT_FAILED"
+  /**
+   * A file came back from the malware scan as rejected.
+   *
+   * Its own reason rather than folded into `ATTACHMENT_FAILED`, because the two
+   * instructions differ: a failed upload is retried, a rejected file can only
+   * be removed. Blocking on it is deliberate — `DELETE` is permitted in any
+   * requirement status precisely so an infected file never gets stuck on a live
+   * requirement, and the cheapest way to keep that promise is to not let one
+   * travel past the draft in the first place.
+   */
+  | "ATTACHMENT_REJECTED"
   | "DUPLICATE_NOT_RESOLVED"
   /**
    * An optional extra was opened and left half-said.
@@ -218,6 +302,34 @@ export function hasAttachmentInFlight(state: RequirementDraftState): boolean {
 
 export function hasFailedAttachment(state: RequirementDraftState): boolean {
   return state.attachments.some((attachment) => attachment.state === "failed");
+}
+
+/**
+ * A file the malware scan rejected.
+ *
+ * Separate from `hasFailedAttachment` because the recovery is different and the
+ * guard's copy has to say which. Checked *before* the general failure so a
+ * Customer holding one rejected file and one flaky upload is told about the one
+ * they cannot retry.
+ */
+export function hasRejectedAttachment(state: RequirementDraftState): boolean {
+  return state.attachments.some((attachment) => attachment.failure === "INFECTED");
+}
+
+/**
+ * Attachment rules, in one place, read by both the screen-3 guard and the
+ * submit guard on review.
+ *
+ * Shared for the same reason `blockedDates` is: review re-asserts the earlier
+ * screens, and a scan verdict can land *while the Customer is on review* —
+ * which is the one path by which a rejected file reaches the submit button at
+ * all. Two copies of this ordering is how the two screens stop agreeing.
+ */
+function blockedAttachments(state: RequirementDraftState): BlockReason | null {
+  if (hasAttachmentInFlight(state)) return "ATTACHMENT_STILL_UPLOADING";
+  if (hasRejectedAttachment(state)) return "ATTACHMENT_REJECTED";
+  if (hasFailedAttachment(state)) return "ATTACHMENT_FAILED";
+  return null;
 }
 
 /**
@@ -280,10 +392,9 @@ export function blockedReason(
     }
 
     case "details":
-      // Attachments are optional; an attachment that is *mid-flight* is not.
-      if (hasAttachmentInFlight(state)) return "ATTACHMENT_STILL_UPLOADING";
-      if (hasFailedAttachment(state)) return "ATTACHMENT_FAILED";
-      return null;
+      // Attachments are optional; an attachment that is *mid-flight* is not, and
+      // neither is one that came back rejected.
+      return blockedAttachments(state);
 
     case "review": {
       // Re-asserted rather than trusted from the earlier screens, because the
@@ -292,7 +403,8 @@ export function blockedReason(
       if (state.addressId === null) return "ADDRESS_NOT_CHOSEN";
       const dates = blockedDates(state, today);
       if (dates !== null) return dates;
-      if (hasAttachmentInFlight(state)) return "ATTACHMENT_STILL_UPLOADING";
+      const attachments = blockedAttachments(state);
+      if (attachments !== null) return attachments;
       if (state.verdict !== null) {
         const unanswered = state.verdict.missingRequiredAnswers.some(
           (code) => !isAnswered(state.answers[code]),

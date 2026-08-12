@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CapabilityRecord, CapabilityStatus } from "../contract-pending/types";
+import type { CapabilityRecord, CapabilityStatus } from "./wire";
 import {
   activeCapabilities,
   describeCapability,
@@ -29,7 +29,18 @@ function record(overrides: Partial<CapabilityRecord> = {}): CapabilityRecord {
     requires_insurance: true,
     max_crew_size: 12,
     max_project_value_paise: null,
+    // Contract 1.23.0. **Empty means every area this Partner serves** — the
+    // common case, and never "not covered". A non-empty list is an Operations
+    // narrowing that can only ever subtract.
+    service_area_ids: [],
+    registration_answers: {},
     expires_at: null,
+    // Published at contract 1.22.0 alongside the `REJECTED` status: raw fields
+    // rather than a computed `EXPIRED` status, which is what Session B asked for
+    // and what keeps the client from holding a vocabulary Django cannot confirm.
+    expired_document_kinds: [],
+    documents_expiring_on: null,
+    last_transition: null,
     reviewed_at: null,
     updated_at: NOW,
     ...overrides,
@@ -43,15 +54,19 @@ describe("every state has a next step", () => {
     "CHANGES_REQUIRED",
     "APPROVED",
     "SUSPENDED",
+    "REJECTED",
     "WITHDRAWN",
   ];
 
-  it("says something specific for all six", () => {
+  it("says something specific for all seven", () => {
     for (const status of statuses) {
       const presentation = describeCapability(
         record({
           status,
-          review_notes: status === "CHANGES_REQUIRED" ? "Your ID does not match." : "",
+          review_notes:
+            status === "CHANGES_REQUIRED" || status === "REJECTED"
+              ? "Your ID does not match."
+              : "",
           suspension_reason_code: status === "SUSPENDED" ? "document_expired" : "",
         }),
         NOW,

@@ -1,12 +1,20 @@
 "use client";
 
-import { ApiRequestError, getStableIdempotencyKey, request } from "@vsolve/api-client";
+import {
+  ApiRequestError,
+  clearIdempotencyKey,
+  getStableIdempotencyKey,
+  request,
+} from "@vsolve/api-client";
 import {
   M2_FRESHNESS,
   m2QueryKeys,
+  isAttachmentInvalid,
+  isAttachmentUnavailable,
   readRequirementList,
   shouldRetryM2Read,
   type ProbableDuplicate,
+  type RequirementAttachment,
   type RequirementDraft,
   type RequirementSubmitted,
   type RequirementSummary,
@@ -15,6 +23,12 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
+import {
+  isUploadExpired,
+  sha256Hex,
+  type UploadProgress,
+  type UploadableAttachmentKind,
+} from "./model/upload";
 
 /**
  * The requirement flow's server layer — contract 1.21.0.
@@ -55,9 +69,6 @@ import { getApiClient } from "@/lib/api/browser";
  *
  * ## What is deliberately absent
  *
- * - **Attachment upload.** `M2-BE-202` is Wave C1. `RequirementDraft.attachments`
- *   is published read-only and there is no command that creates one, so screen
- *   3's uploader integrates later than the rest of the flow.
  * - **Merge.** `GAP-004` asks for a merge and no endpoint implements one, so the
  *   duplicate notice offers the honest thing it can do instead — open the
  *   request that already exists. Logged in the execution plan §7.
@@ -67,7 +78,13 @@ import { getApiClient } from "@/lib/api/browser";
  *   here would be building A2 early with none of its states.
  */
 
-export type { ProbableDuplicate, RequirementDraft, RequirementSummary, RequirementTimeline };
+export type {
+  ProbableDuplicate,
+  RequirementAttachment,
+  RequirementDraft,
+  RequirementSummary,
+  RequirementTimeline,
+};
 
 /* --------------------------------------------------------------------------
    Reads
@@ -146,21 +163,20 @@ export interface DuplicateCheckInput {
  *
  * ## The key's field names are stale and the values are right
  *
- * `m2QueryKeys.requirements.duplicates` takes `{addressId, serviceBy,
+ * `m2QueryKeys.requirements.duplicates` took `{addressId, serviceBy,
  * categorySlug}` — the shape proposal 0012 requested. The published endpoint
  * matches on `address_id`, `requested_start` and `variant_id` instead: a
  * date-time rather than a date, and the variant rather than the category. The
- * key factory is frozen (`m2-keys.ts`), so the values are passed through under
- * the old names and the correction is logged in the execution plan §7. The
- * cache is still keyed on exactly the three inputs that decide the answer,
- * which is the property the key exists for — only its labels are wrong.
+ * values were always passed through correctly under the old labels; the
+ * integrator renamed the frozen key's slots at the wave gate, so the pass-through
+ * is now direct and the §7 request is closed.
  */
 export function useProbableDuplicates(input: DuplicateCheckInput | null) {
   return useQuery({
     queryKey: m2QueryKeys.requirements.duplicates({
       addressId: input?.addressId ?? "",
-      serviceBy: input?.requestedStart ?? "",
-      categorySlug: input?.variantId ?? "",
+      requestedStart: input?.requestedStart ?? "",
+      variantId: input?.variantId ?? "",
     }),
     queryFn: async () =>
       (
@@ -356,6 +372,341 @@ export function useSubmitRequirement() {
     // run for one requirement.
     retry: false,
   });
+}
+
+/* --------------------------------------------------------------------------
+   Attachments — `M2-FE-204`, `M2-FE-205`
+   -------------------------------------------------------------------------- */
+
+/**
+ * Why an attachment attempt stopped, as something the row can act on.
+ *
+ * `retryable` is decided here, at the one place that knows which step failed,
+ * rather than inferred from an HTTP status three layers up. `m2_attachment_
+ * unavailable` (503) is the only retryable refusal the contract publishes on
+ * this path; everything else that is retryable is a transport failure, and
+ * `m2_attachment_invalid` (400) never is — the file itself is the problem and
+ * resending the same bytes fails identically.
+ */
+export class AttachmentUploadFailure extends Error {
+  readonly retryable: boolean;
+  /** True once the bytes are in storage, so a retry only has to finalize again. */
+  readonly bytesStored: boolean;
+
+  constructor(message: string, options: { retryable: boolean; bytesStored: boolean }) {
+    super(message);
+    this.name = "AttachmentUploadFailure";
+    this.retryable = options.retryable;
+    this.bytesStored = options.bytesStored;
+  }
+}
+
+/**
+ * PUTs the bytes to storage, reporting progress. Resolves on a 2xx only.
+ *
+ * `XMLHttpRequest` rather than `fetch` for one reason: `fetch` cannot report
+ * upload progress — no shipping browser exposes `onprogress` for a request body
+ * — and an 80 MB site video over a phone connection is exactly the case where a
+ * progress bar is the difference between waiting and tapping again. Copied in
+ * approach from `apps/partner/features/application/upload-queries.ts`, which
+ * solved the same problem for KYC documents; the two apps do not share code, so
+ * the reasoning is repeated rather than imported.
+ */
+function putBytes(
+  url: string,
+  body: Blob,
+  contentType: string,
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.setRequestHeader("content-type", contentType);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      // Storage answers 401/403 for a signature that has expired. Retryable,
+      // because the recovery is a fresh presign and the same bytes.
+      reject(
+        new AttachmentUploadFailure(
+          xhr.status === 401 || xhr.status === 403
+            ? "That upload link expired before the file finished sending."
+            : "The upload did not reach our storage.",
+          { retryable: true, bytesStored: false },
+        ),
+      );
+    };
+    xhr.onerror = () =>
+      reject(
+        new AttachmentUploadFailure("The upload could not reach our storage.", {
+          retryable: true,
+          bytesStored: false,
+        }),
+      );
+    xhr.onabort = () =>
+      reject(
+        new AttachmentUploadFailure("The upload was cancelled.", {
+          retryable: true,
+          bytesStored: false,
+        }),
+      );
+
+    xhr.send(body);
+  });
+}
+
+/**
+ * The idempotency key for finalizing one upload intent.
+ *
+ * Keyed on the **upload id**, not on the attempt. Django fingerprints the
+ * payload under a reused key and replays the persisted `201`, so a finalize that
+ * is retried after a dropped connection returns the attachment the first attempt
+ * created rather than creating a second one. That is the whole handling of "a
+ * finalize that arrives twice", and it only works if the key is derived from
+ * something stable — a fresh key per press would produce two attachments for one
+ * file.
+ */
+export function attachmentFinalizeKey(uploadId: string): string {
+  return getStableIdempotencyKey(`m2-requirement-attachment-finalize:${uploadId}`);
+}
+
+/** A live presign, kept on the row so a retry does not always start from scratch. */
+export interface AttachmentUploadIntent {
+  uploadId: string;
+  uploadUrl: string;
+  expiresAt: string;
+  /** True once `putBytes` has succeeded against this intent. */
+  bytesStored: boolean;
+}
+
+export interface AttachmentUploadInput {
+  requirementId: string;
+  kind: UploadableAttachmentKind;
+  /** Normalised media type, sent to the presign *and* on the `PUT`. */
+  contentType: string;
+  body: Blob;
+  /** BCP-47 for a voice note; empty for everything else. */
+  language: string;
+  /**
+   * A presign this row already holds.
+   *
+   * Supplied on a retry. When it is still live and its bytes are already stored,
+   * the whole transfer is skipped and only the finalize runs — under the same
+   * idempotency key, so a finalize that in fact succeeded the first time is
+   * replayed rather than repeated.
+   */
+  intent?: AttachmentUploadIntent | null;
+  onProgress?: (progress: UploadProgress) => void;
+  /** Called as soon as a presign exists, so a retry can resume from it. */
+  onIntent?: (intent: AttachmentUploadIntent) => void;
+}
+
+function refusalToFailure(error: unknown, bytesStored: boolean): AttachmentUploadFailure {
+  if (error instanceof AttachmentUploadFailure) return error;
+  if (isAttachmentUnavailable(error)) {
+    return new AttachmentUploadFailure(
+      "Attachments are temporarily unavailable. Try again in a moment.",
+      { retryable: true, bytesStored },
+    );
+  }
+  if (isAttachmentInvalid(error)) {
+    return new AttachmentUploadFailure(
+      error instanceof ApiRequestError
+        ? error.message
+        : "We could not accept that file.",
+      { retryable: false, bytesStored },
+    );
+  }
+  if (error instanceof ApiRequestError && error.status === 409) {
+    // `m2_requirement_locked`: the requirement left DRAFT while the file was in
+    // flight. Nothing about that changes on a second attempt.
+    return new AttachmentUploadFailure(
+      "This request has already gone to professionals, so files can no longer be added to it.",
+      { retryable: false, bytesStored },
+    );
+  }
+  return new AttachmentUploadFailure("The upload did not finish.", {
+    retryable: true,
+    bytesStored,
+  });
+}
+
+/**
+ * Presign, transfer, finalize — one mutation, because the three steps are not
+ * independently useful.
+ *
+ * An intent that is never finalized is an orphan Django's housekeeping sweep has
+ * to collect, and a caller able to invoke the steps separately would eventually
+ * leave one behind.
+ *
+ * ## What a retry actually re-does
+ *
+ * Only what failed. If the bytes are already in storage against a live intent,
+ * the retry finalizes that intent again under its own key — Django replays the
+ * original `201`, so the row is updated rather than duplicated. If the intent
+ * expired, or the transfer never completed, the whole handshake runs again with
+ * a fresh key. The difference matters on a phone: re-sending 80 MB to recover
+ * from a finalize that timed out is a minute of somebody's data for nothing.
+ *
+ * ## Nothing is retried automatically
+ *
+ * `retry: false`. The transfer can be genuinely expensive and the refusals that
+ * matter are not transient; both are retried by an explicit press, so the person
+ * knows a second attempt is happening.
+ */
+export function useUploadAttachment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: AttachmentUploadInput): Promise<RequirementAttachment> => {
+      const report = (progress: UploadProgress) => input.onProgress?.(progress);
+
+      let intent = input.intent ?? null;
+      if (intent !== null && isUploadExpired(intent.expiresAt)) intent = null;
+
+      if (intent === null || !intent.bytesStored) {
+        if (intent === null) {
+          report({ phase: "hashing", percent: 0 });
+          const sha256 = await sha256Hex(input.body).catch(() => {
+            throw new AttachmentUploadFailure(
+              "This browser cannot check the file before sending it, so we did not send it.",
+              { retryable: false, bytesStored: false },
+            );
+          });
+
+          report({ phase: "requesting", percent: 0 });
+          const grant = await request(() =>
+            getApiClient().POST("/api/v1/requirements/{requirement_id}/attachments/uploads/", {
+              params: { path: { requirement_id: input.requirementId } },
+              body: {
+                kind: input.kind,
+                content_type: input.contentType,
+                size_bytes: input.body.size,
+                sha256,
+                language: input.language,
+              },
+            }),
+          ).catch((error: unknown) => {
+            throw refusalToFailure(error, false);
+          });
+
+          // A deadline already in the past means the clock or the round trip is
+          // badly off. Sending bytes at it would waste the whole transfer.
+          if (isUploadExpired(grant.upload_expires_at)) {
+            throw new AttachmentUploadFailure(
+              "That upload link expired before it could be used. Try again.",
+              { retryable: true, bytesStored: false },
+            );
+          }
+
+          intent = {
+            uploadId: grant.id,
+            uploadUrl: grant.upload_url,
+            expiresAt: grant.upload_expires_at,
+            bytesStored: false,
+          };
+          input.onIntent?.(intent);
+        }
+
+        report({ phase: "uploading", percent: 0 });
+        await putBytes(intent.uploadUrl, input.body, input.contentType, (percent) =>
+          report({ phase: "uploading", percent }),
+        );
+        intent = { ...intent, bytesStored: true };
+        input.onIntent?.(intent);
+      }
+
+      report({ phase: "finalizing", percent: 100 });
+      const uploadId = intent.uploadId;
+      const attachment = await request(() =>
+        getApiClient().POST("/api/v1/requirements/{requirement_id}/attachments/", {
+          params: {
+            path: { requirement_id: input.requirementId },
+            header: { "Idempotency-Key": attachmentFinalizeKey(uploadId) },
+          },
+          body: { upload_id: uploadId },
+        }),
+      ).catch((error: unknown) => {
+        // The intent is spent either way once Django has refused it on its
+        // merits, so the stored key goes with it — keeping it would make a later
+        // upload of a different file replay this refusal.
+        if (isAttachmentInvalid(error)) {
+          clearIdempotencyKey(`m2-requirement-attachment-finalize:${uploadId}`);
+        }
+        throw refusalToFailure(error, true);
+      });
+
+      clearIdempotencyKey(`m2-requirement-attachment-finalize:${uploadId}`);
+      return attachment;
+    },
+
+    // The requirement's own record carries `attachments`, and it is the only
+    // thing that knows the scan verdict. Refetched on success and on failure
+    // alike: a finalize that failed at the client may still have landed.
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.detail(input.requirementId),
+      });
+    },
+
+    retry: false,
+  });
+}
+
+export interface RemoveAttachmentInput {
+  requirementId: string;
+  attachmentId: string;
+}
+
+/**
+ * Deletes an attachment and the stored object behind it.
+ *
+ * Permitted while the requirement is a draft — and, for an `INFECTED`
+ * attachment, **in any status at all**. That exception is deliberate on the
+ * server and it is the reason removal is the only recovery this client ever
+ * offers for malware: a rejected file must never be stuck on a live requirement
+ * because the edit window closed.
+ *
+ * A `404` is treated as success by the caller rather than as an error. The row
+ * is gone, which is what the press asked for; reporting a failure would leave a
+ * row on screen for a record that no longer exists.
+ */
+export function useRemoveAttachment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RemoveAttachmentInput) =>
+      request(() =>
+        getApiClient().DELETE("/api/v1/requirements/{requirement_id}/attachments/{attachment_id}/", {
+          params: {
+            path: {
+              requirement_id: input.requirementId,
+              attachment_id: input.attachmentId,
+            },
+          },
+        }),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.detail(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+/** `404` on a delete: already gone, which is the outcome that was asked for. */
+export function isAlreadyRemoved(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 404;
 }
 
 /* --------------------------------------------------------------------------

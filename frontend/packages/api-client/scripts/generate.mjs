@@ -45,8 +45,25 @@ function readContractVersion(source) {
   return match?.[1]?.trim() ?? "unknown";
 }
 
+/**
+ * Line endings, normalized away before anything is hashed or compared.
+ *
+ * Git checks these files out with CRLF on Windows and LF elsewhere, so both the
+ * contract checksum and the staleness comparison would otherwise answer
+ * "different" for two byte-identical-by-content files. The failure is
+ * one-directional and quiet in the worst way: `--check` fails for every Windows
+ * contributor on a clean checkout, and the correct response to a red freshness
+ * gate — regenerate and commit — flips the gate red for everyone else instead.
+ *
+ * A CI gate that cries wolf gets ignored, and this is the gate that stops the
+ * frontend calling an endpoint the contract no longer publishes.
+ */
+function normalizeEol(text) {
+  return text.replace(/\r\n/g, "\n");
+}
+
 async function main() {
-  const source = await readFile(contractPath, "utf8");
+  const source = normalizeEol(await readFile(contractPath, "utf8"));
   const contractVersion = readContractVersion(source);
   const contractHash = createHash("sha256").update(source).digest("hex").slice(0, 16);
 
@@ -63,7 +80,7 @@ async function main() {
 
   if (checkOnly) {
     const existing = await readFile(outputPath, "utf8").catch(() => null);
-    if (existing !== generated) {
+    if (existing === null || normalizeEol(existing) !== generated) {
       console.error(
         "[api-client] Generated types are stale.\n" +
           "The published OpenAPI contract has changed since schema.d.ts was generated.\n" +

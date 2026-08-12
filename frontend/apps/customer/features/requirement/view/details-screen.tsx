@@ -1,10 +1,13 @@
 "use client";
 
-import { AttachmentList, Button, Field, Textarea } from "@vsolve/ui";
+import { Button, Field, Textarea } from "@vsolve/ui";
 import { useRef } from "react";
 
-import { toAttachmentItems } from "../adapters";
+import { toAttachmentRows } from "../adapters";
+import { MAXIMUM_ATTACHMENTS, PICKER_ACCEPT } from "../model/upload";
+import { AttachmentRows } from "./attachment-rows";
 import { useRequirement } from "./requirement-context";
+import { VoiceNoteRecorder } from "./voice-note-recorder";
 
 /**
  * Screen 3 — Details.
@@ -12,38 +15,55 @@ import { useRequirement } from "./requirement-context";
  * ## Voice is a fast path, not an accessory
  *
  * `FLOW-04` and `GAP-007` put voice *beside* the structured questions as an
- * equal option: "record 30 seconds instead of answering questions". It leads this
- * screen for that reason. A Customer describing a leaking pipe in Telugu at 9pm
- * should not have to translate themselves into our form first, and the language
- * they use is captured because matching routes on it — a vendor who cannot read
- * the requirement cannot quote it.
+ * equal option: "record 30 seconds instead of answering questions". It leads
+ * this screen for that reason, above the file picker and above the text box, and
+ * it carries its own language control because the language is an eligibility
+ * input rather than a preference — see `VoiceNoteRecorder`.
+ *
+ * It is on screen 3 rather than screen 1 because the four-screen budget is a
+ * hard constraint (`SCREENS.length === 4`) and screen 1 is where the answers the
+ * lifecycle is inferred from are collected. What it must never be is *after* the
+ * questions in the sense of being their fallback, which is why it is the first
+ * thing on this screen and the questions are not repeated beneath it.
  *
  * ## Uploads report their own truth
  *
- * The shared `AttachmentList` renders progress, failure and removal from one row
- * per file, and `scanning` deliberately maps to `uploading` rather than to
- * `attached`: a file that has left the device but not cleared the malware scan is
- * not attached yet, and showing it as attached is how someone submits believing a
- * photo went with it.
+ * Every file is judged on its own — a refusal lands on that file's row, never as
+ * a banner over the screen, because a page-level error for a picker that took
+ * four photographs is what makes somebody remove all four.
+ *
+ * `checking` is deliberately not `attached`: a file that has left the device but
+ * not cleared the malware scan is not attached, and showing it as attached is
+ * how someone submits believing a photo went with it.
+ *
+ * And the retry affordance is decided **per row**. A checksum mismatch is an
+ * upload going wrong and offers "Try again"; a file the scan rejected offers
+ * only "Remove", because retrying malware is the one thing this screen must
+ * never invite.
  */
 
 export interface DetailsScreenProps {
   /**
-   * Opens the OS file picker result. Upload is server-signed; this only reports
-   * intent.
-   *
-   * Null when there is nowhere to upload to, which is the state today:
-   * `POST /requirements/{id}/attachments/` is `M2-BE-202` and deferred to Wave
-   * C1. Nullable rather than absent, on the same pattern as `onRecordVoice`, so
-   * the screen renders one honest explanation instead of a control that opens a
-   * file picker and then loses the file.
+   * Opens the OS file picker result. Upload is server-signed; this reports the
+   * files and the controller owns the handshake.
    */
-  onAttachFiles: ((files: FileList) => void) | null;
+  onAttachFiles: (files: FileList) => void;
   onRemoveAttachment: (id: string) => void;
   onRetryAttachment: (id: string) => void;
-  /** Starts or stops the voice recorder. Null disables the fast path. */
-  onRecordVoice: (() => void) | null;
-  isRecording?: boolean;
+  /** A finished recording and the language it was spoken in. */
+  onRecordVoice: (blob: Blob, language: string, fileName: string) => void;
+  /**
+   * False until the server-side draft exists.
+   *
+   * Attachments hang off a requirement, and `POST .../attachments/uploads/`
+   * needs its id. Before screen 1 has been saved there is genuinely nowhere to
+   * put a file, and the controls say so rather than accepting one and dropping
+   * it.
+   */
+  canAttach: boolean;
+  /** True while a removal is in flight, so a row cannot be pressed twice. */
+  isBusy?: boolean;
+  previewUrlFor: (id: string) => string | null;
 }
 
 export function DetailsScreen({
@@ -51,10 +71,15 @@ export function DetailsScreen({
   onRemoveAttachment,
   onRetryAttachment,
   onRecordVoice,
-  isRecording = false,
+  canAttach,
+  isBusy = false,
+  previewUrlFor,
 }: DetailsScreenProps) {
   const { state, dispatch } = useRequirement();
   const fileInput = useRef<HTMLInputElement>(null);
+
+  const rows = toAttachmentRows(state.attachments);
+  const remaining = MAXIMUM_ATTACHMENTS - state.attachments.length;
 
   return (
     <div>
@@ -64,76 +89,76 @@ export function DetailsScreen({
         accurate quote than a form does.
       </p>
 
-      {onRecordVoice !== null ? (
-        <div className="mt-5 rounded-card border border-action-line bg-action-surface p-4">
-          <p className="font-semibold text-text">Rather just talk?</p>
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            Record about 30 seconds describing what you need, in whichever
-            language you are comfortable with. We will pass it to professionals
-            who speak it.
-          </p>
-          <Button className="mt-3" onClick={onRecordVoice} aria-pressed={isRecording}>
-            {isRecording ? "Stop recording" : "Record a voice note"}
-          </Button>
-        </div>
-      ) : null}
+      <div className="mt-5">
+        <VoiceNoteRecorder
+          onRecorded={onRecordVoice}
+          language={state.language}
+          onLanguageChange={(language) => dispatch({ type: "SET_LANGUAGE", language })}
+          enabled={canAttach}
+        />
+      </div>
 
       <div className="mt-6">
         <p className="text-sm font-semibold text-text">Photos, video or documents</p>
+        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+          Only the professionals we invite to quote for this request can open
+          these, and only once a file has passed our security check. Anyone who
+          declines, runs out of time or is not chosen loses access; the
+          professional you pick keeps it for the job. Please leave out anything
+          with identity details on it — an Aadhaar card or a bank statement is
+          never needed to quote for work.
+        </p>
+        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+          Photos up to 12 MB, video up to 80 MB, PDFs up to 20 MB.{" "}
+          {remaining > 0
+            ? `You can attach ${remaining} more.`
+            : `You have reached the ${MAXIMUM_ATTACHMENTS}-file limit — remove one to add another.`}
+        </p>
 
-        {onAttachFiles === null ? (
-          // Not a placeholder and not a disabled button. The upload command does
-          // not exist, so the honest thing is to say so once and point at the
-          // field below that does work — a greyed-out "Add files" would leave
-          // the Customer guessing whether it was them or us.
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            Attaching files is not available yet. Describe anything you would have
-            photographed in the box below — professionals read it, and you can add
-            photos later once we have asked you to.
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          accept={PICKER_ACCEPT}
+          className="sr-only"
+          onChange={(event) => {
+            if (event.target.files !== null && event.target.files.length > 0) {
+              onAttachFiles(event.target.files);
+            }
+            // Cleared so re-picking the same file fires `change` again.
+            event.target.value = "";
+          }}
+        />
+        <Button
+          className="mt-3"
+          variant="secondary"
+          onClick={() => fileInput.current?.click()}
+          disabled={!canAttach}
+        >
+          Add files
+        </Button>
+        {!canAttach ? (
+          <p className="mt-2 max-w-prose text-sm text-text-secondary">
+            Answer the first question and we will save your request — then you can
+            attach files to it.
           </p>
-        ) : (
-          <>
-            <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-              Professionals see these only after they accept your request. Please
-              avoid including documents with personal identity details.
-            </p>
+        ) : null}
 
-            <input
-              ref={fileInput}
-              type="file"
-              multiple
-              className="sr-only"
-              onChange={(event) => {
-                if (event.target.files !== null && event.target.files.length > 0) {
-                  onAttachFiles(event.target.files);
-                }
-                // Cleared so re-picking the same file fires `change` again.
-                event.target.value = "";
-              }}
-            />
-            <Button
-              className="mt-3"
-              variant="secondary"
-              onClick={() => fileInput.current?.click()}
-            >
-              Add files
-            </Button>
-
-            <div className="mt-4">
-              <AttachmentList
-                label="Attached to this request"
-                items={toAttachmentItems(state.attachments)}
-                onRemove={onRemoveAttachment}
-                onRetry={onRetryAttachment}
-                empty={
-                  <p className="text-sm text-text-secondary">
-                    Nothing attached yet. This is optional.
-                  </p>
-                }
-              />
-            </div>
-          </>
-        )}
+        <div className="mt-4">
+          <AttachmentRows
+            label="Attached to this request"
+            items={rows}
+            onRemove={onRemoveAttachment}
+            onRetry={onRetryAttachment}
+            previewUrlFor={previewUrlFor}
+            isBusy={isBusy}
+            empty={
+              <p className="text-sm text-text-secondary">
+                Nothing attached yet. This is optional.
+              </p>
+            }
+          />
+        </div>
       </div>
 
       <div className="mt-6">

@@ -1,4 +1,8 @@
-import type { CrewMemberInput, CrewMemberRecord } from "@/features/capability/contract-pending/types";
+import {
+  readCrewStatus,
+  type CrewMemberInput,
+  type CrewMemberRecord,
+} from "@/features/capability/adapters/wire";
 
 /**
  * The crew roster: who is on it, who may supervise, what a form must get right.
@@ -29,11 +33,23 @@ import type { CrewMemberInput, CrewMemberRecord } from "@/features/capability/co
  */
 
 export function activeMembers(members: readonly CrewMemberRecord[]): CrewMemberRecord[] {
-  return members.filter((member) => member.status === "ACTIVE");
+  return members.filter((member) => readCrewStatus(member.status) === "ACTIVE");
 }
 
 export function archivedMembers(members: readonly CrewMemberRecord[]): CrewMemberRecord[] {
-  return members.filter((member) => member.status === "ARCHIVED");
+  return members.filter((member) => readCrewStatus(member.status) === "ARCHIVED");
+}
+
+/**
+ * Rows whose membership status this build has no words for.
+ *
+ * `CrewMember.status` is a bare `string`. A third value from a newer deployment
+ * belongs in neither list above, and silently vanishing from a roster is the one
+ * outcome a Partner must not get — they would send four people to a site
+ * believing the fifth was never added. Counted and stated instead.
+ */
+export function unrecognisedMembers(members: readonly CrewMemberRecord[]): CrewMemberRecord[] {
+  return members.filter((member) => readCrewStatus(member.status) === null);
 }
 
 export function supervisors(members: readonly CrewMemberRecord[]): CrewMemberRecord[] {
@@ -161,6 +177,8 @@ export interface CrewRow {
 export interface RosterView {
   readonly active: readonly CrewRow[];
   readonly archived: readonly CrewRow[];
+  /** Rows whose status this build cannot describe. Stated, never dropped. */
+  readonly unrecognised: readonly CrewRow[];
   readonly supervisorCount: number;
   /** No supervisor means nobody can file "n of m present" when a shift runs. */
   readonly canReportAttendance: boolean;
@@ -175,7 +193,7 @@ function toRow(member: CrewMemberRecord): CrewRow {
     isSupervisor: member.is_supervisor,
     skillCodes: member.skill_codes,
     documentsVerified: member.documents_verified_at !== null,
-    isArchived: member.status === "ARCHIVED",
+    isArchived: readCrewStatus(member.status) === "ARCHIVED",
   };
 }
 
@@ -183,6 +201,7 @@ export function describeRoster(members: readonly CrewMemberRecord[]): RosterView
   return {
     active: sortForDisplay(activeMembers(members)).map(toRow),
     archived: sortForDisplay(archivedMembers(members)).map(toRow),
+    unrecognised: sortForDisplay(unrecognisedMembers(members)).map(toRow),
     supervisorCount: supervisors(members).length,
     canReportAttendance: canReportAttendance(members),
     isEmpty: members.length === 0,

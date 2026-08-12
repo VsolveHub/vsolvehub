@@ -112,6 +112,11 @@ describe("attachments the server already holds", () => {
       id: "att-1",
       kind: "IMAGE",
       scan_status: "VERIFIED",
+      // Published as a required field at contract 1.22.0, alongside `INFECTED`.
+      // Django's own default is a blank CharField: an attachment that has not
+      // failed a scan carries no reason, rather than a null the client would
+      // then have to narrow at every read.
+      scan_failure_reason: "",
       size_bytes: 2048,
       language: "",
       ...overrides,

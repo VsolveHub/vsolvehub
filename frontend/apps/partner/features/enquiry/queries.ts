@@ -63,20 +63,22 @@ export type SiteVisit = Schemas["SiteVisit"];
 /**
  * One page of enquiries, plus whether the server said there are more.
  *
- * ## The contract and the server disagree here, and the server is right
+ * ## The contract and the server used to disagree here. The contract was fixed.
  *
- * `m2_partner_enquiry_list` is declared in `v1.yaml` as a bare
- * `EnquirySummary[]`. `PartnerEnquiryCollectionView.get` returns
- * `EnquiryCursorPagination.get_paginated_response(...)`, which is
- * `{next, previous, results}`. The generated type is therefore wrong about the
+ * `m2_partner_enquiry_list` was declared in `v1.yaml` as a bare
+ * `EnquirySummary[]` while `PartnerEnquiryCollectionView.get` returned
+ * `EnquiryCursorPagination.get_paginated_response(...)`, i.e.
+ * `{next, previous, results}`. The generated type was therefore wrong about the
  * shape of a real response, and code written against it — `data.map(...)` — would
- * throw on the first request rather than fail a type check.
+ * have thrown on the first request rather than failed a type check.
  *
- * So the seam narrows the payload at runtime instead of trusting the declared
- * type, accepts either shape, and the correction is requested in
- * `frontend-execution-plan.md` §7. This is exactly the "re-point, not rewrite"
- * §2 describes: when the contract is fixed and the generated type becomes
- * `EnquiryPage`, this function is deleted and the query body loses one line.
+ * **Contract 1.23.0 declares `EnquirySummaryPage`** and publishes the `cursor`
+ * parameter, so the runtime both-shapes narrowing is deleted and the generated
+ * type is trusted — the request in `frontend-execution-plan.md` §7 is answered.
+ * This is exactly the "re-point, not rewrite" §2 describes. What survives is the
+ * projection down to the two fields the inbox actually uses, so `next` staying
+ * non-null keeps carrying the truncation notice until the cursor is threaded
+ * through.
  */
 export interface EnquiryPage {
   readonly results: readonly EnquirySummary[];
@@ -84,29 +86,8 @@ export interface EnquiryPage {
   readonly next: string | null;
 }
 
-interface PaginatedShape {
-  results?: unknown;
-  next?: unknown;
-}
-
-export function readEnquiryPage(payload: unknown): EnquiryPage {
-  if (Array.isArray(payload)) {
-    return { results: payload as readonly EnquirySummary[], next: null };
-  }
-
-  if (typeof payload === "object" && payload !== null) {
-    const envelope = payload as PaginatedShape;
-    if (Array.isArray(envelope.results)) {
-      return {
-        results: envelope.results as readonly EnquirySummary[],
-        next: typeof envelope.next === "string" ? envelope.next : null,
-      };
-    }
-  }
-
-  // Neither shape. An empty list would read as "you have no enquiries", which is
-  // the one wrong answer — so this is a hard failure the screen reports.
-  throw new TypeError("The enquiry list response was neither a list nor a page of results.");
+export function readEnquiryPage(page: Schemas["EnquirySummaryPage"]): EnquiryPage {
+  return { results: page.results, next: page.next };
 }
 
 /**

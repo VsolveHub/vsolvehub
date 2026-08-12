@@ -1,4 +1,5 @@
 import type { Schemas } from "@vsolve/api-client";
+import { readScanStatus } from "@vsolve/query";
 import type {
   ProbableDuplicate,
   RequirementAttachment,
@@ -9,9 +10,16 @@ import type {
 } from "@vsolve/query";
 import type { Attachment, AttachmentKind } from "@vsolve/ui";
 
+import type { ServerAttachment } from "../model/machine";
 import type { RequestClosureReason, RequestStatus } from "../model/request-state";
 import { isTimelineEventKind, type TimelineEventKind } from "../model/timeline";
-import type { DraftAttachment, LifecycleVerdict } from "../model/state";
+import {
+  isRetryableAttachmentFailure,
+  type AttachmentFailure,
+  type DraftAttachment,
+  type LifecycleVerdict,
+} from "../model/state";
+import { MAXIMUM_ATTACHMENTS, formatBytes, maximumSizeFor } from "../model/upload";
 
 /**
  * The only code that knows what the wire looks like.
@@ -26,7 +34,7 @@ import type { DraftAttachment, LifecycleVerdict } from "../model/state";
  * |---|---|---|
  * | `is_date_flexible: boolean` | `flexibility_days: number`, source of truth | `toDraftIntent` / `flexibilityDaysFor` |
  * | `AttachmentKind: "PHOTO"` | `"IMAGE"` | the model's own union, renamed |
- * | `ScanStatus: "CLEAN" \| "INFECTED"` | `"VERIFIED"`, and no `INFECTED` | `toServerAttachmentItems` |
+ * | `ScanStatus: "CLEAN" \| "INFECTED"` | `PENDING \| VERIFIED \| INFECTED \| FAILED` | `toScanOutcome` |
  *
  * Three shapes the handover note did not mention differed too, and they are
  * absorbed here for the same reason: `answers` and `detail` arrive as `unknown`
@@ -34,6 +42,18 @@ import type { DraftAttachment, LifecycleVerdict } from "../model/state";
  * as bare `string` rather than as the enums the schema also declares, and the
  * attachment carries `size_bytes` with no `file_name` at all.
  */
+
+/**
+ * The two catalogue records the flow is opened with.
+ *
+ * Aliased here rather than imported from `@vsolve/api-client` at the call site
+ * because `requirement-flow.tsx` lives under `view/`, and `boundary.test.ts`
+ * forbids that layer from naming the generated client — a rule it was quietly
+ * breaking. The types are structurally identical; what changes is that the wire
+ * is named in the one place that is allowed to name it.
+ */
+export type RequirementService = Schemas["ServiceDetail"];
+export type RequirementVariant = Schemas["ServiceVariantConfiguration"];
 
 /**
  * One question on screen 1, as the server describes it.
@@ -510,36 +530,239 @@ export function toTimelineEvents(timeline: RequirementTimeline): readonly Timeli
 const DRAFT_ATTACHMENT_KIND: Record<DraftAttachment["kind"], AttachmentKind> = {
   IMAGE: "image",
   VIDEO: "video",
-  DOCUMENT: "document",
-  VOICE_NOTE: "audio",
-};
-
-/** The five the server can send back, which is one more than a file picker produces. */
-const SERVER_ATTACHMENT_KIND: Record<string, AttachmentKind> = {
-  IMAGE: "image",
-  VIDEO: "video",
   AUDIO: "audio",
-  VOICE_NOTE: "audio",
   DOCUMENT: "document",
+  VOICE_NOTE: "audio",
 };
 
-const FAILURE_COPY: Record<NonNullable<DraftAttachment["failure"]>, string> = {
-  TOO_LARGE: "This file is too large.",
-  UNSUPPORTED_TYPE: "We cannot read this kind of file.",
-  SCAN_FAILED: "This file did not pass our security check and was not attached.",
-  UPLOAD_FAILED: "The upload did not finish.",
+/** Which of the reducer's kinds a wire kind is. Unknown reads as a document. */
+const DRAFT_KIND_FOR_WIRE: Record<string, DraftAttachment["kind"]> = {
+  IMAGE: "IMAGE",
+  VIDEO: "VIDEO",
+  AUDIO: "AUDIO",
+  VOICE_NOTE: "VOICE_NOTE",
+  DOCUMENT: "DOCUMENT",
 };
 
-/** Bytes as a short human string. Approximate on purpose — this is a hint, not an audit. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const ATTACHMENT_NOUN: Record<string, string> = {
+  IMAGE: "Photo",
+  VIDEO: "Video",
+  AUDIO: "Audio",
+  VOICE_NOTE: "Voice note",
+  DOCUMENT: "Document",
+};
+
+/**
+ * Why a file was not attached, in words the Customer can act on.
+ *
+ * Takes the kind because the two size sentences a Customer needs are different
+ * numbers — a 20 MB PDF is fine and a 20 MB photograph is an unresized camera
+ * dump — and "this file is too large" without the limit is the message that
+ * makes somebody try the same file twice.
+ *
+ * The last three lines are where the whole `INFECTED`/`FAILED` split becomes
+ * visible to a person. `CHECK_FAILED` ends with "try it again" because that is
+ * the recovery; `INFECTED` says the opposite in as many words, because the row
+ * next to it deliberately offers no retry and a Customer left guessing why will
+ * re-upload the file through a different route.
+ */
+function failureCopy(failure: AttachmentFailure, kind: DraftAttachment["kind"]): string {
+  switch (failure) {
+    case "EMPTY":
+      return "That file is empty, so there was nothing to send.";
+    case "TOO_LARGE": {
+      const ceiling = maximumSizeFor(kind);
+      return ceiling === null
+        ? "This file is larger than we can accept."
+        : `This file is larger than the ${formatBytes(ceiling)} we can accept for a ${
+            ATTACHMENT_NOUN[kind]?.toLowerCase() ?? "file"
+          }.`;
+    }
+    case "UNSUPPORTED_TYPE":
+      return "We cannot read this kind of file. Photos (JPEG, PNG, HEIC), video (MP4, MOV) and PDFs all work.";
+    case "TOO_MANY":
+      return `You can attach up to ${MAXIMUM_ATTACHMENTS} files. Remove one to make room for this.`;
+    case "UPLOAD_FAILED":
+      return "The upload did not finish, so this was not attached.";
+    case "REFUSED":
+      return "We could not accept this file, so it was not attached.";
+    case "CHECK_FAILED":
+      return "What arrived did not match what your device sent, so this was not attached. Try it again.";
+    case "INFECTED":
+      return "This file did not pass our security check, so it was not attached and no professional has seen it. Sending it again will not help — remove it, and try a different file.";
+    case "SCAN_UNKNOWN":
+      return "We could not confirm this file is safe, so it was not attached. Remove it and try a different file.";
+    default:
+      return "This file was not attached.";
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The scan verdict — the one mapping the uploader turns on
+   -------------------------------------------------------------------------- */
+
+interface ScanOutcome {
+  state: "scanning" | "attached" | "failed";
+  failure: AttachmentFailure | null;
+}
+
+/**
+ * What a `scan_status` means for the row on screen.
+ *
+ * | Wire | Row | Retry offered |
+ * |---|---|---|
+ * | `PENDING` | `scanning` — uploaded, not yet usable | n/a |
+ * | `VERIFIED` | `attached` | n/a |
+ * | `FAILED` | `failed` + `CHECK_FAILED` | **yes** — a checksum or size mismatch is the upload going wrong |
+ * | `INFECTED` | `failed` + `INFECTED` | **no** — malware; removal is the only recovery |
+ * | anything else | `failed` + `SCAN_UNKNOWN` | **no** — fails closed |
+ *
+ * `PENDING` is deliberately not `attached`. A file that has not cleared its scan
+ * is not attached: `matching.snapshot_requirement` will not show it to a vendor,
+ * and a Customer submitting in the belief that a photograph went with the
+ * request is precisely the harm the third state exists to prevent.
+ *
+ * The unknown branch fails closed for the reason `readScanStatus` documents: a
+ * verdict this bundle does not recognise could be `INFECTED` under a name it
+ * predates, and treating it as usable is the only outcome that cannot be walked
+ * back.
+ */
+export function toScanOutcome(scanStatus: string): ScanOutcome {
+  switch (readScanStatus(scanStatus)) {
+    case "VERIFIED":
+      return { state: "attached", failure: null };
+    case "PENDING":
+      return { state: "scanning", failure: null };
+    case "FAILED":
+      return { state: "failed", failure: "CHECK_FAILED" };
+    case "INFECTED":
+      return { state: "failed", failure: "INFECTED" };
+    default:
+      return { state: "failed", failure: "SCAN_UNKNOWN" };
+  }
+}
+
+/**
+ * The server's attachment records, ready for `SYNC_SERVER_ATTACHMENTS`.
+ *
+ * The wire carries **no `file_name` at all**, which is why `fallbackName` is a
+ * noun rather than a name: a stored attachment is described by what it is, and
+ * inventing "document-3.pdf" would be worse than saying "Document". A local row
+ * that uploaded the file keeps the real name; this is what is left when none
+ * does.
+ */
+export function toServerAttachments(
+  attachments: readonly RequirementAttachment[],
+): ServerAttachment[] {
+  return attachments.map((attachment) => {
+    const outcome = toScanOutcome(attachment.scan_status);
+    return {
+      attachmentId: attachment.id,
+      kind: DRAFT_KIND_FOR_WIRE[attachment.kind] ?? "DOCUMENT",
+      fallbackName: ATTACHMENT_NOUN[attachment.kind] ?? "Attachment",
+      byteSize: attachment.size_bytes,
+      language: attachment.language === "" ? null : attachment.language,
+      state: outcome.state,
+      failure: outcome.failure,
+    };
+  });
+}
+
+/* --------------------------------------------------------------------------
+   Rows
+   -------------------------------------------------------------------------- */
+
+/**
+ * One attachment as the uploader renders it.
+ *
+ * Richer than the shared `Attachment` in `packages/ui` in exactly one way that
+ * matters: **`canRetry` is per row.** `AttachmentList` takes a single `onRetry`
+ * for the whole list and shows "Try again" on every failed row, which is the one
+ * shape this feature cannot use — a malware verdict must never carry a retry
+ * affordance while a checksum mismatch must. Requesting that flag on the shared
+ * component is logged in the execution plan §7; until it lands the uploader
+ * renders its own rows and the shared list keeps every other caller.
+ */
+export interface AttachmentRowView {
+  id: string;
+  /** The server's id, when the finalize returned one. Null before that. */
+  attachmentId: string | null;
+  name: string;
+  kind: AttachmentKind;
+  /** What the row is doing. `checking` is neither attached nor failed. */
+  status: "uploading" | "checking" | "attached" | "failed";
+  size: string;
+  /** 0–100 while bytes are moving. Null while hashing or waiting on the server. */
+  progress: number | null;
+  /** Null unless the row failed. */
+  error: string | null;
+  canRetry: boolean;
+  /** The language a voice note was recorded in. Null for everything else. */
+  language: string | null;
+}
+
+const ROW_STATUS: Record<DraftAttachment["state"], AttachmentRowView["status"]> = {
+  queued: "uploading",
+  uploading: "uploading",
+  scanning: "checking",
+  attached: "attached",
+  failed: "failed",
+};
+
+export function toAttachmentRows(attachments: readonly DraftAttachment[]): AttachmentRowView[] {
+  return attachments.map((attachment) => ({
+    id: attachment.id,
+    attachmentId: attachment.attachmentId,
+    name: attachment.fileName,
+    kind: DRAFT_ATTACHMENT_KIND[attachment.kind],
+    status: ROW_STATUS[attachment.state],
+    size: formatBytes(attachment.byteSize),
+    progress: attachment.progress,
+    // The server's sentence wins where it gave one — see `failureDetail`. Our
+    // copy is better only for the refusals we decided ourselves, because those
+    // are the ones we can quote a ceiling for.
+    error:
+      attachment.failure === null
+        ? null
+        : (attachment.failureDetail ?? failureCopy(attachment.failure, attachment.kind)),
+    canRetry: attachment.state === "failed" && isRetryableAttachmentFailure(attachment.failure),
+    language: attachment.language,
+  }));
+}
+
+/**
+ * Attachments the server holds, as rows, for a requirement that has left the
+ * four-screen flow.
+ *
+ * Used on the request detail, where there is no local row for anything and the
+ * only affordance that can ever be offered is removal — `DELETE` is refused
+ * once the requirement leaves `DRAFT` **except** for an `INFECTED` attachment,
+ * which is removable in any status so that malware is never stuck on a live
+ * requirement.
+ */
+export function toServerAttachmentRows(
+  attachments: readonly RequirementAttachment[],
+): AttachmentRowView[] {
+  return toServerAttachments(attachments).map((record) => ({
+    id: record.attachmentId,
+    attachmentId: record.attachmentId,
+    name: record.fallbackName,
+    kind: DRAFT_ATTACHMENT_KIND[record.kind],
+    status: record.state === "scanning" ? "checking" : record.state,
+    size: formatBytes(record.byteSize),
+    progress: null,
+    error: record.failure === null ? null : failureCopy(record.failure, record.kind),
+    // Never, on this surface. A retry needs the bytes, and a page that only read
+    // the record does not have them.
+    canRetry: false,
+    language: record.language,
+  }));
 }
 
 /**
  * Draft attachments as the shared `AttachmentList` renders them.
  *
+ * Kept for the read-only callers that do not need a per-row retry decision.
  * `scanning` maps to `uploading` rather than to `attached`: the file has left the
  * device but is not yet usable, and showing it as attached would let a Customer
  * submit believing a photo is present that the scan may still reject.
@@ -555,14 +778,17 @@ export function toAttachmentItems(attachments: readonly DraftAttachment[]): Atta
         : attachment.state === "failed"
           ? "failed"
           : "uploading",
-    size: formatSize(attachment.byteSize),
+    size: formatBytes(attachment.byteSize),
     progress: attachment.progress ?? undefined,
-    error: attachment.failure === null ? undefined : FAILURE_COPY[attachment.failure],
+    error:
+      attachment.failure === null
+        ? undefined
+        : failureCopy(attachment.failure, attachment.kind),
   }));
 }
 
 /**
- * Attachments the server already holds, as the same list renders them.
+ * Attachments the server already holds, as the same shared list renders them.
  *
  * Two mappings rather than one, because the two inputs describe different
  * things: a `DraftAttachment` is a file leaving this device and carries a name,
@@ -572,37 +798,22 @@ export function toAttachmentItems(attachments: readonly DraftAttachment[]): Atta
  *
  * `PENDING` renders as `uploading` for the same reason `scanning` does above:
  * the file is on the server and not yet usable, and the honest word for that on
- * a progress list is "still working", not "done".
- *
- * There is no `INFECTED`. The published states are `PENDING | VERIFIED |
- * FAILED`, so a file that did not pass renders as failed without a claim about
- * why — and anything unrecognised also renders as failed rather than as
- * attached, because failing an unknown scan state *closed* is the only
- * direction that cannot put an unscanned file in front of a vendor.
+ * a progress list is "still working", not "done". Anything the scan vocabulary
+ * does not cover renders as failed rather than as attached — see
+ * `toScanOutcome`, which owns that decision for every caller.
  */
 export function toServerAttachmentItems(
   attachments: readonly RequirementAttachment[],
 ): Attachment[] {
-  return attachments.map((attachment) => {
-    const failed = attachment.scan_status !== "PENDING" && attachment.scan_status !== "VERIFIED";
-    return {
-      id: attachment.id,
-      // The wire carries no file name. A generic noun is not a placeholder for
-      // one — it is the whole truth the record contains, and inventing
-      // "document-3.pdf" would be worse than saying "Document".
-      name: ATTACHMENT_NOUN[attachment.kind] ?? "Attachment",
-      kind: SERVER_ATTACHMENT_KIND[attachment.kind] ?? "document",
-      status: failed ? "failed" : attachment.scan_status === "VERIFIED" ? "attached" : "uploading",
-      size: formatSize(attachment.size_bytes),
-      error: failed ? FAILURE_COPY.SCAN_FAILED : undefined,
-    };
-  });
+  return toServerAttachments(attachments).map((record) => ({
+    id: record.attachmentId,
+    // The wire carries no file name. A generic noun is not a placeholder for
+    // one — it is the whole truth the record contains, and inventing
+    // "document-3.pdf" would be worse than saying "Document".
+    name: record.fallbackName,
+    kind: DRAFT_ATTACHMENT_KIND[record.kind],
+    status: record.state === "attached" ? "attached" : record.state === "failed" ? "failed" : "uploading",
+    size: formatBytes(record.byteSize),
+    error: record.failure === null ? undefined : failureCopy(record.failure, record.kind),
+  }));
 }
-
-const ATTACHMENT_NOUN: Record<string, string> = {
-  IMAGE: "Photo",
-  VIDEO: "Video",
-  AUDIO: "Audio",
-  VOICE_NOTE: "Voice note",
-  DOCUMENT: "Document",
-};

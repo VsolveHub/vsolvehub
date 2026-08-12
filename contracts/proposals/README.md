@@ -43,3 +43,6 @@ The generated OpenAPI document and generated TypeScript client are never manuall
 | 0008 | `cursor` parameter missing on the Booking Group and Partner offer lists | Proposed |
 | 0009 | Partner offer commands: idempotency, typed action and declared refusals | Proposed |
 | 0010 | Expose the `Date` header so browser countdowns use the server clock | Proposed |
+| 0011 | Publish the Booking Group's payment entry point | Proposed |
+| 0012 | M2 capability, requirement and quote surface | Partly implemented at 1.21.0 — unlock/selection half still proposed |
+| 0013 | M2 Partner capability, progressive-gate and crew surface | Proposed — nothing published; Wave C1 |

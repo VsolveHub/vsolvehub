@@ -1,4 +1,4 @@
-import type { BusinessProfileInput, BusinessType } from "../contract-pending/types";
+import type { BusinessProfileInput, BusinessType } from "./wire";
 
 /**
  * Re-exported so components can name the three values without reaching into the

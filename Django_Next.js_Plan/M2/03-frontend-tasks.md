@@ -11,7 +11,9 @@ modules and sync gates. Session columns: [A — Customer](frontend-session-a.md)
 carries 17 M2 paths**, so tasks covering those paths may now be integrated. Every other M2 task is
 still capped at `[~] built` — see [frontend-execution-plan.md](frontend-execution-plan.md) §2 for the
 table of what is and is not published, and for the caveat that C0 shipped with no tests.
-**Revision:** 2 - simplified per [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
+**Revision:** 3 - visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
+revision 2 simplifications remain in force. Revision 3 changes only the **unbuilt** FE4 wave plus one
+review-screen control and two Partner tasks; everything built and wired is untouched.
 
 Continue using the same Partner application and authenticated shell. The backend returns
 `{workspace_key, actions[]}` after login; a typed frontend registry maps known keys to owned routes,
@@ -47,10 +49,11 @@ Revision 2 fixed the following limits. Exceeding one is a design regression, not
 
 | Flow | Budget |
 |---|---|
-| Customer requirement submission | 4 screens: What, Where/When, Details, Review |
-| Customer payments before work starts | A3: one (the unlock). A5: two (unlock, first stage) |
+| Customer requirement submission | 4 screens: What, Where/When, Details, Review. The A5 visit-plan chooser is a control on Review, never a fifth screen. |
+| Customer payments before work starts | A3: one (the unlock). A5: two (the visit plan, the first stage) |
 | Confirmation steps before submit | One. The review screen is the confirmation. |
 | A3 Partner enquiry response | One screen: rate, days, inclusions, accept/decline |
+| A5 Partner enquiry response | One screen: the visit-slot confirmation (slot picker + accept/decline) |
 | Partner steps before seeing a real lead | Phone, name, one service, one city |
 
 ## FE0 - Information architecture, contracts and shared patterns
@@ -282,12 +285,16 @@ typecheck, partner build green. Nothing here exceeds `[~]`: the registration vie
 - [~] `M2-FE-211` Explain when an edit after vendor acceptance notifies vendors and resets their
   deadlines; require explicit confirmation for material edits. `GAP-015`
 - [~] `M2-FE-212` State clearly on submission that the requirement is free and that nothing is charged
-  until quotes arrive. `FLOW-01`
+  until quotes arrive (A3) or a professional confirms a visit (A5). `FLOW-01`
+- [ ] `M2-FE-216` **(Revision 3)** Build the A5 visit-plan chooser as a control on the review screen:
+  1/2/3 professionals at the server-published tier prices, plain-language statement that choosing
+  charges nothing and the plan is charged only when the first professional confirms a visit slot.
+  Never renders for A3; never a fifth screen (`SCREENS.length === 4` stands).
 
 ### Customer tracking
 
-- [~] `M2-FE-213` Add `My requests` with matching status, quote teaser count, the delivery deadline,
-  latest activity and support action.
+- [~] `M2-FE-213` Add `My requests` with matching status, quote teaser count (A3) / visit-plan state
+  (A5, revision 3 — arrives with Wave A2), the delivery deadline, latest activity and support action.
 - [~] `M2-FE-214` Add a request detail timeline covering the requirement, matching, invitations at an
   aggregate level, questions, site visits, quote delivery and recovery.
 - [~] `M2-FE-215` Add honest empty, no-supply, delayed-match, SLA-breached and service-by-expired states
@@ -381,12 +388,29 @@ understands exactly when and whether they will be asked to pay.
   **No read finds a Partner's own quote**, so the record survives only the tab that submitted it. That
   is rendered as an honest third state rather than papered over with a locally persisted id.
 
-**FE3 Partner gate:** An eligible A3 vendor can respond to a lead on one phone screen, and an A5 vendor
-can submit a comparable proposal, without unsupported contact or pricing shortcuts.
+### A5 visit response (revision 3)
 
-## FE4 - Teasers, unlock, selection and engagement
+- [ ] `M2-FE-314` Build the A5 enquiry response as a **visit-slot confirmation on one screen**: the
+  requirement summary, a slot picker over the vendor's real availability (the same grid and picker
+  pattern as the A1 checkout `slots-modal.tsx`), and accept/decline with reason. Confirming states
+  the commitment plainly: travel to the site at that slot and estimate there. Waits on the BE4
+  visit-plan surface (Wave C2) for the slot-hold path.
+- [ ] `M2-FE-315` Extend the A5 composer with the **on-site mode**: prefilled from the requirement
+  and the visit, working days as the schedule, material line items as first-class rows, and the
+  completed-visit guard surfaced clearly (`m2_visit_not_completed` routed to a visible explanation,
+  never a dead submit). Optimised for a phone held standing up: large targets, numeric keyboards,
+  save-on-blur.
 
-### Teasers and unlock
+**FE3 Partner gate:** An eligible A3 vendor can respond to a lead on one phone screen; an A5 vendor
+can confirm a visit slot on one screen and submit a comparable estimate from the site; neither has
+unsupported contact or pricing shortcuts.
+
+## FE4 - Access (A3 teasers + unlock · A5 visits + estimates), selection and engagement
+
+Revision 3 splits this wave by archetype. The A3 tasks are unchanged from revision 2. The A5 tasks
+replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbuilt at the split.
+
+### A3 teasers and unlock
 
 - [ ] `M2-FE-401` Show quote **teasers**: vendor verification badge, rating, vendor type and headline
   price band. No full scope, no vendor identity, no contact. `FLOW-01`
@@ -396,15 +420,38 @@ can submit a comparable proposal, without unsupported contact or pricing shortcu
   cancelled, late success and browser-close recovery truthfully.
 - [ ] `M2-FE-404` Never show success from the payment redirect alone; resolve final status from the
   backend and provide a safe retry without duplicate purchase.
-- [ ] `M2-FE-405` Mark out-of-budget quotes as such rather than presenting them as ordinary options.
-  `GAP-003`
+- [ ] `M2-FE-405` Mark out-of-budget quotes and estimates as such rather than presenting them as
+  ordinary options. `GAP-003`
 - [ ] `M2-FE-406` Build non-responsive rejection with its reason, the remaining rejection allowance and
-  the replacement it triggers. `GAP-009`
+  the replacement it triggers (A3: a quote slot; A5: a free replacement visit). `GAP-009`
+
+### A5 visits and estimates (revision 3)
+
+- [ ] `M2-FE-419` Show **vendor cards** for the responding A5 pool before any visit is confirmed:
+  verification badge, rating, vendor type, distance band. No identity, no contact. Identity (name,
+  photo, verification) appears only once that vendor confirms a visit slot.
+- [ ] `M2-FE-420` Build the **visit-plan checkout**, opened when the first vendor holds a slot
+  ("Vendor confirmed Tuesday 10am — book your visits"): server-created payment order, UPI pending,
+  failed, cancelled, late success and browser-close recovery, never success from the redirect alone.
+  States plainly that one payment covers the whole plan and unfilled visits refund themselves.
+- [ ] `M2-FE-421` Build the **visit tracker** on the request detail: each plan slot with its state
+  (awaiting a professional, slot held, scheduled with date/time and the professional's disclosed
+  identity, completed, refunded/replaced), reusing the checkout slot-picker presentation for times.
+- [ ] `M2-FE-422` Build visit-day states: arrival confirmation through the non-OTP fallback (start
+  OTP arrives in M3), reschedule, vendor no-show and customer no-show reporting with honest
+  consequences on screen.
+- [ ] `M2-FE-423` Show delivered **estimates in full** — scope, working days, material lines, taxes,
+  commission treatment, total, exclusions, validity — with no paywall state anywhere in the A5
+  journey, each linked to its completed visit.
+- [ ] `M2-FE-424` Show the **visit money** truthfully on both sides, server-calculated and never
+  client-derived: the Customer sees where each slot's money went (paid to the professional who
+  visited and estimated, or refunded); the Partner sees the visit payout land in Money once the
+  estimate is in, and sees plainly that a visit without an estimate pays nothing.
 
 ### Comparison and selection
 
-- [ ] `M2-FE-407` Display each unlocked quote with vendor verification summary, validity, scope,
-  schedule, taxes, commission treatment, total and exclusions.
+- [ ] `M2-FE-407` Display each unlocked quote (A3) or delivered estimate (A5) with vendor
+  verification summary, validity, scope, schedule, taxes, commission treatment, total and exclusions.
 - [ ] `M2-FE-408` Build an accessible comparison view that normalizes equivalent fields on the single
   tax basis while clearly showing non-equivalent assumptions. `GAP-017`
 - [ ] `M2-FE-409` Allow Customer clarification and revision requests without editing vendor prices or
@@ -412,10 +459,11 @@ can submit a comparable proposal, without unsupported contact or pricing shortcu
 - [ ] `M2-FE-410` Make selection reference a specific proposal and show a final scope/cost summary
   before confirmation.
 - [ ] `M2-FE-411` Show vendor reconfirmation as a pending state, not a confirmed booking.
-- [ ] `M2-FE-412` When a vendor declines or times out, guide the Customer to another unlocked quote or a
-  free replacement without losing history and without a second charge. `FLOW-01`
-- [ ] `M2-FE-413` Offer one-tap re-validation when a quote's validity has expired, reusing the existing
-  unlock. `GAP-019`
+- [ ] `M2-FE-412` When a vendor declines or times out, guide the Customer to another unlocked quote,
+  another estimate or a free replacement (visit) without losing history and without a second charge.
+  `FLOW-01`
+- [ ] `M2-FE-413` Offer one-tap re-validation when a quote's or estimate's validity has expired,
+  reusing the existing unlock or plan. `GAP-019`
 - [ ] `M2-FE-414` Prevent double selection and recover gracefully from stale proposal or concurrent
   action errors.
 
@@ -423,14 +471,15 @@ can submit a comparable proposal, without unsupported contact or pricing shortcu
 
 - [ ] `M2-FE-415` For A3, show direct-payment responsibility and limited Vsolve protection before
   contact/connection completion. Never present it as a protected booking. `SIM-03`
-- [ ] `M2-FE-416` For A5, show stages, funding schedule, commission/tax presentation, cancellation terms
-  and protection before the first stage checkout.
+- [ ] `M2-FE-416` For A5, show stages, funding schedule, commission/tax presentation, cancellation
+  terms and protection before the first stage checkout.
 - [ ] `M2-FE-417` Handle stage-payment pending, failed, retry and late success without creating a false
   confirmed engagement.
 - [ ] `M2-FE-418` Provide durable agreement, receipt/invoice and timeline access to both parties.
 
-**FE4 gate:** Money is only ever requested against visible delivered value, and Customer and Partner see
-the same immutable proposal, engagement state and commercial protections.
+**FE4 gate:** Money is only ever requested against a real accepted commitment — visible delivered
+quotes (A3) or a confirmed visit (A5) — and Customer and Partner see the same immutable proposal,
+engagement state and commercial protections.
 
 ## FE5A - Workforce fulfilment experience
 
@@ -506,7 +555,8 @@ approved scope, payment or stage completion, and an abandoned project shows a ro
 
 ### Unified Operations workspace
 
-- [ ] `M2-FE-701` Add searchable queues for unmatched, under-quoted, SLA-breached, vendor-unconfirmed,
+- [ ] `M2-FE-701` Add searchable queues for unmatched, under-quoted, under-visited (plan slots
+  unfilled, visit no-shows, estimates overdue), SLA-breached, vendor-unconfirmed,
   fulfilment-exception, safety-incident, disputed, refund-pending and payout-held requests.
 - [ ] `M2-FE-702` Build a unified request detail timeline spanning the requirement, snapshots, matching,
   questions, proposals, unlock, engagement, stages, cases and money.
@@ -556,8 +606,9 @@ actions without requesting database edits.
 ### Release readiness
 
 - [ ] `M2-FE-807` Add critical Playwright journeys for A3, A5, vendor rejection/replacement, teaser to
-  unlock, unlock payment pending, non-responsive rejection, cancellation conflict, refund and Operations
-  recovery.
+  unlock, unlock payment pending, plan chooser to visit-plan checkout, visit no-show and unfilled-slot
+  refund, on-site estimate to selection, non-responsive rejection, cancellation conflict, refund and
+  Operations recovery.
 - [ ] `M2-FE-808` Add visual/regression coverage for capability combinations, long content, empty and
   exception states.
 - [ ] `M2-FE-809` Validate generated client synchronization and fail CI on stale generated API usage.

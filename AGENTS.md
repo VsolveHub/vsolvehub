@@ -40,6 +40,15 @@ the generated OpenAPI document.
 Do not edit the other agent’s owned paths. Root/shared-file changes require an explicit integration
 task.
 
+### Commercial M2 exception — resolved 11 August 2026
+
+The split above is the **M1 record**. For commercial M2 (workforce and project services,
+`A3_TIME_BLOCK` + `A5_CUSTOM_PROJECT`) the owner directed that **Claude runs every session**,
+including `backend/**` and `contracts/openapi/**`. That is how P1–P3 and the Wave C0 contract were
+actually built. The three concurrent M2 columns and their owned paths are defined in
+`Django_Next.js_Plan/M2/frontend-execution-plan.md` §3 and `backend-session.md`; those files are the
+live ownership rule for M2 work. To be revisited when M2 closes.
+
 ## Python environment
 
 - Use Python 3.13.
@@ -85,6 +94,21 @@ Check migrations:
 - Maintain at least 85% backend branch-aware coverage.
 - Ruff, strict MyPy, tests, migration checks and OpenAPI validation must pass before handoff.
 
+### Who runs the tests — owner-run, effective 12 August 2026
+
+**Agents do not execute test cases.** Not a suite, not a focused module, not one test. Write the
+tests — every rule above still applies and an unwritten test is a gap you must report — then stop.
+The owner runs and verifies all of them manually.
+
+| Agents run | Agents never run |
+|---|---|
+| `backend\scripts\quality-static.cmd` (ruff, strict mypy, `makemigrations --check`, `spectacular --validate`, contract-drift check) | `backend\scripts\quality.cmd` — **its fourth step is pytest**, and it exits on failure, so a red test also skips the four checks after it |
+| `pnpm lint`, `pnpm typecheck`, `pnpm build` | `pytest`, `vitest`, Playwright, or any command whose purpose is running a test |
+
+Report work as **"built — owner verification pending"** and end the report with the test files you
+wrote and the exact commands to run them. Never state "tests pass", "N/N green" or "verified" for a
+run that did not happen.
+
 ## Git and destructive operations
 
 - Do not delete `.git`.
@@ -92,3 +116,6 @@ Check migrations:
 - Do not commit secrets, `.env` files, databases, media or virtual environments.
 - Use separate branches/worktrees for Codex and Claude once the current dirty tree is safely
   checkpointed by the user.
+- **Never push commercial M2 (workforce/project, `A3_TIME_BLOCK` + `A5_CUSTOM_PROJECT`) code to
+  `main`.** M2 implementation lives on its own branch and merges into `main` only on the owner's
+  explicit instruction. `main` stays the M1 acceptance build.

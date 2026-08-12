@@ -1,4 +1,5 @@
-import type { CapabilityRecord, CapabilityStatus } from "../contract-pending/types";
+import type { CapabilityRecord, CapabilityStatus } from "./wire";
+import { readCapabilityStatus } from "./wire";
 
 /**
  * What a capability's state means, and the exact next thing the Partner may do.
@@ -14,33 +15,54 @@ import type { CapabilityRecord, CapabilityStatus } from "../contract-pending/typ
  * "some documents need attention" is precisely the copy that sends a person back
  * to re-upload the wrong thing.
  *
- * So `CHANGES_REQUIRED` renders the reviewer's own words verbatim, and an empty
- * `review_notes` is treated as the contract violation it is (0013 §B3 acceptance
- * criterion 5) rather than smoothed over with copy the Partner cannot act on.
+ * So `CHANGES_REQUIRED` and `REJECTED` both render the reviewer's own words
+ * verbatim, and an empty `review_notes` is treated as the contract violation it
+ * is (1.22.0 guarantees it non-empty for both, in the domain *and* by
+ * `partners_capability_review_state_needs_notes`) rather than smoothed over with
+ * copy the Partner cannot act on.
+ *
+ * ## The sixth status, and why it was worth a visible break
+ *
+ * Until contract 1.22.0 `_ALLOWED_TRANSITIONS` sent both Operations' refusal and
+ * the Partner's own exit to `WITHDRAWN`, so this file described both as "no
+ * longer live" and committed to neither cause. 1.22.0 splits them:
+ *
+ * | | `REJECTED` | `WITHDRAWN` |
+ * |---|---|---|
+ * | Who caused it | Operations | The Partner |
+ * | `review_notes` | Required, non-empty | Not required |
+ * | Reachable from | `UNDER_REVIEW`, `CHANGES_REQUIRED` | Every non-terminal status |
+ * | Terminal | Yes | Yes |
+ * | Blocks a fresh request | **No** | **No** |
+ *
+ * Both are terminal and neither is a ban, so both end in a way forward — but not
+ * the same way. A refusal offers support first, because a person told "no"
+ * without a route to argue concludes the decision was arbitrary; a withdrawal
+ * offers "ask again" first, because that is literally the undo.
+ *
+ * ## An unrecognised status describes itself as unrecognised
+ *
+ * `PartnerCapability.status` is a bare `string` on the wire. A seventh value
+ * from a newer deployment resolves to `null` through `readCapabilityStatus` and
+ * gets its own presentation — "we cannot describe this" plus support — never the
+ * nearest thing this build happens to know. That is the same fail-closed rule
+ * the workspace registry applies to an unknown key, one layer down: guessing is
+ * how `WITHDRAWN` came to mean two things in the first place.
  *
  * ## Expiry is not a status
  *
  * `assert_capability_active` refuses an `APPROVED` capability whose `expires_at`
- * has passed. That check is reproduced here — but as a *derived* presentation,
- * never as a sixth `CapabilityStatus`. Inventing an `EXPIRED` value the model
- * does not have would leave the client holding a vocabulary Django cannot
- * confirm, and the two would drift the first time expiry policy changed.
+ * has passed, and refuses again when a required document has expired. Both are
+ * reproduced here as *derived* presentation, never as extra `CapabilityStatus`
+ * values. Inventing them would leave the client holding a vocabulary Django
+ * cannot confirm, and the two would drift the first time expiry policy changed —
+ * which is exactly what Session B asked for and 1.22.0 delivered: raw fields
+ * (`expired_document_kinds`, `documents_expiring_on`), no computed status.
  *
- * The comparison runs against a server clock (proposal 0010), not `Date.now()`.
- * A device whose clock is a day fast would otherwise show a live capability as
- * expired and route the Partner to support for a problem that does not exist.
- *
- * ## Two states this build cannot yet tell apart — logged, not papered over
- *
- * 1. **Rejected vs withdrawn.** `_ALLOWED_TRANSITIONS` sends both a Partner's
- *    own exit and Operations' refusal to `WITHDRAWN`, and 0013 §B3 publishes no
- *    actor. "You closed this" and "we said no" need different copy and different
- *    next actions, so the copy below commits to neither and names the record's
- *    state instead of guessing at its cause.
- * 2. **Expired documents.** `PartnerDocument` carries no expiry field at all, so
- *    the expired-document state `M2-FE-109` asks for has nothing to read.
- *
- * Both are in frontend-execution-plan.md §7. Neither is worked around here.
+ * Every comparison runs against a server clock (proposal 0010), not
+ * `Date.now()`. A device whose clock is a day fast would otherwise show a live
+ * capability as expired and route the Partner to support for a problem that does
+ * not exist.
  */
 
 export type CapabilityTone = "neutral" | "info" | "success" | "warning" | "danger";
@@ -63,9 +85,24 @@ export interface CapabilityPresentation {
   /** True when this capability authorizes its workspace right now. */
   readonly isActive: boolean;
   readonly action: CapabilityAction;
+  /**
+   * A second control, offered only where two routes are genuinely reasonable.
+   *
+   * `REJECTED` and `WITHDRAWN` are both terminal and neither blocks a fresh
+   * request, so each carries the other's route as a secondary: a refusal leads
+   * with support and still lets someone re-apply, a withdrawal leads with
+   * re-applying and still reaches support. One control would have to choose for
+   * them.
+   */
+  readonly secondaryAction: CapabilityAction | null;
+  /** When the last decision was taken, so a state can be dated. Never invented. */
+  readonly decidedAt: string | null;
+  /** The reason code Operations recorded, for support to quote. Empty when none. */
+  readonly decisionReasonCode: string;
 }
 
 const CAPABILITIES_HREF = "/apply/capabilities";
+const DOCUMENTS_HREF = "/apply/documents";
 
 interface StaticPresentation {
   readonly tone: CapabilityTone;
@@ -74,9 +111,12 @@ interface StaticPresentation {
   readonly detail: string;
   readonly isWaiting: boolean;
   readonly action: CapabilityAction;
+  readonly secondaryAction?: CapabilityAction;
 }
 
-const BY_STATUS: Record<Exclude<CapabilityStatus, "CHANGES_REQUIRED" | "SUSPENDED">, StaticPresentation> = {
+type SimpleStatus = Exclude<CapabilityStatus, "CHANGES_REQUIRED" | "SUSPENDED" | "REJECTED">;
+
+const BY_STATUS: Record<SimpleStatus, StaticPresentation> = {
   REQUESTED: {
     tone: "neutral",
     label: "Requested",
@@ -103,15 +143,16 @@ const BY_STATUS: Record<Exclude<CapabilityStatus, "CHANGES_REQUIRED" | "SUSPENDE
     isWaiting: false,
     action: { kind: "NONE" },
   },
-  // Deliberately does not claim to know why. See the header.
+  // The Partner's own exit, and nothing else, since 1.22.0. Leads with the undo.
   WITHDRAWN: {
     tone: "neutral",
-    label: "Closed",
-    headline: "This request is no longer live",
+    label: "Closed by you",
+    headline: "You closed this request",
     detail:
-      "It is not being reviewed and it does not give you access to this work. You can ask for it again, or contact support if you did not expect this.",
+      "It is not being reviewed and it does not give you access to this work. Asking again starts a new review — closing it does not count against you.",
     isWaiting: false,
     action: { kind: "REQUEST_AGAIN", href: CAPABILITIES_HREF, label: "Ask again" },
+    secondaryAction: { kind: "SUPPORT", label: "I did not close this" },
   },
 };
 
@@ -136,11 +177,89 @@ export function isExpired(record: CapabilityRecord, serverNow: string): boolean 
   return expiresAt <= now;
 }
 
+/**
+ * Required documents Django has already recorded as expired.
+ *
+ * `expired_document_kinds` is the raw field 1.22.0 publishes rather than a
+ * computed status, which is what Session B asked for: `assert_capability_active`
+ * refuses on it with `m2_capability_not_approved`, so an `APPROVED` capability
+ * with a non-empty list is **not** authorized and this build must not render it
+ * as though it were.
+ */
+export function hasExpiredDocuments(record: CapabilityRecord): boolean {
+  return record.expired_document_kinds.length > 0;
+}
+
+/** A document kind rendered in the Partner's words rather than as a constant. */
+function readableKind(kind: string): string {
+  const words = kind.replace(/_/g, " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export function describeExpiredDocuments(record: CapabilityRecord): string {
+  return record.expired_document_kinds.map(readableKind).join(", ");
+}
+
+/** How many days until the next required document expires, or null. */
+export function daysUntilDocumentExpiry(
+  record: CapabilityRecord,
+  serverNow: string,
+): number | null {
+  if (record.documents_expiring_on === null) return null;
+  // The field is a date; the end of that day is when the document stops being
+  // usable, and treating midnight as the deadline would warn a day early.
+  const expiresAt = Date.parse(`${record.documents_expiring_on}T23:59:59Z`);
+  const now = Date.parse(serverNow);
+  if (Number.isNaN(expiresAt) || Number.isNaN(now)) return null;
+  return Math.floor((expiresAt - now) / 86_400_000);
+}
+
+/** True when this capability is authorized right now, by every check we can see. */
+export function isCapabilityLive(record: CapabilityRecord, serverNow: string): boolean {
+  return (
+    readCapabilityStatus(record.status) === "APPROVED" &&
+    !isExpired(record, serverNow) &&
+    !hasExpiredDocuments(record)
+  );
+}
+
+function decisionOf(record: CapabilityRecord): {
+  decidedAt: string | null;
+  decisionReasonCode: string;
+} {
+  return {
+    // `last_transition` first: it dates the decision itself, where `reviewed_at`
+    // dates the review and is null for a Partner's own withdrawal.
+    decidedAt: record.last_transition?.occurred_at ?? record.reviewed_at,
+    decisionReasonCode: record.last_transition?.reason_code ?? "",
+  };
+}
+
 export function describeCapability(
   record: CapabilityRecord,
   serverNow: string,
 ): CapabilityPresentation {
-  if (record.status === "APPROVED" && isExpired(record, serverNow)) {
+  const status = readCapabilityStatus(record.status);
+  const decision = decisionOf(record);
+
+  // A status this build has no words for. Never mapped onto the nearest known
+  // value — see the header.
+  if (status === null) {
+    return {
+      tone: "warning",
+      label: "Unknown",
+      headline: "We cannot describe this request",
+      detail:
+        "Your app is older than this part of Vsolve. Update it, or contact support and we will tell you exactly where this stands.",
+      isWaiting: false,
+      isActive: false,
+      action: { kind: "SUPPORT", label: "Contact support" },
+      secondaryAction: null,
+      ...decision,
+    };
+  }
+
+  if (status === "APPROVED" && isExpired(record, serverNow)) {
     return {
       tone: "warning",
       label: "Expired",
@@ -150,26 +269,72 @@ export function describeCapability(
       isWaiting: false,
       isActive: false,
       action: { kind: "REQUEST_AGAIN", href: CAPABILITIES_HREF, label: "Ask again" },
+      secondaryAction: null,
+      ...decision,
     };
   }
 
-  if (record.status === "CHANGES_REQUIRED") {
+  // An approved capability whose required document has lapsed. Deliberately not
+  // a status: Django refuses it with `m2_capability_not_approved` and publishes
+  // the kinds, so the screen names the document rather than the state.
+  if (status === "APPROVED" && hasExpiredDocuments(record)) {
+    return {
+      tone: "warning",
+      label: "Document expired",
+      headline: "A document we need has run out of date",
+      detail: `New enquiries for this work stop reaching you until you replace it: ${describeExpiredDocuments(record)}. Work you have already committed to is unaffected.`,
+      isWaiting: false,
+      isActive: false,
+      action: { kind: "FIX", href: DOCUMENTS_HREF, label: "Replace the document" },
+      secondaryAction: null,
+      ...decision,
+    };
+  }
+
+  if (status === "CHANGES_REQUIRED") {
     return {
       tone: "warning",
       label: "Changes needed",
       headline: "We need something corrected",
-      // The reviewer's own words. The fallback names a backend problem plainly
-      // rather than inventing a plausible correction the Partner would act on.
+      // The reviewer's own words. 1.22.0 guarantees them non-empty; the fallback
+      // names a backend problem plainly rather than inventing a plausible
+      // correction the Partner would act on.
       detail:
         record.review_notes.trim() ||
         "A reviewer asked for changes but did not say what. Contact support and we will tell you exactly what is needed.",
       isWaiting: false,
       isActive: false,
-      action: { kind: "FIX", href: "/apply/documents", label: "Fix and resend" },
+      action: { kind: "FIX", href: DOCUMENTS_HREF, label: "Fix and resend" },
+      secondaryAction: null,
+      ...decision,
     };
   }
 
-  if (record.status === "SUSPENDED") {
+  if (status === "REJECTED") {
+    return {
+      tone: "danger",
+      label: "Not approved",
+      headline: "We could not approve this",
+      // Operations' own words, and they are required to exist. The sentence
+      // after them is the part that matters: a refusal is not a ban, and the
+      // Partner has to be told so here rather than discovering it by trying.
+      detail: `${
+        record.review_notes.trim() ||
+        "A reviewer turned this down but did not say why. Contact support and we will tell you."
+      } This does not stop you asking again for the same work once it is sorted.`,
+      isWaiting: false,
+      isActive: false,
+      action: { kind: "SUPPORT", label: "Ask us why" },
+      secondaryAction: {
+        kind: "REQUEST_AGAIN",
+        href: CAPABILITIES_HREF,
+        label: "Ask again",
+      },
+      ...decision,
+    };
+  }
+
+  if (status === "SUSPENDED") {
     return {
       tone: "danger",
       label: "Suspended",
@@ -183,13 +348,17 @@ export function describeCapability(
       isWaiting: false,
       isActive: false,
       action: { kind: "SUPPORT", label: "Contact support" },
+      secondaryAction: null,
+      ...decision,
     };
   }
 
-  const presentation = BY_STATUS[record.status];
+  const presentation = BY_STATUS[status];
   return {
     ...presentation,
-    isActive: record.status === "APPROVED",
+    isActive: status === "APPROVED",
+    secondaryAction: presentation.secondaryAction ?? null,
+    ...decision,
   };
 }
 
@@ -206,9 +375,7 @@ export function activeCapabilities(
   records: readonly CapabilityRecord[],
   serverNow: string,
 ): CapabilityRecord[] {
-  return records.filter(
-    (record) => record.status === "APPROVED" && !isExpired(record, serverNow),
-  );
+  return records.filter((record) => isCapabilityLive(record, serverNow));
 }
 
 /**
@@ -218,9 +385,14 @@ export function activeCapabilities(
  * something they are waiting on, which outranks something already working. A
  * list would be more complete and would also bury the single row that needs a
  * person, which is the only reason to interrupt a home screen at all.
+ *
+ * `REJECTED` sits above `SUSPENDED` because a refusal is the state a Partner is
+ * most likely to be confused by and most able to resolve; a withdrawal is not
+ * ranked at all, because the Partner caused it and knows.
  */
 const ATTENTION_ORDER: readonly CapabilityStatus[] = [
   "CHANGES_REQUIRED",
+  "REJECTED",
   "SUSPENDED",
   "UNDER_REVIEW",
   "REQUESTED",
@@ -230,7 +402,7 @@ export function mostUrgentCapability(
   records: readonly CapabilityRecord[],
 ): CapabilityRecord | null {
   for (const status of ATTENTION_ORDER) {
-    const match = records.find((record) => record.status === status);
+    const match = records.find((record) => readCapabilityStatus(record.status) === status);
     if (match) return match;
   }
   return null;

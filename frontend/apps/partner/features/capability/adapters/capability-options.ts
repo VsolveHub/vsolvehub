@@ -1,13 +1,19 @@
 import { WORKSPACE_REGISTRY } from "@/features/workspace/registry";
 
-import type {
-  BusinessType,
-  BusinessTypeOption,
-  CapabilityAsk,
-  CapabilityOption,
-  CapabilityOptions,
-} from "../contract-pending/types";
 import { expectedFor, fieldsFor, type BusinessField } from "./business-type";
+import {
+  readRegistrationQuestions,
+  type RegistrationQuestionSet,
+} from "./registration-questions";
+import {
+  readBusinessType,
+  readCapabilityAsk,
+  type BusinessType,
+  type BusinessTypeOption,
+  type CapabilityAsk,
+  type CapabilityOption,
+  type CapabilityOptions,
+} from "./wire";
 
 /**
  * What a Partner may ask to be approved for, as a screen can render it.
@@ -48,16 +54,32 @@ export interface BusinessTypeChoice {
   readonly expected: readonly BusinessField[];
 }
 
+/**
+ * The business types the server offers, dropping any this build cannot render.
+ *
+ * `BusinessTypeOption.value` is a bare `string` on the wire. A fourth type from
+ * a newer deployment has no field set here and no constraint knowledge, so
+ * rendering it would offer a radio button that saves a profile whose required
+ * fields the form never asked for. Dropping it costs an option; guessing costs a
+ * Partner filed under a business type nobody described to them.
+ */
 export function describeBusinessTypes(
   options: readonly BusinessTypeOption[],
 ): BusinessTypeChoice[] {
-  return options.map((option) => ({
-    value: option.value,
-    label: option.label,
-    consequence: option.consequence,
-    fields: fieldsFor(option.value),
-    expected: expectedFor(option.value),
-  }));
+  return options.flatMap((option): BusinessTypeChoice[] => {
+    const value = readBusinessType(option.value);
+    if (value === null) return [];
+
+    return [
+      {
+        value,
+        label: option.label,
+        consequence: option.consequence,
+        fields: fieldsFor(value),
+        expected: expectedFor(value),
+      },
+    ];
+  });
 }
 
 /** One extra input a capability request needs, described for a form. */
@@ -99,6 +121,15 @@ export interface CapabilityChoice {
   readonly workspaceLabel: string | null;
   readonly requiresInsurance: boolean;
   readonly asks: readonly CapabilityAskField[];
+  /**
+   * Category-specific questions this variant asks at registration.
+   *
+   * Server-authored on the versioned schema (contract 1.23.0). This is what
+   * makes `M2-FE-105`'s "category-specific steps" possible without a client-side
+   * branch per category — a construction variant asking for a safety
+   * certificate and an events variant asking for venue cover are one form here.
+   */
+  readonly registrationQuestions: RegistrationQuestionSet;
   readonly alreadyRequested: boolean;
   /** True when the Partner is paid by Vsolve rather than directly by the customer. */
   readonly isPlatformPaid: boolean;
@@ -112,7 +143,15 @@ function toChoice(option: CapabilityOption): CapabilityChoice {
     lifecycleExplanation: option.lifecycle_explanation,
     workspaceLabel: WORKSPACE_REGISTRY[option.workspace_key]?.label ?? null,
     requiresInsurance: option.requires_insurance,
-    asks: option.asks_for.map((name) => ({ name, ...ASK_FIELDS[name] })),
+    // `asks_for` is a bare `string[]`. A name with no control here is dropped
+    // rather than rendered as an unlabelled box — the server still validates the
+    // request, so the refusal is honest and the form never asks for something it
+    // cannot explain.
+    asks: option.asks_for.flatMap((name): CapabilityAskField[] => {
+      const ask = readCapabilityAsk(name);
+      return ask === null ? [] : [{ name: ask, ...ASK_FIELDS[ask] }];
+    }),
+    registrationQuestions: readRegistrationQuestions(option.registration_questions),
     alreadyRequested: option.already_requested,
     // Read from `commercial_mode`, never derived from the key. This is the field
     // that decides whether the screen promises Vsolve protection or tells the

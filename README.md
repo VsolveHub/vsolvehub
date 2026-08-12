@@ -80,6 +80,18 @@ state. Error handling is not fallback data and stays.
 
 ## Status
 
-Milestone 1 (the Scheduled A1 Technician slice) is built through S7 at OpenAPI **1.17.0**. S8
-acceptance is the remaining stage. The live board is
+Two milestones run in parallel, on separate branches, and are separately accepted.
+
+**Milestone 1 — the Scheduled A1 Technician slice.** Built through S7; S8 acceptance is the remaining
+stage. `main` is the M1 acceptance build. Live board:
 [`Django_Next.js_Plan/M1/task.md`](./Django_Next.js_Plan/M1/task.md).
+
+**Milestone 2 — workforce and project services** (`A3_TIME_BLOCK` + `A5_CUSTOM_PROJECT`). On
+`feat/m2-workforce-projects`, and **never pushed to `main`** without the owner's explicit
+instruction. Backend domain layers for capabilities, requirements, matching and proposals are built
+and tested; contract **1.21.0** publishes 17 M2 paths; the Partner workspace shell is wired to them.
+No phase has passed its gate. Live board:
+[`Django_Next.js_Plan/M2/task.md`](./Django_Next.js_Plan/M2/task.md).
+
+The contract version above moves with the branch — `contracts/openapi/v1.yaml` is the truth, not this
+paragraph.

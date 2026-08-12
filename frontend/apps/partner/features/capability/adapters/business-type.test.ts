@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BusinessProfileInput } from "../contract-pending/types";
+import type { BusinessProfileInput } from "./wire";
 import {
   certainRefusals,
   expectedFor,

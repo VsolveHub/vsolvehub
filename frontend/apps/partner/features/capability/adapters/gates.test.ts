@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { GateStatus } from "../contract-pending/types";
+import type { GateStatus } from "./wire";
 import { blockingGate, describeGate, explainBlock, outstandingGates, parseGates } from "./gates";
 
 /**

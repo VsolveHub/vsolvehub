@@ -44,8 +44,10 @@
 >    `robots: noindex`, exactly as Session B mounted its seven.
 > 5. Then `FE-211`, which is now readable from server state.
 >
-> **Do not start Wave A2.** `FE-401..418` needs unlock, selection and reconfirmation, and those have
-> no domain layer on the server at all — that is Wave C2, not a missing serializer. Finish Wave 1.
+> **Do not start Wave A2.** `FE-216`, `FE-401..424` (rescoped by revision 3 — A3 unlock + A5
+> visits/estimates, see the Wave A2 section below) needs unlock, visit-plan, selection and
+> reconfirmation surfaces, and those have no domain layer on the server at all — that is Wave C2,
+> not a missing serializer. Finish Wave 1.
 >
 > **The constraint has changed.** Contract **1.21.0** now publishes the requirement surface — list,
 > create, read, patch, submit, duplicate-check, timeline and quote teasers — and the generated client
@@ -130,11 +132,17 @@ duplicate-merge path, expired-requirement state.
 
 ---
 
-## Wave A2 — Teasers, unlock, selection and engagement
+## Wave A2 — Access (A3 teasers + unlock · A5 visits + estimates), selection and engagement
 
-**Depends on:** A1. **Gate:** money is only ever requested against visible delivered value.
+**Depends on:** A1 and Wave C2. **Gate:** money is only ever requested against a real accepted
+commitment — visible delivered quotes (A3) or a confirmed visit (A5).
 
-### Teasers and unlock
+**Revision 3 (ADR-0008) reshaped this wave before it started.** The A5 journey is visit-first: plan
+chooser on review (`FE-216`, an A1-wave follow-up), vendor cards, visit-plan checkout, visit tracker,
+on-site estimates readable in full. Teasers and the unlock are A3-only. Reuse the checkout
+slot-picker presentation (`features/checkout/view/slots-modal.tsx`) for visit times.
+
+### A3 teasers and unlock
 
 - [ ] `M2-FE-401` Quote **teasers**: verification badge, rating, vendor type, headline price band.
   No full scope, no vendor identity, no contact.
@@ -144,21 +152,41 @@ duplicate-merge path, expired-requirement state.
   success and browser-close recovery all handled truthfully.
 - [ ] `M2-FE-404` Never show success from the payment redirect alone. Resolve final status from the
   backend; safe retry with no duplicate purchase.
-- [ ] `M2-FE-405` Out-of-budget quotes marked as such, not presented as ordinary options.
-- [ ] `M2-FE-406` Non-responsive rejection: reason, remaining rejection allowance, the replacement it triggers.
+- [ ] `M2-FE-405` Out-of-budget quotes and estimates marked as such, not presented as ordinary options.
+- [ ] `M2-FE-406` Non-responsive rejection: reason, remaining rejection allowance, the replacement it
+  triggers (A3: quote slot; A5: free replacement visit).
+
+### A5 visits and estimates (revision 3)
+
+- [ ] `M2-FE-216` The visit-plan chooser on the review screen: 1/2/3 professionals at server-published
+  tier prices; choosing charges nothing; never renders for A3; never a fifth screen.
+- [ ] `M2-FE-419` Vendor cards before any confirmed visit: verification, rating, vendor type, distance
+  band — no identity, no contact. Identity appears per vendor at slot confirmation.
+- [ ] `M2-FE-420` The visit-plan checkout at `/requests/[id]/book-visits`, opened when the first
+  vendor holds a slot; one payment for the whole plan; unfilled visits refund themselves; all payment
+  states truthful, never success from the redirect.
+- [ ] `M2-FE-421` The visit tracker on the request detail: per-slot states (awaiting, held, scheduled
+  + disclosed identity, completed, refunded/replaced), slot times in the checkout picker presentation.
+- [ ] `M2-FE-422` Visit-day states: arrival via the non-OTP fallback, reschedule, vendor no-show and
+  customer no-show reporting with honest consequences.
+- [ ] `M2-FE-423` Estimates readable **in full** — no paywall state anywhere in the A5 journey — each
+  linked to its completed visit.
+- [ ] `M2-FE-424` Visit money shown truthfully on both sides, server-calculated: Customer sees each
+  slot's money paid to the visiting professional or refunded; Partner sees the visit payout in Money
+  once the estimate is in, and that a visit without an estimate pays nothing.
 
 ### Comparison and selection
 
-- [ ] `M2-FE-407` Each unlocked quote: verification summary, validity, scope, schedule, taxes,
-  commission treatment, total, exclusions.
+- [ ] `M2-FE-407` Each unlocked quote (A3) / delivered estimate (A5): verification summary, validity,
+  scope, schedule, taxes, commission treatment, total, exclusions.
 - [ ] `M2-FE-408` Accessible comparison view normalising equivalent fields on the single tax basis,
   while clearly showing non-equivalent assumptions.
 - [ ] `M2-FE-409` Clarification and revision requests that cannot edit vendor prices or agreement fields.
 - [ ] `M2-FE-410` Selection references a specific proposal; final scope/cost summary before confirmation.
 - [ ] `M2-FE-411` Vendor reconfirmation shown as a **pending state, not a confirmed booking**.
-- [ ] `M2-FE-412` Vendor decline or timeout guides to another unlocked quote or a free replacement —
-  no lost history, no second charge.
-- [ ] `M2-FE-413` One-tap re-validation when a quote's validity expires, reusing the existing unlock.
+- [ ] `M2-FE-412` Vendor decline or timeout guides to another quote, estimate or a free replacement
+  (visit) — no lost history, no second charge.
+- [ ] `M2-FE-413` One-tap re-validation when validity expires, reusing the existing unlock or plan.
 - [ ] `M2-FE-414` Prevent double selection; recover from stale-proposal and concurrent-action errors.
 
 ### Engagement entry
@@ -171,8 +199,9 @@ duplicate-merge path, expired-requirement state.
   confirmed engagement.
 - [ ] `M2-FE-418` Durable agreement, receipt/invoice and timeline access for both parties.
 
-**Evidence to record:** payment-pending and late-success traces, duplicate-unlock prevention, the
-teaser field list proving no identity leaks pre-unlock.
+**Evidence to record:** payment-pending and late-success traces, duplicate-unlock and duplicate-plan
+prevention, the teaser field list proving no identity leaks pre-unlock (A3), the vendor-card field
+list proving no identity leaks before slot confirmation (A5), the unfilled-share refund trace.
 
 ---
 
@@ -235,6 +264,7 @@ Route files under `app/operations/**` belong to Session B; hand them your route 
 - [ ] `M2-FE-804` (customer share) Slow network, offline transition, timeout, duplicate click, refresh
   and back navigation for every financial or state-changing flow.
 - [ ] `M2-FE-807` (customer journeys) A3 and A5 happy paths, teaser→unlock, unlock payment pending,
+  plan chooser→visit-plan checkout, visit no-show and unfilled-share refund, on-site estimate→selection,
   non-responsive rejection, cancellation conflict, refund.
 - [ ] `M2-FE-808` (customer share) Long content, empty and exception state coverage.
 
@@ -248,7 +278,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | Wave | Scope | Built `[~]` | Integrated `[x]` | Evidence |
 |---|---|---|---|---|
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
-| A2 | `FE-401..418` | `[ ]` | `[ ]` | |
+| A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[ ]` | `[ ]` | |
 | A3 | `FE-509..512`, `FE-608..613` | `[ ]` | `[ ]` | |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
