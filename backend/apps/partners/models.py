@@ -1,6 +1,7 @@
 """Partner onboarding, eligibility, availability, and presence persistence."""
 
 import uuid
+from datetime import date
 
 from django.conf import settings
 from django.db import models
@@ -330,6 +331,13 @@ class PartnerDocument(models.Model):
     )
     scanned_at = models.DateTimeField(null=True, blank=True)
     scan_failure_code = models.CharField(max_length=64, blank=True)
+    #: The day this document stops being valid, or nothing.
+    #:
+    #: Nullable, and that is the answer rather than an omission: a photograph of a government ID
+    #: has no expiry the platform tracks, while a police verification or a trade licence does. A
+    #: non-null default would be a policy guess about which kinds expire, and which kinds each
+    #: capability requires is an open owner decision (7). See proposal 0013 §Answered.
+    expires_on = models.DateField(null=True, blank=True)
     replaces = models.ForeignKey(
         "self",
         null=True,
@@ -363,10 +371,15 @@ class PartnerDocument(models.Model):
         ]
         indexes = [
             models.Index(fields=("application", "kind", "status")),
+            models.Index(fields=("kind", "expires_on")),
         ]
 
     def __str__(self) -> str:
         return f"{self.application_id}:{self.kind}:v{self.version}"
+
+    def is_expired_on(self, day: date) -> bool:
+        """A document with no recorded expiry never expires. Absence is not staleness."""
+        return self.expires_on is not None and self.expires_on < day
 
 
 class PartnerDocumentUpload(models.Model):
@@ -615,3 +628,455 @@ class PartnerOnlineSession(models.Model):
 
     def __str__(self) -> str:
         return f"{self.partner_id}:{self.started_at.isoformat()}"
+
+
+# ---------------------------------------------------------------------------
+# M2 capability foundation (A3_TIME_BLOCK and A5_CUSTOM_PROJECT)
+#
+# See docs/adr/0007-m2-engagement-spine-and-fee-after-value.md. Commercial mode
+# is a property of the archetype and is deliberately not stored here: a field
+# Operations could edit would reintroduce the per-variant mode matrix ADR-0007
+# removes.
+# ---------------------------------------------------------------------------
+
+
+def commercial_mode_for_archetype(archetype: str) -> str:
+    """Derive the commercial mode. A3 is always lead-only; A5 always managed."""
+    if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
+        return PartnerCapability.CommercialMode.LEAD_ONLY
+    if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        return PartnerCapability.CommercialMode.MANAGED_PAYMENT_REQUIRED
+    return PartnerCapability.CommercialMode.NOT_APPLICABLE
+
+
+class PartnerBusinessProfile(models.Model):
+    """Business identity for a Partner operating as an agency or project vendor."""
+
+    class BusinessType(models.TextChoices):
+        INDIVIDUAL = "INDIVIDUAL", "Individual"
+        WORKFORCE_AGENCY = "WORKFORCE_AGENCY", "Workforce agency"
+        PROJECT_VENDOR = "PROJECT_VENDOR", "Project vendor"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.OneToOneField(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="business_profile",
+    )
+    business_type = models.CharField(
+        max_length=24,
+        choices=BusinessType.choices,
+        default=BusinessType.INDIVIDUAL,
+    )
+    legal_name = models.CharField(max_length=200, blank=True)
+    registration_number = models.CharField(max_length=64, blank=True)
+    gst_registered = models.BooleanField(default=False)
+    gstin = models.CharField(max_length=15, blank=True)
+    years_in_operation = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-updated_at",)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(gst_registered=False, gstin="") | models.Q(gst_registered=True),
+                name="partners_gstin_requires_gst_registered",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(business_type="INDIVIDUAL") | models.Q(registration_number=""),
+                name="partners_individual_has_no_registration_number",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.business_type}"
+
+
+class PartnerCapability(models.Model):
+    """One approved lifecycle capability. Authorises a workspace and its actions.
+
+    A skill supports eligibility; only an approved capability authorises work.
+    """
+
+    class Status(models.TextChoices):
+        REQUESTED = "REQUESTED", "Requested"
+        UNDER_REVIEW = "UNDER_REVIEW", "Under review"
+        CHANGES_REQUIRED = "CHANGES_REQUIRED", "Changes required"
+        APPROVED = "APPROVED", "Approved"
+        SUSPENDED = "SUSPENDED", "Suspended"
+        #: Operations refused. Distinct from WITHDRAWN on purpose — see proposal 0013 §Answered.
+        #: "We said no" needs a reason and a support path; "you closed this" needs an obvious way
+        #: to ask again. Collapsing them, as this model did until 12 August, left the Partner app
+        #: unable to say either honestly.
+        REJECTED = "REJECTED", "Rejected"
+        #: The Partner's own exit, and nothing else.
+        WITHDRAWN = "WITHDRAWN", "Withdrawn"
+
+    class CommercialMode(models.TextChoices):
+        LEAD_ONLY = "LEAD_ONLY", "Lead only"
+        MANAGED_PAYMENT_REQUIRED = "MANAGED_PAYMENT_REQUIRED", "Managed payment required"
+        NOT_APPLICABLE = "NOT_APPLICABLE", "Not applicable"
+
+    ACTIVE_STATUSES = (
+        Status.REQUESTED,
+        Status.UNDER_REVIEW,
+        Status.CHANGES_REQUIRED,
+        Status.APPROVED,
+    )
+    #: Statuses a reviewer cannot reach without saying what is wrong. `CHANGES_REQUIRED` is here
+    #: for the same reason `SUSPENDED` needs a reason code: the Partner's only next action is to
+    #: fix something, and "we need a correction" without naming it sends them back to re-upload
+    #: the document that was already right.
+    REVIEW_STATUSES_NEEDING_NOTES = (Status.CHANGES_REQUIRED, Status.REJECTED)
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="capabilities",
+    )
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="partner_capabilities",
+    )
+    archetype = models.CharField(
+        max_length=24,
+        choices=ServiceVariant.BookingArchetype.choices,
+    )
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.REQUESTED)
+    max_crew_size = models.PositiveSmallIntegerField(null=True, blank=True)
+    max_concurrent_engagements = models.PositiveSmallIntegerField(null=True, blank=True)
+    max_project_value_paise = models.PositiveBigIntegerField(null=True, blank=True)
+    requires_insurance = models.BooleanField(default=False)
+    review_notes = models.TextField(blank=True)
+    suspension_reason_code = models.SlugField(max_length=80, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="partner_capabilities_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("partner", "archetype", "-updated_at")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("partner", "variant"),
+                condition=models.Q(
+                    status__in=("REQUESTED", "UNDER_REVIEW", "CHANGES_REQUIRED", "APPROVED")
+                ),
+                name="partners_unique_live_capability_per_variant",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_crew_size__isnull=True) | models.Q(max_crew_size__gt=0),
+                name="partners_capability_crew_size_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_project_value_paise__isnull=True)
+                | models.Q(max_project_value_paise__gt=0),
+                name="partners_capability_project_value_positive",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="SUSPENDED") | ~models.Q(suspension_reason_code=""),
+                name="partners_capability_suspension_needs_reason",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status__in=("CHANGES_REQUIRED", "REJECTED"))
+                | ~models.Q(review_notes=""),
+                name="partners_capability_review_state_needs_notes",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("archetype", "status"), name="partners_capability_lookup_idx"),
+            models.Index(fields=("partner", "status")),
+            models.Index(fields=("status", "expires_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.archetype}:{self.status}"
+
+    @property
+    def commercial_mode(self) -> str:
+        return commercial_mode_for_archetype(self.archetype)
+
+    @property
+    def workspace_key(self) -> str:
+        return self.archetype
+
+
+class PartnerCapabilityTransition(models.Model):
+    """Immutable audit of every capability review decision."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    capability = models.ForeignKey(
+        PartnerCapability,
+        on_delete=models.PROTECT,
+        related_name="transitions",
+    )
+    from_status = models.CharField(max_length=24, blank=True)
+    to_status = models.CharField(max_length=24)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="partner_capability_transitions_made",
+    )
+    reason_code = models.SlugField(max_length=80)
+    reason = models.TextField(blank=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("occurred_at", "id")
+        indexes = [
+            models.Index(fields=("capability", "occurred_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.capability_id}:{self.from_status}->{self.to_status}"
+
+
+class PartnerInsuranceDeclaration(models.Model):
+    """Worker insurance and liability declaration required for workforce capability.
+
+    Blocking for construction labour. The policy reference is stored for Operations
+    verification; the document itself lives behind the M1 document storage adapter.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="insurance_declarations",
+    )
+    insurer_name = models.CharField(max_length=160)
+    policy_reference = models.CharField(max_length=120)
+    coverage_paise = models.PositiveBigIntegerField()
+    covers_workmen_compensation = models.BooleanField(default=False)
+    valid_from = models.DateField()
+    valid_to = models.DateField()
+    declared_at = models.DateTimeField(default=timezone.now)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="partner_insurance_verified",
+    )
+
+    class Meta:
+        ordering = ("-valid_to", "-declared_at")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(valid_to__gt=models.F("valid_from")),
+                name="partners_insurance_valid_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(coverage_paise__gt=0),
+                name="partners_insurance_coverage_positive",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("partner", "valid_to")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.insurer_name}"
+
+
+class CrewMember(models.Model):
+    """A worker as a global person, not a per-agency row.
+
+    Identity is a keyed hash so the same person registered by two agencies resolves
+    to one record and cannot be double-booked on one day.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity_hash = models.CharField(max_length=64, unique=True)
+    display_name = models.CharField(max_length=120)
+    #: The last four digits of the phone number, and nothing else.
+    #:
+    #: `identity_hash` is not reversible, so without this a roster of two people called Ramesh is
+    #: two identical rows and the Partner cannot tell which one they archived. Four digits are what
+    #: makes the list usable; the number itself stays out of the database, so a dump of this
+    #: table is not a contact list.
+    phone_suffix = models.CharField(max_length=4, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("display_name", "id")
+
+    def __str__(self) -> str:
+        return self.display_name
+
+
+class PartnerCrewMembership(models.Model):
+    """A crew member on one Partner's roster. One person may appear on several."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        ARCHIVED = "ARCHIVED", "Archived"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="crew_memberships",
+    )
+    crew_member = models.ForeignKey(
+        CrewMember,
+        on_delete=models.PROTECT,
+        related_name="partner_memberships",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    is_supervisor = models.BooleanField(default=False)
+    documents_verified_at = models.DateTimeField(null=True, blank=True)
+    added_at = models.DateTimeField(default=timezone.now)
+    archived_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("partner", "-added_at")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("partner", "crew_member"),
+                name="partners_unique_crew_membership",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="ARCHIVED") | models.Q(archived_at__isnull=False),
+                name="partners_archived_membership_has_timestamp",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("partner", "status")),
+            models.Index(fields=("crew_member", "status")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.crew_member_id}"
+
+
+class CrewSkill(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    membership = models.ForeignKey(
+        PartnerCrewMembership,
+        on_delete=models.PROTECT,
+        related_name="skills",
+    )
+    skill = models.ForeignKey(Skill, on_delete=models.PROTECT, related_name="crew_links")
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("membership", "skill"),
+                name="partners_unique_crew_skill",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.membership_id}:{self.skill_id}"
+
+
+class PartnerIdentityCluster(models.Model):
+    """Partner accounts that share a real-world identity signal.
+
+    A cluster counts as one Partner for quote-slot purposes, so one beneficial owner
+    cannot occupy two competing slots on the same requirement.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"cluster:{self.id}"
+
+
+class PartnerClusterMembership(models.Model):
+    class Signal(models.TextChoices):
+        PHONE = "PHONE", "Shared phone"
+        PAN = "PAN", "Shared PAN"
+        BANK_ACCOUNT = "BANK_ACCOUNT", "Shared bank account"
+        DEVICE = "DEVICE", "Shared device"
+        OPERATIONS = "OPERATIONS", "Operations decision"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cluster = models.ForeignKey(
+        PartnerIdentityCluster,
+        on_delete=models.PROTECT,
+        related_name="memberships",
+    )
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="cluster_memberships",
+    )
+    signal = models.CharField(max_length=16, choices=Signal.choices)
+    signal_hash = models.CharField(max_length=64)
+    linked_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("cluster", "linked_at")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("cluster", "partner"),
+                name="partners_unique_cluster_membership",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("partner",)),
+            models.Index(fields=("signal", "signal_hash")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.cluster_id}:{self.partner_id}:{self.signal}"
+
+
+class MinimumWageFloor(models.Model):
+    """Statutory daily wage floor by state and skill.
+
+    Values are Operations-loaded reference data. An A3 proposal below the live floor
+    is rejected server-side; the platform, not only the vendor, carries that exposure.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    state_code = models.CharField(max_length=8)
+    skill = models.ForeignKey(
+        Skill,
+        on_delete=models.PROTECT,
+        related_name="wage_floors",
+    )
+    floor_paise_per_day = models.PositiveBigIntegerField()
+    effective_from = models.DateField()
+    source_reference = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("state_code", "skill", "-effective_from")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("state_code", "skill", "effective_from"),
+                name="partners_unique_wage_floor_version",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(floor_paise_per_day__gt=0),
+                name="partners_wage_floor_positive",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("state_code", "skill", "effective_from")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.state_code}:{self.skill_id}:{self.floor_paise_per_day}"

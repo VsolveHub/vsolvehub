@@ -86,6 +86,8 @@ class ServiceVariant(models.Model):
     class BookingArchetype(models.TextChoices):
         LEGACY = "LEGACY", "Legacy"
         A1_TASK_VISIT = "A1_TASK_VISIT", "A1 task visit"
+        A3_TIME_BLOCK = "A3_TIME_BLOCK", "A3 time block"
+        A5_CUSTOM_PROJECT = "A5_CUSTOM_PROJECT", "A5 custom project"
 
     class PricingStrategy(models.TextChoices):
         FIXED = "FIXED", "Fixed"
@@ -190,6 +192,79 @@ class A1VariantConfiguration(models.Model):
                 fields=("variant",),
                 condition=models.Q(status="ACTIVE"),
                 name="catalog_unique_active_a1_variant_configuration",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant_id}:v{self.version}:{self.status}"
+
+
+class M2VariantConfiguration(models.Model):
+    """Versioned Operations-owned configuration for one A3 or A5 variant.
+
+    Deliberately the same shape as `A1VariantConfiguration`: a version, one active row, and a
+    JSON schema that `carts.item_inputs.validate_scope` can check answers against. A second
+    configuration shape would mean a second validator.
+
+    `quote_delivery_sla_hours` and `first_quote_sla_hours` are nullable because the SLA per
+    category is an open owner decision. Nullable and fail-closed is the honest representation of
+    "not decided"; a default here would bake a policy nobody approved into the schema.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        RETIRED = "RETIRED", "Retired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    variant = models.ForeignKey(
+        ServiceVariant,
+        on_delete=models.PROTECT,
+        related_name="m2_configurations",
+    )
+    version = models.PositiveIntegerField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    #: Validated by the same helper the A1 cart uses.
+    question_schema = models.JSONField(default=dict)
+    #: Hours from submission to the first usable quote, and to the full set. Owner decision 2.
+    first_quote_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    quote_delivery_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Maximum quotes a Customer can unlock. Revision 2 fixes the promise at "up to three".
+    max_quotes = models.PositiveSmallIntegerField(default=3)
+    #: How many non-responsive rejections a Customer may make before the slot stops reopening.
+    non_responsive_rejection_cap = models.PositiveSmallIntegerField(null=True, blank=True)
+    evidence_policy = models.JSONField(default=dict)
+    contact_policy = models.JSONField(default=dict)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="m2_variant_configurations_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("variant", "-version")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("variant", "version"),
+                name="catalog_unique_m2_variant_configuration_version",
+            ),
+            models.UniqueConstraint(
+                fields=("variant",),
+                condition=models.Q(status="ACTIVE"),
+                name="catalog_unique_active_m2_variant_configuration",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(max_quotes__gt=0),
+                name="catalog_m2_configuration_max_quotes_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quote_delivery_sla_hours__isnull=True)
+                | models.Q(first_quote_sla_hours__isnull=True)
+                | models.Q(quote_delivery_sla_hours__gte=models.F("first_quote_sla_hours")),
+                name="catalog_m2_configuration_sla_order",
             ),
         ]
 

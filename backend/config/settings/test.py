@@ -23,3 +23,6 @@ PAYMENT_LEGAL_ENTITY_CODE = "vsolve-test"
 PAYMENT_LIVE_COLLECTIONS_APPROVED = False
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+MESSAGE_TRANSPORT = "fake"
+NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = True

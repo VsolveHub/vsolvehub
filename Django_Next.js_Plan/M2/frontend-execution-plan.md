@@ -54,24 +54,54 @@ Between them, Session A and Session B share **no source file**. The split is by 
 > true until Wave C0 landed. It is no longer. Kept as a heading rather than deleted because the
 > two-state tracking rule below is still how every task is marked.
 
-`contracts/openapi/v1.yaml` is at **1.21.0 and carries 17 M2 paths** — requirement capture, quote
-teasers, clarification, Partner enquiries, proposals and `GET /partner/workspaces/`. The generated
-client contains them and `pnpm typecheck` is green across all 9 packages.
+`contracts/openapi/v1.yaml` is at **1.22.0 and carries 33 M2 paths.** Wave C0 published 17 on
+11 August — requirement capture, quote teasers, clarification, Partner enquiries, proposals and
+`GET /partner/workspaces/`. **Wave C1 published 16 more on 12 August:**
+
+| Newly live at 1.22.0 | Paths | Unblocks |
+|---|---|---|
+| Attachments | `POST /requirements/{id}/attachments/uploads/`, `POST /requirements/{id}/attachments/`, `DELETE /requirements/{id}/attachments/{attachment_id}/` | `M2-FE-205` upload path; `scanStatus` now really carries `INFECTED` |
+| Site visits | `POST /site-visits/{id}/schedule/`, `POST /site-visits/{id}/complete/` | `M2-FE-306` |
+| Business identity | `GET` / `PUT /partner/business-profile/` | `M2-FE-103` |
+| Capabilities | `GET /partner/capability-options/`, `GET` / `POST /partner/capabilities/`, `POST /partner/capabilities/{id}/withdraw/` | `M2-FE-104`, `M2-FE-109` |
+| Insurance | `GET` / `PUT /partner/insurance/` | `M2-FE-106` |
+| Gates | `GET /partner/gates/` | `M2-FE-102` |
+| Crew | `GET` / `POST /partner/crew/`, `PATCH` and `archive` per membership | `M2-FE-107` |
+| Masked demand | `GET /partner/demand-preview/` | `M2-FE-101` |
+
+**Both sessions must run `pnpm contract:generate` before anything else.** The committed
+`packages/api-client/src/generated/schema.d.ts` is at 1.21.0, so `contract:check` fails until it is
+regenerated — and none of the sixteen new paths exists in the typed client until then.
+
+**Three things Session B must know before re-pointing** (all detailed in
+`contracts/openapi/CHANGELOG.md` 1.22.0):
+
+1. **`PartnerCapability.Status` has a sixth value, `REJECTED`.** Operations' refusal now has its own
+   state and `WITHDRAWN` means only the Partner's own exit. `capability-status.ts` handles five and
+   will not recognise it — a deliberate visible break, because `WITHDRAWN` quietly meaning two things
+   was worse. Logged as a frozen-file change request below.
+2. **`m2_capability_transition_invalid` was not published.** The live code is
+   `m2_capability_transition_not_allowed`, which has existed since 10 August; renaming it to match
+   the proposal's guess would have been a breaking change for nothing. The `errors.ts` request row
+   below is corrected accordingly.
+3. **`POST /partner/crew/` answers `201` for a new membership and `200` for a reinstated one.** The
+   status code is how the UI knows to say "we put Ramesh back on your roster".
 
 **What is still unpublished, and therefore still caps its tasks at `[~]`:**
 
 | Surface | Wave | Consequence for the frontend |
 |---|---|---|
-| Attachment upload (`M2-BE-202`) | C1 | The Details screen's upload path has no server. The record is published read-only. |
-| All of proposal 0013 — business profile, capability options/request/review-state, insurance, crew CRUD, gate status, demand preview | C1 | Session B's whole `/apply` express path and crew roster are route-less by necessity. |
+| Attachment access expiry for non-selected vendors (`M2-BE-310`) | C1 remainder | Upload works; a declined vendor's link is not yet revoked, and no attachment reaches an enquiry. |
 | Unlock checkout and state, unlocked quotes, selection, rejection, re-validation | C2 (BE4) | Session A's Wave A2 has no domain layer to integrate against, let alone an endpoint. |
 | Engagement and stage spine | C3 | Wave 3 in both columns. |
 | Operations queues, cases, assisted capture | C6 | Wave 4 in both columns. |
 
-**One caveat that applies to everything already published.** C0 shipped with lint, strict types, a
-migration check and schema validation — and **no tests**. No object-level authorization test exists
-for any of the 17 paths. They compile and generate; none is proven against a real request. Treat
-integration findings as likely, not surprising.
+**One caveat that applies to everything already published.** C0 shipped with **no tests**. Wave C1
+wrote them — five backend files covering object-level authorization on all 33 paths, the sweeps,
+attachments and the registration surface — and **did not run them**, per the verification convention.
+They are queued for the owner in [task.md](task.md) §"Owner verification queue". The surface is now
+covered by written tests rather than by executed ones: treat integration findings as likely, not
+surprising.
 
 The frontend completion standard in `03-frontend-tasks.md` requires the generated client and real
 backend states, so a task reaches `[x]` only once it is re-pointed and verified against real server
@@ -296,6 +326,8 @@ row — keep edits to one line so a merge stays trivial.
 | Date | From | File | Change needed | Why | Landed at gate |
 |---|---|---|---|---|---|
 | 2026-08-11 | B | `packages/api-client/src/errors.ts` | Add `m2_business_type_invalid` (`fix_input`), `m2_capability_already_requested` (`choose_again`), `m2_capability_transition_invalid` (`contact_support`) | Proposal 0013 introduces three codes outside the frozen 29. Until they land they fall through to the generic refusal path. | |
+| 2026-08-12 | C | `packages/api-client/src/errors.ts` | **Correction to the row above.** Published at 1.22.0: `m2_business_type_invalid` (`fix_input`), `m2_capability_already_requested` (`choose_again`), `m2_attachment_invalid` (`fix_input`), `m2_attachment_unavailable` (`retry`, retryable). `m2_capability_transition_invalid` was **not** published — the live code is `m2_capability_transition_not_allowed` (`contact_support`). | Renaming a code that has existed since 10 August to match a proposal's guess at its name is a breaking change bought for nothing. | |
+| 2026-08-12 | C | `apps/partner/features/capability/**` (`capability-status.ts`) | Handle a sixth `PartnerCapability.Status`: `REJECTED` | 1.22.0 splits Operations' refusal out of `WITHDRAWN`, which now means only the Partner's own exit. `REJECTED` carries a mandatory `review_notes` and needs a support path; `WITHDRAWN` needs an obvious way to ask again. Both are terminal and neither blocks a fresh request. An unhandled status should render as "we cannot describe this" rather than fall back to either. | |
 | 2026-08-12 | A | `packages/query/src/m2-keys.ts` | `requirements.duplicates` should take `{addressId, requestedStart, variantId}`, not `{addressId, serviceBy, categorySlug}` | The published `GET /requirements/duplicate-check/` matches on `address_id`, `requested_start` (a date-*time*) and `variant_id`. The key's three slots are still the three inputs that decide the answer, so the cache is correct; only the labels are wrong. `features/requirement/queries.ts` passes the right values under the stale names with a comment. | |
 | 2026-08-12 | A | `e2e/support/responsive.ts` | `RouteUnderTest` needs an optional `setup(page)` hook | Every authenticated route has to install its API before `goto`, or the session gate redirects to `/login` and the readiness check passes against that page instead. Worked around with a `test.describe` + `beforeEach` wrapper, copied from `bookings.e2e.ts` — three specs now carry the same wrapper. | |
 | 2026-08-12 | B | `packages/api-client/src/errors.ts` | Add `m2_wage_floor_unavailable` (`fix_input`) | Contract 1.21.0 documents it on `POST /proposals/` — "no floor is loaded for the state and skill; this fails closed rather than guessing" — and it is not in the frozen 29, so it falls through to the generic refusal path instead of landing under the rate field beside `m2_proposal_below_wage_floor`. A vendor is told "we could not complete this" for something they can fix. | |
@@ -320,8 +352,8 @@ Anything the backend must expose that no proposal covers. Do not build around it
 | 2026-08-11 | B | `M2-FE-107` | Crew roster CRUD — `GET`/`POST /api/v1/partner/crew/`, `PATCH` and `archive` per membership. Must publish `membership_id` and a masked phone, never the global `crew_member_id`. | `0013` §E |
 | 2026-08-11 | B | `M2-FE-109` | Capability review state — `GET /api/v1/partner/capabilities/`. This is what separates "not applied" / "under review" / "suspended", which `08-frontend-information-architecture.md` §4 lists as not implementable from grants alone. | `0013` §B3 |
 | 2026-08-11 | B | `M2-FE-110` | `GET /api/v1/partner/workspaces/` is specified in 0012 §A1 but unpublished, so the grants query stays unmounted and `PartnerShell` keeps its `workspaceGrants` prop seam. Not a gap — a dependency. | `0012` §A1 |
-| 2026-08-11 | B | `M2-FE-109` | **A rejection is indistinguishable from a withdrawal.** `_ALLOWED_TRANSITIONS` in `capabilities.py` sends both Operations' refusal and the Partner's own exit to `WITHDRAWN`, and 0013 §B3 publishes no actor. "We said no" and "you closed this" need different copy and different next actions. Needs either a `REJECTED` status or an actor/reason on the record. | `0013` §B3 — open question |
-| 2026-08-11 | B | `M2-FE-109` | **No document expiry exists.** `PartnerDocument` (contract 1.20.0) has `status`, `review_reason`, `reviewed_at` and no expiry field, so the expired-document state the task requires has nothing to read. Needs `expires_at` on the document, or a document-validity projection. | not filed — needs a backend decision on where validity lives |
+| 2026-08-11 | B | `M2-FE-109` | **A rejection is indistinguishable from a withdrawal.** `_ALLOWED_TRANSITIONS` in `capabilities.py` sends both Operations' refusal and the Partner's own exit to `WITHDRAWN`, and 0013 §B3 publishes no actor. "We said no" and "you closed this" need different copy and different next actions. Needs either a `REJECTED` status or an actor/reason on the record. | **Answered and published at 1.22.0** — a `REJECTED` status, not `actor_kind`: `PartnerCapabilityTransition.actor` is null both for a Partner action and for a system job, so a derived actor would mislabel the case that matters. `last_transition` is published without it. See proposal 0013 §Answered. |
+| 2026-08-11 | B | `M2-FE-109` | **No document expiry exists.** `PartnerDocument` (contract 1.20.0) has `status`, `review_reason`, `reviewed_at` and no expiry field, so the expired-document state the task requires has nothing to read. Needs `expires_at` on the document, or a document-validity projection. | **Answered and published at 1.22.0** — `PartnerDocument.expires_on` (nullable), plus `expired_document_kinds` and `documents_expiring_on` on the capability record. Raw fields, not a computed `EXPIRED` status, as Session B preferred. See proposal 0013 §Answered. |
 | 2026-08-11 | A | `M2-FE-207` | **The four optional extras have no wire field.** Proposal 0012 §B and contract 1.21.0 both carry `answers`, `additional_details` and nothing for `callback_preference`, `site_visit_interest`, `access_constraints` or `preferred_communication`. They are not catalogue configuration — the same four for every category — so there is no question schema to render them from either. Built as client-owned shapes in `features/requirement/model/optional-details.ts`, held in the draft, mapped in `adapters/` when a shape lands. Requesting one nullable object per key on `PATCH /requirements/{requirement_id}/`. | not filed — needs a 0012 amendment |
 | 2026-08-12 | B | `M2-FE-301` | **The declared list shape is not the shape Django sends.** `m2_partner_enquiry_list` is declared `EnquirySummary[]`; `PartnerEnquiryCollectionView.get` returns `EnquiryCursorPagination.get_paginated_response(...)`, i.e. `{next, previous, results}`. Code written against the generated type — `data.map(...)` — throws on the first real request and fails no type check. Narrowed at the seam in `features/enquiry/queries.ts › readEnquiryPage`, which accepts both. **`m2_requirement_list` has the same defect** (`RequirementCursorPagination`), so Session A's `My requests` is exposed to it too. | not filed — a schema correction, not a new endpoint |
 | 2026-08-12 | B | `M2-FE-301` | **The enquiry list cannot be paged.** `EnquiryCursorPagination` returns twenty rows, and the operation publishes no `cursor` query parameter, so the typed client has nothing to send. A Partner with more than twenty enquiries sees a truncated inbox. The screen states the truncation rather than hiding it; the parameter is what would remove the notice. | not filed |
@@ -336,6 +368,9 @@ Anything the backend must expose that no proposal covers. Do not build around it
 | 2026-08-12 | B | `M2-FE-313` | **A Partner cannot read their own quote back.** 1.21.0 publishes `POST /proposals/`, `GET /proposals/{id}/` and withdraw — and nothing that answers "which proposal did I send for this enquiry". `EnquiryDetail` carries `questions` and `site_visits` and no proposal. Once the id leaves the tab, the only readable truth is `status == "QUOTED"`; withdraw, the status states and the supersession trace all become unreachable. `m2QueryKeys.proposals.mine` already exists for this and stays unmounted. **Needs `GET /api/v1/proposals/?requirement=` or a `proposals` field on `EnquiryDetail`.** | `0012` amendment — the largest hole in Wave B2 |
 | 2026-08-12 | B | `M2-FE-310` | **No wage-floor read.** Nothing publishes the statutory floor for a state and skill, so the composer states the rule and shows no figure. `M2-FE-310` asks for it inline; any number on that screen would be this client inventing statutory pay. | `0012` amendment |
 | 2026-08-12 | B | `M2-FE-310` | **The wage-floor guard is inert over HTTP.** `proposals.submit_proposal` runs `assert_rate_meets_wage_floor` only when handed `wage_floor_skill` and `wage_floor_state_code`; `ProposalCreateSerializer` carries neither and `PartnerProposalCollectionView` passes neither. So `m2_proposal_below_wage_floor` is documented on the endpoint and **cannot currently be returned by it** — a below-floor A3 rate is accepted. The client surfaces the refusal correctly if it ever arrives. This is a backend defect, not a contract gap. | not filed — needs a backend fix |
+| 2026-08-12 | C | `M2-FE-310` | **Confirmed by the backend, and not fixed in Wave C1.** The fix is `M2-BE-317` — derive the state and skill from the requirement's address and variant rather than taking them from the caller — and it needs a variant-to-skill mapping that does not exist yet. Recorded in `02-backend-tasks.md` and `backend-session.md` §C1 as the highest-priority remaining C1 item, because the endpoint documents a refusal it cannot make. | not filed — backend, `M2-BE-317` |
+| 2026-08-12 | C | `M2-FE-205` | **The published scan vocabulary, stated exactly, because two renames have already happened around it.** `RequirementAttachment.ProcessingStatus` at 1.22.0 is `PENDING | VERIFIED | INFECTED | FAILED`, published on the attachment as `scan_status` with a companion `scan_failure_reason`. It is **not** `CLEAN` — `VERIFIED` is the model's own value and renaming a stored enum for a client label is the wrong direction (the C0 outcome table says so). `INFECTED` and `FAILED` are separate on purpose: `FAILED` is a checksum or size mismatch and the recovery is a retry; `INFECTED` is malware and the recovery is removal, which the `DELETE` route allows **in any requirement status** precisely so an infected file is never stuck on a live requirement. Session A's local `SCAN_FAILED` needs to map to one of the two, and which one decides whether a retry button appears. | not a gap — a mapping note |
+| 2026-08-12 | C | `M2-FE-302` | **Attachments now exist, and reaching an enquiry is the only remaining half.** 1.22.0 publishes the upload, so `RequirementAttachment` rows are real — but `RequirementSnapshot` does not copy them and `EnquiryDetail` publishes none. Deliberately a separate decision: the snapshot copy has to settle what a vendor sees when an attachment is added or scanned *after* their invitation, which is `M2-BE-310` territory. | tracked with `M2-BE-310` |
 | 2026-08-12 | B | `M2-FE-311` | **The required tax basis is unreadable.** `_required_tax_basis` forces every quote on a requirement onto whichever basis the first vendor used and refuses a mismatch — against a vendor the second one cannot see. Nothing publishes the required basis, so the composer can only warn before and show Django's sentence after. Needs `required_tax_basis` on `EnquiryDetail`. | `0012` amendment |
 | 2026-08-12 | B | `M2-FE-311` | **No commission treatment exists to state.** `Proposal.commission_treatment` is `CharField(max_length=24)` with no choices, no default and no published vocabulary, and there is no M2 commission policy — `ServicePricingPolicy.commission_basis_points` belongs to the A1 task lifecycle and is unreachable from a proposal. The field is deliberately left unsent: a 24-character code authored here would be the vocabulary Operations and Finance report on, invented by a client. The composer says the customer compares the total as entered. | `0012` amendment |
 | 2026-08-12 | B | `M2-FE-312` | **An A3 total is not reconciled server-side.** `_assert_a5_shape` checks that stage amounts sum to `total_paise`; `_assert_a3_shape` checks only that rate, days and headcount are present. A workforce quote of ₹900/worker/day x 6 x 4 can carry `total_paise: 1` and be stored. The client computes the total and never lets it be typed, which is as far as a client can go. | not filed — needs a backend fix |

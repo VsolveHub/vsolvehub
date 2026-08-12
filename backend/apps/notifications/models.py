@@ -35,6 +35,8 @@ class KillSwitch(models.Model):
     class Scope(models.TextChoices):
         NOTIFICATIONS = "NOTIFICATIONS", "All outbound notifications"
         SMS = "SMS", "SMS channel"
+        WHATSAPP = "WHATSAPP", "WhatsApp channel"
+        VOICE = "VOICE", "Voice call channel"
         PAYMENTS = "PAYMENTS", "Payment collection"
         PAYOUTS = "PAYOUTS", "Partner payouts"
         DISPATCH = "DISPATCH", "Partner dispatch"
@@ -85,6 +87,10 @@ class NotificationIntent(models.Model):
         SMS = "SMS", "SMS"
         EMAIL = "EMAIL", "Email"
         PUSH = "PUSH", "Push"
+        #: Added for M2. A workforce deadline that only ever rings an unread in-app notice is a
+        #: deadline the vendor loses to silence, so the ladder must be able to leave the app.
+        WHATSAPP = "WHATSAPP", "WhatsApp"
+        VOICE = "VOICE", "Voice call"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"

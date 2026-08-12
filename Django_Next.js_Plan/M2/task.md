@@ -1,8 +1,9 @@
 # M2 Master Task Board
 
 **Scope:** Workforce and project services (`A3_TIME_BLOCK` and `A5_CUSTOM_PROJECT`)
-**Status:** P1–P3 domain layers built and verified (91 tests). **Contract 1.21.0 publishes 17 M2
-paths**, but with **no HTTP tests**, so no phase has passed its gate. Frontend: FE0 foundation built;
+**Status:** P1–P3 domain layers built and verified (91 tests). **Contract 1.22.0 publishes 33 M2
+paths** — 17 from Wave C0, 16 from Wave C1 — and the four background sweeps are now on Celery beat.
+HTTP tests **exist for every path and have not been run**, so no phase has passed its gate. Frontend: FE0 foundation built;
 Customer Wave A1 built, wired and mounted on 4 routes; Partner Wave B1 built, wired to the live
 workspaces endpoint and mounted on 7 routes, and Wave B2 built and mounted on 4 more.
 Operations/admin: nothing started.
@@ -106,25 +107,35 @@ P5 delivers the shared spine once. P5A and P5B are thin archetype tails and may 
 parallel only after P5 is stable. A service category cannot launch until its own tail and the P6
 recovery paths are complete.
 
-## The critical path — cleared 11 August 2026
+## The critical path — cleared 11 August 2026, extended 12 August
 
-`M2-BE-013` was the one task gating every other column, and it is now `[~]`: **contract 1.21.0
-publishes 17 M2 paths.** The frontend cap is lifted — both columns can integrate.
+`M2-BE-013` was the one task gating every other column, and it is now `[~]`: **contract 1.22.0
+publishes 33 M2 paths.** The frontend cap is lifted — both columns can integrate.
 
 What changed: `apps/requirements` gained `selectors.py`, `serializers.py`, `views.py` and `urls.py`,
 and `config/urls.py` now includes them. No domain module was edited; every state change delegates to
 a command that already existed behind the 91 passing tests. Details and the residual gaps are in
 [backend-session.md](backend-session.md) §"C0 outcome".
 
-**It is `[~]`, not `[x]`, and the distinction matters.** C0 shipped with lint, strict types, a
-migration check and schema validation — and **no tests**. The completion standard requires an
-object-level authorization test per endpoint and role; none exists, so the surface compiles and
-generates but is unproven against a real request. Contract validation is also not yet in CI. Both
-are the first C1 items.
+**Wave C1 added 16 paths on 12 August**: attachment presign/finalize/remove, site-visit scheduling
+and completion, and all thirteen paths of proposal 0013 — Partner business profile, capability
+options/request/list/withdraw, insurance, progressive gates, crew CRUD and the masked demand preview.
+Both of 0013's open design questions are answered in that file: a capability rejection is now its own
+`REJECTED` status, and document validity lives on a nullable `PartnerDocument.expires_on`. Details in
+[backend-session.md](backend-session.md) §"C1 outcome".
 
-Still unpublished, and named so nobody builds against them by mistake: attachment upload, the whole
-unlock/selection path (BE4 — no domain layer to wrap), and all of proposal 0013 (Partner capability,
-crew and progressive gates), which Session B filed on 11 August and which is now C1 work.
+**It is still `[~]`, not `[x]`, and the reason has changed.** C1 closed both things that held it open
+in substance: **object-level authorization tests now exist for all 33 paths**, and the CI question was
+**raised with the owner and deliberately deferred** — the repository has no pipeline of any kind, so
+standing one up is M1 platform work serving every column rather than an M2 deliverable. What keeps
+`M2-BE-013` at `[~]` is the verification convention itself: the tests are written and **the owner has
+not run them**, and a session may never self-promote on test grounds.
+
+Still unpublished, and named so nobody builds against them by mistake: the whole unlock/selection path
+(BE4 — no domain layer to wrap), attachment access expiry for a non-selected vendor (`M2-BE-310`), and
+the engagement spine (C3). One live defect is worth naming beside them: `POST /proposals/` documents
+`m2_proposal_below_wage_floor` and **cannot currently return it** (`M2-BE-317`), so a below-floor A3
+rate is accepted today.
 
 ## Session map — three columns
 
@@ -159,11 +170,12 @@ Engineering design — done:
   Evidence: [08-frontend-information-architecture.md](08-frontend-information-architecture.md); the
   Partner half is implemented as code in `frontend/apps/partner/features/workspace/registry.ts`.
 - [~] Publish the first validated M2 contract.
-  **Published 2026-08-11: contract 1.21.0 carries 17 M2 paths.** Proposal 0012 was reviewed and
-  implemented, and its open question on 202 refusals is answered in that file. Still open before
-  `[x]`: no object-level authorization test exists for any of the 17 paths, **contract validation is
-  not in CI (the repository has no CI pipeline at all — there is no `.github/`)**, and proposal 0013
-  (Partner capability, crew and gates) is filed and unimplemented. See the file-history note in
+  **Published 2026-08-11 at 1.21.0 (17 paths) and extended 2026-08-12 to 1.22.0 (33 paths).**
+  Proposals 0012 and 0013 are both reviewed, answered and implemented; 0012's open question on `202`
+  refusals and both of 0013's design questions are answered in those files. Still open before `[x]`:
+  **the owner has not run the authorization tests**, which now exist for every path; and **contract
+  validation is not in CI by owner decision** — there is no `.github/` and no pipeline of any kind, so
+  it is logged as M1 platform work rather than built inside an M2 wave. See the file-history note in
   `03-frontend-tasks.md` under `M2-FE-006` — proposal 0012 was written twice on 2026-08-10 and the
   earlier version was overwritten unrecoverably.
 
@@ -418,15 +430,28 @@ on unexecuted code and the board is quietly drifting toward the thing it exists 
 | 2026-08-12 | A (Wave A1 wiring, `FE-201..215`) | **9 unit/component files.** Node: `packages/query/src/m2-requirement.test.ts`, `apps/customer/features/requirement/model/state.test.ts`, `apps/customer/features/requirement/adapters/{draft,tracking}.test.ts`, `apps/customer/features/requirement/boundary.test.ts`, `apps/customer/features/booking/contract-pending/boundary.test.ts` (guard entries changed). jsdom: `apps/customer/features/requirement/queries.test.tsx`, `apps/customer/features/requirement/view/{material-edit-notice,duplicate-notice,requirement-sent}.test.tsx` | `cd frontend && pnpm vitest run packages/query/src/m2-requirement.test.ts apps/customer/features/requirement apps/customer/features/booking/contract-pending` | |
 | 2026-08-12 | A (Wave A1 wiring, `FE-201..215`) | **1 Playwright file:** `frontend/e2e/m2-customer-requirement.e2e.ts` with `frontend/e2e/support/requirement-api.ts`. The `customer-m2` project is added to `playwright.config.ts` in the same change; needs a built + started `apps/customer` on :3000. **Covers `/requests` and `/requests/{id}` only** — the four-screen flow reads the catalog during a server render, where `page.route` cannot reach | `cd frontend && pnpm build --filter=customer && pnpm exec playwright test --project=customer-m2` | |
 | 2026-08-12 | A (Wave A1 wiring) | **Regression risk, not a new file.** The whole existing customer suite should be re-run: `contract-pending/` was deleted, `DraftAttachment.kind` renamed `PHOTO`→`IMAGE`, `failure` renamed `INFECTED`→`SCAN_FAILED`, `DuplicateNotice` changed from `onMerge` to `hrefFor`, `RequirementWorkspace` gained `onAdvance`/`isAdvancing`, and `toRequestRow` now returns `null` for an unknown status | `cd frontend && pnpm vitest run apps/customer` | |
+| 2026-08-12 | C (Wave C1) | `backend/tests/requirements/conftest.py` — shared M2 HTTP fixtures: two Customers, two vendors, an Operations reviewer, a Partner-role account with **no** `PartnerProfile`, and a fake signed-upload provider. Every record is built through a real domain command, so no test can pass against a state the commands refuse | *fixtures only — exercised by the five files below* | |
+| 2026-08-12 | C (Wave C1) | `backend/tests/requirements/test_m2_http_authorization.py` — **object-level authorization for all 33 published paths.** A 38-row anonymous route table; a parametrised foreign-Customer sweep over 7 requirement routes; a parametrised foreign-vendor sweep over 5 enquiry routes; the Customer-session refusal over all 24 `partner/**` operations; and **exhaustive-key snapshots** of the teaser, demand preview and crew roster so a field added later fails rather than leaks | `cd backend; .\.venv\Scripts\python.exe -m pytest tests/requirements/test_m2_http_authorization.py -q` | |
+| 2026-08-12 | C (Wave C1) | `backend/tests/requirements/test_m2_sweeps.py` — the four sweeps plus attachment housekeeping, each run twice; the **no-double-invite** replay case; `CELERY_BEAT_SCHEDULE` asserted as configuration so renaming a sweep fails a test instead of silently unwiring a watchdog | `cd backend; .\.venv\Scripts\python.exe -m pytest tests/requirements/test_m2_sweeps.py -q` | |
+| 2026-08-12 | C (Wave C1) | `backend/tests/requirements/test_m2_attachments.py` — presign, finalize, checksum/size/media-type mismatch, per-kind ceilings, expired intent, replayed finalize under one key and under a new one, `INFECTED` vs `FAILED`, contradictory scan verdicts, removal, and the storage-deletion-failure fallback | `cd backend; .\.venv\Scripts\python.exe -m pytest tests/requirements/test_m2_attachments.py -q` | |
+| 2026-08-12 | C (Wave C1) | `backend/tests/requirements/test_m2_registration_surface.py` — the HTTP half of proposal 0013: business profile field errors, capability options copy and `asks_for`, request/duplicate/withdraw, insurance, gates (including **read-and-refusal copy parity**), crew add `201` vs reinstate `200` | `cd backend; .\.venv\Scripts\python.exe -m pytest tests/requirements/test_m2_registration_surface.py -q` | |
+| 2026-08-12 | C (Wave C1) | `backend/tests/partners/test_m2_capability_lifecycle.py` — the domain half of proposal 0013: `REJECTED` vs `WITHDRAWN`, mandatory review notes in **both** the command and the check constraint, document expiry, business-type constraints, insurance re-declaration clearing `verified_at`, gate copy parity, crew reinstatement and the masked phone | `cd backend; .\.venv\Scripts\python.exe -m pytest tests/partners/test_m2_capability_lifecycle.py -q` | |
+| 2026-08-12 | C (Wave C1) | **All six at once, plus the existing 91 domain tests.** This is the run that decides whether `M2-BE-013`, BE1, BE2 and BE3 can be promoted — nothing in Wave C1 is proven until it is green | `cd backend; .\scripts\quality.cmd` | |
 
 **Why it starts empty, which is worth stating plainly.** Every test written for M2 before 12 August
 was also executed at the time — the 91 domain tests on 10 August, and the frontend suite on 11 and
 12 August. Those runs happened and their rows in the verification table below stand. The queue is a
 forward-looking ledger, not a backlog.
 
-**What is *not* in this queue, because it does not exist.** The 17 published HTTP paths have **no
-test file at all** — not written, not run. That is a gap in the deliverable, tracked as the first
-item of Wave C1, and no verification convention makes it smaller.
+**What was not in this queue on 12 August because it did not exist** — no test file for any
+published HTTP path — is now the last seven rows above: roughly 160 test functions across five files,
+written and unexecuted.
+
+**Two gaps the queue cannot cover, because those tests are unwritten rather than unrun.** Rate limits
+(`M2-BE-803`) and true two-transaction concurrency on quote slots and capacity holds
+(`M2-BE-323`/`M2-BE-804`) have no tests at all. The guards are written under `select_for_update`; that
+is unproven. Both are recorded in `02-backend-tasks.md` rather than counted here, because a row in this
+table promises the owner something to run.
 
 ## Latest verification
 
@@ -446,5 +471,6 @@ item of Wave C1, and no verification convention makes it smaller.
 | 2026-08-11 | Programme sequencing | Corrected | Codebase re-audited against the board. Confirmed `config/urls.py` routes no M2 app and `apps/requirements/` has no HTTP layer, so `M2-BE-013` is the single critical-path item gating all 108 frontend tasks. Backend column split into [backend-session.md](backend-session.md) (waves C0–C7) as a third concurrent session; C0 scoped as a thin layer over the ~45 existing tested commands plus the one real gap, `M2-BE-202` attachment upload. Ownership drift between `AGENTS.md` (Codex owns `backend/**`) and observed practice (Claude wrote P1–P3) flagged for an owner decision. | Claude |
 | 2026-08-11 | Wave B1 (Partner registration + workspace) | `[~]` 14 of 15 built | `features/{capability,crew,workspace}/` full `adapters → view` stack: four-step express path to masked demand, three progressive gates, business type, capability picker, insurance, crew roster, six review states, and the capability-driven shell (registry + switcher + mid-session guard) wired into `partner-shell.tsx`. **Tests written this time: 1379/1379 frontend tests green across 101 files**, `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` **9 of 9** at contract 1.21.0 — which clears the `apps/partner` red recorded in the Wave C0 row above. Unknown workspace key resolves to nothing and no workspace resolves to `/jobs`; A1 navigation is exactly `BASE_NAV` with the M1 offer inbox suite passing untouched. Two pre-existing `main` failures fixed to get a green gate (`offers.test.tsx` missing `ToastProvider` since `ca7b1c7`; stale exact-list nav assertion in `operations-shell.test.tsx` since `ca9d9b7`) and one real defect the new tests found (`WorkspaceSummaries` announced "3shifts today"). `FE-105` not started; nothing mounted to a route, so nothing exceeds `[~]`. | Claude |
 | 2026-08-12 | Wave B1 wiring (Session B) | `[~]` endpoint live, routes mounted | **First M2 endpoint consumed by any app.** `partner-shell.tsx` reads `GET /api/v1/partner/workspaces/` at contract 1.21.0 through `features/workspace/queries.ts`, gated on the session already holding the Partner role so `/apply` does not spend a guaranteed 403. All **7 registry destinations mounted** as `force-dynamic`, `robots: noindex` routes — `/workforce` and `/projects` render real grant-driven homes (label, description, the payment sentence for the mode Django sent, authorized destinations; **no counts**, since nothing publishes them); the other five render an honest not-built-yet state. Three decisions worth carrying: an unread grant list is `null` and never `[]` (collapsing them would fail *open* — a dropped connection reading as a suspension nobody applied); a 401/403 is not resent; `SESSION_STATE` freshness so an Operations suspension lands on window focus rather than at next login. `boundary.test.ts` caught the wiring as designed and its `/partner/workspaces/` entry was retired under its own rule. **1399/1399 frontend tests** (partner 314), lint clean at `--max-warnings 0`, 9/9 typecheck, `build --filter=partner` green. Still `[~]`: `FE-105` unstarted and the `capability/`+`crew/` registration views remain route-less. | Claude |
+| 2026-08-12 | P0 / P1 / P2 / P3 (Wave C1) | `[~]` built — owner verification pending | **Contract 1.22.0 publishes 33 M2 paths**, 16 new: three attachment paths, two site-visit paths, and all thirteen of proposal 0013. New modules `apps/requirements/{attachments,storage,tasks}.py` and `apps/partners/{gates,capability_options}.py`; migrations `partners.0007`, `partners.0008`, `requirements.0004`. **The four dead sweeps are on Celery beat** — `expired_requirement_ids`, `sla_breached_requirement_ids`, `expired_invitation_ids`, `expired_proposal_ids` — plus attachment housekeeping, five entries in total; `expire_proposal` and `expire_invitation_and_replace` were genuinely missing commands and are new. **A replay cannot double-invite**: the replacement is taken inside the same transaction and requirement lock as the expiry, because a system job has no actor and `execute_idempotent` does not apply. **Both of proposal 0013's design questions answered** — `PartnerCapability.Status` gains `REJECTED` (an `actor_kind` was rejected because `PartnerCapabilityTransition.actor` is null for both a Partner action and a system job, so a derived actor would mislabel the case that matters), and `PartnerDocument` gains a nullable `expires_on` enforced through the existing `PARTNER_REQUIRED_DOCUMENT_KINDS` rather than a new policy knob. `RequirementAttachment.ProcessingStatus` gains `INFECTED`, kept separate from `FAILED` because one recovery offers a retry and the other must not. **Static gates: ruff format and check clean across 338 files, strict MyPy clean across 218 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after naming three more enums, `manage.py check` clean.** **Six test files written and NOT RUN** — see §"Owner verification queue"; nothing here is proven against a real request until the owner runs them. **CI raised with the owner and deferred to M1 platform work**: no `.github/`, no pipeline of any kind, and the real scope is a Postgres service, two toolchains and a POSIX rewrite of `quality.ps1`. Remaining in C1: capability and matching completeness, `M2-BE-317` first — `POST /proposals/` documents `m2_proposal_below_wage_floor` and cannot currently return it. | Claude |
 | 2026-08-12 | Programme-wide audit | Docs resynchronised | Full codebase-vs-plan sweep. **Confirmed in code:** contract at 1.21.0 with 17 M2 paths routed through `config/urls.py`; `pnpm typecheck` **9/9 green**; the `express-path.ts` typecheck failure logged on 11 August is **fixed** (`step.key` at lines 137/147/200); the Partner boundary guard has correctly retired `/partner/workspaces/`. **Three gaps the plan understated:** (1) **the repository has no CI at all** — there is no `.github/`, so "add contract validation to CI" has no pipeline to add to; (2) **`CELERY_BEAT_SCHEDULE` in `config/settings/base.py` contains no M2 sweep**, so all four selectors (`expired_requirement_ids`, `sla_breached_requirement_ids`, `expired_invitation_ids`, `expired_proposal_ids`) are dead code and an unanswered wave stalls forever; (3) **zero HTTP tests** — no file under `backend/tests/` names any M2 path. **Customer app is the laggard:** `features/requirement/` is fully built but contains no `useQuery`, mounts no route, and its boundary guard still lists `/api/v1/requirements/` and `/api/v1/proposals/` as unpublished. Stale text corrected in `task.md`, `frontend-execution-plan.md`, `03-frontend-tasks.md`, `backend-session.md`, `AGENTS.md`, `contracts/proposals/README.md` and proposals 0012/0013. | Claude |
 | 2026-08-12 | Wave A1 wiring (Session A) | `[~]` 15 of 15 built and wired, owner verification pending | **The Customer requirement flow is reachable.** Four routes under `app/(flow)/requests/` — `My requests`, one request's page, the category-first entry and the four screens — all `force-dynamic`, `robots: noindex`, behind one `CustomerShell` gate. `features/requirement/queries.ts` + `packages/query/src/m2-requirement.ts` consume requirement list/create/read/patch/submit/duplicate-check/timeline at 1.21.0. The three stale M2 entries removed from the Customer boundary guard; `contract-pending/` deleted per its own README and its rule re-stated as `features/requirement/boundary.test.ts` (view/model may not name the generated client, through either package), carrying the `SCREENS.length === 4` assertion across. Adapters re-pointed: `flexibility_days` written through one named constant, `PHOTO`→`IMAGE`, `CLEAN`→`VERIFIED` with an unknown scan state failing **closed**, plus two the handover note missed (`answers`/`detail` arrive as `unknown`; no `file_name` at all). `FE-211` built — the consequence and the confirmation — with `onConfirmEdit` deliberately unsupplied, because no amend command exists and a confirmation that reaches a 409 teaches a Customer that confirming does nothing. **One field was missing from a screen**: `requested_start` is required by `_assert_submittable` and matched on by the duplicate check, and screen 2 did not ask for it — it would have been invisible until a real submit. **Eleven contract gaps logged**, the two largest being no merge endpoint for `GAP-004` and two separately-authored question schemas whose mismatch surfaces only when the Customer presses Send. `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` **9 of 9**, `pnpm build --filter=customer` green. **No tests were run** — 10 files written and queued above. | Claude |

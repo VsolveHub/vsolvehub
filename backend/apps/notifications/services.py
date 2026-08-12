@@ -27,6 +27,14 @@ from apps.notifications.models import KillSwitch, NotificationDelivery, Notifica
 #: hand anyway.
 MAX_DELIVERY_ATTEMPTS = 3
 
+#: Which blunt off-switch silences which channel. A channel absent here is governed only by the
+#: global NOTIFICATIONS switch; adding one is a dict entry, not a branch in `request_notification`.
+_CHANNEL_KILL_SWITCH: dict[str, str] = {
+    NotificationIntent.Channel.SMS: KillSwitch.Scope.SMS,
+    NotificationIntent.Channel.WHATSAPP: KillSwitch.Scope.WHATSAPP,
+    NotificationIntent.Channel.VOICE: KillSwitch.Scope.VOICE,
+}
+
 #: Purposes a recipient cannot mute. Telling somebody their visit was cancelled is not marketing,
 #: and a preference screen that could switch it off would be a preference screen that breaks the
 #: product's promises.
@@ -162,8 +170,9 @@ def request_notification(
         context=context or {},
         idempotency_key=idempotency_key,
     )
+    channel_switch = _CHANNEL_KILL_SWITCH.get(channel)
     if is_engaged(KillSwitch.Scope.NOTIFICATIONS) or (
-        channel == NotificationIntent.Channel.SMS and is_engaged(KillSwitch.Scope.SMS)
+        channel_switch is not None and is_engaged(channel_switch)
     ):
         intent.status = NotificationIntent.Status.SUPPRESSED
         intent.suppressed_reason = "kill_switch_engaged"

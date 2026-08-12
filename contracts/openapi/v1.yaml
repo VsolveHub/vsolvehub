@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.20.0
+  version: 1.22.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5391,6 +5391,448 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/business-profile/:
+    get:
+      operationId: m2_partner_business_profile_read
+      description: The Partner's business identity. **`404` when none exists, and
+        that is the ordinary state for every M1 Partner** — the client renders the
+        individual default and offers the step rather than showing an error.
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBusinessProfile'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    put:
+      operationId: m2_partner_business_profile_replace
+      description: Create or replace. A `PUT` rather than a `PATCH` because the three
+        business types have genuinely different required fields, and a partial update
+        is how a Partner switching from agency to individual keeps a registration
+        number the database forbids.
+      tags:
+      - M2 - Partner registration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerBusinessProfileWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerBusinessProfileWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerBusinessProfileWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerBusinessProfile'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_business_type_invalid` for a registration number on an
+            `INDIVIDUAL`, or a GSTIN without `gst_registered`. Both are model constraints.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/capabilities/:
+    get:
+      operationId: m2_partner_capability_list
+      description: Every capability this Partner holds, in any status. **This is the
+        read that tells "not applied" from "under review" from "suspended"** — an
+        empty workspace-grant list cannot, and inferring a review banner from one
+        would show it to every existing M1 Partner. `REJECTED` is Operations' refusal;
+        `WITHDRAWN` is the Partner's own exit.
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCapabilityList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_partner_capability_request
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - M2 - Partner registration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapabilityRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CapabilityRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CapabilityRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCapability'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_lifecycle_not_supported` when the variant carries no A3/A5
+            archetype. Show "we do not cover this yet" and return to the options list,
+            not a field error.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_capability_already_requested` when a live request exists
+            for this variant — the recovery is "open the one you have", not "try something
+            else". `idempotency_in_progress` means wait and re-read, never resend
+            under a new key.'
+  /api/v1/partner/capabilities/{capability_id}/withdraw/:
+    post:
+      operationId: m2_partner_capability_withdraw
+      description: The Partner's own exit. Distinct from Operations' `REJECTED` refusal,
+        which the Partner cannot cause and this route cannot reach. Neither status
+        blocks a fresh request for the same variant.
+      parameters:
+      - in: path
+        name: capability_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCapability'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/capability-options/:
+    get:
+      operationId: m2_partner_capability_option_list
+      description: 'Business types with their consequences, and the lifecycle capabilities
+        open for request. All copy is server-authored: `lifecycle_explanation` is
+        the sentence that decides whether a Partner understands what they are signing
+        up to, and `asks_for` names the fields one form should render so the client
+        needs no archetype branch.'
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityOptions'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/crew/:
+    get:
+      operationId: m2_partner_crew_list
+      description: This Partner's roster. Publishes **no `crew_member_id`** — identity
+        is global, and handing the global id to one agency would let two agencies
+        compare rosters and discover a worker is on both. `phone_masked` shows four
+        digits; the number itself is never stored, so this is not a redaction but
+        the whole of what exists.
+      tags:
+      - M2 - Partner crew
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_partner_crew_add
+      description: Add a worker. **`201` for a new membership, `200` for a reinstated
+        one**, so the UI can say "we put Ramesh back on your roster" instead of silently
+        succeeding on a name the Partner thought was gone.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - M2 - Partner crew
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewMemberCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewMemberCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewMemberCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMember'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMember'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_capability_not_approved` when the Partner holds no approved
+            workforce capability. The roster is not a general address book.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/crew/{membership_id}/:
+    patch:
+      operationId: m2_partner_crew_update
+      description: 'Skills and the supervisor flag. `display_name` is **not** editable:
+        it belongs to the global crew member, and one agency renaming a person would
+        rename them on every other roster.'
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner crew
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCrewMemberUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCrewMemberUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCrewMemberUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMember'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/crew/{membership_id}/archive/:
+    post:
+      operationId: m2_partner_crew_archive
+      description: 'Take a worker off this roster. **Does not yet refuse when the
+        worker holds a future assignment**: crew assignment is per stage and the stage
+        model arrives with `M2-BE-522`, so there is nothing to read. A guard against
+        a table that does not exist would be a check that always passes.'
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner crew
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMember'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/demand-preview/:
+    get:
+      operationId: m2_partner_demand_preview
+      description: 'Live requirement summaries in the areas this Partner serves, masked.
+        **Customer name, phone, full address, building number and the exact budget
+        are absent from the response.** `id` is a preview identifier — a keyed hash,
+        not a requirement primary key — and resolves on no other route. Ineligible
+        demand is returned with a hint rather than hidden: hiding it would make an
+        empty screen the first thing most new Partners see. An empty list is a real
+        answer ("nothing in your area right now"), never a `404`.'
+      tags:
+      - M2 - Partner workspaces
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandPreview'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/earnings/:
     get:
       operationId: partner_earnings_retrieve
@@ -5413,6 +5855,377 @@ paths:
                 $ref: '#/components/schemas/PartnerBalance'
           description: ''
         '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/enquiries/:
+    get:
+      operationId: m2_partner_enquiry_list
+      tags:
+      - M2 - Partner enquiries
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EnquirySummary'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/enquiries/{invitation_id}/:
+    get:
+      operationId: m2_partner_enquiry_read
+      parameters:
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnquiryDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/enquiries/{invitation_id}/accept/:
+    post:
+      operationId: m2_partner_enquiry_accept
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnquiryDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_kyc_required` — identity verification is gated here, at
+            the first accept, rather than at registration. `m2_capability_not_approved`
+            and `m2_capability_suspended` when the lifecycle capability is not live.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_invitation_expired`, `m2_invitation_slots_exhausted` or
+            `m2_proposal_slot_conflict` when a linked account already holds a slot.'
+  /api/v1/partner/enquiries/{invitation_id}/decline/:
+    post:
+      operationId: m2_partner_enquiry_decline
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnquiryDeclineRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EnquiryDeclineRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EnquiryDeclineRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnquiryDetail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/enquiries/{invitation_id}/questions/:
+    post:
+      operationId: m2_partner_enquiry_question_create
+      parameters:
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuestionCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuestionCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementQuestion'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/enquiries/{invitation_id}/site-visits/:
+    post:
+      operationId: m2_partner_site_visit_request
+      description: Request a paid site visit. The fee is what makes a vendor willing
+        to travel before winning the job; free visits are not offered. Charging the
+        fee is not built until BE4 — this records the request and its fee.
+      parameters:
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteVisitRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SiteVisitRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SiteVisitRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteVisit'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/gates/:
+    get:
+      operationId: m2_partner_gate_list
+      description: 'The three progressive gates, each with the reason it is being
+        asked for and the one action that clears it. **Advisory**: the commands enforce
+        these at the moment they run, and this read only decides what the UI explains
+        beforehand. A client treating it as authoritative would block somebody whose
+        KYC completed thirty seconds ago. `blocks` names actions, never screens —
+        an unsatisfied gate never hides demand.'
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressiveGateList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/insurance/:
+    get:
+      operationId: m2_partner_insurance_read
+      description: 'The worker-insurance declaration in force today. **`404` when
+        none is declared, which is the ordinary state and not an error.** `verified_at`
+        is read-only and set only by Operations: a client must render an unverified
+        declaration as *declared*, never as *insured*, because the difference is who
+        carries the liability if a worker is hurt.'
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerInsurance'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    put:
+      operationId: m2_partner_insurance_replace
+      description: 'Declare or replace. A replacement clears `verified_at`: swapping
+        a checked policy for an unchecked one must not keep the badge.'
+      tags:
+      - M2 - Partner registration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerInsuranceWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerInsuranceWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerInsuranceWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerInsurance'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
           content:
             application/json:
               schema:
@@ -5841,6 +6654,32 @@ paths:
                 items:
                   $ref: '#/components/schemas/PartnerSkillOption'
           description: ''
+  /api/v1/partner/workspaces/:
+    get:
+      operationId: m2_partner_workspace_list
+      description: 'The Partner''s approved lifecycle capabilities as `{workspace_key,
+        commercial_mode, actions[]}`. Drives navigation and nothing else: no routes,
+        no labels, no icons. A Partner with no approved capability receives `200 {"workspaces":
+        []}` — that is a real, common state (registered, not yet reviewed), not an
+        error. Suspension is expressed by omitting the workspace or reducing its actions,
+        never by an error, so navigation degrades in place rather than blanking mid-session.'
+      tags:
+      - M2 - Partner workspaces
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceGrantList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/payment-attempts/:
     post:
       operationId: payment_attempts_create
@@ -6087,6 +6926,152 @@ paths:
               schema:
                 $ref: '#/components/schemas/GroupQuote'
           description: ''
+  /api/v1/proposals/:
+    post:
+      operationId: m2_proposal_submit
+      description: 'Submit a quote, or a revision that supersedes this vendor''s previous
+        one. Proposals are append-only: a revision never overwrites what the Customer
+        was originally offered. The archetype decides which fields are required and
+        the server enforces it.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - M2 - Proposals
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_proposal_invalid_shape` when the quote does not match
+            the requirement''s lifecycle or the stage totals do not reconcile; `m2_proposal_below_wage_floor`;
+            `m2_wage_floor_unavailable` when no floor is loaded for the state and
+            skill — this fails closed rather than guessing.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/proposals/{proposal_id}/:
+    get:
+      operationId: m2_proposal_read
+      parameters:
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Proposals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/proposals/{proposal_id}/withdraw/:
+    post:
+      operationId: m2_proposal_withdraw
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Proposals
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/quotes/:
     post:
       operationId: quotes_create
@@ -6139,6 +7124,528 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/requirements/:
+    get:
+      operationId: m2_requirement_list
+      tags:
+      - M2 - Requirements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequirementSummary'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_requirement_create
+      tags:
+      - M2 - Requirements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RequirementCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RequirementCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementDraft'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_lifecycle_not_supported` when the service has no active
+            A3/A5 configuration. The Customer sees ''we do not cover this yet'' and
+            a route back to the catalog, not a validation error on a field they cannot
+            see.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/{requirement_id}/:
+    get:
+      operationId: m2_requirement_read
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementDraft'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    patch:
+      operationId: m2_requirement_update
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRequirementUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRequirementUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRequirementUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementDraft'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_locked` once the requirement has left DRAFT
+            and vendors have seen it.'
+  /api/v1/requirements/{requirement_id}/attachments/:
+    post:
+      operationId: m2_requirement_attachment_finalize
+      description: Turn a completed upload into an attachment, after verifying what
+        actually arrived.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachmentFinalizeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttachmentFinalizeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttachmentFinalizeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementAttachment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_attachment_invalid` when the stored object does not match
+            the size, media type or checksum the client declared, when the upload
+            expired, or when it has already been finalized.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/{requirement_id}/attachments/{attachment_id}/:
+    delete:
+      operationId: m2_requirement_attachment_remove
+      description: Remove an attachment and delete the stored object. Refused after
+        the requirement leaves DRAFT, because a vendor was invited against a snapshot
+        and removing a photograph they quoted on rewrites the question after the answer.
+        An `INFECTED` attachment is removable in any state.
+      parameters:
+      - in: path
+        name: attachment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: Removed.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/{requirement_id}/attachments/uploads/:
+    post:
+      operationId: m2_requirement_attachment_upload_create
+      description: Ask for a signed upload URL. The server names the object key and
+        records the size, media type and SHA-256 the client declares; finalization
+        streams the stored object back and refuses anything that does not match. `scan_status`
+        is `PENDING` on arrival because the object does not exist yet.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentUploadGrant'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_attachment_invalid` for an unsupported media type, an
+            oversized file, a malformed checksum, or more attachments than one requirement
+            may carry.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_locked` once the requirement has left DRAFT
+            — a photograph appearing after a vendor quoted is a scope change, not
+            an attachment.'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_attachment_unavailable` when the storage adapter is down.
+            Retryable, and the only retryable error on this path.'
+  /api/v1/requirements/{requirement_id}/quotes/teasers/:
+    get:
+      operationId: m2_quote_teaser_list
+      description: Pre-unlock quote teasers. This payload is sent to a Customer who
+        has paid nothing, so vendor name, contact, scope, line items and the exact
+        total are absent from the response — not merely unrendered.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Quotes
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteTeaserList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/{requirement_id}/submit/:
+    post:
+      operationId: m2_requirement_submit
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RequirementSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RequirementSubmitRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementSubmitted'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_duplicate` (show the duplicate and offer a
+            merge before allowing `allow_duplicate`), `m2_requirement_expired`, or
+            `idempotency_in_progress` — wait and re-read, never resend under a new
+            key.'
+  /api/v1/requirements/{requirement_id}/timeline/:
+    get:
+      operationId: m2_requirement_timeline
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementTimeline'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/duplicate-check/:
+    get:
+      operationId: m2_requirement_duplicate_check
+      parameters:
+      - in: query
+        name: address_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: requested_start
+        schema:
+          type: string
+          format: date-time
+        required: true
+      - in: query
+        name: variant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbableDuplicateList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/questions/{question_id}/answer/:
+    post:
+      operationId: m2_requirement_question_answer
+      description: The Customer's half of structured clarification.
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Requirements
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionAnswerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuestionAnswerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuestionAnswerRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementQuestion'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/scope-amendments/{amendment_id}/approve/:
     post:
@@ -6366,6 +7873,128 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/site-visits/{site_visit_id}/complete/:
+    post:
+      operationId: m2_site_visit_complete
+      description: |-
+        Only the vendor closes a visit, because only the vendor attended it.
+
+        Scheduling takes both parties; completion is a report of what happened, and the party that
+        travelled is the one who can make it. A Customer who disagrees with the outcome has the
+        clarification timeline and, from Wave C6, a case — not a competing completion.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: site_visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Site visits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteVisitCompleteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SiteVisitCompleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SiteVisitCompleteRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteVisit'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` when the visit was
+            never scheduled. A visit with no agreed time cannot have happened.'
+  /api/v1/site-visits/{site_visit_id}/schedule/:
+    post:
+      operationId: m2_site_visit_schedule
+      description: 'Put a time on a requested visit, or move one already scheduled.
+        Either party may call it: the vendor proposes a slot they can travel in, the
+        Customer confirms a time somebody will be on site, and neither can do it alone.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: site_visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Site visits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteVisitScheduleRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SiteVisitScheduleRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SiteVisitScheduleRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteVisit'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` once the visit is
+            completed or cancelled.'
   /api/v1/tax-documents/{document_id}/:
     get:
       operationId: tax_documents_retrieve
@@ -6672,6 +8301,83 @@ components:
       required:
       - expected_version
       - outage_reason
+    AttachmentFinalizeRequest:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+      required:
+      - upload_id
+    AttachmentUploadGrant:
+      type: object
+      description: The signed-upload grant. Bytes go to storage, never through Django.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          type: string
+          readOnly: true
+        upload_url:
+          type: string
+          format: uri
+          readOnly: true
+        upload_token:
+          type: string
+          readOnly: true
+        upload_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        scan_status:
+          type: string
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - kind
+      - scan_status
+      - server_now
+      - upload_expires_at
+      - upload_token
+      - upload_url
+    AttachmentUploadRequestRequest:
+      type: object
+      description: |-
+        What the client declares before any bytes exist.
+
+        The checksum is required, and it is the point of the whole handshake: finalization streams the
+        stored object back and compares it against these three values, so an upload that swapped the
+        file after presigning is refused rather than stored. Without them "verify the upload" would mean
+        "believe the client".
+      properties:
+        kind:
+          $ref: '#/components/schemas/RequirementAttachmentKindEnum'
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          minLength: 64
+          maxLength: 64
+        language:
+          type: string
+          default: ''
+          maxLength: 16
+      required:
+      - content_type
+      - kind
+      - sha256
+      - size_bytes
     AuthenticatedSession:
       type: object
       properties:
@@ -7021,6 +8727,22 @@ components:
           minLength: 1
       required:
       - address_id
+    BusinessTypeOption:
+      type: object
+      properties:
+        value:
+          type: string
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        consequence:
+          type: string
+          readOnly: true
+      required:
+      - consequence
+      - label
+      - value
     CancellationBand:
       type: object
       properties:
@@ -7085,6 +8807,114 @@ components:
       - fee_paise
       - fee_waiver
       - refund_paise
+    CapabilityOption:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        variant_name:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        workspace_key:
+          type: string
+          readOnly: true
+        commercial_mode:
+          type: string
+          readOnly: true
+        lifecycle_explanation:
+          type: string
+          readOnly: true
+        requires_insurance:
+          type: boolean
+          readOnly: true
+        asks_for:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        already_requested:
+          type: boolean
+          readOnly: true
+      required:
+      - already_requested
+      - asks_for
+      - category_name
+      - commercial_mode
+      - lifecycle_explanation
+      - requires_insurance
+      - variant_id
+      - variant_name
+      - workspace_key
+    CapabilityOptions:
+      type: object
+      properties:
+        business_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/BusinessTypeOption'
+          readOnly: true
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapabilityOption'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - business_types
+      - capabilities
+      - server_now
+    CapabilityRequestRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        max_crew_size:
+          type: integer
+          minimum: 1
+          nullable: true
+        max_project_value_paise:
+          type: integer
+          minimum: 1
+          nullable: true
+      required:
+      - variant_id
+    CapabilityTransitionSummary:
+      type: object
+      description: |-
+        The last decision on a capability, with its date and reason.
+
+        Published without an `actor_kind`, deliberately. `PartnerCapabilityTransition.actor` is null
+        both for a Partner's own action and for a system job, so a computed actor would confidently
+        mislabel the case the client most needs to get right. The **status** now answers who:
+        `REJECTED` is Operations and `WITHDRAWN` is the Partner. See proposal 0013 section "Answered".
+      properties:
+        to_status:
+          type: string
+          readOnly: true
+        reason_code:
+          type: string
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - occurred_at
+      - reason
+      - reason_code
+      - to_status
     Cart:
       type: object
       properties:
@@ -7822,6 +9652,93 @@ components:
         * `image/jpeg` - image/jpeg
         * `image/png` - image/png
         * `application/pdf` - application/pdf
+    CrewList:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewMember'
+          readOnly: true
+      required:
+      - members
+    CrewMember:
+      type: object
+      description: |-
+        One worker on this Partner's roster.
+
+        **`crew_member_id` is deliberately absent.** Identity is global - `CrewMember.identity_hash` -
+        and publishing the global id to one agency would let two agencies correlate rosters and discover
+        that a worker is on both. `membership_id` is per-Partner and is what every command takes.
+
+        `phone_masked` rather than the number. The Partner supplied it, so this is not a leak in the
+        quote-teaser sense, but the roster is read on a shared site phone and an unmasked list is a
+        contact export waiting to happen. The Partner who needs the full number already has it.
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+        phone_masked:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        is_supervisor:
+          type: boolean
+          readOnly: true
+        skill_codes:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        documents_verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        added_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - added_at
+      - display_name
+      - documents_verified_at
+      - is_supervisor
+      - membership_id
+      - phone_masked
+      - skill_codes
+      - status
+    CrewMemberCreateRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        phone_e164:
+          type: string
+          minLength: 1
+          maxLength: 16
+          pattern: ^\+[1-9]\d{7,14}$
+        skill_codes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: ^[-a-zA-Z0-9_]+$
+        is_supervisor:
+          type: boolean
+          default: false
+      required:
+      - display_name
+      - phone_e164
     CsrfToken:
       type: object
       properties:
@@ -7947,6 +9864,69 @@ components:
           maxLength: 32
       required:
       - outcome
+    DemandPreview:
+      type: object
+      properties:
+        summaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DemandSummary'
+          readOnly: true
+        matched_service_count:
+          type: integer
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - matched_service_count
+      - server_now
+      - summaries
+    DemandSummary:
+      type: object
+      description: |-
+        **This payload goes to a Partner who has completed no KYC.**
+
+        An explicit field list, like `QuoteTeaserSerializer` and for the mirrored reason. Absent by
+        requirement, not by omission: customer name, phone, full address, building number, the exact
+        budget, and any identifier that resolves to a requirement this Partner was not invited to.
+
+        `id` is a keyed hash rather than the requirement's primary key. An unapproved account holding
+        real requirement ids is one lookup away from the record the moment any endpoint accepts one, and
+        "no endpoint accepts one today" is not a property that survives the next endpoint.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        headline:
+          type: string
+          readOnly: true
+        area_label:
+          type: string
+          readOnly: true
+        starts_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        workspace_key:
+          type: string
+          readOnly: true
+        is_eligible:
+          type: boolean
+          readOnly: true
+        eligibility_hint:
+          type: string
+          readOnly: true
+      required:
+      - area_label
+      - eligibility_hint
+      - headline
+      - id
+      - is_eligible
+      - starts_on
+      - workspace_key
     DependencyEnum:
       enum:
       - NONE
@@ -8134,6 +10114,174 @@ components:
       required:
       - reason
       - scope
+    EnquiryDeclineRequest:
+      type: object
+      properties:
+        reason_code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - reason_code
+    EnquiryDetail:
+      type: object
+      description: |-
+        An enquiry list row.
+
+        Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
+        against, and re-reading the requirement would silently move the goalposts under a quote in
+        progress. Customer identity and address are absent before acceptance by design.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        requirement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        archetype:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/VendorInvitationStatusEnum'
+          readOnly: true
+        wave:
+          type: integer
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+        service_by:
+          type: string
+          format: date
+          readOnly: true
+        language:
+          type: string
+          readOnly: true
+        responds_by:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        answers:
+          readOnly: true
+        additional_details:
+          type: string
+          readOnly: true
+        budget_min_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        budget_max_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        decline_reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementQuestion'
+          readOnly: true
+        site_visits:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteVisit'
+          readOnly: true
+      required:
+      - additional_details
+      - answers
+      - archetype
+      - budget_max_paise
+      - budget_min_paise
+      - category_slug
+      - created_at
+      - decline_reason_code
+      - id
+      - language
+      - questions
+      - requested_start
+      - requirement_id
+      - responds_by
+      - service_by
+      - site_visits
+      - status
+      - wave
+    EnquirySummary:
+      type: object
+      description: |-
+        An enquiry list row.
+
+        Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
+        against, and re-reading the requirement would silently move the goalposts under a quote in
+        progress. Customer identity and address are absent before acceptance by design.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        requirement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        archetype:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/VendorInvitationStatusEnum'
+          readOnly: true
+        wave:
+          type: integer
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+        service_by:
+          type: string
+          format: date
+          readOnly: true
+        language:
+          type: string
+          readOnly: true
+        responds_by:
+          type: string
+          format: date-time
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - archetype
+      - category_slug
+      - created_at
+      - id
+      - language
+      - requested_start
+      - requirement_id
+      - responds_by
+      - service_by
+      - status
+      - wave
     EscalateCaseRequestRequest:
       type: object
       properties:
@@ -8558,6 +10706,16 @@ components:
         * `COMPLETED` - Completed
         * `PARTIALLY_COMPLETED` - Partially completed
         * `DISPUTED` - Disputed
+    GateNextActionEnum:
+      enum:
+      - SUBMIT_APPLICATION
+      - ADD_PAYOUT_ACCOUNT
+      - ADD_CREW_MEMBER
+      type: string
+      description: |-
+        * `SUBMIT_APPLICATION` - Submit the Partner application
+        * `ADD_PAYOUT_ACCOUNT` - Add a payout account
+        * `ADD_CREW_MEMBER` - Add a crew member
     GroupAddressChangeRequestRequest:
       type: object
       properties:
@@ -8878,6 +11036,8 @@ components:
       enum:
       - NOTIFICATIONS
       - SMS
+      - WHATSAPP
+      - VOICE
       - PAYMENTS
       - PAYOUTS
       - DISPATCH
@@ -8887,6 +11047,8 @@ components:
       description: |-
         * `NOTIFICATIONS` - All outbound notifications
         * `SMS` - SMS channel
+        * `WHATSAPP` - WhatsApp channel
+        * `VOICE` - Voice call channel
         * `PAYMENTS` - Payment collection
         * `PAYOUTS` - Partner payouts
         * `DISPATCH` - Partner dispatch
@@ -10593,6 +12755,189 @@ components:
       - previous
       - results
       - server_now
+    PartnerBusinessProfile:
+      type: object
+      properties:
+        business_type:
+          allOf:
+          - $ref: '#/components/schemas/PartnerBusinessTypeEnum'
+          readOnly: true
+        legal_name:
+          type: string
+          readOnly: true
+        registration_number:
+          type: string
+          readOnly: true
+        gst_registered:
+          type: boolean
+          readOnly: true
+        gstin:
+          type: string
+          readOnly: true
+        years_in_operation:
+          type: integer
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - business_type
+      - gst_registered
+      - gstin
+      - legal_name
+      - registration_number
+      - updated_at
+      - years_in_operation
+    PartnerBusinessProfileWriteRequest:
+      type: object
+      description: |-
+        A full replace, not a merge.
+
+        `business_type` is required and is **read, never inferred** - not from the capability requested,
+        not from the services selected. The three types carry different tax, liability and payout
+        consequences, so the Partner states which one they are and the platform does not guess.
+      properties:
+        business_type:
+          $ref: '#/components/schemas/PartnerBusinessTypeEnum'
+        legal_name:
+          type: string
+          maxLength: 200
+        registration_number:
+          type: string
+          maxLength: 64
+        gst_registered:
+          type: boolean
+          default: false
+        gstin:
+          type: string
+          maxLength: 15
+        years_in_operation:
+          type: integer
+          maximum: 200
+          minimum: 0
+      required:
+      - business_type
+    PartnerBusinessTypeEnum:
+      enum:
+      - INDIVIDUAL
+      - WORKFORCE_AGENCY
+      - PROJECT_VENDOR
+      type: string
+      description: |-
+        * `INDIVIDUAL` - Individual
+        * `WORKFORCE_AGENCY` - Workforce agency
+        * `PROJECT_VENDOR` - Project vendor
+    PartnerCapability:
+      type: object
+      description: |-
+        One capability in any status. The read that distinguishes the navigation states.
+
+        `/partner/workspaces/` answers *what may I do* and stays empty and cheap for the great majority
+        of Partners who hold no capability at all. This answers *where does my application stand*, which
+        is why the two are separate reads: an empty grant list cannot tell "not applied" from "under
+        review" from "suspended", and inferring a review banner from it would show one to every existing
+        M1 Partner.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        variant_id:
+          type: string
+          format: uuid
+          readOnly: true
+        variant_name:
+          type: string
+          readOnly: true
+        workspace_key:
+          type: string
+          readOnly: true
+        commercial_mode:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        review_notes:
+          type: string
+          readOnly: true
+        suspension_reason_code:
+          type: string
+          readOnly: true
+        requires_insurance:
+          type: boolean
+          readOnly: true
+        max_crew_size:
+          type: integer
+          readOnly: true
+          nullable: true
+        max_project_value_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        expired_document_kinds:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        documents_expiring_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        last_transition:
+          allOf:
+          - $ref: '#/components/schemas/CapabilityTransitionSummary'
+          readOnly: true
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - commercial_mode
+      - documents_expiring_on
+      - expired_document_kinds
+      - expires_at
+      - id
+      - last_transition
+      - max_crew_size
+      - max_project_value_paise
+      - requires_insurance
+      - review_notes
+      - reviewed_at
+      - status
+      - suspension_reason_code
+      - updated_at
+      - variant_id
+      - variant_name
+      - workspace_key
+    PartnerCapabilityList:
+      type: object
+      properties:
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerCapability'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - capabilities
+      - server_now
     PartnerConsent:
       type: object
       properties:
@@ -10899,6 +13244,71 @@ components:
       - latitude
       - longitude
       - service_area_id
+    PartnerInsurance:
+      type: object
+      properties:
+        insurer_name:
+          type: string
+          readOnly: true
+        policy_reference:
+          type: string
+          readOnly: true
+        coverage_paise:
+          type: integer
+          readOnly: true
+        covers_workmen_compensation:
+          type: boolean
+          readOnly: true
+        valid_from:
+          type: string
+          format: date
+          readOnly: true
+        valid_to:
+          type: string
+          format: date
+          readOnly: true
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - coverage_paise
+      - covers_workmen_compensation
+      - insurer_name
+      - policy_reference
+      - valid_from
+      - valid_to
+      - verified_at
+    PartnerInsuranceWriteRequest:
+      type: object
+      properties:
+        insurer_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        policy_reference:
+          type: string
+          minLength: 1
+          maxLength: 120
+        coverage_paise:
+          type: integer
+          minimum: 1
+        covers_workmen_compensation:
+          type: boolean
+          default: false
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type: string
+          format: date
+      required:
+      - coverage_paise
+      - insurer_name
+      - policy_reference
+      - valid_from
+      - valid_to
     PartnerLedgerEntry:
       type: object
       description: |-
@@ -11356,6 +13766,24 @@ components:
         scope:
           type: object
           additionalProperties: {}
+    PatchedCrewMemberUpdateRequest:
+      type: object
+      description: |-
+        Skills and the supervisor flag only.
+
+        `display_name` is **not** editable here. It belongs to the global `CrewMember`, which several
+        agencies may share, so one agency renaming a person would rename them on every other roster.
+        Read-only with the reason stated beats editable-and-scoped, which a later caller can forget.
+      properties:
+        skill_codes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: ^[-a-zA-Z0-9_]+$
+        is_supervisor:
+          type: boolean
     PatchedPartnerApplicationUpdateRequest:
       type: object
       properties:
@@ -11419,6 +13847,46 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+    PatchedRequirementUpdateRequest:
+      type: object
+      description: |-
+        Partial update, one screen at a time, for save-and-resume.
+
+        Every field is optional and `None` means "not sent" rather than "clear this", matching
+        `services.update_draft`, which skips `None` for exactly that reason.
+      properties:
+        answers: {}
+        address_id:
+          type: string
+          format: uuid
+          nullable: true
+        requested_start:
+          type: string
+          format: date-time
+          nullable: true
+        flexibility_days:
+          type: integer
+          maximum: 365
+          minimum: 0
+        service_by:
+          type: string
+          format: date
+          nullable: true
+        budget_min_paise:
+          type: integer
+          minimum: 0
+          nullable: true
+        budget_max_paise:
+          type: integer
+          minimum: 0
+          nullable: true
+        additional_details:
+          type: string
+          maxLength: 4000
+        language:
+          type: string
+          minLength: 1
+          maxLength: 16
     PaymentAllocation:
       type: object
       properties:
@@ -12032,6 +14500,42 @@ components:
         * `IN_REVIEW` - In review
         * `COMPLETED` - Completed
         * `REJECTED` - Rejected
+    ProbableDuplicate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        summary:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        mergeable:
+          type: boolean
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - mergeable
+      - status
+      - summary
+    ProbableDuplicateList:
+      type: object
+      properties:
+        probable_duplicates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProbableDuplicate'
+          readOnly: true
+      required:
+      - probable_duplicates
     ProcessingStatusEnum:
       enum:
       - PENDING
@@ -12042,6 +14546,263 @@ components:
         * `PENDING` - Pending scan
         * `CLEAN` - Clean
         * `FAILED` - Failed scan
+    ProgressiveGate:
+      type: object
+      properties:
+        gate:
+          allOf:
+          - $ref: '#/components/schemas/ProgressiveGateEnum'
+          readOnly: true
+        is_satisfied:
+          type: boolean
+          readOnly: true
+        blocks:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        next_action:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/GateNextActionEnum'
+          - $ref: '#/components/schemas/NullEnum'
+      required:
+      - blocks
+      - gate
+      - is_satisfied
+      - next_action
+      - reason
+    ProgressiveGateEnum:
+      enum:
+      - KYC
+      - PAYOUT_DETAILS
+      - CREW_ROSTER
+      type: string
+      description: |-
+        * `KYC` - Identity verification
+        * `PAYOUT_DETAILS` - Payout account
+        * `CREW_ROSTER` - Crew roster
+    ProgressiveGateList:
+      type: object
+      description: |-
+        **Advisory.** The commands enforce these; this read only decides what the UI explains first.
+
+        A client treating it as authoritative would block somebody whose KYC completed thirty seconds
+        ago and admit somebody suspended thirty seconds ago.
+      properties:
+        gates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressiveGate'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - gates
+      - server_now
+    Proposal:
+      type: object
+      description: |-
+        A vendor's own quote, read back to that vendor.
+
+        Not the Customer-facing quote view — that requires an active unlock and arrives with BE4.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        requirement:
+          type: string
+          format: uuid
+          readOnly: true
+        invitation:
+          type: string
+          format: uuid
+          readOnly: true
+        revision:
+          type: integer
+          readOnly: true
+          default: 1
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ProposalStatusEnum'
+          readOnly: true
+        usability:
+          allOf:
+          - $ref: '#/components/schemas/ProposalUsabilityEnum'
+          readOnly: true
+        rate_paise_per_worker_day:
+          type: integer
+          readOnly: true
+          nullable: true
+        minimum_days:
+          type: integer
+          readOnly: true
+          nullable: true
+        worker_count:
+          type: integer
+          readOnly: true
+          nullable: true
+        total_paise:
+          type: integer
+          readOnly: true
+        tax_paise:
+          type: integer
+          readOnly: true
+        tax_basis:
+          allOf:
+          - $ref: '#/components/schemas/ProposalTaxBasisEnum'
+          readOnly: true
+        commission_treatment:
+          type: string
+          readOnly: true
+        inclusions:
+          readOnly: true
+        exclusions:
+          readOnly: true
+        stages:
+          readOnly: true
+        warranty_terms:
+          type: string
+          readOnly: true
+        valid_until:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        vendor_confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - commission_treatment
+      - exclusions
+      - id
+      - inclusions
+      - invitation
+      - minimum_days
+      - rate_paise_per_worker_day
+      - requirement
+      - revision
+      - stages
+      - status
+      - submitted_at
+      - tax_basis
+      - tax_paise
+      - total_paise
+      - usability
+      - valid_until
+      - vendor_confirmed_at
+      - warranty_terms
+      - worker_count
+    ProposalCreateRequest:
+      type: object
+      description: |-
+        Both composers in one shape; the domain validates which fields the archetype requires.
+
+        Deliberately not two serializers. `proposals.submit_proposal` already runs `_assert_a3_shape`
+        or `_assert_a5_shape` against the requirement's own archetype, and a second archetype check
+        here would be a copy of that rule which could disagree with it. A vendor sending A5 stages on
+        an A3 requirement gets one refusal, from the layer that knows.
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+        total_paise:
+          type: integer
+          minimum: 1
+        tax_basis:
+          $ref: '#/components/schemas/ProposalTaxBasisEnum'
+        tax_paise:
+          type: integer
+          minimum: 0
+          default: 0
+        rate_paise_per_worker_day:
+          type: integer
+          minimum: 1
+          nullable: true
+        minimum_days:
+          type: integer
+          minimum: 1
+          nullable: true
+        worker_count:
+          type: integer
+          minimum: 1
+          nullable: true
+        stages:
+          type: array
+          items: {}
+        inclusions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        exclusions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+        warranty_terms:
+          type: string
+          maxLength: 4000
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+        commission_treatment:
+          type: string
+          maxLength: 24
+      required:
+      - invitation_id
+      - tax_basis
+      - total_paise
+    ProposalStatusEnum:
+      enum:
+      - SUBMITTED
+      - SUPERSEDED
+      - WITHDRAWN
+      - EXPIRED
+      - SELECTED
+      - REJECTED
+      type: string
+      description: |-
+        * `SUBMITTED` - Submitted
+        * `SUPERSEDED` - Superseded
+        * `WITHDRAWN` - Withdrawn
+        * `EXPIRED` - Expired
+        * `SELECTED` - Selected
+        * `REJECTED` - Rejected
+    ProposalTaxBasisEnum:
+      enum:
+      - INCLUSIVE
+      - EXCLUSIVE
+      type: string
+      description: |-
+        * `INCLUSIVE` - Tax included in the total
+        * `EXCLUSIVE` - Tax added to the total
+    ProposalUsabilityEnum:
+      enum:
+      - USABLE
+      - OUT_OF_BUDGET
+      - INCOMPLETE
+      type: string
+      description: |-
+        * `USABLE` - Usable
+        * `OUT_OF_BUDGET` - Outside the stated budget
+        * `INCOMPLETE` - Incomplete
     ProposeAmendmentRequestRequest:
       type: object
       description: |-
@@ -12090,6 +14851,24 @@ components:
       description: |-
         * `BOOKING_GROUP` - Booking group
         * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+    QuestionAnswerRequest:
+      type: object
+      properties:
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - answer
+    QuestionCreateRequest:
+      type: object
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - question
     Quote:
       type: object
       properties:
@@ -12237,6 +15016,64 @@ components:
       - code
       - included_in_total
       - label
+    QuoteTeaser:
+      type: object
+      description: |-
+        **This payload goes to a Customer who has paid nothing.**
+
+        An explicit field list rather than a `ModelSerializer`, because the difference between the two
+        is one `fields` edit away from shipping a vendor's name to an unpaid Customer. The price
+        *band* is the point: enough to judge whether unlocking is worth it, not enough to act on.
+      properties:
+        proposal_id:
+          type: string
+          format: uuid
+          readOnly: true
+        vendor_type:
+          type: string
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+        price_band_low_paise:
+          type: integer
+          readOnly: true
+        price_band_high_paise:
+          type: integer
+          readOnly: true
+        is_out_of_budget:
+          type: boolean
+          readOnly: true
+      required:
+      - is_out_of_budget
+      - is_verified
+      - price_band_high_paise
+      - price_band_low_paise
+      - proposal_id
+      - vendor_type
+    QuoteTeaserList:
+      type: object
+      properties:
+        teasers:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteTeaser'
+          readOnly: true
+        usable_quote_count:
+          type: integer
+          readOnly: true
+        unlock_available:
+          type: boolean
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - server_now
+      - teasers
+      - unlock_available
+      - usable_quote_count
     RankedCandidate:
       type: object
       properties:
@@ -12472,6 +15309,347 @@ components:
           maxLength: 140
       required:
       - scope
+    RequirementAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/RequirementAttachmentKindEnum'
+          readOnly: true
+        scan_status:
+          type: string
+          readOnly: true
+        scan_failure_reason:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        language:
+          type: string
+          readOnly: true
+      required:
+      - id
+      - kind
+      - language
+      - scan_failure_reason
+      - scan_status
+      - size_bytes
+    RequirementAttachmentKindEnum:
+      enum:
+      - IMAGE
+      - VIDEO
+      - AUDIO
+      - VOICE_NOTE
+      - DOCUMENT
+      type: string
+      description: |-
+        * `IMAGE` - Image
+        * `VIDEO` - Video
+        * `AUDIO` - Audio
+        * `VOICE_NOTE` - Voice note
+        * `DOCUMENT` - Document
+    RequirementCreateRequest:
+      type: object
+      properties:
+        variant_id:
+          type: string
+          format: uuid
+        answers: {}
+        language:
+          type: string
+          minLength: 1
+          default: en-IN
+          maxLength: 16
+      required:
+      - variant_id
+    RequirementDraft:
+      type: object
+      description: |-
+        The full record the four-screen flow reads after every write.
+
+        `inferred_lifecycle` is published but is never rendered as an archetype name — `GAP-006` is
+        explicit that the Customer describes what they need and the platform works out the lifecycle.
+        `lifecycle_explanation` is the sentence they actually see.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RequirementStatusEnum'
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        inferred_lifecycle:
+          type: string
+          readOnly: true
+        lifecycle_explanation:
+          type: string
+          nullable: true
+          readOnly: true
+        answers:
+          readOnly: true
+        missing_required_answers:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        address_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        flexibility_days:
+          type: integer
+          readOnly: true
+        is_date_flexible:
+          type: boolean
+          readOnly: true
+        service_by:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        budget_min_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        budget_max_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        language:
+          type: string
+          readOnly: true
+        additional_details:
+          type: string
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementAttachment'
+          readOnly: true
+        server_now:
+          type: string
+          readOnly: true
+      required:
+      - additional_details
+      - address_id
+      - answers
+      - attachments
+      - budget_max_paise
+      - budget_min_paise
+      - category_slug
+      - flexibility_days
+      - id
+      - inferred_lifecycle
+      - is_date_flexible
+      - language
+      - lifecycle_explanation
+      - missing_required_answers
+      - requested_start
+      - server_now
+      - service_by
+      - status
+    RequirementQuestion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        invitation:
+          type: string
+          format: uuid
+          readOnly: true
+        question:
+          type: string
+          readOnly: true
+        answer:
+          type: string
+          readOnly: true
+        asked_at:
+          type: string
+          format: date-time
+          readOnly: true
+        answered_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - answer
+      - answered_at
+      - asked_at
+      - id
+      - invitation
+      - question
+    RequirementStatusEnum:
+      enum:
+      - DRAFT
+      - MATCHING
+      - QUOTES_READY
+      - UNLOCKED
+      - SELECTED
+      - ENGAGED
+      - CLOSED_NO_SUPPLY
+      - CLOSED_SLA_BREACH
+      - CLOSED_EXPIRED
+      - CLOSED_ABANDONED
+      - CLOSED_COMPLETE
+      - CLOSED_CANCELLED
+      type: string
+      description: |-
+        * `DRAFT` - Draft
+        * `MATCHING` - Matching
+        * `QUOTES_READY` - Quotes ready
+        * `UNLOCKED` - Unlocked
+        * `SELECTED` - Selected
+        * `ENGAGED` - Engaged
+        * `CLOSED_NO_SUPPLY` - Closed: no supply
+        * `CLOSED_SLA_BREACH` - Closed: delivery promise missed
+        * `CLOSED_EXPIRED` - Closed: needed-by date passed
+        * `CLOSED_ABANDONED` - Closed: abandoned
+        * `CLOSED_COMPLETE` - Closed: complete
+        * `CLOSED_CANCELLED` - Closed: cancelled
+    RequirementSubmitRequest:
+      type: object
+      properties:
+        allow_duplicate:
+          type: boolean
+          default: false
+    RequirementSubmitted:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        service_by:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        quote_delivery_deadline_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_free:
+          type: boolean
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - is_free
+      - quote_delivery_deadline_at
+      - server_now
+      - service_by
+      - status
+    RequirementSummary:
+      type: object
+      description: A `My requests` row.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RequirementStatusEnum'
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        lifecycle_explanation:
+          type: string
+          nullable: true
+          readOnly: true
+        service_by:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        quote_delivery_deadline_at:
+          type: string
+          format: date-time
+          readOnly: true
+        teaser_count:
+          type: integer
+          readOnly: true
+        closure_reason:
+          type: string
+          nullable: true
+          readOnly: true
+        last_activity_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category_slug
+      - closure_reason
+      - id
+      - last_activity_at
+      - lifecycle_explanation
+      - quote_delivery_deadline_at
+      - service_by
+      - status
+      - teaser_count
+    RequirementTimeline:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementTimelineEvent'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - events
+      - server_now
+    RequirementTimelineEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        at:
+          type: string
+          format: date-time
+          readOnly: true
+        type:
+          type: string
+          readOnly: true
+        detail:
+          readOnly: true
+      required:
+      - at
+      - detail
+      - id
+      - type
     RescheduleBookingRequestRequest:
       type: object
       description: |-
@@ -13183,6 +16361,79 @@ components:
       - active_role
       - session_expires_at
       - user
+    SiteVisit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SiteVisitStatusEnum'
+          readOnly: true
+        fee_paise:
+          type: integer
+          readOnly: true
+        adjusts_against_final_price:
+          type: boolean
+          readOnly: true
+        scheduled_for:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - adjusts_against_final_price
+      - completed_at
+      - fee_paise
+      - id
+      - scheduled_for
+      - status
+    SiteVisitCompleteRequest:
+      type: object
+      properties:
+        outcome_notes:
+          type: string
+          maxLength: 4000
+    SiteVisitRequestRequest:
+      type: object
+      properties:
+        fee_paise:
+          type: integer
+          minimum: 1
+        adjusts_against_final_price:
+          type: boolean
+          default: true
+      required:
+      - fee_paise
+    SiteVisitScheduleRequest:
+      type: object
+      properties:
+        scheduled_for:
+          type: string
+          format: date-time
+      required:
+      - scheduled_for
+    SiteVisitStatusEnum:
+      enum:
+      - REQUESTED
+      - SCHEDULED
+      - COMPLETED
+      - CANCELLED
+      - NO_SHOW
+      type: string
+      description: |-
+        * `REQUESTED` - Requested
+        * `SCHEDULED` - Scheduled
+        * `COMPLETED` - Completed
+        * `CANCELLED` - Cancelled
+        * `NO_SHOW` - No show
     SourceEnum:
       enum:
       - MANUAL
@@ -13567,6 +16818,22 @@ components:
       - id
       - is_current
       - last_seen_at
+    VendorInvitationStatusEnum:
+      enum:
+      - INVITED
+      - ACCEPTED
+      - QUOTED
+      - DECLINED
+      - EXPIRED
+      - WITHDRAWN
+      type: string
+      description: |-
+        * `INVITED` - Invited
+        * `ACCEPTED` - Accepted
+        * `QUOTED` - Quoted
+        * `DECLINED` - Declined
+        * `EXPIRED` - Expired
+        * `WITHDRAWN` - Withdrawn
     VersionedBatchCommandRequest:
       type: object
       properties:
@@ -13760,6 +17027,53 @@ components:
       description: |-
         * `ORIGINAL` - Original scope
         * `AMENDMENT` - Approved amendment
+    WorkspaceGrant:
+      type: object
+      description: |-
+        `{workspace_key, commercial_mode, actions[]}` and nothing else.
+
+        No routes, no labels, no icons: the backend authorises, the frontend owns presentation. The
+        key is opaque — a client that does not recognise one renders nothing rather than a generic
+        tab, because a tab whose screens are not in the bundle is an unrecoverable dead end.
+      properties:
+        workspace_key:
+          allOf:
+          - $ref: '#/components/schemas/WorkspaceKeyEnum'
+          readOnly: true
+        commercial_mode:
+          type: string
+          readOnly: true
+        actions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - actions
+      - commercial_mode
+      - workspace_key
+    WorkspaceGrantList:
+      type: object
+      properties:
+        workspaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkspaceGrant'
+          readOnly: true
+      required:
+      - workspaces
+    WorkspaceKeyEnum:
+      enum:
+      - LEGACY
+      - A1_TASK_VISIT
+      - A3_TIME_BLOCK
+      - A5_CUSTOM_PROJECT
+      type: string
+      description: |-
+        * `LEGACY` - Legacy
+        * `A1_TASK_VISIT` - A1 task visit
+        * `A3_TIME_BLOCK` - A3 time block
+        * `A5_CUSTOM_PROJECT` - A5 custom project
   securitySchemes:
     cookieAuth:
       type: apiKey

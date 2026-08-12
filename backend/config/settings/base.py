@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "apps.pricing",
     "apps.locations",
     "apps.partners",
+    "apps.requirements",
 ]
 
 MIDDLEWARE = [
@@ -266,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.20.0",
+    "VERSION": "1.22.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -318,6 +319,29 @@ SPECTACULAR_SETTINGS = {
         "NotificationChannelEnum": "apps.notifications.models.NotificationIntent.Channel",
         "NotificationIntentStatusEnum": "apps.notifications.models.NotificationIntent.Status",
         "NotificationDeliveryStatusEnum": "apps.notifications.models.NotificationDelivery.Status",
+        # M2. Same reasoning again: `status` is the most reused field name in the schema, and an
+        # unnamed choice set is published as a positional `StatusD6aEnum` whose digits move the
+        # next time an unrelated app adds a `status`. Naming all four now — not only the two that
+        # collided today — keeps a future M2 serializer from renaming a component the frontend
+        # has already imported.
+        "RequirementStatusEnum": "apps.requirements.models.CustomerRequirement.Status",
+        "VendorInvitationStatusEnum": "apps.requirements.models.VendorInvitation.Status",
+        "ProposalStatusEnum": "apps.requirements.models.Proposal.Status",
+        "ProposalUsabilityEnum": "apps.requirements.models.Proposal.Usability",
+        "ProposalTaxBasisEnum": "apps.requirements.models.Proposal.TaxBasis",
+        "SiteVisitStatusEnum": "apps.requirements.models.SiteVisit.Status",
+        "RequirementAttachmentKindEnum": "apps.requirements.models.RequirementAttachment.Kind",
+        "RequirementScanStatusEnum": (
+            "apps.requirements.models.RequirementAttachment.ProcessingStatus"
+        ),
+        # M2 Wave C1, the proposal 0013 registration surface. `business_type` is the collision
+        # waiting to happen — it is a name any future customer- or vendor-side model will reuse —
+        # and `gate` / `next_action` are named for the same reason the eight above are: an unnamed
+        # choice set is published positionally, and the digits move when an unrelated app adds a
+        # field with the same name.
+        "PartnerBusinessTypeEnum": "apps.partners.models.PartnerBusinessProfile.BusinessType",
+        "ProgressiveGateEnum": "apps.partners.gates.ProgressiveGate",
+        "GateNextActionEnum": "apps.partners.gates.GateNextAction",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -390,6 +414,13 @@ RAZORPAYX_WEBHOOK_SECRET = env("RAZORPAYX_WEBHOOK_SECRET", default="")
 PAYOUTS_LIVE_ENABLED = env.bool("PAYOUTS_LIVE_ENABLED", default=False)
 PAYOUTS_ALLOW_FAKE_PROVIDER = env.bool("PAYOUTS_ALLOW_FAKE_PROVIDER", default=False)
 
+# Outbound message transport for SMS, WhatsApp and voice. MSG91 is the intended provider and is
+# not implemented yet, so this stays `unconfigured` and `get_message_transport` refuses. A
+# transport that silently no-ops would report success to the escalation ladder while the vendor
+# heard nothing, which is the one failure the ladder exists to prevent.
+MESSAGE_TRANSPORT = env("MESSAGE_TRANSPORT", default="unconfigured")
+NOTIFICATIONS_ALLOW_FAKE_TRANSPORT = env.bool("NOTIFICATIONS_ALLOW_FAKE_TRANSPORT", default=False)
+
 GEOCODING_PROVIDER = env("GEOCODING_PROVIDER", default="unconfigured")
 GEOCODING_NOMINATIM_URL = env(
     "GEOCODING_NOMINATIM_URL",
@@ -428,6 +459,19 @@ PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS = env.int(
     default=24,
 )
 FULFILMENT_EVIDENCE_BUCKET = env("FULFILMENT_EVIDENCE_BUCKET", default="fulfilment-evidence")
+# M2 adds a bucket, not a storage adapter. `apps.foundation.storage` is one signed-upload boundary
+# shared by every app that needs one; a second implementation here is the duplication
+# `02-backend-tasks.md` §"Reuse before building" names against `M2-BE-202`.
+REQUIREMENT_ATTACHMENT_BUCKET = env(
+    "REQUIREMENT_ATTACHMENT_BUCKET",
+    default="requirement-attachments",
+)
+# Short: an attachment view URL is handed to a vendor whose invitation may expire while they hold
+# it. Five minutes means a leaked link is worthless long before `M2-BE-310` has to revoke anything.
+REQUIREMENT_ATTACHMENT_ACCESS_URL_TTL_SECONDS = env.int(
+    "REQUIREMENT_ATTACHMENT_ACCESS_URL_TTL_SECONDS",
+    default=300,
+)
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",
@@ -516,6 +560,40 @@ CELERY_BEAT_SCHEDULE = {
         # Daily. Deleting expired OTP challenges, sessions and audit events is not urgent;
         # doing it in the middle of a booking peak would be.
         "schedule": 60.0 * 60 * 24,
+    },
+    # M2. Until 12 August these four selectors existed with no schedule behind them, which meant
+    # an unanswered invitation wave stalled forever and a requirement whose needed-by date had
+    # passed was never closed by anything. The cadences below are deliberately different: two of
+    # these sweeps only close records, and two of them invite real vendors.
+    "sweep-expired-requirements": {
+        "task": "apps.requirements.tasks.sweep_expired_requirements",
+        # 15 minutes. `service_by` is a date, so the worst case is a requirement staying open a
+        # quarter-hour into a day on which its quotes were already worthless.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-sla-breached-requirements": {
+        "task": "apps.requirements.tasks.sweep_sla_breached_requirements",
+        # 5 minutes. This one tells a Customer we missed a promise we made them, and a promise
+        # broken quietly for an hour is worse than the breach.
+        "schedule": 60.0 * 5,
+    },
+    "sweep-expired-invitations": {
+        "task": "apps.requirements.tasks.sweep_expired_invitations",
+        # 2 minutes. Expiring an invitation releases a quote slot and invites a replacement, so
+        # this is the sweep the delivery SLA actually depends on.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-expired-proposals": {
+        "task": "apps.requirements.tasks.sweep_expired_proposals",
+        # 5 minutes. A quote past its validity must stop being selectable before a Customer pays
+        # to unlock it.
+        "schedule": 60.0 * 5,
+    },
+    "sweep-orphaned-attachment-uploads": {
+        "task": "apps.requirements.tasks.sweep_orphaned_attachment_uploads",
+        # Hourly, like its Partner-document twin. An abandoned upload intent costs storage and
+        # nothing else.
+        "schedule": 60.0 * 60,
     },
 }
 

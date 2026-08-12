@@ -43,7 +43,7 @@ Numbers are allocated at merge time, not when drafting. Two branches that both r
 number in advance will collide; take the next free number when the record actually lands. Numbers
 are never reused, including for records that are superseded or withdrawn.
 
-The next free number is **0007**.
+The next free number is **0008**.
 
 ## Index
 
@@ -55,3 +55,4 @@ The next free number is **0007**.
 | [0004](0004-fail-closed-provider-selection.md) | Fail-closed provider selection | Accepted |
 | [0005](0005-server-clock-calibration.md) | Server clock calibration | Accepted |
 | [0006](0006-outbox-visibility-deadline-recovery.md) | Outbox visibility deadline and recovery | Accepted |
+| [0007](0007-m2-engagement-spine-and-fee-after-value.md) | M2 engagement spine and fee after value | Accepted |

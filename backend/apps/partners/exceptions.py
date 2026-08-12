@@ -114,3 +114,141 @@ class PartnerScheduleError(PartnerDomainError):
             message=message,
             status_code=400,
         )
+
+
+# ---------------------------------------------------------------------------
+# M2 capability failures. Codes are fixed by
+# Django_Next.js_Plan/M2/07-state-machines-and-permissions.md section 8.
+# ---------------------------------------------------------------------------
+
+
+class CapabilityNotApprovedError(PartnerDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_capability_not_approved",
+            message=message
+            or "This work needs an approved capability. Apply for it from your profile.",
+            status_code=403,
+        )
+
+
+class CapabilitySuspendedError(PartnerDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_capability_suspended",
+            message=message or "This capability is suspended. Support can explain what to fix.",
+            status_code=403,
+        )
+
+
+class KycRequiredError(PartnerDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_kyc_required",
+            message="Verify your identity and business details before accepting work.",
+            status_code=403,
+        )
+
+
+class PayoutDetailsRequiredError(PartnerDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_payout_details_required",
+            message="Add your bank details before you can be paid.",
+            status_code=403,
+        )
+
+
+class CrewRosterRequiredError(PartnerDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_crew_roster_required",
+            message="Add at least one crew member before assigning a team.",
+            status_code=403,
+        )
+
+
+class CrewConflictError(PartnerDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_crew_conflict",
+            message=message,
+            status_code=409,
+        )
+
+
+class LifecycleNotSupportedError(PartnerDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_lifecycle_not_supported",
+            message=message,
+            status_code=400,
+        )
+
+
+class WageFloorError(PartnerDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_proposal_below_wage_floor",
+            message=message,
+            status_code=400,
+        )
+
+
+class WageFloorUnsetError(PartnerDomainError):
+    """No floor is loaded for this state and skill.
+
+    Fails closed rather than guessing. ADR-0007 forbids baking a policy default
+    into code while the owner decision is open.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_wage_floor_unavailable",
+            message="We cannot check the minimum wage for this work yet. Support can help.",
+            status_code=409,
+        )
+
+
+class CapabilityTransitionError(PartnerDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_capability_transition_not_allowed",
+            message=message,
+            status_code=409,
+        )
+
+
+class CapabilityAlreadyRequestedError(CapabilityTransitionError):
+    """A live request already exists for this variant.
+
+    A subclass rather than a sibling: it *is* a refused transition, so anything catching
+    `CapabilityTransitionError` keeps working, and the distinct code exists because the recovery is
+    different. "Look at the request you already have" and "that move is not allowed" send a Partner
+    to two different places, and a generic transition error sends them to neither.
+    """
+
+    def __init__(self) -> None:
+        PartnerDomainError.__init__(
+            self,
+            code="m2_capability_already_requested",
+            message="You already have a live request for this service. Open it to see its status.",
+            status_code=409,
+        )
+
+
+class BusinessTypeInvalidError(PartnerDomainError):
+    """A business profile that the model's own check constraints would refuse.
+
+    Caught in the domain rather than left to `IntegrityError` so the Partner is told which field is
+    wrong. `partners_individual_has_no_registration_number` and
+    `partners_gstin_requires_gst_registered` are the two constraints this fronts.
+    """
+
+    def __init__(self, message: str, *, field: str) -> None:
+        super().__init__(
+            code="m2_business_type_invalid",
+            message=message,
+            status_code=400,
+        )
+        self.field = field

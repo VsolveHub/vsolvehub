@@ -1,5 +1,251 @@
 # API Contract Changelog
 
+> Entries for 1.19.0 and 1.20.0 were never written. This file therefore jumps 1.18.0 → 1.21.0.
+> The gap is recorded rather than backfilled, because inventing a description of a change nobody
+> documented is worse than an honest hole.
+
+## 1.22.0 - M2 Wave C1: attachments, site visits, and the Partner registration surface
+
+**Additive. 16 new paths, no existing operation changed. One new status value on an existing enum.**
+
+Wave C0 opened the M2 door and left three rooms locked: a Customer could describe a job but not
+attach a photograph of it, a paid site visit could be requested and never scheduled or closed, and
+the entire Partner registration surface — every model migrated, every command tested since 10 August
+— was unreachable over HTTP. This release is those three, plus the four background sweeps that were
+selectors with nothing calling them.
+
+### What is published
+
+| Area | Paths |
+|---|---|
+| Attachments | `POST /requirements/{id}/attachments/uploads/`, `POST /requirements/{id}/attachments/`, `DELETE /requirements/{id}/attachments/{attachment_id}/` |
+| Site visits | `POST /site-visits/{id}/schedule/`, `POST /site-visits/{id}/complete/` |
+| Business identity | `GET` / `PUT /partner/business-profile/` |
+| Capabilities | `GET /partner/capability-options/`, `GET` / `POST /partner/capabilities/`, `POST /partner/capabilities/{id}/withdraw/` |
+| Insurance | `GET` / `PUT /partner/insurance/` |
+| Progressive gates | `GET /partner/gates/` |
+| Crew roster | `GET` / `POST /partner/crew/`, `PATCH /partner/crew/{membership_id}/`, `POST /partner/crew/{membership_id}/archive/` |
+| Masked demand | `GET /partner/demand-preview/` |
+
+### A rejection is now distinguishable from a withdrawal
+
+**`PartnerCapability.Status` gains `REJECTED`.** Until now `_ALLOWED_TRANSITIONS` sent both
+Operations' refusal and the Partner's own exit to `WITHDRAWN`, so the Partner app could not tell "we
+said no" from "you closed this" and honestly said neither. `REJECTED` is Operations' refusal and is
+reachable only from `UNDER_REVIEW` or `CHANGES_REQUIRED`; `WITHDRAWN` is the Partner's exit and
+nothing else. Neither blocks a fresh request for the same variant — a terminal state that did would
+be a permanent ban dressed as a status.
+
+**This is a visible break for a client that switches on the status**, and deliberately so: an
+unknown status should render as "we cannot describe this" and prompt an update, which is strictly
+better than `WITHDRAWN` quietly meaning two things. The proposal preferred a computed
+`last_transition.actor_kind` instead, and that option was rejected because
+`PartnerCapabilityTransition.actor` is null both for a Partner's own action and for a system job — an
+`actor_kind` derived from it would confidently mislabel the exact case the client needs right.
+`last_transition` is published anyway, without `actor_kind`, because it dates the decision.
+
+`review_notes` is now guaranteed non-empty for `CHANGES_REQUIRED` and `REJECTED`, by both a domain
+guard and `partners_capability_review_state_needs_notes`. "We need a correction" without saying what
+is the copy that sends somebody back to re-upload the document that was already right.
+
+### Documents can expire, and absence of an expiry is not staleness
+
+`PartnerDocument` gains a nullable `expires_on`, and the capability record publishes
+`expired_document_kinds` and `documents_expiring_on`. Nullable is the answer rather than an omission:
+a photograph of a government ID has no platform-tracked expiry and a police verification does, and a
+non-null default would have been a policy guess about which kinds expire.
+
+`assert_capability_active` now refuses when a document of a kind in
+`PARTNER_REQUIRED_DOCUMENT_KINDS` has expired, reusing the existing `m2_capability_not_approved`
+rather than inventing a code `07-state-machines-and-permissions.md` §8 does not list. **Nothing
+changes for any existing Partner** — `expires_on` is null everywhere until somebody sets one.
+
+### `INFECTED` is not `FAILED`
+
+`RequirementAttachment.ProcessingStatus` gains `INFECTED`, which the frontend has modelled since
+Wave B1 and the model lacked. A checksum mismatch is an upload going wrong and the recovery is "try
+again"; malware is not, and the recovery is that the file is gone and no vendor ever saw it. One
+status for both would have offered a retry button for the second case. `scan_failure_reason` is
+published alongside so the Customer is told which.
+
+Bytes never pass through Django. `POST .../attachments/uploads/` records what the client says it is
+sending and returns a signed URL; `POST .../attachments/` streams the stored object back and refuses
+anything whose size, media type or SHA-256 disagrees. Without the intent row, "verify the upload"
+would mean "believe the client", and the client is the party whose file we are suspicious of.
+Attachments are refused once the requirement leaves `DRAFT`: a photograph appearing after a vendor
+quoted is a scope change arriving through the back door.
+
+### The masked demand preview carries a preview id, not a requirement id
+
+`GET /partner/demand-preview/` is sent to an account that has completed no KYC, and it applies the
+teaser rules in the other direction: no customer name, phone, street address or exact budget, and
+`area_label` is a locality. `id` is a keyed hash and is **not a `Requirement` primary key** — an
+unapproved account holding real requirement ids is one lookup away from the record the moment any
+endpoint accepts one, and "no endpoint accepts one today" is not a property that survives the next
+endpoint. It is not even a UUID, so the path converters refuse it before a view runs.
+
+Ineligible demand is returned with `is_eligible: false` and a hint rather than hidden. Hiding it
+would make an empty screen the first thing most new Partners see; showing it as actionable would be
+a lie. An empty list is a real answer and never a `404`.
+
+### The crew roster publishes no global identity
+
+`GET /partner/crew/` returns `membership_id` and never `crew_member_id`. Identity is global, and
+handing the global id to one agency would let two agencies compare rosters and discover that a worker
+is on both. `CrewMember` gains a four-digit `phone_suffix` and `phone_masked` publishes
+`•••••• 4821` — the number itself is still never stored, so this is not a redaction of something we
+hold but the whole of what exists, and four digits are what let a Partner tell two people called
+Ramesh apart.
+
+`POST /partner/crew/` answers **`201` for a new membership and `200` for a reinstated one**, so the
+UI can say "we put Ramesh back on your roster" instead of silently succeeding on a name the Partner
+thought was gone. `display_name` is read-only through the roster: one agency renaming a shared person
+would rename them on every other roster.
+
+### Gates explain themselves once, on the server
+
+`GET /partner/gates/` publishes `KYC`, `PAYOUT_DETAILS` and `CREW_ROSTER` with the reason each is
+asked for and the one action that clears it. The same strings arrive in the `403` from the refused
+command, read from one table — two copies of that sentence drift the first time the rule changes.
+The read is **advisory**: the commands enforce these at the moment they run, and a client treating it
+as authoritative would block somebody whose KYC completed thirty seconds ago.
+
+Four reads answer an account that holds the Partner role but has no `PartnerProfile` yet — a real
+state lasting the thirty seconds between the two. `/partner/workspaces/`, `/partner/capabilities/`,
+`/partner/crew/` and `/partner/gates/` all return empty rather than `404`, because a `404` on the
+registration flow's own reads is a gate, and proposal 0013's first constraint is that no gate stands
+before browsing demand.
+
+### Site visits have two participants and both can move one
+
+`POST /site-visits/{id}/schedule/` resolves by participation rather than by role: the vendor proposes
+a slot they can travel in, the Customer confirms a time somebody will be on site. `complete/` is
+Partner-only — completion is a report of what happened, and the party that travelled is the one who
+can make it. A Customer who disagrees has the clarification timeline, not a competing completion.
+
+### New error codes
+
+| Code | Status | Retryable |
+|---|---|---|
+| `m2_business_type_invalid` | `400` | no |
+| `m2_capability_already_requested` | `409` | no |
+| `m2_attachment_invalid` | `400` | no |
+| `m2_attachment_unavailable` | `503` | **yes** |
+
+`m2_capability_transition_invalid`, which proposal 0013 proposed, is **not** published:
+`CapabilityTransitionError` has emitted `m2_capability_transition_not_allowed` since 10 August, and
+renaming a live code to match a proposal's guess at its name is a breaking change bought for nothing.
+
+Three new named enums — `PartnerBusinessTypeEnum`, `ProgressiveGateEnum`, `GateNextActionEnum`.
+`business_type` is the collision waiting to happen, being a name any future model will reuse.
+
+### Behind the contract: four sweeps now have a schedule
+
+Not an API change, and the largest correctness change in this release.
+`expired_requirement_ids`, `sla_breached_requirement_ids`, `expired_invitation_ids` and
+`expired_proposal_ids` existed as selectors with **no `CELERY_BEAT_SCHEDULE` entry**, so an
+unanswered invitation wave stalled forever and a requirement whose needed-by date had passed was
+never closed by anything. `apps/requirements/tasks.py` and five beat entries close that. Every sweep
+is idempotent by state, and expiring an invitation invites its replacement inside the same
+transaction and requirement lock — so a Celery re-drive cannot expire once and invite twice.
+
+### Not in this release
+
+The unlock checkout and state, the unlocked-quote read, selection, rejection and re-validation — all
+of BE4, which has no domain layer to wrap yet. Attachment access still does not expire with a
+non-selected vendor's invitation (`M2-BE-310`), and archiving a crew member does not refuse on a
+future assignment (`M2-BE-522` has no stage model yet). Named here so their absence is documented
+rather than discovered.
+
+## 1.21.0 - M2 opens: the requirement, enquiry and proposal surface
+
+**Additive. 17 new paths, no existing operation changed.**
+
+The M2 domain layer had been built and tested for three phases — capabilities, requirements,
+matching and proposals, 91 passing tests — behind no HTTP route at all. `apps/requirements` had
+models, services and commands but no `views.py`, and `config/urls.py` did not include it. Every one
+of the 108 M2 frontend tasks was capped at "built, not integrated" because of that one gap. This
+release is the door on the room.
+
+### What is published
+
+| Area | Paths |
+|---|---|
+| Customer requirement | `POST/GET /requirements/`, `GET/PATCH /requirements/{id}/`, `POST /requirements/{id}/submit/`, `GET /requirements/duplicate-check/`, `GET /requirements/{id}/timeline/` |
+| Quote teasers | `GET /requirements/{id}/quotes/teasers/` |
+| Clarification | `POST /requirements/questions/{id}/answer/`, `POST /partner/enquiries/{id}/questions/` |
+| Partner enquiries | `GET /partner/enquiries/`, `GET /partner/enquiries/{id}/`, `POST .../accept/`, `POST .../decline/`, `POST .../site-visits/` |
+| Proposals | `POST /proposals/`, `GET /proposals/{id}/`, `POST /proposals/{id}/withdraw/` |
+| Workspaces | `GET /partner/workspaces/` |
+
+### The requirement is free, and the contract says so
+
+Nothing in the requirement surface accepts a payment, quotes a price or implies one is coming.
+`POST /requirements/{id}/submit/` answers `202` with `is_free: true` — read from the server that
+enforces the rule rather than hardcoded in a screen, because a literal `true` in a component is a
+promise that outlives the policy it describes. The unlock is a separate surface and arrives later.
+
+### A teaser is not a quote
+
+`GET /requirements/{id}/quotes/teasers/` is sent to a Customer who has paid nothing. Vendor name,
+contact, scope, line items and the exact total are **absent from the response**, not merely
+unrendered — a client cannot un-receive a payload, and cached identity survives a refund. The
+serializer is an explicit field list rather than a `ModelSerializer` for exactly that reason: the
+two are one `fields` edit apart, and only one of them fails safe.
+
+The price *band* is what is published, plus `usable_quote_count` and `unlock_available`. The last
+mirrors the server's own guard so the control can be disabled; the unlock command re-checks
+independently, because a stale `true` is the state a duplicate purchase lives in.
+
+### Workspaces authorise, they do not navigate
+
+`GET /partner/workspaces/` returns `{workspace_key, commercial_mode, actions[]}`. No routes, no
+labels, no icons — the backend authorises, the frontend owns presentation, and a key the client
+does not recognise renders nothing rather than a generic tab. A Partner with no approved capability
+receives `200 {"workspaces": []}`, never `403`: registered-but-not-yet-reviewed is a real and
+common state and must not render as an error. Suspension is expressed by omitting a workspace or
+reducing its `actions`, so navigation degrades in place instead of blanking mid-session.
+
+`commercial_mode` is published rather than derived. ADR-0007 fixes A3 as `LEAD_ONLY` and A5 as
+`MANAGED_PAYMENT_REQUIRED`, which makes inferring it from the key tempting and wrong: it is the
+field that decides whether the UI promises Vsolve protection or tells a Partner to collect
+directly, and a client that computes it keeps promising protection through a policy change.
+
+### 404, not 403, wherever existence is private
+
+Object-level authorization is per record. Another Customer's requirement answers `404` — a `403`
+confirms there is a record there to find. The same holds for another Partner's enquiry or proposal.
+
+### Progressive registration is enforced at the accept, not the browse
+
+`POST /partner/enquiries/{id}/accept/` is where `m2_kyc_required` fires. A Partner browses masked
+demand freely; proving identity is the price of taking a slot away from another vendor, not the
+price of looking.
+
+### Errors
+
+The 29 `m2_*` codes now reach clients through the standard envelope with `code`, user-safe
+`message`, `retryable` and a correlation id. `packages/api-client/src/errors.ts` already classifies
+every one of them, so publishing changes no frontend code.
+
+`m2_unlock_payment_pending` is settled as **`409`, retryable** — see proposal 0012's answered open
+question. A `202` carrying an error body arrives at `openapi-fetch` as `data`, and the unlock screen
+is the one place in M2 where reading a refusal as a success would show quotes nobody paid for.
+`202` stays reserved for genuine acceptance and always carries a projection, never an error.
+
+### Named enums
+
+Eight M2 choice sets are named in `ENUM_NAME_OVERRIDES`, not only the two that collided on arrival.
+An unnamed `status` is published as a positional `StatusD6aEnum` whose digits shift when an
+unrelated app adds its own `status` — a silent rename of a component the frontend has imported.
+
+### Not in this release
+
+Attachment upload (`POST /requirements/{id}/attachments/`), the unlock checkout and state, the
+unlocked-quote read, selection, rejection and re-validation. The attachment models exist but the
+upload command does not; the unlock path is BE4 and has no domain layer yet. They are named here so
+their absence is a documented gap rather than something a reader has to discover by 404.
+
 ## 1.18.0 - One start time per visit
 
 **Breaking.** `POST /fulfilment-plan-sets/` replaces `preferred_start: datetime` with

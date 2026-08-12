@@ -67,6 +67,16 @@ if PARTNER_DOCUMENT_ORPHAN_RETENTION_HOURS <= 0:
 if PAYMENT_PROVIDER != "razorpay":
     raise ImproperlyConfigured("PAYMENT_PROVIDER must be razorpay in production.")
 
+# MSG91 is not implemented yet, so production is not required to name a transport — an
+# unconfigured one refuses to send and the escalation ladder reports the gap. What production must
+# never do is run the fake, which accepts every message and would make an unheard deadline look
+# delivered.
+if MESSAGE_TRANSPORT == "fake" or NOTIFICATIONS_ALLOW_FAKE_TRANSPORT:
+    raise ImproperlyConfigured(
+        "The fake message transport must stay off in production. It reports every message as "
+        "accepted without sending it."
+    )
+
 # Refused at start-up rather than checked at the endpoint. A flag that lets a caller
 # mark their own money received is the single most valuable switch in this codebase to
 # flip by accident, and the cheapest place to make that impossible is a deploy that
