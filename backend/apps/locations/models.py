@@ -43,6 +43,16 @@ class ServiceArea(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     slug = models.SlugField(max_length=120, unique=True)
     name = models.CharField(max_length=160)
+    #: The state this area sits in, in whatever code vocabulary Operations loaded
+    #: `partners.MinimumWageFloor.state_code` with. Blank means "not mapped yet", and every rule
+    #: that depends on it fails closed rather than guessing — a statutory wage floor is not
+    #: something to infer from a free-text address line, and `Address.state` holds a *name*
+    #: ("Telangana"), not a code, so deriving one would be a lookup table of policy in code.
+    #:
+    #: On the area rather than the address because the area is Operations-owned reference data and
+    #: an address is Customer-entered text. An area that genuinely spans two states has to be split
+    #: before it can carry a floor, which is the correct answer rather than a limitation.
+    state_code = models.CharField(max_length=8, blank=True)
     timezone = models.CharField(
         max_length=64,
         default="Asia/Kolkata",

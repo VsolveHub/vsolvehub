@@ -104,6 +104,22 @@ class InvitationTransitionError(RequirementDomainError):
         )
 
 
+class CapacityUnavailableError(RequirementDomainError):
+    """The vendor is already spoken for on the requested dates.
+
+    Raised at acceptance rather than only at wave time, because the vendor's diary moves between
+    the two. It covers both records that can hold them: M2's own `CapacityHold` from another
+    enquiry, and the M1 `assignments.Reservation` an A1 booking sits on.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_capacity_unavailable",
+            message="You already have work booked on these dates.",
+            status_code=409,
+        )
+
+
 class QuoteSlotsExhaustedError(RequirementDomainError):
     def __init__(self) -> None:
         super().__init__(

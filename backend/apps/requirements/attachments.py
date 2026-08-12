@@ -35,8 +35,10 @@ from apps.requirements.exceptions import (
 )
 from apps.requirements.models import (
     CustomerRequirement,
+    Proposal,
     RequirementAttachment,
     RequirementAttachmentUpload,
+    VendorInvitation,
 )
 from apps.requirements.storage import (
     DocumentStorage,
@@ -381,6 +383,121 @@ def remove_attachment(
         # provider would not delete is an orphan for the housekeeping sweep to collect, not a
         # reason to put the attachment back in front of the Customer.
         return
+
+
+# ---------------------------------------------------------------------------
+# Vendor access, and when it ends (`M2-BE-310`)
+# ---------------------------------------------------------------------------
+
+#: How long a vendor's signed link to a Customer's site photograph is good for. Short, because the
+#: link is a bearer credential the moment it exists: anyone holding the URL is holding the file, and
+#: revoking access has to mean something more than "we stopped rendering the button".
+ATTACHMENT_REVIEW_LIFETIME_SECONDS: Final = 15 * 60
+
+
+@dataclass(frozen=True, slots=True)
+class VendorAttachment:
+    attachment: RequirementAttachment
+    download_url: str
+    expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class VendorAttachmentAccess:
+    """What one vendor may see of a Customer's files right now, and whether they still may.
+
+    Expiry is published as a **state on a successful read**, not as an error. Two reasons. The
+    vendor is entitled to their own enquiry record either way, so a refusal would be refusing them
+    their own row; and "there are no photographs" and "you may no longer see the photographs" are
+    different facts that a Partner staring at an empty list deserves told apart. It also keeps M2
+    inside the error vocabulary `07-state-machines-and-permissions.md` §8 fixes, instead of adding
+    a code that would reach the frontend's error table as an unrecognised string.
+    """
+
+    has_access: bool
+    attachments: tuple[VendorAttachment, ...]
+
+
+def invitation_may_read_attachments(invitation: VendorInvitation) -> bool:
+    """Whether this vendor still has a reason to see the Customer's files.
+
+    **The coupled decision, settled 13 August: `RequirementSnapshot` does not copy attachments.**
+    It freezes the *answers* — the text a vendor quoted against — and attachment access is resolved
+    live from the invitation's state each time it is asked for. Two reasons, and the second is the
+    one that decides it:
+
+    * A copied attachment set would be a second grant of the file that survives the invitation it
+      came from. "Access expires with the invitation" cannot be implemented against a frozen copy
+      without also expiring the copy, at which point the copy was never the grant.
+    * It answers the open question about a file added or scanned *after* an invitation. A vendor
+      sees the requirement's currently-`VERIFIED` attachments, so a photograph that finished its
+      malware scan an hour after they were invited becomes visible, and one that came back
+      `INFECTED` never does. The alternative — freezing the list at invitation time — would show a
+      vendor a `PENDING` file that later turned out to be malware, or hide a clean file from the
+      only person who needed it. Attachments cannot be *added* after `DRAFT` anyway
+      (`_assert_attachable`), so the live list can only ever gain scan verdicts on files the
+      snapshot's own answers already described. Nothing a vendor quoted against changes underneath
+      them.
+
+    Access holds while the invitation holds a quote slot — `INVITED`, `ACCEPTED` or `QUOTED` — and
+    ends the moment it is declined, expired or withdrawn. A vendor who was not selected loses the
+    Customer's site photographs; only the selected vendor keeps them, which is expressed here as
+    "their invitation is still `QUOTED` and their proposal is `SELECTED`", and hardens into the
+    engagement in Wave C3.
+    """
+    if invitation.status in VendorInvitation.SLOT_HOLDING_STATUSES:
+        return True
+    return Proposal.objects.filter(
+        invitation=invitation,
+        status=Proposal.Status.SELECTED,
+    ).exists()
+
+
+def vendor_attachments(
+    *,
+    invitation: VendorInvitation,
+    storage: DocumentStorage | None = None,
+) -> VendorAttachmentAccess:
+    """Signed, short-lived links to the requirement's checked attachments, for one vendor.
+
+    **No link is minted once access has lapsed.** That is the substance of `M2-BE-310`: a signed
+    URL is a bearer credential, so revoking access has to mean not issuing one, not hiding a
+    button. Existing links die on their own within `ATTACHMENT_REVIEW_LIFETIME_SECONDS`, which is
+    why that value is minutes rather than days.
+    """
+    if not invitation_may_read_attachments(invitation):
+        return VendorAttachmentAccess(has_access=False, attachments=())
+
+    records = list(
+        RequirementAttachment.objects.filter(
+            requirement_id=invitation.requirement_id,
+            processing_status__in=RequirementAttachment.SHAREABLE_STATUSES,
+        ).order_by("created_at", "id")
+    )
+    if not records:
+        return VendorAttachmentAccess(has_access=True, attachments=())
+
+    provider = storage or get_attachment_storage()
+    granted: list[VendorAttachment] = []
+    for attachment in records:
+        try:
+            review = provider.create_signed_review(
+                object_key=attachment.object_key,
+                expires_in_seconds=ATTACHMENT_REVIEW_LIFETIME_SECONDS,
+            )
+        except DocumentStorageError as exc:
+            raise AttachmentRejectedError(
+                "We could not open the Customer's files just now. Try again shortly.",
+                retryable=True,
+            ) from exc
+        granted.append(
+            VendorAttachment(
+                attachment=attachment,
+                download_url=review.review_url,
+                expires_at=review.expires_at,
+            )
+        )
+    return VendorAttachmentAccess(has_access=True, attachments=tuple(granted))
 
 
 def orphaned_upload_ids(*, at: datetime | None = None) -> list[uuid.UUID]:

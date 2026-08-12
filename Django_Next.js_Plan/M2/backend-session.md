@@ -10,6 +10,12 @@
 > registration surface. The four sweeps that had no schedule now have one. Object-level authorization
 > tests exist for every published path — **written, not run**, per the verification convention.
 > **Start at "Wave C1 remainder"**, which is the capability and matching completeness list; then C2.
+>
+> **Revision 3 landed on 12 August 2026 (ADR-0008), before any C2 code existed.** A5 is visit-first:
+> the unlock is A3-only, the A5 front door is the tiered `VisitPlan` charged at the first confirmed
+> visit slot, visit slots book against `carts.availability`, and A5 estimates are submitted on site
+> against a `COMPLETED` visit. Wave C2 below is rewritten accordingly; nothing already built changes,
+> except that `M2-BE-215` (`choose_visit_plan`) joins the requirement surface when C2 starts.
 
 ## Kickoff prompt for this session
 
@@ -279,38 +285,42 @@ change. Published truthfully rather than bent to fit the client's guess:
   `accept_invitation` locks the invitation, so that is the only order that cannot invert against
   either.
 
-## Wave C1 remainder — capability and matching completeness
+## Wave C1 remainder — capability and matching completeness — **`[~]` shipped 13 August 2026**
 
-**Start here.** Everything above is done; this is what is left of C1.
+Contract **1.23.0**. Full account in §"C1 remainder outcome" below.
 
-- [ ] `M2-BE-102` / `M2-BE-107` service-area scoping on the capability, plus crew availability.
-- [ ] `M2-BE-115` extend `assert_capability_active` to check availability, service area and
-  insurance — the guard now checks approval, suspension, capability expiry **and expired required
-  documents** (C1), and still not availability, service area or insurance. Insurance enforcement is
-  blocked on owner decision 6.
-- [ ] `M2-BE-301` travel feasibility and language in eligibility. **Vendor language is not captured in
-  P1** — add it there first or the filter has nothing to read.
-- [ ] `M2-BE-303` real ranking signals. Ordering is currently a stable sort, as A1 does.
-- [ ] `M2-BE-306` consult `carts.availability` in the capacity hold. Today an A1 booking and an M2
-  hold can overlap on the same day.
-- [ ] `M2-BE-317` derive state and skill for the wage floor from the requirement, not from the
-  caller. **Highest priority in this list.** `POST /api/v1/proposals/` documents
-  `m2_proposal_below_wage_floor` and **cannot currently return it**: `ProposalCreateSerializer`
-  carries neither `wage_floor_skill` nor `wage_floor_state_code` and the view passes neither, so a
-  below-floor A3 rate is accepted. An endpoint that documents a refusal it cannot make is worse than
-  one that documents nothing. Needs a variant-to-skill mapping, which does not exist yet. Confirmed
-  independently by Session B — see `frontend-execution-plan.md` §7 under `M2-FE-310`.
-- [ ] `M2-BE-110` registration draft/submit/correction/resubmit commands.
-- [ ] `M2-BE-310` attachment access expiry for non-selected vendors, plus the decision on whether
-  `RequirementSnapshot` copies attachments. Unblocked by C1's upload work and the last attachment gap.
+- [~] `M2-BE-102` / `M2-BE-107` service-area scoping on the capability, plus crew availability.
+  `PartnerCapability.service_areas` (M2M, empty = every area the Partner serves, can only subtract
+  from `PartnerServiceArea`) and `CrewAvailabilityException` (dated, membership-scoped), both read
+  by their guards.
+- [~] `M2-BE-115` `assert_capability_active` now takes an optional `service_area` and `on_day` and
+  checks coverage and the Partner's own published calendar. **Insurance is still not enforced** —
+  owner decision 6, and `requires_insurance` currently holds a default nobody approved, so enforcing
+  it would refuse real vendors on a rule the owner has not set.
+- [~] `M2-BE-301` travel feasibility and language in eligibility. Vendor language is now captured
+  (`PartnerLanguage`, `GET`/`PUT /partner/languages/`); travel feasibility reuses the M1 commit
+  window and travel estimate against the requested start.
+- [~] `M2-BE-303` real ranking signals: prior relationship, distance band, least-recent invitation,
+  stable tie-break. `MATCHING_POLICY_VERSION` is now 2.
+- [~] `M2-BE-306` the capacity hold consults `carts.availability`. Both at wave time and at
+  acceptance, where it raises `m2_capacity_unavailable`.
+- [~] `M2-BE-317` state and skill are derived from the requirement and refused when unmapped.
+  **The defect is closed**: `POST /api/v1/proposals/` can now return
+  `m2_proposal_below_wage_floor`, and returns `m2_wage_floor_unavailable` rather than skipping.
+- [~] `M2-BE-110` `submit_capability_for_review` + `POST /partner/capabilities/{id}/submit/`. The
+  resubmit-after-correction path that had no route.
+- [~] `M2-BE-310` attachment access expires with the invitation, and **`RequirementSnapshot` does
+  not copy attachments** — the coupled decision, with its reasoning, is below.
 - [ ] Crew archive refusing on a future assignment (proposal 0013 criterion 9). **Not buildable until
   C4** — assignment is per stage and `M2-BE-522` has no model yet, so a guard now would be a check
-  that always passes.
+  that always passes. Confirmed still blocked.
 - [ ] A per-variant `requires_insurance` override (proposal 0013 criterion 12). The value is
   server-authored and never client-derived, which is the half that matters; no variant can be
-  configured to `False` on an A3 archetype, which needs owner decision 6 first.
-- [ ] `M2-BE-106` category-specific registration answers on the **versioned question schema** M1
-  already has.
+  configured to `False` on an A3 archetype, which needs owner decision 6 first. Confirmed still
+  blocked.
+- [~] `M2-BE-106` category-specific registration answers on the **versioned question schema** M1
+  already has: `M2VariantConfiguration.registration_question_schema` validated through
+  `carts.item_inputs.validate_scope`, stored on `PartnerCapability.registration_answers`.
 
 ### Deferred by dependency, not by choice
 
@@ -376,11 +386,109 @@ module byte-compiles.
 
 ---
 
-## Wave C2 — Unlock, selection, reconfirmation, engagement (`BE4`)
+### C1 remainder outcome — 13 August 2026
 
-**Depends on:** C1. Frontend Wave A2 integrates against this.
+**Built.** Contract **1.23.0**: two schema corrections, four new paths, several additive fields.
+Three migrations (`catalog.0007`, `locations.0003`, `partners.0009`). No new module — every change
+extends one that existed, which is what kept this a completeness wave rather than a second design.
 
-`M2-BE-401..418`. The commercially load-bearing wave:
+#### The two defects
+
+**`M2-BE-317` — the wage-floor guard now fires.** `submit_proposal` no longer takes
+`wage_floor_skill` or `wage_floor_state_code`; it derives both:
+
+| Input | Derived from | Why not the obvious alternative |
+|---|---|---|
+| Skill | `catalog.M2VariantConfiguration.wage_floor_skill` (nullable FK to `partners.Skill`) | `ServiceVariant.required_skill_code` already exists and was rejected: it is the **dispatch trade slug**, matched against `PartnerSkill` to decide who can be sent. Reusing it would tie a statutory wage classification to a merchandising decision, so a catalog re-slug would silently move a legal floor. |
+| State | `locations.ServiceArea.state_code` (new, blank) | `Address.state` holds a free-text *name* ("Telangana"); `MinimumWageFloor.state_code` holds whatever code Operations loaded. Mapping one to the other would be a policy table living in code. The area is Operations-owned reference data; an address is Customer-entered text. |
+
+Both nullable/blank, both fail closed with `m2_wage_floor_unavailable`. **This blocks A3 quoting
+until Operations maps a skill, sets a state code and loads a floor** — which is the point. The old
+behaviour was to skip the check, and a guard that silently does nothing is indistinguishable from
+one that passed. `partners.assert_rate_meets_wage_floor` keeps its explicit-inputs signature for
+anything that genuinely needs to name a state and a skill; the HTTP path cannot reach it.
+
+One documentation error fixed alongside: the operation listed `m2_wage_floor_unavailable` under
+`400`, and `WageFloorUnsetError` has always been a `409`.
+
+**Defect B — the list envelope.** `m2_requirement_list` and `m2_partner_enquiry_list` declared bare
+arrays and returned DRF page envelopes. Both now declare `RequirementSummaryPage` /
+`EnquirySummaryPage` (the `BookingGroupPage` shape), use `StrictCursorPagination`, publish the
+`cursor` parameter and call `reject_invalid_cursor_query` first. The frontend's compensating
+narrowings (`packages/query/src/m2-requirement.ts › readRequirementList`,
+`apps/partner/features/enquiry/queries.ts › readEnquiryPage`) can be deleted by their own columns —
+not touched here. This also closes Session B's "cannot be paged" gap: no cursor parameter was
+published, so a Partner with more than twenty enquiries saw a silently truncated inbox.
+
+#### Six decisions worth carrying forward
+
+1. **The snapshot does not copy attachments, and that is what makes expiry implementable.** A copied
+   set would be a second grant of the file surviving the invitation it came from; "access expires
+   with the invitation" cannot hold against a frozen copy without also expiring the copy, at which
+   point the copy was never the grant. It also answers the open question about a file scanned *after*
+   an invitation: a vendor sees the requirement's currently-`VERIFIED` attachments, so a photograph
+   that passed its scan an hour later becomes visible and an `INFECTED` one never does. Nothing a
+   vendor quoted against changes underneath them, because attachments cannot be added after `DRAFT`.
+2. **Expired access is a state on a `200`, not an error code.** `has_access: false`. The vendor still
+   owns their enquiry record, so refusing it would refuse them their own row; and it keeps M2 inside
+   the error vocabulary §8 fixes instead of adding a code the frontend's error table would render as
+   an unrecognised string.
+3. **An undeclared language is not a mismatch.** `LANGUAGE_MISMATCH` fires only on a declaration that
+   contradicts the requirement. The mirror of C1's `expires_on` rule — absence of a declaration is
+   not staleness — and without it every Partner registered before the field existed would vanish
+   from every pool on the day it shipped.
+4. **An unknown distance is scored at the pool's median band, not last.** Sorting unknowns to the
+   back would hand every M2 enquiry to whichever vendors happen to run the technician app; sorting
+   them first would make deleting a location fix a ranking strategy. Treating them as typical does
+   neither. Recorded per candidate as `distance_band_km: null` plus the band actually used.
+5. **`partner_unavailable_on` is deliberately weaker than `partner_available_during`.** M1's rule
+   ("an empty schedule means unavailable") is right for the A1 slot grid, where a Customer picks a
+   half-hour. It is wrong for a day-block archetype whose vendors publish no hourly calendar, and
+   applying it would have excluded every existing vendor. A dated exception is a refusal; a weekday
+   no rule covers is a refusal **only when the Partner has published rules for that area at all**.
+6. **`submit_capability_for_review` is not `transition_capability`.** That command stamps
+   `reviewed_by`/`reviewed_at` from its actor, which would record the Partner as the reviewer of
+   their own capability — in the audit trail that exists to prove who decided what.
+
+#### Verified
+
+`.\scripts\quality-static.cmd`: ruff format and ruff check clean across 338 files, **strict MyPy
+clean across 218 source files**, `makemigrations --check` no changes, `spectacular --validate` with
+**zero warnings and no new `ENUM_NAME_OVERRIDES` needed** (the new fields are FKs, JSON and free
+text, not choice sets), committed-contract drift check clean. `manage.py check` clean.
+
+#### Not done, and why
+
+- **No test was written or run**, per the build-first amendment. Recorded as one line of deferred
+  debt for this wave, not as individual rows.
+- **Two existing test fixtures were corrected**, and this is worth knowing before the owner's run:
+  `tests/requirements/conftest.py` and `tests/requirements/test_matching_and_proposals.py` now set
+  `wage_floor_skill` on the variant configuration, `state_code` on the service area, and a baseline
+  `MinimumWageFloor`. Without that every A3 `submit_proposal` in those files would refuse with
+  `m2_wage_floor_unavailable` — which is the new behaviour landing, not a regression. The
+  wage-floor test dropped its two removed kwargs and now supersedes the baseline with a newer
+  effective-dated row, which is how Operations actually raises a floor.
+- **Insurance enforcement** stays out of `assert_capability_active` — owner decision 6.
+- **Crew archive on a future assignment** and the **per-variant `requires_insurance` override** are
+  confirmed still blocked, on C4's assignment model and owner decision 6 respectively.
+- **`M2-BE-321`** (price-band signal), **`M2-BE-113`** (suspension routing funded engagements) and
+  **contract validation in CI** are unchanged and unattempted, for the reasons already recorded.
+- **`evaluate_candidates` is still N+1 per candidate** on capability, service area, languages and
+  roster size. The new filters were batched (reservations, distance, prior partners, last-invited);
+  the pre-existing per-candidate queries were left alone rather than folded into an unrelated
+  refactor. Worth a pass before a real city's pool is loaded.
+
+---
+
+## Wave C2 — Access (A3 unlock · A5 visit plan), selection, reconfirmation, engagement (`BE4`)
+
+**Depends on:** C1. Frontend Wave A2 integrates against this. **Revision 3 (ADR-0008) reshaped this
+wave before anything in it was built** — read `07-state-machines-and-permissions.md` §1, §4, §4a and
+§4b first; the A5 front door is now the visit plan, and the unlock is A3-only.
+
+`M2-BE-215`, `M2-BE-401..428`. The commercially load-bearing wave:
+
+A3 unlock (unchanged from revision 2):
 
 - [ ] Server-priced unlock in paise with effective dates (`401`, `402`); offered **only when a usable
   quote exists** — `proposals.classify_usability` already decides this.
@@ -388,17 +496,42 @@ module byte-compiles.
   retry (`403`, `404`, `405`). Reuse the M1 payment and ledger infrastructure with a distinct money
   purpose; do not build a second payment path.
 - [ ] Non-responsive rejection releases the slot and invites a replacement at no extra charge (`406`).
+
+A5 visit plan (revision 3):
+
+- [ ] `choose_visit_plan` on the requirement (`215`): A5 only, server-priced tiers, charges nothing,
+  bounds the wave. `m2_visit_plan_required` on an A5 submit without one.
+- [ ] `VisitPlan` + per-slot shares in integer paise, remainder on the first share (`419`, `420`).
+- [ ] `confirm_visit_slot` books against **`carts.availability`** — the grid the A1 flow reads, so a
+  visit and an A1 booking cannot double-book (`421`). First held slot opens the plan checkout.
+- [ ] Plan checkout + verified webhook charge exactly one plan; the held slot hardens to `SCHEDULED`
+  only on the callback; later slots book free (`422`). Same M1 payment abstractions, new purpose.
+- [ ] Visit arrival on the non-OTP fallback (`423`); estimate-visit guard `m2_visit_not_completed`
+  and the on-site composer prefill context (`424`).
+- [ ] Share settlement sweeps: unfilled at visit SLA, vendor no-show, missed estimate window, customer
+  no-show per config — all idempotent, all through the M1 `Refund` lifecycle (`425`).
+- [ ] Per-slot split (`426`, decided 2026-08-13): vendor visit payout + Vsolve platform share per
+  share, in paise; `EARNED` makes the payout eligible through the M1 payout rails, gated on payout
+  details; no stage credit. Reclassification money rules (`427`).
+
+Shared:
+
 - [ ] Selection → time-limited vendor reconfirmation that **re-checks** capability, schedule and
   capacity at reconfirmation time (`407`, `408`).
-- [ ] Rejection, expiry or changed availability preserves the unlock and offers the next quote free
-  (`409`, `410`).
-- [ ] A3 completes as a connection with released contact; A5 opens stage funding (`411`, `412`).
+- [ ] Rejection, expiry or changed availability preserves the unlock/plan and offers the next
+  quote, estimate or replacement visit free (`409`, `410`).
+- [ ] A3 completes as a connection with released contact; A5 opens stage funding at face value
+  (`411`, `412`) — visit money settles per share, never as a stage discount.
 - [ ] Server-calculated stage amounts, commission, tax and payout allocation in paise (`413`, `414`).
 - [ ] Verification: simultaneous selections, vendor expiry at payment time, suspension between
-  selection and payment (`417`, `418`).
+  selection and payment (`417`, `418`); the visit-plan money paths — duplicate plan webhooks, hold
+  expiry racing checkout, grid contention with A1, share arithmetic (payouts + platform shares +
+  refunds reconcile to the plan), sweep idempotence, payout-details gating, reclassification with a
+  charged plan (`428`).
 
-**Gate:** money is collected only against delivered value; selection is not a booking until vendor
-reconfirmation and the archetype's own confirmation condition both succeed.
+**Gate:** money is collected only against a real accepted commitment — a usable quote (A3) or a
+confirmed visit (A5); selection is not a booking until vendor reconfirmation and the archetype's own
+confirmation condition both succeed.
 
 ---
 
@@ -473,7 +606,8 @@ runbooks, dashboards, feature flags that gate new purchases only.
 |---|---|---|---|---|
 | C0 | `M2-BE-013` | n/a | `[~]` **17 paths live at contract 1.21.0** | Ruff, strict MyPy, `makemigrations --check` and `spectacular --validate` all clean; client regenerates; 7 of 8 frontend packages typecheck. **No tests written** — the gate stays open. Attachments deferred. See below. |
 | C1 | P1–P3 gap closure | `[~]` 91/91 domain tests + 5 new files written, unrun | `[~]` **16 more paths live at contract 1.22.0 (33 total)** | Ruff, strict MyPy across 218 files, `makemigrations --check` and `spectacular --validate` all clean, zero schema warnings. Four sweeps on beat. **Tests written, not run** — five files, ~160 test functions, queued in `task.md` §"Owner verification queue". CI deferred to M1 by owner decision. Remainder: capability/matching completeness, `M2-BE-317` first. |
-| C2 | `BE-401..418` | `[ ]` | `[ ]` | |
+| C1 remainder | `BE-102/106/107/110/115/301/303/306/310/317` | `[~]` built — static gates green | `[~]` **4 more paths at contract 1.23.0 (37 total)**, plus two corrected list envelopes | Ruff, strict MyPy across 218 files, `makemigrations --check`, `spectacular --validate` (zero warnings) and the drift check all clean. **The wage-floor guard can now fire**; both list operations declare the envelope they always sent and accept a `cursor`. Migrations `catalog.0007`, `locations.0003`, `partners.0009`. **Tests deferred per the build-first amendment**; two existing fixtures corrected for the fail-closed wage floor. |
+| C2 | `BE-215`, `BE-401..428` (revision 3: A3 unlock + A5 visit plan) | `[ ]` | `[ ]` | |
 | C3 | `BE-501..509` | `[ ]` | `[ ]` | |
 | C4 | `BE-521..535` | `[ ]` | `[ ]` | |
 | C5 | `BE-541..550` | `[ ]` | `[ ]` | |
@@ -498,6 +632,8 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | 2026-08-10 | `M2-BE-321` | No reference price per variant | `02-backend-tasks.md` BE3 |
 | 2026-08-10 | 12 policy tasks | Owner decisions in `task.md` P0 | `task.md` P0 |
 | 2026-08-12 | Contract validation in CI | **Owner decision: M1 platform work, not M2.** The repository has no pipeline at all. | This file, C0.6 |
-| 2026-08-12 | `M2-BE-317` wage-floor derivation | No variant-to-skill mapping exists | This file, C1 remainder |
+| 2026-08-12 | `M2-BE-317` wage-floor derivation | ~~No variant-to-skill mapping exists~~ **Cleared 13 August**: `M2VariantConfiguration.wage_floor_skill` + `ServiceArea.state_code`, both fail closed | This file, C1 remainder outcome |
+| 2026-08-13 | Wage-floor **values** | Owner decision 7. The guard is live and fails closed, so A3 quoting is blocked per variant/area until Operations loads a floor | `task.md` P0 |
+| 2026-08-13 | Insurance in `assert_capability_active` | Owner decision 6 | This file, `M2-BE-115` |
 | 2026-08-12 | Crew archive conflict (0013 criterion 9) | C4's per-stage assignment model | `02-backend-tasks.md` `M2-BE-111` |
 | 2026-08-12 | Per-variant `requires_insurance` (0013 criterion 12) | Owner decision 6 | `apps/partners/capability_options.py` |

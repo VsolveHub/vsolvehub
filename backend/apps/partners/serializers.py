@@ -8,6 +8,7 @@ from rest_framework import serializers
 
 from apps.partners.gates import GateNextAction, ProgressiveGate
 from apps.partners.models import (
+    CrewAvailabilityException,
     PartnerApplication,
     PartnerApplicationTransition,
     PartnerAvailabilityException,
@@ -783,6 +784,12 @@ class CapabilityOptionSerializer(serializers.Serializer[dict[str, object]]):
     #: Which request fields this archetype needs. One form serves both archetypes because the
     #: server names the fields, rather than the client branching on the archetype.
     asks_for = serializers.ListField(child=serializers.CharField(), read_only=True)
+    #: The category-specific registration questions for this variant, from the same versioned
+    #: schema the answers are validated against. Empty is the ordinary state.
+    registration_questions = serializers.ListField(
+        child=serializers.JSONField(),
+        read_only=True,
+    )
     already_requested = serializers.BooleanField(read_only=True)
 
 
@@ -800,6 +807,22 @@ class CapabilityRequestSerializer(serializers.Serializer[dict[str, object]]):
         min_value=1,
         allow_null=True,
     )
+    #: Optional narrowing. Omitted or empty means "every area I work in", which is what most
+    #: Partners want and what the server stores as an empty set.
+    service_area_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
+    #: Answers to the variant's registration questions. Validated server-side against the versioned
+    #: schema; the client never decides what counts as a complete answer set.
+    registration_answers = serializers.JSONField(required=False, default=dict)
+
+
+class CapabilitySubmitSerializer(serializers.Serializer[dict[str, object]]):
+    """Submit or resubmit one capability for review.
+
+    `registration_answers` is optional so a resubmit that only fixed a document does not have to
+    resend the answers. Sending them replaces the stored set and revalidates it.
+    """
+
+    registration_answers = serializers.JSONField(required=False, allow_null=True)
 
 
 class CapabilityTransitionSummarySerializer(serializers.Serializer[dict[str, object]]):
@@ -840,6 +863,10 @@ class PartnerCapabilitySerializer(serializers.Serializer[dict[str, object]]):
     requires_insurance = serializers.BooleanField(read_only=True)
     max_crew_size = serializers.IntegerField(read_only=True, allow_null=True)
     max_project_value_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    #: Empty means every area this Partner serves. A non-empty list is an Operations narrowing and
+    #: must be rendered as a restriction, never as the Partner's coverage.
+    service_area_ids = serializers.ListField(child=serializers.UUIDField(), read_only=True)
+    registration_answers = serializers.JSONField(read_only=True)
     #: Raw, and not projected into the status. A computed `EXPIRED` would be a status the model does
     #: not have, which is a second source of truth that will drift from the first.
     expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
@@ -857,6 +884,33 @@ class PartnerCapabilitySerializer(serializers.Serializer[dict[str, object]]):
 class PartnerCapabilityListSerializer(serializers.Serializer[dict[str, object]]):
     capabilities = PartnerCapabilitySerializer(many=True, read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
+
+
+class PartnerLanguageWriteSerializer(serializers.Serializer[dict[str, object]]):
+    #: The whole set, every time. An empty list is a valid answer meaning "I have not said", and it
+    #: is not the same as declaring English — matching excludes only on a declaration that
+    #: contradicts the requirement.
+    language_tags = serializers.ListField(
+        child=serializers.CharField(max_length=16),
+        allow_empty=True,
+    )
+
+
+class PartnerLanguageListSerializer(serializers.Serializer[dict[str, object]]):
+    language_tags = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+
+class CrewAvailabilityWriteSerializer(serializers.Serializer[dict[str, object]]):
+    date = serializers.DateField()
+    is_available = serializers.BooleanField()
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=200)
+
+
+class CrewAvailabilitySerializer(serializers.ModelSerializer[CrewAvailabilityException]):
+    class Meta:
+        model = CrewAvailabilityException
+        fields = ("id", "date", "is_available", "reason", "recorded_at")
+        read_only_fields = fields
 
 
 class PartnerInsuranceSerializer(serializers.ModelSerializer[PartnerInsuranceDeclaration]):

@@ -92,9 +92,16 @@ regenerated — and none of the sixteen new paths exists in the typed client unt
 | Surface | Wave | Consequence for the frontend |
 |---|---|---|
 | Attachment access expiry for non-selected vendors (`M2-BE-310`) | C1 remainder | Upload works; a declined vendor's link is not yet revoked, and no attachment reaches an enquiry. |
-| Unlock checkout and state, unlocked quotes, selection, rejection, re-validation | C2 (BE4) | Session A's Wave A2 has no domain layer to integrate against, let alone an endpoint. |
+| A3: unlock checkout and state, unlocked quotes. A5 (revision 3, ADR-0008): visit-plan chooser, slot hold/confirm, plan checkout, visit tracker, on-site estimate guard. Shared: selection, rejection, re-validation | C2 (BE4) | Session A's Wave A2 (`FE-216`, `FE-401..424`) and Session B's `FE-314`/`FE-315` have no domain layer to integrate against, let alone an endpoint. |
 | Engagement and stage spine | C3 | Wave 3 in both columns. |
 | Operations queues, cases, assisted capture | C6 | Wave 4 in both columns. |
+
+> **Revision 3 — visit-first A5 (2026-08-12).** The owner adopted ADR-0008: A5 becomes visit-first
+> (tiered visit plan charged at the first confirmed slot, on-site estimates, no second paywall); A3
+> is unchanged. Every affected task was renamed or added in `03-frontend-tasks.md` (`FE-216`,
+> `FE-314`, `FE-315`, `FE-419..424`) and `02-backend-tasks.md` (`BE-215`, `BE-419..428`) — nothing
+> already built or wired changes. Visit slots reuse `carts.availability` and the checkout
+> slot-picker pattern.
 
 **One caveat that applies to everything already published.** C0 shipped with **no tests**. Wave C1
 wrote them — five backend files covering object-level authorization on all 33 paths, the sweeps,
@@ -250,7 +257,7 @@ Commits stay rare either way — build the wave, commit at the wave gate, not pe
 |---|---|---|---|
 | **0** | — | — | **No.** Foundation session only. `M2-FE-001..011`. |
 | **1** | A1 · Requirement + tracking — `FE-201..215` | B1 · Registration + workspace — `FE-101..115` | Yes |
-| **2** | A2 · Teasers, unlock, selection, engagement — `FE-401..418` | B2 · Enquiries, clarification, proposals — `FE-301..313` | Yes |
+| **2** | A2 · Access (A3 teasers/unlock · A5 visits/estimates), selection, engagement — `FE-216`, `FE-401..424` | B2 · Enquiries, clarification, proposals — `FE-301..313`; revision 3 adds `FE-314`/`FE-315` once C2 publishes | Yes |
 | **3** | A3 · Customer fulfilment — `FE-509..512`, `FE-608..613` | B3 · Partner fulfilment — `FE-501..508`, `FE-601..607` | Yes |
 | **4** | A4 · Ops cases and money — `FE-706..711` | B4 · Ops queues and actions — `FE-701..705` | Yes, split by feature folder |
 | **5** | — | — | **No.** `FE-801, 805, 806, 809, 810, 811` + all gates. |
@@ -331,6 +338,8 @@ row — keep edits to one line so a merge stays trivial.
 | 2026-08-12 | A | `packages/query/src/m2-keys.ts` | `requirements.duplicates` should take `{addressId, requestedStart, variantId}`, not `{addressId, serviceBy, categorySlug}` | The published `GET /requirements/duplicate-check/` matches on `address_id`, `requested_start` (a date-*time*) and `variant_id`. The key's three slots are still the three inputs that decide the answer, so the cache is correct; only the labels are wrong. `features/requirement/queries.ts` passes the right values under the stale names with a comment. | |
 | 2026-08-12 | A | `e2e/support/responsive.ts` | `RouteUnderTest` needs an optional `setup(page)` hook | Every authenticated route has to install its API before `goto`, or the session gate redirects to `/login` and the readiness check passes against that page instead. Worked around with a `test.describe` + `beforeEach` wrapper, copied from `bookings.e2e.ts` — three specs now carry the same wrapper. | |
 | 2026-08-12 | B | `packages/api-client/src/errors.ts` | Add `m2_wage_floor_unavailable` (`fix_input`) | Contract 1.21.0 documents it on `POST /proposals/` — "no floor is loaded for the state and skill; this fails closed rather than guessing" — and it is not in the frozen 29, so it falls through to the generic refusal path instead of landing under the rate field beside `m2_proposal_below_wage_floor`. A vendor is told "we could not complete this" for something they can fix. | |
+| 2026-08-13 | C | `packages/api-client/src/errors.ts` | **Answering B's row above, and one correction.** `m2_wage_floor_unavailable` is live at 1.23.0 and is a **`409`, not a `400`** — the operation's description said `400` and the code has always raised `409`; the schema now agrees with the code. Suggested handling is `contact_support`, not `fix_input`: the vendor cannot fix it by editing the rate, because it means Operations has not mapped a wage floor for this variant or area. Also add `m2_capacity_unavailable` (`choose_again`) — new on `POST /partner/enquiries/{id}/accept/`. | |
+| 2026-08-13 | C | `packages/query/src/m2-requirement.ts` (Session A) and `apps/partner/features/enquiry/queries.ts` (Session B) | **The two compensating narrowings can be deleted.** `readRequirementList` and `readEnquiryPage` accept both a bare array and a page envelope because the contract declared the first and Django sent the second. At 1.23.0 both operations declare `RequirementSummaryPage` / `EnquirySummaryPage` — `{next, previous, results}` — so the generated type is now the truth. Do not delete before regenerating the client. | |
 
 ### Shared component promotion requests
 
@@ -478,14 +487,15 @@ Last reconciled against the codebase on **2026-08-12**.
 |---|---|---|---|
 | 0 | — | — | `[~]` built; gate turns on Product/owner approval, not engineering |
 | 1 | `[~]` 15/15 built **and wired** — 4 routes mounted, guard retired, `FE-211` built. Owner verification pending | `[~]` 14/15 built **and wired** — workspaces endpoint consumed, 7 routes mounted. `FE-105` open | `[ ]` |
-| 2 | `[ ]` — blocked on C2/BE4, which has no domain layer | `[~]` 13/13 built **and wired** — enquiry inbox, detail, accept/decline, clarification, site-visit request and both composers on 4 routes. Owner verification pending | `[ ]` |
+| 2 | `[ ]` — blocked on C2/BE4, which has no domain layer. Revision 3 rescopes A2 to `FE-216`, `FE-401..424` | `[~]` 13/13 built **and wired** — enquiry inbox, detail, accept/decline, clarification, site-visit request and both composers on 4 routes. Owner verification pending. Revision 3 adds `FE-314`/`FE-315`, blocked on C2 | `[ ]` |
 | 3 | `[ ]` blocked on C3 | `[ ]` blocked on C3 | `[ ]` |
 | 4 | `[ ]` blocked on C6 | `[ ]` blocked on C6 | `[ ]` |
 | 5 | — | — | `[ ]` |
 
 **Read the asymmetry in Wave 2.** Session B built `FE-301..313` against the published enquiry,
-clarification and proposal paths on 12 August. Session A cannot start `FE-401..418`, because the
-unlock and selection domain layer does not exist yet — that is Wave C2, not a missing serializer.
+clarification and proposal paths on 12 August. Session A cannot start `FE-216`/`FE-401..424`
+(revision 3 scope), because the unlock, visit-plan and selection domain layer does not exist yet —
+that is Wave C2, not a missing serializer.
 
 **Wave A1 wiring closed, 12 August 2026.** The Customer requirement flow is reachable: four routes
 under `app/(flow)/requests/`, `features/requirement/queries.ts` against the generated client,
@@ -495,6 +505,13 @@ read first are **no merge endpoint** (`M2-FE-210` asks for one and none exists) 
 question schemas** (`M2-FE-202` — the client renders one and the server validates against another,
 and a mismatch surfaces only when the Customer presses Send on screen 4). Session A's next task is
 `M2-FE-802..808`'s customer share, since Wave A2 remains blocked on C2.
+
+| 2026-08-13 | C | `M2-FE-301` / `M2-FE-213` | **Answered and corrected at 1.23.0.** Both `m2_requirement_list` and `m2_partner_enquiry_list` now declare a page envelope and publish a `cursor` query parameter, through `common.pagination.StrictCursorPagination` — the same mechanism `booking_group_list` uses. This was a schema correction: Django's response never changed, only what the contract claimed about it. The missing `cursor` was the second half of the same defect — a Partner with more than twenty enquiries had a silently truncated inbox. | n/a — published |
+| 2026-08-13 | C | `M2-FE-310` | **Answered at 1.23.0: the wage-floor guard fires.** `POST /proposals/` derives the state from `ServiceArea.state_code` and the skill from `M2VariantConfiguration.wage_floor_skill`, both new and both Operations-owned, and refuses with `409 m2_wage_floor_unavailable` when either is unmapped. **The composer must expect this refusal on a well-formed quote** — it is not a field error and the vendor cannot clear it by changing the rate; the honest copy is that we cannot check the minimum wage for this work yet and support can help. Nothing in the request body changed. | n/a — published |
+| 2026-08-13 | C | Partner enquiry detail | **New: `GET /api/v1/partner/enquiries/{id}/attachments/`** returns the Customer's checked files as signed links that expire in minutes, with `has_access: false` once the invitation is declined, expired or withdrawn and this vendor was not selected. Render the lapsed state explicitly — an empty list without the flag reads as "the Customer attached nothing". Do not cache the URLs. | n/a — published |
+| 2026-08-13 | C | `M2-FE-105` / capability views | **New: `POST /api/v1/partner/capabilities/{id}/submit/`** — the Partner's own submit and resubmit. This is the button `CHANGES_REQUIRED` never had: until now only Operations could move that row, so a Partner who fixed what was asked had no way to say so. Already `UNDER_REVIEW` returns `200` unchanged, so the control can be optimistic. | n/a — published |
+| 2026-08-13 | C | Partner registration | **New: `GET`/`PUT /api/v1/partner/languages/`** and `PUT /api/v1/partner/crew/{membership_id}/availability/`. Languages are an eligibility input, not profile decoration — but **declaring none is never a mismatch**, so the UI must not present the empty state as a problem to fix. Crew availability is exception-shaped: one dated statement per worker, default available. | n/a — published |
+| 2026-08-13 | C | `M2-FE-104` | `GET /partner/capability-options/` gains `registration_questions` (`M2-BE-106`) and `POST /partner/capabilities/` accepts `registration_answers` and `service_area_ids`. The questions come from the same versioned schema the server validates against, so **render them, never a hand-written copy** — a client-side question list is how the two drift and the mismatch surfaces on submit. An empty `service_area_ids` means every area the Partner works in; the field can only narrow. | n/a — published |
 
 **What Wave B2 found, and what the integrator should read first.** Twenty-three rows were added to
 the gap table above on 12 August. Three of them are not contract gaps but defects that a test would

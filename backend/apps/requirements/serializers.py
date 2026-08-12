@@ -240,6 +240,21 @@ class RequirementSummarySerializer(serializers.ModelSerializer[CustomerRequireme
         return closure_reason(obj)
 
 
+class RequirementSummaryPageSerializer(serializers.Serializer[dict[str, Any]]):
+    """The page envelope `My requests` has always been sent, now also declared.
+
+    Until 13 August the operation declared a bare array and the view returned this envelope, so a
+    client generated from the contract threw on its first real request and every consumer had to
+    hand-write a narrowing around the generated type. The shape is
+    `carts.serializers.BookingGroupPageSerializer`'s, because there is no reason for two page
+    envelopes in one API.
+    """
+
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = RequirementSummarySerializer(many=True)
+
+
 class DuplicateCheckQuerySerializer(serializers.Serializer[dict[str, Any]]):
     variant_id = serializers.UUIDField()
     address_id = serializers.UUIDField()
@@ -398,6 +413,50 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "created_at",
         )
         read_only_fields: tuple[str, ...] = fields
+
+
+class EnquirySummaryPageSerializer(serializers.Serializer[dict[str, Any]]):
+    """The Partner enquiry inbox's page envelope.
+
+    The same correction as `RequirementSummaryPageSerializer`, and it closes a second gap Session B
+    logged: no `cursor` parameter was published, so a Partner with more than twenty enquiries saw a
+    silently truncated inbox with no way to page past it.
+    """
+
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = EnquirySummarySerializer(many=True)
+
+
+class VendorAttachmentSerializer(serializers.Serializer[dict[str, Any]]):
+    """One of the Customer's checked files, as a short-lived signed link.
+
+    `download_url` is a bearer credential — anyone holding it holds the file — which is why it is
+    minted per read and expires in minutes rather than being stored anywhere.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    kind = serializers.CharField(read_only=True)
+    size_bytes = serializers.IntegerField(read_only=True)
+    #: For a voice note, the language it was spoken in — the field that decides whether this vendor
+    #: can act on it at all.
+    language = serializers.CharField(read_only=True, allow_blank=True)
+    download_url = serializers.URLField(read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+
+
+class VendorAttachmentListSerializer(serializers.Serializer[dict[str, Any]]):
+    """Attachments this vendor may see, and whether they still may.
+
+    `has_access` is `false` once the invitation was declined, expired or withdrawn and this vendor
+    was not selected. It is published as a state on a `200` rather than as an error because the
+    vendor is entitled to their own enquiry record either way, and because "there are no
+    photographs" and "you may no longer see the photographs" are different things to render.
+    """
+
+    has_access = serializers.BooleanField(read_only=True)
+    attachments = VendorAttachmentSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
 
 
 class EnquiryDetailSerializer(EnquirySummarySerializer):

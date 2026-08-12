@@ -41,6 +41,7 @@ from apps.locations.models import (
 )
 from apps.partners import capabilities
 from apps.partners.models import (
+    MinimumWageFloor,
     PartnerApplication,
     PartnerCapability,
     PartnerOnlineSession,
@@ -150,6 +151,29 @@ class M2World:
     operations_client: APIClient
 
 
+#: The wage-floor mapping every A3 fixture needs since `M2-BE-317` made the guard fail closed.
+#: `submit_proposal` now derives the state and the skill from the requirement instead of taking
+#: them from its caller, so a variant with no `wage_floor_skill` or an area with no `state_code`
+#: refuses every A3 quote with `m2_wage_floor_unavailable`. That is the intended behaviour; these
+#: fixtures supply the mapping so the tests exercise the rate check rather than the missing map.
+WAGE_FLOOR_STATE_CODE = "TG"
+WAGE_FLOOR_PAISE_PER_DAY = 50_000
+
+
+def wage_floor_skill() -> Skill:
+    skill, _created = Skill.objects.get_or_create(
+        code="wage-floor-helper",
+        defaults={"name": "Helper"},
+    )
+    MinimumWageFloor.objects.get_or_create(
+        state_code=WAGE_FLOOR_STATE_CODE,
+        skill=skill,
+        effective_from=timezone.localdate() - timedelta(days=365),
+        defaults={"floor_paise_per_day": WAGE_FLOOR_PAISE_PER_DAY},
+    )
+    return skill
+
+
 def _variant(
     *,
     code: str,
@@ -193,6 +217,7 @@ def _variant(
         first_quote_sla_hours=sla_hours,
         quote_delivery_sla_hours=None if sla_hours is None else sla_hours * 3,
         max_quotes=MAX_QUOTES,
+        wage_floor_skill=wage_floor_skill(),
     )
     ServiceAreaService.objects.create(service_area=area, variant=variant)
     return variant
@@ -274,7 +299,11 @@ def approve_capability(
 
 @pytest.fixture
 def world() -> M2World:
-    area = ServiceArea.objects.create(slug="kukatpally", name="Kukatpally")
+    area = ServiceArea.objects.create(
+        slug="kukatpally",
+        name="Kukatpally",
+        state_code=WAGE_FLOOR_STATE_CODE,
+    )
     for weekday in range(7):
         ServiceAreaOperatingWindow.objects.create(
             service_area=area,

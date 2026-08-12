@@ -4,6 +4,108 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.23.0 - M2 Wave C1 remainder: two schema corrections, a wage floor that can fire, and matching completeness
+
+**Two corrections to declared shapes, four new paths, and several additive fields. No path was
+removed and no operation changed its method or route.**
+
+### The two list operations now declare the envelope they always sent
+
+`m2_requirement_list` and `m2_partner_enquiry_list` declared `RequirementSummary[]` and
+`EnquirySummary[]` and returned a DRF cursor-page envelope. **A client generated from the contract
+threw on its first real request**, which is why both frontend columns carry hand-written narrowing
+(`packages/query/src/m2-requirement.ts › readRequirementList`,
+`apps/partner/features/enquiry/queries.ts › readEnquiryPage`). They now declare
+`RequirementSummaryPage` and `EnquirySummaryPage` — `next`/`previous`/`results`, the shape
+`BookingGroupPage` already established — so **the declared type finally matches what Django has
+always put on the wire**. Those two compensating narrowings can be deleted.
+
+Both also publish the `cursor` query parameter and refuse a malformed one with `cursor_invalid`,
+through `common.pagination.StrictCursorPagination`. That closes a second gap: no cursor parameter
+was published at all, so **a Partner with more than twenty enquiries saw a silently truncated inbox
+with no way to page past it**.
+
+### `POST /proposals/` can now return the refusal it documents
+
+`m2_proposal_below_wage_floor` was documented and unreachable. The guard only ran when the caller
+handed it a skill and a state code, and no HTTP caller did — **a below-floor A3 rate was accepted**.
+
+Both inputs are now **derived from the requirement and never accepted from the caller**, so a vendor
+cannot pick the classification with the lowest floor:
+
+| Input | Source | Unmapped behaviour |
+|---|---|---|
+| Skill | `M2VariantConfiguration.wage_floor_skill` (new, nullable) | `409 m2_wage_floor_unavailable` |
+| State | `ServiceArea.state_code` (new, blank) | `409 m2_wage_floor_unavailable` |
+
+**This fails closed, and that is a live behaviour change**: until Operations maps a wage-floor skill
+on the variant, sets a state code on the service area, and loads a `MinimumWageFloor` row for that
+pair, every A3 quote is refused. Skipping the check silently is the defect being closed. A5
+estimates are unaffected — an outcome price has no statutory daily floor.
+
+`m2_wage_floor_unavailable` was previously documented under `400` on this operation; it has always
+been a `409` in code, and the schema now says so.
+
+### Accepting an enquiry consults the A1 booking grid
+
+`m2_partner_enquiry_accept` gains `m2_capacity_unavailable` on its `409`. M2's own `CapacityHold`
+and the M1 `assignments.Reservation` grid are two records of the same fact, and only the first was
+read: **an agency could hold a Saturday A1 visit and accept a Saturday workforce enquiry**, with
+neither record aware of the other. Both are now checked, at wave time and again at acceptance.
+
+Acceptance and proposal submission also now pass the requirement's service area — and, for
+acceptance, its start date — to `assert_capability_active`, so coverage and the vendor's own
+published calendar are checked at the moment a slot is taken rather than only when the wave was
+built.
+
+### New paths
+
+| Path | What it is |
+|---|---|
+| `POST /partner/capabilities/{id}/submit/` | The Partner's own submit and resubmit (`M2-BE-110`). `CHANGES_REQUIRED → UNDER_REVIEW` had no route, so a Partner who fixed exactly what was asked had no way to say so. Idempotent: already `UNDER_REVIEW` returns `200` unchanged. |
+| `GET` / `PUT /partner/languages/` | The languages a vendor can work in (`M2-BE-301`). Matching excludes on a declaration that contradicts the requirement's language; **declaring nothing is never a mismatch**, so no existing Partner is dropped from a pool for never filling this in. |
+| `PUT /partner/crew/{membership_id}/availability/` | A dated "this worker is off on the 14th". Exception-shaped, because the default for a day labourer is available and a weekly grid would demand a calendar nobody maintains. |
+| `GET /partner/enquiries/{id}/attachments/` | The Customer's checked site photographs as short-lived signed links (`M2-BE-310`). |
+
+### Attachment access expires with the invitation, and the snapshot does not copy attachments
+
+`M2-BE-310`'s coupled decision, settled: **`RequirementSnapshot` freezes the answers and never the
+attachments.** Access is resolved live from the invitation's state, so a vendor sees the
+requirement's currently-`VERIFIED` files — a photograph that finished its malware scan after they
+were invited becomes visible, and one that came back `INFECTED` never does. Freezing the list would
+have shown a vendor a `PENDING` file that later turned out to be malware, or hidden a clean file
+from the only person who needed it. Attachments cannot be added after `DRAFT` anyway, so the live
+list can only gain scan verdicts on files the frozen answers already described.
+
+Access holds while the invitation holds a quote slot and ends when it is declined, expired or
+withdrawn; only the selected vendor keeps it. **Expiry is `has_access: false` on a `200`, not an
+error** — the vendor still owns their enquiry record, and an empty list without that flag would read
+as "the Customer attached nothing". No signed link is minted once access lapses, because a signed URL
+is a bearer credential and hiding a button is not revocation.
+
+### Additive fields
+
+- `CapabilityOption.registration_questions` — the vendor-facing questions for a variant
+  (`M2-BE-106`), from the **same versioned `M2VariantConfiguration`** the Customer's answers are
+  validated against rather than a second question subsystem. Empty is the ordinary state.
+- `CapabilityRequest.service_area_ids` and `.registration_answers`; `PartnerCapability.service_area_ids`
+  and `.registration_answers`. An empty area set means "every area this Partner serves"; a non-empty
+  one is an Operations narrowing and can only subtract from `PartnerServiceArea`, never add.
+- `m2_partner_capability_request` gains `m2_business_type_invalid` on `400` for a failed registration
+  answer set or an area the Partner does not serve.
+
+### Ranking is no longer a stable sort on Partner id
+
+`M2-BE-303`. Invitations are ordered on recorded signals: a vendor this Customer has engaged before,
+then a coarse 5 km distance band, then least-recent invitation, then Partner id as the tie-break.
+`MATCHING_POLICY_VERSION` is `2`, and the per-candidate signals are written into
+`VendorInvitation.ranking_provenance` — which is **not published on any read**, because a vendor
+must not learn their own ranking inputs. A Partner with no fresh location fix is scored at the
+pool's *median* band, not last: sorting unknowns to the back would hand every enquiry to whoever
+happens to run the technician app.
+
+Two new exclusion reasons appear in provenance: `calendar_unavailable` and `travel_not_feasible`.
+
 ## 1.22.0 - M2 Wave C1: attachments, site visits, and the Partner registration surface
 
 **Additive. 16 new paths, no existing operation changed. One new status value on an existing enum.**

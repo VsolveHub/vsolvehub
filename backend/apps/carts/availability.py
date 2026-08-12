@@ -133,13 +133,7 @@ class AvailabilitySnapshot:
         partner = self._partners.get(partner_id)
         if partner is None:
             return None
-        location: PartnerLocation | None = getattr(partner, "latest_location", None)
-        if location is None:
-            return None
-        age = timezone.now() - location.captured_at
-        if age < timedelta(0) or age > timedelta(seconds=settings.PARTNER_LOCATION_STALE_SECONDS):
-            return None
-        return location
+        return usable_location_fix(getattr(partner, "latest_location", None))
 
     def _is_reserved(self, partner_id: UUID, *, starts_at: datetime, duration_minutes: int) -> bool:
         occupied_end = starts_at + timedelta(minutes=duration_minutes + _turnaround_minutes())
@@ -161,6 +155,87 @@ class AvailabilitySnapshot:
             starts_at=starts_at,
             duration_minutes=duration_minutes,
         )
+
+
+def usable_location_fix(location: PartnerLocation | None) -> PartnerLocation | None:
+    """One staleness rule for every caller that reasons about where a Partner is.
+
+    Extracted from `AvailabilitySnapshot.location_fix` when M2 matching needed the same judgement
+    without a whole grid snapshot. A second copy of "how old is too old" would drift from this one
+    the first time `PARTNER_LOCATION_STALE_SECONDS` moved.
+    """
+
+    if location is None:
+        return None
+    age = timezone.now() - location.captured_at
+    if age < timedelta(0) or age > timedelta(seconds=settings.PARTNER_LOCATION_STALE_SECONDS):
+        return None
+    return location
+
+
+def earliest_reachable_by_partner_ids(
+    *,
+    partner_ids: Collection[UUID],
+    destination: Address | None,
+    now: datetime,
+) -> dict[UUID, datetime]:
+    """`earliest_reachable` for a bare set of Partner ids, without building a grid snapshot.
+
+    The same commit window and the same travel estimate as `earliest_reachable`, resolved in one
+    query. M2 matching asks a narrower question than the A1 grid does — "could this vendor plausibly
+    be on site on the requested day at all" — and loading a whole availability snapshot to answer it
+    would drag in rules, exceptions and reservations that the day-level question never reads.
+    """
+
+    if not partner_ids:
+        return {}
+    commit = timedelta(minutes=settings.M1_COMMIT_WINDOW_MINUTES)
+    fallback = now + commit + timedelta(minutes=settings.M1_DEFAULT_TRAVEL_MINUTES)
+    if destination is None:
+        return dict.fromkeys(partner_ids, fallback)
+
+    target = (destination.latitude, destination.longitude)
+    fixes = {
+        location.partner_id: location
+        for location in PartnerLocation.objects.filter(partner_id__in=list(partner_ids))
+    }
+    reachable: dict[UUID, datetime] = {}
+    for partner_id in partner_ids:
+        fix = usable_location_fix(fixes.get(partner_id))
+        reachable[partner_id] = (
+            fallback
+            if fix is None
+            else now + commit + timedelta(minutes=_travel_minutes(fix, target))
+        )
+    return reachable
+
+
+def reserved_partner_ids(
+    *,
+    partner_ids: Collection[UUID],
+    starts_at: datetime,
+    ends_at: datetime,
+) -> frozenset[UUID]:
+    """Which of `partner_ids` already hold a live reservation overlapping one range.
+
+    The public form of the rule `_reserved_by_partner` applies inside the grid, exported because M2
+    capacity holds must agree with it. Before this, an A1 booking and an M2 soft hold could sit on
+    the same Partner on the same day: two different notions of "busy" that never consulted each
+    other. `TENTATIVE` and `CONFIRMED` only, matching the statuses the database's exclusion
+    constraint treats as live — a `RELEASED` row is history.
+    """
+
+    if not partner_ids:
+        return frozenset()
+    return frozenset(
+        Reservation.objects.filter(
+            partner_id__in=list(partner_ids),
+            status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+            occupied_range__overlap=Range(starts_at, ends_at, "[)"),
+        )
+        .values_list("partner_id", flat=True)
+        .distinct()
+    )
 
 
 def schedule_covers(

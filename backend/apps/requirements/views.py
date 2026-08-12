@@ -19,7 +19,6 @@ from django.utils import timezone
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
-from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -65,6 +64,7 @@ from apps.requirements.serializers import (
     DuplicateCheckQuerySerializer,
     EnquiryDeclineSerializer,
     EnquiryDetailSerializer,
+    EnquirySummaryPageSerializer,
     EnquirySummarySerializer,
     ProbableDuplicateListSerializer,
     ProposalCreateSerializer,
@@ -78,6 +78,7 @@ from apps.requirements.serializers import (
     RequirementQuestionSerializer,
     RequirementSubmitSerializer,
     RequirementSubmittedSerializer,
+    RequirementSummaryPageSerializer,
     RequirementSummarySerializer,
     RequirementTimelineSerializer,
     RequirementUpdateSerializer,
@@ -85,9 +86,15 @@ from apps.requirements.serializers import (
     SiteVisitRequestSerializer,
     SiteVisitScheduleSerializer,
     SiteVisitSerializer,
+    VendorAttachmentListSerializer,
     WorkspaceGrantListSerializer,
 )
 from common.errors.serializers import ApiErrorSerializer
+from common.pagination import (
+    BoundedCursorQuerySerializer,
+    StrictCursorPagination,
+    reject_invalid_cursor_query,
+)
 from common.schema import IDEMPOTENCY_KEY_HEADER
 
 DomainError = RequirementDomainError | PartnerDomainError
@@ -147,7 +154,7 @@ def _partner_profile(request: Request) -> Any:
 # ---------------------------------------------------------------------------
 
 
-class RequirementCursorPagination(CursorPagination):
+class RequirementCursorPagination(StrictCursorPagination):
     page_size = 20
     ordering = ("-created_at", "id")
 
@@ -158,9 +165,15 @@ class RequirementCollectionView(APIView):
     @extend_schema(
         tags=["M2 - Requirements"],
         operation_id="m2_requirement_list",
-        responses={200: RequirementSummarySerializer(many=True), 403: ApiErrorSerializer},
+        parameters=[BoundedCursorQuerySerializer],
+        responses={
+            200: RequirementSummaryPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
     )
     def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
         queryset = customer_requirements(cast(User, request.user))
         paginator = RequirementCursorPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
@@ -693,7 +706,7 @@ class RequirementQuestionAnswerView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class EnquiryCursorPagination(CursorPagination):
+class EnquiryCursorPagination(StrictCursorPagination):
     page_size = 20
     ordering = ("-created_at", "id")
 
@@ -704,9 +717,15 @@ class PartnerEnquiryCollectionView(APIView):
     @extend_schema(
         tags=["M2 - Partner enquiries"],
         operation_id="m2_partner_enquiry_list",
-        responses={200: EnquirySummarySerializer(many=True), 403: ApiErrorSerializer},
+        parameters=[BoundedCursorQuerySerializer],
+        responses={
+            200: EnquirySummaryPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
     )
     def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
         try:
             profile = _partner_profile(request)
         except RequirementDomainError as exc:
@@ -755,8 +774,11 @@ class PartnerEnquiryAcceptView(APIView):
             404: ApiErrorSerializer,
             409: OpenApiResponse(
                 response=ApiErrorSerializer,
-                description="`m2_invitation_expired`, `m2_invitation_slots_exhausted` or "
-                "`m2_proposal_slot_conflict` when a linked account already holds a slot.",
+                description="`m2_invitation_expired`, `m2_invitation_slots_exhausted`, "
+                "`m2_proposal_slot_conflict` when a linked account already holds a slot, or "
+                "`m2_capacity_unavailable` when the vendor already has work booked on these "
+                "dates — either another M2 enquiry they accepted or an A1 booking on the shared "
+                "availability grid.",
             ),
         },
     )
@@ -770,7 +792,21 @@ class PartnerEnquiryAcceptView(APIView):
             # Partner browses masked demand freely; proving who they are is the price of taking
             # a slot away from another vendor, not the price of looking.
             assert_kyc_complete(profile)
-            assert_capability_active(partner=profile, variant=invitation.requirement.variant)
+            requirement = invitation.requirement
+            assert_capability_active(
+                partner=profile,
+                variant=requirement.variant,
+                # Coverage and calendar are checked here, at the moment a slot is taken, rather
+                # than only when the wave was built. A vendor's areas and days off move between
+                # the two, and the invitation is the point where a stale answer costs a Customer
+                # a quote slot.
+                service_area=requirement.service_area,
+                on_day=(
+                    requirement.requested_start.date()
+                    if requirement.requested_start is not None
+                    else None
+                ),
+            )
         except (RequirementDomainError, PartnerDomainError) as exc:
             _raise_api_error(exc)
 
@@ -880,6 +916,64 @@ class PartnerEnquiryQuestionView(APIView):
         return Response(
             RequirementQuestionSerializer(question).data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class PartnerEnquiryAttachmentListView(APIView):
+    """The Customer's site photographs, for one vendor, while they are still entitled to them."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Partner enquiries"],
+        operation_id="m2_partner_enquiry_attachment_list",
+        description=(
+            "Short-lived signed links to the requirement's **checked** attachments. Access lasts "
+            "as long as the invitation holds a quote slot, and ends when it is declined, expired "
+            "or withdrawn — only the selected vendor keeps it. Expiry is reported as "
+            "`has_access: false` on a `200`, not as an error: the vendor still owns their enquiry "
+            "record, and an empty list without that flag would read as 'the Customer attached "
+            "nothing'. No link is minted once access has lapsed, because a signed URL is a bearer "
+            "credential and hiding a button is not revocation."
+        ),
+        responses={
+            200: VendorAttachmentListSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            503: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_attachment_unavailable` when the storage adapter is down.",
+            ),
+        },
+    )
+    def get(self, request: Request, invitation_id: uuid.UUID) -> Response:
+        try:
+            invitation = invitation_for_partner(
+                partner=_partner_profile(request),
+                invitation_id=invitation_id,
+            )
+            access = attachments.vendor_attachments(invitation=invitation)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        return Response(
+            VendorAttachmentListSerializer(
+                {
+                    "has_access": access.has_access,
+                    "attachments": [
+                        {
+                            "id": granted.attachment.id,
+                            "kind": granted.attachment.kind,
+                            "size_bytes": granted.attachment.size_bytes,
+                            "language": granted.attachment.transcript_language,
+                            "download_url": granted.download_url,
+                            "expires_at": granted.expires_at,
+                        }
+                        for granted in access.attachments
+                    ],
+                    "server_now": timezone.now(),
+                }
+            ).data
         )
 
 
@@ -1081,12 +1175,21 @@ class PartnerProposalCollectionView(APIView):
                 response=ApiErrorSerializer,
                 description="`m2_proposal_invalid_shape` when the quote does not match the "
                 "requirement's lifecycle or the stage totals do not reconcile; "
-                "`m2_proposal_below_wage_floor`; `m2_wage_floor_unavailable` when no floor is "
-                "loaded for the state and skill — this fails closed rather than guessing.",
+                "`m2_proposal_below_wage_floor` when an A3 daily rate is under the statutory "
+                "floor for the requirement's own state and skill. **Neither the state nor the "
+                "skill is accepted from the caller** — both are derived from the requirement, so "
+                "a vendor cannot influence the floor they are measured against.",
             ),
             403: ApiErrorSerializer,
             404: ApiErrorSerializer,
-            409: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_wage_floor_unavailable` when Operations has not mapped this "
+                "variant to a wage-floor skill, has not set a state code on the service area, or "
+                "has loaded no floor for that pair. This **fails closed** — an A3 quote is refused "
+                "rather than accepted unchecked, because brokering labour below the statutory "
+                "minimum is a violation the platform carries, not only the vendor.",
+            ),
         },
     )
     def post(self, request: Request) -> Response:
@@ -1100,7 +1203,12 @@ class PartnerProposalCollectionView(APIView):
         try:
             profile = _partner_profile(request)
             invitation = invitation_for_partner(partner=profile, invitation_id=invitation_id)
-            assert_capability_active(partner=profile, variant=invitation.requirement.variant)
+            requirement = invitation.requirement
+            assert_capability_active(
+                partner=profile,
+                variant=requirement.variant,
+                service_area=requirement.service_area,
+            )
         except (RequirementDomainError, PartnerDomainError) as exc:
             _raise_api_error(exc)
 
@@ -1266,6 +1374,7 @@ class PartnerDemandPreviewView(APIView):
 __all__ = [
     "PartnerDemandPreviewView",
     "PartnerEnquiryAcceptView",
+    "PartnerEnquiryAttachmentListView",
     "PartnerEnquiryCollectionView",
     "PartnerEnquiryDeclineView",
     "PartnerEnquiryDetailView",

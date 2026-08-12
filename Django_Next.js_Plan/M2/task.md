@@ -1,8 +1,9 @@
 # M2 Master Task Board
 
 **Scope:** Workforce and project services (`A3_TIME_BLOCK` and `A5_CUSTOM_PROJECT`)
-**Status:** P1–P3 domain layers built and verified (91 tests). **Contract 1.22.0 publishes 33 M2
-paths** — 17 from Wave C0, 16 from Wave C1 — and the four background sweeps are now on Celery beat.
+**Status:** P1–P3 domain layers built and verified (91 tests). **Contract 1.23.0 publishes 37 M2
+paths** — 17 from Wave C0, 16 from Wave C1, 4 from the C1 remainder — and the four background sweeps
+are now on Celery beat.
 HTTP tests **exist for every path and have not been run**, so no phase has passed its gate. Frontend: FE0 foundation built;
 Customer Wave A1 built, wired and mounted on 4 routes; Partner Wave B1 built, wired to the live
 workspaces endpoint and mounted on 7 routes, and Wave B2 built and mounted on 4 more.
@@ -14,10 +15,27 @@ Operations/admin: nothing started.
 This is the authoritative M2 implementation status board. The backend and frontend task files contain
 the detailed work. Update this file in the same change that completes a phase or changes its status.
 
+## Revision 3 summary — visit-first A5 (owner decision, 2026-08-12)
+
+Recorded in [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md). A3 is untouched.
+Everything in this table lands in the **unbuilt** P4 surface, so it is documentation change, not
+rework:
+
+| Changed | From (revision 2) | To (revision 3) |
+|---|---|---|
+| A5 front door | Remote quotes → teasers → INR 149 unlock | **Visit plan**: 1/2/3 vendors at proposed INR 49/99/199, charged only at the first confirmed visit slot |
+| A5 quoting | Vendor quotes remotely from the snapshot | Vendor estimates **on site** through the existing A5 composer (price, working days, materials); estimate requires a completed visit |
+| A5 quote access | Paywalled behind the unlock | Fully readable; the visit plan is the access fee, no second paywall |
+| A5 visit scheduling | Ad-hoc paid site visit, no slot engine | Slots booked on the M1 grid (`carts.availability` + the checkout slot-picker pattern) |
+| A5 unfilled promise | n/a | Per-slot share auto-refunds at the visit SLA |
+| A5 visit money (updated 2026-08-13) | n/a | Each consumed slot share splits: **vendor visit payout** (paid on completed visit + usable estimate, via M1 payout rails) + **Vsolve platform share**. Undelivered slots refund the Customer. No stage credit — stages fund at face value. |
+| Requirement states | One middle path (`QUOTES_READY → UNLOCKED`) | Archetype-split middle: A3 unchanged; A5 `MATCHING → VISITS_BOOKED → QUOTES_READY → SELECTED` |
+| New aggregate | — | `VisitPlan` (plan size, price, charge state, per-slot shares); `QuoteUnlock` scoped to A3 |
+
 ## Revision 2 summary
 
 The plan was simplified after audit. Anything below that contradicts an older copy of the M2
-documents is the current truth:
+documents is the current truth **except where the revision 3 table above supersedes it for A5**:
 
 | Changed | From | To |
 |---|---|---|
@@ -67,6 +85,21 @@ Rows in the verification table at the bottom of this file that record runs which
 (2026-08-10 and 2026-08-11) stay exactly as written. This convention governs claims made from
 12 August onward.
 
+### Build-first amendment — owner-directed, effective 13 August 2026
+
+**For the M2 build sprint, tests are neither run nor written.** The owner's direction: build the
+whole product first, get both apps running with the UI visible, then the owner tests manually; test
+authoring resumes only after that manual pass, and running them stays owner-only as above.
+
+| | Rule during the build sprint |
+|---|---|
+| **Sessions must not run** | Any test, unchanged from above. |
+| **Sessions do not write** | Test files. Skipped test coverage is recorded per wave as one line ("tests deferred per build-first amendment") — not as individual debt rows. |
+| **Still mandatory** | Every static gate: `ruff format --check`, `ruff check`, strict `mypy`, `makemigrations --check`, `spectacular --validate`, `manage.py check`, `pnpm lint --max-warnings 0`, `pnpm typecheck`, `pnpm build`. A wave is not reportable with a red static gate. |
+| **How to mark work** | `[~] built — static gates green, owner manual verification pending`. |
+| **What replaces tests as the wave gate** | The static gates plus a written smoke script per wave: the exact clicks/requests the owner performs to see the feature work. |
+| **When this amendment ends** | After the owner's manual UI pass across both apps, the 12 August convention resumes and the deferred test debt is worked off before M2 acceptance. The completion standards in `02`/`03` still require tests for `[x]` — nothing reaches `[x]` during the sprint. |
+
 ## Payment activation boundary
 
 `milestones.md` excludes payments and OTP from commercial M2 and activates them in M3. Money and
@@ -95,7 +128,7 @@ P0 Scope and contract alignment
   -> P1 Partner registration and capability foundation
   -> P2 Customer requirement (free) and matching entry
   -> P3 Vendor matching, clarification and proposals
-  -> P4 Quote unlock, selection, reconfirmation and engagement
+  -> P4 Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement
   -> P5 Engagement spine and stage fulfilment
   -> P5A Workforce stages (A3)
   -> P5B Project stages (A5)
@@ -131,11 +164,15 @@ standing one up is M1 platform work serving every column rather than an M2 deliv
 `M2-BE-013` at `[~]` is the verification convention itself: the tests are written and **the owner has
 not run them**, and a session may never self-promote on test grounds.
 
+**Wave C1 remainder added 4 paths on 13 August at contract 1.23.0** and corrected two declared
+shapes. Attachment access expiry (`M2-BE-310`) is published; the wage-floor defect (`M2-BE-317`) is
+closed — `POST /proposals/` can now return `m2_proposal_below_wage_floor`, and refuses with
+`m2_wage_floor_unavailable` rather than skipping when Operations has not mapped the variant or the
+area. Both list operations now declare the page envelope they always returned. Details in
+[backend-session.md](backend-session.md) §"C1 remainder outcome".
+
 Still unpublished, and named so nobody builds against them by mistake: the whole unlock/selection path
-(BE4 — no domain layer to wrap), attachment access expiry for a non-selected vendor (`M2-BE-310`), and
-the engagement spine (C3). One live defect is worth naming beside them: `POST /proposals/` documents
-`m2_proposal_below_wage_floor` and **cannot currently return it** (`M2-BE-317`), so a below-floor A3
-rate is accepted today.
+(BE4 — no domain layer to wrap) and the engagement spine (C3).
 
 ## Session map — three columns
 
@@ -179,25 +216,43 @@ Engineering design — done:
   `03-frontend-tasks.md` under `M2-FE-006` — proposal 0012 was written twice on 2026-08-10 and the
   earlier version was overwritten unrecoverably.
 
+Owner decisions:
+
+- [x] Approve the commercial model **shape**. **Decided 2026-08-12** (ADR-0008): free requirement for
+  both archetypes; A3 keeps the INR 149 unlock after a usable quote exists; A5 is visit-first with a
+  tiered visit plan charged only at the first confirmed visit slot, estimates readable in full.
+- [x] Approve one commercial mode per archetype (A3 lead-only, A5 managed) and reject per-variant
+  modes. Reaffirmed by ADR-0008.
+
 Owner decisions — **blocking, not started**:
 
-- [ ] Approve the revised commercial model: free requirement, INR 149 unlock after a usable quote exists.
-- [ ] Approve the quote-delivery SLA and vendor reconfirmation deadlines per category.
-- [ ] Approve one commercial mode per archetype (A3 lead-only, A5 managed) and reject per-variant modes.
-- [ ] Approve the definition of a usable quote, the out-of-budget rule and the non-responsive rejection cap.
+- [ ] Approve the final A5 visit-plan tier prices (proposed INR 49/99/199) and the exact per-slot
+  split percentages: vendor visit payout versus Vsolve platform share. (The split **shape** is
+  decided 2026-08-13: pass-through to the visiting vendor on completed visit + usable estimate; no
+  stage credit.)
+- [ ] Approve the quote-delivery SLA (A3), the visit-delivery SLA and post-visit estimate window
+  (A5), and vendor reconfirmation deadlines per category.
+- [ ] Approve the customer no-show policy for a confirmed visit: the vendor payout pays; decide the
+  platform-share disposition.
+- [ ] Approve the definition of a usable quote/estimate, the out-of-budget rule and the
+  non-responsive rejection cap.
 - [ ] Approve commission visibility on A5 proposals and the single tax basis for competing quotes.
-- [ ] Approve GST, invoicing and principal-versus-agent treatment per mode, including the unlock fee.
+- [ ] Approve GST, invoicing and principal-versus-agent treatment per mode, including the unlock fee
+  and the visit-plan fee.
 - [ ] Approve the worker insurance, injury liability and safety-incident position.
 - [ ] Approve the minimum-wage floor source and enforcement per state and skill.
 - [ ] Resolve the wallet contradiction between this plan and `milestones.md` M3.
 - [ ] Confirm the M2/M3 milestone boundary given that `milestones.md` excludes payments and OTP from M2.
-- [ ] Approve the unit economics model: Operations touches per request against INR 149.
-- [ ] Freeze which launch categories are A3 and which are A5.
+- [ ] Approve the unit economics model: Operations touches per request against INR 149 (A3) and per
+  visit against the plan tiers (A5).
+- [ ] Freeze which launch categories are A3 and which are A5, confirming per A5 category that a
+  physical visit is the right consult shape.
 - [ ] Approve contact disclosure, cancellation, dispute, payout, tax and compliance policies.
 - [ ] Approve the M2 OpenAPI proposal and publish the first validated contract.
 
-**Exit gate:** Decisions have owners and dates; no unresolved policy is hidden in code or UI. The ten
-blocking decisions in `README.md` are all resolved. **Gate not passed** — design half only.
+**Exit gate:** Decisions have owners and dates; no unresolved policy is hidden in code or UI. The
+blocking decisions in `README.md` are all resolved. **Gate not passed** — the model shape is decided
+(ADR-0008); its values and the remaining policy decisions are open.
 
 ### P1 - Partner registration and capability foundation
 
@@ -207,11 +262,16 @@ of the registration surface is proposal 0013 and unpublished. Frontend Wave B1 b
 7 workspace routes mounted; the `capability/` and `crew/` registration views remain route-less.
 
 - [~] Backend partner business, crew, skill, service-area and availability records are production-ready.
-  Business profile, crew and capability models built. Service-area scoping on the capability and crew
-  availability are not.
+  Business profile, crew and capability models built. **Service-area scoping on the capability and
+  crew availability landed 13 August** — `PartnerCapability.service_areas` (empty means every area
+  the Partner serves; it can only subtract from `PartnerServiceArea`) and `CrewAvailabilityException`
+  (dated, per membership, upserted). `[~] built — static gates green, owner manual verification
+  pending`.
 - [~] Backend capability review and lifecycle eligibility rules are enforced server-side.
-  `transition_capability` and `assert_capability_active` implemented; the guard does not yet check
-  availability, service area or insurance.
+  `transition_capability` and `assert_capability_active` implemented; since 13 August the guard also
+  checks **service area and the Partner's published calendar** when the caller supplies them, which
+  the enquiry-accept and proposal-submit paths now do. **Insurance is still not checked** — owner
+  decision 6. `[~] built — static gates green, owner manual verification pending`.
 - [~] Progressive registration works: browse masked demand before KYC; KYC before first enquiry accept;
   payout details before first payout; crew roster before first crew assignment.
   All three gates implemented as domain guards. No HTTP surface, so browse-before-KYC is unproven.
@@ -265,6 +325,9 @@ path that is live.
   Detection and an explicit override built. **Merge not built.**
 - [ ] Customer can create, review, edit and submit a four-screen requirement on mobile and desktop.
   Frontend not started.
+- [ ] An A5 requirement carries a chosen visit plan from the review screen (`choose_visit_plan`,
+  charges nothing, bounds the wave); an A3 requirement never renders the chooser. **Revision 3 — not
+  started.**
 - [~] Voice capture is a first-class fast path with language recorded for routing.
   Language and transcript fields carried. **No transcription adapter, no capture UI.**
 - [~] Requirement submission emits matching work with no payment precondition.
@@ -282,14 +345,23 @@ Enquiry, proposal, clarification and teaser paths published at 1.21.0 with **no 
 Session B Wave B2 (`FE-301..313`) is not started.
 
 - [~] Eligible vendors are ranked, invited and slot-reserved without duplicate or excessive exposure.
-  Waves bounded by size and free slots; one account per beneficial owner. **No business ranking
-  signals** — ordering is a stable sort, as A1 does.
+  Waves bounded by size and free slots; one account per beneficial owner. **Real ranking signals
+  landed 13 August** — prior relationship with this Customer, a coarse 5 km distance band,
+  least-recent invitation, then Partner id as the stable tie-break; `MATCHING_POLICY_VERSION` is 2
+  and the per-candidate signals are recorded on the invitation but published on no read. A Partner
+  with no fresh location fix is scored at the pool's median band, never last.
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] Eligibility includes travel feasibility for the date, language and recent responsiveness.
-  Responsiveness done (21-day presence window). **Travel feasibility and language are not built** —
-  vendor language is not captured in P1.
+  Responsiveness done (21-day presence window). **Travel feasibility and language landed 13 August**
+  — vendor language is captured as `PartnerLanguage` with `GET`/`PUT /partner/languages/` and
+  compared on the primary subtag; a vendor who declared nothing is never excluded, because absence of
+  a declaration is not a mismatch. Travel feasibility reuses the M1 commit window and travel estimate
+  against the requested start. `[~] built — static gates green, owner manual verification pending`.
 - [~] Accepting an invitation takes a soft capacity hold for the requested dates.
-  Done, and fed back into eligibility. **Does not yet consult `carts.availability`**, so an A1 booking
-  and an M2 hold can overlap. Hard hold at selection is P4.
+  Done, and fed back into eligibility. **It consults `carts.availability` since 13 August** — both at
+  wave time and again at acceptance, where it raises `m2_capacity_unavailable`, so an A1 booking and
+  an M2 hold can no longer overlap on the same day. Hard hold at selection is still P4.
+  `[~] built — static gates green, owner manual verification pending`.
 - [x] An immutable `RequirementSnapshot` is written at each invitation.
   Content-hashed; vendors seeing unchanged content share one row.
 - [x] Deadlines are computed in business hours against a holiday calendar.
@@ -302,35 +374,70 @@ Session B Wave B2 (`FE-301..313`) is not started.
 - [x] Vendors submit append-only proposals; A3 uses the one-screen composer and A5 the full composer.
   Supersession preserves the original offer; A3 and A5 shapes validated separately.
 - [~] A3 rates are validated against the applicable minimum-wage floor.
-  Guard works, but state and skill are caller-supplied rather than derived from the requirement.
+  **Closed 13 August.** State and skill are derived from the requirement — `ServiceArea.state_code`
+  and `M2VariantConfiguration.wage_floor_skill`, both Operations-owned — and never accepted from the
+  vendor. Unmapped either way refuses with `m2_wage_floor_unavailable`, so the guard **fails closed
+  and blocks A3 quoting** until Operations loads the mapping and a floor (owner decision 7).
+  `[~] built — static gates green, owner manual verification pending`.
 - [x] Competing proposals for one requirement use a single tax basis and display commission treatment.
 - [x] Identity clustering prevents one beneficial owner filling more than one slot.
 - [ ] Price-band outliers raise a review signal without automatic penalty.
   Not started: needs a reference price per variant.
-- [ ] Attachment access expires with the invitation for non-selected vendors.
-  Not started: depends on the attachment upload command.
+- [~] Attachment access expires with the invitation for non-selected vendors.
+  Built 13 August: `GET /partner/enquiries/{id}/attachments/` mints short-lived signed links only
+  while the invitation holds a quote slot, and reports lapsed access as `has_access: false` on a
+  `200` rather than an error. **`RequirementSnapshot` deliberately does not copy attachments** — a
+  frozen copy would be a second grant that outlives the invitation it came from, and resolving live
+  is also what decides what a vendor sees when a file is scanned after their invitation.
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] Contact disclosure and clarification events are consented, limited and auditable.
   Contact-sharing heuristic flags for review without auto-banning. **Disclosure itself is not built.**
 
 **Exit gate:** Usable quotes are delivered inside the declared SLA or the documented replacement and
-closure path executes automatically. Nothing has been charged. **Gate not passed** — the
-"nothing charged" half holds; automatic replacement does not exist.
+closure path executes automatically. Nothing has been charged. (Revision 3: this gate demonstrates
+end to end on A3; the A5 estimate path additionally needs P4's visit surface, since an A5 estimate
+requires a completed visit.) **Gate not passed** — the "nothing charged" half holds; automatic
+replacement does not exist.
 
-### P4 - Unlock, selection, reconfirmation and engagement
+### P4 - Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement
+
+Revision 3 splits this phase into the two archetype front doors. Nothing in it was built before the
+split, so no rework exists.
+
+A3 — quote unlock (unchanged from revision 2):
 
 - [ ] Quote teasers expose verification, rating, vendor type and a price band only.
 - [ ] The INR 149 unlock is server-priced, payment-backed and offered only when a usable quote exists.
 - [ ] One successful payment grants exactly one unlock under duplicate webhooks and retries.
 - [ ] Non-responsive rejection releases a slot and triggers replacement within the configured cap.
+
+A5 — visit plan (revision 3):
+
+- [ ] `VisitPlan` is server-priced in paise per tier; choosing a plan charges nothing.
+- [ ] A vendor confirms a visit slot booked against `carts.availability`; the first held slot opens
+  the plan checkout, and only a verified provider callback charges the plan and hardens the booking.
+- [ ] One successful payment charges exactly one plan under duplicate webhooks and retries; later
+  slots book without further payment.
+- [ ] Unfilled plan shares auto-refund at the visit SLA; vendor no-show and estimate-not-submitted
+  refund or replace the share and hit vendor standing.
+- [ ] Visit arrival is confirmed through the non-OTP fallback (start OTP is M3).
+- [ ] The A5 composer submits on site against a completed visit (`m2_visit_not_completed` otherwise)
+  and its estimates are fully readable with no second paywall.
+
+Shared:
+
 - [ ] Customer selection creates a time-limited vendor reconfirmation request.
-- [ ] Quote-validity expiry offers a one-tap re-validation request that reuses the existing unlock.
-- [ ] Rejection, expiry or changed availability preserves the unlock and offers the next quote free.
-- [ ] A3 completes as a connection with released contact; A5 opens stage funding.
+- [ ] Validity expiry offers a one-tap re-validation request that reuses the existing unlock or plan.
+- [ ] Rejection, expiry or changed availability preserves the unlock/plan entitlement and offers the
+  next quote, estimate or a replacement visit free.
+- [ ] A3 completes as a connection with released contact; A5 opens stage funding at face value while
+  consumed visit shares pay out (vendor payout + platform share) through the M1 rails.
 - [ ] Managed stage payment is collected before protected A5 work starts.
 - [ ] Both parties receive the final scope, commercial terms, cancellation policy and receipt.
 
-**Exit gate:** Money is collected only against delivered value; selection is not treated as a booking
-until vendor reconfirmation and the archetype's own confirmation condition both succeed.
+**Exit gate:** Money is collected only against a real accepted commitment — a usable quote (A3) or a
+confirmed visit (A5); selection is not treated as a booking until vendor reconfirmation and the
+archetype's own confirmation condition both succeed.
 
 ### P5 - Engagement spine
 
@@ -473,4 +580,7 @@ table promises the owner something to run.
 | 2026-08-12 | Wave B1 wiring (Session B) | `[~]` endpoint live, routes mounted | **First M2 endpoint consumed by any app.** `partner-shell.tsx` reads `GET /api/v1/partner/workspaces/` at contract 1.21.0 through `features/workspace/queries.ts`, gated on the session already holding the Partner role so `/apply` does not spend a guaranteed 403. All **7 registry destinations mounted** as `force-dynamic`, `robots: noindex` routes — `/workforce` and `/projects` render real grant-driven homes (label, description, the payment sentence for the mode Django sent, authorized destinations; **no counts**, since nothing publishes them); the other five render an honest not-built-yet state. Three decisions worth carrying: an unread grant list is `null` and never `[]` (collapsing them would fail *open* — a dropped connection reading as a suspension nobody applied); a 401/403 is not resent; `SESSION_STATE` freshness so an Operations suspension lands on window focus rather than at next login. `boundary.test.ts` caught the wiring as designed and its `/partner/workspaces/` entry was retired under its own rule. **1399/1399 frontend tests** (partner 314), lint clean at `--max-warnings 0`, 9/9 typecheck, `build --filter=partner` green. Still `[~]`: `FE-105` unstarted and the `capability/`+`crew/` registration views remain route-less. | Claude |
 | 2026-08-12 | P0 / P1 / P2 / P3 (Wave C1) | `[~]` built — owner verification pending | **Contract 1.22.0 publishes 33 M2 paths**, 16 new: three attachment paths, two site-visit paths, and all thirteen of proposal 0013. New modules `apps/requirements/{attachments,storage,tasks}.py` and `apps/partners/{gates,capability_options}.py`; migrations `partners.0007`, `partners.0008`, `requirements.0004`. **The four dead sweeps are on Celery beat** — `expired_requirement_ids`, `sla_breached_requirement_ids`, `expired_invitation_ids`, `expired_proposal_ids` — plus attachment housekeeping, five entries in total; `expire_proposal` and `expire_invitation_and_replace` were genuinely missing commands and are new. **A replay cannot double-invite**: the replacement is taken inside the same transaction and requirement lock as the expiry, because a system job has no actor and `execute_idempotent` does not apply. **Both of proposal 0013's design questions answered** — `PartnerCapability.Status` gains `REJECTED` (an `actor_kind` was rejected because `PartnerCapabilityTransition.actor` is null for both a Partner action and a system job, so a derived actor would mislabel the case that matters), and `PartnerDocument` gains a nullable `expires_on` enforced through the existing `PARTNER_REQUIRED_DOCUMENT_KINDS` rather than a new policy knob. `RequirementAttachment.ProcessingStatus` gains `INFECTED`, kept separate from `FAILED` because one recovery offers a retry and the other must not. **Static gates: ruff format and check clean across 338 files, strict MyPy clean across 218 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after naming three more enums, `manage.py check` clean.** **Six test files written and NOT RUN** — see §"Owner verification queue"; nothing here is proven against a real request until the owner runs them. **CI raised with the owner and deferred to M1 platform work**: no `.github/`, no pipeline of any kind, and the real scope is a Postgres service, two toolchains and a POSIX rewrite of `quality.ps1`. Remaining in C1: capability and matching completeness, `M2-BE-317` first — `POST /proposals/` documents `m2_proposal_below_wage_floor` and cannot currently return it. | Claude |
 | 2026-08-12 | Programme-wide audit | Docs resynchronised | Full codebase-vs-plan sweep. **Confirmed in code:** contract at 1.21.0 with 17 M2 paths routed through `config/urls.py`; `pnpm typecheck` **9/9 green**; the `express-path.ts` typecheck failure logged on 11 August is **fixed** (`step.key` at lines 137/147/200); the Partner boundary guard has correctly retired `/partner/workspaces/`. **Three gaps the plan understated:** (1) **the repository has no CI at all** — there is no `.github/`, so "add contract validation to CI" has no pipeline to add to; (2) **`CELERY_BEAT_SCHEDULE` in `config/settings/base.py` contains no M2 sweep**, so all four selectors (`expired_requirement_ids`, `sla_breached_requirement_ids`, `expired_invitation_ids`, `expired_proposal_ids`) are dead code and an unanswered wave stalls forever; (3) **zero HTTP tests** — no file under `backend/tests/` names any M2 path. **Customer app is the laggard:** `features/requirement/` is fully built but contains no `useQuery`, mounts no route, and its boundary guard still lists `/api/v1/requirements/` and `/api/v1/proposals/` as unpublished. Stale text corrected in `task.md`, `frontend-execution-plan.md`, `03-frontend-tasks.md`, `backend-session.md`, `AGENTS.md`, `contracts/proposals/README.md` and proposals 0012/0013. | Claude |
+| 2026-08-13 | Revision 3 money + build-first sprint | Docs revised | **Visit money is a pass-through split (owner decision):** each consumed slot share = vendor visit payout (paid on completed visit + usable estimate, through M1 payout rails, gated on payout details) + Vsolve platform share; undelivered slots refund the Customer; the stage-credit concept is deleted — stages fund at face value. Reconciliation rule: `plan = Σ payouts + Σ platform shares + Σ refunds`. Three-way profitability stated in `README.md` §"The A5 visit plan mechanics". **Verification convention amended (build-first):** during the sprint tests are neither run nor written; static gates + a per-wave smoke script gate each wave; convention resumes after the owner's manual UI pass. Orchestration prompt for the multi-agent sprint added as [09-build-sprint-orchestration.md](09-build-sprint-orchestration.md). | Claude |
+| 2026-08-12 | Revision 3 — visit-first A5 | Docs revised | **Owner decision applied across the plan set.** ADR-0008 written and indexed; ADR-0007 status annotated. A5 becomes visit-first: tiered visit plan (proposed 49/99/199 for 1/2/3 vendors) charged only at the first confirmed visit slot; on-site estimates through the existing A5 composer against a completed visit; estimates readable with no second paywall; unfilled shares auto-refund at the visit SLA; visit-fee credit applied at first stage funding. A3 unchanged. Visit slots reuse the built M1 slot engine (`carts.availability`, checkout `slots-modal.tsx`, `preferred_starts`). New `VisitPlan` aggregate; `QuoteUnlock` scoped to A3; requirement machine gains `VISITS_BOOKED`; five new error codes; new commands (`choose_visit_plan`, `confirm_visit_slot`, `create_visit_plan_checkout`, `complete_visit_plan`, `confirm_visit_arrival`, `refund_unfilled_visit_shares`). Updated: `README.md`, `07`, `task.md`, `02`, `03`, `04`, `05`, `08`, all three session files, `frontend-execution-plan.md`. **All revision 3 build work lands in the unbuilt P4/Wave C2/Wave A2 — nothing shipped is reworked.** New blocking owner decisions: tier prices + vendor split, credit policy, visit SLA + estimate window, customer no-show policy. | Claude |
+| 2026-08-13 | Wave C1 remainder (Session C) | `[~]` built — static gates green, owner manual verification pending | **Contract 1.23.0.** Two schema corrections and four new paths. **`M2-BE-317` closed — the wage-floor guard can now fire**: `submit_proposal` no longer takes `wage_floor_skill`/`wage_floor_state_code` from its caller and derives both from the requirement (`catalog.M2VariantConfiguration.wage_floor_skill`, `locations.ServiceArea.state_code`, both new and both nullable), failing closed with `m2_wage_floor_unavailable` rather than skipping — so `POST /proposals/` can finally return the refusal it documented, and A3 quoting is blocked per variant/area until Operations loads a floor. `ServiceVariant.required_skill_code` was rejected as the mapping because it is the dispatch trade slug and reusing it would tie a statutory floor to a merchandising decision. **Both list operations now declare the envelope Django always sent** — `m2_requirement_list` and `m2_partner_enquiry_list` declared bare arrays and returned DRF pages, so a generated client threw on its first request; both now use `StrictCursorPagination`, publish a `cursor` parameter (closing Session B's silently-truncated-inbox gap) and return a page envelope, and the frontend's two compensating narrowings can be deleted by their own columns. Also: `M2-BE-306` the capacity hold consults `carts.availability` at wave time and at acceptance (`m2_capacity_unavailable`); `M2-BE-115` the guard checks coverage and the Partner's calendar; `M2-BE-102/107` capability service-area scoping and `CrewAvailabilityException`; `M2-BE-301` `PartnerLanguage` capture plus travel feasibility, with an undeclared language never a mismatch; `M2-BE-303` real ranking signals at policy version 2, unknown distance scored at the pool median rather than last; `M2-BE-110` `POST /partner/capabilities/{id}/submit/`, the resubmit-after-correction path that had no route; `M2-BE-310` attachment access expiring with the invitation, with **`RequirementSnapshot` deliberately not copying attachments**; `M2-BE-106` registration answers on the versioned schema M1 already has. Migrations `catalog.0007`, `locations.0003`, `partners.0009`. **Static gates: ruff format and check clean across 338 files, strict MyPy clean across 218 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings with no new enum overrides needed, contract-drift check clean, `manage.py check` clean.** **No test was written or run** (build-first amendment); two existing fixtures in `tests/requirements/{conftest,test_matching_and_proposals}.py` were corrected for the fail-closed wage floor, so the owner's eventual run does not read the change as a regression. Still blocked and confirmed so: `M2-BE-113` (C3), crew archive on a future assignment (C4), per-variant `requires_insurance` and insurance enforcement (owner decision 6), `M2-BE-321` (no reference price), CI (owner-deferred to M1). | Claude |
 | 2026-08-12 | Wave A1 wiring (Session A) | `[~]` 15 of 15 built and wired, owner verification pending | **The Customer requirement flow is reachable.** Four routes under `app/(flow)/requests/` — `My requests`, one request's page, the category-first entry and the four screens — all `force-dynamic`, `robots: noindex`, behind one `CustomerShell` gate. `features/requirement/queries.ts` + `packages/query/src/m2-requirement.ts` consume requirement list/create/read/patch/submit/duplicate-check/timeline at 1.21.0. The three stale M2 entries removed from the Customer boundary guard; `contract-pending/` deleted per its own README and its rule re-stated as `features/requirement/boundary.test.ts` (view/model may not name the generated client, through either package), carrying the `SCREENS.length === 4` assertion across. Adapters re-pointed: `flexibility_days` written through one named constant, `PHOTO`→`IMAGE`, `CLEAN`→`VERIFIED` with an unknown scan state failing **closed**, plus two the handover note missed (`answers`/`detail` arrive as `unknown`; no `file_name` at all). `FE-211` built — the consequence and the confirmation — with `onConfirmEdit` deliberately unsupplied, because no amend command exists and a confirmation that reaches a 409 teaches a Customer that confirming does nothing. **One field was missing from a screen**: `requested_start` is required by `_assert_submittable` and matched on by the duplicate check, and screen 2 did not ask for it — it would have been invisible until a real submit. **Eleven contract gaps logged**, the two largest being no merge endpoint for `GAP-004` and two separately-authored question schemas whose mismatch surfaces only when the Customer presses Send. `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` **9 of 9**, `pnpm build --filter=customer` green. **No tests were run** — 10 files written and queued above. | Claude |

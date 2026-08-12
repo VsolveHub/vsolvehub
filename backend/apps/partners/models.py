@@ -745,7 +745,24 @@ class PartnerCapability(models.Model):
         max_length=24,
         choices=ServiceVariant.BookingArchetype.choices,
     )
+    #: Where this capability is approved to operate (`M2-BE-102`). **Empty means every area the
+    #: Partner serves**, which is the common case and keeps the M1 `PartnerServiceArea` link the
+    #: single source of coverage. A non-empty set narrows it: a workforce agency approved for
+    #: construction labour in one city but not the next is a real Operations decision, and before
+    #: this field the only way to express it was to remove the whole service area — which also
+    #: removed their A1 work. `PartnerServiceArea` still gates first; this can only subtract.
+    service_areas = models.ManyToManyField(
+        ServiceArea,
+        blank=True,
+        related_name="partner_capabilities",
+    )
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.REQUESTED)
+    #: Category-specific registration answers (`M2-BE-106`), validated at request time against
+    #: `M2VariantConfiguration.registration_question_schema` through the same
+    #: `carts.item_inputs.validate_scope` the Customer's answers use. Kept on the capability rather
+    #: than the profile because the questions are per variant: "how many scaffolders can you field"
+    #: is not a question about the business, it is a question about this capability.
+    registration_answers = models.JSONField(default=dict, blank=True)
     max_crew_size = models.PositiveSmallIntegerField(null=True, blank=True)
     max_concurrent_engagements = models.PositiveSmallIntegerField(null=True, blank=True)
     max_project_value_paise = models.PositiveBigIntegerField(null=True, blank=True)
@@ -962,6 +979,83 @@ class PartnerCrewMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.partner_id}:{self.crew_member_id}"
+
+
+class CrewAvailabilityException(models.Model):
+    """A dated statement that one crew member is, or is not, available (`M2-BE-107`).
+
+    Deliberately exception-shaped rather than a weekly rule set. A day labourer's default is
+    "available"; what a supervisor actually knows is "Ramesh is at a wedding on the 14th". A weekly
+    grid would demand a schedule nobody maintains and would silently mark everyone unavailable the
+    day it shipped.
+
+    Scoped to the *membership*, not the global `CrewMember`: one agency must not be able to publish
+    another agency's worker as unavailable. Cross-agency conflict is settled by assignment, which
+    `assert_crew_available` already reads.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    membership = models.ForeignKey(
+        PartnerCrewMembership,
+        on_delete=models.PROTECT,
+        related_name="availability_exceptions",
+    )
+    date = models.DateField()
+    is_available = models.BooleanField(default=False)
+    reason = models.CharField(max_length=200, blank=True)
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("date", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("membership", "date"),
+                name="partners_unique_crew_availability_exception",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("membership", "date")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.membership_id}:{self.date}:{self.is_available}"
+
+
+class PartnerLanguage(models.Model):
+    """A language this vendor can actually work in (`M2-BE-301`).
+
+    Matching reads it as hard eligibility: a voice note in Telugu sent to a vendor who reads only
+    Hindi is a silent failure that looks like an unresponsive vendor. **A Partner who has declared
+    no language is never excluded** — absence of a declaration is not a mismatch, and treating it as
+    one would empty the candidate pool for every Partner registered before this field existed.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="languages",
+    )
+    #: BCP-47-ish, matching `CustomerRequirement.language`. Compared on the primary subtag, so
+    #: `te-IN` and `te` are one language and a regional tag never fails to match itself.
+    language_tag = models.CharField(max_length=16)
+    is_active = models.BooleanField(default=True)
+    declared_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("partner", "language_tag")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("partner", "language_tag"),
+                name="partners_unique_partner_language",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("partner", "is_active")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.language_tag}"
 
 
 class CrewSkill(models.Model):

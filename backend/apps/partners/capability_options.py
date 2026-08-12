@@ -97,6 +97,12 @@ class CapabilityOption:
     lifecycle_explanation: str
     requires_insurance: bool
     asks_for: tuple[str, ...]
+    #: The category-specific registration questions for this variant (`M2-BE-106`), taken straight
+    #: from the **versioned** `M2VariantConfiguration.registration_question_schema` the answers are
+    #: validated against. Published as the raw question list rather than a rendered form so the
+    #: client cannot hold a copy that has drifted from the schema doing the validating. Empty when
+    #: Operations has published none, which is the ordinary state.
+    registration_questions: tuple[dict[str, object], ...]
     #: Mirrors `partners_unique_live_capability_per_variant` so the control is disabled before the
     #: refusal rather than after it.
     already_requested: bool
@@ -112,11 +118,13 @@ def capability_options(partner: PartnerProfile) -> list[CapabilityOption]:
     `M2VariantConfiguration`. A variant with an archetype but no configuration cannot carry a
     requirement, so offering a capability on it would be offering work that cannot arrive.
     """
-    open_variant_ids = set(
-        M2VariantConfiguration.objects.filter(
+    open_configurations = {
+        row["variant_id"]: row["registration_question_schema"]
+        for row in M2VariantConfiguration.objects.filter(
             status=M2VariantConfiguration.Status.ACTIVE,
-        ).values_list("variant_id", flat=True)
-    )
+        ).values("variant_id", "registration_question_schema")
+    }
+    open_variant_ids = set(open_configurations)
     if not open_variant_ids:
         return []
 
@@ -147,11 +155,27 @@ def capability_options(partner: PartnerProfile) -> list[CapabilityOption]:
             lifecycle_explanation=LIFECYCLE_EXPLANATIONS.get(variant.booking_archetype, ""),
             requires_insurance=requires_insurance_for(variant),
             asks_for=CAPABILITY_ASKS_FOR.get(variant.booking_archetype, ()),
+            registration_questions=_registration_questions(open_configurations.get(variant.id)),
             already_requested=variant.id in live,
         )
         for variant in variants
     ]
     return options
+
+
+def _registration_questions(schema: object) -> tuple[dict[str, object], ...]:
+    """The question list out of a stored schema, defensively.
+
+    A configuration row is Operations-authored JSON. A malformed one publishes no questions rather
+    than raising: the capability-options screen is the first thing a new vendor sees, and a broken
+    schema on one variant must not blank the whole catalog for them.
+    """
+    if not isinstance(schema, dict):
+        return ()
+    questions = schema.get("questions")
+    if not isinstance(questions, list):
+        return ()
+    return tuple(question for question in questions if isinstance(question, dict))
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +193,10 @@ class CapabilityRecord:
     requires_insurance: bool
     max_crew_size: int | None
     max_project_value_paise: int | None
+    #: Empty means "every area this Partner serves" — the common case. A non-empty set is an
+    #: Operations narrowing, and the client must render it as a restriction rather than as coverage.
+    service_area_ids: tuple[uuid.UUID, ...]
+    registration_answers: dict[str, object]
     expires_at: datetime | None
     expired_document_kinds: tuple[str, ...]
     documents_expiring_on: date | None
@@ -195,7 +223,7 @@ def capability_records(partner: PartnerProfile) -> list[CapabilityRecord]:
     capabilities = (
         PartnerCapability.objects.filter(partner=partner)
         .select_related("variant__service")
-        .prefetch_related("transitions")
+        .prefetch_related("transitions", "service_areas")
         .order_by("-updated_at", "id")
     )
 
@@ -216,6 +244,8 @@ def capability_records(partner: PartnerProfile) -> list[CapabilityRecord]:
                 requires_insurance=capability.requires_insurance,
                 max_crew_size=capability.max_crew_size,
                 max_project_value_paise=capability.max_project_value_paise,
+                service_area_ids=tuple(area.id for area in capability.service_areas.all()),
+                registration_answers=capability.registration_answers or {},
                 expires_at=capability.expires_at,
                 # Only meaningful while the capability could otherwise authorise work. Publishing
                 # an expired document against a withdrawn capability would be a warning about a

@@ -52,6 +52,10 @@ pytestmark = pytest.mark.django_db
 THREE_SLOTS = 3
 TWO_INVITATIONS = 2
 A3_TOTAL_PAISE = 960_000
+WAGE_FLOOR_STATE_CODE = "TG"
+#: Low enough that every other A3 quote in this file clears it; the wage-floor test supersedes it
+#: with a newer effective-dated row rather than fighting the fixture.
+BASELINE_WAGE_FLOOR_PAISE = 50_000
 
 
 def _variant(
@@ -91,12 +95,35 @@ def _variant(
         first_quote_sla_hours=8,
         quote_delivery_sla_hours=24,
         max_quotes=THREE_SLOTS,
+        # `M2-BE-317`: the wage-floor guard derives its skill from here and its state from the
+        # service area, and fails closed when either is unmapped. Without this every A3 quote in
+        # this file would be refused with `m2_wage_floor_unavailable` before reaching the rule
+        # under test.
+        wage_floor_skill=_wage_floor_skill(),
     )
     return variant
 
 
+def _wage_floor_skill() -> Skill:
+    skill, _created = Skill.objects.get_or_create(
+        code="wage-floor-helper",
+        defaults={"name": "Helper"},
+    )
+    MinimumWageFloor.objects.get_or_create(
+        state_code=WAGE_FLOOR_STATE_CODE,
+        skill=skill,
+        effective_from=timezone.localdate() - timedelta(days=365),
+        defaults={"floor_paise_per_day": BASELINE_WAGE_FLOOR_PAISE},
+    )
+    return skill
+
+
 def _area() -> ServiceArea:
-    area = ServiceArea.objects.create(slug="kukatpally", name="Kukatpally")
+    area = ServiceArea.objects.create(
+        slug="kukatpally",
+        name="Kukatpally",
+        state_code=WAGE_FLOOR_STATE_CODE,
+    )
     for weekday in range(7):
         ServiceAreaOperatingWindow.objects.create(
             service_area=area, weekday=weekday, opens_at="09:00", closes_at="18:00"
@@ -641,11 +668,15 @@ def test_competing_quotes_are_forced_onto_one_tax_basis() -> None:
 
 
 def test_a_rate_below_the_wage_floor_is_refused_at_submission() -> None:
+    """The state and the skill are derived from the requirement, never sent by the vendor.
+
+    A newer effective-dated floor supersedes the fixture's baseline, which is how Operations
+    actually raises a floor: a new row, not an edit.
+    """
     invitation = _accepted_invitation()
-    skill = Skill.objects.create(code="helper", name="Helper")
     MinimumWageFloor.objects.create(
-        state_code="TG",
-        skill=skill,
+        state_code=WAGE_FLOOR_STATE_CODE,
+        skill=_wage_floor_skill(),
         floor_paise_per_day=71_000,
         effective_from=timezone.localdate() - timedelta(days=30),
     )
@@ -658,8 +689,6 @@ def test_a_rate_below_the_wage_floor_is_refused_at_submission() -> None:
             rate_paise_per_worker_day=60_000,
             minimum_days=3,
             worker_count=4,
-            wage_floor_skill=skill,
-            wage_floor_state_code="TG",
         )
 
 

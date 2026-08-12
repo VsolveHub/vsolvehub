@@ -21,6 +21,7 @@ from django.utils import timezone
 from apps.catalog.models import ServiceVariant
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User
+from apps.locations.models import ServiceArea
 from apps.partners.exceptions import (
     BusinessTypeInvalidError,
     CapabilityAlreadyRequestedError,
@@ -38,10 +39,13 @@ from apps.partners.exceptions import (
 )
 from apps.partners.gates import GATE_BLOCKS, GATE_COPY, GateState
 from apps.partners.models import (
+    CrewAvailabilityException,
     CrewMember,
     CrewSkill,
     MinimumWageFloor,
     PartnerApplication,
+    PartnerAvailabilityException,
+    PartnerAvailabilityRule,
     PartnerBusinessProfile,
     PartnerCapability,
     PartnerCapabilityTransition,
@@ -50,7 +54,9 @@ from apps.partners.models import (
     PartnerDocument,
     PartnerIdentityCluster,
     PartnerInsuranceDeclaration,
+    PartnerLanguage,
     PartnerProfile,
+    PartnerServiceArea,
     Skill,
 )
 
@@ -325,6 +331,59 @@ _ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
 }
 
 
+def registration_question_schema(variant: ServiceVariant) -> dict[str, object]:
+    """The vendor-facing registration questions for this variant's active configuration.
+
+    Empty when Operations has published none, which is the ordinary state and not an error: a
+    variant with no extra questions asks none. `M2-BE-106` is explicit that this reuses the
+    **versioned** schema M1 already has rather than starting a second question subsystem, so the
+    schema is read from the same `ACTIVE` `M2VariantConfiguration` row the Customer's answers are
+    validated against and shares its version.
+    """
+    from apps.catalog.models import M2VariantConfiguration  # noqa: PLC0415
+
+    configuration = M2VariantConfiguration.objects.filter(
+        variant=variant,
+        status=M2VariantConfiguration.Status.ACTIVE,
+    ).first()
+    if configuration is None:
+        return {}
+    schema = configuration.registration_question_schema
+    return schema if isinstance(schema, dict) else {}
+
+
+def _validate_registration_answers(
+    *,
+    variant: ServiceVariant,
+    answers: dict[str, object],
+) -> dict[str, object]:
+    """Check a vendor's registration answers against the versioned schema.
+
+    Imported lazily for the same reason `assert_payout_details_present` imports payouts lazily:
+    `apps.carts` reads `apps.partners`, and a module-level import here would close the loop. The
+    validator itself is the one `carts.item_inputs` already owns — a second copy is exactly the
+    duplication `02-backend-tasks.md` §"Reuse before building" names.
+    """
+    from apps.carts.item_inputs import validate_scope  # noqa: PLC0415
+
+    schema = registration_question_schema(variant)
+    if not schema:
+        # Nothing published to validate against. An answer set sent anyway is refused rather than
+        # stored unvalidated, because a stored answer nobody checked reads as a checked one.
+        if answers:
+            raise BusinessTypeInvalidError(
+                "This service does not ask registration questions yet.",
+                field="registration_answers",
+            )
+        return {}
+
+    try:
+        validate_scope(schema=schema, scope=answers)
+    except ValueError as exc:
+        raise BusinessTypeInvalidError(str(exc), field="registration_answers") from exc
+    return answers
+
+
 @transaction.atomic
 def request_capability(
     *,
@@ -332,6 +391,8 @@ def request_capability(
     variant: ServiceVariant,
     max_crew_size: int | None = None,
     max_project_value_paise: int | None = None,
+    service_areas: Sequence[ServiceArea] = (),
+    registration_answers: dict[str, object] | None = None,
 ) -> PartnerCapability:
     """Partner asks to be considered for one lifecycle capability."""
     if variant.booking_archetype not in M2_ARCHETYPES:
@@ -351,6 +412,28 @@ def request_capability(
     if existing is not None:
         raise CapabilityAlreadyRequestedError()
 
+    answers = _validate_registration_answers(
+        variant=variant,
+        answers=registration_answers or {},
+    )
+
+    # A capability cannot be scoped to an area the Partner does not serve at all: the narrowing is
+    # a subtraction from `PartnerServiceArea`, never an addition to it, and letting it add would
+    # make the capability a second, quietly disagreeing coverage record.
+    served = set(
+        PartnerServiceArea.objects.filter(partner=partner, is_active=True).values_list(
+            "service_area_id", flat=True
+        )
+    )
+    unserved = [area for area in service_areas if area.id not in served]
+    if unserved:
+        raise BusinessTypeInvalidError(
+            "Add "
+            + ", ".join(sorted(area.name for area in unserved))
+            + " to the areas you work in before asking for this capability there.",
+            field="service_area_ids",
+        )
+
     capability = PartnerCapability.objects.create(
         partner=partner,
         variant=variant,
@@ -358,16 +441,85 @@ def request_capability(
         status=PartnerCapability.Status.REQUESTED,
         max_crew_size=max_crew_size,
         max_project_value_paise=max_project_value_paise,
+        registration_answers=answers,
         requires_insurance=(
             variant.booking_archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
         ),
     )
+    if service_areas:
+        capability.service_areas.set(service_areas)
     _record_transition(
         capability=capability,
         from_status="",
         to_status=capability.status,
         actor=None,
         reason_code="partner_requested",
+    )
+    return capability
+
+
+@transaction.atomic
+def submit_capability_for_review(
+    *,
+    capability_id: uuid.UUID,
+    actor: User | None = None,
+    registration_answers: dict[str, object] | None = None,
+) -> PartnerCapability:
+    """The Partner's own submit and resubmit (`M2-BE-110`).
+
+    One command for both because they are the same act from the Partner's side: "I have said what
+    I can say, please look at it." `REQUESTED → UNDER_REVIEW` is the first submit;
+    `CHANGES_REQUIRED → UNDER_REVIEW` is the resubmit after a correction, and it is the one that
+    was missing — until now the only way out of `CHANGES_REQUIRED` was for Operations to move the
+    row themselves, so a Partner who fixed what was asked had no button.
+
+    Resubmitting **clears the correction note**, because a request that has been answered should
+    not still be displayed as outstanding; the transition record keeps what was asked for.
+    Idempotent by state: a capability already `UNDER_REVIEW` is returned untouched rather than
+    queued twice.
+
+    Deliberately not routed through `transition_capability`. That command stamps `reviewed_by` and
+    `reviewed_at` from its actor, which is right for Operations and wrong here — it would record
+    the Partner as the reviewer of their own capability, in the audit trail that exists to prove
+    who decided what.
+    """
+    capability = (
+        PartnerCapability.objects.select_for_update()
+        .select_related("variant")
+        .get(pk=capability_id)
+    )
+    if capability.status == PartnerCapability.Status.UNDER_REVIEW:
+        return capability
+    if capability.status not in (
+        PartnerCapability.Status.REQUESTED,
+        PartnerCapability.Status.CHANGES_REQUIRED,
+    ):
+        raise CapabilityTransitionError(
+            f"A {capability.status} capability cannot be sent for review.",
+        )
+
+    if registration_answers is not None:
+        capability.registration_answers = _validate_registration_answers(
+            variant=capability.variant,
+            answers=registration_answers,
+        )
+
+    from_status = capability.status
+    capability.status = PartnerCapability.Status.UNDER_REVIEW
+    capability.review_notes = ""
+    capability.save(
+        update_fields=("status", "review_notes", "registration_answers", "updated_at"),
+    )
+    _record_transition(
+        capability=capability,
+        from_status=from_status,
+        to_status=capability.status,
+        actor=actor,
+        reason_code=(
+            "partner_resubmitted"
+            if from_status == PartnerCapability.Status.CHANGES_REQUIRED
+            else "partner_submitted"
+        ),
     )
     return capability
 
@@ -519,16 +671,79 @@ def earliest_required_document_expiry(
     return row
 
 
+def capability_serves_area(
+    capability: PartnerCapability,
+    service_area: ServiceArea,
+) -> bool:
+    """Whether this capability is approved to operate in one area.
+
+    An empty `service_areas` set means "everywhere this Partner works", which is the common case;
+    the M1 `PartnerServiceArea` link is still the coverage record and is checked separately. This
+    only ever narrows.
+    """
+    scoped = list(capability.service_areas.values_list("id", flat=True))
+    if not scoped:
+        return True
+    return service_area.id in scoped
+
+
+def partner_unavailable_on(
+    *,
+    partner: PartnerProfile,
+    service_area: ServiceArea,
+    on_day: date,
+) -> bool:
+    """Whether this Partner has *said* they cannot work a day in an area.
+
+    Deliberately narrower than `selectors.partner_available_during`, which answers "does the
+    published schedule cover this half-hour" and treats an empty schedule as unavailable. That rule
+    is right for the A1 slot grid, where the Customer is picking a time; it is wrong for A3 and A5,
+    where the unit is a day and most workforce vendors publish no hourly calendar at all. Applying
+    it here would exclude every existing vendor the day it shipped.
+
+    So: a dated exception saying `is_available=False` is a refusal, and so is a weekday no
+    published rule covers **when the Partner has published rules for that area at all**. A Partner
+    with no rules has made no statement, and no statement is not a refusal.
+    """
+    exception = PartnerAvailabilityException.objects.filter(
+        partner=partner,
+        service_area=service_area,
+        date=on_day,
+    ).first()
+    if exception is not None:
+        return not exception.is_available
+
+    rules = PartnerAvailabilityRule.objects.filter(
+        partner=partner,
+        service_area=service_area,
+        is_active=True,
+    )
+    weekdays = set(rules.values_list("weekday", flat=True))
+    if not weekdays:
+        return False
+    return on_day.weekday() not in weekdays
+
+
 def assert_capability_active(
     *,
     partner: PartnerProfile,
     variant: ServiceVariant,
+    service_area: ServiceArea | None = None,
+    on_day: date | None = None,
 ) -> PartnerCapability:
     """The single eligibility guard. Invitations and assignments both call it.
 
-    Still narrower than `M2-BE-115` asks for: availability, service area and the insurance
-    declaration are not checked here yet, and that gap is recorded in `02-backend-tasks.md` rather
-    than papered over with a partial check that reads as complete.
+    `service_area` and `on_day` are optional because not every caller has them — a workspace read
+    is about the capability, not about a job. When they are supplied the guard also checks
+    coverage (`M2-BE-102`) and the Partner's own published availability (`M2-BE-115`); when they
+    are not, it checks what it can and says so by omission rather than by silently passing a check
+    it never ran.
+
+    **Insurance is still not enforced here**, and that is a policy gap rather than an oversight:
+    whether an approved A3 capability requires a *verified* declaration is owner decision 6, and
+    `PartnerCapability.requires_insurance` currently records a default nobody approved. Enforcing
+    it now would refuse real vendors on a rule the owner has not set. Recorded against
+    `M2-BE-104`/`M2-BE-115`.
     """
     capability = (
         PartnerCapability.objects.filter(
@@ -554,6 +769,30 @@ def assert_capability_active(
     moment = timezone.now()
     if capability.expires_at is not None and capability.expires_at <= moment:
         raise CapabilityNotApprovedError()
+
+    if service_area is not None:
+        serves_area = PartnerServiceArea.objects.filter(
+            partner=partner,
+            service_area=service_area,
+            is_active=True,
+        ).exists()
+        if not serves_area or not capability_serves_area(capability, service_area):
+            # `m2_capability_not_approved` rather than a new code, for the same reason document
+            # expiry reuses it: `07-state-machines-and-permissions.md` §8 is the authority on
+            # codes and lists none for coverage. The *message* is what tells the vendor which of
+            # the several things this code covers went wrong.
+            raise CapabilityNotApprovedError(
+                f"You are not approved to work in {service_area.name} for this service.",
+            )
+
+    if (
+        service_area is not None
+        and on_day is not None
+        and partner_unavailable_on(partner=partner, service_area=service_area, on_day=on_day)
+    ):
+        raise CapabilityNotApprovedError(
+            f"Your calendar says you are not working on {on_day.isoformat()}.",
+        )
 
     # An expired required document is not a policy judgement — it is what "expired" means. The
     # refusal reuses `m2_capability_not_approved`, the code this function already raises for an
@@ -835,6 +1074,45 @@ def crew_roster(partner: PartnerProfile) -> list[CrewRosterEntry]:
     ]
 
 
+@transaction.atomic
+def set_crew_availability(
+    *,
+    membership: PartnerCrewMembership,
+    on_day: date,
+    is_available: bool,
+    reason: str = "",
+) -> CrewAvailabilityException:
+    """Record that one worker is, or is not, available on one day (`M2-BE-107`).
+
+    Upsert rather than append: the Partner is stating today's truth about a date, and two
+    contradictory rows for one date would leave `assert_crew_available` to pick one.
+    """
+    record, _created = CrewAvailabilityException.objects.update_or_create(
+        membership=membership,
+        date=on_day,
+        defaults={"is_available": is_available, "reason": reason},
+    )
+    return record
+
+
+def unavailable_crew_membership_ids(
+    *,
+    memberships: Iterable[PartnerCrewMembership],
+    on_day: date,
+) -> set[uuid.UUID]:
+    """Which of these memberships have declared themselves off on a day."""
+    ids = [membership.id for membership in memberships]
+    if not ids:
+        return set()
+    return set(
+        CrewAvailabilityException.objects.filter(
+            membership_id__in=ids,
+            date=on_day,
+            is_available=False,
+        ).values_list("membership_id", flat=True)
+    )
+
+
 def assert_crew_available(
     *,
     partner: PartnerProfile,
@@ -846,18 +1124,83 @@ def assert_crew_available(
 
     `busy_crew_member_ids` is supplied by the engagement module, which owns
     assignments. Identity is global, so a person on two rosters is still one person.
+
+    A declared day off is refused here too (`M2-BE-107`), and it reads as a conflict rather than a
+    silent omission for the same reason every other exclusion in M2 is named: the supervisor
+    assigning the shift needs to be told which person and why, not handed a shorter list.
     """
     busy = set(busy_crew_member_ids)
+    memberships = list(memberships)
+    off_today = unavailable_crew_membership_ids(memberships=memberships, on_day=on_day)
     for membership in memberships:
         if membership.partner_id != partner.id:
             raise CrewConflictError("That crew member is not on your roster.")
         if membership.status != PartnerCrewMembership.Status.ACTIVE:
             raise CrewConflictError(f"{membership.crew_member.display_name} is archived.")
+        if membership.id in off_today:
+            raise CrewConflictError(
+                f"{membership.crew_member.display_name} is marked unavailable on "
+                f"{on_day.isoformat()}.",
+            )
         if membership.crew_member_id in busy:
             raise CrewConflictError(
                 f"{membership.crew_member.display_name} is already booked on "
                 f"{on_day.isoformat()}, including through another agency.",
             )
+
+
+# ---------------------------------------------------------------------------
+# Languages a vendor can work in
+# ---------------------------------------------------------------------------
+
+
+def language_subtag(tag: str) -> str:
+    """`te-IN` and `te` are one language. Case-folded so `TE` is too."""
+    return tag.strip().split("-", 1)[0].casefold()
+
+
+@transaction.atomic
+def set_partner_languages(
+    *,
+    partner: PartnerProfile,
+    language_tags: Sequence[str],
+) -> list[PartnerLanguage]:
+    """Replace the languages this vendor works in (`M2-BE-301`).
+
+    A replace rather than a merge: the screen shows the whole set, so what the vendor submits is
+    the whole set, and a merge would make removing a language impossible from the only UI that
+    edits it. Rows are deactivated rather than deleted so a matching decision made last week can
+    still be explained.
+    """
+    wanted = {language_subtag(tag): tag.strip() for tag in language_tags if tag.strip()}
+    existing = {
+        language_subtag(row.language_tag): row
+        for row in PartnerLanguage.objects.filter(partner=partner)
+    }
+
+    kept: list[PartnerLanguage] = []
+    for subtag, row in existing.items():
+        should_be_active = subtag in wanted
+        if row.is_active != should_be_active:
+            row.is_active = should_be_active
+            row.save(update_fields=("is_active",))
+        if should_be_active:
+            kept.append(row)
+
+    for subtag, tag in wanted.items():
+        if subtag not in existing:
+            kept.append(PartnerLanguage.objects.create(partner=partner, language_tag=tag))
+    return sorted(kept, key=lambda row: row.language_tag)
+
+
+def partner_language_subtags(partner: PartnerProfile) -> set[str]:
+    """The languages this vendor declared, normalised. Empty means "they never said"."""
+    return {
+        language_subtag(tag)
+        for tag in PartnerLanguage.objects.filter(partner=partner, is_active=True).values_list(
+            "language_tag", flat=True
+        )
+    }
 
 
 # ---------------------------------------------------------------------------

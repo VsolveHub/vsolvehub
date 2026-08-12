@@ -209,6 +209,14 @@ class M2VariantConfiguration(models.Model):
     `quote_delivery_sla_hours` and `first_quote_sla_hours` are nullable because the SLA per
     category is an open owner decision. Nullable and fail-closed is the honest representation of
     "not decided"; a default here would bake a policy nobody approved into the schema.
+
+    `wage_floor_skill` follows the same rule for the same reason. It is the variant-to-skill
+    mapping the A3 minimum-wage guard needs, and it lives here rather than being derived from
+    `ServiceVariant.required_skill_code` because that field is the *dispatch* trade slug — it is
+    matched against `PartnerSkill` to decide who can be sent, and reusing it as the statutory wage
+    classification would silently tie a legal floor to a merchandising decision. Nullable is the
+    honest representation of "Operations has not mapped this variant"; `proposals.submit_proposal`
+    refuses an A3 quote with `m2_wage_floor_unavailable` rather than skipping the check.
     """
 
     class Status(models.TextChoices):
@@ -226,6 +234,19 @@ class M2VariantConfiguration(models.Model):
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
     #: Validated by the same helper the A1 cart uses.
     question_schema = models.JSONField(default=dict)
+    #: The category-specific questions a *vendor* answers when requesting this capability
+    #: (`M2-BE-106`). Same shape, same validator, same version as `question_schema` — one versioned
+    #: schema per variant configuration rather than a second question subsystem for registration.
+    registration_question_schema = models.JSONField(default=dict, blank=True)
+    #: Which statutory wage classification an A3 rate on this variant is measured against.
+    #: Operations-owned; null until they map it, and the guard fails closed while it is null.
+    wage_floor_skill = models.ForeignKey(
+        "partners.Skill",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_variant_configurations",
+    )
     #: Hours from submission to the first usable quote, and to the full set. Owner decision 2.
     first_quote_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
     quote_delivery_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)

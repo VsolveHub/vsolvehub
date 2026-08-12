@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.22.0
+  version: 1.23.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5534,7 +5534,10 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_lifecycle_not_supported` when the variant carries no A3/A5
             archetype. Show "we do not cover this yet" and return to the options list,
-            not a field error.'
+            not a field error. `m2_business_type_invalid` when the registration answers
+            do not satisfy the variant''s published question schema, or when a requested
+            service area is not one the Partner works in — the capability can only
+            narrow their coverage, never add to it.'
         '403':
           content:
             application/json:
@@ -5556,6 +5559,82 @@ paths:
             for this variant — the recovery is "open the one you have", not "try something
             else". `idempotency_in_progress` means wait and re-read, never resend
             under a new key.'
+  /api/v1/partner/capabilities/{capability_id}/submit/:
+    post:
+      operationId: m2_partner_capability_submit
+      description: |-
+        The Partner's own submit and resubmit (`M2-BE-110`).
+
+        The button that was missing. Until now a capability sitting in `CHANGES_REQUIRED` could only be
+        moved by Operations, so a Partner who fixed exactly what was asked had no way to say so and
+        the correction cycle depended on somebody noticing. Reaching `UNDER_REVIEW` from `REQUESTED` is
+        the first submit and from `CHANGES_REQUIRED` the resubmit; they are one command because they
+        are one act.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: capability_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner registration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapabilitySubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CapabilitySubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CapabilitySubmitRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerCapability'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_business_type_invalid` when the registration answers do
+            not satisfy the variant''s published question schema.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_capability_transition_not_allowed` from any status other
+            than `REQUESTED` or `CHANGES_REQUIRED`. A capability already `UNDER_REVIEW`
+            returns `200` unchanged rather than refusing — resubmitting is not an
+            error.'
   /api/v1/partner/capabilities/{capability_id}/withdraw/:
     post:
       operationId: m2_partner_capability_withdraw
@@ -5806,6 +5885,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/crew/{membership_id}/availability/:
+    put:
+      operationId: m2_partner_crew_availability_set
+      description: 'Mark one worker off, or back on, for one date. Exception-shaped
+        rather than a weekly calendar because that is what a supervisor actually knows:
+        the default is available, and what gets recorded is the wedding on the 14th.
+        `assert_crew_available` refuses an assignment on a day marked unavailable,
+        naming the person.'
+      parameters:
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner crew
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewAvailabilityWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewAvailabilityWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewAvailabilityWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewAvailability'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/demand-preview/:
     get:
       operationId: m2_partner_demand_preview
@@ -5863,6 +5998,12 @@ paths:
   /api/v1/partner/enquiries/:
     get:
       operationId: m2_partner_enquiry_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
       tags:
       - M2 - Partner enquiries
       security:
@@ -5872,9 +6013,13 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/EnquirySummary'
+                $ref: '#/components/schemas/EnquirySummaryPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -5963,8 +6108,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: '`m2_invitation_expired`, `m2_invitation_slots_exhausted` or
-            `m2_proposal_slot_conflict` when a linked account already holds a slot.'
+          description: '`m2_invitation_expired`, `m2_invitation_slots_exhausted`,
+            `m2_proposal_slot_conflict` when a linked account already holds a slot,
+            or `m2_capacity_unavailable` when the vendor already has work booked on
+            these dates — either another M2 enquiry they accepted or an A1 booking
+            on the shared availability grid.'
+  /api/v1/partner/enquiries/{invitation_id}/attachments/:
+    get:
+      operationId: m2_partner_enquiry_attachment_list
+      description: 'Short-lived signed links to the requirement''s **checked** attachments.
+        Access lasts as long as the invitation holds a quote slot, and ends when it
+        is declined, expired or withdrawn — only the selected vendor keeps it. Expiry
+        is reported as `has_access: false` on a `200`, not as an error: the vendor
+        still owns their enquiry record, and an empty list without that flag would
+        read as ''the Customer attached nothing''. No link is minted once access has
+        lapsed, because a signed URL is a bearer credential and hiding a button is
+        not revocation.'
+      parameters:
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorAttachmentList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_attachment_unavailable` when the storage adapter is down.'
   /api/v1/partner/enquiries/{invitation_id}/decline/:
     post:
       operationId: m2_partner_enquiry_decline
@@ -6226,6 +6421,68 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/languages/:
+    get:
+      operationId: m2_partner_language_list
+      description: |-
+        The languages this vendor can actually work in (`M2-BE-301`).
+
+        Eligibility input, not profile decoration. A requirement carries the language its answers and
+        voice note are in, and sending it to a vendor who cannot read it produces a silent non-response
+        that looks exactly like a dead account. **Declaring nothing is not a mismatch** — matching only
+        excludes on a declaration that contradicts the requirement, so no existing Partner is dropped
+        from a pool for never having filled this in.
+      tags:
+      - M2 - Partner registration
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerLanguageList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    put:
+      operationId: m2_partner_language_set
+      description: Replace the whole set. A merge would make removing a language impossible
+        from the only screen that edits them. Tags are compared on their primary subtag,
+        so `te-IN` and `te` are one language.
+      tags:
+      - M2 - Partner registration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerLanguageWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PartnerLanguageWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PartnerLanguageWriteRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartnerLanguageList'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -6971,9 +7228,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_proposal_invalid_shape` when the quote does not match
-            the requirement''s lifecycle or the stage totals do not reconcile; `m2_proposal_below_wage_floor`;
-            `m2_wage_floor_unavailable` when no floor is loaded for the state and
-            skill — this fails closed rather than guessing.'
+            the requirement''s lifecycle or the stage totals do not reconcile; `m2_proposal_below_wage_floor`
+            when an A3 daily rate is under the statutory floor for the requirement''s
+            own state and skill. **Neither the state nor the skill is accepted from
+            the caller** — both are derived from the requirement, so a vendor cannot
+            influence the floor they are measured against.'
         '403':
           content:
             application/json:
@@ -6991,7 +7250,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: ''
+          description: '`m2_wage_floor_unavailable` when Operations has not mapped
+            this variant to a wage-floor skill, has not set a state code on the service
+            area, or has loaded no floor for that pair. This **fails closed** — an
+            A3 quote is refused rather than accepted unchecked, because brokering
+            labour below the statutory minimum is a violation the platform carries,
+            not only the vendor.'
   /api/v1/proposals/{proposal_id}/:
     get:
       operationId: m2_proposal_read
@@ -7128,6 +7392,12 @@ paths:
   /api/v1/requirements/:
     get:
       operationId: m2_requirement_list
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
       tags:
       - M2 - Requirements
       security:
@@ -7137,9 +7407,13 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RequirementSummary'
+                $ref: '#/components/schemas/RequirementSummaryPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
         '403':
           content:
@@ -8837,6 +9111,10 @@ components:
           items:
             type: string
           readOnly: true
+        registration_questions:
+          type: array
+          items: {}
+          readOnly: true
         already_requested:
           type: boolean
           readOnly: true
@@ -8846,6 +9124,7 @@ components:
       - category_name
       - commercial_mode
       - lifecycle_explanation
+      - registration_questions
       - requires_insurance
       - variant_id
       - variant_name
@@ -8885,8 +9164,24 @@ components:
           type: integer
           minimum: 1
           nullable: true
+        service_area_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        registration_answers: {}
       required:
       - variant_id
+    CapabilitySubmitRequest:
+      type: object
+      description: |-
+        Submit or resubmit one capability for review.
+
+        `registration_answers` is optional so a resubmit that only fixed a document does not have to
+        resend the answers. Sending them replaces the stored set and revalidates it.
+      properties:
+        registration_answers:
+          nullable: true
     CapabilityTransitionSummary:
       type: object
       description: |-
@@ -9652,6 +9947,47 @@ components:
         * `image/jpeg` - image/jpeg
         * `image/png` - image/png
         * `application/pdf` - application/pdf
+    CrewAvailability:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+        is_available:
+          type: boolean
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date
+      - id
+      - is_available
+      - reason
+      - recorded_at
+    CrewAvailabilityWriteRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        is_available:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 200
+      required:
+      - date
+      - is_available
     CrewList:
       type: object
       properties:
@@ -10282,6 +10618,31 @@ components:
       - service_by
       - status
       - wave
+    EnquirySummaryPage:
+      type: object
+      description: |-
+        The Partner enquiry inbox's page envelope.
+
+        The same correction as `RequirementSummaryPageSerializer`, and it closes a second gap Session B
+        logged: no `cursor` parameter was published, so a Partner with more than twenty enquiries saw a
+        silently truncated inbox with no way to page past it.
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnquirySummary'
+      required:
+      - next
+      - previous
+      - results
     EscalateCaseRequestRequest:
       type: object
       properties:
@@ -12876,6 +13237,14 @@ components:
           type: integer
           readOnly: true
           nullable: true
+        service_area_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          readOnly: true
+        registration_answers:
+          readOnly: true
         expires_at:
           type: string
           format: date-time
@@ -12914,9 +13283,11 @@ components:
       - last_transition
       - max_crew_size
       - max_project_value_paise
+      - registration_answers
       - requires_insurance
       - review_notes
       - reviewed_at
+      - service_area_ids
       - status
       - suspension_reason_code
       - updated_at
@@ -13309,6 +13680,27 @@ components:
       - policy_reference
       - valid_from
       - valid_to
+    PartnerLanguageList:
+      type: object
+      properties:
+        language_tags:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - language_tags
+    PartnerLanguageWriteRequest:
+      type: object
+      properties:
+        language_tags:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 16
+      required:
+      - language_tags
     PartnerLedgerEntry:
       type: object
       description: |-
@@ -15615,6 +16007,33 @@ components:
       - service_by
       - status
       - teaser_count
+    RequirementSummaryPage:
+      type: object
+      description: |-
+        The page envelope `My requests` has always been sent, now also declared.
+
+        Until 13 August the operation declared a bare array and the view returned this envelope, so a
+        client generated from the contract threw on its first real request and every consumer had to
+        hand-write a narrowing around the generated type. The shape is
+        `carts.serializers.BookingGroupPageSerializer`'s, because there is no reason for two page
+        envelopes in one API.
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementSummary'
+      required:
+      - next
+      - previous
+      - results
     RequirementTimeline:
       type: object
       properties:
@@ -16818,6 +17237,68 @@ components:
       - id
       - is_current
       - last_seen_at
+    VendorAttachment:
+      type: object
+      description: |-
+        One of the Customer's checked files, as a short-lived signed link.
+
+        `download_url` is a bearer credential — anyone holding it holds the file — which is why it is
+        minted per read and expires in minutes rather than being stored anywhere.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        language:
+          type: string
+          readOnly: true
+        download_url:
+          type: string
+          format: uri
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - download_url
+      - expires_at
+      - id
+      - kind
+      - language
+      - size_bytes
+    VendorAttachmentList:
+      type: object
+      description: |-
+        Attachments this vendor may see, and whether they still may.
+
+        `has_access` is `false` once the invitation was declined, expired or withdrawn and this vendor
+        was not selected. It is published as a state on a `200` rather than as an error because the
+        vendor is entitled to their own enquiry record either way, and because "there are no
+        photographs" and "you may no longer see the photographs" are different things to render.
+      properties:
+        has_access:
+          type: boolean
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/VendorAttachment'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachments
+      - has_access
+      - server_now
     VendorInvitationStatusEnum:
       enum:
       - INVITED

@@ -9,7 +9,10 @@ notifications
 session beside [frontend-session-a.md](frontend-session-a.md) and
 [frontend-session-b.md](frontend-session-b.md). **Start at Wave C0 (`M2-BE-013`); it gates all 108
 frontend tasks.**
-**Revision:** 2 - simplified per [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
+**Revision:** 3 - visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
+revision 2 simplifications per [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
+remain in force. Revision 3 changes only the **unbuilt** BE4 surface plus one BE2 command; A3 and
+everything shipped are untouched.
 
 Implement M2 as modules in the existing Django modular monolith. Keep views thin, place state
 transitions in explicit domain commands, calculate money in integer paise, and protect invariants with
@@ -62,7 +65,7 @@ would otherwise duplicate it.
 | Validating customer answers against that schema | `carts.item_inputs.validate_scope(schema=..., scope=...)` | Already used by three call sites; M2 answers validate the same way. `M2-BE-203` |
 | Customer-facing question definitions | `catalog.ServiceQuestion` + `ServiceQuestionOption` — kind, `validation_rules`, options, ordering, `is_active` | Covers the guided requirement's structured questions. **No `version` field** — versioning comes from the variant configuration above, not from the question row. |
 | Explainable candidate ordering with recorded reasons | `assignments.ranking` — `ExclusionReason`, `CandidateEvaluation`, `RANKING_POLICY_VERSION`, and the rule that every passed-over Partner gets a named reason | `M2-BE-303` asks for exactly this. Extend the vocabulary; keep the contract. |
-| Bulk capacity/schedule resolution | `carts.availability` (loads a whole grid once) and the shared window rule `partners.selectors.availability_window_contains` | Soft capacity holds must agree with this, not invent a second availability notion. `M2-BE-306` |
+| Bulk capacity/schedule resolution | `carts.availability` (loads a whole grid once) and the shared window rule `partners.selectors.availability_window_contains` | Soft capacity holds must agree with this, not invent a second availability notion. `M2-BE-306`. **Revision 3: A5 visit slots are booked directly against this grid** (`M2-BE-421`), which closes the overlap for visits by construction. |
 | Signed-upload evidence with a FAILED processing state | `fulfilment.evidence` | Stage evidence in P5 |
 | Scope or price change after agreement | `fulfilment.amendments` | `M2-BE-505`; A3 extensions and A5 change orders both |
 | Cancellation policy evaluation | `fulfilment.cancellation` | `M2-BE-701` |
@@ -77,9 +80,10 @@ would otherwise duplicate it.
 
 Nothing in M1 covers these, so they are built from scratch: the requirement aggregate and its
 `service_by` clock; the invitation snapshot; proposals and their supersession chain; quote teasers and
-`QuoteUnlock`; structured question-and-answer clarification; the engagement/stage spine; duplicate
-requirement detection; language routing and transcription; non-responsive rejection; price-band review
-signals; and the WhatsApp/IVR notification rungs.
+`QuoteUnlock` (A3); **`VisitPlan` and its per-slot share settlement (A5, revision 3)**; structured
+question-and-answer clarification; the engagement/stage spine; duplicate requirement detection;
+language routing and transcription; non-responsive rejection; price-band review signals; and the
+WhatsApp/IVR notification rungs.
 
 A new aggregate is justified only when the M1 shape genuinely cannot carry the M2 invariant. Record the
 reason in the task evidence.
@@ -103,7 +107,9 @@ depend on a live provider.
   when a usable quote exists, up to three quotes.
   Evidence: ADR-0007 Decision section; requirement and unlock state machines in
   [07-state-machines-and-permissions.md](07-state-machines-and-permissions.md) §1 and §4.
-  Verified 2026-08-10.
+  Verified 2026-08-10. **Revision 3 (2026-08-12): the A5 half is superseded by ADR-0008 — visit-first,
+  tiered visit plan charged at the first confirmed slot. The A3 half stands unchanged. §1, §4, §4a
+  and §4b of `07` carry the revised machines.**
 - [x] `M2-BE-003` Record the approved fixed mode per archetype (A3 `LEAD_ONLY`, A5
   `MANAGED_PAYMENT_REQUIRED`) and remove per-variant mode configuration from the design.
   Evidence: ADR-0007 Decision and Consequences; no mode field exists on the capability model.
@@ -159,10 +165,17 @@ depend on a live provider.
   now exist for every published path**, written and not run per the verification convention, in
   `tests/requirements/test_m2_http_authorization.py`. Ruff, strict MyPy across 218 files,
   `makemigrations --check` and `spectacular --validate` all clean with zero warnings.
+  **Wave C1 remainder (2026-08-13): contract 1.23.0.** Four more paths — capability submit, partner
+  languages (read/write), crew availability and the vendor attachment read — and **two schema
+  corrections**: `m2_requirement_list` and `m2_partner_enquiry_list` declared bare arrays while
+  returning DRF page envelopes, so a generated client threw on its first real request; both now
+  declare a page envelope and publish the `cursor` parameter they never had.
+  `POST /proposals/` can finally return `m2_proposal_below_wage_floor`.
   **Remaining before `[x]`:** the owner has not run the tests, so nothing is proven against a real
   request; **contract validation is not in CI, by owner decision — the repository has no pipeline at
   all and standing one up is M1 platform work** (raised and deferred 2026-08-12). See
-  [backend-session.md](backend-session.md) §"C0 outcome" and §"C1 outcome".
+  [backend-session.md](backend-session.md) §"C0 outcome", §"C1 outcome" and
+  §"C1 remainder outcome".
 
 **BE0 gate:** No implementation task depends on an unresolved pricing, legal, lifecycle or permission
 decision. The ten blocking decisions in `README.md` are resolved, state diagrams and the initial
@@ -188,8 +201,11 @@ run them.
   and suspension reason. A skill is an eligibility input, not a lifecycle. Commercial mode is derived
   from the archetype and is not stored per capability.
   Implemented: `PartnerCapability` + `PartnerCapabilityTransition`. Mode is the derived
-  `commercial_mode` property, so no field exists that Operations could edit. **Service-area scoping is
-  not on the capability yet** and still resolves through `PartnerServiceArea`.
+  `commercial_mode` property, so no field exists that Operations could edit. **Service-area scoping
+  landed 13 August**: `PartnerCapability.service_areas`, where an empty set means every area the
+  Partner serves and a non-empty set can only *subtract* from `PartnerServiceArea` — a capability is
+  a narrowing of coverage, never a second coverage record. Read by `assert_capability_active` and by
+  `matching.evaluate_candidates`. `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-103` Model crew members with a **global crew identity** and per-Partner membership, so one
   person cannot be double-booked through two agencies on one day; prevent a crew member from being
   assigned through an unrelated Partner. `GAP-027`
@@ -204,14 +220,25 @@ run them.
   device, and expose the cluster key to matching. `GAP-011`
   Implemented: `PartnerIdentityCluster` + `PartnerClusterMembership` with hashed signal values, and
   `clustered_partner_ids` for the P3 matching module to consume.
-- [ ] `M2-BE-106` Model category-specific registration answers and documents with versioned schemas,
+- [~] `M2-BE-106` Model category-specific registration answers and documents with versioned schemas,
   retention metadata and restricted access.
-  Not started: M1 `PartnerDocument` covers documents; the versioned answer schema is not built.
+  Built 13 August on the schema M1 already has, not a second one:
+  `M2VariantConfiguration.registration_question_schema` shares the version and the `ACTIVE`-row rule
+  with the Customer-facing `question_schema`, answers are validated through the same
+  `carts.item_inputs.validate_scope`, and they are stored on `PartnerCapability.registration_answers`
+  — per capability, because "how many scaffolders can you field" is a question about this capability
+  and not about the business. Published on `GET /partner/capability-options/` as
+  `registration_questions`. Documents remain M1 `PartnerDocument` plus C1's `expires_on`.
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-107` Add constraints and indexes for unique active capability, valid service areas,
   capacity ranges, document ownership, cluster membership and active crew identity.
   Implemented: partial unique index on live capability per variant, positive-value checks,
   suspension-needs-reason check, unique crew and cluster membership, three capability indexes.
-  Service-area constraints deferred with `M2-BE-102`.
+  13 August: the capability-to-area link carries the through table's own uniqueness, and crew
+  availability arrived as `CrewAvailabilityException` with
+  `partners_unique_crew_availability_exception` — one statement per worker per date, upserted,
+  because two contradictory rows would leave `assert_crew_available` to pick one.
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-108` Model the minimum-wage floor reference table by state and skill, with effective dates.
   `GAP-023`
   Implemented: `MinimumWageFloor` with an effective-dated unique key, plus `live_wage_floor` and
@@ -226,15 +253,26 @@ run them.
   Implemented: `assert_kyc_complete`, `assert_payout_details_present` (honours M1's verified +
   `effective_from` cooling rule rather than restating a weaker one) and `assert_crew_roster_present`.
   **No HTTP surface yet** — browse-masked-demand arrives with the requirement module in P2.
-- [ ] `M2-BE-110` Implement registration draft, submit, correction and resubmit commands.
-  Not started: M1 commands are reused unchanged; no M2 delta implemented.
+- [~] `M2-BE-110` Implement registration draft, submit, correction and resubmit commands.
+  The M2 delta built 13 August: `submit_capability_for_review` and
+  `POST /api/v1/partner/capabilities/{id}/submit/`. Draft is `request_capability` and correction is
+  Operations' `transition_capability`; what was missing was the Partner's own way *out* of
+  `CHANGES_REQUIRED` — until now only Operations could move that row, so a Partner who fixed exactly
+  what was asked had no button and the cycle depended on somebody noticing. One command for submit
+  and resubmit because they are one act; it clears the correction note and is idempotent by state.
+  Deliberately **not** routed through `transition_capability`, which stamps `reviewed_by` from its
+  actor and would record the Partner as their own reviewer.
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-111` Implement crew add, edit, archive, skill and availability commands with audit logs.
   Implemented: `add_crew_to_roster` (resolves to one global person, reports created vs reinstated so
   the response can say which), `update_crew_member` (skills and supervisor flag; the display name
   belongs to the global `CrewMember` and is deliberately read-only), `archive_crew_member`, crew
   skills, and a `crew_roster` read model publishing `membership_id` and a four-digit masked phone but
-  never `crew_member_id`. Published at 1.22.0 (C1). **Crew availability and a crew-edit audit log are
-  not built.** **Archiving does not refuse on a future assignment** — proposal 0013's acceptance
+  never `crew_member_id`. Published at 1.22.0 (C1). **Crew availability landed 13 August** as
+  `set_crew_availability` + `PUT /api/v1/partner/crew/{membership_id}/availability/`, read by
+  `assert_crew_available`, which now names the person and the date rather than silently shortening
+  the list. **A crew-edit audit log is still not built.**
+  **Archiving does not refuse on a future assignment** — proposal 0013's acceptance
   criterion 9 — because assignment is per stage and `M2-BE-522` has no model until Wave C4; a guard
   against a table that does not exist would be a check that always passes.
 - [~] `M2-BE-112` Implement Operations approve, reject, request-correction, suspend and reinstate
@@ -260,8 +298,17 @@ run them.
   availability, insurance declaration or service-area rules fail.
   Implemented: `assert_capability_active` covers approval status, suspension, capability expiry and —
   since C1 — **expired required documents**, read from `settings.PARTNER_REQUIRED_DOCUMENT_KINDS`.
-  **Availability, service-area and insurance checks are not yet part of the guard**; insurance
-  enforcement is blocked on owner decision 6.
+  13 August it gained an optional `service_area` and `on_day`: coverage (both `PartnerServiceArea`
+  and the capability's own narrowing) and the Partner's published calendar, checked at the moment a
+  slot is taken rather than only when the wave was built. Both refusals reuse
+  `m2_capability_not_approved` and differ in message, because §8 lists no coverage code and inventing
+  one to save a client a string comparison would put a code on the wire the design does not know.
+  The calendar rule is deliberately weaker than M1's `partner_available_during` — a dated exception
+  is a refusal, and a weekday no rule covers is a refusal only when the Partner has published rules
+  for that area at all, because a day-block vendor publishes no hourly calendar and M1's rule would
+  have excluded every one of them. **Insurance is still not enforced** — owner decision 6, and
+  `requires_insurance` holds a default nobody approved.
+  `[~] built — static gates green, owner manual verification pending`.
 
 ### Verification
 
@@ -285,8 +332,9 @@ KYC is demonstrable — `GET /partner/demand-preview/` answers an account with n
 documents and no capability, and `GET /partner/gates/` explains the three gates that will be asked
 for. What holds the gate open: **the tests are written and unrun**, so the surface is not proven
 against a real request; `M2-BE-113` — suspension not stranding funded work — is genuinely unbuilt
-until P5 creates the engagement aggregate; and the guard still does not check availability, service
-area or insurance (`M2-BE-115`).
+until P5 creates the engagement aggregate; and the guard still does not check **insurance**
+(`M2-BE-115`), which is owner decision 6. Service area and availability came into the guard on
+13 August.
 
 ## BE2 - Customer requirements (free) and matching entry
 
@@ -352,6 +400,11 @@ attachment paths at 1.22.0) with authorization and attachment tests **written an
   `m2.requirement.closed`, which is the event the refund path will consume, so nothing has to be
   re-plumbed. **The refund half waits for P4's unlock** (`M2-BE-705`).
 
+- [ ] `M2-BE-215` Implement `choose_visit_plan` (revision 3): A5 only, recorded on the requirement
+  from the review screen; tier (1/2/3 visits) and server-priced paise snapshot; charges nothing;
+  bounds the invitation wave. An A5 submit without a plan is refused with `m2_visit_plan_required`;
+  the command is refused outright on an A3 requirement.
+
 ### Matching entry
 
 - [~] `M2-BE-211` Emit outbox events to begin matching on requirement submission with no payment
@@ -408,9 +461,18 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
   service area, travel feasibility for the requested date, language, schedule, capacity, suspension,
   conflict and workload. `GAP-007`
   Implemented: `matching.evaluate_candidates` covers capability, archetype match, service area,
-  already-invited, cluster, responsiveness, committed capacity and roster size. **Travel feasibility
-  and language matching are not implemented** - `LANGUAGE_MISMATCH` exists in the reason vocabulary
-  but nothing emits it, because vendor language is not captured in P1.
+  already-invited, cluster, responsiveness, committed capacity and roster size. **Language and travel
+  feasibility landed 13 August.** Vendor language is now captured — `PartnerLanguage` plus
+  `GET`/`PUT /api/v1/partner/languages/` — and compared on the primary subtag, so `te-IN` and `te`
+  are one language. **A vendor who declared no language is never excluded**: absence of a declaration
+  is not a mismatch, and the opposite rule would have emptied every pool of every Partner registered
+  before the field existed. Travel feasibility reuses the M1 commit window and travel estimate
+  (`carts.availability.earliest_reachable_by_partner_ids`, extracted from `earliest_reachable` so
+  there is one implementation) against the requested start, which means it bites on same-day and
+  imminent work and passes silently on anything days out — which is correct. Three named reasons
+  gained emitters or entries: `language_mismatch` finally has one, and `calendar_unavailable` and
+  `travel_not_feasible` joined the vocabulary.
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-302` Include recent responsiveness in eligibility, not only in ranking, so waves are not
   spent on dormant accounts. `GAP-013`
   Implemented: a Partner with no `PartnerOnlineSession` inside `RESPONSIVENESS_WINDOW_DAYS` (21) is
@@ -419,9 +481,18 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
 - [~] `M2-BE-303` Rank candidates using configurable, explainable signals; store matching reason codes
   and algorithm version without exposing sensitive vendor scores.
   **Reuses the `assignments.ranking` contract** - `ExclusionReason`, `CandidateEvaluation`, a policy
-  version and a `provenance()` record naming every passed-over Partner. Ordering is a stable sort on
-  Partner id, exactly as A1 does. **No business ranking signals** (distance, prior preference,
-  least-recent assignment) are computed yet.
+  version and a `provenance()` record naming every passed-over Partner. **Real signals landed 13
+  August** and `MATCHING_POLICY_VERSION` moved to 2, because an invitation written under version 1
+  was decided by different rules and Operations explaining a past decision needs to know which. The
+  order is prior relationship with this Customer, then a coarse 5 km distance band, then least-recent
+  invitation, then Partner id as the stable tie-break — bands rather than metres because a vendor
+  4.1 km away is not meaningfully closer than one at 4.9 and ranking on the difference would jitter
+  with every GPS fix while looking precise. **A Partner with no fresh location fix is scored at the
+  pool's median band**, not last: sorting unknowns to the back would hand every M2 enquiry to
+  whichever vendors happen to run the technician app, and sorting them first would make deleting a
+  location fix a strategy. Per-candidate signals are written to
+  `VendorInvitation.ranking_provenance` and **published on no read**, so a vendor cannot learn their
+  own ranking inputs. `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-304` Model vendor invitations and quote-slot reservations with unique constraints,
   business-hours deadlines and atomic capacity accounting.
   Implemented: `VendorInvitation` with one invitation per Partner per requirement, a partial unique
@@ -435,9 +506,17 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
 - [~] `M2-BE-306` Take a **soft capacity hold** for the requested dates when a vendor accepts, and a
   hard hold at selection, so one vendor cannot win more work than it can staff. `GAP-012`
   Implemented: `CapacityHold` at `SOFT` on acceptance, released on decline, expiry or withdrawal, and
-  fed back into eligibility as `capacity_committed`. **The hard hold at selection is P4.** The hold
-  does not yet consult `carts.availability`, so an A1 booking and an M2 hold can still overlap -
-  reconciling them is required before launch.
+  fed back into eligibility as `capacity_committed`. **The hold consults `carts.availability` since
+  13 August.** `carts.availability.reserved_partner_ids` is the public form of the rule the grid
+  already applied internally — `TENTATIVE` and `CONFIRMED` reservations overlapping a half-open
+  range, exactly as the database's exclusion constraint reads it — and
+  `matching.committed_capacity_partner_ids` unions it with M2's own holds. Read at wave time as
+  `capacity_committed` **and again at acceptance**, where it raises `m2_capacity_unavailable`,
+  because a vendor's diary moves between the two. Until this landed an agency could hold a Saturday
+  A1 visit and accept a Saturday workforce enquiry with neither record aware of the other. The day
+  range is converted to instants in the **service area's** timezone, so a job on the 14th does not
+  read as the 13th. **The hard hold at selection is still P4.**
+  `[~] built — static gates green, owner manual verification pending`.
 - [~] `M2-BE-307` Implement invitation accept, decline and expiry commands; make repeated commands
   idempotent and prevent acceptance after capacity is exhausted.
   Implemented: accept (idempotent, re-checks slots under a row lock), decline (reason required),
@@ -457,9 +536,25 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
   Evidence: cluster key derived from `partners.clustered_partner_ids`; a sibling account is refused at
   acceptance with `m2_proposal_slot_conflict`, backed by a partial unique index, and a wave invites
   only one account per owner. Verified 2026-08-10.
-- [ ] `M2-BE-310` Expire attachment access with the invitation for non-selected vendors; only the
+- [~] `M2-BE-310` Expire attachment access with the invitation for non-selected vendors; only the
   selected vendor retains access for the engagement's life. `GAP-008`
-  Not started: depends on the attachment upload command in `M2-BE-202`.
+  Built 13 August as `attachments.vendor_attachments` plus
+  `GET /api/v1/partner/enquiries/{id}/attachments/`. **The coupled decision is settled:
+  `RequirementSnapshot` does not copy attachments.** It freezes the answers a vendor quoted against,
+  and access is resolved live from the invitation's state — which is what makes expiry
+  implementable at all, since a frozen copy would be a second grant surviving the invitation it came
+  from. It also answers what a vendor sees when a file is scanned *after* their invitation: the
+  currently-`VERIFIED` set, so a photograph that passed its scan an hour later becomes visible and an
+  `INFECTED` one never does. Freezing the list would have shown a vendor a `PENDING` file that turned
+  out to be malware, or hidden a clean file from the only person who needed it; attachments cannot be
+  added after `DRAFT`, so the live list can only gain verdicts on files the frozen answers already
+  described. Access holds while the invitation holds a quote slot and ends on decline, expiry or
+  withdrawal; only the selected vendor keeps it. **No signed link is minted once access lapses** —
+  a signed URL is a bearer credential, so revocation has to mean not issuing one, and the
+  fifteen-minute lifetime is what bounds links already handed out. Expiry is published as
+  `has_access: false` on a `200` rather than an error, because the vendor still owns their enquiry
+  record and an empty list without that flag reads as "the Customer attached nothing".
+  `[~] built — static gates green, owner manual verification pending`.
 
 ### Safe follow-up
 
@@ -500,9 +595,20 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
   whose amounts reconcile to the quoted total. Verified 2026-08-10.
 - [~] `M2-BE-317` Validate A3 rates against the applicable state and skill minimum-wage floor and reject
   submissions below it. `GAP-023`
-  Implemented via `partners.assert_rate_meets_wage_floor`. **The state and skill are passed in by the
-  caller** rather than derived from the requirement's address and variant, so the guard is opt-in
-  until that derivation exists. Deriving it is required before launch.
+  **The live defect is closed as of 13 August.** `submit_proposal` no longer accepts
+  `wage_floor_skill` or `wage_floor_state_code` from its caller; it derives the skill from
+  `catalog.M2VariantConfiguration.wage_floor_skill` and the state from
+  `locations.ServiceArea.state_code`, both new, both nullable/blank, both Operations-owned. A vendor
+  who could name their own classification could name the one with the lowest floor, and the platform
+  carries that exposure. `ServiceVariant.required_skill_code` was considered and rejected: it is the
+  *dispatch* trade slug matched against `PartnerSkill`, and reusing it would tie a statutory wage
+  classification to a merchandising decision. An unmapped variant or area raises
+  `m2_wage_floor_unavailable` (409) rather than skipping — **this fails closed and therefore blocks
+  A3 quoting until Operations loads the mapping and a floor**, which is the intended consequence;
+  skipping silently is the defect. `partners.assert_rate_meets_wage_floor` keeps its explicit-inputs
+  signature for callers that genuinely name a state and a skill, and no HTTP path can reach it.
+  Values remain owner decision 7.
+  `[~] built — static gates green, owner manual verification pending`.
 - [x] `M2-BE-318` Enforce a single tax basis across competing proposals for one requirement and persist
   the commission-treatment field on every proposal. `GAP-016`, `GAP-017`
   Evidence: the first proposal fixes the basis; a competing quote on the other basis is rejected with
@@ -548,24 +654,33 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
   the third needs `M2-BE-312`. Written, not run.
 
 **BE3 gate:** Usable quotes are delivered inside the declared SLA or replacement and closure proceed
-without manual database intervention. Nothing has been charged.
+without manual database intervention. Nothing has been charged. (Revision 3: demonstrable end to end
+on A3; the A5 estimate path additionally needs BE4's visit surface, since an A5 proposal requires a
+completed visit.)
 
 **Gate not passed, and the reason has changed.** The "nothing has been charged" half still holds - no
 money path exists anywhere in P3. The delivery half is now mostly true: since C1 an unanswered wave
 recovers automatically, `schedule_site_visit` and `complete_site_visit` are published, and every
-published path has a written authorization test. What holds the gate open: **the tests are unrun**;
-replacement on an *explicit decline* is still unwired; and `M2-BE-317` means
-`m2_proposal_below_wage_floor` is documented on `POST /proposals/` and cannot be returned by it, so a
-below-floor A3 rate is accepted today.
+published path has a written authorization test. **`M2-BE-317` is closed as of 13 August**:
+`m2_proposal_below_wage_floor` can be returned, the state and skill are derived from the requirement
+rather than the caller, and an unmapped variant or area refuses with `m2_wage_floor_unavailable`
+instead of skipping. What holds the gate open: **the tests are unrun**; replacement on an *explicit
+decline* is still unwired; and the wage-floor **values** are owner decision 7, so the fail-closed
+guard blocks A3 quoting per variant and area until Operations loads them.
 
-## BE4 - Unlock, selection, reconfirmation and engagement
+## BE4 - Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement
 
-### Unlock
+Revision 3 splits the front door by archetype. The A3 unlock tasks are unchanged from revision 2;
+the A5 visit-plan tasks are new and replace the A5 use of the unlock. Nothing in this phase existed
+before the split.
+
+### A3 unlock
 
 - [ ] `M2-BE-401` Store the unlock price server-side in paise, with effective dates and immutable
   purchase snapshots.
 - [ ] `M2-BE-402` Model `QuoteUnlock` with the requirement, purchased price, unlocked proposal set,
-  rejection count and refund state. Offer it only when at least one usable quote exists. `FLOW-01`
+  rejection count and refund state. Offer it only when at least one usable quote exists. A3 only.
+  `FLOW-01`
 - [ ] `M2-BE-403` Implement unlock checkout, payment-order creation and verified webhook completion
   using existing M1 payment abstractions and provider test callbacks.
 - [ ] `M2-BE-404` Guarantee one unlock for one successful payment under duplicate webhooks, browser
@@ -573,7 +688,43 @@ below-floor A3 rate is accepted today.
 - [ ] `M2-BE-405` Implement payment-pending reconciliation and Customer-visible status; never grant an
   unlock from a client redirect alone.
 - [ ] `M2-BE-406` Implement non-responsive rejection: release the slot, invite a replacement at no extra
-  charge, enforce the configured cap and record the reason against vendor standing. `GAP-009`
+  charge (A3: a quote slot; A5: a free replacement visit), enforce the configured cap and record the
+  reason against vendor standing. `GAP-009`
+
+### A5 visit plan (revision 3, ADR-0008)
+
+- [ ] `M2-BE-419` Model `VisitPlan`: requirement, tier size, server-priced paise snapshot per tier
+  with effective dates, charge state, per-slot shares (`plan price / plan size` in integer paise,
+  remainder on the first share) and per-share settlement state (`OPEN`, `COMMITTED`, `EARNED`,
+  `REFUNDED`, `REPLACED`).
+- [ ] `M2-BE-420` Link each A5 `SiteVisit` to one plan share; a share holds at most one live visit.
+- [ ] `M2-BE-421` Implement `confirm_visit_slot`: books the visit slot against **`carts.availability`**
+  — the same grid the A1 technician flow reads — so a visit and an A1 booking cannot double-book;
+  refuses with `m2_visit_slot_unavailable` when capacity is gone. The first held slot opens the plan
+  checkout; the hold expires harmlessly if the Customer never pays.
+- [ ] `M2-BE-422` Implement `create_visit_plan_checkout` and `complete_visit_plan` on the M1 payment
+  abstractions with provider test callbacks: one verified payment charges exactly one plan under
+  duplicate webhooks and retries; the held slot hardens to `SCHEDULED` only on the verified callback;
+  later slots book without further payment. Never charge from a client redirect
+  (`m2_visit_plan_payment_pending` while waiting).
+- [ ] `M2-BE-423` Implement visit arrival confirmation on the non-OTP fallback (start OTP is M3
+  activation), reusing the same fallback pattern as crew arrival (`M2-BE-524`).
+- [ ] `M2-BE-424` Enforce the estimate-visit guard: an A5 proposal must reference a `COMPLETED`
+  visit; otherwise `m2_visit_not_completed`. Prefill support: expose the requirement + visit context
+  the on-site composer reads.
+- [ ] `M2-BE-425` Implement share settlement sweeps: unfilled shares auto-refund at the visit SLA;
+  vendor no-show and estimate-not-submitted-in-window refund or replace the share (free replacement
+  visit) and record against vendor standing; customer no-show disposition follows the configured
+  policy. All through the M1 `Refund` lifecycle, idempotent under overlapping runs.
+- [ ] `M2-BE-426` Implement the per-slot split (decided 2026-08-13): each share carries a
+  server-calculated **vendor visit payout** and **Vsolve platform share** in integer paise (split
+  percentages read fail-closed). An `EARNED` share (completed visit + usable estimate in window)
+  makes the vendor payout payout-eligible through the **M1 payout and ledger rails**, gated on the
+  progressive payout-details rule; the platform share books as Vsolve revenue. A refunded share pays
+  neither. No stage credit exists.
+- [ ] `M2-BE-427` Reclassification money rules: A5→A3 voids unfilled shares and refunds them (or
+  converts per configuration); A3→A5 preserves an unlock as plan credit. No second charge, extending
+  `M2-BE-205`.
 
 ### Selection and reconfirmation
 
@@ -582,21 +733,24 @@ below-floor A3 rate is accepted today.
   withdrawn. `GAP-021`
 - [ ] `M2-BE-408` Create a time-limited vendor reconfirmation that rechecks capability, schedule,
   capacity and proposal validity.
-- [ ] `M2-BE-409` On rejection or expiry, preserve the rejected history, keep the unlock valid and offer
-  the next quote or a replacement at no additional charge.
+- [ ] `M2-BE-409` On rejection or expiry, preserve the rejected history, keep the unlock (A3) or
+  visit-plan entitlement (A5) valid and offer the next quote, estimate or a replacement visit at no
+  additional charge.
 - [ ] `M2-BE-410` Implement a re-validation request for an expired-validity proposal that reuses the
-  existing unlock rather than forcing a second purchase. `GAP-019`
+  existing unlock or plan rather than forcing a second purchase. `GAP-019`
 
 ### Engagement creation and money
 
 - [ ] `M2-BE-411` For A3 (`LEAD_ONLY`), create a connection engagement that records direct payment,
   limited Vsolve protection and the earned unlock-fee policy.
 - [ ] `M2-BE-412` For A5 (`MANAGED_PAYMENT_REQUIRED`), create an immutable engagement snapshot only
-  after vendor reconfirmation and require a verified funded first stage before work may start.
+  after vendor reconfirmation and require a verified funded first stage at face value before work
+  may start. Visit money settles per share (`M2-BE-426`) and never discounts a stage.
 - [ ] `M2-BE-413` Server-calculate stage amounts, commission, tax and payout allocation in paise; reject
   client-supplied totals.
 - [ ] `M2-BE-414` Reuse M1 ledger and payment infrastructure with distinct money purposes for unlock
-  fee, site-visit fee, stage funding, material advance, refund, commission and vendor payout. `GAP-028`
+  fee, visit-plan fee, site-visit fee, stage funding, material advance, refund, commission and vendor
+  payout. `GAP-028`
   Add them to the existing `commerce.PaymentAttempt.Purpose` enum exactly as
   `SCOPE_AMENDMENT_REVISION` did. Do not create a parallel payment path or a second ledger.
 - [ ] `M2-BE-415` Generate durable invoice/receipt metadata and expose payment status without leaking
@@ -610,10 +764,16 @@ below-floor A3 rate is accepted today.
   commands. `GAP-020`
 - [ ] `M2-BE-418` Test that protections and refund eligibility differ correctly between A3 connections
   and A5 managed engagements.
+- [ ] `M2-BE-428` Test the visit-plan money paths: duplicate plan webhooks, hold expiry racing the
+  checkout, slot contention on the grid against a concurrent A1 booking, share arithmetic in paise
+  (remainder on the first share; payout + platform share + refunds reconcile to the plan), unfilled-
+  share refund idempotence under overlapping sweeps, estimate-window refusal, vendor payout
+  eligibility gating on payout details, and reclassification with a charged plan.
 
-**BE4 gate:** Money is collected only against delivered value. An engagement exists only after valid
-selection, vendor reconfirmation and the archetype's own confirmation condition. All amounts reconcile
-to immutable engagement terms.
+**BE4 gate:** Money is collected only against a real accepted commitment — a usable quote (A3) or a
+confirmed visit (A5). An engagement exists only after valid selection, vendor reconfirmation and the
+archetype's own confirmation condition. All amounts, shares, payouts and platform shares reconcile
+to immutable engagement terms in integer paise.
 
 ## BE5 - Engagement spine
 
@@ -733,15 +893,20 @@ project has a path to being finished; clarification cannot alter the agreement.
 
 ### Refund and payout integrity
 
-- [ ] `M2-BE-705` Implement unlock-fee outcomes: full refund on `service_by` expiry or exhausted
+- [ ] `M2-BE-705` Implement unlock-fee outcomes (A3): full refund on `service_by` expiry or exhausted
   vendors, free replacement on non-responsive rejection, earned fee once valid quotes were unlocked.
   `FLOW-01`
+- [ ] `M2-BE-718` Implement visit-plan outcomes (A5): full refund of unconsumed value on `service_by`
+  expiry; per-share refund on unfilled slots, vendor no-show and missed estimate windows; earned
+  shares (vendor payout + platform share) once a completed visit produced a usable estimate; customer
+  no-show pays the vendor payout with the platform share per the configured policy. All shares
+  reconcile to the plan in paise: `plan = Σ payouts + Σ platform shares + Σ refunds`.
 - [ ] `M2-BE-706` Implement service-payment cancellation outcomes by archetype, work state and verified
   completion.
 - [ ] `M2-BE-707` Make refund initiation idempotent and ledger-backed; handle provider pending, failed,
   reversed and duplicate test callbacks.
-- [ ] `M2-BE-708` Handle a chargeback on the unlock fee itself through the standard dispute path and
-  alert on the rate. `GAP-035`
+- [ ] `M2-BE-708` Handle a chargeback on the unlock or visit-plan fee itself through the standard
+  dispute path and alert on the rate. `GAP-035`
 - [ ] `M2-BE-709` Hold payout automatically when a qualifying case opens and release/reverse only
   through authorized commands.
 - [ ] `M2-BE-710` Reconcile payment, refund, ledger and payout records on a scheduled job with alerts for
@@ -786,8 +951,9 @@ recovery command; money reconciles after retries.
 
 ### Reliability and operations
 
-- [ ] `M2-BE-806` Add structured metrics for the success measures in `README.md`: quote fill rate, time
-  to first quote against SLA, unlock conversion, unlock refund rate, vendor response rate,
+- [ ] `M2-BE-806` Add structured metrics for the success measures in `README.md`: quote fill rate
+  (A3), visit fill rate and visit-to-estimate rate (A5), time to first quote / first confirmed visit
+  against SLA, unlock and plan conversion, unlock and visit-plan refund rates, vendor response rate,
   selection-to-confirmation rate, dispute rate and Operations touches per request. `PLN-05`
 - [~] `M2-BE-807` Define and implement the notification escalation ladder (in-app, push, SMS, WhatsApp,
   call) so no deadline depends on an unread in-app notice. `PLN-06`

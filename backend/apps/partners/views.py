@@ -20,6 +20,7 @@ from apps.catalog.models import ServiceVariant
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import AccessAuditEvent, User
 from apps.identity.services import record_access_event
+from apps.locations.models import ServiceArea
 from apps.locations.serializers import PartnerServiceAreaOptionSerializer
 from apps.partners.capabilities import (
     add_crew_to_roster,
@@ -29,6 +30,9 @@ from apps.partners.capabilities import (
     gate_states,
     live_insurance_declaration,
     request_capability,
+    set_crew_availability,
+    set_partner_languages,
+    submit_capability_for_review,
     transition_capability,
     update_crew_member,
     upsert_business_profile,
@@ -48,6 +52,7 @@ from apps.partners.models import (
     PartnerCapability,
     PartnerCrewMembership,
     PartnerDocument,
+    PartnerLanguage,
     PartnerProfile,
     Skill,
 )
@@ -67,6 +72,9 @@ from apps.partners.selectors import (
 from apps.partners.serializers import (
     CapabilityOptionsSerializer,
     CapabilityRequestSerializer,
+    CapabilitySubmitSerializer,
+    CrewAvailabilitySerializer,
+    CrewAvailabilityWriteSerializer,
     CrewListSerializer,
     CrewMemberCreateSerializer,
     CrewMemberSerializer,
@@ -97,6 +105,8 @@ from apps.partners.serializers import (
     PartnerGoOnlineSerializer,
     PartnerInsuranceSerializer,
     PartnerInsuranceWriteSerializer,
+    PartnerLanguageListSerializer,
+    PartnerLanguageWriteSerializer,
     PartnerPresenceHeartbeatSerializer,
     PartnerPresenceSerializer,
     PartnerPresenceSessionRequestSerializer,
@@ -1108,7 +1118,10 @@ class PartnerCapabilityCollectionView(APIView):
                 response=ApiErrorSerializer,
                 description="`m2_lifecycle_not_supported` when the variant carries no A3/A5 "
                 'archetype. Show "we do not cover this yet" and return to the options list, not a '
-                "field error.",
+                "field error. `m2_business_type_invalid` when the registration answers do not "
+                "satisfy the variant's published question schema, or when a requested service area "
+                "is not one the Partner works in — the capability can only narrow their coverage, "
+                "never add to it.",
             ),
             403: ApiErrorSerializer,
             404: ApiErrorSerializer,
@@ -1132,6 +1145,12 @@ class PartnerCapabilityCollectionView(APIView):
             id=values["variant_id"],
             is_active=True,
         )
+        area_ids = list(values.get("service_area_ids") or [])
+        # Resolved here rather than in the command so an unknown id is a `404` on the id the caller
+        # sent, not a domain refusal about coverage they never asked for.
+        areas = list(ServiceArea.objects.filter(id__in=area_ids)) if area_ids else []
+        if len(areas) != len(set(area_ids)):
+            raise NotFound("One of those service areas was not found.")
 
         def command() -> tuple[int, dict[str, object]]:
             try:
@@ -1140,6 +1159,8 @@ class PartnerCapabilityCollectionView(APIView):
                     variant=variant,
                     max_crew_size=values.get("max_crew_size"),
                     max_project_value_paise=values.get("max_project_value_paise"),
+                    service_areas=areas,
+                    registration_answers=values.get("registration_answers") or {},
                 )
             except PartnerDomainError as exc:
                 _raise_api_error(exc)
@@ -1155,7 +1176,82 @@ class PartnerCapabilityCollectionView(APIView):
             actor=actor,
             operation="m2.capability.request",
             key=key,
-            request_payload={"variant_id": str(values["variant_id"])},
+            request_payload={
+                "variant_id": str(values["variant_id"]),
+                "service_area_ids": sorted(str(area_id) for area_id in area_ids),
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class PartnerCapabilitySubmitView(APIView):
+    """The Partner's own submit and resubmit (`M2-BE-110`).
+
+    The button that was missing. Until now a capability sitting in `CHANGES_REQUIRED` could only be
+    moved by Operations, so a Partner who fixed exactly what was asked had no way to say so and
+    the correction cycle depended on somebody noticing. Reaching `UNDER_REVIEW` from `REQUESTED` is
+    the first submit and from `CHANGES_REQUIRED` the resubmit; they are one command because they
+    are one act.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Partner registration"],
+        operation_id="m2_partner_capability_submit",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CapabilitySubmitSerializer,
+        responses={
+            200: PartnerCapabilitySerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_business_type_invalid` when the registration answers do not "
+                "satisfy the variant's published question schema.",
+            ),
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_capability_transition_not_allowed` from any status other than "
+                "`REQUESTED` or `CHANGES_REQUIRED`. A capability already `UNDER_REVIEW` returns "
+                "`200` unchanged rather than refusing — resubmitting is not an error.",
+            ),
+        },
+    )
+    def post(self, request: Request, capability_id: uuid.UUID) -> Response:
+        serializer = CapabilitySubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        answers = serializer.validated_data.get("registration_answers")
+        actor = cast(User, request.user)
+        profile = _partner_profile_or_404(request)
+        key = _idempotency_key(request)
+        capability = PartnerCapability.objects.filter(id=capability_id, partner=profile).first()
+        if capability is None:
+            raise NotFound("Capability was not found.")
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                submit_capability_for_review(
+                    capability_id=capability.id,
+                    actor=actor,
+                    registration_answers=answers,
+                )
+            except PartnerDomainError as exc:
+                _raise_api_error(exc)
+
+            return HTTPStatus.OK, cast(
+                dict[str, object],
+                PartnerCapabilitySerializer(
+                    _capability_record(profile=profile, capability_id=capability.id)
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.capability.submit",
+            key=key,
+            request_payload={"capability_id": str(capability_id)},
             command=command,
         )
         return Response(result.body, status=result.status_code)
@@ -1448,6 +1544,99 @@ class PartnerCrewArchiveView(APIView):
         except PartnerDomainError as exc:
             _raise_api_error(exc)
         return Response(_crew_entry(profile=profile, membership_id=membership_id))
+
+
+class PartnerCrewAvailabilityView(APIView):
+    """A dated statement that one worker is, or is not, available (`M2-BE-107`)."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Partner crew"],
+        operation_id="m2_partner_crew_availability_set",
+        request=CrewAvailabilityWriteSerializer,
+        description=(
+            "Mark one worker off, or back on, for one date. Exception-shaped rather than a weekly "
+            "calendar because that is what a supervisor actually knows: the default is available, "
+            "and what gets recorded is the wedding on the 14th. `assert_crew_available` refuses an "
+            "assignment on a day marked unavailable, naming the person."
+        ),
+        responses={
+            200: CrewAvailabilitySerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def put(self, request: Request, membership_id: uuid.UUID) -> Response:
+        serializer = CrewAvailabilityWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        profile = _partner_profile_or_404(request)
+        membership = _crew_membership_or_404(profile=profile, membership_id=membership_id)
+        record = set_crew_availability(
+            membership=membership,
+            on_day=values["date"],
+            is_available=values["is_available"],
+            reason=values.get("reason", ""),
+        )
+        return Response(CrewAvailabilitySerializer(record).data)
+
+
+class PartnerLanguageView(APIView):
+    """The languages this vendor can actually work in (`M2-BE-301`).
+
+    Eligibility input, not profile decoration. A requirement carries the language its answers and
+    voice note are in, and sending it to a vendor who cannot read it produces a silent non-response
+    that looks exactly like a dead account. **Declaring nothing is not a mismatch** — matching only
+    excludes on a declaration that contradicts the requirement, so no existing Partner is dropped
+    from a pool for never having filled this in.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Partner registration"],
+        operation_id="m2_partner_language_list",
+        responses={200: PartnerLanguageListSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        profile = partner_profile_for_user(cast(User, request.user))
+        tags = (
+            sorted(
+                PartnerLanguage.objects.filter(partner=profile, is_active=True).values_list(
+                    "language_tag", flat=True
+                )
+            )
+            if profile is not None
+            else []
+        )
+        return Response(PartnerLanguageListSerializer({"language_tags": tags}).data)
+
+    @extend_schema(
+        tags=["M2 - Partner registration"],
+        operation_id="m2_partner_language_set",
+        request=PartnerLanguageWriteSerializer,
+        description=(
+            "Replace the whole set. A merge would make removing a language impossible from the "
+            "only screen that edits them. Tags are compared on their primary subtag, so `te-IN` "
+            "and `te` are one language."
+        ),
+        responses={200: PartnerLanguageListSerializer, 400: ApiErrorSerializer},
+    )
+    def put(self, request: Request) -> Response:
+        serializer = PartnerLanguageWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = _partner_profile_or_404(request)
+        rows = set_partner_languages(
+            partner=profile,
+            language_tags=serializer.validated_data["language_tags"],
+        )
+        return Response(
+            PartnerLanguageListSerializer(
+                {"language_tags": sorted(row.language_tag for row in rows)}
+            ).data
+        )
 
 
 def _crew_membership_or_404(

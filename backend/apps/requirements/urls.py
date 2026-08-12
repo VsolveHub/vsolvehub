@@ -10,6 +10,7 @@ from django.urls import path
 from apps.requirements.views import (
     PartnerDemandPreviewView,
     PartnerEnquiryAcceptView,
+    PartnerEnquiryAttachmentListView,
     PartnerEnquiryCollectionView,
     PartnerEnquiryDeclineView,
     PartnerEnquiryDetailView,
@@ -127,6 +128,11 @@ urlpatterns = [
         "partner/enquiries/<uuid:invitation_id>/questions/",
         PartnerEnquiryQuestionView.as_view(),
         name="m2-partner-enquiry-question",
+    ),
+    path(
+        "partner/enquiries/<uuid:invitation_id>/attachments/",
+        PartnerEnquiryAttachmentListView.as_view(),
+        name="m2-partner-enquiry-attachments",
     ),
     path(
         "partner/enquiries/<uuid:invitation_id>/site-visits/",

@@ -22,7 +22,7 @@ from django.utils import timezone
 from apps.catalog.models import ServiceVariant
 from apps.identity.models import User
 from apps.partners.capabilities import assert_rate_meets_wage_floor
-from apps.partners.models import Skill
+from apps.partners.exceptions import WageFloorUnsetError
 from apps.requirements.exceptions import (
     ProposalShapeError,
     RequirementTransitionError,
@@ -92,6 +92,47 @@ def classify_usability(*, requirement: CustomerRequirement, total_paise: int) ->
     return Proposal.Usability.USABLE
 
 
+def assert_rate_meets_derived_wage_floor(
+    *,
+    requirement: CustomerRequirement,
+    rate_paise_per_day: int,
+) -> None:
+    """Check an A3 rate against the floor for **this requirement's** state and skill.
+
+    Both inputs are derived from the requirement and neither is accepted from the caller. That is
+    the whole point of `M2-BE-317`: a vendor who could name their own wage classification or their
+    own state could name the one with the lowest floor, and the platform — not only the vendor —
+    carries the consequence of brokering labour below the statutory minimum.
+
+    * **Skill** comes from `M2VariantConfiguration.wage_floor_skill`, the Operations-owned mapping
+      on the same versioned row the requirement's answers were validated against.
+    * **State** comes from `ServiceArea.state_code`, likewise Operations-owned. `Address.state`
+      holds a free-text *name*; turning "Telangana" into whatever code Operations loaded the floors
+      under would be a policy table living in code.
+
+    **Fails closed.** An unmapped variant or an unmapped area raises `m2_wage_floor_unavailable`
+    rather than skipping the check — skipping is the defect this closes, and a guard that silently
+    does nothing is indistinguishable from one that passed.
+    """
+    configuration = requirement.configuration
+    skill = configuration.wage_floor_skill if configuration is not None else None
+    area = requirement.service_area
+    state_code = area.state_code if area is not None else ""
+    if skill is None or not state_code:
+        raise WageFloorUnsetError()
+
+    assert_rate_meets_wage_floor(
+        state_code=state_code,
+        skill=skill,
+        on_day=(
+            requirement.requested_start.date()
+            if requirement.requested_start
+            else timezone.localdate()
+        ),
+        rate_paise_per_day=rate_paise_per_day,
+    )
+
+
 def _required_tax_basis(requirement: CustomerRequirement) -> str:
     """One basis per requirement, taken from whoever quoted first.
 
@@ -124,13 +165,21 @@ def submit_proposal(
     valid_until: Any = None,
     commission_treatment: str = "",
     captured_by: User | None = None,
-    wage_floor_skill: Skill | None = None,
-    wage_floor_state_code: str = "",
 ) -> Proposal:
-    """Submit a first quote, or a revision that supersedes the vendor's previous one."""
+    """Submit a first quote, or a revision that supersedes the vendor's previous one.
+
+    The wage floor is **derived**, never passed in. Until 13 August this command took
+    `wage_floor_skill` and `wage_floor_state_code` from its caller and skipped the check when they
+    were absent, which is how `POST /api/v1/proposals/` came to document a refusal it could not
+    make. Operations-assisted capture goes through this same command and gets the same derivation;
+    `partners.assert_rate_meets_wage_floor` remains the explicit-inputs function for anything that
+    genuinely needs to name a state and a skill.
+    """
     invitation = (
         VendorInvitation.objects.select_for_update()
-        .select_related("requirement", "snapshot", "partner")
+        .select_related(
+            "requirement__configuration", "requirement__service_area", "snapshot", "partner"
+        )
         .get(pk=invitation_id)
     )
     requirement = invitation.requirement
@@ -161,20 +210,14 @@ def submit_proposal(
             f"Quotes for this request are compared {required_basis.lower()} of tax.",
         )
 
+    # A3 only. An A5 estimate is a price for an outcome, not a rate per worker per day, so there is
+    # no statutory floor to measure it against.
     if (
         requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
-        and wage_floor_skill is not None
-        and wage_floor_state_code
         and rate_paise_per_worker_day is not None
     ):
-        assert_rate_meets_wage_floor(
-            state_code=wage_floor_state_code,
-            skill=wage_floor_skill,
-            on_day=(
-                requirement.requested_start.date()
-                if requirement.requested_start
-                else timezone.localdate()
-            ),
+        assert_rate_meets_derived_wage_floor(
+            requirement=requirement,
             rate_paise_per_day=rate_paise_per_worker_day,
         )
 
