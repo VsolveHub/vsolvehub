@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.24.0)
- * Checksum: 32764f5d53d6baf9
+ * Source:   contracts/openapi/v1.yaml (version 1.25.0)
+ * Checksum: 44774aef4ebca9c6
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -750,6 +750,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagement-amendments/{engagement_amendment_id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description **Money first, scope second (`M2-BE-506`).** Accepting does not change the agreed work until the money has moved. Three routes, chosen by the commercial mode and the sign of the delta and never by anything a client sends:
+         *
+         *     - `LEAD_ONLY` (A3): no platform money exists to move, so the amendment authorizes here and the extra shift-days appear immediately. `checkout` is `null`.
+         *     - Managed (A5), negative delta: the refund is issued against the stage's own funding payment **before** the scope shrinks, so there is no instant in which the Customer owns less work than they have paid for. `checkout` is `null`.
+         *     - Managed (A5), positive delta: `checkout` carries a `PaymentAttempt` and **nothing changes until a verified provider callback**. A client redirect claiming success is a claim by the party that benefits from it.
+         *
+         *     Repeating an acceptance while its payment is pending returns the same attempt rather than starting a second charge.
+         */
+        post: operations["m2_engagement_amendment_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-amendments/{engagement_amendment_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The Customer says no. The agreed work is unchanged, nothing has moved, and the vendor may propose a different change. */
+        post: operations["m2_engagement_amendment_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One shift-day (A3) or milestone (A5) with its evidence, money and clocks. Both `review_due_at` and `payout_release_due_at` are nullable and their nulls are real policy states: no review window is configured, so this stage never auto-approves; no payout hold is configured, so its payout does not release on a clock. Render nothing there rather than a countdown to a deadline nobody set. */
+        get: operations["m2_stage_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The Customer accepts the work on one stage. `AWAITING_REVIEW` → `APPROVED`. On a managed (A5) engagement this writes the vendor's earning **held** on the M1 payout rails and stamps `payout_release_due_at` — the dispute window — and the money becomes payable when that window closes. On `LEAD_ONLY` (A3) nothing is held because nothing was collected, so the stage goes straight to `RELEASED`. */
+        post: operations["m2_stage_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/correction/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Send a stage back to be done properly. `AWAITING_REVIEW` → `CORRECTION_REQUESTED`, and the review clock stops. **A correction is not an amendment**: it asks for the agreed work, it does not change what the agreed work is, and it moves no money. A Customer who wants something different is asking for a change order, which needs the vendor's agreement. */
+        post: operations["m2_stage_request_correction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/dispute/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Formally object to submitted work. `AWAITING_REVIEW` → `DISPUTED`, and the engagement shows `DISPUTED` alongside. **A dispute stops only the disputed allocation**: every other stage carries on and any payout already released stays released. The review timeout cannot reach a disputed stage, so silence never becomes approval on something somebody has objected to. */
+        post: operations["m2_stage_dispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/dispute/decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description `DISPUTED` → `APPROVED` or `CORRECTION_REQUESTED`, as an auditable domain command rather than a database edit. Two outcomes and not three: a partial outcome is a scope amendment both sides accept, never an operator quietly repricing a stage. The full case machinery — evidence, deadlines, appeals — is Wave C6; this is the transition it will drive, published now so a disputed stage is not a dead end. */
+        post: operations["m2_stage_dispute_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/evidence/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Verify the object that arrived against the intent and record it as evidence. `processing_status` lands `PENDING`: the bytes are the ones the client promised, and whether they are safe is a separate question a scanner answers. Two concurrent finalizes of one intent produce one evidence row. */
+        post: operations["m2_stage_evidence_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/evidence/uploads/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description A signed, short-lived upload URL for one evidence file, plus the intent id to finalize against. The server names the object key and records the size, media type and SHA-256 it expects; finalization fetches the object back and compares. Without the intent row, 'verify the upload' would mean 'believe the client'. `NOTE` is not a kind here — a note carries no file and is submitted with the stage. */
+        post: operations["m2_stage_evidence_upload_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagement-stages/{stage_id}/funding/": {
         parameters: {
             query?: never;
@@ -767,6 +928,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagement-stages/{stage_id}/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Begin work on a stage. `PENDING` → `IN_PROGRESS`, and `CORRECTION_REQUESTED` → `IN_PROGRESS` after the Customer sent it back. **A5 requires verified funding at face value** — the visit-plan money settles per share and never discounts a stage — so a funded A5 stage is already `IN_PROGRESS` and this call is an idempotent no-op; reaching it on an unfunded one is `m2_stage_not_funded`. */
+        post: operations["m2_stage_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/submit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Hand the stage to the Customer for review. `IN_PROGRESS` → `AWAITING_REVIEW`, and the moment the review clock starts. The note is required and is stored as its own append-only evidence row rather than as a field on the stage, so a correction cycle leaves both accounts readable — what the vendor said the first time and what they said after the Customer pushed back. Resubmitting after a correction restarts the review window from zero, because the Customer is looking at different evidence. */
+        post: operations["m2_stage_evidence_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The caller's engagements, newest first, as a cursor page. A Customer sees the ones they commissioned and a Partner the ones they are performing; the `role` query parameter picks which, and defaults to whichever the caller can be. Read `commercial_mode` before promising anything: `LEAD_ONLY` (A3) is a connection, not a protected booking. */
+        get: operations["m2_engagement_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagements/{engagement_id}/": {
         parameters: {
             query?: never;
@@ -776,6 +988,64 @@ export interface paths {
         };
         /** @description The agreement frozen at reconfirmation, with its ordered stages. **Read `commercial_mode` before promising anything**: `LEAD_ONLY` (A3) means the Customer pays the vendor directly and Vsolve's protection is matching and replacement, not a protected booking. `MANAGED_PAYMENT_REQUIRED` (A5) funds one stage at a time, at face value — the visit-plan money settles per share and never discounts a stage. */
         get: operations["m2_engagement_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/amendments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every change request on this engagement, newest first. Both parties read it. */
+        get: operations["m2_engagement_amendment_list"];
+        put?: never;
+        /**
+         * @description The vendor asks to change the agreed work. **Routed through the M1 scope-amendment engine** — same status machine, same lines, same expiry rule — with two line kinds M2 adds because an engagement has no catalog task to price from.
+         *
+         *     **The archetype fixes the shape and the pricing authority.** An A3 engagement takes a `TIME_EXTENSION`, priced by the **server** from the worker-day rate frozen at reconfirmation: the vendor names days, never money, because a vendor who could name the money could re-price a job the Customer already committed to. An A5 engagement takes a `CHANGE_ORDER`, priced by the vendor line by line, because a bespoke outcome has no catalog rate — and the server still sums the lines and rejects any client-supplied total. `amount_paise` is signed: negative removes scope.
+         *
+         *     One live change request per engagement.
+         */
+        post: operations["m2_engagement_amendment_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/completion/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its own, when every stage is released; this is the separate fact that the Customer agrees it is done. The warranty period a configured A5 variant then enters is Wave C5 and is not built. */
+        post: operations["m2_engagement_completion_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/events/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every move on this engagement and its stages, oldest first. `actor_is_system` separates a decision somebody made from one a clock made — 'approved by you' and 'approved because the review window closed' are different sentences and a timeline that renders them identically is lying about who decided. Actor identity itself is never published: which of the two parties acted is derivable from `reason_code`, and the counterparty's user id is not their business. */
+        get: operations["m2_engagement_event_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3477,6 +3747,26 @@ export interface components {
             amount_paise: number;
             currency: string;
         };
+        /**
+         * @description One line of a change request, priced.
+         *
+         *     `amount_paise` is signed on the wire even though the stored column is not: the M1
+         *     `ScopeAmendmentLine` was built for additions only, so it holds an absolute value and the sign
+         *     lives in the line's snapshot. Publishing the signed number is what lets one screen render both
+         *     an addition and a reduction without knowing which table the sign came from.
+         */
+        AmendmentLine: {
+            readonly position: number;
+            readonly kind: string;
+            readonly title: string;
+            readonly quantity: number;
+            readonly amount_paise: number;
+        };
+        AmendmentLineInputRequest: {
+            title: string;
+            quantity: number;
+            amount_paise?: number | null;
+        };
         ApiError: {
             readonly error: components["schemas"]["ApiErrorDetail"];
         };
@@ -4308,6 +4598,10 @@ export interface components {
          *     `commercial_mode` is the field the UI must read before it promises anything. `LEAD_ONLY` means
          *     the Customer pays the vendor directly and Vsolve's protection is matching and replacement;
          *     calling that a protected booking is the promise this platform cannot keep.
+         *
+         *     The six money columns are the running total `M2-BE-504` reconciles: `staged_total_paise` always
+         *     equals `total_paise + amendment_delta_paise`, by database constraint, so a client can show
+         *     "agreed, then changed by, now" without doing arithmetic the server has not already checked.
          */
         Engagement: {
             /** Format: uuid */
@@ -4326,13 +4620,82 @@ export interface components {
             readonly tax_basis: string;
             readonly commission_paise: number;
             readonly commission_treatment: string;
+            readonly staged_total_paise: number;
+            readonly amendment_delta_paise: number;
+            readonly funded_total_paise: number;
+            readonly approved_total_paise: number;
+            readonly released_total_paise: number;
+            readonly refunded_total_paise: number;
             /** Format: date-time */
             readonly contact_released_at: string | null;
             /** Format: date-time */
             readonly work_may_start_at: string | null;
+            /** Format: date-time */
+            readonly disputed_at: string | null;
+            /** Format: date-time */
+            readonly completed_at: string | null;
             readonly stages: components["schemas"]["EngagementStage"][];
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /**
+         * @description A change request, as both parties read it.
+         *
+         *     Flattened across `EngagementAmendment` and the M1 `ScopeAmendment` deliberately. The split is
+         *     a storage fact — one amendment engine, two aggregates — and pushing it onto the wire would ask
+         *     every client to know which half of the row holds the status.
+         */
+        EngagementAmendment: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly engagement_id: string;
+            /** Format: uuid */
+            readonly stage_id: string | null;
+            readonly kind: string;
+            readonly status: string;
+            readonly reason: string;
+            readonly delta_paise: number;
+            readonly lines: components["schemas"]["AmendmentLine"][];
+            /** Format: date-time */
+            readonly expires_at: string;
+            /** Format: date-time */
+            readonly responded_at: string | null;
+            /** Format: date-time */
+            readonly applied_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        EngagementAmendmentCreateRequest: {
+            kind: components["schemas"]["EngagementAmendmentKindEnum"];
+            reason: string;
+            /** Format: uuid */
+            stage_id?: string | null;
+            lines: components["schemas"]["AmendmentLineInputRequest"][];
+        };
+        /**
+         * @description What an acceptance returned.
+         *
+         *     `checkout` is present only when the amendment needs a verified payment before it changes
+         *     anything — a managed (A5) engagement taking on extra work. `null` means it is already
+         *     authorized and applied: an A3 extension, or a reduction that refunded rather than charged.
+         */
+        EngagementAmendmentDecision: {
+            readonly amendment: components["schemas"]["EngagementAmendment"];
+            readonly checkout: components["schemas"]["AccessCheckout"] | null;
+        };
+        /**
+         * @description * `TIME_EXTENSION` - Extra time on a workforce engagement
+         *     * `CHANGE_ORDER` - Changed scope on a project engagement
+         * @enum {string}
+         */
+        EngagementAmendmentKindEnum: "TIME_EXTENSION" | "CHANGE_ORDER";
+        EngagementAmendmentList: {
+            readonly amendments: components["schemas"]["EngagementAmendment"][];
+            /** Format: date-time */
+            readonly server_now: string;
         };
         /**
          * @description * `LEAD_ONLY` - Customer pays the vendor directly
@@ -4340,6 +4703,49 @@ export interface components {
          * @enum {string}
          */
         EngagementCommercialModeEnum: "LEAD_ONLY" | "MANAGED_PAYMENT_REQUIRED";
+        /**
+         * @description One line of the agreement's history.
+         *
+         *     `actor_is_system` rather than an actor id: who a Customer or a vendor was is not the other
+         *     party's business, but *whether a person or a clock* moved something is exactly what a timeline
+         *     has to say — "approved by you" and "approved because the review window closed" are different
+         *     sentences.
+         */
+        EngagementEvent: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly stage: string | null;
+            readonly from_status: string;
+            readonly to_status: string;
+            readonly reason_code: string;
+            readonly reason: string;
+            readonly actor_is_system: boolean;
+            /** Format: date-time */
+            readonly occurred_at: string;
+        };
+        EngagementEventList: {
+            readonly events: components["schemas"]["EngagementEvent"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        EngagementPage: {
+            readonly next: string | null;
+            readonly previous: string | null;
+            readonly results: components["schemas"]["Engagement"][];
+        };
+        /**
+         * @description One shift-day or one milestone, with its money and its clocks.
+         *
+         *     The four money fields are published because they are what the Customer's and the vendor's
+         *     screens are both asking about, and because a client that only ever sees `amount_paise` cannot
+         *     tell a funded stage from an approved one from a paid one.
+         *
+         *     Both `*_due_at` fields are nullable and their nulls mean something specific: no review window
+         *     is configured, so this stage will never auto-approve; no payout hold is configured, so its
+         *     payout does not release on a clock. A screen must render nothing there rather than a countdown
+         *     to a deadline nobody set.
+         */
         EngagementStage: {
             /** Format: uuid */
             readonly id: string;
@@ -4350,8 +4756,29 @@ export interface components {
             readonly scheduled_on: string | null;
             readonly status: components["schemas"]["EngagementStageStatusEnum"];
             readonly funding_state: components["schemas"]["EngagementStageFundingStateEnum"];
+            readonly funded_paise: number;
+            readonly approved_amount_paise: number;
+            readonly released_amount_paise: number;
+            readonly refunded_amount_paise: number;
+            readonly correction_note: string;
+            readonly dispute_reason_code: string;
+            /** Format: date-time */
+            readonly review_due_at: string | null;
+            /** Format: date-time */
+            readonly payout_release_due_at: string | null;
+            readonly evidence: components["schemas"]["StageEvidence"][];
             /** Format: date-time */
             readonly funded_at: string | null;
+            /** Format: date-time */
+            readonly started_at: string | null;
+            /** Format: date-time */
+            readonly evidence_submitted_at: string | null;
+            /** Format: date-time */
+            readonly approved_at: string | null;
+            /** Format: date-time */
+            readonly released_at: string | null;
+            /** Format: date-time */
+            readonly disputed_at: string | null;
         };
         /**
          * @description * `NOT_REQUIRED` - Not required
@@ -6368,9 +6795,10 @@ export interface components {
          *     * `M2_SITE_VISIT_FEE` - M2 site visit fee
          *     * `M2_STAGE_FUNDING` - M2 stage funding
          *     * `M2_MATERIAL_ADVANCE` - M2 material advance
+         *     * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT";
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -6670,6 +7098,14 @@ export interface components {
             readonly answered_at: string | null;
         };
         /**
+         * @description * `PENDING` - Pending
+         *     * `VERIFIED` - Verified
+         *     * `INFECTED` - Rejected by the malware scan
+         *     * `FAILED` - Failed
+         * @enum {string}
+         */
+        RequirementScanStatusEnum: "PENDING" | "VERIFIED" | "INFECTED" | "FAILED";
+        /**
          * @description * `DRAFT` - Draft
          *     * `MATCHING` - Matching
          *     * `VISITS_BOOKED` - Visits booked
@@ -6864,9 +7300,11 @@ export interface components {
         /**
          * @description * `TASK` - Task
          *     * `MATERIAL` - Material
+         *     * `LABOUR_DAY` - Additional worker-day (M2 A3)
+         *     * `PROJECT_WORK` - Additional or reduced project work (M2 A5)
          * @enum {string}
          */
-        ScopeAmendmentLineKindEnum: "TASK" | "MATERIAL";
+        ScopeAmendmentLineKindEnum: "TASK" | "MATERIAL" | "LABOUR_DAY" | "PROJECT_WORK";
         /**
          * @description * `PROPOSED` - Proposed
          *     * `CUSTOMER_APPROVED` - Customer approved
@@ -7069,6 +7507,82 @@ export interface components {
          * @enum {string}
          */
         SourceEnum: "MANUAL" | "REVERSE_GEOCODED";
+        StageCorrectionRequest: {
+            note: string;
+        };
+        StageDisputeDecisionRequest: {
+            outcome: components["schemas"]["StageDisputeOutcomeEnum"];
+            note: string;
+        };
+        /**
+         * @description * `APPROVE` - Approve the stage as submitted
+         *     * `REQUEST_CORRECTION` - Send it back for correction
+         * @enum {string}
+         */
+        StageDisputeOutcomeEnum: "APPROVE" | "REQUEST_CORRECTION";
+        /**
+         * @description * `NOT_DONE` - The work was not done
+         *     * `PARTIALLY_DONE` - Only part of the work was done
+         *     * `POOR_QUALITY` - The work was done badly
+         *     * `WRONG_SCOPE` - This is not what was agreed
+         *     * `OTHER` - Another reason
+         * @enum {string}
+         */
+        StageDisputeReasonEnum: "NOT_DONE" | "PARTIALLY_DONE" | "POOR_QUALITY" | "WRONG_SCOPE" | "OTHER";
+        StageDisputeRequest: {
+            reason_code: components["schemas"]["StageDisputeReasonEnum"];
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description What the vendor showed, as both parties read it.
+         *
+         *     `object_key` is **not** published. It is a storage path, and publishing one turns every
+         *     evidence read into an enumeration surface; a short-lived signed link is issued by the download
+         *     endpoint instead, the same way `vendor_attachments` issues them for a Customer's site photos.
+         */
+        StageEvidence: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly kind: components["schemas"]["StageEvidenceKindEnum"];
+            readonly note: string;
+            readonly content_type: string;
+            readonly size_bytes: number;
+            readonly processing_status: components["schemas"]["RequirementScanStatusEnum"];
+            readonly failure_reason: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        StageEvidenceFinalizeRequest: {
+            /** Format: uuid */
+            upload_id: string;
+        };
+        /**
+         * @description * `NOTE` - Written note
+         *     * `PHOTO` - Photo
+         *     * `VIDEO` - Video
+         *     * `DOCUMENT` - Document
+         * @enum {string}
+         */
+        StageEvidenceKindEnum: "NOTE" | "PHOTO" | "VIDEO" | "DOCUMENT";
+        StageEvidenceSubmitRequest: {
+            note: string;
+        };
+        StageEvidenceUploadGrant: {
+            /** Format: uuid */
+            readonly upload_id: string;
+            /** Format: uri */
+            readonly upload_url: string;
+            readonly upload_token: string;
+            /** Format: date-time */
+            readonly expires_at: string;
+        };
+        StageEvidenceUploadRequestRequest: {
+            kind: components["schemas"]["StageEvidenceKindEnum"];
+            content_type: string;
+            size_bytes: number;
+            sha256: string;
+        };
         /**
          * @description What the Customer is told about the code they must read out.
          *
@@ -9309,6 +9823,416 @@ export interface operations {
             };
         };
     };
+    m2_engagement_amendment_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_amendment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementAmendmentDecision"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_amendment_not_actionable` when it expired or already has a decision. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_amendment_decline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_amendment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementAmendmentDecision"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_approve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_disputed` while a dispute is open; `m2_stage_transition_not_allowed` when nothing has been submitted. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_request_correction: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageCorrectionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StageCorrectionRequest"];
+                "multipart/form-data": components["schemas"]["StageCorrectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_dispute: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageDisputeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StageDisputeRequest"];
+                "multipart/form-data": components["schemas"]["StageDisputeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_dispute_resolve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageDisputeDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StageDisputeDecisionRequest"];
+                "multipart/form-data": components["schemas"]["StageDisputeDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_evidence_finalize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageEvidenceFinalizeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StageEvidenceFinalizeRequest"];
+                "multipart/form-data": components["schemas"]["StageEvidenceFinalizeRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StageEvidence"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_evidence_upload_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageEvidenceUploadRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StageEvidenceUploadRequestRequest"];
+                "multipart/form-data": components["schemas"]["StageEvidenceUploadRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StageEvidenceUploadGrant"];
+                };
+            };
+            /** @description `m2_attachment_invalid` for an unsupported media type, an empty file, a file over the per-kind ceiling or a malformed checksum. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` once the stage no longer accepts evidence. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_attachment_unavailable` when storage is down. Retryable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_stage_funding_checkout_create: {
         parameters: {
             query?: never;
@@ -9350,6 +10274,130 @@ export interface operations {
             };
         };
     };
+    m2_stage_start: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_not_funded` on an unfunded A5 stage; `m2_stage_transition_not_allowed` from any other status, or before work has been cleared to start. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_stage_evidence_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageEvidenceSubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["StageEvidenceSubmitRequest"];
+                "multipart/form-data": components["schemas"]["StageEvidenceSubmitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementStage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_engagement_read: {
         parameters: {
             query?: never;
@@ -9367,6 +10415,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_amendment_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementAmendmentList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_amendment_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EngagementAmendmentCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["EngagementAmendmentCreateRequest"];
+                "multipart/form-data": components["schemas"]["EngagementAmendmentCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementAmendment"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_amendment_not_actionable` when one is already open; `m2_stage_transition_not_allowed` for the wrong kind, an engagement that is not open to changes, or a reduction that is too large or too late; `m2_amendment_required` when the engagement carries no agreed daily rate to price an extension from; `m2_policy_unavailable` when the response window is unset — an amendment with no deadline is an open-ended claim on somebody's money, so it is refused rather than invented. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_completion_accept: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` when stages are still open. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_event_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementEventList"];
                 };
             };
             404: {

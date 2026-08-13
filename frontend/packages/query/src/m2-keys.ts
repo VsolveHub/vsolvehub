@@ -149,6 +149,42 @@ export const m2QueryKeys = {
   },
 
   /**
+   * The A5 visit plan, its slots and the grid a vendor books one from.
+   *
+   * Added at the Wave I gate on both frontend columns' §7 request — Session A
+   * had nested the plan read under `requirements.detail` and Session B was
+   * composing slot keys locally, which meant the two halves of one aggregate
+   * were being invalidated by different rules.
+   *
+   * **`plan` is keyed by requirement**, exactly as `unlock` is and for the same
+   * reason: there is at most one plan per requirement, and a customer returning
+   * from a lost payment redirect holds a requirement id and nothing else. Keying
+   * a purchase by an id the recovery path cannot produce is how somebody who has
+   * paid ends up unable to find what they bought.
+   *
+   * **`slots` is keyed by invitation, and it is deliberately not nested under
+   * the plan.** The grid belongs to one vendor's diary, not to the customer's
+   * purchase: two vendors invited to the same plan see different grids, and a
+   * plan-wide refetch must not reach into a competitor's slot cache. It also
+   * expires on its own clock — every slot `id` is a signed token with a TTL, so
+   * this is the one M2 read where a stale cache hands back a credential the
+   * server will refuse.
+   *
+   * `visit` hangs off nothing: a site visit is addressable on its own routes
+   * (arrival, completion, no-show), and those act on one visit without saying
+   * anything about its siblings under the same plan.
+   */
+  visits: {
+    all: ["m2", "visits"] as const,
+    plan: (requirementId: string) =>
+      [...m2QueryKeys.visits.all, "plan", requirementId] as const,
+    slots: (invitationId: string) =>
+      [...m2QueryKeys.visits.all, "slots", invitationId] as const,
+    visit: (siteVisitId: string) =>
+      [...m2QueryKeys.visits.all, "visit", siteVisitId] as const,
+  },
+
+  /**
    * Engagements and their stages — one spine, both archetypes.
    *
    * `stages()` is nested under the engagement because a stage never outlives it:
@@ -210,6 +246,15 @@ export const M2_FRESHNESS = {
   proposals: EXPIRING_STATE,
   /** Payment in flight, then a grant that can be refunded out from under it. */
   unlock: EXPIRING_STATE,
+  /** Shares settle and refund on server clocks the customer cannot see. */
+  visitPlan: EXPIRING_STATE,
+  /**
+   * The strictest tier in the table, and the only read where staleness hands
+   * back a **credential**: every slot `id` is a signed token with a TTL, so a
+   * cached grid does not merely look wrong, it offers times the server will
+   * refuse to book.
+   */
+  visitSlots: EXPIRING_STATE,
   engagementList: VOLATILE_STATE,
   engagementDetail: VOLATILE_STATE,
   /** Review timeouts auto-approve; the clock is the point. */
@@ -250,6 +295,7 @@ export interface M2CommandContext {
   proposalId?: string;
   engagementId?: string;
   stageId?: string;
+  siteVisitId?: string;
 }
 
 type KeyPrefix = readonly unknown[];
@@ -268,6 +314,17 @@ export type M2Command =
   | "request_site_visit"
   | "schedule_site_visit"
   | "create_unlock_checkout"
+  // The A5 visit plan, revision 3. `complete_visit_plan` and
+  // `refund_unfilled_visit_shares` are absent on purpose: both are system
+  // commands — a verified webhook and a sweep — and no client issues them, so a
+  // row here would describe an invalidation that never fires from this side.
+  | "choose_visit_plan"
+  | "confirm_visit_slot"
+  | "create_visit_plan_checkout"
+  | "confirm_visit_arrival"
+  | "complete_site_visit"
+  | "report_visit_no_show"
+  | "request_revalidation"
   | "reject_proposal"
   | "select_proposal"
   | "reconfirm_selection"
@@ -286,13 +343,23 @@ export type M2Command =
 
 const K = m2QueryKeys;
 
-/** The requirement plus everything hanging off it that a state change can move. */
+/**
+ * The requirement plus everything hanging off it that a state change can move.
+ *
+ * `visits.plan` joined this at the Wave I gate, and the A5 rejection path is why:
+ * a `NON_RESPONSIVE` rejection does not merely close a quote, it sends that
+ * vendor's plan **share** back to owing a free replacement visit. A scope that
+ * refetched the quotes and left the plan cached would show the customer a
+ * settled share against a quote they had just rejected. `reclassify_requirement`
+ * moves plan money too (`M2-BE-427`), and `select_proposal` can consume it.
+ */
 function requirementScope(requirementId: string): KeyPrefix[] {
   return [
     K.requirements.detail(requirementId),
     K.requirements.list(),
     K.proposals.teasers(requirementId),
     K.proposals.unlocked(requirementId),
+    K.visits.plan(requirementId),
   ];
 }
 
@@ -331,6 +398,50 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
   // The checkout is created but nothing is granted yet. Only the unlock record
   // moves; the teasers stay teasers until a verified callback says otherwise.
   create_unlock_checkout: (c) => (c.requirementId ? [K.unlock.forRequirement(c.requirementId)] : []),
+
+  // Choosing charges nothing and bounds the invitation wave, so the plan moves
+  // and the requirement's own read moves with it — `submit_requirement` refuses
+  // an A5 requirement without a plan, so the Send button's enabled state is a
+  // function of this command.
+  choose_visit_plan: (c) =>
+    c.requirementId
+      ? [K.visits.plan(c.requirementId), K.requirements.detail(c.requirementId)]
+      : [],
+
+  // The vendor's side of the same fact, and the one row that moves BOTH columns.
+  // It takes a quote slot (so the whole inbox moves, exactly as `accept_invitation`
+  // does), consumes a plan share, and its own grid is now a slot short. The
+  // customer's plan read is deliberately NOT invalidated from here — a vendor's
+  // client cannot reach it, and the customer learns through their own poll.
+  confirm_visit_slot: (c) => [
+    K.invitations.all,
+    ...(c.invitationId ? [K.visits.slots(c.invitationId)] : []),
+  ],
+
+  // Same shape as `create_unlock_checkout`: an attempt exists, nothing is
+  // granted. The plan hardens only on the verified callback.
+  create_visit_plan_checkout: (c) => (c.requirementId ? [K.visits.plan(c.requirementId)] : []),
+
+  // Arrival, completion and a no-show all move one visit. Completion
+  // additionally opens the estimate window, which the plan read carries per
+  // share — so when the caller knows the requirement, refetch the plan too.
+  confirm_visit_arrival: (c) => (c.siteVisitId ? [K.visits.visit(c.siteVisitId)] : []),
+  complete_site_visit: (c) => [
+    ...(c.siteVisitId ? [K.visits.visit(c.siteVisitId)] : []),
+    ...(c.requirementId ? [K.visits.plan(c.requirementId)] : []),
+  ],
+  // A no-show settles a share — refunded, or owed a free replacement — so the
+  // money on the plan read changes, not only the visit's status.
+  report_visit_no_show: (c) => [
+    ...(c.siteVisitId ? [K.visits.visit(c.siteVisitId)] : []),
+    ...(c.requirementId ? [K.visits.plan(c.requirementId)] : []),
+  ],
+
+  // Re-validation stamps the request on the proposal and charges nothing. The
+  // vendor answers by superseding, which is a separate command — so only the
+  // quote list moves here, and the unlock or plan is deliberately untouched.
+  request_revalidation: (c) =>
+    c.requirementId ? [K.proposals.unlocked(c.requirementId)] : [K.proposals.all],
 
   // A non-responsive rejection releases a slot and triggers a replacement, so
   // the teaser list changes shape, not just one row's status.

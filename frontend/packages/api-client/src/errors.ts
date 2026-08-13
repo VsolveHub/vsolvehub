@@ -204,6 +204,33 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   m2_stage_disputed: "contact_support",
   m2_amendment_required: "contact_support",
   m2_cancellation_needs_confirmation: "await_confirmation",
+  // Wave C3. Both are transition refusals, and both mean the record moved under
+  // the screen — somebody else acted, or a clock did. Re-reading is the recovery,
+  // which is `choose_again`: the state the button was drawn from is stale, and
+  // offering "Try again" would resend a command against the state that just lost.
+  m2_stage_transition_not_allowed: "choose_again",
+  m2_amendment_not_actionable: "choose_again",
+
+  // Requirement transitions
+  //
+  // The generic requirement refusal: the request is closed, already has a chosen
+  // vendor, or is past the point this command applies at. It reached the frontend
+  // through the status-based fallback until Wave I, which classified every 409 as
+  // `retry` — and a retry is the one recovery guaranteed not to work here, because
+  // nothing about resending changes the state that refused.
+  m2_requirement_transition_not_allowed: "choose_again",
+
+  // The two fail-closed configuration states.
+  //
+  // These are the codes `apps/requirements/pricing.py` raises when an owner
+  // decision has not been made: no effective `M2AccessPrice` row, or an unset
+  // clock, cap or disposition rule. They are NOT transient and they are NOT the
+  // user's fault, so classifying them as `retry` — which is where the status
+  // fallback put them — offers the one action certain to fail, forever, on every
+  // press. `contact_support` is the honest recovery: a human has to load a price
+  // or make a decision before this can succeed.
+  m2_access_price_unavailable: "contact_support",
+  m2_policy_unavailable: "contact_support",
 
   // Adapters
   m2_provider_unavailable: "retry",
