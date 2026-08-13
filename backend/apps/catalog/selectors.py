@@ -79,10 +79,20 @@ def _requirement_variants() -> QuerySet[ServiceVariant]:
     the vendor's quote, and a rate row on one would both invent a number and make it look
     addable to a cart through the A1 flow.
     """
-    return ServiceVariant.objects.filter(
-        is_active=True,
-        m2_configurations__status=M2VariantConfiguration.Status.ACTIVE,
-    ).distinct()
+    questions = ServiceQuestion.objects.filter(is_active=True).prefetch_related(
+        Prefetch("options", queryset=ServiceQuestionOption.objects.filter(is_active=True)),
+    )
+    return (
+        ServiceVariant.objects.filter(
+            is_active=True,
+            m2_configurations__status=M2VariantConfiguration.Status.ACTIVE,
+        )
+        # Screen 1 of the requirement flow renders these, and `submit_requirement` validates the
+        # answers against the same authored schema. A variant published without them is a first
+        # screen with nothing to ask and a fourth screen that refuses what it collected.
+        .prefetch_related(Prefetch("questions", queryset=questions))
+        .distinct()
+    )
 
 
 def _offerable_services() -> QuerySet[Service]:

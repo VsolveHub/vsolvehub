@@ -267,8 +267,39 @@ class ServiceVariantConfigurationSerializer(ServiceVariantSummarySerializer):
         fields = (*ServiceVariantSummarySerializer.Meta.fields, "required_skill_code", "questions")
 
 
+class RequirementVariantSerializer(serializers.ModelSerializer[ServiceVariant]):
+    """An A3/A5 variant, as the guided-requirement flow needs it.
+
+    **Deliberately not `ServiceVariantConfigurationSerializer`.** That one publishes
+    `starting_price`, `minimum_service_subtotal` and `task_lines`, all read from annotations only
+    `_public_variants` adds — so serializing an M2 variant through it raises `AttributeError`. It
+    would also be the wrong shape if it worked: an A3 or A5 variant has no rate, because its price
+    is the vendor's quote, and a money field here would be a number this platform invented.
+
+    `questions` is the load-bearing field. Screen 1 of the four-screen flow renders exactly these
+    rows, and `services.submit_requirement` validates the answers against the *same* authored
+    schema — so a variant published without them is a flow whose first screen has nothing to ask.
+    """
+
+    fulfilment_archetype = serializers.CharField(source="booking_archetype", read_only=True)
+    questions = ServiceQuestionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ServiceVariant
+        fields = (
+            "id",
+            "code",
+            "name",
+            "description",
+            "fulfilment_archetype",
+            "questions",
+        )
+        read_only_fields = fields
+
+
 class ServiceDetailSerializer(ServiceCardSerializer):
     variants = serializers.SerializerMethodField()
+    requirement_variants = serializers.SerializerMethodField()
     policies = ServicePolicySerializer(many=True, read_only=True)
     media = ServiceMediaSerializer(many=True, read_only=True)
 
@@ -277,6 +308,10 @@ class ServiceDetailSerializer(ServiceCardSerializer):
             *ServiceCardSerializer.Meta.fields,
             "description",
             "variants",
+            #: The A3/A5 half of the same service. Separate from `variants` because that list is
+            #: the A1 *task* list — the booking workspace turns each row into a priced task line —
+            #: and an M2 variant has no price to put there. Empty for ordinary A1 work.
+            "requirement_variants",
             "policies",
             "media",
         )
@@ -286,3 +321,9 @@ class ServiceDetailSerializer(ServiceCardSerializer):
     def get_variants(service: Service) -> list[dict[str, object]]:
         serializer = ServiceVariantConfigurationSerializer(_public_variants(service), many=True)
         return list(serializer.data)
+
+    @staticmethod
+    @extend_schema_field(RequirementVariantSerializer(many=True))
+    def get_requirement_variants(service: Service) -> list[dict[str, object]]:
+        variants = getattr(service, "requirement_variants", [])
+        return list(RequirementVariantSerializer(variants, many=True).data)

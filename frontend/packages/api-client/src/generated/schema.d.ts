@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.27.0)
- * Checksum: c7472f387ddf8862
+ * Source:   contracts/openapi/v1.yaml (version 1.28.0)
+ * Checksum: 38c6565538b4198c
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7348,6 +7348,28 @@ export interface components {
             readonly detail: unknown;
         };
         /**
+         * @description An A3/A5 variant, as the guided-requirement flow needs it.
+         *
+         *     **Deliberately not `ServiceVariantConfigurationSerializer`.** That one publishes
+         *     `starting_price`, `minimum_service_subtotal` and `task_lines`, all read from annotations only
+         *     `_public_variants` adds — so serializing an M2 variant through it raises `AttributeError`. It
+         *     would also be the wrong shape if it worked: an A3 or A5 variant has no rate, because its price
+         *     is the vendor's quote, and a money field here would be a number this platform invented.
+         *
+         *     `questions` is the load-bearing field. Screen 1 of the four-screen flow renders exactly these
+         *     rows, and `services.submit_requirement` validates the answers against the *same* authored
+         *     schema — so a variant published without them is a flow whose first screen has nothing to ask.
+         */
+        RequirementVariant: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly code: string;
+            readonly name: string;
+            readonly description: string;
+            readonly fulfilment_archetype: string;
+            readonly questions: components["schemas"]["ServiceQuestion"][];
+        };
+        /**
          * @description The floor every state-changing fulfilment command sits on.
          *
          *     `expected_version` is required, never defaulted. A command that would apply to whatever
@@ -7522,6 +7544,7 @@ export interface components {
             readonly cover: components["schemas"]["ServiceMedia"] | null;
             description?: string;
             readonly variants: components["schemas"]["ServiceVariantConfiguration"][];
+            readonly requirement_variants: components["schemas"]["RequirementVariant"][];
             readonly policies: components["schemas"]["ServicePolicy"][];
             readonly media: components["schemas"]["ServiceMedia"][];
         };

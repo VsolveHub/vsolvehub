@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.27.0
+  version: 1.28.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -19320,6 +19320,50 @@ components:
       - detail
       - id
       - type
+    RequirementVariant:
+      type: object
+      description: |-
+        An A3/A5 variant, as the guided-requirement flow needs it.
+
+        **Deliberately not `ServiceVariantConfigurationSerializer`.** That one publishes
+        `starting_price`, `minimum_service_subtotal` and `task_lines`, all read from annotations only
+        `_public_variants` adds — so serializing an M2 variant through it raises `AttributeError`. It
+        would also be the wrong shape if it worked: an A3 or A5 variant has no rate, because its price
+        is the vendor's quote, and a money field here would be a number this platform invented.
+
+        `questions` is the load-bearing field. Screen 1 of the four-screen flow renders exactly these
+        rows, and `services.submit_requirement` validates the answers against the *same* authored
+        schema — so a variant published without them is a flow whose first screen has nothing to ask.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+        fulfilment_archetype:
+          type: string
+          readOnly: true
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceQuestion'
+          readOnly: true
+      required:
+      - code
+      - description
+      - fulfilment_archetype
+      - id
+      - name
+      - questions
     RescheduleBookingRequestRequest:
       type: object
       description: |-
@@ -19781,6 +19825,11 @@ components:
           items:
             $ref: '#/components/schemas/ServiceVariantConfiguration'
           readOnly: true
+        requirement_variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementVariant'
+          readOnly: true
         policies:
           type: array
           items:
@@ -19800,6 +19849,7 @@ components:
       - name
       - policies
       - request_archetypes
+      - requirement_variants
       - short_description
       - slug
       - starting_price

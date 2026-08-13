@@ -288,10 +288,42 @@ export function serviceDetail(
     ...card,
     description: "",
     variants: [serviceVariantConfiguration()],
+    // Empty on an A1 service, and the two lists are never both populated in
+    // practice today: `variants` is the priced task list the booking workspace
+    // reads, `requirement_variants` is the A3/A5 half the four-screen flow reads.
+    // A service carrying both is a catalogue shape nothing has produced yet.
+    requirement_variants: [],
     policies: [],
     media: [],
     ...overrides,
   };
+}
+
+/**
+ * A service you describe rather than price, with the variant the flow needs.
+ *
+ * `requirement_variants[].questions` is the load-bearing part: screen 1 of the four-screen flow
+ * renders exactly those rows, and `submit_requirement` validates the answers against the same
+ * authored schema. A fixture without them describes a flow whose first screen has nothing to ask.
+ */
+export function requirementServiceDetail(
+  overrides: Partial<Schemas["ServiceDetail"]> = {},
+): Schemas["ServiceDetail"] {
+  return serviceDetail({
+    ...requirementServiceCard(),
+    variants: [],
+    requirement_variants: [
+      {
+        id: "9b1f0c22-6d3e-4b71-9f52-1c0d7e4a9b84",
+        code: "standard",
+        name: "Construction helpers",
+        description: "",
+        fulfilment_archetype: "A3_TIME_BLOCK",
+        questions: [],
+      },
+    ],
+    ...overrides,
+  });
 }
 
 export function reverseGeocodeResponse(

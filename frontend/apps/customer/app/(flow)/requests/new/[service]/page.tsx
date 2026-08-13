@@ -52,13 +52,19 @@ export default async function NewRequestForServicePage({
 
   if (service === null) notFound();
 
-  // First match rather than a chooser. A service with two M2 variants is a
-  // catalogue shape nothing has produced yet, and offering a pick between
-  // "time block" and "custom project" is exactly the archetype question
-  // `GAP-006` forbids asking. If it ever happens, the choice has to be
-  // expressed in the Customer's own words, which is a product decision rather
-  // than a dropdown.
-  const variant = service.variants.find((entry) =>
+  // Read from `requirement_variants`, not `variants`. `variants` is the A1 *task* list — the
+  // booking workspace turns each row into a priced task line — and it is built from a selector
+  // that filters `booking_archetype=A1_TASK_VISIT`, so an A3 or A5 variant was never in it. This
+  // page therefore found nothing on every M2 service and rendered "we do not take requests for
+  // this yet" over a service that was fully configured to take them. Contract 1.28.0 publishes
+  // the other half of the same service.
+  //
+  // First match rather than a chooser. A service with two M2 variants is a catalogue shape
+  // nothing has produced yet, and offering a pick between "time block" and "custom project" is
+  // exactly the archetype question `GAP-006` forbids asking. If it ever happens, the choice has
+  // to be expressed in the Customer's own words, which is a product decision rather than a
+  // dropdown.
+  const variant = service.requirement_variants.find((entry) =>
     M2_ARCHETYPES.includes(entry.fulfilment_archetype),
   );
 

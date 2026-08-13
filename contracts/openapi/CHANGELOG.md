@@ -4,6 +4,38 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.28.0 - The requirement flow can find the variant it needs
+
+**One new field on `ServiceDetail`, and it is the other half of 1.27.0's fix.**
+
+1.27.0 got M2 services into the catalog and onto their own pages. Opening one still landed on
+**"We do not take requests for this yet"** over a service that was fully configured to take them.
+
+### Why
+
+`ServiceDetail.variants` is built from `_public_variants`, which filters
+`booking_archetype=A1_TASK_VISIT` — it is the **A1 task list**, and the booking workspace turns
+each row into a priced task line. `/requests/new/[service]` resolved its variant by searching that
+list for an A3 or A5 archetype, which it could never contain. So the flow found nothing, and its
+honest empty state fired on a service that was not empty.
+
+### `ServiceDetail.requirement_variants` — new, required
+
+`RequirementVariant[]`: `{id, code, name, description, fulfilment_archetype, questions}`. Empty for
+ordinary A1 work.
+
+**Deliberately not `ServiceVariantConfiguration`.** That shape carries `starting_price`,
+`minimum_service_subtotal` and `task_lines`, all read from annotations only the priced selector
+adds — serializing an M2 variant through it raises `AttributeError`, and it would be the wrong
+shape if it worked, because a variant priced by vendor quote has no money fields to publish.
+
+`questions` is the load-bearing part. Screen 1 of the four-screen flow renders exactly those rows
+and `submit_requirement` validates the answers against the same authored schema, so a variant
+published without them is a first screen with nothing to ask.
+
+The client's `RequirementVariant` type was aliased to `ServiceVariantConfiguration` and typechecked
+only because the flow was never handed a real M2 variant. Both halves are corrected together.
+
 ## 1.27.0 - The catalog can offer a service it cannot price
 
 **No new path. One field added, one field made nullable — and it fixes a defect that made every M2

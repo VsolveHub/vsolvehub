@@ -53,7 +53,17 @@ import { MAXIMUM_ATTACHMENTS, formatBytes, maximumSizeFor } from "../model/uploa
  * is named in the one place that is allowed to name it.
  */
 export type RequirementService = Schemas["ServiceDetail"];
-export type RequirementVariant = Schemas["ServiceVariantConfiguration"];
+/**
+ * The A3/A5 variant the flow was opened with — **not** `ServiceVariantConfiguration`.
+ *
+ * It was aliased to that until contract 1.28.0, which was the wrong shape in a way nothing could
+ * catch: `ServiceVariantConfiguration` carries `starting_price`, `minimum_service_subtotal` and
+ * `task_lines`, and a variant whose price is the vendor's quote has none of them. The alias
+ * typechecked only because the flow was never handed a real M2 variant — the route filtered
+ * `ServiceDetail.variants`, which is the A1 task list and never contained one, so every M2
+ * service rendered "we do not take requests for this yet" instead.
+ */
+export type RequirementVariant = Schemas["RequirementVariant"];
 
 /**
  * One question on screen 1, as the server describes it.
@@ -116,7 +126,11 @@ export interface QuestionSet {
  * and a mismatch surfaces only at submit. Logged in the execution plan §7.
  */
 export function toQuestionSet(
-  variant: Schemas["ServiceVariantConfiguration"],
+  // Only the question list is read, so this takes the narrowest shape that carries one rather
+  // than a whole variant. `RequirementVariant` and `ServiceVariantConfiguration` both satisfy it,
+  // which is the honest statement: screen 1 does not care what a variant costs, and typing this
+  // against the priced shape is what let the A3/A5 mismatch hide.
+  variant: Pick<Schemas["ServiceVariantConfiguration"], "questions">,
 ): QuestionSet {
   const questions: RequirementQuestionView[] = [];
   const unsupported: string[] = [];
