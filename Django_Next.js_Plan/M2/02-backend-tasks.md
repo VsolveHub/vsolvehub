@@ -282,10 +282,16 @@ run them.
   **`REJECTED`** status so Operations' refusal is no longer indistinguishable from the Partner's own
   `WITHDRAWN` exit, and made `review_notes` mandatory for `CHANGES_REQUIRED` and `REJECTED` in both the
   command and a check constraint. **Notification events are not emitted.**
-- [ ] `M2-BE-113` On suspension, find funded or committed engagements for the capability and route them
-  to replacement or refund rather than leaving authorized money against unauthorized work. `GAP-020`
-  Not started: depends on the P5 engagement aggregate. Suspension currently changes eligibility only,
-  and the `transition_capability` docstring records that limitation.
+- [~] `M2-BE-113` built — static gates green, owner manual verification pending. `GAP-020`
+  **Unblocked and built in Wave C3, 13 August**, once the stage money existed to route.
+  `transition_capability` emits `m2.capability.suspended` and `apps/requirements/handlers.py`
+  consumes it — through the outbox rather than by a direct call, because `apps.requirements` already
+  imports `apps.partners` and because a review decision must be recorded even if a refund adapter
+  times out. The routing is **per stage**, not per engagement, since a half-finished project is
+  exactly where one answer for the whole agreement is wrong: a funded stage nobody started is
+  refunded, a stage in progress or awaiting review is flagged for replacement and left to Operations
+  to judge, and approved or released work stays settled because it happened. The engagement is **not
+  cancelled** — that would take the Customer's dispute rights and their evidence with it.
 - [~] `M2-BE-114` Publish Partner and Operations read models as `{workspace_key, actions[]}` plus
   approved capability IDs and archetype. Return stable machine values, never frontend routes or labels,
   and never infer a workspace from a profession/category name. `SIM-09`
@@ -331,8 +337,9 @@ since 12 August: all thirteen proposal 0013 paths at contract 1.22.0, so browse-
 KYC is demonstrable — `GET /partner/demand-preview/` answers an account with no application, no
 documents and no capability, and `GET /partner/gates/` explains the three gates that will be asked
 for. What holds the gate open: **the tests are written and unrun**, so the surface is not proven
-against a real request; `M2-BE-113` — suspension not stranding funded work — is genuinely unbuilt
-until P5 creates the engagement aggregate; and the guard still does not check **insurance**
+against a real request; ~~`M2-BE-113` — suspension not stranding funded work — is genuinely unbuilt
+until P5 creates the engagement aggregate~~ **(built in Wave C3, 13 August)**; and the guard still
+does not check **insurance**
 (`M2-BE-115`), which is owner decision 6. Service area and availability came into the guard on
 13 August.
 
@@ -783,28 +790,44 @@ to immutable engagement terms in integer paise.
 
 Build this once for both archetypes. Do not create parallel workforce and project agreement families.
 
-- [ ] `M2-BE-501` Model `Engagement` created from a selected proposal, carrying archetype, commercial
-  mode, immutable commercial terms and lifecycle status. `SIM-01`
-- [ ] `M2-BE-502` Model `EngagementStage` as an ordered stage that is a shift-day (A3) or a milestone
-  (A5), with amount, schedule, funding state, evidence state and approval state. `SIM-01`
-- [ ] `M2-BE-503` Implement shared stage commands: start, submit evidence, approve, request correction,
-  dispute, timeout and release.
-- [ ] `M2-BE-504` Validate that stage amounts reconcile to the engagement total and that funded,
-  approved, paid and refunded amounts cannot exceed their legal bounds.
-- [ ] `M2-BE-505` Route every post-agreement scope or money change through the **M1 scope-amendment
-  engine** in `fulfilment.amendments`; A3 time extensions and A5 change orders are both amendments.
-  Do not build a second amendment subsystem. Note its documented M1 boundary: only catalog `TASK`
-  lines are priced there today, so M2's non-catalog lines are the extension to design. `SIM-01`
-- [ ] `M2-BE-506` Require verified additional payment or refund adjustment before an accepted amendment
-  changes funded scope.
-- [ ] `M2-BE-507` Hold and release payout per stage using ledger transactions and dispute windows.
-- [ ] `M2-BE-508` Prevent scope, amount or completion change through clarification, callback or any
-  unilateral UI action.
+- [~] `M2-BE-501` built — static gates green, owner manual verification pending. Created in C2; C3
+  added the money envelope (`staged_total_paise`, `amendment_delta_paise` and four running totals)
+  and froze the eight commercial terms in `save()`. `SIM-01`
+- [~] `M2-BE-502` built — static gates green, owner manual verification pending. Approval state **is**
+  `status` and evidence state **is** the `StageEvidence` rows; a third denormalised copy would drift
+  from both, so it was deliberately not added. `SIM-01`
+- [~] `M2-BE-503` built — static gates green, owner manual verification pending.
+  `apps/requirements/stages.py`, plus the Operations dispute decision without which a disputed stage
+  was a dead end. `AWAITING_REVIEW → APPROVED` on timeout is refused while `DISPUTED`, guarded twice.
+- [~] `M2-BE-504` built — static gates green, owner manual verification pending. **As database
+  constraints**: `staged_total_paise = total_paise + amendment_delta_paise` on the engagement, plus
+  four engagement bounds and five per-stage bounds. The load-bearing one is `funded − refunded ≤
+  staged` — never hold more of a Customer's money than there is agreed work.
+- [~] `M2-BE-505` built — static gates green, owner manual verification pending. **One engine, two
+  front doors.** `ScopeAmendment.booking` is nullable, `requirements.EngagementAmendment` carries the
+  M2 aggregate and a signed delta, and the expiry rule is now shared and public. The four M1 command
+  functions resolve through `locked_booking_context` and `current_task_rate` and genuinely cannot be
+  called for an engagement — so the extension is `ScopeAmendmentLine.Kind.LABOUR_DAY` and
+  `PROJECT_WORK`, exactly as this row anticipated. `SIM-01`
+- [~] `M2-BE-506` built — static gates green, owner manual verification pending. New
+  `PaymentAttempt.Purpose.M2_SCOPE_AMENDMENT` (enum and check constraint in the same migration);
+  a managed positive delta applies only from a verified callback, a negative delta refunds first, and
+  `LEAD_ONLY` moves no platform money at all.
+- [~] `M2-BE-507` built — static gates green, owner manual verification pending. Approval writes a
+  `PENDING` `PartnerLedgerEntry` with no Booking; `release_stage_payout` plus an hourly sweep moves it
+  once the dispute window closes and the payout account is verified. `payouts.release_payout_hold`
+  resolves **by Booking** and cannot do this — the same reason `access.release_visit_payout_hold`
+  exists.
+- [~] `M2-BE-508` built — static gates green, owner manual verification pending. Enforced in `save()`
+  on both models rather than by convention: `Engagement` refuses a write to its eight frozen terms,
+  and `EngagementStage.amount_paise` moves only through `apply_amendment_amount`, whose one caller is
+  the amendment module and only after `AUTHORIZED`.
 
 ### Verification
 
-- [ ] `M2-BE-509` Test stage overfunding, approval/payment races, duplicate evidence, timeout while
-  disputed, and concurrent amendments across both archetypes with one shared test suite.
+- [ ] `M2-BE-509` **Tests deferred per the build-first amendment** (`task.md` §"Build-first amendment
+  (2026-08-13)"). This row is Wave C3's test debt, recorded as one line. The smoke script that
+  replaces it for the sprint is `docs/runbooks/m2-engagement-spine-smoke.md`.
 
 **BE5 gate:** Both archetypes run on one spine with one set of stage commands, and no duplicate
 agreement, amendment or approval subsystem exists.

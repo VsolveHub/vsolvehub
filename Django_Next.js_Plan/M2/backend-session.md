@@ -327,8 +327,10 @@ Contract **1.23.0**. Full account in §"C1 remainder outcome" below.
 - [ ] `M2-BE-321` price-band review signal — needs a reference price per variant.
 - [ ] `M2-BE-312` masked callback requests and consented contact disclosure.
 - [ ] `M2-BE-117` audit queries and Operations visibility for capability decisions.
-- [ ] `M2-BE-113` suspension routing funded engagements to replacement or refund — **genuinely
-  blocked until C3 creates the engagement aggregate.** Do not attempt it earlier.
+- [~] `M2-BE-113` suspension routing funded engagements to replacement or refund. ~~Blocked until C3
+  creates the engagement aggregate.~~ **Built in C3, 13 August**, once the stage money existed to
+  route: an unstarted funded stage refunds, a stage in progress or awaiting review is flagged for
+  replacement, and approved or released work stays settled.
 
 **Gate:** every P1–P3 exit-gate sentence in `task.md` is true end to end, not just in the domain layer.
 
@@ -637,7 +639,9 @@ name published at 1.22.0.
 
 ---
 
-## Wave C3 — The engagement spine (`BE5`) — **build once, carefully**
+## Wave C3 — The engagement spine (`BE5`) — **`[~]` shipped 13 August 2026**
+
+Contract **1.25.0**, 15 new paths and 16 new operations. Full account in §"C3 outcome" below.
 
 **Depends on:** C2. Frontend Wave 3 builds both halves of this spine in parallel, so a misread here
 shows up in three places at once.
@@ -645,14 +649,163 @@ shows up in three places at once.
 `M2-BE-501..509`. One `Engagement` + `EngagementStage` for both archetypes. A stage is a shift-day
 (A3) or a milestone (A5) with **the same** evidence, approval and money-release semantics.
 
-- [ ] Scope amendments route through the **M1 amendment engine** (`M2-BE-505`). Do not build a second
+- [~] The shared stage commands (`M2-BE-503`): start, submit evidence, approve, request correction,
+  dispute, review timeout, release — plus the Operations dispute decision, without which a disputed
+  stage was a dead end for the whole of C4 and C5.
+- [~] Stage amounts reconcile to the engagement total as a **database constraint** (`M2-BE-504`), not
+  only as validation: `staged_total_paise = total_paise + amendment_delta_paise` on the engagement
+  row, plus five per-stage bounds.
+- [~] Scope amendments route through the **M1 amendment engine** (`M2-BE-505`). Do not build a second
   one — this is the single largest duplication risk in M2.
-- [ ] No scope, amount or completion change through clarification, callback or any unilateral UI
-  action (`M2-BE-508`).
-- [ ] Unblock `M2-BE-113` here.
+- [~] Verified payment or refund adjustment before an accepted amendment changes funded scope
+  (`M2-BE-506`), on a new `M2_SCOPE_AMENDMENT` purpose.
+- [~] Hold and release payout per stage through the M1 ledger and a dispute window (`M2-BE-507`).
+- [~] No scope, amount or completion change through clarification, callback or any unilateral UI
+  action (`M2-BE-508`) — enforced in `save()` on both models, not by convention.
+- [~] **`M2-BE-113` unblocked and built.** Suspension routes funded and committed engagements.
 
 **Gate:** both archetypes run on one spine with one set of stage commands, and no duplicate agreement,
 amendment or approval subsystem exists. C4 and C5 may not start until this is stable.
+
+---
+
+### C3 outcome — 13 August 2026
+
+**Built.** Contract **1.25.0**: 15 new paths, 16 new operations (62 M2 operations → 78), two new
+backend modules (`apps/requirements/{stages,amendments}.py`) plus `apps/requirements/handlers.py`,
+four migrations (`requirements.0006`, `catalog.0009`, `commerce.0008`, `fulfilment.0002`) and three
+new `CELERY_BEAT_SCHEDULE` entries. Four new models: `EngagementEvent`, `StageEvidence`,
+`StageEvidenceUpload`, `EngagementAmendment`.
+
+#### `M2-BE-505`: the amendment engine was extended, not forked — and here is exactly where the seam is
+
+The task named this the largest duplication risk in M2, so the answer needs to be precise rather
+than reassuring.
+
+**Reused verbatim:** `fulfilment.ScopeAmendment` (the six-state machine, the response deadline, the
+reason, the version), `fulfilment.ScopeAmendmentLine`, and the expiry rule — which was private and
+is now `fulfilment.amendments.guard_amendment_not_expired`, so both entry points call one function
+instead of each holding a copy. Every row an M2 amendment writes lands in the M1 tables and is
+readable by anything that already reads an amendment.
+
+**Not reusable, and it is structural rather than stylistic.** The four command functions in that
+module resolve their aggregate through `locked_booking_context(booking_id)` and price every line
+through `pricing.selectors.current_task_rate`. An M2 engagement has no `Booking`, no
+`FulfilmentUnit` and no catalog task, so calling them would be calling a lookup that cannot succeed.
+`ScopeAmendment.booking` is now nullable and `requirements.EngagementAmendment` carries the M2
+aggregate and a signed delta; the M1 commands gained an explicit `_booking_of` guard that refuses an
+engagement amendment reaching the Booking door rather than failing on an attribute.
+
+That is the documented M1 boundary stated as an extension, which is what `M2-BE-505` asked for:
+`ScopeAmendmentLine.Kind` gains `LABOUR_DAY` and `PROJECT_WORK`. **One engine, two front doors,
+because there are two aggregates.** The alternative — a second `ScopeAmendment` table — is the thing
+the task forbids, and nothing here duplicates a column that lives there.
+
+#### Eight decisions worth carrying forward
+
+1. **The money envelope is columns, because a constraint cannot be a subquery.** `M2-BE-504` asks for
+   database constraints, and "stage amounts reconcile to the engagement total" is a sum across rows.
+   So `Engagement` carries `staged_total_paise` and five siblings, maintained with `F()` arithmetic
+   inside the transaction that moved the stage, and the reconciliation becomes a check between two
+   columns of one row. The bound that turned out to matter most is not the obvious one: it is
+   **`funded − refunded ≤ staged`** — never hold more of a Customer's money than there is agreed
+   work — which is what forces a scope reduction to refund *before* it shrinks, because the database
+   refuses the other order.
+2. **`total_paise` does not move; `amendment_delta_paise` does.** An accepted amendment legitimately
+   changes what is owed, and the first instinct was to update the total. Keeping the agreed number
+   frozen and putting the change beside it means a dispute two years later reads both, and it keeps
+   `commission_paise ≤ total_paise` — an existing C2 constraint — true without re-deriving
+   commission on every amendment.
+3. **`M2-BE-508` is a `save()` guard, not a code convention.** Following
+   `payouts.PartnerLedgerEntry.save`: `Engagement` refuses any write to its eight frozen commercial
+   terms, and `EngagementStage` refuses a write to `amount_paise` unless it came through
+   `apply_amendment_amount`, whose only caller is the amendment module and only after `AUTHORIZED`.
+   A service that forgets the rule is a bug; a model that permits it is an invitation.
+4. **`EngagementEvent` rather than `RequirementTransition`.** The requirement's own log ends at
+   `ENGAGED`, and pushing forty shift-day approvals into it would bury the six status changes it
+   exists to show a Customer. `actor_is_system` is published and actor *identity* is not: "approved
+   by you" and "approved because the review window closed" are different sentences, and the
+   counterparty's user id is not the caller's business.
+5. **The review-timeout exception is enforced twice, on purpose.** §5 says
+   `AWAITING_REVIEW → APPROVED` may occur on timeout **except while `DISPUTED`**. `dispute_stage`
+   clears `review_due_at` so the selector cannot see the row, *and* `expire_stage_review` re-checks
+   the status under the row lock — because a Customer can dispute in the window between the sweep
+   reading a list and the task acting on one entry, which is exactly the moment auto-approval would
+   settle an objection by ignoring it.
+6. **Commission is allocated cumulatively, not per stage.** `commission × amount // staged` per
+   stage leaves a remainder belonging to nobody; an eleven-milestone project would under-book Vsolve
+   by up to ten paise with no row explaining where it went. Allocating against the *cumulative*
+   approved total makes the last stage pick up exactly the accumulated remainder, and it needs no
+   special case for "which stage is last" — which stops being knowable the moment an amendment
+   appends one.
+7. **A5 amendment stages arrive already funded; A3 amendment stages arrive `PENDING`.** The amendment
+   payment *is* the new stage's funding, at face value, which is what `M2-BE-506` means by requiring
+   verified payment before scope changes. An additive amendment **appends** a stage rather than
+   growing an existing one, because a stage is the unit of evidence and approval and extra work
+   inside an approved stage would be work nobody reviewed.
+8. **`StageEvidence.ProcessingStatus` aliases `RequirementAttachment.ProcessingStatus`.** Not tidiness
+   — a second identical `TextChoices` publishes a second identical OpenAPI component, and the
+   generator resolves that by renaming *both*, taking `ScanStatusEnum` with it. The 1.24.0
+   `ReasonEnum` note is this exact failure; aliasing avoids it at the source.
+
+#### Three defects found while wiring it
+
+**`simulate_capture` refused every M2 charge, so no M2 money path was drivable by hand.** Ownership
+was resolved through the `CheckoutSession`, which a checkout-free purpose does not have — so the
+unlock, the visit plan, stage funding and now amendments all answered `403`. `milestones.md` proves
+every M2 money path with a provider **test** callback and this is the door those callbacks come
+through in development, so the whole commercial flow was unverifiable. Ownership now resolves
+against the M2 aggregate that records a customer; an unresolvable purpose is still refused, because
+a permissive default on a money endpoint is the wrong direction to guess in. The view's re-read also
+answered `404` *after* capturing, and no longer does.
+
+**An A3 quote's total was whatever the client sent** — logged as a Wave B2 finding in
+`frontend-execution-plan.md` §7 and never closed. `_assert_a3_shape` now refuses unless
+`total = rate × workers × days`. This was not cosmetic: `engagements._a3_stages` lays out one stage
+per shift-day at `rate × workers`, so a divergent total produced an agreement whose stages could
+never add up — and `M2-BE-504` has now made that a database constraint, which would have turned a
+bad quote into a 500 at reconfirmation. Refused rather than silently derived, because the wage-floor
+guard beside it only ever measured the *rate*.
+
+**Adding a second `processing_status` field renamed `ProcessingStatusEnum`.** Caught by diffing the
+generated component names against the committed contract before publishing, which is now the
+standing check the 1.24.0 CHANGELOG note asks for. Pinned.
+
+#### Verified
+
+`.\scripts\quality-static.cmd`: ruff format and ruff check clean across **345 files**, **strict MyPy
+clean across 225 source files**, `makemigrations --check` no changes, `spectacular --validate` with
+**zero warnings** after five `ENUM_NAME_OVERRIDES` entries (one pin, four new names), committed-
+contract drift check clean. `manage.py check` clean. **No published path, operation or schema
+component was removed or renamed.**
+
+#### Not done, and why
+
+- **No test was written or run**, per the build-first amendment. `M2-BE-509` is this wave's test
+  debt, recorded as one line. The smoke script that replaces it is
+  `docs/runbooks/m2-engagement-spine-smoke.md`.
+- **The frontend client is not regenerated.** `frontend/packages/api-client/src/generated/**` is
+  frozen and only the orchestrator regenerates it. **1.25.0 needs regeneration** before either
+  frontend column can consume any of this.
+- **Three new owner-blocked values fail closed, and the consequences are live**:
+  `stage_review_window_hours` unset means **no stage ever auto-approves**;
+  `stage_payout_hold_hours` unset means **no stage payout releases on a clock** (the earning is
+  still written and still held — the debt is real either way); `amendment_response_hours` unset
+  **blocks proposing an amendment at all**, because `ScopeAmendment.expires_at` is not nullable and
+  an amendment with no deadline is an open-ended claim on somebody's money.
+- **A reduction cannot empty a stage.** Removing a milestone entirely is a cancellation, and routing
+  one through the amendment engine would leave a zero-value stage in the agreement pretending to be
+  work. Vendor abandonment and stage transfer are `M2-BE-545`, Wave C5.
+- **`Engagement.WARRANTY` and `CLOSED` are reachable states with no command behind them.** Retention
+  and the warranty window are `M2-BE-546`; the digital-deliverable handover that fills the gap
+  between `COMPLETING` and `COMPLETED` for Event and Media is `M2-BE-547`. Both are Wave C5, and the
+  states exist now so C5 adds a step rather than a status.
+- **The Operations dispute decision has no case behind it yet.** `m2_stage_dispute_resolve` is the
+  transition Wave C6's case machinery will drive; it is published now so a disputed stage is not a
+  dead end for the whole of C4 and C5.
+- **No Operations HTTP route exists for a capability suspension**, so `M2-BE-113` is driven from the
+  domain command. That surface is C6, and publishing a suspension button before the case process
+  behind it would be a button with no process.
 
 ---
 
@@ -710,7 +863,7 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | C1 | P1–P3 gap closure | `[~]` 91/91 domain tests + 5 new files written, unrun | `[~]` **16 more paths live at contract 1.22.0 (33 total)** | Ruff, strict MyPy across 218 files, `makemigrations --check` and `spectacular --validate` all clean, zero schema warnings. Four sweeps on beat. **Tests written, not run** — five files, ~160 test functions, queued in `task.md` §"Owner verification queue". CI deferred to M1 by owner decision. Remainder: capability/matching completeness, `M2-BE-317` first. |
 | C1 remainder | `BE-102/106/107/110/115/301/303/306/310/317` | `[~]` built — static gates green | `[~]` **4 more paths at contract 1.23.0 (37 total)**, plus two corrected list envelopes | Ruff, strict MyPy across 218 files, `makemigrations --check`, `spectacular --validate` (zero warnings) and the drift check all clean. **The wage-floor guard can now fire**; both list operations declare the envelope they always sent and accept a `cursor`. Migrations `catalog.0007`, `locations.0003`, `partners.0009`. **Tests deferred per the build-first amendment**; two existing fixtures corrected for the fail-closed wage floor. |
 | C2 | `BE-215`, `BE-401..428` (revision 3: A3 unlock + A5 visit plan) | `[~]` built — static gates green | `[~]` **14 new paths / 19 new operations at contract 1.24.0 (62 M2 operations)** | Ruff format and check clean across 342 files, strict MyPy across 222 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 11 named enums, drift check clean. Migrations `requirements.0005`, `catalog.0008`, `commerce.0007`, `assignments.0008`; five new beat entries. **The candidate-visit-starts read is published** at `GET /partner/enquiries/{id}/visit-slots/`. All eight §7 serializer gaps landed. **Tests deferred per the build-first amendment** (`BE-417`/`418`/`428`). **1.24.0 needs client regeneration by the orchestrator.** |
-| C3 | `BE-501..509` | `[ ]` | `[ ]` | |
+| C3 | `BE-501..509` | `[~]` built — static gates green | `[~]` **15 new paths / 16 new operations at contract 1.25.0 (78 M2 operations)** | Ruff format and check clean across 345 files, strict MyPy across 225 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 5 enum entries (one **pin** preventing a rename of the published `ProcessingStatusEnum`), drift check clean. Migrations `requirements.0006`, `catalog.0009`, `commerce.0008`, `fulfilment.0002`; three new beat entries. **One stage spine for both archetypes**; scope amendments run on the M1 engine with `booking` made nullable and two new line kinds. **`M2-BE-113` unblocked and built.** Three defects closed: `simulate_capture` refused every M2 charge, an A3 total was client-supplied, and a new enum would have renamed a published component. **Tests deferred per the build-first amendment** (`BE-509`); smoke script at `docs/runbooks/m2-engagement-spine-smoke.md`. **1.25.0 needs client regeneration by the orchestrator.** |
 | C4 | `BE-521..535` | `[ ]` | `[ ]` | |
 | C5 | `BE-541..550` | `[ ]` | `[ ]` | |
 | C6 | `BE-701..717` | `[ ]` | `[ ]` | |
@@ -729,7 +882,7 @@ runbooks, dashboards, feature flags that gate new purchases only.
 
 | Date | Task | Blocked on | Logged where |
 |---|---|---|---|
-| 2026-08-10 | `M2-BE-113` | C3 engagement aggregate | `02-backend-tasks.md` BE1 gate |
+| 2026-08-10 | `M2-BE-113` | ~~C3 engagement aggregate~~ **Cleared 13 August**: `engagements.route_suspended_capability_engagements`, driven by the `m2.capability.suspended` outbox event | This file, C3 outcome |
 | 2026-08-10 | `M2-BE-301` language filter | Vendor language not captured in P1 | This file, C1 |
 | 2026-08-10 | `M2-BE-321` | No reference price per variant | `02-backend-tasks.md` BE3 |
 | 2026-08-10 | 12 policy tasks | Owner decisions in `task.md` P0 | `task.md` P0 |

@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.24.0",
+    "VERSION": "1.25.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -383,6 +383,25 @@ SPECTACULAR_SETTINGS = {
         # writes — and the no-show party is a request-shape choice with no column behind it.
         "InvitationDeclineReasonEnum": ("apps.requirements.serializers.INVITATION_DECLINE_REASONS"),
         "VisitNoShowPartyEnum": "apps.requirements.serializers.VISIT_NO_SHOW_PARTIES",
+        # M2 Wave C3 — the engagement stage spine and the M2 amendment surface.
+        #
+        # **`ProcessingStatusEnum` is pinned to stop C3 renaming a published component**, which is
+        # the `ReasonEnum` lesson from 1.24.0 arriving a second time.
+        # `WorkEvidence.ProcessingStatus`
+        # was the only `processing_status` choice set in the schema, so it published as the bare
+        # `ProcessingStatusEnum`; adding a second `processing_status` field made the generator
+        # disambiguate both and rename it to `WorkEvidenceProcessingStatusEnum` — a break for an
+        # M1 client that had not changed. `StageEvidence.ProcessingStatus` is an alias of
+        # `RequirementAttachment.ProcessingStatus` rather than a copy for the same reason, which is
+        # why `ScanStatusEnum` needs no entry here: there is still exactly one such choice set.
+        "ProcessingStatusEnum": "apps.fulfilment.models.WorkEvidence.ProcessingStatus",
+        # The four genuinely new choice sets. `kind`, `reason_code` and `outcome` are all names
+        # another app will reuse, so they are named on arrival rather than after a rename breaks a
+        # client — the standing rule since the C1 note above.
+        "StageEvidenceKindEnum": "apps.requirements.models.StageEvidence.Kind",
+        "EngagementAmendmentKindEnum": "apps.requirements.models.EngagementAmendment.Kind",
+        "StageDisputeReasonEnum": "apps.requirements.serializers.STAGE_DISPUTE_REASONS",
+        "StageDisputeOutcomeEnum": "apps.requirements.serializers.STAGE_DISPUTE_OUTCOMES",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -678,6 +697,29 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.requirements.tasks.sweep_visit_payout_holds",
         # Hourly, matching `reconcile-payouts`. A vendor who finishes onboarding waits at most an
         # hour for money that was already theirs, and the payout batch itself runs no faster.
+        "schedule": 60.0 * 60,
+    },
+    # M2 Wave C3 — the engagement stage spine. Same cadence rule as the ten entries above: a sweep
+    # that *decides something on a party's behalf* runs often enough that the decision lands near
+    # the deadline it was promised against, and a sweep that only moves already-earned money runs
+    # at the pace money actually moves.
+    "sweep-stage-reviews": {
+        "task": "apps.requirements.tasks.sweep_stage_reviews",
+        # 15 minutes. This one turns a Customer's silence into an approval and a vendor's payout,
+        # so the promise is "shortly after the window closes" rather than "within the hour" — but
+        # it is not the two-minute class either, because nothing is held hostage while it waits.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-stage-payout-holds": {
+        "task": "apps.requirements.tasks.sweep_stage_payout_holds",
+        # Hourly, matching `sweep-visit-payout-holds` and `reconcile-payouts` for the same reason:
+        # the money is already earned and the payout batch itself runs no faster.
+        "schedule": 60.0 * 60,
+    },
+    "sweep-orphaned-stage-evidence-uploads": {
+        "task": "apps.requirements.tasks.sweep_orphaned_stage_evidence_uploads",
+        # Hourly, like its two upload-intent twins. An abandoned intent costs storage and nothing
+        # else.
         "schedule": 60.0 * 60,
     },
 }

@@ -21,6 +21,8 @@ from apps.catalog.models import ServiceVariant
 from apps.requirements.models import (
     CustomerRequirement,
     Engagement,
+    EngagementAmendment,
+    EngagementEvent,
     EngagementStage,
     Proposal,
     ProposalSelection,
@@ -28,6 +30,7 @@ from apps.requirements.models import (
     RequirementAttachment,
     RequirementQuestion,
     SiteVisit,
+    StageEvidence,
     VendorInvitation,
     VisitPlan,
     VisitPlanShare,
@@ -1021,7 +1024,104 @@ class SelectionDeclineSerializer(serializers.Serializer[dict[str, Any]]):
     reason_code = serializers.SlugField(max_length=80)
 
 
+class StageEvidenceSerializer(serializers.ModelSerializer[StageEvidence]):
+    """What the vendor showed, as both parties read it.
+
+    `object_key` is **not** published. It is a storage path, and publishing one turns every
+    evidence read into an enumeration surface; a short-lived signed link is issued by the download
+    endpoint instead, the same way `vendor_attachments` issues them for a Customer's site photos.
+    """
+
+    class Meta:
+        model = StageEvidence
+        fields = (
+            "id",
+            "kind",
+            "note",
+            "content_type",
+            "size_bytes",
+            "processing_status",
+            "failure_reason",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class StageEvidenceUploadRequestSerializer(serializers.Serializer[dict[str, Any]]):
+    kind = serializers.ChoiceField(choices=StageEvidence.Kind.choices)
+    content_type = serializers.CharField(max_length=120)
+    size_bytes = serializers.IntegerField(min_value=1)
+    sha256 = serializers.RegexField(r"^[0-9a-f]{64}$")
+
+    def validate_kind(self, value: str) -> str:
+        if value == StageEvidence.Kind.NOTE:
+            raise serializers.ValidationError("A note carries no file; submit it with the stage.")
+        return value
+
+
+class StageEvidenceUploadGrantSerializer(serializers.Serializer[dict[str, Any]]):
+    upload_id = serializers.UUIDField(read_only=True)
+    upload_url = serializers.URLField(read_only=True)
+    upload_token = serializers.CharField(read_only=True, allow_blank=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+
+
+class StageEvidenceFinalizeSerializer(serializers.Serializer[dict[str, Any]]):
+    upload_id = serializers.UUIDField()
+
+
+class StageEvidenceSubmitSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Required. A stage handed over with no account of what was done is a stage nobody can review
+    #: and nobody can defend in a dispute.
+    note = serializers.CharField(max_length=4000)
+
+
+class StageCorrectionSerializer(serializers.Serializer[dict[str, Any]]):
+    note = serializers.CharField(max_length=2000)
+
+
+#: Why a Customer disputed a stage. Published on the serializer rather than the column for the
+#: reason the decline vocabulary is: the same column is written by system paths too.
+STAGE_DISPUTE_REASONS = (
+    ("NOT_DONE", "The work was not done"),
+    ("PARTIALLY_DONE", "Only part of the work was done"),
+    ("POOR_QUALITY", "The work was done badly"),
+    ("WRONG_SCOPE", "This is not what was agreed"),
+    ("OTHER", "Another reason"),
+)
+
+#: What Operations may decide about a disputed stage.
+STAGE_DISPUTE_OUTCOMES = (
+    ("APPROVE", "Approve the stage as submitted"),
+    ("REQUEST_CORRECTION", "Send it back for correction"),
+)
+
+
+class StageDisputeSerializer(serializers.Serializer[dict[str, Any]]):
+    reason_code = serializers.ChoiceField(choices=STAGE_DISPUTE_REASONS)
+    note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
+
+
+class StageDisputeDecisionSerializer(serializers.Serializer[dict[str, Any]]):
+    outcome = serializers.ChoiceField(choices=STAGE_DISPUTE_OUTCOMES)
+    note = serializers.CharField(max_length=2000)
+
+
 class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
+    """One shift-day or one milestone, with its money and its clocks.
+
+    The four money fields are published because they are what the Customer's and the vendor's
+    screens are both asking about, and because a client that only ever sees `amount_paise` cannot
+    tell a funded stage from an approved one from a paid one.
+
+    Both `*_due_at` fields are nullable and their nulls mean something specific: no review window
+    is configured, so this stage will never auto-approve; no payout hold is configured, so its
+    payout does not release on a clock. A screen must render nothing there rather than a countdown
+    to a deadline nobody set.
+    """
+
+    evidence = StageEvidenceSerializer(many=True, read_only=True)
+
     class Meta:
         model = EngagementStage
         fields = (
@@ -1032,7 +1132,21 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
             "scheduled_on",
             "status",
             "funding_state",
+            "funded_paise",
+            "approved_amount_paise",
+            "released_amount_paise",
+            "refunded_amount_paise",
+            "correction_note",
+            "dispute_reason_code",
+            "review_due_at",
+            "payout_release_due_at",
+            "evidence",
             "funded_at",
+            "started_at",
+            "evidence_submitted_at",
+            "approved_at",
+            "released_at",
+            "disputed_at",
         )
         read_only_fields = fields
 
@@ -1043,6 +1157,10 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     `commercial_mode` is the field the UI must read before it promises anything. `LEAD_ONLY` means
     the Customer pays the vendor directly and Vsolve's protection is matching and replacement;
     calling that a protected booking is the promise this platform cannot keep.
+
+    The six money columns are the running total `M2-BE-504` reconciles: `staged_total_paise` always
+    equals `total_paise + amendment_delta_paise`, by database constraint, so a client can show
+    "agreed, then changed by, now" without doing arithmetic the server has not already checked.
     """
 
     stages = EngagementStageSerializer(many=True, read_only=True)
@@ -1062,12 +1180,141 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "tax_basis",
             "commission_paise",
             "commission_treatment",
+            "staged_total_paise",
+            "amendment_delta_paise",
+            "funded_total_paise",
+            "approved_total_paise",
+            "released_total_paise",
+            "refunded_total_paise",
             "contact_released_at",
             "work_may_start_at",
+            "disputed_at",
+            "completed_at",
             "stages",
             "created_at",
         )
         read_only_fields = fields
+
+
+class EngagementPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.CharField(read_only=True, allow_null=True)
+    previous = serializers.CharField(read_only=True, allow_null=True)
+    results = EngagementSerializer(many=True, read_only=True)
+
+
+class EngagementEventSerializer(serializers.ModelSerializer[EngagementEvent]):
+    """One line of the agreement's history.
+
+    `actor_is_system` rather than an actor id: who a Customer or a vendor was is not the other
+    party's business, but *whether a person or a clock* moved something is exactly what a timeline
+    has to say — "approved by you" and "approved because the review window closed" are different
+    sentences.
+    """
+
+    actor_is_system = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EngagementEvent
+        fields = (
+            "id",
+            "stage",
+            "from_status",
+            "to_status",
+            "reason_code",
+            "reason",
+            "actor_is_system",
+            "occurred_at",
+        )
+        read_only_fields = fields
+
+    def get_actor_is_system(self, obj: EngagementEvent) -> bool:
+        return obj.actor_id is None
+
+
+class EngagementEventListSerializer(serializers.Serializer[dict[str, Any]]):
+    events = EngagementEventSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class AmendmentLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One line of a change request, priced.
+
+    `amount_paise` is signed on the wire even though the stored column is not: the M1
+    `ScopeAmendmentLine` was built for additions only, so it holds an absolute value and the sign
+    lives in the line's snapshot. Publishing the signed number is what lets one screen render both
+    an addition and a reduction without knowing which table the sign came from.
+    """
+
+    position = serializers.IntegerField(read_only=True)
+    kind = serializers.CharField(read_only=True)
+    #: The line's own description. Named `title` rather than `label` for the reason
+    #: `ProposalStageSerializer.title` is: `label` is an attribute of every DRF `Field`, and a
+    #: serializer field of that name shadows it.
+    title = serializers.CharField(read_only=True)
+    quantity = serializers.IntegerField(read_only=True)
+    amount_paise = serializers.IntegerField(read_only=True)
+
+
+class EngagementAmendmentSerializer(serializers.Serializer[dict[str, Any]]):
+    """A change request, as both parties read it.
+
+    Flattened across `EngagementAmendment` and the M1 `ScopeAmendment` deliberately. The split is
+    a storage fact — one amendment engine, two aggregates — and pushing it onto the wire would ask
+    every client to know which half of the row holds the status.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    engagement_id = serializers.UUIDField(read_only=True)
+    stage_id = serializers.UUIDField(read_only=True, allow_null=True)
+    kind = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    reason = serializers.CharField(read_only=True)
+    #: Signed. Positive is extra work the Customer pays for; negative is scope taken out.
+    delta_paise = serializers.IntegerField(read_only=True)
+    lines = AmendmentLineSerializer(many=True, read_only=True)
+    expires_at = serializers.DateTimeField(read_only=True)
+    responded_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    applied_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class EngagementAmendmentListSerializer(serializers.Serializer[dict[str, Any]]):
+    amendments = EngagementAmendmentSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class AmendmentLineInputSerializer(serializers.Serializer[dict[str, Any]]):
+    title = serializers.CharField(max_length=240)
+    quantity = serializers.IntegerField(min_value=1, max_value=999)
+    #: A5 change orders only, and signed. Ignored on an A3 time extension, where the server prices
+    #: from the rate frozen on the engagement — a vendor who could restate that rate could
+    #: re-price a job the Customer has already committed to.
+    amount_paise = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+
+class EngagementAmendmentCreateSerializer(serializers.Serializer[dict[str, Any]]):
+    kind = serializers.ChoiceField(choices=EngagementAmendment.Kind.choices)
+    reason = serializers.CharField(max_length=240)
+    stage_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    lines = AmendmentLineInputSerializer(many=True)
+
+    def validate_lines(self, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not value:
+            raise serializers.ValidationError("A change request needs at least one line.")
+        return value
+
+
+class EngagementAmendmentDecisionSerializer(serializers.Serializer[dict[str, Any]]):
+    """What an acceptance returned.
+
+    `checkout` is present only when the amendment needs a verified payment before it changes
+    anything — a managed (A5) engagement taking on extra work. `null` means it is already
+    authorized and applied: an A3 extension, or a reduction that refunded rather than charged.
+    """
+
+    amendment = EngagementAmendmentSerializer(read_only=True)
+    checkout = AccessCheckoutSerializer(read_only=True, allow_null=True)
 
 
 # ---------------------------------------------------------------------------

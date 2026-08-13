@@ -8,8 +8,23 @@ tells a reader which role a route belongs to before they open the view.
 from django.urls import path
 
 from apps.requirements.views import (
+    EngagementAmendmentCollectionView,
+    EngagementAmendmentDecisionView,
+    EngagementAmendmentDeclineView,
+    EngagementCollectionView,
+    EngagementCompletionView,
     EngagementDetailView,
+    EngagementEventListView,
+    EngagementStageApprovalView,
+    EngagementStageCorrectionView,
+    EngagementStageDetailView,
+    EngagementStageDisputeDecisionView,
+    EngagementStageDisputeView,
+    EngagementStageEvidenceUploadView,
+    EngagementStageEvidenceView,
     EngagementStageFundingView,
+    EngagementStageStartView,
+    EngagementStageSubmitView,
     PartnerDemandPreviewView,
     PartnerEnquiryAcceptView,
     PartnerEnquiryAttachmentListView,
@@ -130,15 +145,90 @@ urlpatterns = [
         SelectionDeclineView.as_view(),
         name="m2-selection-decline",
     ),
+    path("engagements/", EngagementCollectionView.as_view(), name="m2-engagement-list"),
     path(
         "engagements/<uuid:engagement_id>/",
         EngagementDetailView.as_view(),
         name="m2-engagement-detail",
     ),
     path(
+        "engagements/<uuid:engagement_id>/events/",
+        EngagementEventListView.as_view(),
+        name="m2-engagement-events",
+    ),
+    path(
+        "engagements/<uuid:engagement_id>/completion/",
+        EngagementCompletionView.as_view(),
+        name="m2-engagement-completion",
+    ),
+    # Wave C3 — scope amendments. `POST` on the collection proposes (vendor); the decision routes
+    # belong to the Customer. Both go through the M1 amendment engine.
+    path(
+        "engagements/<uuid:engagement_id>/amendments/",
+        EngagementAmendmentCollectionView.as_view(),
+        name="m2-engagement-amendments",
+    ),
+    path(
+        "engagement-amendments/<uuid:engagement_amendment_id>/accept/",
+        EngagementAmendmentDecisionView.as_view(),
+        name="m2-engagement-amendment-accept",
+    ),
+    path(
+        "engagement-amendments/<uuid:engagement_amendment_id>/decline/",
+        EngagementAmendmentDeclineView.as_view(),
+        name="m2-engagement-amendment-decline",
+    ),
+    # Wave C3 — the stage spine. One set of routes for both archetypes: a shift-day and a
+    # milestone take the same commands, and the archetype only changes what they refuse.
+    path(
+        "engagement-stages/<uuid:stage_id>/",
+        EngagementStageDetailView.as_view(),
+        name="m2-engagement-stage-detail",
+    ),
+    path(
         "engagement-stages/<uuid:stage_id>/funding/",
         EngagementStageFundingView.as_view(),
         name="m2-engagement-stage-funding",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/start/",
+        EngagementStageStartView.as_view(),
+        name="m2-engagement-stage-start",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/evidence/uploads/",
+        EngagementStageEvidenceUploadView.as_view(),
+        name="m2-engagement-stage-evidence-upload",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/evidence/",
+        EngagementStageEvidenceView.as_view(),
+        name="m2-engagement-stage-evidence",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/submit/",
+        EngagementStageSubmitView.as_view(),
+        name="m2-engagement-stage-submit",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/approve/",
+        EngagementStageApprovalView.as_view(),
+        name="m2-engagement-stage-approve",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/correction/",
+        EngagementStageCorrectionView.as_view(),
+        name="m2-engagement-stage-correction",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/dispute/",
+        EngagementStageDisputeView.as_view(),
+        name="m2-engagement-stage-dispute",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/dispute/decision/",
+        EngagementStageDisputeDecisionView.as_view(),
+        name="m2-engagement-stage-dispute-decision",
     ),
     path(
         "requirements/<uuid:requirement_id>/attachments/uploads/",

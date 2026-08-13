@@ -19,6 +19,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
+from apps.foundation.services import enqueue_outbox_event
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User
 from apps.locations.models import ServiceArea
@@ -535,9 +536,13 @@ def transition_capability(
 ) -> PartnerCapability:
     """Move a capability through review. Every move is audited.
 
-    Suspending a capability that has funded or committed work must also route that work to
-    replacement or refund. That routing is M2-BE-113 and lands with the engagement module in
-    P5; until then a suspension here changes eligibility only.
+    **Suspension routes committed work as well as blocking new work (`M2-BE-113`).** It emits
+    `m2.capability.suspended`, which `apps.requirements.handlers` consumes to refund unstarted
+    funded stages and flag the rest for replacement. Through the outbox rather than by calling the
+    engagement module directly, for two reasons: `apps.requirements` already imports
+    `apps.partners`, so the reverse call would close an import cycle; and a review decision must
+    be recorded even if the routing fails, which is precisely the separation the outbox exists to
+    make. A worker retries the routing; the suspension itself is already durable.
     """
     capability = PartnerCapability.objects.select_for_update().get(pk=capability_id)
     allowed = _ALLOWED_TRANSITIONS.get(capability.status, frozenset())
@@ -593,6 +598,22 @@ def transition_capability(
         reason_code=reason_code,
         reason=reason,
     )
+    if to_status == PartnerCapability.Status.SUSPENDED:
+        enqueue_outbox_event(
+            aggregate_type="partner_capability",
+            aggregate_id=capability.id,
+            event_type="m2.capability.suspended",
+            # Keyed on the transition rather than on the capability: a capability can be suspended,
+            # reinstated and suspended again, and each suspension has its own committed work to
+            # route. Keying on the capability alone would silently drop the second one.
+            idempotency_key=f"capability-suspended:{capability.id}:{timezone.now().isoformat()}",
+            payload={
+                "partner_capability_id": str(capability.id),
+                "partner_id": str(capability.partner_id),
+                "variant_id": str(capability.variant_id),
+                "reason_code": reason_code,
+            },
+        )
     return capability
 
 

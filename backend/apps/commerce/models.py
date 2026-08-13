@@ -145,6 +145,12 @@ class PaymentAttempt(models.Model):
         #: A5: material money, which is spent rather than earned, so it cannot be recovered like
         #: an unearned work stage. A distinct purpose is what keeps that rule expressible.
         M2_MATERIAL_ADVANCE = "M2_MATERIAL_ADVANCE", "M2 material advance"
+        #: Additional work on a live M2 engagement, after an accepted scope amendment.
+        #: **Deliberately not `SCOPE_AMENDMENT_REVISION`**: that purpose's capture handler
+        #: resolves a `PriceRevision` by `Booking`, which an M2 engagement does not have, so
+        #: reusing it would route an M2 payment into a lookup that cannot succeed. One amendment
+        #: engine, two aggregates, two capture routes.
+        M2_SCOPE_AMENDMENT = "M2_SCOPE_AMENDMENT", "M2 engagement scope amendment"
 
     #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. The
     #: check constraint below is generated from this tuple so adding a purpose without deciding
@@ -156,6 +162,7 @@ class PaymentAttempt(models.Model):
         "M2_SITE_VISIT_FEE",
         "M2_STAGE_FUNDING",
         "M2_MATERIAL_ADVANCE",
+        "M2_SCOPE_AMENDMENT",
     )
 
     class Status(models.TextChoices):
@@ -258,6 +265,7 @@ class PaymentAttempt(models.Model):
                             "M2_SITE_VISIT_FEE",
                             "M2_STAGE_FUNDING",
                             "M2_MATERIAL_ADVANCE",
+                            "M2_SCOPE_AMENDMENT",
                         ),
                         checkout__isnull=True,
                     )

@@ -25,10 +25,19 @@ from uuid import UUID
 
 from celery import shared_task
 
-from apps.requirements import access, attachments, engagements, matching, proposals, services
+from apps.requirements import (
+    access,
+    attachments,
+    engagements,
+    matching,
+    proposals,
+    services,
+    stages,
+)
 from apps.requirements.models import (
     CustomerRequirement,
     RequirementAttachmentUpload,
+    StageEvidenceUpload,
 )
 from apps.requirements.storage import DocumentStorageError, get_attachment_storage
 
@@ -327,6 +336,104 @@ def sweep_expired_selections() -> int:
 # ---------------------------------------------------------------------------
 # Attachment housekeeping
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# The engagement stage spine (`M2-BE-503`, `M2-BE-507`)
+#
+# Two clocks, two sweeps, and their cadences differ for the reason the C1 and C2 cadences differ:
+# one of them decides that silence was consent, and the other only moves money that is already
+# earned.
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def expire_one_stage_review(_self: object, stage_id: str) -> None:
+    stages.expire_stage_review(stage_id=UUID(stage_id))
+
+
+@shared_task
+def sweep_stage_reviews() -> int:
+    """Approve stages whose review window closed with no decision.
+
+    `07-state-machines-and-permissions.md` §5 permits `AWAITING_REVIEW → APPROVED` on review
+    timeout **except while the stage is `DISPUTED`**. That exception is enforced twice on purpose:
+    a disputed stage has its `review_due_at` cleared so it cannot appear in the selector at all,
+    and `expire_stage_review` re-checks the status under the row lock — because a Customer can
+    dispute in the window between this sweep reading a list and the task acting on one entry, and
+    that is exactly the moment auto-approval would settle an objection by ignoring it.
+
+    A stage whose variant has no configured review window is never swept, because
+    `pricing.stage_review_deadline` answers `None` and this selector requires a real deadline.
+    Releasing a vendor's money against a clock nobody set is the failure that would be worse than
+    waiting.
+    """
+    swept = 0
+    for stage_id in stages.stage_review_due_ids()[:SWEEP_BATCH_SIZE]:
+        expire_one_stage_review.delay(str(stage_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def release_one_stage_payout(_self: object, stage_id: str) -> None:
+    stages.release_stage_payout(stage_id=UUID(stage_id))
+
+
+@shared_task
+def sweep_stage_payout_holds() -> int:
+    """Release approved stages past their dispute window, and held earnings past their gate.
+
+    One sweep for both halves because one command handles both, and each half is idempotent on its
+    own: the stage moves to `RELEASED` when its window closes, and the ledger entry moves to
+    `AVAILABLE` when the vendor's payout account is verified. A vendor who never adds bank details
+    keeps a `PENDING` entry indefinitely, which is the honest record — the debt is real and unpaid.
+
+    `payouts.release_payout_hold` cannot do this: it resolves an entry **by Booking**, and a stage
+    has none. The same reason `access.release_visit_payout_hold` exists for a visit payout.
+    """
+    swept = 0
+    for stage_id in stages.stage_payout_release_due_ids()[:SWEEP_BATCH_SIZE]:
+        release_one_stage_payout.delay(str(stage_id))
+        swept += 1
+    return swept
+
+
+@shared_task
+def sweep_orphaned_stage_evidence_uploads() -> int:
+    """Mark expired evidence-upload intents and delete any bytes that arrived against them.
+
+    The stage twin of `sweep_orphaned_attachment_uploads`, and the same problem: an intent whose
+    signed URL was used and never finalized is storage nobody owns and no record points at.
+    """
+    swept = 0
+    for upload_id in stages.orphaned_stage_evidence_upload_ids()[:SWEEP_BATCH_SIZE]:
+        upload = StageEvidenceUpload.objects.filter(
+            id=upload_id,
+            status=StageEvidenceUpload.Status.ISSUED,
+        ).first()
+        if upload is None:
+            continue
+        StageEvidenceUpload.objects.filter(id=upload.id).update(
+            status=StageEvidenceUpload.Status.EXPIRED,
+            failure_code="upload_expired",
+        )
+        with suppress(DocumentStorageError):
+            get_attachment_storage().delete_object(object_key=upload.object_key)
+        swept += 1
+    return swept
 
 
 @shared_task

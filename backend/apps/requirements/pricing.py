@@ -261,6 +261,74 @@ def a5_commission(requirement: CustomerRequirement, *, total_paise: int) -> tupl
     return total_paise * basis_points // 10000, treatment
 
 
+def stage_review_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime | None:
+    """When silence on submitted stage evidence becomes approval.
+
+    `None` means the owner has set no review window, and the honest consequence is that **no
+    stage is ever auto-approved**. `07-state-machines-and-permissions.md` §5 permits
+    `AWAITING_REVIEW → APPROVED` on timeout; it does not permit inventing the timeout. A default
+    here would release a vendor's money against a deadline nobody agreed to.
+    """
+    hours = _configuration(requirement).stage_review_window_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=at or timezone.now(),
+        hours=hours,
+    )
+
+
+def stage_payout_hold_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime | None:
+    """When an approved stage's held payout becomes payable — the dispute window (`M2-BE-507`).
+
+    `None` means the hold does not lift on a clock. The earning is still written and still held,
+    because the vendor is owed either way; what is missing is only the automatic release, and
+    releasing money early on a guessed window is the one failure a dispute window exists to
+    prevent.
+    """
+    hours = _configuration(requirement).stage_payout_hold_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=at or timezone.now(),
+        hours=hours,
+    )
+
+
+def amendment_response_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime:
+    """How long a Customer has to answer a proposed scope amendment.
+
+    The one clock in this module that **raises** rather than answering `None`.
+    `fulfilment.ScopeAmendment.expires_at` is not nullable, and an amendment with no expiry is an
+    open-ended claim on somebody's money that the vendor could hold over a live job indefinitely.
+    Refusing to propose one is the fail-closed outcome; inventing a window is not.
+    """
+    hours = _configuration(requirement).amendment_response_hours
+    deadline = (
+        None
+        if hours is None
+        else _business_hours_deadline(
+            area=requirement.service_area,
+            start=at or timezone.now(),
+            hours=hours,
+        )
+    )
+    if deadline is None:
+        raise PolicyUnavailableError(
+            "We have not set how long a change request stays open for this service. "
+            "Support can help.",
+        )
+    return deadline
+
+
 def reconfirmation_deadline(
     requirement: CustomerRequirement, *, at: datetime | None = None
 ) -> datetime | None:

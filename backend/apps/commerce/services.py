@@ -575,6 +575,7 @@ M2_CAPTURE_PURPOSES = (
     PaymentAttempt.Purpose.M2_QUOTE_UNLOCK,
     PaymentAttempt.Purpose.M2_VISIT_PLAN,
     PaymentAttempt.Purpose.M2_STAGE_FUNDING,
+    PaymentAttempt.Purpose.M2_SCOPE_AMENDMENT,
 )
 
 
@@ -599,6 +600,10 @@ def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
         from apps.requirements import engagements  # noqa: PLC0415 - same cycle
 
         engagements.complete_stage_funding(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.M2_SCOPE_AMENDMENT:
+        from apps.requirements import amendments  # noqa: PLC0415 - same cycle
+
+        amendments.complete_engagement_amendment_payment(payment_attempt_id=attempt.id)
 
 
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:
@@ -1245,6 +1250,46 @@ def reconcile_refund(*, refund_id: UUID) -> Refund:
 
 
 @transaction.atomic
+def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID) -> bool:
+    """Whose charge is a checkout-free `PaymentAttempt`?
+
+    Answered from the aggregate that sold it rather than from the attempt, because the attempt
+    genuinely does not know: `initiate_standalone_payment_attempt` deliberately takes no customer,
+    since the aggregate on the other side already records one and a second copy is a second thing
+    that can disagree.
+
+    Imported inside the function for the reason `_apply_m2_capture` is: `apps.requirements` imports
+    this module, and these two calls are the only ones going the other way.
+    """
+    from apps.requirements.models import (  # noqa: PLC0415 - avoids a module import cycle
+        EngagementAmendment,
+        EngagementStage,
+        QuoteUnlock,
+        VisitPlan,
+    )
+
+    purpose = attempt.purpose
+    if purpose == PaymentAttempt.Purpose.M2_QUOTE_UNLOCK:
+        return QuoteUnlock.objects.filter(
+            payment_attempt=attempt, requirement__customer_id=customer_id
+        ).exists()
+    if purpose == PaymentAttempt.Purpose.M2_VISIT_PLAN:
+        return VisitPlan.objects.filter(
+            payment_attempt=attempt, requirement__customer_id=customer_id
+        ).exists()
+    if purpose == PaymentAttempt.Purpose.M2_STAGE_FUNDING:
+        return EngagementStage.objects.filter(
+            payment_attempt=attempt, engagement__customer_id=customer_id
+        ).exists()
+    if purpose == PaymentAttempt.Purpose.M2_SCOPE_AMENDMENT:
+        return EngagementAmendment.objects.filter(
+            payment_attempt=attempt, engagement__customer_id=customer_id
+        ).exists()
+    # `SCOPE_AMENDMENT_REVISION` and `M2_SITE_VISIT_FEE` are not resolvable here yet, and a
+    # permissive default on a money endpoint is the wrong direction to guess in.
+    return False
+
+
 def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
     """Marks a payment captured with no gateway involved. Development only.
 
@@ -1267,6 +1312,17 @@ def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
     on. Beyond that, the attempt's own provider must be `fake`: even if the flag
     were somehow enabled against a real environment, a Razorpay attempt cannot be
     captured through here. And the attempt must belong to the caller.
+
+    ## Checkout-free purposes
+
+    Ownership used to run through the `CheckoutSession` alone, which made every
+    checkout-free purpose — the M1 scope-amendment revision and all five M2
+    charges — impossible to capture here at all. That was a real hole rather
+    than a strictness: `milestones.md` proves every M2 money path with a
+    provider **test** callback, and this is the door those callbacks come
+    through in development, so the whole of the M2 commercial flow was
+    undrivable by hand. `_standalone_attempt_belongs_to` resolves the same
+    question against the aggregate that actually records a customer.
     """
     if not settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE:
         raise PermissionError("Simulated capture is disabled in this environment.")
@@ -1276,9 +1332,15 @@ def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
         .select_related("checkout")
         .get(id=attempt_id)
     )
-    # Ownership runs through the checkout, which is where it is recorded — the
-    # attempt itself carries no customer.
-    if attempt.checkout is None or attempt.checkout.customer_id != customer_id:
+    # Ownership runs through the checkout where there is one — the attempt itself
+    # carries no customer — and through the M2 aggregate that bought it where
+    # there is not.
+    owned = (
+        attempt.checkout.customer_id == customer_id
+        if attempt.checkout is not None
+        else _standalone_attempt_belongs_to(attempt=attempt, customer_id=customer_id)
+    )
+    if not owned:
         raise PermissionError("This payment belongs to another Customer.")
     if attempt.provider != FakePaymentProvider.code:
         raise PermissionError("Only a fake-provider payment can be captured by hand.")

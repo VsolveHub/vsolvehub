@@ -428,7 +428,13 @@ class CustomerAmendmentDecisionView(APIView):
     def post(self, request: Request, amendment_id: UUID) -> Response:
         user = cast(User, request.user)
         amendment = ScopeAmendment.objects.select_related("booking").filter(id=amendment_id).first()
-        if amendment is None or amendment.booking.customer_id != user.id:
+        # `booking` is nullable since M2 Wave C3 routed engagement amendments through the same
+        # engine. A null one here is an M2 amendment reaching the M1 Booking route, and it gets
+        # the same refusal a stranger's amendment gets — the existence of somebody else's
+        # engagement is not this caller's business either.
+        if amendment is None or amendment.booking is None:
+            raise _forbidden()
+        if amendment.booking.customer_id != user.id:
             raise _forbidden()
         key = _required_key(request)
 

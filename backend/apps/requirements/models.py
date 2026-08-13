@@ -6,6 +6,7 @@ docs/adr/0007-m2-engagement-spine-and-fee-after-value.md.
 """
 
 import uuid
+from typing import Any
 
 from django.conf import settings
 from django.db import models
@@ -1285,7 +1286,9 @@ class Engagement(models.Model):
     commercial_mode = models.CharField(max_length=24, choices=CommercialMode.choices)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING_START)
 
-    #: Frozen from the selected proposal. A later supersession cannot move an agreed price.
+    #: Frozen from the selected proposal. A later supersession cannot move an agreed price, and
+    #: neither can an amendment: an accepted amendment moves `amendment_delta_paise`, so the
+    #: number both parties originally agreed to stays readable next to the number they now owe.
     total_paise = models.PositiveBigIntegerField()
     tax_paise = models.PositiveBigIntegerField(default=0)
     tax_basis = models.CharField(max_length=12)
@@ -1298,14 +1301,51 @@ class Engagement(models.Model):
     #: both parties actually agreed to rather than the current row.
     terms_snapshot = models.JSONField(default=dict)
 
+    # --- Wave C3: the money envelope, as columns so it can be a database constraint -----------
+    #
+    # `M2-BE-504` asks that stage amounts reconcile to the engagement total and that funded,
+    # approved, paid and refunded amounts cannot exceed their legal bounds — **as database
+    # constraints, not only as application validation**. A sum across stage rows cannot be a
+    # row-level `CHECK`, so the sums live here as maintained columns and the reconciliation
+    # becomes a check between two columns of one row. Every writer updates them with `F()`
+    # arithmetic inside the transaction that moved the stage, so two concurrent approvals add
+    # rather than overwrite.
+
+    #: Σ of this engagement's stage amounts. Equal to `total_paise + amendment_delta_paise` by
+    #: constraint — which is the reconciliation `M2-BE-504` names, expressed where the database
+    #: can refuse a violation instead of a report noticing one.
+    staged_total_paise = models.PositiveBigIntegerField(default=0)
+    #: Net of every **authorized** amendment, signed. Positive for extra work, negative for scope
+    #: taken out. `total_paise` never moves; this is what moved.
+    amendment_delta_paise = models.BigIntegerField(default=0)
+    funded_total_paise = models.PositiveBigIntegerField(default=0)
+    approved_total_paise = models.PositiveBigIntegerField(default=0)
+    released_total_paise = models.PositiveBigIntegerField(default=0)
+    refunded_total_paise = models.PositiveBigIntegerField(default=0)
+
     #: When the counterparties may see each other's contact details, and when work may begin. A3
     #: releases both at creation — a connection *is* the product. A5 releases both only once the
     #: first stage is funded, because managed work that starts unfunded has no protection behind
     #: it.
     contact_released_at = models.DateTimeField(null=True, blank=True)
     work_may_start_at = models.DateTimeField(null=True, blank=True)
+    disputed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    #: Terms frozen at reconfirmation. Written once, at creation, and refused afterwards by
+    #: `save()` — `M2-BE-508` in the one place no caller can route around.
+    FROZEN_TERM_FIELDS = (
+        "archetype",
+        "commercial_mode",
+        "total_paise",
+        "tax_paise",
+        "tax_basis",
+        "commission_paise",
+        "commission_treatment",
+        "terms_snapshot",
+    )
 
     class Meta:
         ordering = ("-created_at", "id")
@@ -1327,6 +1367,40 @@ class Engagement(models.Model):
                 condition=~models.Q(commercial_mode="LEAD_ONLY") | models.Q(commission_paise=0),
                 name="requirements_lead_only_engagement_has_no_commission",
             ),
+            # `M2-BE-504`, the reconciliation itself. The stages are the agreement: their amounts
+            # add to the agreed total plus whatever amendments both parties authorized, and
+            # nothing else. A stage created without moving the delta, or an amendment applied
+            # without creating a stage, is refused by the database rather than discovered in a
+            # month of unexplained variance.
+            models.CheckConstraint(
+                condition=models.Q(
+                    staged_total_paise=models.F("total_paise") + models.F("amendment_delta_paise")
+                ),
+                name="requirements_engagement_stages_reconcile_to_total",
+            ),
+            # **Vsolve never holds more of a Customer's money than there is agreed work.** The
+            # live exposure is what was collected less what has been given back, and it is bounded
+            # by the staged scope — which is what makes a scope reduction sound: the refund runs
+            # first, then the scope shrinks, and this holds at both steps.
+            models.CheckConstraint(
+                condition=models.Q(
+                    funded_total_paise__lte=models.F("staged_total_paise")
+                    + models.F("refunded_total_paise")
+                ),
+                name="requirements_engagement_exposure_within_scope",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(refunded_total_paise__lte=models.F("funded_total_paise")),
+                name="requirements_engagement_refund_within_funding",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(approved_total_paise__lte=models.F("staged_total_paise")),
+                name="requirements_engagement_approved_within_scope",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(released_total_paise__lte=models.F("approved_total_paise")),
+                name="requirements_engagement_released_within_approved",
+            ),
         ]
         indexes = [
             models.Index(fields=("partner", "status")),
@@ -1335,6 +1409,27 @@ class Engagement(models.Model):
 
     def __str__(self) -> str:
         return f"{self.requirement_id}:{self.commercial_mode}:{self.status}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Frozen commercial terms are frozen (`M2-BE-508`).
+
+        The rule "no scope, amount or completion change through clarification, callback or any
+        unilateral UI action" is only worth as much as the narrowest place it is enforced. A
+        service that forgets it is a bug; a model that permits it is an invitation. Following
+        `payouts.PartnerLedgerEntry.save`, which refuses the same class of edit for the same
+        reason: this is the table where "someone will remember not to" is not good enough.
+
+        An amendment moves `amendment_delta_paise` and `staged_total_paise`, never these eight.
+        """
+        if not self._state.adding:
+            update_fields = set(kwargs.get("update_fields") or ())
+            frozen = update_fields.intersection(self.FROZEN_TERM_FIELDS)
+            if frozen or not update_fields:
+                raise ValueError(
+                    "An engagement's agreed terms are frozen at reconfirmation. Change scope or "
+                    "price through an accepted scope amendment, never by writing the engagement."
+                )
+        super().save(*args, **kwargs)
 
 
 class EngagementStage(models.Model):
@@ -1360,6 +1455,17 @@ class EngagementStage(models.Model):
         PENDING = "PENDING", "Awaiting the provider"
         FUNDED = "FUNDED", "Funded"
 
+    #: Statuses in which the vendor still owes work on this stage.
+    OPEN_STATUSES = (
+        Status.PENDING,
+        Status.IN_PROGRESS,
+        Status.AWAITING_REVIEW,
+        Status.CORRECTION_REQUESTED,
+        Status.DISPUTED,
+    )
+    #: Statuses in which the money for this stage is decided.
+    SETTLED_STATUSES = (Status.RELEASED,)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     engagement = models.ForeignKey(Engagement, on_delete=models.PROTECT, related_name="stages")
     position = models.PositiveSmallIntegerField()
@@ -1379,7 +1485,53 @@ class EngagementStage(models.Model):
         on_delete=models.PROTECT,
         related_name="m2_engagement_stages",
     )
+    #: The four money numbers `M2-BE-504` bounds, per stage. Stored rather than derived because a
+    #: bound the database can enforce has to be a column, and because a stage that was funded at
+    #: one amount and amended to another must still reconcile against what was actually taken.
+    funded_paise = models.PositiveBigIntegerField(default=0)
+    approved_amount_paise = models.PositiveBigIntegerField(default=0)
+    released_amount_paise = models.PositiveBigIntegerField(default=0)
+    refunded_amount_paise = models.PositiveBigIntegerField(default=0)
+    #: The vendor's earning for this stage, on the M1 payout rails. Written `PENDING` at approval
+    #: — held for the dispute window — and moved to `AVAILABLE` by the release sweep. Null for a
+    #: `LEAD_ONLY` stage, where Vsolve collects nothing and therefore owes nothing.
+    ledger_entry = models.ForeignKey(
+        "payouts.PartnerLedgerEntry",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_engagement_stages",
+    )
+    refund = models.ForeignKey(
+        "commerce.Refund",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_engagement_stages",
+    )
+    #: When silence becomes approval. Business hours, stamped when evidence lands; null when the
+    #: owner has set no review window, and those stages are deliberately never auto-approved.
+    review_due_at = models.DateTimeField(null=True, blank=True)
+    #: When an approved stage's held payout becomes payable. Business hours from approval; null
+    #: when the hold window is unset, and those payouts wait for Operations rather than for a
+    #: clock nobody configured.
+    payout_release_due_at = models.DateTimeField(null=True, blank=True)
+    correction_note = models.TextField(blank=True)
+    dispute_reason_code = models.SlugField(max_length=80, blank=True)
+    #: The amendment that created this stage, if it was not part of the original agreement.
+    source_amendment = models.ForeignKey(
+        "EngagementAmendment",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="created_stages",
+    )
     funded_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    evidence_submitted_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+    disputed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1394,10 +1546,377 @@ class EngagementStage(models.Model):
                 condition=~models.Q(funding_state="FUNDED") | models.Q(funded_at__isnull=False),
                 name="requirements_funded_stage_has_a_timestamp",
             ),
+            # `M2-BE-504`, per stage. Four bounds, four constraints, because collapsing them would
+            # tell an operator that *something* about the money is wrong without saying which.
+            #
+            # **At face value or not at all.** A partly funded A5 stage is the state in which work
+            # starts against money that does not cover it, and `complete_stage_funding` already
+            # refuses a short payment — this is the same rule where no caller can miss it. Written
+            # `>=` rather than `=` so that a stage whose scope was later *reduced* by an accepted
+            # amendment stays legal: the excess is refunded, and funding that once covered a
+            # larger stage still covers the smaller one.
+            models.CheckConstraint(
+                condition=~models.Q(funding_state="FUNDED")
+                | models.Q(funded_paise__gte=models.F("amount_paise")),
+                name="requirements_stage_funding_covers_amount",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(refunded_amount_paise__lte=models.F("funded_paise")),
+                name="requirements_stage_refund_within_funding",
+            ),
+            # The per-stage twin of the engagement's exposure bound: never hold more of the
+            # Customer's money for this stage than the stage is worth.
+            models.CheckConstraint(
+                condition=models.Q(
+                    funded_paise__lte=models.F("amount_paise") + models.F("refunded_amount_paise")
+                ),
+                name="requirements_stage_exposure_within_amount",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(approved_amount_paise__lte=models.F("amount_paise")),
+                name="requirements_stage_approved_within_amount",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    released_amount_paise__lte=models.F("approved_amount_paise"),
+                ),
+                name="requirements_stage_released_within_approved",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status__in=("APPROVED", "RELEASED"))
+                | models.Q(approved_at__isnull=False),
+                name="requirements_approved_stage_has_a_timestamp",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="RELEASED") | models.Q(released_at__isnull=False),
+                name="requirements_released_stage_has_a_timestamp",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="DISPUTED") | models.Q(disputed_at__isnull=False),
+                name="requirements_disputed_stage_has_a_timestamp",
+            ),
         ]
         indexes = [
             models.Index(fields=("engagement", "status")),
+            models.Index(fields=("status", "review_due_at")),
+            models.Index(fields=("status", "payout_release_due_at")),
         ]
 
     def __str__(self) -> str:
         return f"{self.engagement_id}:{self.position}:{self.status}"
+
+    #: Opt-in for the one write below that is allowed to move `amount_paise`. Not a field — it
+    #: exists only for the lifetime of the instance applying an amendment.
+    applying_authorized_amendment = False
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """`amount_paise` moves only through an authorized amendment (`M2-BE-508`).
+
+        The stage amount is the agreed price of one shift-day or one milestone. Everything that
+        touches a stage after the agreement opens — evidence, approval, correction, dispute,
+        release — has a legitimate reason to write this row and no reason at all to write that
+        column, so the column is refused unless the caller has said it is applying an amendment.
+
+        `apply_amendment_amount` below is the only way to say that, and
+        `apps.requirements.amendments` is its only caller — after the amendment reached
+        `AUTHORIZED`, which for an A5 engagement means a verified provider callback moved it
+        there.
+        """
+        if not self._state.adding:
+            update_fields = set(kwargs.get("update_fields") or ())
+            changes_amount = "amount_paise" in update_fields or not update_fields
+            if changes_amount and not self.applying_authorized_amendment:
+                raise ValueError(
+                    "A stage amount changes only through an authorized scope amendment."
+                )
+        super().save(*args, **kwargs)
+
+    def apply_amendment_amount(self, amount_paise: int) -> None:
+        """Set the agreed amount of this stage from an authorized amendment.
+
+        A named operation rather than a flag the caller sets by hand, so the one legitimate write
+        to a frozen column reads as what it is at the call site — and so nothing has to reach into
+        a private attribute to perform it.
+        """
+        self.amount_paise = amount_paise
+        self.applying_authorized_amendment = True
+        try:
+            self.save(update_fields=("amount_paise", "updated_at"))
+        finally:
+            self.applying_authorized_amendment = False
+
+
+# ---------------------------------------------------------------------------
+# Wave C3: the stage spine's own records.
+#
+# Three models, and each exists because the alternative was a lie in a record somebody will read
+# years later:
+#
+# * `EngagementEvent` — one audit trail for the agreement and its stages. The requirement's own
+#   `RequirementTransition` log ends at `ENGAGED`, and pushing forty shift-day approvals into it
+#   would bury the six status changes it exists to show a Customer.
+# * `StageEvidence` — what the vendor actually showed. A stage approved on nothing is an approval
+#   nobody can defend in a dispute.
+# * `EngagementAmendment` — the M2 side of the **M1** scope-amendment engine. It carries no
+#   status, no lines and no expiry of its own: `fulfilment.ScopeAmendment` owns all three.
+# ---------------------------------------------------------------------------
+
+
+class EngagementEvent(models.Model):
+    """Immutable record of every engagement or stage move, and who caused it.
+
+    `stage` is null for an engagement-level move and set for a stage-level one, so one query
+    reads the whole agreement's history in order. A row where `from_status == to_status` is
+    deliberate and follows the precedent `services.record_transition` established in Wave C2: not
+    every auditable act is a state change, and "this Partner submitted evidence at this moment"
+    is exactly what a dispute asks for.
+
+    A system-driven move — a review timeout, a payout-hold release — records `actor=None`.
+    Signing it with the Customer's name would be a lie in the record that exists to prove who
+    made which decision.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    engagement = models.ForeignKey(Engagement, on_delete=models.PROTECT, related_name="events")
+    stage = models.ForeignKey(
+        EngagementStage,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="events",
+    )
+    from_status = models.CharField(max_length=24, blank=True)
+    to_status = models.CharField(max_length=24)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_engagement_events",
+    )
+    reason_code = models.SlugField(max_length=80)
+    reason = models.TextField(blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("occurred_at", "id")
+        indexes = [
+            models.Index(fields=("engagement", "occurred_at")),
+            models.Index(fields=("stage", "occurred_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.engagement_id}:{self.reason_code}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValueError("Engagement events are immutable.")
+        super().save(*args, **kwargs)
+
+
+class StageEvidenceUpload(models.Model):
+    """One signed-upload intent for stage evidence, issued before any bytes exist.
+
+    The same shape as `RequirementAttachmentUpload` and `partners.PartnerDocumentUpload`, and for
+    the same reason: the server names the object key and records what it expects, so finalization
+    can compare the object that actually arrived against the file the client said it was sending.
+    Without the intent row there is nothing to compare against, and "verify the upload" degrades
+    to "trust the client".
+    """
+
+    class Status(models.TextChoices):
+        ISSUED = "ISSUED", "Issued"
+        VERIFIED = "VERIFIED", "Verified"
+        EXPIRED = "EXPIRED", "Expired"
+        FAILED = "FAILED", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(
+        EngagementStage,
+        on_delete=models.PROTECT,
+        related_name="evidence_uploads",
+    )
+    kind = models.CharField(max_length=16)
+    object_key = models.CharField(max_length=400, unique=True)
+    content_type = models.CharField(max_length=120)
+    size_bytes = models.PositiveBigIntegerField()
+    sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ISSUED)
+    expires_at = models.DateTimeField()
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    failure_code = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(size_bytes__gt=0),
+                name="requirements_stage_evidence_upload_size_positive",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("stage", "status", "expires_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.stage_id}:{self.kind}:{self.status}"
+
+
+class StageEvidence(models.Model):
+    """What the vendor showed for one stage. Append-only.
+
+    Evidence is never edited or deleted, only added: a correction cycle produces a second row
+    rather than replacing the first, so a dispute reads what was originally offered as well as
+    what was offered after the Customer pushed back.
+
+    A `NOTE` carries no object. Everything else carries a verified object key and a scan verdict,
+    following `fulfilment.evidence`'s rule that a failed upload is never represented as completed
+    evidence.
+    """
+
+    class Kind(models.TextChoices):
+        NOTE = "NOTE", "Written note"
+        PHOTO = "PHOTO", "Photo"
+        VIDEO = "VIDEO", "Video"
+        DOCUMENT = "DOCUMENT", "Document"
+
+    #: Media kinds. A `NOTE` is the one kind with no bytes behind it.
+    MEDIA_KINDS = (Kind.PHOTO, Kind.VIDEO, Kind.DOCUMENT)
+
+    #: **The same choice set as `RequirementAttachment`, deliberately aliased rather than copied.**
+    #: One scan pipeline produces one vocabulary, and a second identical `TextChoices` would have
+    #: published a second identical OpenAPI component — which the generator resolves by renaming
+    #: *both*, silently breaking the `ScanStatusEnum` an already-generated client imports. The
+    #: 1.24.0 `ReasonEnum` note in the contract CHANGELOG is this exact failure; aliasing avoids
+    #: it at the source rather than papering over it with an override.
+    ProcessingStatus = RequirementAttachment.ProcessingStatus
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(EngagementStage, on_delete=models.PROTECT, related_name="evidence")
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    note = models.TextField(blank=True)
+    object_key = models.CharField(max_length=400, blank=True)
+    content_type = models.CharField(max_length=120, blank=True)
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True)
+    processing_status = models.CharField(
+        max_length=16,
+        choices=ProcessingStatus.choices,
+        default=ProcessingStatus.PENDING,
+    )
+    failure_reason = models.CharField(max_length=200, blank=True)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="m2_stage_evidence_submitted",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("object_key",),
+                condition=~models.Q(object_key=""),
+                name="requirements_unique_stage_evidence_object",
+            ),
+            # A note with no text and a photograph with no object are both "evidence" that shows
+            # nothing. Refused here because an approval defends itself with these rows.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="NOTE", object_key="") & ~models.Q(note="")
+                    | ~models.Q(kind="NOTE") & ~models.Q(object_key="")
+                ),
+                name="requirements_stage_evidence_kind_matches_payload",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("stage", "created_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.stage_id}:{self.kind}"
+
+
+class EngagementAmendment(models.Model):
+    """The M2 half of one `fulfilment.ScopeAmendment` (`M2-BE-505`).
+
+    **There is one amendment subsystem in this codebase and it is `apps.fulfilment`.** This row
+    adds the two things an M2 amendment has and an M1 one does not — an `Engagement` instead of a
+    `Booking`, and a signed delta against a stage list — and borrows everything else:
+    `ScopeAmendment` owns the status machine, the expiry rule and the reason; `ScopeAmendmentLine`
+    owns the priced lines. Nothing here duplicates a column that lives there.
+
+    `kind` names the two shapes the flow document calls out. A **time extension** is A3's: more
+    worker-days at the rate the Customer already agreed to, priced by the server from the frozen
+    engagement terms. A **change order** is A5's: additional or reduced project work, priced by
+    the vendor line by line, because an A5 outcome has no catalog to price from — which is the
+    documented M1 boundary (`fulfilment.amendments` prices only catalog `TASK` lines) stated as an
+    extension rather than worked around.
+    """
+
+    class Kind(models.TextChoices):
+        TIME_EXTENSION = "TIME_EXTENSION", "Extra time on a workforce engagement"
+        CHANGE_ORDER = "CHANGE_ORDER", "Changed scope on a project engagement"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    engagement = models.ForeignKey(
+        Engagement,
+        on_delete=models.PROTECT,
+        related_name="amendments",
+    )
+    #: The stage this amendment changes. Null for an addition, which creates a stage rather than
+    #: altering one.
+    stage = models.ForeignKey(
+        EngagementStage,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="amendments",
+    )
+    amendment = models.OneToOneField(
+        "fulfilment.ScopeAmendment",
+        on_delete=models.PROTECT,
+        related_name="m2_engagement_amendment",
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    #: Signed, in paise. Positive is extra work the Customer pays for; negative is scope taken out
+    #: and refunded. Server-calculated from the lines in both directions — a client never states a
+    #: total.
+    delta_paise = models.BigIntegerField()
+    payment_attempt = models.ForeignKey(
+        "commerce.PaymentAttempt",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_engagement_amendments",
+    )
+    refund = models.ForeignKey(
+        "commerce.Refund",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_engagement_amendments",
+    )
+    applied_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            # A zero-delta amendment changes nothing and would still ask a Customer to decide
+            # something. Refused where it cannot be argued with.
+            models.CheckConstraint(
+                condition=~models.Q(delta_paise=0),
+                name="requirements_engagement_amendment_moves_money",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("engagement", "created_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.engagement_id}:{self.kind}:{self.delta_paise}"

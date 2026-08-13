@@ -62,7 +62,41 @@ def _active_amendment(booking: Booking) -> ScopeAmendment | None:
     ).first()
 
 
-def _guard_amendment_not_expired(amendment: ScopeAmendment) -> None:
+def _booking_of(amendment: ScopeAmendment) -> Booking:
+    """The Booking this amendment belongs to, or a refusal.
+
+    `ScopeAmendment.booking` became nullable when M2 Wave C3 routed engagement amendments through
+    this engine (`M2-BE-505`). The four commands in this module are the *Booking* front door and
+    cannot act on an engagement amendment: they resolve a `FulfilmentUnit`, price from the catalog
+    and write `WorkTask`s, none of which an engagement has. Refused explicitly rather than left to
+    fail on an attribute, so an id sent to the wrong door says so.
+    """
+    booking = amendment.booking
+    if booking is None:
+        raise BookingCommandInvalidApiError(
+            reason="This scope amendment belongs to an engagement, not a Booking."
+        )
+    return booking
+
+
+class AmendmentExpiredError(RuntimeError):
+    """The response window closed before the Customer answered.
+
+    Raised by the shared guard rather than by either caller, so the M1 and M2 entry points cannot
+    disagree about when an amendment stops being answerable. Each caller translates it into its
+    own error vocabulary — `BookingCommandInvalidApiError` for M1, `RequirementDomainError` for
+    M2 — because the two surfaces publish different envelopes and neither should import the
+    other's.
+    """
+
+
+def guard_amendment_not_expired(amendment: ScopeAmendment) -> None:
+    """Expire a `PROPOSED` amendment whose window has closed, and refuse.
+
+    Public since M2 Wave C3. The rule is identical for a Booking amendment and an engagement
+    amendment — a proposal nobody answered in time is not answerable now — so it lives once and
+    both entry points call it. Moving it here rather than copying it is `M2-BE-505` in miniature.
+    """
     already_expired = (
         amendment.status == ScopeAmendment.Status.PROPOSED
         and amendment.expires_at <= timezone.now()
@@ -71,9 +105,17 @@ def _guard_amendment_not_expired(amendment: ScopeAmendment) -> None:
         amendment.status = ScopeAmendment.Status.EXPIRED
         amendment.version += 1
         amendment.save(update_fields=("status", "version"))
-        raise BookingCommandInvalidApiError(
-            reason="This scope amendment expired before the Customer responded."
+        raise AmendmentExpiredError(
+            "This scope amendment expired before the Customer responded.",
         )
+
+
+def _guard_amendment_not_expired(amendment: ScopeAmendment) -> None:
+    """The M1 translation: the shared refusal in this surface's own envelope."""
+    try:
+        guard_amendment_not_expired(amendment)
+    except AmendmentExpiredError as exc:
+        raise BookingCommandInvalidApiError(reason=str(exc)) from exc
 
 
 @transaction.atomic
@@ -150,7 +192,7 @@ def decline_scope_amendment(
     amendment = (
         ScopeAmendment.objects.select_for_update().select_related("booking").get(id=amendment_id)
     )
-    booking = amendment.booking
+    booking = _booking_of(amendment)
     if booking.customer_id != customer_id:
         raise PermissionError("This Booking belongs to another Customer.")
     if amendment.status != ScopeAmendment.Status.PROPOSED:
@@ -185,7 +227,7 @@ def approve_scope_amendment(
     amendment = (
         ScopeAmendment.objects.select_for_update().select_related("booking").get(id=amendment_id)
     )
-    booking = amendment.booking
+    booking = _booking_of(amendment)
     if booking.customer_id != customer_id:
         raise PermissionError("This Booking belongs to another Customer.")
     if amendment.status == ScopeAmendment.Status.PAYMENT_PENDING:

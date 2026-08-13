@@ -4,6 +4,212 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.25.0 - M2 Wave C3: the engagement spine, one set of stage commands for both archetypes
+
+**Fifteen new paths and sixteen new operations (62 M2 operations → 78). Additive only: no path was
+removed, no operation changed its method or route, and no published schema component was renamed.**
+
+Wave C2 created the `Engagement` and froze its terms; it deliberately left the **stage command
+spine** absent rather than half-built. This is that spine, and it is built once. A stage is a
+shift-day on A3 and a milestone on A5, and every command below is the same command for both. The
+archetype changes only what those commands *refuse* and what money they move — never the route, the
+shape or the state machine.
+
+### The stage spine
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/engagement-stages/{stage_id}/` | `GET` | `m2_stage_read` |
+| `/api/v1/engagement-stages/{stage_id}/start/` | `POST` | `m2_stage_start` |
+| `/api/v1/engagement-stages/{stage_id}/evidence/uploads/` | `POST` | `m2_stage_evidence_upload_create` |
+| `/api/v1/engagement-stages/{stage_id}/evidence/` | `POST` | `m2_stage_evidence_finalize` |
+| `/api/v1/engagement-stages/{stage_id}/submit/` | `POST` | `m2_stage_evidence_submit` |
+| `/api/v1/engagement-stages/{stage_id}/approve/` | `POST` | `m2_stage_approve` |
+| `/api/v1/engagement-stages/{stage_id}/correction/` | `POST` | `m2_stage_request_correction` |
+| `/api/v1/engagement-stages/{stage_id}/dispute/` | `POST` | `m2_stage_dispute` |
+| `/api/v1/engagement-stages/{stage_id}/dispute/decision/` | `POST` | `m2_stage_dispute_resolve` |
+
+`EngagementStage` gains the four money numbers and the two clocks the spine turns on:
+`funded_paise`, `approved_amount_paise`, `released_amount_paise`, `refunded_amount_paise`,
+`review_due_at`, `payout_release_due_at`, plus `correction_note`, `dispute_reason_code`, an
+`evidence[]` array and five timestamps. **Both `*_due_at` fields are nullable and their nulls are
+real policy states, not missing data**: no review window is configured, so this stage will never
+auto-approve; no payout hold is configured, so its payout does not release on a clock. Render
+nothing there rather than a countdown to a deadline nobody set.
+
+**Starting.** `PENDING → IN_PROGRESS`, and `CORRECTION_REQUESTED → IN_PROGRESS` after the Customer
+sends work back. A5 requires **verified funding at face value** (`409 m2_stage_not_funded`) — the
+visit-plan money settles per share and never discounts a stage — so a funded A5 stage is already
+`IN_PROGRESS` and `m2_stage_start` is an idempotent no-op on it.
+
+**Evidence.** Presign, upload direct to storage, finalize. The server names the object key and
+records the size, media type and SHA-256 it expects; finalization fetches the object back and
+compares. `object_key` is never published — a storage path is an enumeration surface — and
+`processing_status` lands `PENDING`, because "matches the checksum" and "is safe" are different
+questions. `m2_stage_evidence_submit` then moves `IN_PROGRESS → AWAITING_REVIEW` and starts the
+review clock. Its `note` is **required** and is stored as its own append-only evidence row, so a
+correction cycle leaves both accounts readable: what the vendor said the first time, and what they
+said after the Customer pushed back. Resubmitting restarts the review window from zero, because the
+Customer is looking at different evidence.
+
+**Approval and release.** `AWAITING_REVIEW → APPROVED`. On a managed (A5) engagement this writes
+the vendor's earning **held** on the M1 payout rails and stamps `payout_release_due_at` — the
+dispute window — and the money becomes payable when that window closes and the vendor's payout
+account is verified. On `LEAD_ONLY` (A3) nothing is held because nothing was collected, so the
+stage goes straight to `RELEASED`.
+
+**Correction is not an amendment.** It asks for the agreed work to be done properly; it does not
+change what the agreed work is, and it moves no money. A Customer who wants something different is
+asking for a change order, which needs the vendor's agreement.
+
+**Dispute stops only the disputed allocation.** Every other stage carries on and any payout already
+released stays released. The engagement shows `DISPUTED` alongside and returns to `ACTIVE` when the
+last disputed stage is resolved. `m2_stage_dispute_resolve` is Operations-only and offers two
+outcomes, not three: a partial outcome is a scope amendment both sides accept, never an operator
+quietly repricing a stage.
+
+**The review timeout.** `AWAITING_REVIEW → APPROVED` on timeout, **except while the stage is
+`DISPUTED`** — `409 m2_stage_disputed`. Enforced twice on purpose: a disputed stage has its
+`review_due_at` cleared so the sweep cannot see it, and the command re-checks under the row lock,
+because a Customer can dispute in the window between the sweep reading a list and the task acting
+on one entry.
+
+### Scope amendments — through the M1 engine, not beside it
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/engagements/{engagement_id}/amendments/` | `GET` | `m2_engagement_amendment_list` |
+| `/api/v1/engagements/{engagement_id}/amendments/` | `POST` | `m2_engagement_amendment_create` |
+| `/api/v1/engagement-amendments/{engagement_amendment_id}/accept/` | `POST` | `m2_engagement_amendment_decide` |
+| `/api/v1/engagement-amendments/{engagement_amendment_id}/decline/` | `POST` | `m2_engagement_amendment_decline` |
+
+A3 time extensions and A5 change orders are both scope amendments and both run on
+`fulfilment.ScopeAmendment` — the same status machine, the same lines, the same expiry rule. M2 adds
+two line kinds because an engagement has no catalog task to price from, which is the documented M1
+boundary stated as an extension rather than worked around. **`ScopeAmendmentLineKindEnum` gains
+`LABOUR_DAY` and `PROJECT_WORK`** (additive; existing values unchanged).
+
+**The archetype fixes the shape and the pricing authority.** An A3 engagement takes a
+`TIME_EXTENSION`, priced by the **server** from the worker-day rate frozen at reconfirmation: the
+vendor names days, never money, because a vendor who could name the money could re-price a job the
+Customer already committed to. An A5 engagement takes a `CHANGE_ORDER`, priced by the vendor line by
+line, because a bespoke outcome has no catalog rate — and the server still sums the lines and
+rejects any client-supplied total. Line `amount_paise` is **signed** on the wire: negative removes
+scope. One live change request per engagement.
+
+**Money before scope.** Accepting does not change the agreed work until the money has moved. The
+response carries `checkout`, and its three states are the three routes:
+
+- `null` on `LEAD_ONLY` (A3) — no platform money exists to move, so the amendment authorizes on
+  acceptance and the extra shift-days appear immediately.
+- `null` on a managed negative delta — the refund is issued against the stage's own funding payment
+  **before** the scope shrinks, so there is no instant in which the Customer owns less work than
+  they have paid for.
+- A `PaymentAttempt` on a managed positive delta — and **nothing changes until a verified provider
+  callback**. Repeating the acceptance while that payment is pending returns the same attempt
+  rather than starting a second charge.
+
+`PaymentAttempt.Purpose` gains **`M2_SCOPE_AMENDMENT`** (additive). Deliberately not
+`SCOPE_AMENDMENT_REVISION`: that purpose's capture handler resolves a `PriceRevision` by `Booking`,
+which an M2 engagement does not have, so reusing it would route an M2 payment into a lookup that
+cannot succeed.
+
+### The engagement, read back
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/engagements/` | `GET` | `m2_engagement_list` |
+| `/api/v1/engagements/{engagement_id}/events/` | `GET` | `m2_engagement_event_list` |
+| `/api/v1/engagements/{engagement_id}/completion/` | `POST` | `m2_engagement_completion_accept` |
+
+`m2_engagement_list` is a cursor page over the caller's engagements. A `role` query parameter picks
+Customer or Partner and defaults to whichever the caller can be, so one route serves both apps.
+
+`m2_engagement_event_list` is the agreement's own history. `actor_is_system` separates a decision
+somebody made from one a clock made — "approved by you" and "approved because the review window
+closed" are different sentences, and a timeline that renders them identically is lying about who
+decided. Actor identity itself is never published: the counterparty's user id is not the caller's
+business.
+
+`m2_engagement_completion_accept` is `COMPLETING → COMPLETED`, and it closes the requirement as
+`CLOSED_COMPLETE` — the last transition in `07-state-machines-and-permissions.md` §1, which until
+now had nothing to drive it. An engagement reaches `COMPLETING` on its own when every stage is
+released; this is the separate fact that the Customer agrees it is done.
+
+**`Engagement` gains six money fields**: `staged_total_paise`, `amendment_delta_paise`,
+`funded_total_paise`, `approved_total_paise`, `released_total_paise`, `refunded_total_paise`, plus
+`disputed_at` and `completed_at`. `staged_total_paise` always equals `total_paise +
+amendment_delta_paise` **by database constraint**, so a client can render "agreed, then changed by,
+now owed" without doing arithmetic the server has not already checked. `total_paise` never moves:
+an accepted amendment moves the delta, so the number both parties originally agreed to stays
+readable beside the number they now owe.
+
+### New error codes
+
+| Code | Status | Retryable | Meaning |
+|---|---|---|---|
+| `m2_stage_transition_not_allowed` | 409 | no | The stage is not in a status this command can move it from |
+| `m2_stage_disputed` | 409 | no | A disputed stage does not move on a clock or on a Customer approval |
+| `m2_amendment_required` | 409 | no | The change needs an accepted amendment (or the engagement carries no agreed rate to price one from) |
+| `m2_amendment_not_actionable` | 409 | no | The change request expired, already has a decision, or one is already open |
+
+`m2_stage_disputed` and `m2_amendment_required` are §8 codes.
+`m2_stage_transition_not_allowed` and `m2_amendment_not_actionable` are new here, and follow the
+rule the two Wave C2 additions established: a refusal whose recovery is genuinely different from
+every published code gets its own, and the reason is written down rather than discovered later. The
+first is distinct from `m2_requirement_transition_not_allowed` because a Partner reading "this
+request cannot do that" about a shift-day is told about the wrong object entirely; the second is
+distinct from `m2_amendment_required`, which says the opposite thing.
+
+`m2_policy_unavailable` reaches two new places, and both are fail-closed by design:
+`m2_engagement_amendment_create` refuses when the amendment response window is unset — an amendment
+with no deadline is an open-ended claim on somebody's money, and `ScopeAmendment.expires_at` is not
+nullable — and `m2_stage_approve` still succeeds when the payout-hold window is unset, but the
+earning it writes then has no automatic release.
+
+### One changed refusal on an existing operation
+
+**`m2_proposal_submit` now checks that an A3 total reconciles.** `total_paise` must equal
+`rate_paise_per_worker_day x worker_count x minimum_days`, refused with `400
+m2_proposal_invalid_shape`. This was a real defect rather than a tidiness gap: an A3 engagement lays
+out one stage per shift-day at `rate x workers`, so a vendor who quoted a total unrelated to their
+own rate produced an agreement whose stages could never add up to it — and this release makes that
+reconciliation a database constraint, which would have turned a bad quote into a 500 at
+reconfirmation. Refused rather than silently derived, because a composer whose displayed total
+quietly becomes a different number is worse than one that says which number is wrong, and the
+wage-floor guard beside it only ever measured the *rate*.
+
+### Enum naming: one rename prevented, four new sets named
+
+Read this before adding a field over an existing choice set. The 1.24.0 note about `ReasonEnum`
+happened again and was caught the same way.
+
+**`ProcessingStatusEnum` is pinned in `ENUM_NAME_OVERRIDES`.** `WorkEvidence.ProcessingStatus` was
+the only `processing_status` choice set in the schema, so it published as the bare
+`ProcessingStatusEnum` — which M1 clients import. Adding a second `processing_status` field in this
+wave made the generator disambiguate both and rename it to `WorkEvidenceProcessingStatusEnum`, a
+break for an app that had not changed. Pinned, so the published name is unchanged.
+
+**`StageEvidence.ProcessingStatus` is an alias of `RequirementAttachment.ProcessingStatus`, not a
+copy.** One scan pipeline produces one vocabulary, and a second identical `TextChoices` would have
+published a second identical component — which the generator resolves by renaming *both*, taking
+`ScanStatusEnum` with it. Aliasing avoids the collision at the source instead of papering over it.
+
+Four new sets named on arrival: `StageEvidenceKindEnum`, `EngagementAmendmentKindEnum`,
+`StageDisputeReasonEnum`, `StageDisputeOutcomeEnum`. `kind`, `reason_code` and `outcome` are all
+names another app will reuse.
+
+### Also in this release, and not cosmetic
+
+**`payment_attempt_simulate_capture` now works for checkout-free purposes.** Ownership used to be
+resolved through the `CheckoutSession` alone, so every M2 charge — unlock, visit plan, stage
+funding, and now amendments — was **impossible to capture through it at all**. That made the entire
+M2 commercial flow undrivable by hand in development, which matters because `milestones.md` proves
+every M2 money path with a provider test callback and this is the door those callbacks come through.
+Ownership is now resolved against the M2 aggregate that actually records a customer; a purpose with
+no resolvable owner is still refused, because a permissive default on a money endpoint is the wrong
+direction to guess in.
+
 ## 1.24.0 - M2 Wave C2: the A3 unlock, the A5 visit plan, selection, reconfirmation and the engagement
 
 **Fourteen new paths and nineteen new operations (43 M2 operations → 62). Additive only: no path

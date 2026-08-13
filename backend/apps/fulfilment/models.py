@@ -116,7 +116,20 @@ class WorkSession(models.Model):
 
 
 class ScopeAmendment(models.Model):
-    """A Partner-proposed scope/material change, priced from the active catalog."""
+    """A Partner-proposed scope/material change, priced from the active catalog.
+
+    **One amendment subsystem, two aggregates, since M2 Wave C3.** `booking` is nullable because
+    an M2 engagement is not a Booking and never will be: `M2-BE-505` requires that A3 time
+    extensions and A5 change orders route through *this* engine rather than a second one, and the
+    only thing they cannot bring is a Booking. The status machine, the lines, the expiry rule and
+    the reason are shared verbatim; `requirements.EngagementAmendment` carries the M2 aggregate
+    and the signed delta, and is the only row that points back here.
+
+    A row therefore has exactly one owner: an M1 Booking, or the M2 engagement amendment that
+    points at it. That pairing cannot be a check constraint — it spans two tables — so it is held
+    by the two commands that create rows here, each of which writes its own side in the same
+    transaction.
+    """
 
     class Status(models.TextChoices):
         PROPOSED = "PROPOSED", "Proposed"
@@ -126,8 +139,19 @@ class ScopeAmendment(models.Model):
         AUTHORIZED = "AUTHORIZED", "Authorized"
         EXPIRED = "EXPIRED", "Expired"
 
+    #: Statuses in which an amendment still awaits a decision or a payment, so a second one for
+    #: the same aggregate must not be proposed.
+    LIVE_STATUSES = (Status.PROPOSED, Status.CUSTOMER_APPROVED, Status.PAYMENT_PENDING)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    booking = models.ForeignKey(Booking, on_delete=models.PROTECT, related_name="scope_amendments")
+    #: Null for an M2 engagement amendment. See the class docstring.
+    booking = models.ForeignKey(
+        Booking,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="scope_amendments",
+    )
     proposed_by = models.ForeignKey(PartnerProfile, on_delete=models.PROTECT)
     reason = models.CharField(max_length=240)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.PROPOSED)
@@ -148,9 +172,25 @@ class ScopeAmendment(models.Model):
 
 
 class ScopeAmendmentLine(models.Model):
+    """One priced line of an amendment.
+
+    `TASK` is M1's and is priced by the server from the active catalog rate — the documented M1
+    boundary in `amendments.py`. The two M2 kinds exist because that boundary is real: an A3
+    shift-day and an A5 project deliverable are not catalog tasks and have no `current_task_rate`
+    to look up, so `M2-BE-505`'s "M2's non-catalog lines are the extension you design" is these
+    two rows rather than a second engine.
+
+    `LABOUR_DAY` is still server-priced — from the rate frozen on the engagement, which the
+    Customer already agreed to and the wage-floor guard already passed. `PROJECT_WORK` is priced
+    by the vendor, because an A5 outcome is bespoke and the vendor is the price authority in that
+    archetype exactly as they are on the original estimate.
+    """
+
     class Kind(models.TextChoices):
         TASK = "TASK", "Task"
         MATERIAL = "MATERIAL", "Material"
+        LABOUR_DAY = "LABOUR_DAY", "Additional worker-day (M2 A3)"
+        PROJECT_WORK = "PROJECT_WORK", "Additional or reduced project work (M2 A5)"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     amendment = models.ForeignKey(ScopeAmendment, on_delete=models.PROTECT, related_name="lines")

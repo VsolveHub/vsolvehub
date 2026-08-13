@@ -11,6 +11,7 @@ record there to find.
 """
 
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any, NoReturn, cast
 
@@ -36,16 +37,18 @@ from apps.partners.capabilities import (
     workspace_grants,
 )
 from apps.partners.exceptions import PartnerDomainError
-from apps.partners.permissions import IsPartnerUser
+from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
 from apps.requirements import (
     access,
+    amendments,
     attachments,
     engagements,
     matching,
     pricing,
     proposals,
     services,
+    stages,
     visit_slots,
 )
 from apps.requirements.exceptions import (
@@ -56,6 +59,7 @@ from apps.requirements.exceptions import (
 )
 from apps.requirements.models import (
     CustomerRequirement,
+    EngagementStage,
     Proposal,
     RequirementAttachment,
     RequirementQuestion,
@@ -63,11 +67,16 @@ from apps.requirements.models import (
     VisitPlan,
 )
 from apps.requirements.selectors import (
+    amendment_for_participant,
+    customer_engagements,
     customer_readable_proposals,
     customer_requirements,
     demand_preview,
+    engagement_amendments,
+    engagement_events,
     engagement_for_participant,
     invitation_for_partner,
+    partner_engagements,
     partner_invitations,
     partner_proposals,
     requirement_for_customer,
@@ -76,6 +85,8 @@ from apps.requirements.selectors import (
     selection_for_partner,
     site_visit_for_participant,
     stage_for_customer,
+    stage_for_participant,
+    stage_for_partner,
 )
 from apps.requirements.serializers import (
     AccessCheckoutSerializer,
@@ -86,7 +97,14 @@ from apps.requirements.serializers import (
     CustomerQuoteListSerializer,
     DemandPreviewSerializer,
     DuplicateCheckQuerySerializer,
+    EngagementAmendmentCreateSerializer,
+    EngagementAmendmentDecisionSerializer,
+    EngagementAmendmentListSerializer,
+    EngagementAmendmentSerializer,
+    EngagementEventListSerializer,
+    EngagementPageSerializer,
     EngagementSerializer,
+    EngagementStageSerializer,
     EnquiryDeclineSerializer,
     EnquiryDetailSerializer,
     EnquirySummaryPageSerializer,
@@ -116,6 +134,14 @@ from apps.requirements.serializers import (
     SiteVisitRequestSerializer,
     SiteVisitScheduleSerializer,
     SiteVisitSerializer,
+    StageCorrectionSerializer,
+    StageDisputeDecisionSerializer,
+    StageDisputeSerializer,
+    StageEvidenceFinalizeSerializer,
+    StageEvidenceSerializer,
+    StageEvidenceSubmitSerializer,
+    StageEvidenceUploadGrantSerializer,
+    StageEvidenceUploadRequestSerializer,
     UnlockStateSerializer,
     VendorAttachmentListSerializer,
     VisitArrivalSerializer,
@@ -2543,9 +2569,864 @@ class PartnerDemandPreviewView(APIView):
         )
 
 
+# ---------------------------------------------------------------------------
+# Wave C3: the engagement stage spine
+#
+# One set of routes for both archetypes, because there is one spine. The only thing that varies
+# with the archetype is what the commands underneath refuse — an A5 stage cannot start unfunded,
+# an A3 stage releases with no ledger entry — and none of that is a routing decision.
+#
+# Authorization is by participation everywhere a record is shared, and by role where a command
+# belongs to one side: the vendor starts and submits, the Customer approves, corrects and
+# disputes, Operations decides a dispute. A foreign caller gets `404` rather than `403`, because
+# the existence of a stage says a named vendor is doing named work at a named address.
+# ---------------------------------------------------------------------------
+
+
+class EngagementCursorPagination(StrictCursorPagination):
+    page_size = 20
+
+
+class EngagementCollectionView(APIView):
+    """Every engagement the caller is a party to. One route, both roles."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Engagements"],
+        operation_id="m2_engagement_list",
+        parameters=[BoundedCursorQuerySerializer],
+        description=(
+            "The caller's engagements, newest first, as a cursor page. A Customer sees the ones "
+            "they commissioned and a Partner the ones they are performing; the `role` query "
+            "parameter picks which, and defaults to whichever the caller can be. Read "
+            "`commercial_mode` before promising anything: `LEAD_ONLY` (A3) is a connection, not a "
+            "protected booking."
+        ),
+        responses={200: EngagementPageSerializer, 400: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
+        user = cast(User, request.user)
+        role = request.query_params.get("role", "")
+        profile = partner_profile_for_user(user)
+        if role == "partner" or (role == "" and profile is not None):
+            queryset = partner_engagements(profile) if profile is not None else None
+        else:
+            queryset = customer_engagements(user)
+        if queryset is None:
+            return Response({"next": None, "previous": None, "results": []})
+        paginator = EngagementCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(EngagementSerializer(page, many=True).data)
+
+
+class EngagementEventListView(APIView):
+    """The agreement's own history. Both parties read the same rows."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Engagements"],
+        operation_id="m2_engagement_event_list",
+        description=(
+            "Every move on this engagement and its stages, oldest first. `actor_is_system` "
+            "separates a decision somebody made from one a clock made — 'approved by you' and "
+            "'approved because the review window closed' are different sentences and a timeline "
+            "that renders them identically is lying about who decided. Actor identity itself is "
+            "never published: which of the two parties acted is derivable from `reason_code`, and "
+            "the counterparty's user id is not their business."
+        ),
+        responses={200: EngagementEventListSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        try:
+            engagement = engagement_for_participant(
+                user=cast(User, request.user),
+                engagement_id=engagement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            EngagementEventListSerializer(
+                {
+                    "events": list(engagement_events(engagement)),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class EngagementCompletionView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Engagements"],
+        operation_id="m2_engagement_completion_accept",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the "
+            "requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its "
+            "own, when every stage is released; this is the separate fact that the Customer "
+            "agrees it is done. The warranty period a configured A5 variant then enters is Wave "
+            "C5 and is not built."
+        ),
+        responses={
+            200: EngagementSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` when stages are still open.",
+            ),
+        },
+    )
+    def post(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            engagement = engagement_for_participant(user=customer, engagement_id=engagement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        if engagement.customer_id != customer.id:
+            _raise_api_error(RequirementNotFoundError())
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                completed = stages.accept_engagement_completion(
+                    engagement_id=engagement.id, actor=customer
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], EngagementSerializer(completed).data)
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.engagement.accept_completion",
+            key=key,
+            request_payload={"engagement_id": str(engagement_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageDetailView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_read",
+        description=(
+            "One shift-day (A3) or milestone (A5) with its evidence, money and clocks. Both "
+            "`review_due_at` and `payout_release_due_at` are nullable and their nulls are real "
+            "policy states: no review window is configured, so this stage never auto-approves; no "
+            "payout hold is configured, so its payout does not release on a clock. Render nothing "
+            "there rather than a countdown to a deadline nobody set."
+        ),
+        responses={200: EngagementStageSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, stage_id: uuid.UUID) -> Response:
+        try:
+            stage = stage_for_participant(user=cast(User, request.user), stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(EngagementStageSerializer(stage).data)
+
+
+class EngagementStageStartView(APIView):
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_start",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Begin work on a stage. `PENDING` → `IN_PROGRESS`, and `CORRECTION_REQUESTED` → "
+            "`IN_PROGRESS` after the Customer sent it back. **A5 requires verified funding at "
+            "face value** — the visit-plan money settles per share and never discounts a stage — "
+            "so a funded A5 stage is already `IN_PROGRESS` and this call is an idempotent no-op; "
+            "reaching it on an unfunded one is `m2_stage_not_funded`."
+        ),
+        responses={
+            200: EngagementStageSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_not_funded` on an unfunded A5 stage; "
+                "`m2_stage_transition_not_allowed` from any other status, or before work has been "
+                "cleared to start.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                started = stages.start_stage(stage_id=stage.id, actor=actor)
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], EngagementStageSerializer(started).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.stage.start",
+            key=key,
+            request_payload={"stage_id": str(stage_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageEvidenceUploadView(APIView):
+    """Presign one evidence file. Bytes never pass through Django."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_evidence_upload_create",
+        request=StageEvidenceUploadRequestSerializer,
+        description=(
+            "A signed, short-lived upload URL for one evidence file, plus the intent id to "
+            "finalize against. The server names the object key and records the size, media type "
+            "and SHA-256 it expects; finalization fetches the object back and compares. Without "
+            "the intent row, 'verify the upload' would mean 'believe the client'. `NOTE` is not a "
+            "kind here — a note carries no file and is submitted with the stage."
+        ),
+        responses={
+            201: StageEvidenceUploadGrantSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_attachment_invalid` for an unsupported media type, an empty "
+                "file, a file over the per-kind ceiling or a malformed checksum.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` once the stage no longer accepts "
+                "evidence.",
+            ),
+            503: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_attachment_unavailable` when storage is down. Retryable.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        serializer = StageEvidenceUploadRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+            grant = stages.issue_stage_evidence_upload(
+                stage_id=stage.id,
+                kind=serializer.validated_data["kind"],
+                content_type=serializer.validated_data["content_type"],
+                size_bytes=serializer.validated_data["size_bytes"],
+                sha256=serializer.validated_data["sha256"],
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            StageEvidenceUploadGrantSerializer(
+                {
+                    "upload_id": grant.upload.id,
+                    "upload_url": grant.upload_url,
+                    "upload_token": grant.upload_token,
+                    "expires_at": grant.expires_at,
+                }
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EngagementStageEvidenceView(APIView):
+    """Finalize an uploaded evidence file, and read the stage's evidence back."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_evidence_finalize",
+        request=StageEvidenceFinalizeSerializer,
+        description=(
+            "Verify the object that arrived against the intent and record it as evidence. "
+            "`processing_status` lands `PENDING`: the bytes are the ones the client promised, and "
+            "whether they are safe is a separate question a scanner answers. Two concurrent "
+            "finalizes of one intent produce one evidence row."
+        ),
+        responses={
+            201: StageEvidenceSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        serializer = StageEvidenceFinalizeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+            evidence = stages.finalize_stage_evidence_upload(
+                stage_id=stage.id,
+                upload_id=serializer.validated_data["upload_id"],
+                actor=actor,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            StageEvidenceSerializer(evidence).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EngagementStageSubmitView(APIView):
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_evidence_submit",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=StageEvidenceSubmitSerializer,
+        description=(
+            "Hand the stage to the Customer for review. `IN_PROGRESS` → `AWAITING_REVIEW`, and "
+            "the moment the review clock starts. The note is required and is stored as its own "
+            "append-only evidence row rather than as a field on the stage, so a correction cycle "
+            "leaves both accounts readable — what the vendor said the first time and what they "
+            "said after the Customer pushed back. Resubmitting after a correction restarts the "
+            "review window from zero, because the Customer is looking at different evidence."
+        ),
+        responses={
+            200: EngagementStageSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        serializer = StageEvidenceSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                submitted = stages.submit_stage_evidence(
+                    stage_id=stage.id,
+                    actor=actor,
+                    note=serializer.validated_data["note"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], EngagementStageSerializer(submitted).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.stage.submit_evidence",
+            key=key,
+            request_payload={"stage_id": str(stage_id), **serializer.validated_data},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageApprovalView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_approve",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "The Customer accepts the work on one stage. `AWAITING_REVIEW` → `APPROVED`. On a "
+            "managed (A5) engagement this writes the vendor's earning **held** on the M1 payout "
+            "rails and stamps `payout_release_due_at` — the dispute window — and the money becomes "
+            "payable when that window closes. On `LEAD_ONLY` (A3) nothing is held because nothing "
+            "was collected, so the stage goes straight to `RELEASED`."
+        ),
+        responses={
+            200: EngagementStageSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_disputed` while a dispute is open; "
+                "`m2_stage_transition_not_allowed` when nothing has been submitted.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        return _customer_stage_command(
+            request=request,
+            stage_id=stage_id,
+            operation="m2.stage.approve",
+            run=lambda stage, actor, _data: stages.approve_stage(stage_id=stage.id, actor=actor),
+            payload={},
+        )
+
+
+class EngagementStageCorrectionView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_request_correction",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=StageCorrectionSerializer,
+        description=(
+            "Send a stage back to be done properly. `AWAITING_REVIEW` → `CORRECTION_REQUESTED`, "
+            "and the review clock stops. **A correction is not an amendment**: it asks for the "
+            "agreed work, it does not change what the agreed work is, and it moves no money. A "
+            "Customer who wants something different is asking for a change order, which needs the "
+            "vendor's agreement."
+        ),
+        responses={
+            200: EngagementStageSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        serializer = StageCorrectionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return _customer_stage_command(
+            request=request,
+            stage_id=stage_id,
+            operation="m2.stage.request_correction",
+            run=lambda stage, actor, data: stages.request_stage_correction(
+                stage_id=stage.id, actor=actor, note=data["note"]
+            ),
+            payload=dict(serializer.validated_data),
+        )
+
+
+class EngagementStageDisputeView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_dispute",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=StageDisputeSerializer,
+        description=(
+            "Formally object to submitted work. `AWAITING_REVIEW` → `DISPUTED`, and the "
+            "engagement shows `DISPUTED` alongside. **A dispute stops only the disputed "
+            "allocation**: every other stage carries on and any payout already released stays "
+            "released. The review timeout cannot reach a disputed stage, so silence never becomes "
+            "approval on something somebody has objected to."
+        ),
+        responses={
+            200: EngagementStageSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        serializer = StageDisputeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return _customer_stage_command(
+            request=request,
+            stage_id=stage_id,
+            operation="m2.stage.dispute",
+            run=lambda stage, actor, data: stages.dispute_stage(
+                stage_id=stage.id,
+                actor=actor,
+                reason_code=data["reason_code"],
+                note=data["note"],
+            ),
+            payload=dict(serializer.validated_data),
+        )
+
+
+class EngagementStageDisputeDecisionView(APIView):
+    """Operations decides a disputed stage."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Stages"],
+        operation_id="m2_stage_dispute_resolve",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=StageDisputeDecisionSerializer,
+        description=(
+            "`DISPUTED` → `APPROVED` or `CORRECTION_REQUESTED`, as an auditable domain command "
+            "rather than a database edit. Two outcomes and not three: a partial outcome is a "
+            "scope amendment both sides accept, never an operator quietly repricing a stage. The "
+            "full case machinery — evidence, deadlines, appeals — is Wave C6; this is the "
+            "transition it will drive, published now so a disputed stage is not a dead end."
+        ),
+        responses={
+            200: EngagementStageSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        serializer = StageDisputeDecisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        stage = EngagementStage.objects.filter(id=stage_id).first()
+        if stage is None:
+            _raise_api_error(RequirementNotFoundError())
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                resolved = stages.resolve_stage_dispute(
+                    stage_id=stage.id,
+                    actor=actor,
+                    outcome=serializer.validated_data["outcome"],
+                    note=serializer.validated_data["note"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], EngagementStageSerializer(resolved).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.stage.resolve_dispute",
+            key=key,
+            request_payload={"stage_id": str(stage_id), **serializer.validated_data},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+def _customer_stage_command(
+    *,
+    request: Request,
+    stage_id: uuid.UUID,
+    operation: str,
+    run: Callable[[EngagementStage, User, dict[str, Any]], EngagementStage],
+    payload: dict[str, Any],
+) -> Response:
+    """The three Customer stage commands, which differ only in what they call.
+
+    Extracted because approve, request-correction and dispute are the same twelve lines of
+    authorize-then-run-idempotently, and three copies of an authorization check is three places for
+    one of them to be dropped.
+    """
+    customer = cast(User, request.user)
+    key = _idempotency_key(request)
+    try:
+        stage = stage_for_customer(customer=customer, stage_id=stage_id)
+    except RequirementDomainError as exc:
+        _raise_api_error(exc)
+
+    def command() -> tuple[int, dict[str, object]]:
+        try:
+            moved = run(stage, customer, payload)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return status.HTTP_200_OK, cast(dict[str, object], EngagementStageSerializer(moved).data)
+
+    result = execute_idempotent(
+        actor=customer,
+        operation=operation,
+        key=key,
+        request_payload={"stage_id": str(stage_id), **payload},
+        command=command,
+    )
+    return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C3: scope amendments, through the M1 engine
+# ---------------------------------------------------------------------------
+
+
+def _amendment_payload(link: Any) -> dict[str, Any]:
+    """Flatten one amendment across its two rows.
+
+    The split between `EngagementAmendment` and the M1 `ScopeAmendment` is a storage fact — one
+    engine, two aggregates — and pushing it onto the wire would ask every client to know which
+    half holds the status.
+    """
+    amendment = link.amendment
+    signed = {
+        line.position: int(line.snapshot.get("signed_amount_paise", line.amount_paise))
+        for line in amendment.lines.all()
+    }
+    return {
+        "id": link.id,
+        "engagement_id": link.engagement_id,
+        "stage_id": link.stage_id,
+        "kind": link.kind,
+        "status": amendment.status,
+        "reason": amendment.reason,
+        "delta_paise": link.delta_paise,
+        "lines": [
+            {
+                "position": line.position,
+                "kind": line.kind,
+                "title": line.label,
+                "quantity": line.quantity,
+                "amount_paise": signed.get(line.position, line.amount_paise),
+            }
+            for line in amendment.lines.all()
+        ],
+        "expires_at": amendment.expires_at,
+        "responded_at": amendment.responded_at,
+        "applied_at": link.applied_at,
+        "created_at": link.created_at,
+        "server_now": timezone.now(),
+    }
+
+
+class EngagementAmendmentCollectionView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Amendments"],
+        operation_id="m2_engagement_amendment_list",
+        description="Every change request on this engagement, newest first. Both parties read it.",
+        responses={200: EngagementAmendmentListSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        try:
+            engagement = engagement_for_participant(
+                user=cast(User, request.user),
+                engagement_id=engagement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            EngagementAmendmentListSerializer(
+                {
+                    "amendments": [
+                        _amendment_payload(link) for link in engagement_amendments(engagement)
+                    ],
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Amendments"],
+        operation_id="m2_engagement_amendment_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=EngagementAmendmentCreateSerializer,
+        description=(
+            "The vendor asks to change the agreed work. **Routed through the M1 scope-amendment "
+            "engine** — same status machine, same lines, same expiry rule — with two line kinds "
+            "M2 adds because an engagement has no catalog task to price from.\n\n"
+            "**The archetype fixes the shape and the pricing authority.** An A3 engagement takes "
+            "a `TIME_EXTENSION`, priced by the **server** from the worker-day rate frozen at "
+            "reconfirmation: the vendor names days, never money, because a vendor who could name "
+            "the money could re-price a job the Customer already committed to. An A5 engagement "
+            "takes a `CHANGE_ORDER`, priced by the vendor line by line, because a bespoke outcome "
+            "has no catalog rate — and the server still sums the lines and rejects any "
+            "client-supplied total. `amount_paise` is signed: negative removes scope.\n\n"
+            "One live change request per engagement."
+        ),
+        responses={
+            201: EngagementAmendmentSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_amendment_not_actionable` when one is already open; "
+                "`m2_stage_transition_not_allowed` for the wrong kind, an engagement that is not "
+                "open to changes, or a reduction that is too large or too late; "
+                "`m2_amendment_required` when the engagement carries no agreed daily rate to "
+                "price an extension from; `m2_policy_unavailable` when the response window is "
+                "unset — an amendment with no deadline is an open-ended claim on somebody's "
+                "money, so it is refused rather than invented.",
+            ),
+        },
+    )
+    def post(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        serializer = EngagementAmendmentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            engagement = engagement_for_participant(user=actor, engagement_id=engagement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        if engagement.partner.user_id != actor.id:
+            _raise_api_error(RequirementNotFoundError())
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                link = amendments.propose_engagement_amendment(
+                    engagement_id=engagement.id,
+                    actor=actor,
+                    kind=serializer.validated_data["kind"],
+                    reason=serializer.validated_data["reason"],
+                    stage_id=serializer.validated_data["stage_id"],
+                    lines=[
+                        amendments.AmendmentLineInput(
+                            label=line["title"],
+                            quantity=line["quantity"],
+                            amount_paise=line["amount_paise"],
+                        )
+                        for line in serializer.validated_data["lines"]
+                    ],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object],
+                EngagementAmendmentSerializer(_amendment_payload(link)).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.amendment.propose",
+            key=key,
+            request_payload={"engagement_id": str(engagement_id), **serializer.validated_data},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementAmendmentDecisionView(APIView):
+    """The Customer accepts or declines a change request."""
+
+    permission_classes = (IsAuthenticated,)
+    accept = True
+
+    @extend_schema(
+        tags=["M2 - Amendments"],
+        operation_id="m2_engagement_amendment_decide",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "**Money first, scope second (`M2-BE-506`).** Accepting does not change the agreed "
+            "work until the money has moved. Three routes, chosen by the commercial mode and the "
+            "sign of the delta and never by anything a client sends:\n\n"
+            "- `LEAD_ONLY` (A3): no platform money exists to move, so the amendment authorizes "
+            "here and the extra shift-days appear immediately. `checkout` is `null`.\n"
+            "- Managed (A5), negative delta: the refund is issued against the stage's own funding "
+            "payment **before** the scope shrinks, so there is no instant in which the Customer "
+            "owns less work than they have paid for. `checkout` is `null`.\n"
+            "- Managed (A5), positive delta: `checkout` carries a `PaymentAttempt` and **nothing "
+            "changes until a verified provider callback**. A client redirect claiming success is "
+            "a claim by the party that benefits from it.\n\n"
+            "Repeating an acceptance while its payment is pending returns the same attempt rather "
+            "than starting a second charge."
+        ),
+        responses={
+            200: EngagementAmendmentDecisionSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_amendment_not_actionable` when it expired or already has a "
+                "decision.",
+            ),
+        },
+    )
+    def post(self, request: Request, engagement_amendment_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            link = amendment_for_participant(
+                user=customer,
+                engagement_amendment_id=engagement_amendment_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        if link.engagement.customer_id != customer.id:
+            _raise_api_error(RequirementNotFoundError())
+        accept = self.accept
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                if accept:
+                    decided, attempt = amendments.accept_engagement_amendment(
+                        engagement_amendment_id=link.id,
+                        actor=customer,
+                        idempotency_key=key,
+                    )
+                else:
+                    decided = amendments.decline_engagement_amendment(
+                        engagement_amendment_id=link.id,
+                        actor=customer,
+                    )
+                    attempt = None
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            decided.refresh_from_db()
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                EngagementAmendmentDecisionSerializer(
+                    {
+                        "amendment": _amendment_payload(decided),
+                        "checkout": None if attempt is None else _checkout_payload(attempt),
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.amendment.accept" if accept else "m2.amendment.decline",
+            key=key,
+            request_payload={"engagement_amendment_id": str(engagement_amendment_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementAmendmentDeclineView(EngagementAmendmentDecisionView):
+    accept = False
+
+    @extend_schema(
+        tags=["M2 - Amendments"],
+        operation_id="m2_engagement_amendment_decline",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "The Customer says no. The agreed work is unchanged, nothing has moved, and the "
+            "vendor may propose a different change."
+        ),
+        responses={
+            200: EngagementAmendmentDecisionSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, engagement_amendment_id: uuid.UUID) -> Response:
+        return super().post(request, engagement_amendment_id)
+
+
 __all__ = [
+    "EngagementAmendmentCollectionView",
+    "EngagementAmendmentDecisionView",
+    "EngagementAmendmentDeclineView",
+    "EngagementCollectionView",
+    "EngagementCompletionView",
     "EngagementDetailView",
+    "EngagementEventListView",
+    "EngagementStageApprovalView",
+    "EngagementStageCorrectionView",
+    "EngagementStageDetailView",
+    "EngagementStageDisputeDecisionView",
+    "EngagementStageDisputeView",
+    "EngagementStageEvidenceUploadView",
+    "EngagementStageEvidenceView",
     "EngagementStageFundingView",
+    "EngagementStageStartView",
+    "EngagementStageSubmitView",
     "PartnerDemandPreviewView",
     "PartnerEnquiryAcceptView",
     "PartnerEnquiryAttachmentListView",

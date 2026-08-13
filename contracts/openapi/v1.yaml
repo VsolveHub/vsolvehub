@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.24.0
+  version: 1.25.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -1838,6 +1838,481 @@ paths:
               schema:
                 $ref: '#/components/schemas/Offer'
           description: ''
+  /api/v1/engagement-amendments/{engagement_amendment_id}/accept/:
+    post:
+      operationId: m2_engagement_amendment_decide
+      description: |-
+        **Money first, scope second (`M2-BE-506`).** Accepting does not change the agreed work until the money has moved. Three routes, chosen by the commercial mode and the sign of the delta and never by anything a client sends:
+
+        - `LEAD_ONLY` (A3): no platform money exists to move, so the amendment authorizes here and the extra shift-days appear immediately. `checkout` is `null`.
+        - Managed (A5), negative delta: the refund is issued against the stage's own funding payment **before** the scope shrinks, so there is no instant in which the Customer owns less work than they have paid for. `checkout` is `null`.
+        - Managed (A5), positive delta: `checkout` carries a `PaymentAttempt` and **nothing changes until a verified provider callback**. A client redirect claiming success is a claim by the party that benefits from it.
+
+        Repeating an acceptance while its payment is pending returns the same attempt rather than starting a second charge.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_amendment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Amendments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementAmendmentDecision'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_amendment_not_actionable` when it expired or already has
+            a decision.'
+  /api/v1/engagement-amendments/{engagement_amendment_id}/decline/:
+    post:
+      operationId: m2_engagement_amendment_decline
+      description: The Customer says no. The agreed work is unchanged, nothing has
+        moved, and the vendor may propose a different change.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_amendment_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Amendments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementAmendmentDecision'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagement-stages/{stage_id}/:
+    get:
+      operationId: m2_stage_read
+      description: 'One shift-day (A3) or milestone (A5) with its evidence, money
+        and clocks. Both `review_due_at` and `payout_release_due_at` are nullable
+        and their nulls are real policy states: no review window is configured, so
+        this stage never auto-approves; no payout hold is configured, so its payout
+        does not release on a clock. Render nothing there rather than a countdown
+        to a deadline nobody set.'
+      parameters:
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagement-stages/{stage_id}/approve/:
+    post:
+      operationId: m2_stage_approve
+      description: The Customer accepts the work on one stage. `AWAITING_REVIEW` →
+        `APPROVED`. On a managed (A5) engagement this writes the vendor's earning
+        **held** on the M1 payout rails and stamps `payout_release_due_at` — the dispute
+        window — and the money becomes payable when that window closes. On `LEAD_ONLY`
+        (A3) nothing is held because nothing was collected, so the stage goes straight
+        to `RELEASED`.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_disputed` while a dispute is open; `m2_stage_transition_not_allowed`
+            when nothing has been submitted.'
+  /api/v1/engagement-stages/{stage_id}/correction/:
+    post:
+      operationId: m2_stage_request_correction
+      description: 'Send a stage back to be done properly. `AWAITING_REVIEW` → `CORRECTION_REQUESTED`,
+        and the review clock stops. **A correction is not an amendment**: it asks
+        for the agreed work, it does not change what the agreed work is, and it moves
+        no money. A Customer who wants something different is asking for a change
+        order, which needs the vendor''s agreement.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageCorrectionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageCorrectionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageCorrectionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagement-stages/{stage_id}/dispute/:
+    post:
+      operationId: m2_stage_dispute
+      description: 'Formally object to submitted work. `AWAITING_REVIEW` → `DISPUTED`,
+        and the engagement shows `DISPUTED` alongside. **A dispute stops only the
+        disputed allocation**: every other stage carries on and any payout already
+        released stays released. The review timeout cannot reach a disputed stage,
+        so silence never becomes approval on something somebody has objected to.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageDisputeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageDisputeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageDisputeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagement-stages/{stage_id}/dispute/decision/:
+    post:
+      operationId: m2_stage_dispute_resolve
+      description: '`DISPUTED` → `APPROVED` or `CORRECTION_REQUESTED`, as an auditable
+        domain command rather than a database edit. Two outcomes and not three: a
+        partial outcome is a scope amendment both sides accept, never an operator
+        quietly repricing a stage. The full case machinery — evidence, deadlines,
+        appeals — is Wave C6; this is the transition it will drive, published now
+        so a disputed stage is not a dead end.'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageDisputeDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageDisputeDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageDisputeDecisionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagement-stages/{stage_id}/evidence/:
+    post:
+      operationId: m2_stage_evidence_finalize
+      description: 'Verify the object that arrived against the intent and record it
+        as evidence. `processing_status` lands `PENDING`: the bytes are the ones the
+        client promised, and whether they are safe is a separate question a scanner
+        answers. Two concurrent finalizes of one intent produce one evidence row.'
+      parameters:
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceFinalizeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceFinalizeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceFinalizeRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageEvidence'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagement-stages/{stage_id}/evidence/uploads/:
+    post:
+      operationId: m2_stage_evidence_upload_create
+      description: A signed, short-lived upload URL for one evidence file, plus the
+        intent id to finalize against. The server names the object key and records
+        the size, media type and SHA-256 it expects; finalization fetches the object
+        back and compares. Without the intent row, 'verify the upload' would mean
+        'believe the client'. `NOTE` is not a kind here — a note carries no file and
+        is submitted with the stage.
+      parameters:
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceUploadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceUploadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceUploadRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageEvidenceUploadGrant'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_attachment_invalid` for an unsupported media type, an
+            empty file, a file over the per-kind ceiling or a malformed checksum.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` once the stage no longer
+            accepts evidence.'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_attachment_unavailable` when storage is down. Retryable.'
   /api/v1/engagement-stages/{stage_id}/funding/:
     post:
       operationId: m2_stage_funding_checkout_create
@@ -1886,6 +2361,150 @@ paths:
           description: '`m2_stage_not_funded` when the stage is already funded, when
             an earlier stage is not, or when the engagement is `LEAD_ONLY` and paid
             directly to the vendor.'
+  /api/v1/engagement-stages/{stage_id}/start/:
+    post:
+      operationId: m2_stage_start
+      description: Begin work on a stage. `PENDING` → `IN_PROGRESS`, and `CORRECTION_REQUESTED`
+        → `IN_PROGRESS` after the Customer sent it back. **A5 requires verified funding
+        at face value** — the visit-plan money settles per share and never discounts
+        a stage — so a funded A5 stage is already `IN_PROGRESS` and this call is an
+        idempotent no-op; reaching it on an unfunded one is `m2_stage_not_funded`.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_not_funded` on an unfunded A5 stage; `m2_stage_transition_not_allowed`
+            from any other status, or before work has been cleared to start.'
+  /api/v1/engagement-stages/{stage_id}/submit/:
+    post:
+      operationId: m2_stage_evidence_submit
+      description: Hand the stage to the Customer for review. `IN_PROGRESS` → `AWAITING_REVIEW`,
+        and the moment the review clock starts. The note is required and is stored
+        as its own append-only evidence row rather than as a field on the stage, so
+        a correction cycle leaves both accounts readable — what the vendor said the
+        first time and what they said after the Customer pushed back. Resubmitting
+        after a correction restarts the review window from zero, because the Customer
+        is looking at different evidence.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Stages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StageEvidenceSubmitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementStage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagements/:
+    get:
+      operationId: m2_engagement_list
+      description: 'The caller''s engagements, newest first, as a cursor page. A Customer
+        sees the ones they commissioned and a Partner the ones they are performing;
+        the `role` query parameter picks which, and defaults to whichever the caller
+        can be. Read `commercial_mode` before promising anything: `LEAD_ONLY` (A3)
+        is a connection, not a protected booking.'
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
+      tags:
+      - M2 - Engagements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/engagements/{engagement_id}/:
     get:
       operationId: m2_engagement_read
@@ -1912,6 +2531,189 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Engagement'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagements/{engagement_id}/amendments/:
+    get:
+      operationId: m2_engagement_amendment_list
+      description: Every change request on this engagement, newest first. Both parties
+        read it.
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Amendments
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementAmendmentList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_engagement_amendment_create
+      description: |-
+        The vendor asks to change the agreed work. **Routed through the M1 scope-amendment engine** — same status machine, same lines, same expiry rule — with two line kinds M2 adds because an engagement has no catalog task to price from.
+
+        **The archetype fixes the shape and the pricing authority.** An A3 engagement takes a `TIME_EXTENSION`, priced by the **server** from the worker-day rate frozen at reconfirmation: the vendor names days, never money, because a vendor who could name the money could re-price a job the Customer already committed to. An A5 engagement takes a `CHANGE_ORDER`, priced by the vendor line by line, because a bespoke outcome has no catalog rate — and the server still sums the lines and rejects any client-supplied total. `amount_paise` is signed: negative removes scope.
+
+        One live change request per engagement.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Amendments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngagementAmendmentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EngagementAmendmentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EngagementAmendmentCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementAmendment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_amendment_not_actionable` when one is already open; `m2_stage_transition_not_allowed`
+            for the wrong kind, an engagement that is not open to changes, or a reduction
+            that is too large or too late; `m2_amendment_required` when the engagement
+            carries no agreed daily rate to price an extension from; `m2_policy_unavailable`
+            when the response window is unset — an amendment with no deadline is an
+            open-ended claim on somebody''s money, so it is refused rather than invented.'
+  /api/v1/engagements/{engagement_id}/completion/:
+    post:
+      operationId: m2_engagement_completion_accept
+      description: The Customer accepts the finished work. `COMPLETING` → `COMPLETED`,
+        and the requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING`
+        on its own, when every stage is released; this is the separate fact that the
+        Customer agrees it is done. The warranty period a configured A5 variant then
+        enters is Wave C5 and is not built.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Engagements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Engagement'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` when stages are still open.'
+  /api/v1/engagements/{engagement_id}/events/:
+    get:
+      operationId: m2_engagement_event_list
+      description: 'Every move on this engagement and its stages, oldest first. `actor_is_system`
+        separates a decision somebody made from one a clock made — ''approved by you''
+        and ''approved because the review window closed'' are different sentences
+        and a timeline that renders them identically is lying about who decided. Actor
+        identity itself is never published: which of the two parties acted is derivable
+        from `reason_code`, and the counterparty''s user id is not their business.'
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Engagements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementEventList'
           description: ''
         '404':
           content:
@@ -9516,6 +10318,54 @@ components:
       - amount_paise
       - currency
       - payment_attempt_id
+    AmendmentLine:
+      type: object
+      description: |-
+        One line of a change request, priced.
+
+        `amount_paise` is signed on the wire even though the stored column is not: the M1
+        `ScopeAmendmentLine` was built for additions only, so it holds an absolute value and the sign
+        lives in the line's snapshot. Publishing the signed number is what lets one screen render both
+        an addition and a reduction without knowing which table the sign came from.
+      properties:
+        position:
+          type: integer
+          readOnly: true
+        kind:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        quantity:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+      required:
+      - amount_paise
+      - kind
+      - position
+      - quantity
+      - title
+    AmendmentLineInputRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 240
+        quantity:
+          type: integer
+          maximum: 999
+          minimum: 1
+        amount_paise:
+          type: integer
+          nullable: true
+      required:
+      - quantity
+      - title
     ApiError:
       type: object
       properties:
@@ -11625,6 +12475,10 @@ components:
         `commercial_mode` is the field the UI must read before it promises anything. `LEAD_ONLY` means
         the Customer pays the vendor directly and Vsolve's protection is matching and replacement;
         calling that a protected booking is the promise this platform cannot keep.
+
+        The six money columns are the running total `M2-BE-504` reconciles: `staged_total_paise` always
+        equals `total_paise + amendment_delta_paise`, by database constraint, so a client can show
+        "agreed, then changed by, now" without doing arithmetic the server has not already checked.
       properties:
         id:
           type: string
@@ -11668,12 +12522,40 @@ components:
         commission_treatment:
           type: string
           readOnly: true
+        staged_total_paise:
+          type: integer
+          readOnly: true
+        amendment_delta_paise:
+          type: integer
+          readOnly: true
+        funded_total_paise:
+          type: integer
+          readOnly: true
+        approved_total_paise:
+          type: integer
+          readOnly: true
+        released_total_paise:
+          type: integer
+          readOnly: true
+        refunded_total_paise:
+          type: integer
+          readOnly: true
         contact_released_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
         work_may_start_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        disputed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        completed_at:
           type: string
           format: date-time
           readOnly: true
@@ -11688,22 +12570,170 @@ components:
           format: date-time
           readOnly: true
       required:
+      - amendment_delta_paise
+      - approved_total_paise
       - archetype
       - commercial_mode
       - commission_paise
       - commission_treatment
+      - completed_at
       - contact_released_at
       - created_at
+      - disputed_at
+      - funded_total_paise
       - id
       - partner
       - proposal
+      - refunded_total_paise
+      - released_total_paise
       - requirement
+      - staged_total_paise
       - stages
       - status
       - tax_basis
       - tax_paise
       - total_paise
       - work_may_start_at
+    EngagementAmendment:
+      type: object
+      description: |-
+        A change request, as both parties read it.
+
+        Flattened across `EngagementAmendment` and the M1 `ScopeAmendment` deliberately. The split is
+        a storage fact — one amendment engine, two aggregates — and pushing it onto the wire would ask
+        every client to know which half of the row holds the status.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        engagement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        stage_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        kind:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        reason:
+          type: string
+          readOnly: true
+        delta_paise:
+          type: integer
+          readOnly: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmendmentLine'
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        responded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - applied_at
+      - created_at
+      - delta_paise
+      - engagement_id
+      - expires_at
+      - id
+      - kind
+      - lines
+      - reason
+      - responded_at
+      - server_now
+      - stage_id
+      - status
+    EngagementAmendmentCreateRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/EngagementAmendmentKindEnum'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+        stage_id:
+          type: string
+          format: uuid
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/AmendmentLineInputRequest'
+      required:
+      - kind
+      - lines
+      - reason
+    EngagementAmendmentDecision:
+      type: object
+      description: |-
+        What an acceptance returned.
+
+        `checkout` is present only when the amendment needs a verified payment before it changes
+        anything — a managed (A5) engagement taking on extra work. `null` means it is already
+        authorized and applied: an A3 extension, or a reduction that refunded rather than charged.
+      properties:
+        amendment:
+          allOf:
+          - $ref: '#/components/schemas/EngagementAmendment'
+          readOnly: true
+        checkout:
+          allOf:
+          - $ref: '#/components/schemas/AccessCheckout'
+          readOnly: true
+          nullable: true
+      required:
+      - amendment
+      - checkout
+    EngagementAmendmentKindEnum:
+      enum:
+      - TIME_EXTENSION
+      - CHANGE_ORDER
+      type: string
+      description: |-
+        * `TIME_EXTENSION` - Extra time on a workforce engagement
+        * `CHANGE_ORDER` - Changed scope on a project engagement
+    EngagementAmendmentList:
+      type: object
+      properties:
+        amendments:
+          type: array
+          items:
+            $ref: '#/components/schemas/EngagementAmendment'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amendments
+      - server_now
     EngagementCommercialModeEnum:
       enum:
       - LEAD_ONLY
@@ -11712,8 +12742,102 @@ components:
       description: |-
         * `LEAD_ONLY` - Customer pays the vendor directly
         * `MANAGED_PAYMENT_REQUIRED` - Paid through Vsolve
+    EngagementEvent:
+      type: object
+      description: |-
+        One line of the agreement's history.
+
+        `actor_is_system` rather than an actor id: who a Customer or a vendor was is not the other
+        party's business, but *whether a person or a clock* moved something is exactly what a timeline
+        has to say — "approved by you" and "approved because the review window closed" are different
+        sentences.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        stage:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        from_status:
+          type: string
+          readOnly: true
+        to_status:
+          type: string
+          readOnly: true
+        reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        reason:
+          type: string
+          readOnly: true
+        actor_is_system:
+          type: boolean
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - actor_is_system
+      - from_status
+      - id
+      - occurred_at
+      - reason
+      - reason_code
+      - stage
+      - to_status
+    EngagementEventList:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EngagementEvent'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - events
+      - server_now
+    EngagementPage:
+      type: object
+      properties:
+        next:
+          type: string
+          readOnly: true
+          nullable: true
+        previous:
+          type: string
+          readOnly: true
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Engagement'
+          readOnly: true
+      required:
+      - next
+      - previous
+      - results
     EngagementStage:
       type: object
+      description: |-
+        One shift-day or one milestone, with its money and its clocks.
+
+        The four money fields are published because they are what the Customer's and the vendor's
+        screens are both asking about, and because a client that only ever sees `amount_paise` cannot
+        tell a funded stage from an approved one from a paid one.
+
+        Both `*_due_at` fields are nullable and their nulls mean something specific: no review window
+        is configured, so this stage will never auto-approve; no payout hold is configured, so its
+        payout does not release on a clock. A screen must render nothing there rather than a countdown
+        to a deadline nobody set.
       properties:
         id:
           type: string
@@ -11741,19 +12865,92 @@ components:
           allOf:
           - $ref: '#/components/schemas/EngagementStageFundingStateEnum'
           readOnly: true
+        funded_paise:
+          type: integer
+          readOnly: true
+        approved_amount_paise:
+          type: integer
+          readOnly: true
+        released_amount_paise:
+          type: integer
+          readOnly: true
+        refunded_amount_paise:
+          type: integer
+          readOnly: true
+        correction_note:
+          type: string
+          readOnly: true
+        dispute_reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        review_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        payout_release_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageEvidence'
+          readOnly: true
         funded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        evidence_submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        released_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        disputed_at:
           type: string
           format: date-time
           readOnly: true
           nullable: true
       required:
       - amount_paise
+      - approved_amount_paise
+      - approved_at
+      - correction_note
+      - dispute_reason_code
+      - disputed_at
+      - evidence
+      - evidence_submitted_at
       - funded_at
+      - funded_paise
       - funding_state
       - id
       - label
+      - payout_release_due_at
       - position
+      - refunded_amount_paise
+      - released_amount_paise
+      - released_at
+      - review_due_at
       - scheduled_on
+      - started_at
       - status
     EngagementStageFundingStateEnum:
       enum:
@@ -16824,6 +18021,7 @@ components:
       - M2_SITE_VISIT_FEE
       - M2_STAGE_FUNDING
       - M2_MATERIAL_ADVANCE
+      - M2_SCOPE_AMENDMENT
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -16833,6 +18031,7 @@ components:
         * `M2_SITE_VISIT_FEE` - M2 site visit fee
         * `M2_STAGE_FUNDING` - M2 stage funding
         * `M2_MATERIAL_ADVANCE` - M2 material advance
+        * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
     QuestionAnswerRequest:
       type: object
       properties:
@@ -17581,6 +18780,18 @@ components:
       - id
       - invitation
       - question
+    RequirementScanStatusEnum:
+      enum:
+      - PENDING
+      - VERIFIED
+      - INFECTED
+      - FAILED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `VERIFIED` - Verified
+        * `INFECTED` - Rejected by the malware scan
+        * `FAILED` - Failed
     RequirementStatusEnum:
       enum:
       - DRAFT
@@ -18060,10 +19271,14 @@ components:
       enum:
       - TASK
       - MATERIAL
+      - LABOUR_DAY
+      - PROJECT_WORK
       type: string
       description: |-
         * `TASK` - Task
         * `MATERIAL` - Material
+        * `LABOUR_DAY` - Additional worker-day (M2 A3)
+        * `PROJECT_WORK` - Additional or reduced project work (M2 A5)
     ScopeAmendmentStatusEnum:
       enum:
       - PROPOSED
@@ -18620,6 +19835,179 @@ components:
       description: |-
         * `MANUAL` - Manual
         * `REVERSE_GEOCODED` - Reverse geocoded
+    StageCorrectionRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - note
+    StageDisputeDecisionRequest:
+      type: object
+      properties:
+        outcome:
+          $ref: '#/components/schemas/StageDisputeOutcomeEnum'
+        note:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - note
+      - outcome
+    StageDisputeOutcomeEnum:
+      enum:
+      - APPROVE
+      - REQUEST_CORRECTION
+      type: string
+      description: |-
+        * `APPROVE` - Approve the stage as submitted
+        * `REQUEST_CORRECTION` - Send it back for correction
+    StageDisputeReasonEnum:
+      enum:
+      - NOT_DONE
+      - PARTIALLY_DONE
+      - POOR_QUALITY
+      - WRONG_SCOPE
+      - OTHER
+      type: string
+      description: |-
+        * `NOT_DONE` - The work was not done
+        * `PARTIALLY_DONE` - Only part of the work was done
+        * `POOR_QUALITY` - The work was done badly
+        * `WRONG_SCOPE` - This is not what was agreed
+        * `OTHER` - Another reason
+    StageDisputeRequest:
+      type: object
+      properties:
+        reason_code:
+          $ref: '#/components/schemas/StageDisputeReasonEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 2000
+      required:
+      - reason_code
+    StageEvidence:
+      type: object
+      description: |-
+        What the vendor showed, as both parties read it.
+
+        `object_key` is **not** published. It is a storage path, and publishing one turns every
+        evidence read into an enumeration surface; a short-lived signed link is issued by the download
+        endpoint instead, the same way `vendor_attachments` issues them for a Customer's site photos.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/StageEvidenceKindEnum'
+          readOnly: true
+        note:
+          type: string
+          readOnly: true
+        content_type:
+          type: string
+          readOnly: true
+        size_bytes:
+          type: integer
+          readOnly: true
+        processing_status:
+          allOf:
+          - $ref: '#/components/schemas/RequirementScanStatusEnum'
+          readOnly: true
+        failure_reason:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - content_type
+      - created_at
+      - failure_reason
+      - id
+      - kind
+      - note
+      - processing_status
+      - size_bytes
+    StageEvidenceFinalizeRequest:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+      required:
+      - upload_id
+    StageEvidenceKindEnum:
+      enum:
+      - NOTE
+      - PHOTO
+      - VIDEO
+      - DOCUMENT
+      type: string
+      description: |-
+        * `NOTE` - Written note
+        * `PHOTO` - Photo
+        * `VIDEO` - Video
+        * `DOCUMENT` - Document
+    StageEvidenceSubmitRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+      - note
+    StageEvidenceUploadGrant:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+          readOnly: true
+        upload_url:
+          type: string
+          format: uri
+          readOnly: true
+        upload_token:
+          type: string
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - expires_at
+      - upload_id
+      - upload_token
+      - upload_url
+    StageEvidenceUploadRequestRequest:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/StageEvidenceKindEnum'
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 120
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          minLength: 1
+          pattern: ^[0-9a-f]{64}$
+      required:
+      - content_type
+      - kind
+      - sha256
+      - size_bytes
     StartOtp:
       type: object
       description: |-

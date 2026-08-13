@@ -22,6 +22,8 @@ from apps.requirements.exceptions import RequirementNotFoundError
 from apps.requirements.models import (
     CustomerRequirement,
     Engagement,
+    EngagementAmendment,
+    EngagementEvent,
     EngagementStage,
     Proposal,
     ProposalSelection,
@@ -348,6 +350,109 @@ def stage_for_customer(*, customer: User, stage_id: uuid.UUID) -> EngagementStag
     if stage is None:
         raise RequirementNotFoundError()
     return stage
+
+
+# ---------------------------------------------------------------------------
+# Wave C3 reads: the stage spine
+# ---------------------------------------------------------------------------
+
+
+def stage_for_partner(*, partner: PartnerProfile, stage_id: uuid.UUID) -> EngagementStage:
+    """One engagement stage, scoped to the vendor who performs it."""
+    stage = (
+        EngagementStage.objects.select_related(
+            "engagement__requirement__configuration", "engagement__partner"
+        )
+        .filter(engagement__partner=partner, id=stage_id)
+        .first()
+    )
+    if stage is None:
+        raise RequirementNotFoundError()
+    return stage
+
+
+def stage_for_participant(*, user: User, stage_id: uuid.UUID) -> EngagementStage:
+    """One engagement stage, if the caller is either party to its engagement.
+
+    Resolved by participation, like `engagement_for_participant` and `site_visit_for_participant`,
+    because both sides read the same stage: the vendor to see whether their evidence landed, the
+    Customer to decide on it. A stranger gets `404` — the existence of a stage says a named vendor
+    is doing named work for a named Customer.
+    """
+    stage = (
+        EngagementStage.objects.select_related(
+            "engagement__requirement__configuration", "engagement__partner"
+        )
+        .prefetch_related("evidence")
+        .filter(
+            Q(engagement__customer=user) | Q(engagement__partner__user=user),
+            id=stage_id,
+        )
+        .first()
+    )
+    if stage is None:
+        raise RequirementNotFoundError()
+    return stage
+
+
+def engagement_stages(engagement: Engagement) -> QuerySet[EngagementStage]:
+    return EngagementStage.objects.filter(engagement=engagement).order_by("position")
+
+
+def engagement_events(engagement: Engagement) -> QuerySet[EngagementEvent]:
+    """The agreement's own history, oldest first. Both parties read the same rows."""
+    return (
+        EngagementEvent.objects.filter(engagement=engagement)
+        .select_related("stage")
+        .order_by("occurred_at", "id")
+    )
+
+
+def customer_engagements(customer: User) -> QuerySet[Engagement]:
+    return (
+        Engagement.objects.filter(customer=customer)
+        .select_related("requirement", "partner")
+        .prefetch_related("stages")
+        .order_by("-created_at", "id")
+    )
+
+
+def partner_engagements(partner: PartnerProfile) -> QuerySet[Engagement]:
+    return (
+        Engagement.objects.filter(partner=partner)
+        .select_related("requirement")
+        .prefetch_related("stages")
+        .order_by("-created_at", "id")
+    )
+
+
+def amendment_for_participant(
+    *, user: User, engagement_amendment_id: uuid.UUID
+) -> EngagementAmendment:
+    """One change request, if the caller is either party to its engagement."""
+    link = (
+        EngagementAmendment.objects.select_related(
+            "amendment", "engagement__requirement__configuration", "engagement__partner", "stage"
+        )
+        .prefetch_related("amendment__lines")
+        .filter(
+            Q(engagement__customer=user) | Q(engagement__partner__user=user),
+            id=engagement_amendment_id,
+        )
+        .first()
+    )
+    if link is None:
+        raise RequirementNotFoundError()
+    return link
+
+
+def engagement_amendments(engagement: Engagement) -> QuerySet[EngagementAmendment]:
+    return (
+        EngagementAmendment.objects.filter(engagement=engagement)
+        .select_related("amendment", "stage")
+        .prefetch_related("amendment__lines")
+        .order_by("-created_at", "id")
+    )
 
 
 def partner_proposals(

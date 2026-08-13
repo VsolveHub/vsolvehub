@@ -329,3 +329,65 @@ class StageNotFundedError(RequirementDomainError):
             message=message or "This stage has to be funded before work can start.",
             status_code=409,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wave C3: the engagement spine.
+#
+# `m2_stage_disputed` and `m2_amendment_required` are §8 codes. The other two are new here and
+# follow the rule the two C2 additions established: a refusal whose recovery is genuinely
+# different from every published code gets its own, and the reason it exists is written down
+# rather than discovered later.
+#
+# * `m2_stage_transition_not_allowed` — the stage command spine's own "not from here". Distinct
+#   from `m2_requirement_transition_not_allowed` because a Partner reading "this request cannot
+#   do that" about a shift-day is told about the wrong object entirely.
+# * `m2_amendment_not_actionable` — an amendment that is expired, already decided, or awaiting a
+#   payment. Distinct from `m2_amendment_required`, which says the *opposite* thing: that no
+#   amendment exists and one is needed.
+# ---------------------------------------------------------------------------
+
+
+class StageTransitionError(RequirementDomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__(
+            code="m2_stage_transition_not_allowed",
+            message=message,
+            status_code=409,
+        )
+
+
+class StageDisputedError(RequirementDomainError):
+    """A disputed stage does not move on a clock.
+
+    `07-state-machines-and-permissions.md` §5 permits `AWAITING_REVIEW → APPROVED` on review
+    timeout **except** while the stage is `DISPUTED`. Auto-approving a stage somebody has
+    formally objected to would settle the objection by ignoring it.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_stage_disputed",
+            message=message or "This stage is disputed and is waiting on a decision.",
+            status_code=409,
+        )
+
+
+class AmendmentRequiredError(RequirementDomainError):
+    """`M2-BE-508`: scope, amount and completion move only through an accepted amendment."""
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_amendment_required",
+            message=message or "Changing the agreed work needs a change request both sides accept.",
+            status_code=409,
+        )
+
+
+class AmendmentNotActionableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_amendment_not_actionable",
+            message=message or "This change request has already been decided.",
+            status_code=409,
+        )

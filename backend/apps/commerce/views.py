@@ -171,11 +171,11 @@ class SimulatedCaptureView(APIView):
             raise PermissionDenied(str(exc)) from exc
         except ValueError as exc:
             raise ValidationError(str(exc), code="payment_not_ready") from exc
-        attempt = get_object_or_404(
-            _payment_attempt_queryset(),
-            id=attempt_id,
-            checkout__customer=user,
-        )
+        # Re-read by id alone. `simulate_capture` has already proved ownership — through the
+        # checkout where there is one and through the M2 aggregate where there is not — and
+        # re-asserting `checkout__customer` here would answer `404` for every checkout-free
+        # purpose *after* successfully capturing it, which is the worst of both.
+        attempt = get_object_or_404(_payment_attempt_queryset(), id=attempt_id)
         return Response(PaymentAttemptSerializer(attempt).data)
 
 

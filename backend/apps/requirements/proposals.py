@@ -63,6 +63,19 @@ class QuoteTeaser:
 
 
 def _assert_a3_shape(payload: dict[str, Any]) -> None:
+    """A workforce quote's total is its own arithmetic, and the server checks it.
+
+    The reconciliation was missing until Wave C3 and its absence was a real defect rather than a
+    tidiness gap. An A3 engagement lays out one stage per shift-day at `rate x workers`
+    (`engagements._a3_stages`), so a vendor who quoted a total unrelated to their own rate
+    produced an agreement whose stages could never add up to it — and `M2-BE-504` now makes that
+    a database constraint, which would have turned a bad quote into a 500 at reconfirmation.
+
+    Refused rather than silently derived. A composer whose displayed total quietly becomes a
+    different number is worse than one that says which number is wrong, and the wage-floor guard
+    beside this one only ever measured the *rate*: without this check a vendor could pass the
+    statutory floor on paper and bill something else entirely.
+    """
     missing = [
         field
         for field in ("rate_paise_per_worker_day", "minimum_days", "worker_count")
@@ -74,6 +87,16 @@ def _assert_a3_shape(payload: dict[str, Any]) -> None:
         )
     if payload.get("stages"):
         raise ProposalShapeError("A workforce quote does not have project stages.")
+    expected = (
+        int(payload["rate_paise_per_worker_day"])
+        * int(payload["worker_count"])
+        * int(payload["minimum_days"])
+    )
+    if int(payload.get("total_paise") or 0) != expected:
+        raise ProposalShapeError(
+            "A workforce quote's total must be the daily rate times the headcount times the "
+            "number of days.",
+        )
 
 
 def _assert_a5_shape(payload: dict[str, Any]) -> None:

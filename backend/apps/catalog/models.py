@@ -282,6 +282,24 @@ class M2VariantConfiguration(models.Model):
     #: displayed, immutable term on every A5 proposal, so it is Operations-owned rather than
     #: vendor-declared. Owner decision 4's disclosure half.
     commission_treatment = models.CharField(max_length=24, blank=True)
+
+    # --- Wave C3 (`M2-BE-503`, `505`, `507`): the engagement spine's three clocks. -------------
+    # Nullable and fail-closed for the same reason as every clock above. The consequence of an
+    # unset value is stated on each, because "not decided" has a different cost in each case and
+    # `apps.requirements.pricing` refuses or declines to sweep accordingly.
+    #: Business hours a Customer has to review submitted stage evidence before silence becomes
+    #: approval. Null means **no auto-approval**: a stage waits for a real decision rather than
+    #: being approved against a deadline nobody set.
+    stage_review_window_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Business hours an approved stage's payout is held before it becomes payable — the dispute
+    #: window `M2-BE-507` names. Null means the hold never lifts on a clock; Operations releases
+    #: it. The earning is still written, so the debt exists either way.
+    stage_payout_hold_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Business hours a Customer has to accept or decline a proposed scope amendment. Null blocks
+    #: `propose_engagement_amendment`: an amendment with no expiry is an open-ended claim on
+    #: somebody's money, and `fulfilment.ScopeAmendment.expires_at` is not nullable.
+    amendment_response_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+
     evidence_policy = models.JSONField(default=dict)
     contact_policy = models.JSONField(default=dict)
     created_by = models.ForeignKey(
