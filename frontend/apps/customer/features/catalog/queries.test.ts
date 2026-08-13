@@ -121,7 +121,7 @@ describe("getService", () => {
     );
 
     const service = await getService("switch-socket-repair");
-    expect(service?.starting_price.amount_paise).toBe(19900);
+    expect(service?.starting_price?.amount_paise).toBe(19900);
   });
 
   it("returns null for an unknown slug", async () => {

@@ -44,15 +44,23 @@ export function ServiceJsonLd({
       name: "Hyderabad",
     },
     ...(service.cover ? { image: service.cover.url } : {}),
-    offers: {
-      "@type": "AggregateOffer",
-      priceCurrency: service.starting_price.currency,
-      // Schema.org expects a decimal string, and the contract carries paise.
-      lowPrice: (service.starting_price.amount_paise / 100).toFixed(2),
-      offerCount: Math.max(service.variants.length, 1),
-      availability: "https://schema.org/InStock",
-      url,
-    },
+    // No `offers` block at all when the service has no price. Schema.org's `AggregateOffer`
+    // requires a price, and a service quoted per job does not have one — emitting a zero or a
+    // placeholder would put a fabricated price into Google's index, where it outlives any
+    // correction we make on the page.
+    ...(service.starting_price !== null
+      ? {
+          offers: {
+            "@type": "AggregateOffer",
+            priceCurrency: service.starting_price.currency,
+            // Schema.org expects a decimal string, and the contract carries paise.
+            lowPrice: (service.starting_price.amount_paise / 100).toFixed(2),
+            offerCount: Math.max(service.variants.length, 1),
+            availability: "https://schema.org/InStock",
+            url,
+          },
+        }
+      : {}),
   };
 
   return (

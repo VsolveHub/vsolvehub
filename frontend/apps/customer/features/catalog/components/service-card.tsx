@@ -42,11 +42,23 @@ export function ServiceCard({
 
       <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{service.short_description}</p>
 
+      {/*
+        Two catalogs, one card. A priced service shows what it starts at; a service you *describe*
+        has no price to show, because the price is whatever a vendor quotes after reading the job.
+        Rendering "Starts at —" or a zero would be inventing the number this whole lifecycle exists
+        to avoid, so the card says what happens next instead.
+      */}
       <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
-        <span className="text-xs uppercase tracking-[0.08em] text-text-muted">Starts at</span>
-        <span data-numeric className="text-lg font-bold text-text">
-          {formatMoney(service.starting_price.amount_paise)}
-        </span>
+        {service.starting_price !== null ? (
+          <>
+            <span className="text-xs uppercase tracking-[0.08em] text-text-muted">Starts at</span>
+            <span data-numeric className="text-lg font-bold text-text">
+              {formatMoney(service.starting_price.amount_paise)}
+            </span>
+          </>
+        ) : (
+          <span className="text-sm font-semibold text-text">Tell us what you need</span>
+        )}
       </div>
     </Link>
   );

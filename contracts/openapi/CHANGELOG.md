@@ -4,6 +4,50 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.27.0 - The catalog can offer a service it cannot price
+
+**No new path. One field added, one field made nullable — and it fixes a defect that made every M2
+service invisible and every M2 service page a `404`.**
+
+### The defect
+
+`public_services_for_category` gated on `has_current_rate`. That is the M1 rule and it is correct
+for A1: a task nobody has priced must not appear bookable. **An A3 or A5 service has no
+`ServiceRate` by design** — its price is the vendor's quote — so the gate excluded every M2 service
+from the catalog. `public_service_by_slug` carried the same rule as `if not public_variants: raise
+NotFound`, so the service *pages* answered `404` too.
+
+Nothing was wrong in the data. With the demo seed loaded, `workforce-and-projects` was an active
+category containing two `ACTIVE` services, with active variants and `ACTIVE` M2 configurations, and
+`public_services_for_category("workforce-and-projects")` returned `[]`.
+
+The rule is now **"a service is offerable when it can be priced *or* when it can be asked about"**,
+in one shared `_offerable_services()` that all three listing selectors use. `README.md` §"Customer,
+Partner and Operations surfaces" is explicit that this is one catalog and the archetype chooses the
+action, so the fix belongs in the gate rather than in a second M2-only listing.
+
+### `ServiceCard.request_archetypes` — new, required
+
+`string[]`. The guided-requirement lifecycles this service accepts: `["A3_TIME_BLOCK"]`,
+`["A5_CUSTOM_PROJECT"]`, both, or **`[]` for ordinary A1 work**.
+
+This is the field `M2-FE-201` has been asking for since 12 August. A client could not tell an M2
+service from an A1 one: `bookable_variant_id` is the A1 path and there was nothing for the other, so
+the category picker offered every service and the next screen told the Customer we do not cover this
+one. Non-empty means render "Tell us what you need"; empty means "Check price and availability".
+
+### `ServiceCard.starting_price` — now nullable
+
+**This is a breaking read-shape change and clients must handle `null`.**
+
+`null` is the honest answer for an M2 service, not a missing value: there is no rate, so there is no
+number, and "starts at ₹X" would be one this platform invented. `bookable_variant_id` is already
+`null` for the same services, so the A1 add-to-cart path stays closed by construction.
+
+The guard is also a crash fix. `get_starting_price` called `min()` over the priced variants
+unconditionally, which raises `ValueError` on an empty sequence. It could not fire while the gate
+required a rate; widening the gate is what made an unpriced service reachable.
+
 ## 1.26.0 - M2 Wave C3.5: the defects Wave I found, and a demo that can actually be walked
 
 **Three new paths and three new operations (78 M2 operations → 81), plus eight additive fields and

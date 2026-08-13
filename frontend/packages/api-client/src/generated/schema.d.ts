@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.26.0)
- * Checksum: eb84eef8e6419def
+ * Source:   contracts/openapi/v1.yaml (version 1.27.0)
+ * Checksum: c7472f387ddf8862
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -7501,9 +7501,10 @@ export interface components {
             readonly short_description: string;
             readonly category_slug: string;
             readonly subcategory_slug: string;
-            readonly starting_price: components["schemas"]["Money"];
+            readonly starting_price: components["schemas"]["Money"] | null;
             /** Format: uuid */
             readonly bookable_variant_id: string | null;
+            readonly request_archetypes: string[];
             readonly cover: components["schemas"]["ServiceMedia"] | null;
         };
         ServiceDetail: {
@@ -7514,9 +7515,10 @@ export interface components {
             readonly short_description: string;
             readonly category_slug: string;
             readonly subcategory_slug: string;
-            readonly starting_price: components["schemas"]["Money"];
+            readonly starting_price: components["schemas"]["Money"] | null;
             /** Format: uuid */
             readonly bookable_variant_id: string | null;
+            readonly request_archetypes: string[];
             readonly cover: components["schemas"]["ServiceMedia"] | null;
             description?: string;
             readonly variants: components["schemas"]["ServiceVariantConfiguration"][];

@@ -155,9 +155,37 @@ export function serviceCard(
     subcategory_slug: "electrical",
     starting_price: money(19900),
     bookable_variant_id: "8a1f0c22-6d3e-4b71-9f52-1c0d7e4a9b83",
+    // Required since contract 1.27.0. Empty is the A1 card: a priced service you book. An M2
+    // service is the mirror image — `starting_price: null`, `bookable_variant_id: null` and an
+    // archetype here — so a fixture that omitted this would only ever describe half the catalog.
+    request_archetypes: [],
     cover: null,
     ...overrides,
   };
+}
+
+/**
+ * The other half of the catalog: a service you describe rather than price.
+ *
+ * A3 and A5 services carry no `ServiceRate`, so **both money fields are null and that is the
+ * correct state** — the price is whatever a vendor quotes. `request_archetypes` is what tells the
+ * card to offer "Tell us what you need" instead of "Check price and availability".
+ */
+export function requirementServiceCard(
+  overrides: Partial<Schemas["ServiceCard"]> = {},
+): Schemas["ServiceCard"] {
+  return serviceCard({
+    id: "66666666-6666-4666-8666-666666666667",
+    slug: "construction-helpers",
+    name: "Construction helpers",
+    short_description: "Tell us how many people you need and for how long.",
+    category_slug: "workforce-and-projects",
+    subcategory_slug: "construction-labour",
+    starting_price: null,
+    bookable_variant_id: null,
+    request_archetypes: ["A3_TIME_BLOCK"],
+    ...overrides,
+  });
 }
 
 export function address(overrides: Partial<Schemas["Address"]> = {}): Schemas["Address"] {

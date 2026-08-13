@@ -132,6 +132,7 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
     starting_price = serializers.SerializerMethodField()
     cover = serializers.SerializerMethodField()
     bookable_variant_id = serializers.SerializerMethodField()
+    request_archetypes = serializers.SerializerMethodField()
 
     class Meta:
         model = Service
@@ -144,9 +145,24 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
             "subcategory_slug",
             "starting_price",
             "bookable_variant_id",
+            #: Which guided-requirement lifecycles this service accepts. Empty for ordinary A1
+            #: work. This is the field that decides the card's action — "Check price and
+            #: availability" against "Tell us what you need" — and it exists because a client
+            #: could not tell the two apart: `bookable_variant_id` is the A1 path and there was
+            #: nothing for the other. `M2-FE-201`.
+            "request_archetypes",
             "cover",
         )
         read_only_fields = fields
+
+    @staticmethod
+    @extend_schema_field(
+        serializers.ListField(child=serializers.CharField(), allow_empty=True),
+    )
+    def get_request_archetypes(service: Service) -> list[str]:
+        variants = getattr(service, "requirement_variants", [])
+        # Ordered rather than a set, so the same service publishes the same list every read.
+        return sorted({variant.booking_archetype for variant in variants})
 
     @staticmethod
     @extend_schema_field(serializers.UUIDField(allow_null=True))
@@ -167,10 +183,25 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
         return str(variants[0].id)
 
     @staticmethod
-    @extend_schema_field(MoneySerializer)
-    def get_starting_price(service: Service) -> dict[str, object]:
+    @extend_schema_field(MoneySerializer(allow_null=True))
+    def get_starting_price(service: Service) -> dict[str, object] | None:
+        """The lowest price this service can start at, or `null` when it has none.
+
+        **`null` is the honest answer for an M2 service, not a missing value.** An A3 or A5
+        service carries no `ServiceRate` because its price is the vendor's quote — so there is no
+        number to show, and "starts at ₹X" would be one this platform invented. The client renders
+        the requirement action from `request_archetypes` instead.
+
+        The empty guard is also a real crash fix: this used to call `min()` over the priced
+        variants unconditionally, which raises `ValueError` on an empty sequence. It could not fire
+        while the catalog gate required a rate; widening that gate to admit M2 services is what
+        made an unpriced service reachable here.
+        """
+        priced = _public_variants(service)
+        if not priced:
+            return None
         variant = min(
-            _public_variants(service),
+            priced,
             key=lambda item: max(
                 cast(_RatedVariant, cast(object, item)).current_rate_amount_paise,
                 cast(_RatedVariant, cast(object, item)).minimum_service_subtotal_paise,

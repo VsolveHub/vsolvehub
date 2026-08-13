@@ -20,6 +20,9 @@ const FAN: ServiceCard = {
   short_description: "Ceiling and wall fans fitted and tested.",
   category_slug: "technician",
   subcategory_slug: "electrician",
+  // Empty: a suggestion is always a priced A1 service. `public_services_by_id` keeps the rate
+  // gate the catalog listing dropped at 1.27.0, because a per-job service cannot join a cart.
+  request_archetypes: [],
   bookable_variant_id: "variant-fan-1",
   starting_price: { amount_paise: 29900, currency: "INR" },
   cover: null,

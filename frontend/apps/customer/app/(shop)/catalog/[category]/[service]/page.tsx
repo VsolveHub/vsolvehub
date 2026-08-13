@@ -68,20 +68,32 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         <h1 className="text-balance text-2xl font-bold text-text sm:text-3xl">{service.name}</h1>
         <p className="mt-2 max-w-prose text-text-secondary">{service.short_description}</p>
 
-        <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-          <div>
-            <span className="block text-xs uppercase tracking-[0.08em] text-text-muted">
-              Starts at
-            </span>
-            <span data-numeric className="text-2xl font-bold text-text">
-              {formatMoney(service.starting_price.amount_paise)}
-            </span>
-          </div>
-        </div>
+        {service.starting_price !== null ? (
+          <>
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+              <div>
+                <span className="block text-xs uppercase tracking-[0.08em] text-text-muted">
+                  Starts at
+                </span>
+                <span data-numeric className="text-2xl font-bold text-text">
+                  {formatMoney(service.starting_price.amount_paise)}
+                </span>
+              </div>
+            </div>
 
-        <p className="mt-2 text-sm text-text-secondary">
-          The exact price is confirmed before you pay, once you have told us what the job involves.
-        </p>
+            <p className="mt-2 text-sm text-text-secondary">
+              The exact price is confirmed before you pay, once you have told us what the job
+              involves.
+            </p>
+          </>
+        ) : (
+          // A service quoted per job. The sentence below is the honest version of the one above:
+          // there is no starting price to confirm *from*, because nobody has seen the work yet.
+          <p className="mt-4 text-sm text-text-secondary">
+            This work is priced per job. Tell us what you need and verified professionals will send
+            you their own quotes — describing the job costs nothing.
+          </p>
+        )}
       </header>
 
       {/* The one primary action on the page (plan 03). It leads into the booking

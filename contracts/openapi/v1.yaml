@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.26.0
+  version: 1.27.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -19703,11 +19703,17 @@ components:
         starting_price:
           allOf:
           - $ref: '#/components/schemas/Money'
+          nullable: true
           readOnly: true
         bookable_variant_id:
           type: string
           format: uuid
           nullable: true
+          readOnly: true
+        request_archetypes:
+          type: array
+          items:
+            type: string
           readOnly: true
         cover:
           allOf:
@@ -19720,6 +19726,7 @@ components:
       - cover
       - id
       - name
+      - request_archetypes
       - short_description
       - slug
       - starting_price
@@ -19750,11 +19757,17 @@ components:
         starting_price:
           allOf:
           - $ref: '#/components/schemas/Money'
+          nullable: true
           readOnly: true
         bookable_variant_id:
           type: string
           format: uuid
           nullable: true
+          readOnly: true
+        request_archetypes:
+          type: array
+          items:
+            type: string
           readOnly: true
         cover:
           allOf:
@@ -19786,6 +19799,7 @@ components:
       - media
       - name
       - policies
+      - request_archetypes
       - short_description
       - slug
       - starting_price

@@ -80,14 +80,23 @@ export function CartSuggestions({
             </Link>
 
             <div className="mt-auto pt-3">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[0.6875rem] uppercase tracking-[0.08em] text-text-muted">
-                  Starts at
-                </span>
-                <span data-numeric className="text-base font-bold text-text">
-                  {formatMoney(card.starting_price.amount_paise)}
-                </span>
-              </div>
+              {/*
+                Suggestions come from a rate-gated selector, so a card here always has a price —
+                `public_services_by_id` deliberately kept the rate gate the catalog listing dropped,
+                because a suggestion is an "add this to your visit" affordance and a service quoted
+                per job cannot be added to a cart. The guard is belt-and-braces: if that ever
+                changes, the price line disappears rather than the card crashing.
+              */}
+              {card.starting_price !== null ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[0.6875rem] uppercase tracking-[0.08em] text-text-muted">
+                    Starts at
+                  </span>
+                  <span data-numeric className="text-base font-bold text-text">
+                    {formatMoney(card.starting_price.amount_paise)}
+                  </span>
+                </div>
+              ) : null}
 
               {card.bookable_variant_id !== null ? (
                 <Button
