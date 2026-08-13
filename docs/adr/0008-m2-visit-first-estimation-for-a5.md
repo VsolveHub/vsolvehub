@@ -1,7 +1,23 @@
 # 8. M2 visit-first estimation and tiered visit plans for A5
 
-- Status: Accepted
+- Status: Accepted, with two amendments.
+  1. This record's statements that A3 is unchanged (quote-first through the INR 149 unlock) are
+     superseded by ADR-0009 — A3 is now rate-card-first with the quote flow as fallback.
+  2. **This record's visit-fee-credit statements are superseded by the owner's 2026-08-13 visit-money
+     decision.** Where the Decision and Consequences sections below speak of "the visit-fee credit"
+     — how much of the plan price adjusts against the first funded stage of the chosen vendor — that
+     mechanism does not exist. Each per-slot share instead splits into a **vendor visit payout** (paid
+     through the M1 payout rails when that vendor's visit is `COMPLETED` and a usable estimate lands
+     in the post-visit window) and a **Vsolve platform share**; undelivered shares refund the Customer
+     whole. **Stages fund at face value and there is no stage credit** — the plan money is spent on
+     the visits themselves.
+     [`07-state-machines-and-permissions.md`](../../Django_Next.js_Plan/M2/07-state-machines-and-permissions.md)
+     §4a is authoritative for the visit money.
+  The visit-first decision itself — free requirement, tiered plan, charge at the first confirmed
+  slot, on-site estimates, no second paywall — is unchanged. The body below is left as written; an
+  ADR is a record of a decision at a date, not a living document.
 - Date: 2026-08-12
+- Amended: 2026-08-13 (visit money), 2026-08-13 (ADR-0009 supersedes the A3 statements)
 
 ## Context
 

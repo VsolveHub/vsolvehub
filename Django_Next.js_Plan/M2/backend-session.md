@@ -16,6 +16,14 @@
 > visit slot, visit slots book against `carts.availability`, and A5 estimates are submitted on site
 > against a `COMPLETED` visit. Wave C2 below is rewritten accordingly; nothing already built changes,
 > except that `M2-BE-215` (`choose_visit_plan`) joins the requirement surface when C2 starts.
+>
+> **Revision 4 landed on 13 August 2026 (ADR-0009), after C2, C3 and C3.5 shipped.** A3 is
+> rate-card-first: the primary front door is a published `RateCard`, the A1 offer cascade in
+> `apps.assignments` and a `BookingFee` charged at vendor accept; wages stay direct, daily and P2P.
+> **Nothing C2 built changes** — the unlock surface at 1.24.0 is demoted to the thin-supply
+> fallback, untouched, and whether the fallback still charges the unlock is owner decision 14. The
+> rate-card work is new build, carried as wave **C2R** below; read
+> `07-state-machines-and-permissions.md` §1, §2, §4c, §6 and §8 before starting it.
 
 ## Kickoff prompt for this session
 
@@ -490,6 +498,10 @@ Contract **1.24.0**, 14 new paths and 19 new operations. Full account in §"C2 o
 wave before anything in it was built** — read `07-state-machines-and-permissions.md` §1, §4, §4a and
 §4b first; the A5 front door is now the visit plan, and the unlock is A3-only.
 
+**Revision 4 (ADR-0009, 2026-08-13 — after this wave shipped):** the A3 unlock surface built here is
+demoted to the thin-supply fallback, untouched; the primary A3 front door is Wave **C2R**'s
+rate-card build below.
+
 `M2-BE-215`, `M2-BE-401..428`. The commercially load-bearing wave:
 
 A3 unlock (unchanged from revision 2):
@@ -933,7 +945,10 @@ defects above. Recorded because "unrun" would be inaccurate and "tested" would b
   tests before M2 acceptance.
 - **`VisitNoShowRequest.reason_code` is now required**, which is a **breaking request-shape change**
   for a client that has not regenerated. Flagged in §7 for both columns.
-- **The frontend client is not regenerated.** **1.26.0 needs regeneration by the orchestrator.**
+- ~~**The frontend client is not regenerated.** **1.26.0 needs regeneration by the orchestrator.**~~
+  **Closed 2026-08-14 (build-sprint Gate 0).** The orchestrator regenerated through 1.26.0, 1.27.0
+  and 1.28.0; the committed client is at **1.28.0** and the drift check is clean. Left struck rather
+  than deleted so the wave record stays append-only.
 - **No rating**, for the reason above.
 - **Contact disclosure and the callback flow** remain untouched — both need an owner decision.
 - **The nullable-join fix was applied mechanically at 24 sites and is unproven at 22 of them.** Two
@@ -942,9 +957,61 @@ defects above. Recorded because "unrun" would be inaccurate and "tested" would b
 
 ---
 
+## Wave C2R — Rate-card A3 (revision 4, ADR-0009) — **not started**
+
+`M2-BE-429..435`. **New build, not rework.** Revision 4 (2026-08-13) demotes the C2 unlock surface
+to the thin-supply fallback — every 1.24.0 path stays published and untouched, and whether the
+fallback keeps charging the unlock is **owner decision 14**. The primary A3 front door is built
+here. Per the build-first amendment, no test is written or run in this wave —
+`.\scripts\quality-static.cmd` is the gate — and the wave's test debt is recorded in
+`02-backend-tasks.md`.
+
+**Depends on:** C2's patterns, not C2's files — the effective-dated fail-closed Operations price
+(`M2AccessPrice`), the payment-purpose convention and the split rails decided 2026-08-13 — plus the
+A1 offer cascade in **`apps.assignments`**, the M1 payout and ledger rails for the forfeit split,
+and the built fail-closed wage-floor guard. May run before or beside C4; C4's settlement rows
+(`536..539`) read the rates this wave publishes.
+
+- [ ] `RateCard` + `publish_rate_card` (`429`): effective-dated per city+skill on the
+  `M2AccessPrice` pattern, three components in paise (worker day-wage + supervision margin + booking
+  fee), the published overtime and add-on rates and the printed inclusion list. The wage component
+  passes the **built wage-floor guard at publish** — the same fail-closed check vendor quotes pass.
+  No live card means `m2_rate_card_unavailable`, never a guessed price. Seed values, the
+  decline-alarm threshold and the review calendar are owner decision 13.
+- [ ] The A3 **preset** on `M2VariantConfiguration` + `book_at_published_rate` (`430`): skill,
+  headcount, dates, the 3–4 price-moving facts; rate and inclusion list shown before booking;
+  submission starts the cascade in one step, or routes to the quote flow when no card is live.
+- [ ] The cascade caller into `apps.assignments` (`431`): small wave, first accept wins,
+  minutes-level timeouts; offers only to leads with approved A3 capability and verified roster ≥
+  headcount; `accept_crew_offer` takes a roster-sized hold (`m2_roster_insufficient`);
+  `decline_crew_offer` requires a reason and feeds the decline alarm; widening behind an honest
+  holding state; `fall_back_to_quote_flow` past the configured threshold with nothing charged. A
+  caller, not a second dispatch engine.
+- [ ] `BookingFee` + checkout + verified webhook (`432`): `OFFER_ACCEPTED → PENDING → ACTIVE →
+  EARNED | FORFEIT_SPLIT | REFUNDED | FAILED`, `EARNED` at first-day arrival;
+  `create_booking_fee_checkout` refuses without a held accepted offer
+  (`m2_booking_fee_not_chargeable`); one charge per booking under duplicate webhooks; never from a
+  client redirect (`m2_booking_fee_payment_pending`); the verified callback hardens the booking
+  **and creates the engagement**.
+- [ ] Forfeit and refund machinery (`433`): the forfeit split through the **M1 payout rails**
+  (travel compensation to the lead + platform share, reconciling
+  `fee = travel compensation + platform share` in paise); full refund + free re-dispatch + standing
+  hit on vendor no-show; free-cancel until T hours out. Fee value, split percentages and T are owner
+  decision 12.
+- [ ] The **decline-rate alarm** (`434`): sustained decline above the configured threshold at a rate
+  pages Operations — an alarm, not a report. Threshold is owner decision 13.
+- [ ] Rate-card acceptance recorded at A3 capability approval (`435`); the offer screen always shows
+  the lead's own number.
+
+**Gate:** an A3 Customer can book a confirmed crew at a published all-inclusive rate with the
+booking fee as the only online charge; the cascade degrades honestly to the quote flow past the
+threshold; no rate below the statutory floor can be published; and nothing shipped at 1.24.0 is
+removed or renamed.
+
 ## Wave C4 — Workforce stages, A3 (`BE5A`)
 
-`M2-BE-521..535`. Thin tail on the C3 spine.
+`M2-BE-521..539`. Thin tail on the C3 spine; revision 4 adds the daily-settlement rows (`536..539`),
+which read Wave C2R's published rates.
 
 - [ ] Per-**stage** crew assignment so multi-day work rotates legitimately (`522`).
 - [ ] **Supervisor-level daily attendance** — "n of m present today", one action. Do **not** build
@@ -952,8 +1019,18 @@ defects above. Recorded because "unrun" would be inaccurate and "tested" would b
   (`525`, `526`).
 - [ ] Missing check-out settles at the agreed shift length, flagged, disputed only on Customer dispute (`527`).
 - [ ] Arrival confirmation on the non-OTP fallback as the default path (`524`).
-- [ ] Overtime as a scope amendment; unapproved overtime is unpaid (`531`).
+- [ ] Overtime as a scope amendment **at the card's published overtime rate**; unapproved overtime
+  is unpaid (`531`, revision 4 wording).
 - [ ] `SafetyIncident` as a first-class record with its own flow — not a cancellation reason (`530`).
+- [ ] The dual evening **"Day settled?"** taps — `confirm_day_settled`, supervisor and Customer, a
+  UPI QR/deep-link to the lead's VPA at the exact published amount as a convenience; the money is
+  P2P, the platform never holds wages, and a one-sided claim without the tap trail reaches
+  Operations as unproven (`536`, revision 4).
+- [ ] Settlement **per worker-day present, never per job**: a 3-of-4 day settles at 3 workers'
+  published rate; the Customer continues short, adds a day, or cancels the shortfall free (`537`,
+  revision 4).
+- [ ] Scope amendments at the card's **published add-on rates** (`538`) and `report_cash_demand` —
+  one-tap report, standing hit, removal on pattern (`539`) (revision 4).
 
 ## Wave C5 — Project stages, A5 (`BE5B`)
 
@@ -969,15 +1046,18 @@ defects above. Recorded because "unrun" would be inaccurate and "tested" would b
 
 ## Wave C6 — Recovery, refunds, disputes, Operations APIs (`BE6`)
 
-`M2-BE-701..717`. Frontend Wave 4 integrates against this.
+`M2-BE-701..719`. Frontend Wave 4 integrates against this.
 
 - [ ] Policy engine, linked cases, evidence, deadlines, decisions, appeals (`701`–`704`).
 - [ ] Idempotent ledger-backed refunds; provider pending, failed and reversed states (`707`).
-- [ ] Chargeback on the unlock fee through the standard dispute path (`708`).
+- [ ] Booking-fee outcomes beside the unlock's (`705`) and the visit plan's (`718`): full refund
+  with free re-dispatch on vendor no-show; the forfeit split through the M1 payout rails (`719`,
+  revision 4).
+- [ ] Chargeback on the booking, unlock or visit-plan fee through the standard dispute path (`708`).
 - [ ] Scheduled reconciliation of payment, refund, ledger and payout with alerts (`710`).
 - [ ] Unified request timeline API (`711`) — one timeline, consumed by both Operations folders.
-- [ ] Assisted clarification and **assisted A3 quote capture as a primary path**, attributed to the
-  named Partner with consent recorded (`713`).
+- [ ] Assisted clarification and **assisted A3 quote capture as a primary path of the fallback quote
+  flow** (revision 4), attributed to the named Partner with consent recorded (`713`).
 - [ ] Prove Operations can recover every supported failure **without direct database edits** (`717`).
 
 ## Wave C7 — Security, observability, release (`BE7`)
@@ -998,9 +1078,10 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | C2 | `BE-215`, `BE-401..428` (revision 3: A3 unlock + A5 visit plan) | `[~]` built — static gates green | `[~]` **14 new paths / 19 new operations at contract 1.24.0 (62 M2 operations)** | Ruff format and check clean across 342 files, strict MyPy across 222 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 11 named enums, drift check clean. Migrations `requirements.0005`, `catalog.0008`, `commerce.0007`, `assignments.0008`; five new beat entries. **The candidate-visit-starts read is published** at `GET /partner/enquiries/{id}/visit-slots/`. All eight §7 serializer gaps landed. **Tests deferred per the build-first amendment** (`BE-417`/`418`/`428`). **1.24.0 needs client regeneration by the orchestrator.** |
 | C3 | `BE-501..509` | `[~]` built — static gates green | `[~]` **15 new paths / 16 new operations at contract 1.25.0 (78 M2 operations)** | Ruff format and check clean across 345 files, strict MyPy across 225 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 5 enum entries (one **pin** preventing a rename of the published `ProcessingStatusEnum`), drift check clean. Migrations `requirements.0006`, `catalog.0009`, `commerce.0008`, `fulfilment.0002`; three new beat entries. **One stage spine for both archetypes**; scope amendments run on the M1 engine with `booking` made nullable and two new line kinds. **`M2-BE-113` unblocked and built.** Three defects closed: `simulate_capture` refused every M2 charge, an A3 total was client-supplied, and a new enum would have renamed a published component. **Tests deferred per the build-first amendment** (`BE-509`); smoke script at `docs/runbooks/m2-engagement-spine-smoke.md`. **1.25.0 needs client regeneration by the orchestrator.** |
 | C3.5 | Dev seed + the Wave I §7 defects | `[~]` built — static gates green | `[~]` **3 new paths / 3 new operations at contract 1.26.0 (81 M2 operations)** | Ruff format and check clean across 347 files, strict MyPy across 228 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 3 enum entries, drift check clean. Migration `requirements.0007`. **`manage.py seed_m2_demo`** loads every owner-blocked value as dev-only data behind three guards; runbook `docs/runbooks/m2-demo-seed.md`. Vendor cards, two-way clarification, `ProposalMaterialLine` + `EngagementStage.kind`, real verification badge, distance band, `service_name`, visit `timezone`, engagement `access_receipt`, no-show vocabulary. **Two live defects closed: 24 `select_for_update`-over-a-nullable-join `500`s (two of them M1 regressions from C3), and a plan-visit reschedule that abandoned its grid reservation.** `VisitNoShowRequest.reason_code` is now required — breaking for an un-regenerated client. **Tests deferred per the build-first amendment.** **1.26.0 needs client regeneration by the orchestrator.** |
-| C4 | `BE-521..535` | `[ ]` | `[ ]` | |
+| C2R | `BE-429..435` (revision 4: rate-card A3) | `[ ]` | `[ ]` | New build; the C2 unlock surface is the demoted fallback and stays untouched |
+| C4 | `BE-521..539` | `[ ]` | `[ ]` | |
 | C5 | `BE-541..550` | `[ ]` | `[ ]` | |
-| C6 | `BE-701..717` | `[ ]` | `[ ]` | |
+| C6 | `BE-701..719` | `[ ]` | `[ ]` | |
 | C7 | `BE-801..` | `[ ]` | `[ ]` | |
 
 ### Already verified (do not rebuild)
@@ -1026,3 +1107,6 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | 2026-08-13 | Insurance in `assert_capability_active` | Owner decision 6 | This file, `M2-BE-115` |
 | 2026-08-12 | Crew archive conflict (0013 criterion 9) | C4's per-stage assignment model | `02-backend-tasks.md` `M2-BE-111` |
 | 2026-08-12 | Per-variant `requires_insurance` (0013 criterion 12) | Owner decision 6 | `apps/partners/capability_options.py` |
+| 2026-08-13 | `M2-BE-432`/`M2-BE-433` booking-fee value, forfeit split %, free-cancel window T | Owner decision 12 (revision 4). C2R builds the machinery fail-closed | `07-state-machines-and-permissions.md` §9 |
+| 2026-08-13 | `M2-BE-429` seed rate values per launch city+skill, decline-alarm threshold, review-calendar owner | Owner decision 13 (revision 4). An unpublished card means `m2_rate_card_unavailable` — no instant A3 at all | `07-state-machines-and-permissions.md` §9 |
+| 2026-08-13 | Whether the A3 fallback keeps charging the unlock | Owner decision 14 (revision 4). Until decided, the fallback inherits the built C2 behaviour | ADR-0009 |

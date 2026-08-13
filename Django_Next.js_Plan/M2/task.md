@@ -1,27 +1,56 @@
 # M2 Master Task Board
 
 **Scope:** Workforce and project services (`A3_TIME_BLOCK` and `A5_CUSTOM_PROJECT`)
-**Status:** P1–P4 built. **Contract 1.24.0 publishes 62 M2 operations** — 43 through the C1
-remainder, plus 19 from Wave C2 (the A3 unlock, the A5 visit plan, selection, reconfirmation and the
-engagement). Nine background sweeps are on Celery beat. The typed client is regenerated at 1.24.0.
-**P4's whole surface is published; none of it is reachable in a browser yet** — that is Wave A2 and
-`FE-314`/`315`, in flight.
-HTTP tests **exist for every path and have not been run**, so no phase has passed its gate. Frontend: FE0 foundation built;
-Customer Wave A1 built, wired and mounted on 4 routes, **plus requirement attachments and the voice
-fast path (`FE-204`/`FE-205`)**; Partner Wave B1 built, wired to the live workspaces endpoint and
-mounted on 7 routes, Wave B2 built and mounted on 4 more, and **the registration surface (`FE-105`)
-mounted on 4 `/apply` routes with the sixth capability status `REJECTED` handled**.
-Operations/admin: nothing started.
-**Last audited:** 2026-08-13 (Gate 1 of the build sprint; see the bottom of this file).
+**Status:** P1–P4 built. **Contract 1.28.0 is published and the typed client is regenerated at
+1.28.0.** Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
+thin-supply fallback since revision 4 — the A5 visit plan with per-slot split payouts, selection and
+reconfirmation), Wave C3 (the engagement + stage spine) and Wave C3.5 (defect closure plus the
+dev-only seed `manage.py seed_m2_demo`). Background sweeps are on Celery beat.
+Frontend: FE0 foundation built; **Customer Waves A1, A2 and A3 are built and mounted**, as is
+**Wave I** (the cross-cutting customer pass); **Partner Waves B1 and B2 are built and mounted, and
+B3's project half is landed**. Operations/admin: **nothing started**.
+**Remaining work:** backend **C2R** (the rate-card A3 front door) and **C4–C7**; frontend **A2R**
+and **B2R** (the revision 4 consumption of C2R), the workforce fulfilment UI, and **A4/B4** (the
+Operations application).
+HTTP tests **exist for the C0–C2 paths and have not been run**; the C3 onward waves wrote none, per
+the build-first amendment. No phase has passed its gate.
+**Revision 4 (2026-08-13, ADR-0009):** A3 is now **rate-card-first** — the built unlock surface
+above is demoted to the thin-supply fallback, and the primary A3 front door (rate card, offer
+cascade to leads, booking fee at vendor accept, daily direct wages) is new, unstarted work. See the
+revision 4 summary below.
+**Last audited:** 2026-08-14 (build-sprint Gate 0; the per-wave status headers further down this
+file lag this line — the handoff log in
+[frontend-execution-plan.md](frontend-execution-plan.md) §7 is the truth of record).
 **Source flow:** [README.md](README.md)
 **Audit applied:** [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
 
 This is the authoritative M2 implementation status board. The backend and frontend task files contain
 the detailed work. Update this file in the same change that completes a phase or changes its status.
 
+## Revision 4 summary — rate-card A3 (owner decision, 2026-08-13)
+
+Recorded in [ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md). A5 is
+untouched. Unlike revision 3, this touches **built** surface: the A3 unlock path (Wave C2 backend,
+Wave A2 frontend) is demoted to the thin-supply fallback, not deleted; the primary A3 front door is
+new build.
+
+| Changed | From (revision 3) | To (revision 4) |
+|---|---|---|
+| A3 front door | Free requirement → remote quotes → teasers → INR 149 unlock → selection | **Rate card**: Operations publishes an all-inclusive per-worker-day price per city+skill (wage ≥ floor + supervision margin + booking fee); the Customer books at the published rate |
+| A3 capture | Four-screen requirement | A **preset**: skill, headcount, dates + the 3–4 price-moving facts (floor, lift, carry distance, packing); rate and inclusion list shown before booking |
+| A3 dispatch | Bounded invitation waves, business-hours deadlines, vendors compete for quote slots | The **A1 offer cascade to leads** (capability + verified roster ≥ headcount): small wave, first accept wins, minutes-level timeouts; accepting the rate card is part of capability approval |
+| A3 platform fee | INR 149 unlock after a usable quote | A **booking fee charged at vendor accept** on the 2026-08-13 split rails; customer no-show forfeits (lead travel compensation + platform share); vendor no-show auto-refunds in full + free re-dispatch; free-cancel until T hours |
+| A3 selection | Customer selects among unlocked quotes; vendor reconfirms | None — first accepting lead is the crew; the verified booking fee opens the engagement |
+| A3 wages | Customer pays vendor directly (unspecified rhythm) | **Direct, daily, at day end, P2P** — never held by the platform; evening dual "Day settled?" taps with a UPI link at the exact published amount; settlement per worker-day present |
+| On-site extras | Scope amendment (unpriced) | Scope amendment at the card's **published add-on rates**; "extra demanded in cash" is a one-tap report → standing hit → removal on pattern |
+| Thin supply | Waves widen until SLA closure | Cascade widens with an honest holding state; past a configured threshold, **fall back to the quote flow** (teasers + unlock as built; fee status there is owner decision 14) |
+| Rate governance | n/a | Ops phone survey seeds (10–15 contractors per launch city); monthly review; **decline rate is an ops alarm** (sustained >threshold at a rate = raise it); any demand multiplier displayed, never silent |
+| New aggregates | — | `RateCard` (effective-dated, city+skill, fails closed) and `BookingFee` (charge/forfeit-split/refund state); `QuoteUnlock` scoped to the A3 fallback |
+
 ## Revision 3 summary — visit-first A5 (owner decision, 2026-08-12)
 
-Recorded in [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md). A3 is untouched.
+Recorded in [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md). A3 was untouched
+by this revision; revision 4 above has since replaced its front door.
 Everything in this table lands in the **unbuilt** P4 surface, so it is documentation change, not
 rework:
 
@@ -131,8 +160,8 @@ in M2, and activated with live providers in M3. No M2 exit gate may depend on a 
 P0 Scope and contract alignment
   -> P1 Partner registration and capability foundation
   -> P2 Customer requirement (free) and matching entry
-  -> P3 Vendor matching, clarification and proposals
-  -> P4 Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement
+  -> P3 Vendor matching, clarification and proposals (A3: the rate-card offer cascade)
+  -> P4 Access (A3 booking fee · A3-fallback unlock · A5 visit plan), selection, reconfirmation and engagement
   -> P5 Engagement spine and stage fulfilment
   -> P5A Workforce stages (A3)
   -> P5B Project stages (A5)
@@ -175,8 +204,9 @@ closed — `POST /proposals/` can now return `m2_proposal_below_wage_floor`, and
 area. Both list operations now declare the page envelope they always returned. Details in
 [backend-session.md](backend-session.md) §"C1 remainder outcome".
 
-Still unpublished, and named so nobody builds against them by mistake: the whole unlock/selection path
-(BE4 — no domain layer to wrap) and the engagement spine (C3).
+Still unpublished, and named so nobody builds against them by mistake: the whole A3 rate-card path
+(revision 4 — `RateCard`, the cascade caller, `BookingFee`; no domain layer exists yet). The unlock/
+selection path and the engagement spine have since been published (Waves C2 and C3).
 
 ## Session map — three columns
 
@@ -223,10 +253,15 @@ Engineering design — done:
 Owner decisions:
 
 - [x] Approve the commercial model **shape**. **Decided 2026-08-12** (ADR-0008): free requirement for
-  both archetypes; A3 keeps the INR 149 unlock after a usable quote exists; A5 is visit-first with a
-  tiered visit plan charged only at the first confirmed visit slot, estimates readable in full.
+  both archetypes; A5 is visit-first with a tiered visit plan charged only at the first confirmed
+  visit slot, estimates readable in full. The A3 half of that decision (INR 149 unlock) is
+  superseded by the next item.
+- [x] Approve the A3 rate-card model. **Decided 2026-08-13** (ADR-0009): Operations publishes an
+  all-inclusive per-worker-day rate per city+skill; dispatch to leads through the A1 offer cascade,
+  first accept wins; booking fee charged at vendor accept on the 2026-08-13 split rails; wages
+  direct, daily, P2P; the quote flow + unlock demoted to the thin-supply fallback.
 - [x] Approve one commercial mode per archetype (A3 lead-only, A5 managed) and reject per-variant
-  modes. Reaffirmed by ADR-0008.
+  modes. Reaffirmed by ADR-0008 and ADR-0009.
 
 Owner decisions — **blocking, not started**:
 
@@ -234,21 +269,29 @@ Owner decisions — **blocking, not started**:
   split percentages: vendor visit payout versus Vsolve platform share. (The split **shape** is
   decided 2026-08-13: pass-through to the visiting vendor on completed visit + usable estimate; no
   stage credit.)
-- [ ] Approve the quote-delivery SLA (A3), the visit-delivery SLA and post-visit estimate window
-  (A5), and vendor reconfirmation deadlines per category.
+- [ ] Approve the A3 booking-fee value, its forfeit split percentages (lead travel compensation
+  versus platform share) and the free-cancel window T, per category. (The split **shape** is
+  decided: it reuses the 2026-08-13 rails.)
+- [ ] Approve the seed rate-card values per launch city and skill (from the Operations phone
+  survey), the decline-alarm threshold and the monthly review calendar owner.
+- [ ] Decide whether the A3 fallback quote flow retains the INR 149 unlock or delivers its quotes
+  readable free (decision 14; until decided the fallback inherits the built behaviour).
+- [ ] Approve the quote-delivery SLA (A3 fallback), the visit-delivery SLA and post-visit estimate
+  window (A5), and vendor reconfirmation deadlines per category.
 - [ ] Approve the customer no-show policy for a confirmed visit: the vendor payout pays; decide the
   platform-share disposition.
 - [ ] Approve the definition of a usable quote/estimate, the out-of-budget rule and the
   non-responsive rejection cap.
 - [ ] Approve commission visibility on A5 proposals and the single tax basis for competing quotes.
-- [ ] Approve GST, invoicing and principal-versus-agent treatment per mode, including the unlock fee
-  and the visit-plan fee.
+- [ ] Approve GST, invoicing and principal-versus-agent treatment per mode, including the A3
+  booking fee (and its forfeit travel compensation) and the A5 visit-plan fee.
 - [ ] Approve the worker insurance, injury liability and safety-incident position.
-- [ ] Approve the minimum-wage floor source and enforcement per state and skill.
+- [ ] Approve the minimum-wage floor source and enforcement per state and skill — now also the
+  floor under every published rate card's wage component.
 - [ ] Resolve the wallet contradiction between this plan and `milestones.md` M3.
 - [ ] Confirm the M2/M3 milestone boundary given that `milestones.md` excludes payments and OTP from M2.
-- [ ] Approve the unit economics model: Operations touches per request against INR 149 (A3) and per
-  visit against the plan tiers (A5).
+- [ ] Approve the unit economics model: Operations touches per request against the booking fee's
+  platform share (A3) and per visit against the plan tiers' platform share (A5).
 - [ ] Freeze which launch categories are A3 and which are A5, confirming per A5 category that a
   physical visit is the right consult shape.
 - [ ] Approve contact disclosure, cancellation, dispute, payout, tax and compliance policies.
@@ -332,11 +375,16 @@ path that is live.
 - [ ] An A5 requirement carries a chosen visit plan from the review screen (`choose_visit_plan`,
   charges nothing, bounds the wave); an A3 requirement never renders the chooser. **Revision 3 — not
   started.**
+- [ ] An A3 requirement is captured as the preset — skill, headcount, dates and the 3–4
+  price-moving facts — with the published rate and its inclusion list on the screen before booking
+  (`book_at_published_rate`); no live rate card for the city+skill refuses instant capture with
+  `m2_rate_card_unavailable` and routes to the quote flow. **Revision 4 — not started.**
 - [~] Voice capture is a first-class fast path with language recorded for routing.
   Language and transcript fields carried. **No transcription adapter, no capture UI.**
 - [~] Requirement submission emits matching work with no payment precondition.
   `m2.requirement.submitted` emitted through the M1 outbox, keyed so a replay cannot double-match.
-- [ ] Customer request timeline shows matching status, teasers, the SLA deadline and recovery states.
+- [ ] Customer request timeline shows matching status, the cascade holding state and booking-fee
+  state (A3), teasers (fallback), the SLA deadline and recovery states.
   Frontend not started.
 
 **Exit gate:** A submitted requirement is free, complete, correctly classified and enters matching
@@ -382,7 +430,16 @@ Session B Wave B2 (`FE-301..313`) is not started.
   and `M2VariantConfiguration.wage_floor_skill`, both Operations-owned — and never accepted from the
   vendor. Unmapped either way refuses with `m2_wage_floor_unavailable`, so the guard **fails closed
   and blocks A3 quoting** until Operations loads the mapping and a floor (owner decision 7).
-  `[~] built — static gates green, owner manual verification pending`.
+  `[~] built — static gates green, owner manual verification pending`. **Revision 4 extends the
+  same guard to `publish_rate_card`: a card's wage component below the floor cannot be published.**
+- [ ] The A3 rate-card cascade offers the booking to leads whose approved capability and verified
+  roster cover the headcount, through the A1 offer engine — small wave, first accept wins,
+  minutes-level timeouts; accept takes a roster-sized capacity hold (`accept_crew_offer`); declines
+  record a reason and feed the decline-rate alarm; past the configured threshold the requirement
+  falls back to the quote flow with an honest explanation (`fall_back_to_quote_flow`).
+  **Revision 4 — not started.**
+- [ ] `RateCard` is Operations-published, effective-dated per city+skill, fails closed, and its
+  decline-rate alarm pages Operations at the configured threshold. **Revision 4 — not started.**
 - [x] Competing proposals for one requirement use a single tax basis and display commission treatment.
 - [x] Identity clustering prevents one beneficial owner filling more than one slot.
 - [ ] Price-band outliers raise a review signal without automatic penalty.
@@ -397,21 +454,41 @@ Session B Wave B2 (`FE-301..313`) is not started.
 - [~] Contact disclosure and clarification events are consented, limited and auditable.
   Contact-sharing heuristic flags for review without auto-banning. **Disclosure itself is not built.**
 
-**Exit gate:** Usable quotes are delivered inside the declared SLA or the documented replacement and
-closure path executes automatically. Nothing has been charged. (Revision 3: this gate demonstrates
-end to end on A3; the A5 estimate path additionally needs P4's visit surface, since an A5 estimate
-requires a completed visit.) **Gate not passed** — the "nothing charged" half holds; automatic
-replacement does not exist.
+**Exit gate:** A booked A3 crew reaches an accepted lead inside the cascade promise or falls back
+honestly (revision 4); usable quotes are delivered inside the declared SLA on the fallback, or the
+documented replacement and closure path executes automatically. Nothing has been charged before a
+lead accepts. (Revision 3: the quote half of this gate demonstrates end to end on the A3 fallback;
+the A5 estimate path additionally needs P4's visit surface, since an A5 estimate
+requires a completed visit.) **Gate not passed** — the "nothing charged" half holds; the cascade
+caller does not exist; automatic replacement does not exist.
 
-### P4 - Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement
+### P4 - Access (A3 booking fee · A3-fallback unlock · A5 visit plan), selection, reconfirmation and engagement
 
-**Status `[~]`** — the whole backend surface is built and published at contract 1.24.0 (Wave C2,
-13 August). Revision 3 split this phase into the two archetype front doors, and nothing in it was
-built before the split, so no rework exists. **The frontend halves are in flight** (Wave A2 and
-`FE-314`/`315`), which is why every row below is `[~]` and not `[x]`: a published path nobody can
+**Status `[~]`** — the quote-unlock and visit-plan backend surface is built and published at
+contract 1.24.0 (Wave C2, 13 August), and the Customer access surface is built (Wave A2). Revision 4
+(2026-08-13) demotes the whole A3 unlock half to the **thin-supply fallback** and adds the primary
+A3 front door — rate-card booking fee — as **new, unstarted** work; nothing built is deleted.
+**The remaining frontend halves are in flight** (`FE-314`/`315`), and a published path nobody can
 reach has not demonstrated anything.
 
-A3 — quote unlock (unchanged from revision 2):
+A3 — rate-card booking fee (revision 4, not started):
+
+- [ ] The booking fee is server-priced from the rate card's fee component, effective-dated and
+  fail-closed, and offered only against a held accepted offer
+  (`create_booking_fee_checkout` refuses otherwise with `m2_booking_fee_not_chargeable`).
+- [ ] One successful payment charges exactly one booking fee under duplicate webhooks and retries;
+  the verified provider callback — never a client redirect — hardens the booking and creates the
+  engagement (`complete_booking_fee`).
+- [ ] Customer no-show, locked gate or a cancel inside T hours executes the forfeit split: a
+  configured share pays the lead as travel compensation through the M1 payout rails, the remainder
+  is platform share; reconciliation is `fee = travel compensation + platform share` in paise.
+- [ ] Vendor no-show auto-refunds the fee in full, triggers a free re-dispatch through the cascade
+  and hits standing; a cancel at or beyond T hours refunds in full.
+- [ ] Contact is released and both parties receive the booking record — published rate, inclusion
+  list, headcount, dates — at engagement creation, exactly as `LEAD_ONLY` requires.
+
+A3 fallback — quote unlock (built; demoted from primary by revision 4; fee status there is owner
+decision 14):
 
 - [~] Quote teasers expose verification, rating, vendor type and a price band only. Published at
   1.21.0; the full-quote read behind the unlock is `GET /requirements/{id}/quotes/` at 1.24.0.
@@ -447,18 +524,19 @@ Shared:
 - [~] Validity expiry offers a one-tap re-validation request that reuses the existing unlock or plan.
 - [~] Rejection, expiry or changed availability preserves the unlock/plan entitlement and offers the
   next quote, estimate or a replacement visit free. The proposal is `LAPSED`, never `REJECTED`.
-- [~] A3 completes as a connection with released contact; A5 opens stage funding at face value while
-  consumed visit shares pay out (vendor payout + platform share) through the M1 rails.
+- [~] A3 (fallback) completes as a connection with released contact; A5 opens stage funding at face
+  value while consumed visit shares pay out (vendor payout + platform share) through the M1 rails.
 - [~] Managed stage payment is collected before protected A5 work starts. Stages fund in order and
   one at a time; `contact_released_at` and `work_may_start_at` stay null until the first is funded.
 - [~] Both parties receive the final scope, commercial terms, cancellation policy and receipt.
   Receipts allocate from `DocumentSequence` under an `M2A-` series; the **GST and invoicing basis of
-  the unlock and visit-plan fees is owner decision 5 and open.**
+  the booking, unlock and visit-plan fees is owner decision 5 and open.**
 
-**Exit gate:** Money is collected only against a real accepted commitment — a usable quote (A3) or a
-confirmed visit (A5); selection is not treated as a booking until vendor reconfirmation and the
-archetype's own confirmation condition both succeed. **Gate not passed** — the backend half holds
-end to end, and neither front door is reachable in a browser until Wave A2 and `FE-314`/`315` land.
+**Exit gate:** Money is collected only against a real accepted commitment — an accepted crew offer
+(A3), a usable quote (A3 fallback) or a confirmed visit (A5); a booking is not treated as confirmed
+until the verified fee callback (A3) or vendor reconfirmation plus the archetype's own confirmation
+condition (A3 fallback, A5) succeed. **Gate not passed** — the built halves hold end to end, the
+rate-card front door does not exist yet, and the remaining frontend is `FE-314`/`315`.
 
 ### P5 - Engagement spine
 
@@ -479,7 +557,17 @@ agreement, amendment or approval subsystem exists.
 - [ ] Supervisor-level daily attendance confirmation with one-tap Customer confirm or dispute.
 - [ ] Per-worker discrepancy detail is captured only when the Customer disputes.
 - [ ] Missing check-out settles at the agreed shift length, flagged, and is disputed only on Customer dispute.
-- [ ] Unapproved overtime is unpaid unless confirmed inside the retroactive window; terms state this up front.
+- [ ] Each evening both sides get the one-tap "Day settled?" prompt with a UPI QR/deep-link to the
+  lead's VPA at the exact published amount; the money is P2P, the platform never holds wages, and a
+  one-sided non-payment claim without the tap trail reaches Operations as unproven. **Revision 4.**
+- [ ] The day settles at the present workers' published rate (per worker-day, never per job); on a
+  shortfall the Customer chooses continue short / add a day / cancel the shortfall free; repeated
+  shortfall hits matching priority. **Revision 4.**
+- [ ] On-site extras execute as one-tap scope amendments at the card's published add-on rates before
+  they count; "extra demanded in cash" is a one-tap Customer report (`report_cash_demand`) that hits
+  standing and removes on pattern. **Revision 4.**
+- [ ] Unapproved overtime is unpaid unless confirmed inside the retroactive window at the card's
+  published overtime rate; terms state this up front.
 - [ ] No-show, partial crew, late arrival, Customer unavailable and unsafe site are auditable.
 - [ ] Safety incidents are first-class records with their own report flow, not cancellation reasons.
 - [ ] Customer and vendor confirm completion; exceptions enter a case instead of auto-settlement.
@@ -504,10 +592,13 @@ action, and an abandoned project has a path to being finished.
 
 ### P6 - Recovery, refunds, disputes and Operations
 
-- [ ] Operations has one request workspace spanning matching, unlock, proposals, engagement and cases.
+- [ ] Operations has one request workspace spanning matching, the cascade, booking fees, unlock,
+  proposals, engagement and cases, plus the rate-card surface: publish/revise per city+skill and the
+  decline-rate alarm.
 - [ ] Assisted clarification and assisted quote capture act on behalf of a named Partner with audit logs,
-  and assisted A3 quote capture is treated as a primary path.
-- [ ] Requirement reclassification preserves any unlock and restarts matching without a second charge.
+  and assisted A3 quote capture is treated as a primary path on the fallback.
+- [ ] Requirement reclassification preserves any paid value (booking fee, unlock or plan) and
+  restarts matching without a second charge.
 - [ ] Cancellations after contact disclosure require dual confirmation or Operations review.
 - [ ] Refunds are idempotent, ledger-backed, reconciled and communicated without false guarantees.
 - [ ] Off-platform leakage signals trigger proportionate review, not unsupported automatic punishment.
@@ -608,3 +699,4 @@ table promises the owner something to run.
 | 2026-08-13 | Client regeneration at 1.24.0 (integrator) | `[~]` green on 4 of 5 packages, `apps/partner` handed to Session B | **The regeneration earned its keep immediately.** Wave C2 added two `reason` choice fields, which made drf-spectacular disambiguate all three and **rename the bare `ReasonEnum` to `DispatchCommandRequestReasonEnum`** — a published component `apps/admin/features/dispatch-recovery/model/commands.ts` imports by name, in an app that had not changed. Pinned back in `ENUM_NAME_OVERRIDES` rather than absorbed in the client, because the rename was the defect; `pnpm typecheck` is the check that exists for exactly this and it is what caught it. Three fixtures corrected for fields that are **required rather than optional** (`RequirementSummary.service_name` and the four `RequirementDraft` tracking fields). `apps/partner` left knowingly red and handed to Session B as item zero of its wave — its enquiry fixtures need the same treatment and `proposal-state.ts` needs copy for `ACCEPTED` and `LAPSED`, the two proposal states C2 published, which are **not** the same as `REJECTED`. Doing it as integrator would have been reaching into another column's files. | Claude |
 | 2026-08-12 | Wave A1 wiring (Session A) | `[~]` 15 of 15 built and wired, owner verification pending | **The Customer requirement flow is reachable.** Four routes under `app/(flow)/requests/` — `My requests`, one request's page, the category-first entry and the four screens — all `force-dynamic`, `robots: noindex`, behind one `CustomerShell` gate. `features/requirement/queries.ts` + `packages/query/src/m2-requirement.ts` consume requirement list/create/read/patch/submit/duplicate-check/timeline at 1.21.0. The three stale M2 entries removed from the Customer boundary guard; `contract-pending/` deleted per its own README and its rule re-stated as `features/requirement/boundary.test.ts` (view/model may not name the generated client, through either package), carrying the `SCREENS.length === 4` assertion across. Adapters re-pointed: `flexibility_days` written through one named constant, `PHOTO`→`IMAGE`, `CLEAN`→`VERIFIED` with an unknown scan state failing **closed**, plus two the handover note missed (`answers`/`detail` arrive as `unknown`; no `file_name` at all). `FE-211` built — the consequence and the confirmation — with `onConfirmEdit` deliberately unsupplied, because no amend command exists and a confirmation that reaches a 409 teaches a Customer that confirming does nothing. **One field was missing from a screen**: `requested_start` is required by `_assert_submittable` and matched on by the duplicate check, and screen 2 did not ask for it — it would have been invisible until a real submit. **Eleven contract gaps logged**, the two largest being no merge endpoint for `GAP-004` and two separately-authored question schemas whose mismatch surfaces only when the Customer presses Send. `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` **9 of 9**, `pnpm build --filter=customer` green. **No tests were run** — 10 files written and queued above. | Claude |
 | 2026-08-13 | Build sprint — GATE 1 (Sessions A + B merged) | `[~]` built — static gates green, owner manual verification pending | **Two in-flight frontend waves reconciled, finished and merged into one commit.** Session A shipped requirement **attachments** (`FE-205`: presign → PUT → finalize → delete as one mutation, resumable from a held presign, finalize under a key derived from the upload id so a retried finalize replays Django's `201` instead of creating a second attachment) and the **voice fast path** (`FE-204`: `voice-note-recorder.tsx` + `model/language.ts`, language recorded for routing). Session B **mounted the built-but-dark registration surface** on four `/apply` routes — business profile, capabilities, insurance, masked demand preview — plus `features/capability/queries.ts`, `crew/queries.ts` and `session/use-partner-role.ts`, and handled the sixth capability status **`REJECTED`** (ranked above `SUSPENDED`, renders the reviewer's own words, terminal but never blocking a fresh request). `features/capability/contract-pending/` deleted per its own README, its rule carried across as `features/capability/boundary.test.ts`. **§7 drained by the orchestrator:** the four `errors.ts` codes and the `m2-keys.ts` `duplicates` rename confirmed landed; **both compensating list narrowings deleted** now that 1.23.0 declares `RequirementSummaryPage`/`EnquirySummaryPage` — `readRequirementList` and `readEnquiryPage` take the generated page types, and the test cases covering the deleted bare-array branches went with them (the `e2e/support/responsive.ts` hook is deferred: `e2e/**` is test code the amendment does not touch during the sprint). **Static gates on the merged tree: backend `quality-static.cmd` green** (ruff format + check across 338 files, strict MyPy across 218 source files, `makemigrations --check` no changes); **frontend `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` 9 of 9 including `generate:check` at contract 1.23.0, `pnpm build --filter=customer` and `--filter=partner` both green.** No test written or run (build-first amendment). | Claude |
+| 2026-08-13 | Revision 4 — rate-card A3 | Docs revised | **Owner decision applied across the plan set.** ADR-0009 written and indexed; ADR-0007/0008 status lines annotated. A3 becomes rate-card-first: Operations publishes an all-inclusive per-worker-day rate per city+skill (wage ≥ floor + supervision margin + booking fee, printed inclusion list, effective-dated and fail-closed on the `M2AccessPrice` pattern); the requirement narrows to a preset asking the 3–4 price-moving facts; dispatch to leads through the A1 offer cascade (first accept wins, roster-sized holds); the booking fee charges at vendor accept on the 2026-08-13 split rails (customer no-show forfeits to lead travel compensation + platform share; vendor no-show auto-refunds + free re-dispatch; free-cancel until T hours); wages direct, daily, P2P with the dual "Day settled?" taps + UPI link; extras via amendments at published add-on rates; `report_cash_demand` one-tap; thin supply falls back to the built quote flow (unlock status there = owner decision 14). New aggregates `RateCard` + `BookingFee`; new commands and 4 error codes in `07`; decline rate is an ops alarm. New blocking owner decisions 12–14. **The unlock surface (Waves C2/A2) is demoted to fallback, not deleted; every rate-card item is new, unstarted build.** Updated: `README.md`, `07`, `task.md`, `02`, `03`, `04`, `05`, `06`, `08`, `09`, all three session files, `frontend-execution-plan.md`, ADR index. | Claude |
