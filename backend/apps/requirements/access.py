@@ -48,6 +48,7 @@ from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
     RequirementTransitionError,
     UnlockNotAvailableError,
+    UnlockRequiredError,
     VisitPlanNotChargeableError,
     VisitPlanRequiredError,
     VisitSlotUnavailableError,
@@ -61,6 +62,7 @@ from apps.requirements.models import (
     VisitPlan,
     VisitPlanShare,
 )
+from apps.requirements.services import record_transition
 
 A3 = ServiceVariant.BookingArchetype.A3_TIME_BLOCK
 A5 = ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
@@ -108,6 +110,16 @@ def charged_visit_plan(requirement: CustomerRequirement) -> VisitPlan | None:
     return plan
 
 
+def latest_unlock(requirement: CustomerRequirement) -> QuoteUnlock | None:
+    """The most recent unlock in any state, for the read that has to explain a failed one.
+
+    `active_unlock` answers "may they read"; this answers "what happened". A `PENDING` attempt the
+    provider never confirmed and a `FAILED` one whose amount did not match are both states the
+    Customer needs told, and neither is readable.
+    """
+    return QuoteUnlock.objects.filter(requirement=requirement).order_by("-created_at").first()
+
+
 def customer_may_read_full_quotes(requirement: CustomerRequirement) -> bool:
     """Whether the paywall is open.
 
@@ -119,6 +131,21 @@ def customer_may_read_full_quotes(requirement: CustomerRequirement) -> bool:
     if requirement.archetype == A5:
         return charged_visit_plan(requirement) is not None
     return active_unlock(requirement) is not None
+
+
+def assert_customer_may_read_full_quotes(requirement: CustomerRequirement) -> None:
+    """The same rule as a refusal, for the read that enforces it.
+
+    Two different codes, because the two recoveries are different actions on different screens: A3
+    says "unlock the quotes" (`403 m2_unlock_required`) and A5 says "your visit plan is not paid
+    for yet" (`409 m2_visit_plan_required`). Collapsing them would send an A5 Customer looking for
+    an unlock button that does not exist on their flow.
+    """
+    if customer_may_read_full_quotes(requirement):
+        return
+    if requirement.archetype == A5:
+        raise VisitPlanRequiredError()
+    raise UnlockRequiredError()
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +226,17 @@ def create_unlock_checkout(
         payment_attempt=attempt,
         status=QuoteUnlock.Status.PENDING,
     )
+    # Who started this charge, and when. The requirement does not move state here — it moves on the
+    # verified callback — but a payment dispute asks "who authorised this", and the answer has to
+    # exist before the money does rather than being reconstructed from a provider log afterwards.
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="unlock_checkout_started",
+        reason=f"quote_unlock:{unlock.id} for {price.amount_paise} paise",
+    )
     return unlock, attempt
 
 
@@ -253,6 +291,17 @@ def complete_unlock(*, payment_attempt_id: uuid.UUID) -> QuoteUnlock | None:
     if requirement.status == CustomerRequirement.Status.QUOTES_READY:
         requirement.status = CustomerRequirement.Status.UNLOCKED
         requirement.save(update_fields=("status", "updated_at"))
+        # `actor=None` and it has to be: the party that moved this is the provider callback, not a
+        # person. Attributing it to the Customer would put a signature on a state change they did
+        # not make, in the trail that exists to prove who made which one.
+        record_transition(
+            requirement=requirement,
+            from_status=CustomerRequirement.Status.QUOTES_READY,
+            to_status=CustomerRequirement.Status.UNLOCKED,
+            actor=None,
+            reason_code="unlock_payment_verified",
+            reason=f"quote_unlock:{unlock.id}",
+        )
     enqueue_outbox_event(
         aggregate_type="requirement",
         aggregate_id=requirement.id,
@@ -353,6 +402,18 @@ def choose_visit_plan(*, requirement_id: uuid.UUID, plan_size: int, actor: User)
     plan.chosen_at = timezone.now()
     plan.save()
     _create_shares(plan)
+    # Re-choosing is allowed while nothing is committed, so this is an append-only record of what
+    # the Customer was actually shown and picked — the tier and the price snapshot both. The plan
+    # row only ever carries the latest choice; a plan that was resized after a wave went out is a
+    # question the invitation count will raise later, and this is where it gets answered.
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="visit_plan_chosen",
+        reason=f"{plan_size} visit(s) at {price.amount_paise} paise",
+    )
     return plan
 
 
@@ -375,6 +436,26 @@ def _create_shares(plan: VisitPlan) -> list[VisitPlanShare]:
             )
         )
     return list(VisitPlanShare.objects.bulk_create(shares))
+
+
+def visit_plan_checkout_availability(requirement: CustomerRequirement) -> bool:
+    """Mirrors `create_visit_plan_checkout`'s guard, for the screen's disabled state.
+
+    A read, never a decision — the same relationship `unlock_availability` has to the unlock
+    command. True means a vendor is holding a slot right now and the plan is unpaid; the command
+    re-checks under the requirement's row lock, because a hold that lapsed a second ago is exactly
+    the state a stale `true` lives in.
+    """
+    if requirement.archetype != A5:
+        return False
+    plan = VisitPlan.objects.filter(requirement=requirement).first()
+    if plan is None or plan.status in VisitPlan.CHARGED_STATUSES or not plan.charge_required:
+        return False
+    return SiteVisit.objects.filter(
+        requirement=requirement,
+        status=SiteVisit.Status.REQUESTED,
+        plan_share__isnull=False,
+    ).exists()
 
 
 def assert_visit_plan_chosen(requirement: CustomerRequirement) -> VisitPlan:
@@ -534,6 +615,13 @@ def _mark_visits_booked(requirement: CustomerRequirement) -> None:
     if requirement.status == CustomerRequirement.Status.MATCHING:
         requirement.status = CustomerRequirement.Status.VISITS_BOOKED
         requirement.save(update_fields=("status", "updated_at"))
+        record_transition(
+            requirement=requirement,
+            from_status=CustomerRequirement.Status.MATCHING,
+            to_status=CustomerRequirement.Status.VISITS_BOOKED,
+            actor=None,
+            reason_code="first_visit_slot_confirmed",
+        )
 
 
 def _activate_free_plan(plan: VisitPlan) -> None:
@@ -593,6 +681,14 @@ def create_visit_plan_checkout(
     plan.status = VisitPlan.Status.PENDING
     plan.payment_attempt = attempt
     plan.save(update_fields=("status", "payment_attempt", "updated_at"))
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="visit_plan_checkout_started",
+        reason=f"visit_plan:{plan.id} for {plan.chargeable_paise} paise",
+    )
     return plan, attempt
 
 
@@ -803,8 +899,9 @@ def _refundable_attempt_id(plan: VisitPlan) -> uuid.UUID | None:
     """
     if plan.payment_attempt_id is not None:
         return plan.payment_attempt_id
-    if plan.credit_unlock_id is not None:
-        return plan.credit_unlock.payment_attempt_id
+    credit_unlock = plan.credit_unlock
+    if credit_unlock is not None:
+        return credit_unlock.payment_attempt_id
     return None
 
 
@@ -824,8 +921,8 @@ def _earn_share(
 
     **The progressive payout gate is applied as a hold, not a refusal.** A vendor without verified
     bank details has still earned the money; they simply cannot be paid it yet, so the entry is
-    written `PENDING` and `release_payout_hold` moves it when the account lands. Refusing to write
-    the entry would lose the debt the moment the sweep moved on.
+    written `PENDING` and `release_visit_payout_hold` below moves it when the account lands.
+    Refusing to write the entry would lose the debt the moment the sweep moved on.
     """
     locked = VisitPlanShare.objects.select_for_update().select_related("plan").get(pk=share.pk)
     if locked.status in (VisitPlanShare.Status.EARNED, VisitPlanShare.Status.REFUNDED):
@@ -914,6 +1011,46 @@ def refund_share(*, share_id: uuid.UUID, reason_code: str) -> VisitPlanShare:
     )
     _settle_plan_if_complete(share.plan_id)
     return share
+
+
+def held_visit_payout_share_ids() -> list[uuid.UUID]:
+    """Earned visit payouts still waiting on the vendor's bank details.
+
+    `payouts.release_payout_hold` cannot do this job: it resolves an entry **by Booking**, and a
+    visit payout has no Booking. That is not an oversight in either place — the M1 rule is one
+    earning per Booking, and a visit is not one — so the progressive gate needs its own release,
+    and this is the selector behind it.
+    """
+    return list(
+        VisitPlanShare.objects.filter(
+            status=VisitPlanShare.Status.EARNED,
+            ledger_entry__isnull=False,
+            ledger_entry__status=PartnerLedgerEntry.Status.PENDING,
+        ).values_list("id", flat=True)
+    )
+
+
+@transaction.atomic
+def release_visit_payout_hold(*, share_id: uuid.UUID) -> PartnerLedgerEntry | None:
+    """Make one earned visit payout payable, once the vendor's account is verified.
+
+    Idempotent by state, like every other sweep command here. A vendor who never adds bank details
+    keeps a `PENDING` entry indefinitely, which is the honest record: the debt is real and unpaid,
+    and deleting it to tidy the queue would be writing off somebody else's money.
+    """
+    share = (
+        VisitPlanShare.objects.select_for_update()
+        .select_related("ledger_entry", "partner")
+        .get(pk=share_id)
+    )
+    entry = share.ledger_entry
+    if entry is None or entry.status != PartnerLedgerEntry.Status.PENDING:
+        return entry
+    if share.partner is None or payable_account(share.partner) is None:
+        return entry
+    entry.status = PartnerLedgerEntry.Status.AVAILABLE
+    entry.save(update_fields=("status", "updated_at"))
+    return entry
 
 
 def _mark_share_replaced(*, share: VisitPlanShare, reason_code: str) -> VisitPlanShare:
@@ -1099,32 +1236,32 @@ def carry_money_across_reclassification(
             # active and refundable rather than being silently spent.
             return
         tier = tiers[0]
-        plan = VisitPlan.objects.filter(requirement=requirement).first() or VisitPlan(
+        credited = VisitPlan.objects.filter(requirement=requirement).first() or VisitPlan(
             requirement=requirement
         )
-        plan.plan_size = tier.row.plan_size
-        plan.price = tier.row
-        plan.price_paise = tier.amount_paise
-        plan.vendor_payout_basis_points = tier.vendor_payout_basis_points or 0
-        plan.credit_paise = min(unlock.price_paise, tier.amount_paise)
-        plan.credit_unlock = unlock
-        plan.status = VisitPlan.Status.CHOSEN
-        plan.save()
-        plan.shares.all().delete()
-        _create_shares(plan)
+        credited.plan_size = tier.row.plan_size
+        credited.price = tier.row
+        credited.price_paise = tier.amount_paise
+        credited.vendor_payout_basis_points = tier.vendor_payout_basis_points or 0
+        credited.credit_paise = min(unlock.price_paise, tier.amount_paise)
+        credited.credit_unlock = unlock
+        credited.status = VisitPlan.Status.CHOSEN
+        credited.save()
+        credited.shares.all().delete()
+        _create_shares(credited)
         unlock.status = QuoteUnlock.Status.CONSUMED
         unlock.consumed_at = timezone.now()
         unlock.save(update_fields=("status", "consumed_at", "updated_at"))
         return
 
     if from_archetype == A5 and to_archetype == A3:
-        plan = VisitPlan.objects.select_for_update().filter(requirement=requirement).first()
-        if plan is None:
+        existing = VisitPlan.objects.select_for_update().filter(requirement=requirement).first()
+        if existing is None:
             return
-        if plan.status == VisitPlan.Status.CHOSEN:
-            plan.status = VisitPlan.Status.VOID
-            plan.voided_at = timezone.now()
-            plan.save(update_fields=("status", "voided_at", "updated_at"))
+        if existing.status == VisitPlan.Status.CHOSEN:
+            existing.status = VisitPlan.Status.VOID
+            existing.voided_at = timezone.now()
+            existing.save(update_fields=("status", "voided_at", "updated_at"))
             return
-        for share in plan.shares.filter(status__in=VisitPlanShare.OPEN_STATUSES):
+        for share in existing.shares.filter(status__in=VisitPlanShare.OPEN_STATUSES):
             refund_share(share_id=share.id, reason_code="m2_requirement_reclassified")

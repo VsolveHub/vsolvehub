@@ -1,7 +1,7 @@
 """Server-authoritative group payment, refund, reconciliation and document commands."""
 
 from collections.abc import Iterable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from django.conf import settings
@@ -223,7 +223,7 @@ def initiate_standalone_payment_attempt(
     amount_paise: int,
     idempotency_key: str,
     currency: str = "INR",
-    expires_at: object = None,
+    expires_at: datetime | None = None,
 ) -> PaymentAttempt:
     """Start a charge that has no `CheckoutSession` behind it.
 

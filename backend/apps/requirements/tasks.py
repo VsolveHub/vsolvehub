@@ -25,7 +25,7 @@ from uuid import UUID
 
 from celery import shared_task
 
-from apps.requirements import attachments, matching, proposals, services
+from apps.requirements import access, attachments, engagements, matching, proposals, services
 from apps.requirements.models import (
     CustomerRequirement,
     RequirementAttachmentUpload,
@@ -174,6 +174,152 @@ def sweep_expired_proposals() -> int:
     swept = 0
     for proposal_id in proposals.expired_proposal_ids()[:SWEEP_BATCH_SIZE]:
         expire_one_proposal.delay(str(proposal_id))
+        swept += 1
+    return swept
+
+
+# ---------------------------------------------------------------------------
+# Visit-plan share settlement (`M2-BE-425`)
+#
+# Four clocks, four sweeps, and they are separate because their outcomes are. A slot nobody took
+# refunds; a slot somebody took and abandoned refunds *or* buys a replacement; a hold nobody paid
+# for simply lapses. Collapsing them would make one policy decision stand for three.
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def refund_one_unfilled_share(_self: object, share_id: str) -> None:
+    access.refund_share(share_id=UUID(share_id), reason_code="m2_visit_slot_never_filled")
+
+
+@shared_task
+def sweep_unfilled_visit_shares() -> int:
+    """Refund every plan slot no vendor ever took, once the visit-delivery SLA passes.
+
+    This is the promise that makes the A5 front door honest: a Customer who paid for three visits
+    and received two gets the third one's share back **without a support ticket**. `refund_share`
+    is idempotent by state, so two overlapping ticks issue one refund.
+    """
+    swept = 0
+    for share_id in access.unfilled_share_ids()[:SWEEP_BATCH_SIZE]:
+        refund_one_unfilled_share.delay(str(share_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def settle_one_missed_estimate(_self: object, site_visit_id: str) -> None:
+    access.settle_missed_estimate(site_visit_id=UUID(site_visit_id))
+
+
+@shared_task
+def sweep_missed_estimate_windows() -> int:
+    """A vendor visited, produced nothing, and the post-visit window closed.
+
+    The visit-side analogue of a non-responsive quote. The share refunds or buys a free replacement
+    visit depending on whether the plan still has time to run — `settle_missed_estimate` decides,
+    because that is a policy question and this only decides when to ask it.
+    """
+    swept = 0
+    for visit_id in access.missed_estimate_visit_ids()[:SWEEP_BATCH_SIZE]:
+        settle_one_missed_estimate.delay(str(visit_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def release_one_expired_visit_hold(_self: object, site_visit_id: str) -> None:
+    access.release_expired_visit_hold(site_visit_id=UUID(site_visit_id))
+
+
+@shared_task
+def sweep_expired_visit_holds() -> int:
+    """Hand back the grid slot of a first visit the Customer never paid for.
+
+    Nothing was charged, so nothing is refunded — the hold lapses, the share returns to `OPEN` and
+    the vendor's time goes back on the availability grid. Without this sweep "the hold expires
+    harmlessly if they never pay" would be a sentence with no code behind it, and a vendor's diary
+    would carry a dead reservation forever.
+    """
+    swept = 0
+    for visit_id in access.expired_visit_hold_ids()[:SWEEP_BATCH_SIZE]:
+        release_one_expired_visit_hold.delay(str(visit_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def release_one_visit_payout_hold(_self: object, share_id: str) -> None:
+    access.release_visit_payout_hold(share_id=UUID(share_id))
+
+
+@shared_task
+def sweep_visit_payout_holds() -> int:
+    """Make earned visit payouts payable once the vendor's bank details land.
+
+    The progressive gate holds the money, it does not cancel it: a vendor who completed a visit and
+    delivered an estimate is owed regardless of when they get round to onboarding their account.
+    `payouts.release_payout_hold` cannot do this — it resolves by Booking, and a visit has none.
+    """
+    swept = 0
+    for share_id in access.held_visit_payout_share_ids()[:SWEEP_BATCH_SIZE]:
+        release_one_visit_payout_hold.delay(str(share_id))
+        swept += 1
+    return swept
+
+
+# ---------------------------------------------------------------------------
+# Vendor reconfirmation (`M2-BE-408`, `409`)
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def expire_one_selection(_self: object, selection_id: str) -> None:
+    engagements.expire_selection(selection_id=UUID(selection_id))
+
+
+@shared_task
+def sweep_expired_selections() -> int:
+    """Release a selection the chosen vendor never answered.
+
+    The Customer's unlock or visit plan survives it untouched — that is the whole point of the
+    command this calls — so the requirement returns to the state it was selectable from and the
+    next quote costs nothing more. Without the sweep a silent vendor would freeze a requirement in
+    `SELECTED` until its needed-by date.
+    """
+    swept = 0
+    for selection_id in engagements.expired_selection_ids()[:SWEEP_BATCH_SIZE]:
+        expire_one_selection.delay(str(selection_id))
         swept += 1
     return swept
 

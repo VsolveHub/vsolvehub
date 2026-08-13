@@ -27,6 +27,7 @@ from apps.carts.availability import (
     reserved_partner_ids,
     usable_location_fix,
 )
+from apps.catalog.models import ServiceVariant
 from apps.partners.capabilities import (
     capability_serves_area,
     clustered_partner_ids,
@@ -53,6 +54,7 @@ from apps.requirements.models import (
     CustomerRequirement,
     RequirementSnapshot,
     VendorInvitation,
+    VisitPlan,
 )
 from apps.requirements.sla import add_business_hours
 
@@ -598,6 +600,25 @@ def live_slot_count(requirement: CustomerRequirement) -> int:
 
 
 def _max_slots(requirement: CustomerRequirement) -> int:
+    """How many vendors may hold a slot on this requirement at once.
+
+    **A5 is bounded by the visit plan, not by `max_quotes`** (`M2-BE-215`). The plan size *is* the
+    product the Customer chose — "two professionals will visit" — so inviting on the variant's quote
+    ceiling instead would send four vendors to a home that paid for two, and the fourth would find
+    every share taken. `VOID` is excluded because a voided plan bought nothing.
+
+    A5 with no plan falls through to the configured ceiling rather than to zero:
+    `submit_requirement` already refuses an A5 requirement without a plan, so reaching here without
+    one means Operations reclassified an in-flight A3, and stalling matching is the wrong recovery.
+    """
+    if requirement.archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        plan = (
+            VisitPlan.objects.filter(requirement=requirement)
+            .exclude(status=VisitPlan.Status.VOID)
+            .first()
+        )
+        if plan is not None:
+            return plan.plan_size
     configuration = requirement.configuration
     return configuration.max_quotes if configuration is not None else 3
 

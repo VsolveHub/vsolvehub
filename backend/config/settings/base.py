@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.23.0",
+    "VERSION": "1.24.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -342,6 +342,38 @@ SPECTACULAR_SETTINGS = {
         "PartnerBusinessTypeEnum": "apps.partners.models.PartnerBusinessProfile.BusinessType",
         "ProgressiveGateEnum": "apps.partners.gates.ProgressiveGate",
         "GateNextActionEnum": "apps.partners.gates.GateNextAction",
+        # M2 Wave C2 — the access, selection and engagement choice sets.
+        #
+        # `RejectionReasonEnum` is pinned rather than renamed: it was published at 1.22.0 from
+        # `Proposal.rejection_reason`, and Wave C2 added a *second* field over the same choice set
+        # (`ProposalRejectRequest.reason`). Without this entry the generator resolved the collision
+        # positionally to `Reason9ecEnum` — a component whose digits move the next time an
+        # unrelated `reason` field appears. Naming it keeps the published name and gives both
+        # fields one component.
+        "RejectionReasonEnum": "apps.requirements.models.Proposal.RejectionReason",
+        # The six new status sets. They resolve to these names today because no other model shares
+        # the class name, which is exactly the property that stops being true later — the C1 note
+        # above is about this and it applies unchanged.
+        "QuoteUnlockStatusEnum": "apps.requirements.models.QuoteUnlock.Status",
+        "VisitPlanStatusEnum": "apps.requirements.models.VisitPlan.Status",
+        "VisitPlanShareStatusEnum": "apps.requirements.models.VisitPlanShare.Status",
+        "ProposalSelectionStatusEnum": "apps.requirements.models.ProposalSelection.Status",
+        "EngagementStatusEnum": "apps.requirements.models.Engagement.Status",
+        "EngagementStageStatusEnum": "apps.requirements.models.EngagementStage.Status",
+        # Four sets whose *field* names are the collision risk rather than their model names:
+        # `commercial_mode`, `funding_state`, `arrival_method` and `party` are all short, generic
+        # and certain to be reused. Named on arrival rather than after a rename breaks a client.
+        "EngagementCommercialModeEnum": "apps.requirements.models.Engagement.CommercialMode",
+        "EngagementStageFundingStateEnum": (
+            "apps.requirements.models.EngagementStage.FundingState"
+        ),
+        "VisitArrivalMethodEnum": "apps.requirements.models.SiteVisit.ArrivalMethod",
+        # The two vocabularies that live in the serializer layer on purpose. The decline reasons
+        # are published only on the surface a vendor types into — the same database column also
+        # carries system reasons, so constraining the model would refuse the platform's own
+        # writes — and the no-show party is a request-shape choice with no column behind it.
+        "InvitationDeclineReasonEnum": ("apps.requirements.serializers.INVITATION_DECLINE_REASONS"),
+        "VisitNoShowPartyEnum": "apps.requirements.serializers.VISIT_NO_SHOW_PARTIES",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -604,6 +636,39 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.requirements.tasks.sweep_orphaned_attachment_uploads",
         # Hourly, like its Partner-document twin. An abandoned upload intent costs storage and
         # nothing else.
+        "schedule": 60.0 * 60,
+    },
+    # M2 Wave C2 — the visit plan and the selection clock. Cadences follow the same rule as the
+    # four above: the sweeps that hand a resource back run often, and the ones that only settle
+    # money run at the pace the money actually moves.
+    "sweep-expired-visit-holds": {
+        "task": "apps.requirements.tasks.sweep_expired_visit_holds",
+        # 2 minutes, like the invitation sweep and for the same reason: this one returns a
+        # vendor's time to the shared availability grid, and every minute it waits is a slot the
+        # vendor cannot be offered for an A1 job either.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-expired-selections": {
+        "task": "apps.requirements.tasks.sweep_expired_selections",
+        # 5 minutes. A silent vendor otherwise freezes a requirement in `SELECTED`, and the
+        # Customer's entitlement is intact the moment this runs.
+        "schedule": 60.0 * 5,
+    },
+    "sweep-unfilled-visit-shares": {
+        "task": "apps.requirements.tasks.sweep_unfilled_visit_shares",
+        # 15 minutes. The refund is owed from the instant the fill SLA passes; a quarter-hour of
+        # latency on a bank refund that takes days to land is not the slow part.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-missed-estimate-windows": {
+        "task": "apps.requirements.tasks.sweep_missed_estimate_windows",
+        # 15 minutes, same reasoning.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-visit-payout-holds": {
+        "task": "apps.requirements.tasks.sweep_visit_payout_holds",
+        # Hourly, matching `reconcile-payouts`. A vendor who finishes onboarding waits at most an
+        # hour for money that was already theirs, and the payout batch itself runs no faster.
         "schedule": 60.0 * 60,
     },
 }

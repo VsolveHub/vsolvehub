@@ -400,7 +400,7 @@ attachment paths at 1.22.0) with authorization and attachment tests **written an
   `m2.requirement.closed`, which is the event the refund path will consume, so nothing has to be
   re-plumbed. **The refund half waits for P4's unlock** (`M2-BE-705`).
 
-- [ ] `M2-BE-215` Implement `choose_visit_plan` (revision 3): A5 only, recorded on the requirement
+- [~] built — static gates green, owner manual verification pending `M2-BE-215` Implement `choose_visit_plan` (revision 3): A5 only, recorded on the requirement
   from the review screen; tier (1/2/3 visits) and server-priced paise snapshot; charges nothing;
   bounds the invitation wave. An A5 submit without a plan is refused with `m2_visit_plan_required`;
   the command is refused outright on an A3 requirement.
@@ -676,86 +676,86 @@ before the split.
 
 ### A3 unlock
 
-- [ ] `M2-BE-401` Store the unlock price server-side in paise, with effective dates and immutable
+- [~] built — static gates green, owner manual verification pending `M2-BE-401` Store the unlock price server-side in paise, with effective dates and immutable
   purchase snapshots.
-- [ ] `M2-BE-402` Model `QuoteUnlock` with the requirement, purchased price, unlocked proposal set,
+- [~] built — static gates green, owner manual verification pending `M2-BE-402` Model `QuoteUnlock` with the requirement, purchased price, unlocked proposal set,
   rejection count and refund state. Offer it only when at least one usable quote exists. A3 only.
   `FLOW-01`
-- [ ] `M2-BE-403` Implement unlock checkout, payment-order creation and verified webhook completion
+- [~] built — static gates green, owner manual verification pending `M2-BE-403` Implement unlock checkout, payment-order creation and verified webhook completion
   using existing M1 payment abstractions and provider test callbacks.
-- [ ] `M2-BE-404` Guarantee one unlock for one successful payment under duplicate webhooks, browser
+- [~] built — static gates green, owner manual verification pending `M2-BE-404` Guarantee one unlock for one successful payment under duplicate webhooks, browser
   retries and delayed provider callbacks.
-- [ ] `M2-BE-405` Implement payment-pending reconciliation and Customer-visible status; never grant an
+- [~] built — static gates green, owner manual verification pending `M2-BE-405` Implement payment-pending reconciliation and Customer-visible status; never grant an
   unlock from a client redirect alone.
-- [ ] `M2-BE-406` Implement non-responsive rejection: release the slot, invite a replacement at no extra
+- [~] built — static gates green, owner manual verification pending `M2-BE-406` Implement non-responsive rejection: release the slot, invite a replacement at no extra
   charge (A3: a quote slot; A5: a free replacement visit), enforce the configured cap and record the
   reason against vendor standing. `GAP-009`
 
 ### A5 visit plan (revision 3, ADR-0008)
 
-- [ ] `M2-BE-419` Model `VisitPlan`: requirement, tier size, server-priced paise snapshot per tier
+- [~] built — static gates green, owner manual verification pending `M2-BE-419` Model `VisitPlan`: requirement, tier size, server-priced paise snapshot per tier
   with effective dates, charge state, per-slot shares (`plan price / plan size` in integer paise,
   remainder on the first share) and per-share settlement state (`OPEN`, `COMMITTED`, `EARNED`,
   `REFUNDED`, `REPLACED`).
-- [ ] `M2-BE-420` Link each A5 `SiteVisit` to one plan share; a share holds at most one live visit.
-- [ ] `M2-BE-421` Implement `confirm_visit_slot`: books the visit slot against **`carts.availability`**
+- [~] built — static gates green, owner manual verification pending `M2-BE-420` Link each A5 `SiteVisit` to one plan share; a share holds at most one live visit.
+- [~] built — static gates green, owner manual verification pending `M2-BE-421` Implement `confirm_visit_slot`: books the visit slot against **`carts.availability`**
   — the same grid the A1 technician flow reads — so a visit and an A1 booking cannot double-book;
   refuses with `m2_visit_slot_unavailable` when capacity is gone. The first held slot opens the plan
   checkout; the hold expires harmlessly if the Customer never pays.
-- [ ] `M2-BE-422` Implement `create_visit_plan_checkout` and `complete_visit_plan` on the M1 payment
+- [~] built — static gates green, owner manual verification pending `M2-BE-422` Implement `create_visit_plan_checkout` and `complete_visit_plan` on the M1 payment
   abstractions with provider test callbacks: one verified payment charges exactly one plan under
   duplicate webhooks and retries; the held slot hardens to `SCHEDULED` only on the verified callback;
   later slots book without further payment. Never charge from a client redirect
   (`m2_visit_plan_payment_pending` while waiting).
-- [ ] `M2-BE-423` Implement visit arrival confirmation on the non-OTP fallback (start OTP is M3
+- [~] built — static gates green, owner manual verification pending `M2-BE-423` Implement visit arrival confirmation on the non-OTP fallback (start OTP is M3
   activation), reusing the same fallback pattern as crew arrival (`M2-BE-524`).
-- [ ] `M2-BE-424` Enforce the estimate-visit guard: an A5 proposal must reference a `COMPLETED`
+- [~] built — static gates green, owner manual verification pending `M2-BE-424` Enforce the estimate-visit guard: an A5 proposal must reference a `COMPLETED`
   visit; otherwise `m2_visit_not_completed`. Prefill support: expose the requirement + visit context
   the on-site composer reads.
-- [ ] `M2-BE-425` Implement share settlement sweeps: unfilled shares auto-refund at the visit SLA;
+- [~] built — static gates green, owner manual verification pending `M2-BE-425` Implement share settlement sweeps: unfilled shares auto-refund at the visit SLA;
   vendor no-show and estimate-not-submitted-in-window refund or replace the share (free replacement
   visit) and record against vendor standing; customer no-show disposition follows the configured
   policy. All through the M1 `Refund` lifecycle, idempotent under overlapping runs.
-- [ ] `M2-BE-426` Implement the per-slot split (decided 2026-08-13): each share carries a
+- [~] built — static gates green, owner manual verification pending `M2-BE-426` Implement the per-slot split (decided 2026-08-13): each share carries a
   server-calculated **vendor visit payout** and **Vsolve platform share** in integer paise (split
   percentages read fail-closed). An `EARNED` share (completed visit + usable estimate in window)
   makes the vendor payout payout-eligible through the **M1 payout and ledger rails**, gated on the
   progressive payout-details rule; the platform share books as Vsolve revenue. A refunded share pays
   neither. No stage credit exists.
-- [ ] `M2-BE-427` Reclassification money rules: A5→A3 voids unfilled shares and refunds them (or
+- [~] built — static gates green, owner manual verification pending `M2-BE-427` Reclassification money rules: A5→A3 voids unfilled shares and refunds them (or
   converts per configuration); A3→A5 preserves an unlock as plan credit. No second charge, extending
   `M2-BE-205`.
 
 ### Selection and reconfirmation
 
-- [ ] `M2-BE-407` Implement Customer selection against a specific proposal with an atomic requirement
+- [~] built — static gates green, owner manual verification pending `M2-BE-407` Implement Customer selection against a specific proposal with an atomic requirement
   lock. Multiple simultaneous selections are not supported and the "multiple lots" allowance is
   withdrawn. `GAP-021`
-- [ ] `M2-BE-408` Create a time-limited vendor reconfirmation that rechecks capability, schedule,
+- [~] built — static gates green, owner manual verification pending `M2-BE-408` Create a time-limited vendor reconfirmation that rechecks capability, schedule,
   capacity and proposal validity.
-- [ ] `M2-BE-409` On rejection or expiry, preserve the rejected history, keep the unlock (A3) or
+- [~] built — static gates green, owner manual verification pending `M2-BE-409` On rejection or expiry, preserve the rejected history, keep the unlock (A3) or
   visit-plan entitlement (A5) valid and offer the next quote, estimate or a replacement visit at no
   additional charge.
-- [ ] `M2-BE-410` Implement a re-validation request for an expired-validity proposal that reuses the
+- [~] built — static gates green, owner manual verification pending `M2-BE-410` Implement a re-validation request for an expired-validity proposal that reuses the
   existing unlock or plan rather than forcing a second purchase. `GAP-019`
 
 ### Engagement creation and money
 
-- [ ] `M2-BE-411` For A3 (`LEAD_ONLY`), create a connection engagement that records direct payment,
+- [~] built — static gates green, owner manual verification pending `M2-BE-411` For A3 (`LEAD_ONLY`), create a connection engagement that records direct payment,
   limited Vsolve protection and the earned unlock-fee policy.
-- [ ] `M2-BE-412` For A5 (`MANAGED_PAYMENT_REQUIRED`), create an immutable engagement snapshot only
+- [~] built — static gates green, owner manual verification pending `M2-BE-412` For A5 (`MANAGED_PAYMENT_REQUIRED`), create an immutable engagement snapshot only
   after vendor reconfirmation and require a verified funded first stage at face value before work
   may start. Visit money settles per share (`M2-BE-426`) and never discounts a stage.
-- [ ] `M2-BE-413` Server-calculate stage amounts, commission, tax and payout allocation in paise; reject
+- [~] built — static gates green, owner manual verification pending `M2-BE-413` Server-calculate stage amounts, commission, tax and payout allocation in paise; reject
   client-supplied totals.
-- [ ] `M2-BE-414` Reuse M1 ledger and payment infrastructure with distinct money purposes for unlock
+- [~] built — static gates green, owner manual verification pending `M2-BE-414` Reuse M1 ledger and payment infrastructure with distinct money purposes for unlock
   fee, visit-plan fee, site-visit fee, stage funding, material advance, refund, commission and vendor
   payout. `GAP-028`
   Add them to the existing `commerce.PaymentAttempt.Purpose` enum exactly as
   `SCOPE_AMENDMENT_REVISION` did. Do not create a parallel payment path or a second ledger.
-- [ ] `M2-BE-415` Generate durable invoice/receipt metadata and expose payment status without leaking
+- [~] built — static gates green, owner manual verification pending `M2-BE-415` Generate durable invoice/receipt metadata and expose payment status without leaking
   provider payloads.
-- [ ] `M2-BE-416` Enforce contact and work-start policy from the archetype's fixed commercial mode.
+- [~] built — static gates green, owner manual verification pending `M2-BE-416` Enforce contact and work-start policy from the archetype's fixed commercial mode.
 
 ### Verification
 
@@ -769,6 +769,10 @@ before the split.
   (remainder on the first share; payout + platform share + refunds reconcile to the plan), unfilled-
   share refund idempotence under overlapping sweeps, estimate-window refusal, vendor payout
   eligibility gating on payout details, and reclassification with a charged plan.
+
+> **`M2-BE-417`, `M2-BE-418` and `M2-BE-428`: tests deferred per the build-first amendment**
+> (`task.md` §"Build-first amendment (2026-08-13)"). No test was written or run in Wave C2. These
+> three rows are the wave's test debt and are worked off after the owner's manual UI pass.
 
 **BE4 gate:** Money is collected only against a real accepted commitment — a usable quote (A3) or a
 confirmed visit (A5). An engagement exists only after valid selection, vendor reconfirmation and the

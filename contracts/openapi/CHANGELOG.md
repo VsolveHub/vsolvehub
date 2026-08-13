@@ -4,6 +4,226 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.24.0 - M2 Wave C2: the A3 unlock, the A5 visit plan, selection, reconfirmation and the engagement
+
+**Fourteen new paths and nineteen new operations (43 M2 operations → 62). Additive only: no path
+was removed, no operation changed its method or route, and one existing operation gained a `GET`.**
+
+This is the commercially load-bearing wave. Every money path in it obeys one rule, and the whole
+model rests on it: **only a verified provider callback grants anything.** A client redirect saying
+"payment succeeded" is a claim made by the party that benefits from it, and no endpoint here reads
+one. The checkout responses below tell you an attempt exists; whether the Customer *has* an unlock
+or a charged plan is the `unlock` / `plan` object on the state read beside it.
+
+### The A3 quote unlock
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/requirements/{requirement_id}/unlock/` | `GET` | `m2_unlock_read` |
+| `/api/v1/requirements/{requirement_id}/unlock/` | `POST` | `m2_unlock_checkout_create` |
+
+`GET` publishes `UnlockState`: the unlock in any state (or `null`), `is_available`, `price_paise`,
+`usable_quote_count`, `can_read_full_quotes` and `server_now`.
+
+**`price_paise` is nullable and that is a real state, not a placeholder.** The unlock price is
+blocking owner decision 1, so `apps.requirements.pricing` reads it from an effective-dated
+`M2AccessPrice` row and **fails closed** when none is loaded. The screen must say we cannot offer
+this yet; it must not render INR 149. `POST` refuses the same case with `409
+m2_access_price_unavailable`.
+
+`POST` refuses unless at least one **usable** quote is live at that instant
+(`409 m2_unlock_not_available`), and `400 m2_lifecycle_not_supported` on an A5 request. Repeating
+it while a previous attempt is pending returns that attempt rather than starting a second charge.
+
+### The A5 visit plan
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/requirements/{requirement_id}/visit-plan/` | `GET` | `m2_visit_plan_read` |
+| `/api/v1/requirements/{requirement_id}/visit-plan/` | `POST` | `m2_visit_plan_choose` |
+| `/api/v1/requirements/{requirement_id}/visit-plan/checkout/` | `POST` | `m2_visit_plan_checkout_create` |
+
+One read serves both halves of the A5 flow. Before a plan exists it carries `available_tiers` — the
+priced options for the review screen's chooser, and **an empty list is the honest answer** while the
+owner has priced no tier. After one exists it carries the plan, its per-slot `shares` (each with
+`amount_paise`, `vendor_payout_paise` and `platform_share_paise`) and the confirmed `visits` with
+their scheduled times. Two endpoints would have let the chooser and the tracker disagree about which
+plan the Customer has.
+
+**Choosing charges nothing.** It bounds the invitation wave and snapshots the price the Customer was
+shown, so a price loaded between choosing and the first vendor confirming cannot silently become
+what they pay. Re-choosing is allowed until a vendor commits, and refused after
+(`409 m2_requirement_transition_not_allowed`).
+
+**The plan is charged once, at the first confirmed visit slot.** The checkout refuses with
+`409 m2_visit_plan_not_chargeable` when no vendor holds a slot, when the plan is already paid for,
+or when a reclassification credit covers it. The held slot hardens to `SCHEDULED` only on the
+verified callback; if the Customer never pays, the hold lapses and **nothing was charged**.
+
+### Candidate visit starts — the read the Partner slot picker depends on
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/partner/enquiries/{invitation_id}/visit-slots/` | `GET` | `m2_visit_slot_list` |
+| `/api/v1/partner/enquiries/{invitation_id}/visit-slots/` | `POST` | `m2_visit_slot_confirm` |
+
+`GET` returns `VisitSlotGrid` — `server_now`, `visit_duration_minutes`,
+`availability_is_preliminary`, `timezone`, `days[{date, is_today, slots[{id, starts_at, ends_at,
+is_available, unavailable_reason}]}]`. **The same shape as `POST /api/v1/booking/windows/` minus
+`capacity`**, drawn from the same `carts.availability` snapshot and the same window loop, and
+narrowed to the one invited vendor. `capacity` is dropped because on a single-vendor grid it is a
+readout of that vendor's own diary depth.
+
+Each `id` is a **signed token** bound to this invitation and this start, and it is the only thing
+`POST` accepts — a vendor cannot book a time the grid never offered or a slot drawn for a
+competitor. Tokens expire, so a picker left open must re-read rather than post a stale one. An
+ineligible vendor gets a grid where every slot reads `NO_CAPACITY` rather than an error: that is the
+truth and it is renderable.
+
+`POST` **is A5 acceptance.** It takes the quote slot and the soft capacity hold, then a hard
+reservation on the shared grid — so a visit and an A1 booking cannot double-book the same vendor, by
+database constraint rather than by convention. `opens_plan_checkout: true` marks the confirmation
+that opens the Customer's checkout; that visit reads `REQUESTED`, not `SCHEDULED`, until the payment
+is verified. Refusals: `409 m2_visit_slot_unavailable` (gone, stale token, or a start in the past),
+`409 m2_visit_plan_required`, `409 m2_capacity_unavailable`, `409 m2_invitation_slots_exhausted`,
+`400 m2_lifecycle_not_supported`, `403 m2_kyc_required`.
+
+### Visit arrival and no-show
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/site-visits/{site_visit_id}/arrival/` | `POST` | `m2_site_visit_arrival_confirm` |
+| `/api/v1/site-visits/{site_visit_id}/no-show/` | `POST` | `m2_site_visit_no_show_report` |
+
+Arrival uses the **non-OTP fallback as the default path**, not as a degraded one — the start OTP is
+M3 activation — and `arrival_method` is stored so every historical arrival still says truthfully how
+it was proved once OTP is switched on. Either party may confirm.
+
+No-show: **you report the other party's absence, never your own.** A Customer reports `VENDOR`, a
+vendor reports `CUSTOMER`; the reverse is refused. The two settle differently — a vendor no-show
+costs the Customer nothing and the slot goes back to owing a free replacement visit; a customer
+no-show still pays the vendor their visit payout, because they travelled, and only the platform
+share is in question (`409 m2_policy_unavailable` while that owner decision is open).
+
+`POST /site-visits/{id}/complete/` is unchanged on the wire and now dispatches internally: a plan
+visit stamps `estimate_due_at`, the post-visit window an estimate must land inside.
+
+### Reading, rejecting and re-validating quotes
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/requirements/{requirement_id}/quotes/` | `GET` | `m2_quote_list` |
+| `/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/reject/` | `POST` | `m2_quote_reject` |
+| `/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/revalidate/` | `POST` | `m2_quote_revalidate` |
+
+`m2_quote_list` returns full quotes and estimates — scope, line items, stages, taxes, validity and
+vendor identity — and **enforces entitlement rather than shortening the payload**: `403
+m2_unlock_required` on A3, `409 m2_visit_plan_required` on A5. Contact details are absent at every
+status; they are released by the engagement, not by the fee. `non_responsive_rejections_remaining`
+is nullable, because the cap is an owner decision and a screen must not offer a replacement on a
+rule that does not exist.
+
+Rejection takes `reason` from `RejectionReasonEnum`. `NOT_CHOSEN` is bookkeeping. `NON_RESPONSIVE`
+releases the vendor's slot and buys a replacement **at no extra charge** — a new quote slot on A3, a
+free replacement visit on A5 — up to the configured cap (`409 m2_rejection_cap_reached`, or `409
+m2_policy_unavailable` when the cap is unset).
+
+Re-validation charges nothing and reuses the unlock or plan already paid for: **expiry must not be a
+dead end that forces a second purchase.** The vendor answers by superseding; the expired revision
+stays readable and stays unselectable, because only a vendor can state a price.
+
+### Selection, reconfirmation and the engagement
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/requirements/{requirement_id}/selection/` | `GET` | `m2_selection_read` |
+| `/api/v1/requirements/{requirement_id}/selection/` | `POST` | `m2_selection_create` |
+| `/api/v1/selections/{selection_id}/reconfirm/` | `POST` | `m2_selection_reconfirm` |
+| `/api/v1/selections/{selection_id}/decline/` | `POST` | `m2_selection_decline` |
+| `/api/v1/engagements/{engagement_id}/` | `GET` | `m2_engagement_read` |
+| `/api/v1/engagement-stages/{stage_id}/funding/` | `POST` | `m2_stage_funding_checkout_create` |
+
+**Selection is not a booking.** It starts the vendor's reconfirmation clock (`reconfirm_by`), and the
+engagement opens only when they commit. Multiple simultaneous selections are refused with `409
+m2_selection_conflict` (retryable — the answer changes on its own).
+
+Reconfirmation **re-checks everything**: the capability against this request's own area and start
+date, the vendor's diary on the shared grid, and the quote's validity. `409
+m2_reconfirmation_expired` also expires the selection in the same call, so the Customer is not left
+waiting on a vendor who arrived a minute late.
+
+If the vendor declines or the clock runs out, **the Customer's entitlement survives untouched** and
+the next quote costs nothing more. The quote is marked `LAPSED`, never `REJECTED` — a rejection is
+the Customer's refusal, and a vendor reading it against their own timeout would be told the wrong
+story about their own standing.
+
+`Engagement.commercial_mode` is the field the UI must read before it promises anything. `LEAD_ONLY`
+(A3) means the Customer pays the vendor directly and Vsolve's protection is matching and
+replacement — **not a protected booking**. `MANAGED_PAYMENT_REQUIRED` (A5) funds one stage at a
+time, **at face value**: there is no stage credit, because the visit-plan money was spent on the
+visits themselves and discounting a stage by it would pay for them twice out of the vendor's work.
+
+### Eight §7 gaps closed in the same publish
+
+1. **A Partner can read their own quotes back.** `GET /api/v1/proposals/` (`m2_proposal_list`), a
+   cursor page scoped to the caller, with an optional `requirement` filter. Until now a vendor could
+   submit a quote and reach it only by remembering its id, so withdraw, the six proposal states and
+   the whole supersession trace ended when the tab closed.
+2. **`quote_delivery_deadline_at`, `teaser_count` and `closure_reason` are now on `RequirementDraft`**
+   as well as the list row, so `/requests/{id}` renders a countdown instead of a bare state.
+3. **`service_name` on both requirement projections and on `EnquiryDetail`.** `My requests` was
+   titling rows by formatting `category_slug`.
+4. **`is_free` on `RequirementDraft`**, so the promise can be stated before the Send button rather
+   than only on the submit response.
+5. **`server_now` on `EnquiryDetail`** — the one read carrying a hard `responds_by`, previously
+   counted down against a browser clock with no server reference beside it.
+6. **`reason_code` on decline is a published vocabulary**: `InvitationDeclineReasonEnum`
+   (`TOO_FAR`, `NO_CAPACITY`, `OUT_OF_SCOPE`, `BUDGET_TOO_LOW`, `UNCLEAR_SCOPE`, `OTHER`). It is
+   constrained on the **serializer**, not the column: the same column also carries system reasons
+   (`requirement_changed`, `non_responsive_quote`), so constraining the model would refuse the
+   platform's own writes.
+7. **`required_tax_basis` on `EnquiryDetail`.** Every quote on one requirement is forced onto the
+   basis the first vendor used, and the second vendor could not see which.
+8. **`ProposalStage` is a published shape** — `{title, deliverable, amount_paise, ends_on}` — on both
+   `ProposalCreateRequest.stages` and every proposal read, replacing `unknown[]`. Reads are
+   defensive (`label` accepted as a `title` alias) so a stage stored before this shape existed
+   degrades to a blank title rather than a 500.
+
+**`ProposalCreateRequest` also gains `site_visit_id`**, and this closed a defect rather than adding a
+feature: `submit_proposal` has always taken one and no serializer published it, so **an A5 on-site
+estimate could not be submitted over HTTP at all**. The A5 guard `409 m2_visit_not_completed` is
+now reachable.
+
+### New and renamed enums
+
+Named on arrival, per the C1 rule that an unnamed choice set publishes positionally and its digits
+move when an unrelated app adds a field with the same name: `QuoteUnlockStatusEnum`,
+`VisitPlanStatusEnum`, `VisitPlanShareStatusEnum`, `ProposalSelectionStatusEnum`,
+`EngagementStatusEnum`, `EngagementStageStatusEnum`, `EngagementCommercialModeEnum`,
+`EngagementStageFundingStateEnum`, `VisitArrivalMethodEnum`, `InvitationDeclineReasonEnum`,
+`VisitNoShowPartyEnum`.
+
+`RejectionReasonEnum` is **pinned, not renamed**. Wave C2 added a second field over the same choice
+set (`ProposalRejectRequest.reason`), and the generator resolved the collision positionally to
+`Reason9ecEnum`. The override keeps the name published at 1.22.0 and gives both fields one
+component.
+
+### Error codes reachable for the first time
+
+`m2_unlock_not_available`, `m2_unlock_required`, `m2_visit_plan_required`,
+`m2_visit_plan_not_chargeable`, `m2_visit_slot_unavailable`, `m2_visit_not_completed`,
+`m2_rejection_cap_reached`, `m2_selection_conflict`, `m2_reconfirmation_expired`,
+`m2_stage_not_funded`, and the two fail-closed codes this plan requires but §8 does not name:
+`m2_access_price_unavailable` (no effective price is loaded — nothing can be sold) and
+`m2_policy_unavailable` (a clock, cap or disposition rule was never decided). They are two codes
+rather than one because the recoveries differ, and because an alert on the first means "we cannot
+sell anything".
+
+### Not in this publish
+
+Contact disclosure and the callback flow are **deliberately absent**. Both need an owner decision,
+and publishing a disclosure surface before that decision would be the product deciding it.
+
 ## 1.23.0 - M2 Wave C1 remainder: two schema corrections, a wage floor that can fire, and matching completeness
 
 **Two corrections to declared shapes, four new paths, and several additive fields. No path was

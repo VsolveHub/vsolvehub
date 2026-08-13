@@ -16,7 +16,8 @@ from typing import Any, NoReturn, cast
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -37,37 +38,64 @@ from apps.partners.capabilities import (
 from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
-from apps.requirements import attachments, matching, proposals, services
-from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
+from apps.requirements import (
+    access,
+    attachments,
+    engagements,
+    matching,
+    pricing,
+    proposals,
+    services,
+    visit_slots,
+)
+from apps.requirements.exceptions import (
+    PolicyUnavailableError,
+    RequirementDomainError,
+    RequirementNotFoundError,
+    RequirementTransitionError,
+)
 from apps.requirements.models import (
     CustomerRequirement,
     Proposal,
     RequirementAttachment,
     RequirementQuestion,
     SiteVisit,
+    VisitPlan,
 )
 from apps.requirements.selectors import (
+    customer_readable_proposals,
     customer_requirements,
     demand_preview,
+    engagement_for_participant,
     invitation_for_partner,
     partner_invitations,
+    partner_proposals,
     requirement_for_customer,
     requirement_summary_text,
     requirement_timeline,
+    selection_for_partner,
     site_visit_for_participant,
+    stage_for_customer,
 )
 from apps.requirements.serializers import (
+    AccessCheckoutSerializer,
     AttachmentFinalizeSerializer,
     AttachmentUploadGrantSerializer,
     AttachmentUploadRequestSerializer,
+    CustomerProposalSerializer,
+    CustomerQuoteListSerializer,
     DemandPreviewSerializer,
     DuplicateCheckQuerySerializer,
+    EngagementSerializer,
     EnquiryDeclineSerializer,
     EnquiryDetailSerializer,
     EnquirySummaryPageSerializer,
     EnquirySummarySerializer,
     ProbableDuplicateListSerializer,
     ProposalCreateSerializer,
+    ProposalPageSerializer,
+    ProposalRejectSerializer,
+    ProposalSelectionSerializer,
     ProposalSerializer,
     QuestionAnswerSerializer,
     QuestionCreateSerializer,
@@ -82,11 +110,22 @@ from apps.requirements.serializers import (
     RequirementSummarySerializer,
     RequirementTimelineSerializer,
     RequirementUpdateSerializer,
+    SelectionCreateSerializer,
+    SelectionDeclineSerializer,
     SiteVisitCompleteSerializer,
     SiteVisitRequestSerializer,
     SiteVisitScheduleSerializer,
     SiteVisitSerializer,
+    UnlockStateSerializer,
     VendorAttachmentListSerializer,
+    VisitArrivalSerializer,
+    VisitNoShowSerializer,
+    VisitPlanChooseSerializer,
+    VisitPlanSerializer,
+    VisitPlanStateSerializer,
+    VisitSlotConfirmationSerializer,
+    VisitSlotConfirmSerializer,
+    VisitSlotGridSerializer,
     WorkspaceGrantListSerializer,
 )
 from common.errors.serializers import ApiErrorSerializer
@@ -147,6 +186,49 @@ def _partner_profile(request: Request) -> Any:
     if profile is None:
         raise RequirementNotFoundError()
     return profile
+
+
+def _checkout_payload(attempt: Any) -> dict[str, object]:
+    """One M2 charge, as much of it as a client is entitled to see.
+
+    `provider_order_id` is usually blank in this response and that is correct rather than a race to
+    paper over: the order is created by the outbox consumer that
+    `initiate_standalone_payment_attempt` enqueues, so the attempt exists before the provider knows
+    about it. The client polls the state read beside it. Creating the order inline would put a
+    third-party HTTP call inside the transaction that took the Customer's slot.
+    """
+    return {
+        "payment_attempt_id": attempt.id,
+        "amount_paise": attempt.amount_paise,
+        "currency": attempt.currency,
+        "provider": attempt.provider,
+        "provider_order_id": attempt.provider_order_id,
+        "status": attempt.status,
+        "expires_at": attempt.expires_at,
+        "server_now": timezone.now(),
+    }
+
+
+def _optional_policy(read: Any) -> Any:
+    """Read an owner-blocked policy value, or `None` when the owner has not set it.
+
+    Used **only on reads**. Every command still fails closed — `m2_policy_unavailable` — because a
+    command that guessed would act on a rule nobody approved. A read is different: refusing the
+    whole screen because one optional number is unset would hide a request the Customer can still
+    see the rest of, so the field arrives `null` and the UI renders nothing where it would have
+    rendered a promise.
+    """
+    try:
+        return read()
+    except PolicyUnavailableError:
+        return None
+
+
+def _proposal_for_customer(*, requirement: CustomerRequirement, proposal_id: uuid.UUID) -> Proposal:
+    proposal = Proposal.objects.filter(id=proposal_id, requirement=requirement).first()
+    if proposal is None:
+        _raise_api_error(RequirementNotFoundError())
+    return proposal
 
 
 # ---------------------------------------------------------------------------
@@ -1156,8 +1238,62 @@ class SiteVisitCompleteView(APIView):
 # ---------------------------------------------------------------------------
 
 
+class ProposalCursorPagination(StrictCursorPagination):
+    page_size = 20
+    ordering = ("-submitted_at", "id")
+
+
 class PartnerProposalCollectionView(APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Proposals"],
+        operation_id="m2_proposal_list",
+        parameters=[
+            BoundedCursorQuerySerializer,
+            OpenApiParameter(
+                name="requirement",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Narrow to one request. The result set is scoped to the caller's own "
+                "proposals first, so this filters a set they already own and cannot be used to "
+                "discover a request they were never invited to.",
+            ),
+        ],
+        description=(
+            "Every quote this vendor has submitted, newest first. **This closes the largest hole "
+            "in the Partner surface**: until 1.24.0 a vendor could submit a quote and read it back "
+            "only by remembering its id, so withdraw, the six proposal states and the whole "
+            "supersession trace ended when the tab closed."
+        ),
+        responses={
+            200: ProposalPageSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request) -> Response:
+        reject_invalid_cursor_query(request)
+        try:
+            profile = _partner_profile(request)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        requirement_id: uuid.UUID | None = None
+        raw = request.query_params.get("requirement")
+        if raw:
+            try:
+                requirement_id = uuid.UUID(raw)
+            except ValueError as exc:
+                raise ValidationError(
+                    {"requirement": "This must be a UUID."}, code="requirement_invalid"
+                ) from exc
+
+        queryset = partner_proposals(partner=profile, requirement_id=requirement_id)
+        paginator = ProposalCursorPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(ProposalSerializer(page, many=True).data)
 
     @extend_schema(
         tags=["M2 - Proposals"],
@@ -1296,6 +1432,1042 @@ class PartnerProposalWithdrawView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Wave C2: the A3 unlock
+# ---------------------------------------------------------------------------
+
+
+class RequirementUnlockView(APIView):
+    """The A3 paywall. Read it to know whether it can be bought; post to start buying it."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Access"],
+        operation_id="m2_unlock_read",
+        description=(
+            "The unlock state for one A3 request. `unlock` is `null` until a checkout has been "
+            "started, and reaching `ACTIVE` requires a **verified provider callback** — a client "
+            "redirect saying the payment succeeded never grants access. `price_paise` is `null` "
+            "when Operations has loaded no effective price, which is a real state while the tier "
+            "prices are an open owner decision: the screen says we cannot offer this yet rather "
+            "than showing a number nobody approved."
+        ),
+        responses={200: UnlockStateSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user),
+                requirement_id=requirement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        price = _optional_policy(pricing.unlock_price)
+        unlock = access.active_unlock(requirement) or access.latest_unlock(requirement)
+        return Response(
+            UnlockStateSerializer(
+                {
+                    "unlock": unlock,
+                    "is_available": access.unlock_availability(requirement),
+                    "price_paise": price.amount_paise if price is not None else None,
+                    "usable_quote_count": len(access.usable_proposals(requirement)),
+                    "can_read_full_quotes": access.customer_may_read_full_quotes(requirement),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Access"],
+        operation_id="m2_unlock_checkout_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Start the charge that unlocks delivered quotes. **A3 only**, and refused unless at "
+            "least one usable quote is live at this instant — that is what makes 'paid but nothing "
+            "happened' unreachable rather than merely unlikely. Repeating the call while a "
+            "previous attempt is still pending returns that attempt rather than starting a second "
+            "charge."
+        ),
+        responses={
+            201: AccessCheckoutSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_lifecycle_not_supported` on an A5 request, which uses a visit "
+                "plan and has no unlock.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_unlock_not_available` when no usable quote exists yet or the "
+                "request is already unlocked; `m2_access_price_unavailable` when Operations has "
+                "loaded no effective price — this **fails closed** rather than charging a guess.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                _unlock, attempt = access.create_unlock_checkout(
+                    requirement_id=requirement.id,
+                    actor=customer,
+                    idempotency_key=key,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], AccessCheckoutSerializer(_checkout_payload(attempt)).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.unlock.checkout",
+            key=key,
+            request_payload={"requirement_id": str(requirement_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C2: the A5 visit plan
+# ---------------------------------------------------------------------------
+
+
+class RequirementVisitPlanView(APIView):
+    """The A5 front door: the tier chooser before a plan exists, the tracker after."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Access"],
+        operation_id="m2_visit_plan_read",
+        description=(
+            "The visit plan for one A5 request. Before a plan is chosen this carries "
+            "`available_tiers` — the priced options for the review screen's chooser, and an "
+            "**empty list is the honest answer** while the owner has priced no tier. After a plan "
+            "exists it carries the plan, its per-slot shares and the confirmed visits with their "
+            "scheduled times. Choosing a plan charges nothing; the whole plan is charged once, at "
+            "the first confirmed visit slot."
+        ),
+        responses={200: VisitPlanStateSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user),
+                requirement_id=requirement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        plan = VisitPlan.objects.filter(requirement=requirement).prefetch_related("shares").first()
+        tiers = [
+            {"plan_size": tier.row.plan_size, "price_paise": tier.amount_paise}
+            for tier in pricing.available_visit_plan_tiers()
+        ]
+        visits = SiteVisit.objects.filter(
+            requirement=requirement,
+            plan_share__isnull=False,
+        ).order_by("plan_share__position", "created_at")
+        return Response(
+            VisitPlanStateSerializer(
+                {
+                    "plan": plan,
+                    "available_tiers": tiers,
+                    "visits": visits,
+                    "checkout_available": access.visit_plan_checkout_availability(requirement),
+                    "can_read_full_estimates": access.customer_may_read_full_quotes(requirement),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Access"],
+        operation_id="m2_visit_plan_choose",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=VisitPlanChooseSerializer,
+        description=(
+            "Choose how many verified professionals will visit and estimate on site: one, two or "
+            "three. **This charges nothing** — it bounds the invitation wave and snapshots the "
+            "price the Customer was shown, so a price loaded between choosing and the first vendor "
+            "confirming cannot silently become what they pay. Re-choosing is allowed while no "
+            "vendor has committed to a slot. A5 only; an A3 request has no visit plan."
+        ),
+        responses={
+            200: VisitPlanSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_lifecycle_not_supported` on an A3 request.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_access_price_unavailable` when this tier has no effective price; "
+                "`m2_requirement_transition_not_allowed` once a vendor has committed to a visit, "
+                "because resizing a plan somebody is already travelling for is not a choice.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        serializer = VisitPlanChooseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                plan = access.choose_visit_plan(
+                    requirement_id=requirement.id,
+                    plan_size=serializer.validated_data["plan_size"],
+                    actor=customer,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], VisitPlanSerializer(plan).data)
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.visit_plan.choose",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class RequirementVisitPlanCheckoutView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Access"],
+        operation_id="m2_visit_plan_checkout_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Pay for the whole visit plan, once, against a slot a vendor has actually committed "
+            "to. The first vendor's slot is held while this completes and **lapses harmlessly if "
+            "the Customer never pays** — nothing was charged and the vendor's time returns to the "
+            "availability grid. The held slot hardens to `SCHEDULED` only on the verified provider "
+            "callback. Later vendors book without any further payment."
+        ),
+        responses={
+            201: AccessCheckoutSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_visit_plan_not_chargeable` when no vendor holds a slot yet, when "
+                "the plan is already paid for, or when a reclassification credit already covers "
+                "it; `m2_visit_plan_required` when no plan has been chosen.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                _plan, attempt = access.create_visit_plan_checkout(
+                    requirement_id=requirement.id,
+                    actor=customer,
+                    idempotency_key=key,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], AccessCheckoutSerializer(_checkout_payload(attempt)).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.visit_plan.checkout",
+            key=key,
+            request_payload={"requirement_id": str(requirement_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C2: reading, rejecting and re-validating quotes
+# ---------------------------------------------------------------------------
+
+
+class RequirementQuoteListView(APIView):
+    """Full quotes and estimates, for a Customer who has paid to read them."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Quotes"],
+        operation_id="m2_quote_list",
+        description=(
+            "Every quote (A3) or on-site estimate (A5) in full: scope, line items, stages, taxes, "
+            "validity and the vendor's identity. **Entitlement is enforced here, not hidden in the "
+            "UI** — an A3 request needs an active unlock and an A5 request needs a charged visit "
+            "plan, and without one this refuses rather than returning a shortened payload. "
+            "Contact details are not in this response at any status; they are released by the "
+            "engagement, not by the fee."
+        ),
+        responses={
+            200: CustomerQuoteListSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_unlock_required` — the A3 quotes are still behind the unlock.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_visit_plan_required` — no A5 visit plan has been charged, so no "
+                "estimate has been bought yet.",
+            ),
+        },
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user),
+                requirement_id=requirement_id,
+            )
+            access.assert_customer_may_read_full_quotes(requirement)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        cap = _optional_policy(lambda: pricing.non_responsive_rejection_cap(requirement))
+        used = proposals.non_responsive_rejection_count(requirement)
+        return Response(
+            CustomerQuoteListSerializer(
+                {
+                    "quotes": customer_readable_proposals(requirement),
+                    "non_responsive_rejections_remaining": (
+                        max(cap - used, 0) if cap is not None else None
+                    ),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class RequirementQuoteRejectView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Quotes"],
+        operation_id="m2_quote_reject",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ProposalRejectSerializer,
+        description=(
+            "Refuse a quote. `NOT_CHOSEN` is bookkeeping — the Customer preferred somebody else "
+            "and nothing further happens. `NON_RESPONSIVE` is the control against slot squatting: "
+            "it releases the vendor's slot and buys a replacement **at no extra charge** — a new "
+            "quote slot on A3, a free replacement visit on A5 — up to a configured cap."
+        ),
+        responses={
+            200: CustomerProposalSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_rejection_cap_reached` when every free replacement has been "
+                "used; `m2_proposal_not_selectable` when the quote is no longer live; "
+                "`m2_policy_unavailable` when the owner has not set the cap — the free "
+                "replacement is refused rather than promised on a rule that does not exist.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID, proposal_id: uuid.UUID) -> Response:
+        serializer = ProposalRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        proposal = _proposal_for_customer(requirement=requirement, proposal_id=proposal_id)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                rejected = proposals.reject_proposal(
+                    requirement_id=requirement.id,
+                    proposal_id=proposal.id,
+                    reason=serializer.validated_data["reason"],
+                    actor=customer,
+                    note=serializer.validated_data["note"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], CustomerProposalSerializer(rejected).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.quote.reject",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "proposal_id": str(proposal_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class RequirementQuoteRevalidateView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Quotes"],
+        operation_id="m2_quote_revalidate",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Ask this vendor to put a fresh price on a quote whose validity has passed. **This "
+            "charges nothing and reuses the unlock or visit plan already paid for** — expiry must "
+            "not be a dead end that forces a second purchase. The vendor answers by superseding "
+            "the quote; the expired revision stays readable and stays unselectable, because only "
+            "a vendor can state a price."
+        ),
+        responses={
+            200: CustomerProposalSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_proposal_not_selectable` when the quote has not expired, when "
+                "the request already has a chosen vendor, or when the caller has not unlocked "
+                "these quotes at all.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID, proposal_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        proposal = _proposal_for_customer(requirement=requirement, proposal_id=proposal_id)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                asked = proposals.request_revalidation(
+                    requirement_id=requirement.id,
+                    proposal_id=proposal.id,
+                    actor=customer,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], CustomerProposalSerializer(asked).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.quote.revalidate",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "proposal_id": str(proposal_id),
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C2: selection, reconfirmation and the engagement
+# ---------------------------------------------------------------------------
+
+
+class RequirementSelectionView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Selection"],
+        operation_id="m2_selection_read",
+        description=(
+            "The live selection for this request, or `null`. `reconfirm_by` is the vendor's "
+            "deadline; `engagement_id` fills in once they reconfirm."
+        ),
+        responses={200: ProposalSelectionSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user),
+                requirement_id=requirement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        selection = requirement.selections.order_by("-created_at").first()
+        if selection is None:
+            _raise_api_error(RequirementNotFoundError())
+        return Response(ProposalSelectionSerializer(selection).data)
+
+    @extend_schema(
+        tags=["M2 - Selection"],
+        operation_id="m2_selection_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=SelectionCreateSerializer,
+        description=(
+            "Choose one vendor. **Selection is not a booking**: it starts the vendor's "
+            "reconfirmation clock, and the engagement opens only when they commit — A3 on their "
+            "reconfirmation, A5 when the first stage is funded. If they decline or the clock runs "
+            "out, the unlock or visit-plan entitlement survives untouched and the next quote costs "
+            "nothing more. Multiple simultaneous selections are not supported."
+        ),
+        responses={
+            201: ProposalSelectionSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_unlock_required` — an A3 quote cannot be selected unread.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_selection_conflict` when another session selected first "
+                "(retryable, and the answer changes on its own); `m2_proposal_not_selectable` for "
+                "a superseded, withdrawn or expired quote, or an A5 estimate with no completed "
+                "visit behind it; `m2_visit_plan_required` when the A5 plan is unpaid.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        serializer = SelectionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        proposal = _proposal_for_customer(
+            requirement=requirement,
+            proposal_id=serializer.validated_data["proposal_id"],
+        )
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                selection = engagements.select_proposal(
+                    requirement_id=requirement.id,
+                    proposal_id=proposal.id,
+                    actor=customer,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], ProposalSelectionSerializer(selection).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.selection.create",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "proposal_id": str(serializer.validated_data["proposal_id"]),
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class SelectionReconfirmView(APIView):
+    """The vendor commits, and the engagement opens."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Selection"],
+        operation_id="m2_selection_reconfirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Confirm price, date and capacity after being chosen. **Everything is re-checked "
+            "here** rather than trusted from quoting time: the capability against this request's "
+            "own area and start date, the vendor's diary on the shared availability grid, and the "
+            "quote's validity. A vendor whose approval lapsed in between must not end up holding "
+            "authorised money against unauthorised work."
+        ),
+        responses={
+            200: EngagementSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_capability_not_approved` or `m2_capability_suspended` when the "
+                "lifecycle capability is no longer live.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_reconfirmation_expired` when the deadline passed — the selection "
+                "is expired in the same call, so the Customer is not left waiting; "
+                "`m2_capacity_unavailable` when the vendor's diary filled; "
+                "`m2_proposal_not_selectable` when the quote's own validity elapsed; "
+                "`m2_policy_unavailable` when the A5 commission terms are unset.",
+            ),
+        },
+    )
+    def post(self, request: Request, selection_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            selection = selection_for_partner(
+                partner=_partner_profile(request),
+                selection_id=selection_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                engagement = engagements.reconfirm_selection(selection_id=selection.id)
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], EngagementSerializer(engagement).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.selection.reconfirm",
+            key=key,
+            request_payload={"selection_id": str(selection_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class SelectionDeclineView(APIView):
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Selection"],
+        operation_id="m2_selection_decline",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=SelectionDeclineSerializer,
+        description=(
+            "Decline after being chosen. The quote is marked `LAPSED` rather than `REJECTED` — a "
+            "rejection is the Customer's refusal, and a vendor reading it against their own "
+            "decision would be told the wrong story about their own standing. The Customer's "
+            "unlock or visit plan survives and the next quote costs nothing more."
+        ),
+        responses={
+            200: ProposalSelectionSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, selection_id: uuid.UUID) -> Response:
+        serializer = SelectionDeclineSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            selection = selection_for_partner(
+                partner=_partner_profile(request),
+                selection_id=selection_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                declined = engagements.decline_selection(
+                    selection_id=selection.id,
+                    reason_code=serializer.validated_data["reason_code"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], ProposalSelectionSerializer(declined).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.selection.decline",
+            key=key,
+            request_payload={"selection_id": str(selection_id), **serializer.validated_data},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementDetailView(APIView):
+    """One agreement, readable by either party to it."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Engagements"],
+        operation_id="m2_engagement_read",
+        description=(
+            "The agreement frozen at reconfirmation, with its ordered stages. **Read "
+            "`commercial_mode` before promising anything**: `LEAD_ONLY` (A3) means the Customer "
+            "pays the vendor directly and Vsolve's protection is matching and replacement, not a "
+            "protected booking. `MANAGED_PAYMENT_REQUIRED` (A5) funds one stage at a time, at face "
+            "value — the visit-plan money settles per share and never discounts a stage."
+        ),
+        responses={200: EngagementSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        try:
+            engagement = engagement_for_participant(
+                user=cast(User, request.user),
+                engagement_id=engagement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(EngagementSerializer(engagement).data)
+
+
+class EngagementStageFundingView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Engagements"],
+        operation_id="m2_stage_funding_checkout_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Fund one A5 stage, **at face value and in order**. There is no stage credit: the "
+            "visit-plan money was spent on the visits themselves and settles per share, so "
+            "discounting a stage by it would pay for those visits twice out of the vendor's work. "
+            "Projects collect one stage at a time and never the full project value because a "
+            "proposal was accepted."
+        ),
+        responses={
+            201: AccessCheckoutSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_not_funded` when the stage is already funded, when an "
+                "earlier stage is not, or when the engagement is `LEAD_ONLY` and paid directly to "
+                "the vendor.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_customer(customer=customer, stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                _stage, attempt = engagements.create_stage_funding_checkout(
+                    stage_id=stage.id,
+                    actor=customer,
+                    idempotency_key=key,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], AccessCheckoutSerializer(_checkout_payload(attempt)).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.stage.funding_checkout",
+            key=key,
+            request_payload={"stage_id": str(stage_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C2: A5 visit slots — the read the whole Partner picker depends on
+# ---------------------------------------------------------------------------
+
+
+class PartnerEnquiryVisitSlotView(APIView):
+    """Candidate visit starts for this vendor, and the command that books one.
+
+    The read and the write sit on one path deliberately. `confirm_visit_slot` redeems a token this
+    grid issued, so publishing the write without the read would have left the Partner slot picker
+    with nothing to render — the browser must never compute availability, and the A1 checkout
+    already ships that rule as `POST /booking/windows/`.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Visit slots"],
+        operation_id="m2_visit_slot_list",
+        description=(
+            "The visit times this vendor may confirm, drawn from the **same `carts.availability` "
+            "grid the A1 technician flow reads** and narrowed to this one invited vendor. Same "
+            "payload shape as `POST /api/v1/booking/windows/` minus `capacity`, which on a "
+            "single-vendor grid would be a readout of that vendor's own diary depth.\n\n"
+            "Each `id` is a **signed token** bound to this invitation and this start; it is the "
+            "only thing the confirm command accepts, so a vendor cannot book a time the grid never "
+            "offered or a slot drawn for a competitor. Tokens expire, so a picker left open must "
+            "re-read rather than post a stale one.\n\n"
+            "An ineligible vendor receives a grid in which every slot reads `NO_CAPACITY` rather "
+            "than an error — that is the truth and it is renderable, where a refusal would leave "
+            "the screen with nothing to say."
+        ),
+        responses={
+            200: VisitSlotGridSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_policy_unavailable` when the owner has not set how long a visit "
+                "takes for this service — the grid cannot be drawn at an invented width; "
+                "`m2_visit_slot_unavailable` when the request has no serviceable area.",
+            ),
+        },
+    )
+    def get(self, request: Request, invitation_id: uuid.UUID) -> Response:
+        try:
+            invitation = invitation_for_partner(
+                partner=_partner_profile(request),
+                invitation_id=invitation_id,
+            )
+            grid = visit_slots.candidate_visit_starts(invitation=invitation)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(VisitSlotGridSerializer(visit_slots.as_wire(grid)).data)
+
+    @extend_schema(
+        tags=["M2 - Visit slots"],
+        operation_id="m2_visit_slot_confirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=VisitSlotConfirmSerializer,
+        description=(
+            "Commit to being on site at a specific time. **This is A5 acceptance** — it takes the "
+            "quote slot and the soft capacity hold, and then a hard slot on the shared "
+            "availability grid, so a visit and an A1 booking cannot double-book the same vendor.\n"
+            "\nThe **first** confirmation on an unpaid plan holds its slot and opens the "
+            "Customer's checkout (`opens_plan_checkout: true`); the visit reads `REQUESTED` until "
+            "that payment is verified, and the hold lapses harmlessly if it never is. Later slots "
+            "on a paid plan are confirmed outright."
+        ),
+        responses={
+            201: VisitSlotConfirmationSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_lifecycle_not_supported` — only project requests book visit "
+                "slots.",
+            ),
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_visit_slot_unavailable` when the slot has gone, the token is "
+                "stale or the start has passed — the availability grid's exclusion constraint is "
+                "the final authority and this is what losing that race reads as; "
+                "`m2_visit_plan_required` when no plan is live; `m2_capacity_unavailable` and "
+                "`m2_invitation_slots_exhausted` from the acceptance underneath.",
+            ),
+        },
+    )
+    def post(self, request: Request, invitation_id: uuid.UUID) -> Response:
+        serializer = VisitSlotConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            profile = _partner_profile(request)
+            invitation = invitation_for_partner(partner=profile, invitation_id=invitation_id)
+            # The same progressive gate the plain accept applies, for the same reason: confirming a
+            # visit slot *is* acceptance on A5, and taking a slot away from another vendor is what
+            # proving identity buys.
+            assert_kyc_complete(profile)
+        except (RequirementDomainError, PartnerDomainError) as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                confirmation = access.confirm_visit_slot(
+                    invitation_id=invitation.id,
+                    slot_id=serializer.validated_data["slot_id"],
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object],
+                VisitSlotConfirmationSerializer(
+                    {
+                        "visit": confirmation.visit,
+                        "share": confirmation.share,
+                        "opens_plan_checkout": confirmation.opens_plan_checkout,
+                        "server_now": timezone.now(),
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.visit_slot.confirm",
+            key=key,
+            request_payload={
+                "invitation_id": str(invitation_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class SiteVisitArrivalView(APIView):
+    """Arrival on the non-OTP fallback, which is the default path in M2."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Site visits"],
+        operation_id="m2_site_visit_arrival_confirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=VisitArrivalSerializer,
+        description=(
+            "Record that the vendor is on site. Either party may confirm it. M2 uses the "
+            "**non-OTP fallback** as the default path rather than as a degraded one — the start "
+            "OTP is M3 activation — and `arrival_method` is stored so every historical arrival "
+            "still says truthfully how it was proved once the OTP path is switched on."
+        ),
+        responses={
+            200: SiteVisitSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when the visit is not "
+                "scheduled — a visit whose plan payment has not been verified is still held, not "
+                "scheduled, and nobody has arrived at it.",
+            ),
+        },
+    )
+    def post(self, request: Request, site_visit_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            visit = site_visit_for_participant(user=actor, site_visit_id=site_visit_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                arrived = access.confirm_visit_arrival(site_visit_id=visit.id, actor=actor)
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], SiteVisitSerializer(arrived).data)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.site_visit.arrival",
+            key=key,
+            request_payload={"site_visit_id": str(site_visit_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class SiteVisitNoShowView(APIView):
+    """A scheduled visit did not happen, reported by the party who turned up."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Site visits"],
+        operation_id="m2_site_visit_no_show_report",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=VisitNoShowSerializer,
+        description=(
+            "Report that the other party did not turn up. **You report the other side's absence, "
+            "never your own** — a Customer reports `VENDOR`, a vendor reports `CUSTOMER` — because "
+            "the report is a statement by the party who was there.\n\n"
+            "The two settle differently. A vendor no-show costs the Customer nothing: the slot "
+            "goes back to owing a **free replacement visit**. A customer no-show still pays the "
+            "vendor their visit payout — they travelled — and only the platform's share is in "
+            "question, which is an owner decision read fail-closed."
+        ),
+        responses={
+            200: SiteVisitSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when a party reports its own "
+                "no-show.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when the visit was never "
+                "scheduled; `m2_policy_unavailable` when the owner has not decided how a customer "
+                "no-show settles the platform share.",
+            ),
+        },
+    )
+    def post(self, request: Request, site_visit_id: uuid.UUID) -> Response:
+        serializer = VisitNoShowSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        party = serializer.validated_data["party"]
+        try:
+            visit = site_visit_for_participant(user=actor, site_visit_id=site_visit_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        reporter_is_customer = visit.requirement.customer_id == actor.id
+        if (party == "VENDOR") != reporter_is_customer:
+            _raise_api_error(
+                RequirementTransitionError(
+                    "Report the other party's absence; we ask them separately about yours.",
+                )
+            )
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                reported = access.report_visit_no_show(
+                    site_visit_id=visit.id,
+                    party=party,
+                    reason_code=serializer.validated_data["reason_code"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], SiteVisitSerializer(reported).data)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.site_visit.no_show",
+            key=key,
+            request_payload={
+                "site_visit_id": str(site_visit_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
 # Partner: workspace grants
 #
 # Lives here rather than in `apps.partners.views` only because the M2 URL module is here; the
@@ -1372,6 +2544,8 @@ class PartnerDemandPreviewView(APIView):
 
 
 __all__ = [
+    "EngagementDetailView",
+    "EngagementStageFundingView",
     "PartnerDemandPreviewView",
     "PartnerEnquiryAcceptView",
     "PartnerEnquiryAttachmentListView",
@@ -1380,6 +2554,7 @@ __all__ = [
     "PartnerEnquiryDetailView",
     "PartnerEnquiryQuestionView",
     "PartnerEnquirySiteVisitView",
+    "PartnerEnquiryVisitSlotView",
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
     "PartnerProposalWithdrawView",
@@ -1391,9 +2566,20 @@ __all__ = [
     "RequirementDetailView",
     "RequirementDuplicateCheckView",
     "RequirementQuestionAnswerView",
+    "RequirementQuoteListView",
+    "RequirementQuoteRejectView",
+    "RequirementQuoteRevalidateView",
+    "RequirementSelectionView",
     "RequirementSubmitView",
     "RequirementTeaserListView",
     "RequirementTimelineView",
+    "RequirementUnlockView",
+    "RequirementVisitPlanCheckoutView",
+    "RequirementVisitPlanView",
+    "SelectionDeclineView",
+    "SelectionReconfirmView",
+    "SiteVisitArrivalView",
     "SiteVisitCompleteView",
+    "SiteVisitNoShowView",
     "SiteVisitScheduleView",
 ]

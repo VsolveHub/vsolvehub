@@ -21,7 +21,10 @@ from apps.partners.models import PartnerCapability, PartnerProfile, PartnerServi
 from apps.requirements.exceptions import RequirementNotFoundError
 from apps.requirements.models import (
     CustomerRequirement,
+    Engagement,
+    EngagementStage,
     Proposal,
+    ProposalSelection,
     RequirementQuestion,
     RequirementTransition,
     SiteVisit,
@@ -291,6 +294,94 @@ def site_visit_for_participant(*, user: User, site_visit_id: uuid.UUID) -> SiteV
     if visit is None:
         raise RequirementNotFoundError()
     return visit
+
+
+# ---------------------------------------------------------------------------
+# Wave C2 reads: selection, engagement and the vendor's own quotes
+# ---------------------------------------------------------------------------
+
+
+def selection_for_partner(*, partner: PartnerProfile, selection_id: uuid.UUID) -> ProposalSelection:
+    """The selection this vendor was chosen in, or a 404.
+
+    Scoped to the Partner rather than to the proposal's requirement: a selection names a vendor and
+    a price, and confirming that one exists for a requirement the caller was not chosen for tells
+    them a competitor won.
+    """
+    selection = (
+        ProposalSelection.objects.select_related("requirement__configuration", "proposal")
+        .filter(partner=partner, id=selection_id)
+        .first()
+    )
+    if selection is None:
+        raise RequirementNotFoundError()
+    return selection
+
+
+def engagement_for_participant(*, user: User, engagement_id: uuid.UUID) -> Engagement:
+    """One engagement, if the caller is either party to it. A 404 otherwise.
+
+    Resolved by participation, like `site_visit_for_participant` and for the same reason: both
+    sides operate the same agreement, and a role-scoped read would need two routes for one record.
+    """
+    engagement = (
+        Engagement.objects.select_related("requirement", "partner", "proposal")
+        .prefetch_related("stages")
+        .filter(
+            Q(customer=user) | Q(partner__user=user),
+            id=engagement_id,
+        )
+        .first()
+    )
+    if engagement is None:
+        raise RequirementNotFoundError()
+    return engagement
+
+
+def stage_for_customer(*, customer: User, stage_id: uuid.UUID) -> EngagementStage:
+    """One engagement stage, scoped to the Customer who would fund it."""
+    stage = (
+        EngagementStage.objects.select_related("engagement__requirement")
+        .filter(engagement__customer=customer, id=stage_id)
+        .first()
+    )
+    if stage is None:
+        raise RequirementNotFoundError()
+    return stage
+
+
+def partner_proposals(
+    *, partner: PartnerProfile, requirement_id: uuid.UUID | None = None
+) -> QuerySet[Proposal]:
+    """Every quote this vendor has submitted, newest first, optionally for one requirement.
+
+    Closes what `frontend-execution-plan.md` §7 calls the largest hole in Wave B2: a Partner could
+    submit a quote and read it back only by remembering its id. Withdraw, the six proposal states
+    and the whole supersession trace were unreachable the moment the tab closed.
+
+    Scoped to `partner`, so the `requirement_id` filter narrows a set the caller already owns and
+    cannot be used to discover a requirement they were never invited to.
+    """
+    queryset = Proposal.objects.filter(partner=partner).select_related("requirement")
+    if requirement_id is not None:
+        queryset = queryset.filter(requirement_id=requirement_id)
+    return queryset.order_by("-submitted_at", "id")
+
+
+def customer_readable_proposals(requirement: CustomerRequirement) -> QuerySet[Proposal]:
+    """The quotes or estimates a paying Customer may read in full.
+
+    Every vendor-confirmed proposal that is still on the table, plus the ones they already acted
+    on — `REJECTED` and `LAPSED` rows stay readable because a Customer comparing three quotes needs
+    to see the one they turned down, and a dispute needs the history. Superseded and withdrawn rows
+    are excluded: a price the vendor has replaced is not an offer.
+    """
+    return (
+        Proposal.objects.filter(requirement=requirement, vendor_confirmed_at__isnull=False)
+        .exclude(status__in=(Proposal.Status.SUPERSEDED, Proposal.Status.WITHDRAWN))
+        .select_related("partner", "partner__business_profile", "site_visit")
+        .order_by("total_paise", "id")
+    )
 
 
 def _transition_events(requirement: CustomerRequirement) -> list[dict[str, Any]]:

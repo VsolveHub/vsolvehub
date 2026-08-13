@@ -58,6 +58,7 @@ from apps.requirements.models import (
     ProposalSelection,
     VendorInvitation,
 )
+from apps.requirements.services import record_transition
 
 A3 = ServiceVariant.BookingArchetype.A3_TIME_BLOCK
 A5 = ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
@@ -127,8 +128,21 @@ def select_proposal(
     )
     proposal.status = Proposal.Status.SELECTED
     proposal.save(update_fields=("status", "updated_at"))
+    from_status = requirement.status
     requirement.status = CustomerRequirement.Status.SELECTED
     requirement.save(update_fields=("status", "updated_at"))
+    # The one command in M2 that commits a Customer to a named vendor, so the actor is recorded
+    # rather than inferred from the requirement's owner: Operations can act on a Customer's behalf
+    # elsewhere in this system, and "the Customer chose" and "somebody chose for them" must not be
+    # the same row.
+    record_transition(
+        requirement=requirement,
+        from_status=from_status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="proposal_selected",
+        reason=f"proposal:{proposal.id} partner:{proposal.partner_id}",
+    )
     enqueue_outbox_event(
         aggregate_type="requirement",
         aggregate_id=requirement.id,
@@ -158,6 +172,14 @@ def _restore_after_failed_selection(requirement: CustomerRequirement) -> None:
         else CustomerRequirement.Status.QUOTES_READY
     )
     requirement.save(update_fields=("status", "updated_at"))
+    record_transition(
+        requirement=requirement,
+        from_status=CustomerRequirement.Status.SELECTED,
+        to_status=requirement.status,
+        actor=None,
+        reason_code="selection_released",
+        reason="entitlement preserved; no new charge",
+    )
 
 
 @transaction.atomic
@@ -411,8 +433,17 @@ def _open_engagement(
         ]
     )
 
+    from_status = requirement.status
     requirement.status = CustomerRequirement.Status.ENGAGED
     requirement.save(update_fields=("status", "updated_at"))
+    record_transition(
+        requirement=requirement,
+        from_status=from_status,
+        to_status=requirement.status,
+        actor=None,
+        reason_code="vendor_reconfirmed",
+        reason=f"engagement:{engagement.id} mode:{engagement.commercial_mode}",
+    )
     if is_lead_only:
         # The A3 fee is earned from this point. It is not refunded for a change of mind afterwards,
         # which the Customer was told before they paid it.
@@ -479,6 +510,15 @@ def create_stage_funding_checkout(
     stage.funding_state = EngagementStage.FundingState.PENDING
     stage.payment_attempt = attempt
     stage.save(update_fields=("funding_state", "payment_attempt", "updated_at"))
+    requirement = engagement.requirement
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="stage_funding_started",
+        reason=f"stage:{stage.id} position:{stage.position} for {stage.amount_paise} paise",
+    )
     return stage, attempt
 
 

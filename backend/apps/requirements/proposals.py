@@ -20,21 +20,28 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
+from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_rate_meets_wage_floor
 from apps.partners.exceptions import WageFloorUnsetError
+from apps.requirements import access, matching, pricing
 from apps.requirements.exceptions import (
+    ProposalNotSelectableError,
     ProposalShapeError,
+    RejectionCapReachedError,
     RequirementTransitionError,
     VisitNotCompletedError,
 )
 from apps.requirements.models import (
     CustomerRequirement,
     Proposal,
+    ProposalSelection,
     RequirementQuestion,
     SiteVisit,
     VendorInvitation,
+    VisitPlanShare,
 )
+from apps.requirements.services import record_transition
 
 #: Digits that look like an Indian phone number, or an off-platform handle. A review signal only.
 _CONTACT_PATTERN = re.compile(
@@ -171,7 +178,7 @@ def assert_rate_meets_derived_wage_floor(
     )
 
 
-def _required_tax_basis(requirement: CustomerRequirement) -> str:
+def required_tax_basis(requirement: CustomerRequirement) -> str:
     """One basis per requirement, taken from whoever quoted first.
 
     Comparing a tax-inclusive total against a tax-exclusive one is the trap the comparison view
@@ -245,7 +252,7 @@ def submit_proposal(
         _assert_a5_shape(payload)
         site_visit = _assert_completed_visit(invitation=invitation, site_visit_id=site_visit_id)
 
-    required_basis = _required_tax_basis(requirement)
+    required_basis = required_tax_basis(requirement)
     if required_basis and tax_basis != required_basis:
         raise ProposalShapeError(
             f"Quotes for this request are compared {required_basis.lower()} of tax.",
@@ -262,12 +269,19 @@ def submit_proposal(
             rate_paise_per_day=rate_paise_per_worker_day,
         )
 
+    # The **highest revision**, not the live one. Until Wave C2 this read `status=SUBMITTED`, which
+    # was right while every supersession followed a live quote and wrong the moment `M2-BE-410` let
+    # a vendor re-validate an `EXPIRED` one: `previous` came back `None`, the new row was numbered
+    # revision 1 again, and `requirements_unique_proposal_revision` refused it. Numbering from the
+    # chain rather than from the live row also keeps `supersedes` unbroken across an expiry, which
+    # is what a dispute reads to reconstruct what this vendor offered and when.
     previous = (
         Proposal.objects.select_for_update()
-        .filter(invitation=invitation, status=Proposal.Status.SUBMITTED)
+        .filter(invitation=invitation)
+        .order_by("-revision")
         .first()
     )
-    if previous is not None:
+    if previous is not None and previous.status == Proposal.Status.SUBMITTED:
         previous.status = Proposal.Status.SUPERSEDED
         previous.save(update_fields=("status", "updated_at"))
 
@@ -301,6 +315,13 @@ def submit_proposal(
         invitation.status = VendorInvitation.Status.QUOTED
         invitation.save(update_fields=("status", "updated_at"))
 
+    if site_visit is not None:
+        # The A5 vendor has now delivered what the Customer's plan bought — a completed visit and a
+        # usable estimate — so the share is earned here rather than waiting for a sweep to notice.
+        # `settle_share_for_estimate` re-checks usability and share state itself, so an
+        # out-of-budget estimate or a share somebody already settled changes nothing.
+        access.settle_share_for_estimate(proposal=proposal)
+
     _promote_requirement_when_quoted(requirement)
     return proposal
 
@@ -322,9 +343,21 @@ def confirm_captured_proposal(*, proposal_id: uuid.UUID) -> Proposal:
     return proposal
 
 
+#: The two states a first usable quote or estimate can promote *from*. `MATCHING` is A3's path —
+#: a remote quote arrives and the teaser screen becomes real. `VISITS_BOOKED` is A5's, added with
+#: revision 3: the plan was charged when a vendor confirmed a slot, and the requirement only
+#: reaches `QUOTES_READY` when that visit actually produces something to read
+#: (`07-state-machines-and-permissions.md` §1). Without the second entry an A5 requirement would
+#: sit in `VISITS_BOOKED` forever and the Customer could never select.
+_PROMOTABLE_TO_QUOTES_READY = (
+    CustomerRequirement.Status.MATCHING,
+    CustomerRequirement.Status.VISITS_BOOKED,
+)
+
+
 def _promote_requirement_when_quoted(requirement: CustomerRequirement) -> None:
-    """Move to QUOTES_READY the moment a usable, vendor-confirmed quote exists."""
-    if requirement.status != CustomerRequirement.Status.MATCHING:
+    """Move to QUOTES_READY the moment a usable, vendor-confirmed quote or estimate exists."""
+    if requirement.status not in _PROMOTABLE_TO_QUOTES_READY:
         return
     has_usable = Proposal.objects.filter(
         requirement=requirement,
@@ -333,8 +366,16 @@ def _promote_requirement_when_quoted(requirement: CustomerRequirement) -> None:
         vendor_confirmed_at__isnull=False,
     ).exists()
     if has_usable:
+        from_status = requirement.status
         requirement.status = CustomerRequirement.Status.QUOTES_READY
         requirement.save(update_fields=("status", "updated_at"))
+        record_transition(
+            requirement=requirement,
+            from_status=from_status,
+            to_status=requirement.status,
+            actor=None,
+            reason_code="first_usable_quote_delivered",
+        )
 
 
 @transaction.atomic
@@ -367,6 +408,226 @@ def expire_proposal(*, proposal_id: uuid.UUID) -> Proposal:
         return proposal
     proposal.status = Proposal.Status.EXPIRED
     proposal.save(update_fields=("status", "updated_at"))
+    return proposal
+
+
+# ---------------------------------------------------------------------------
+# Customer rejection and re-validation (`M2-BE-406`, `409`, `410`)
+# ---------------------------------------------------------------------------
+
+
+def non_responsive_rejection_count(requirement: CustomerRequirement) -> int:
+    """How many free replacements this Customer has already used.
+
+    Counted from `Proposal` rows rather than from a stored tally, because the rows are what an
+    appeal and a vendor-standing review actually read. `QuoteUnlock.non_responsive_rejection_count`
+    is kept in step below as the unlock's own snapshot — it is a mirror, and this is the source.
+    """
+    return Proposal.objects.filter(
+        requirement=requirement,
+        status=Proposal.Status.REJECTED,
+        rejection_reason=Proposal.RejectionReason.NON_RESPONSIVE,
+    ).count()
+
+
+def _release_slot_and_replace(*, proposal: Proposal, reason_code: str) -> None:
+    """Give the quote slot back and invite one vendor to take it.
+
+    `withdraw_invitation` rather than `decline_invitation`: a decline is the *vendor's* word, and
+    recording a Customer's rejection as the vendor declining would put the wrong party's name on
+    the exit. Withdrawal is the penalty-free release the invitation machine already models, and it
+    releases the same capacity hold.
+
+    The replacement wave is sized to the one slot that was just freed. `invite_wave` refuses on a
+    requirement that is no longer live, so a rejection made moments after the needed-by date passes
+    releases the slot and invites nobody, rather than raising into the Customer's response.
+    """
+    matching.withdraw_invitation(invitation_id=proposal.invitation_id, reason_code=reason_code)
+    requirement = proposal.requirement
+    if requirement.status in CustomerRequirement.LIVE_STATUSES:
+        matching.invite_wave(requirement_id=requirement.id, size=1)
+
+
+@transaction.atomic
+def reject_proposal(
+    *,
+    requirement_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    reason: str,
+    actor: User,
+    note: str = "",
+) -> Proposal:
+    """The Customer refuses a quote or estimate (`M2-BE-406`).
+
+    Two reasons, and only one of them costs anybody anything:
+
+    * **`NOT_CHOSEN`** is bookkeeping. The Customer preferred somebody else, the quote stops being
+      selectable, and nothing else happens — no slot is reopened, no cap is consumed and the
+      vendor's standing is untouched, because losing is not misconduct.
+    * **`NON_RESPONSIVE`** is the control against slot squatting: a deliberately junk-but-complete
+      quote both looks responsive and blocks a competitor. It releases the slot and buys a
+      replacement **at no extra charge** — for A3 a new quote slot, for A5 a free replacement visit
+      on the same plan share — and it is capped, because a mechanism that hands out free
+      replacements without a limit is a mechanism that gets farmed.
+
+    The cap is `M2VariantConfiguration.non_responsive_rejection_cap` and **fails closed**: while the
+    owner has not set it, `m2_policy_unavailable` refuses the *free replacement*, not the rejection
+    itself. A Customer can always refuse a quote; what an unset policy blocks is Vsolve promising a
+    replacement it has not decided the terms of.
+    """
+    requirement = (
+        CustomerRequirement.objects.select_for_update()
+        .select_related("configuration")
+        .get(pk=requirement_id)
+    )
+    if requirement.status in CustomerRequirement.CLOSED_STATUSES:
+        raise RequirementTransitionError("This request is closed.")
+    if reason not in Proposal.RejectionReason.values:
+        raise ProposalShapeError("That is not a rejection reason we record.")
+
+    proposal = (
+        Proposal.objects.select_for_update()
+        .select_related("requirement", "invitation", "site_visit__plan_share")
+        .get(pk=proposal_id, requirement=requirement)
+    )
+    if proposal.status != Proposal.Status.SUBMITTED:
+        raise ProposalNotSelectableError("This quote can no longer be rejected.")
+
+    is_non_responsive = reason == Proposal.RejectionReason.NON_RESPONSIVE
+    if is_non_responsive:
+        # Read the cap before writing anything. Refusing halfway would leave a rejected quote with
+        # no replacement behind it and no way for the Customer to tell which of the two happened.
+        cap = pricing.non_responsive_rejection_cap(requirement)
+        if non_responsive_rejection_count(requirement) >= cap:
+            raise RejectionCapReachedError()
+
+    proposal.status = Proposal.Status.REJECTED
+    proposal.rejection_reason = reason
+    proposal.save(update_fields=("status", "rejection_reason", "updated_at"))
+
+    if not is_non_responsive:
+        return proposal
+
+    _mirror_rejection_count_on_unlock(requirement)
+    visit = proposal.site_visit
+    share = visit.plan_share if visit is not None else None
+    if share is not None:
+        # A5: the share this vendor consumed owes a **free replacement visit**, so it goes back to
+        # `REPLACED` rather than `OPEN`. The distinction is money, not vocabulary — `REPLACED` is
+        # a slot the Customer already paid for and has not received, and the visit-SLA sweep
+        # refunds it if nobody ever takes it.
+        _revert_share_for_replacement(share)
+    _release_slot_and_replace(proposal=proposal, reason_code="non_responsive_quote")
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="proposal_rejected_non_responsive",
+        reason=f"proposal:{proposal.id} partner:{proposal.partner_id} {note}".strip(),
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.proposal.rejected",
+        idempotency_key=f"proposal-rejected:{proposal.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "proposal_id": str(proposal.id),
+            "partner_id": str(proposal.partner_id),
+            "reason": reason,
+        },
+    )
+    return proposal
+
+
+def _revert_share_for_replacement(share: VisitPlanShare) -> None:
+    """Owe a free replacement visit on a share whose estimate was refused."""
+    locked = VisitPlanShare.objects.select_for_update().get(pk=share.pk)
+    if locked.status != VisitPlanShare.Status.COMMITTED:
+        return
+    locked.status = VisitPlanShare.Status.REPLACED
+    locked.partner = None
+    locked.settlement_reason_code = "non_responsive_estimate"
+    locked.save(update_fields=("status", "partner", "settlement_reason_code", "updated_at"))
+
+
+def _mirror_rejection_count_on_unlock(requirement: CustomerRequirement) -> None:
+    unlock = access.active_unlock(requirement)
+    if unlock is None:
+        return
+    unlock.non_responsive_rejection_count = non_responsive_rejection_count(requirement)
+    unlock.save(update_fields=("non_responsive_rejection_count", "updated_at"))
+
+
+@transaction.atomic
+def request_revalidation(
+    *, requirement_id: uuid.UUID, proposal_id: uuid.UUID, actor: User
+) -> Proposal:
+    """Ask a vendor to re-validate a quote whose validity elapsed (`M2-BE-410`).
+
+    **Expiry must not be a dead end that forces a second purchase.** The Customer already bought
+    access to this vendor's quote — the A3 unlock, or the A5 visit that produced the estimate — and
+    a date passing is not a new sale. This command therefore charges nothing and creates nothing: it
+    stamps the request on the proposal and asks the vendor, who answers by superseding it through
+    `submit_proposal`. The new revision lands under the same unlock or plan.
+
+    Deliberately **not** a re-open. The expired row stays `EXPIRED` and stays unselectable; only a
+    vendor can put a live price back on the table, because a price is the vendor's statement.
+    """
+    requirement = (
+        CustomerRequirement.objects.select_for_update()
+        .select_related("configuration")
+        .get(pk=requirement_id)
+    )
+    if requirement.status in CustomerRequirement.CLOSED_STATUSES:
+        raise RequirementTransitionError("This request is closed.")
+    if not access.customer_may_read_full_quotes(requirement):
+        # The same entitlement that lets them read the quote lets them ask about it. Without this a
+        # requirement id would be enough to poke a vendor on a quote the caller never bought.
+        raise ProposalNotSelectableError("Unlock this request's quotes before asking about them.")
+    if ProposalSelection.objects.filter(
+        requirement=requirement,
+        status__in=ProposalSelection.LIVE_STATUSES,
+    ).exists():
+        raise ProposalNotSelectableError("This request already has a chosen vendor.")
+
+    proposal = Proposal.objects.select_for_update().get(pk=proposal_id, requirement=requirement)
+    now = timezone.now()
+    is_expired = proposal.status == Proposal.Status.EXPIRED or (
+        proposal.status == Proposal.Status.SUBMITTED
+        and proposal.valid_until is not None
+        and proposal.valid_until <= now
+    )
+    if not is_expired:
+        raise ProposalNotSelectableError("This quote has not expired, so it can still be selected.")
+    if proposal.revalidation_requested_at is not None:
+        # Idempotent by state. A second tap re-reads the first request rather than sending the
+        # vendor a duplicate, and the vendor's answer is a supersession either way.
+        return proposal
+
+    proposal.revalidation_requested_at = now
+    proposal.save(update_fields=("revalidation_requested_at", "updated_at"))
+    record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=actor,
+        reason_code="revalidation_requested",
+        reason=f"proposal:{proposal.id} partner:{proposal.partner_id}",
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.proposal.revalidation_requested",
+        idempotency_key=f"proposal-revalidation:{proposal.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "proposal_id": str(proposal.id),
+            "partner_id": str(proposal.partner_id),
+            "invitation_id": str(proposal.invitation_id),
+        },
+    )
     return proposal
 
 
@@ -484,6 +745,20 @@ def schedule_site_visit(*, site_visit_id: uuid.UUID, scheduled_for: Any) -> Site
 
 @transaction.atomic
 def complete_site_visit(*, site_visit_id: uuid.UUID, outcome_notes: str = "") -> SiteVisit:
+    """Close a visit that happened. One command, two shapes.
+
+    An **A5 plan visit** is handed to `access.complete_plan_visit`, which does everything this does
+    and additionally stamps `estimate_due_at` — the post-visit window inside which an estimate must
+    land, and the clock the estimate-or-refund sweep reads. Dispatching here rather than in a view
+    is deliberate: which command a visit needs is a property of the visit, and a router that had to
+    know would be the place the two paths drift.
+
+    An **ad-hoc A3 visit** keeps the simpler close below. It carries no plan share, so there is no
+    window to open and nothing to settle.
+    """
+    if SiteVisit.objects.filter(pk=site_visit_id, plan_share__isnull=False).exists():
+        return access.complete_plan_visit(site_visit_id=site_visit_id, outcome_notes=outcome_notes)
+
     visit = SiteVisit.objects.select_for_update().get(pk=site_visit_id)
     if visit.status != SiteVisit.Status.SCHEDULED:
         raise RequirementTransitionError("Only a scheduled visit can be completed.")

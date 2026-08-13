@@ -8,6 +8,8 @@ tells a reader which role a route belongs to before they open the view.
 from django.urls import path
 
 from apps.requirements.views import (
+    EngagementDetailView,
+    EngagementStageFundingView,
     PartnerDemandPreviewView,
     PartnerEnquiryAcceptView,
     PartnerEnquiryAttachmentListView,
@@ -16,6 +18,7 @@ from apps.requirements.views import (
     PartnerEnquiryDetailView,
     PartnerEnquiryQuestionView,
     PartnerEnquirySiteVisitView,
+    PartnerEnquiryVisitSlotView,
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
     PartnerProposalWithdrawView,
@@ -27,10 +30,21 @@ from apps.requirements.views import (
     RequirementDetailView,
     RequirementDuplicateCheckView,
     RequirementQuestionAnswerView,
+    RequirementQuoteListView,
+    RequirementQuoteRejectView,
+    RequirementQuoteRevalidateView,
+    RequirementSelectionView,
     RequirementSubmitView,
     RequirementTeaserListView,
     RequirementTimelineView,
+    RequirementUnlockView,
+    RequirementVisitPlanCheckoutView,
+    RequirementVisitPlanView,
+    SelectionDeclineView,
+    SelectionReconfirmView,
+    SiteVisitArrivalView,
     SiteVisitCompleteView,
+    SiteVisitNoShowView,
     SiteVisitScheduleView,
 )
 
@@ -67,6 +81,65 @@ urlpatterns = [
         RequirementQuestionAnswerView.as_view(),
         name="m2-requirement-question-answer",
     ),
+    # Wave C2 — the two front doors. `unlock/` is A3-only and `visit-plan/` is A5-only; each
+    # refuses on the other archetype rather than quietly doing nothing, so a client that mounted
+    # the wrong one finds out immediately.
+    path(
+        "requirements/<uuid:requirement_id>/unlock/",
+        RequirementUnlockView.as_view(),
+        name="m2-requirement-unlock",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/visit-plan/",
+        RequirementVisitPlanView.as_view(),
+        name="m2-requirement-visit-plan",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/visit-plan/checkout/",
+        RequirementVisitPlanCheckoutView.as_view(),
+        name="m2-requirement-visit-plan-checkout",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/quotes/",
+        RequirementQuoteListView.as_view(),
+        name="m2-requirement-quotes",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/quotes/<uuid:proposal_id>/reject/",
+        RequirementQuoteRejectView.as_view(),
+        name="m2-requirement-quote-reject",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/quotes/<uuid:proposal_id>/revalidate/",
+        RequirementQuoteRevalidateView.as_view(),
+        name="m2-requirement-quote-revalidate",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/selection/",
+        RequirementSelectionView.as_view(),
+        name="m2-requirement-selection",
+    ),
+    # Selection and engagement: the vendor's half, and a read either party may make.
+    path(
+        "selections/<uuid:selection_id>/reconfirm/",
+        SelectionReconfirmView.as_view(),
+        name="m2-selection-reconfirm",
+    ),
+    path(
+        "selections/<uuid:selection_id>/decline/",
+        SelectionDeclineView.as_view(),
+        name="m2-selection-decline",
+    ),
+    path(
+        "engagements/<uuid:engagement_id>/",
+        EngagementDetailView.as_view(),
+        name="m2-engagement-detail",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/funding/",
+        EngagementStageFundingView.as_view(),
+        name="m2-engagement-stage-funding",
+    ),
     path(
         "requirements/<uuid:requirement_id>/attachments/uploads/",
         RequirementAttachmentCollectionView.as_view(),
@@ -92,6 +165,16 @@ urlpatterns = [
         "site-visits/<uuid:site_visit_id>/complete/",
         SiteVisitCompleteView.as_view(),
         name="m2-site-visit-complete",
+    ),
+    path(
+        "site-visits/<uuid:site_visit_id>/arrival/",
+        SiteVisitArrivalView.as_view(),
+        name="m2-site-visit-arrival",
+    ),
+    path(
+        "site-visits/<uuid:site_visit_id>/no-show/",
+        SiteVisitNoShowView.as_view(),
+        name="m2-site-visit-no-show",
     ),
     # Partner
     path(
@@ -138,6 +221,14 @@ urlpatterns = [
         "partner/enquiries/<uuid:invitation_id>/site-visits/",
         PartnerEnquirySiteVisitView.as_view(),
         name="m2-partner-enquiry-site-visit",
+    ),
+    # The A5 slot picker, read and write on one path. `GET` draws the grid the browser renders;
+    # `POST` redeems a signed slot id from it. Publishing the write alone would have left the
+    # picker with nothing to draw — the browser must never compute availability.
+    path(
+        "partner/enquiries/<uuid:invitation_id>/visit-slots/",
+        PartnerEnquiryVisitSlotView.as_view(),
+        name="m2-partner-enquiry-visit-slots",
     ),
     path("proposals/", PartnerProposalCollectionView.as_view(), name="m2-proposal-create"),
     path(

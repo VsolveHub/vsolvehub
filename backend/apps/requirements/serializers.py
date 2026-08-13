@@ -14,22 +14,53 @@ Two rules run through this file and neither is negotiable:
 from datetime import datetime
 from typing import Any
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.catalog.models import ServiceVariant
 from apps.requirements.models import (
     CustomerRequirement,
+    Engagement,
+    EngagementStage,
     Proposal,
+    ProposalSelection,
+    QuoteUnlock,
     RequirementAttachment,
     RequirementQuestion,
     SiteVisit,
     VendorInvitation,
+    VisitPlan,
+    VisitPlanShare,
 )
 from apps.requirements.selectors import (
     closure_reason,
     confirmed_teaser_count,
     lifecycle_explanation,
     missing_answer_codes,
+)
+
+#: Why a vendor declined an enquiry, published so both apps render one vocabulary.
+#:
+#: `07-state-machines-and-permissions.md` requires a reason on every decline and names none, and
+#: `VendorInvitation.decline_reason_code` is deliberately left an unconstrained `SlugField` on the
+#: model: the same column also carries **system** reasons (`requirement_changed` from a withdrawal,
+#: `non_responsive_quote` from a Customer rejection), and constraining the column would refuse the
+#: platform's own writes. The vocabulary therefore lives here, on the one surface a vendor types
+#: into — which is where it was missing.
+INVITATION_DECLINE_REASONS = (
+    ("TOO_FAR", "Too far to travel"),
+    ("NO_CAPACITY", "No capacity on those dates"),
+    ("OUT_OF_SCOPE", "Not work we do"),
+    ("BUDGET_TOO_LOW", "Budget is below what this costs"),
+    ("UNCLEAR_SCOPE", "Cannot tell what is being asked for"),
+    ("OTHER", "Another reason"),
+)
+
+#: Whose absence is being reported. A request-shape vocabulary with no column behind it — the
+#: outcome is written as a `SiteVisit.Status`, not as this string.
+VISIT_NO_SHOW_PARTIES = (
+    ("VENDOR", "Vendor"),
+    ("CUSTOMER", "Customer"),
 )
 
 # ---------------------------------------------------------------------------
@@ -138,6 +169,9 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
     """
 
     category_slug = serializers.SlugField(source="variant.service.slug", read_only=True)
+    #: The name a human reads. `category_slug` is a slug and misnamed besides, so `My requests` was
+    #: titling rows by formatting one — `frontend-execution-plan.md` §7, `M2-FE-213`.
+    service_name = serializers.CharField(source="variant.service.name", read_only=True)
     inferred_lifecycle = serializers.CharField(source="archetype", read_only=True)
     lifecycle_explanation = serializers.SerializerMethodField()
     missing_required_answers = serializers.SerializerMethodField()
@@ -146,6 +180,18 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
     #: date-flexibility control is a checkbox and re-deriving the boolean per client is how two
     #: apps end up disagreeing about what zero days means.
     is_date_flexible = serializers.SerializerMethodField()
+    #: The three tracking fields that were on the list projection and not on this one, so a direct
+    #: navigation to `/requests/{id}` rendered a state with no countdown and no quote count
+    #: (`M2-FE-215`). Filling them from the list cache would have shown a deadline read at some
+    #: earlier moment as though it had just been confirmed, on the one screen whose job is to be
+    #: truthful about a promise with a clock on it.
+    quote_delivery_deadline_at = serializers.DateTimeField(source="quotes_due_at", read_only=True)
+    teaser_count = serializers.SerializerMethodField()
+    closure_reason = serializers.SerializerMethodField()
+    #: Stated **before** the button rather than after. Until now the only field saying a
+    #: requirement costs nothing was on the submit *response* — i.e. the Customer was told after
+    #: they had already sent it (`M2-FE-212`).
+    is_free = serializers.SerializerMethodField()
     attachments = RequirementAttachmentSerializer(many=True, read_only=True)
     server_now = serializers.SerializerMethodField()
 
@@ -155,6 +201,7 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
             "id",
             "status",
             "category_slug",
+            "service_name",
             "inferred_lifecycle",
             "lifecycle_explanation",
             "answers",
@@ -164,6 +211,10 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
             "flexibility_days",
             "is_date_flexible",
             "service_by",
+            "quote_delivery_deadline_at",
+            "teaser_count",
+            "closure_reason",
+            "is_free",
             "budget_min_paise",
             "budget_max_paise",
             "language",
@@ -181,6 +232,22 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
 
     def get_is_date_flexible(self, obj: CustomerRequirement) -> bool:
         return obj.flexibility_days > 0
+
+    def get_teaser_count(self, obj: CustomerRequirement) -> int:
+        return confirmed_teaser_count(obj)
+
+    def get_closure_reason(self, obj: CustomerRequirement) -> str | None:
+        return closure_reason(obj)
+
+    def get_is_free(self, _obj: CustomerRequirement) -> bool:
+        """Always `True`, and read from the server on purpose.
+
+        Submitting a requirement is free in both archetypes — the A3 unlock and the A5 visit plan
+        are separate purchases made later, against a delivered quote or a confirmed visit. A screen
+        that hardcodes the promise keeps making it after the policy changes; this is the field that
+        would go `false` first.
+        """
+        return True
 
     def get_server_now(self, _obj: CustomerRequirement) -> str:
         server_now: datetime = self.context["server_now"]
@@ -208,6 +275,8 @@ class RequirementSummarySerializer(serializers.ModelSerializer[CustomerRequireme
     """A `My requests` row."""
 
     category_slug = serializers.SlugField(source="variant.service.slug", read_only=True)
+    #: See `RequirementDraftSerializer.service_name`. A row title is not a slug.
+    service_name = serializers.CharField(source="variant.service.name", read_only=True)
     lifecycle_explanation = serializers.SerializerMethodField()
     quote_delivery_deadline_at = serializers.DateTimeField(source="quotes_due_at", read_only=True)
     teaser_count = serializers.SerializerMethodField()
@@ -220,6 +289,7 @@ class RequirementSummarySerializer(serializers.ModelSerializer[CustomerRequireme
             "id",
             "status",
             "category_slug",
+            "service_name",
             "lifecycle_explanation",
             "service_by",
             "quote_delivery_deadline_at",
@@ -338,17 +408,40 @@ class QuestionAnswerSerializer(serializers.Serializer[dict[str, Any]]):
 
 
 class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
+    """One visit, in both its shapes.
+
+    `is_plan_visit` is the field that decides how the whole record reads. A plan visit is paid for
+    out of the A5 visit plan, occupies a share of it and opens an estimate window when it completes;
+    an ad-hoc visit is a vendor-priced journey with none of that behind it. Publishing the flag
+    rather than letting a client infer it from `fee_paise` keeps the two from being rendered as one
+    thing with a different price.
+    """
+
+    is_plan_visit = serializers.SerializerMethodField()
+
     class Meta:
         model = SiteVisit
         fields = (
             "id",
             "status",
+            "is_plan_visit",
             "fee_paise",
             "adjusts_against_final_price",
             "scheduled_for",
+            "duration_minutes",
+            "arrival_confirmed_at",
+            "arrival_method",
             "completed_at",
+            #: When a completed visit stops being allowed to produce an estimate. Null when the
+            #: owner has set no post-visit window — which is an unset policy, not "no deadline
+            #: soon", and the composer must not render it as time in hand.
+            "estimate_due_at",
+            "cancellation_reason_code",
         )
         read_only_fields = fields
+
+    def get_is_plan_visit(self, obj: SiteVisit) -> bool:
+        return obj.plan_share_id is not None
 
 
 class SiteVisitRequestSerializer(serializers.Serializer[dict[str, Any]]):
@@ -475,34 +568,106 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         read_only=True,
         allow_null=True,
     )
+    #: See `RequirementDraftSerializer.service_name` — the vendor's inbox had the same slug problem.
+    service_name = serializers.CharField(
+        source="requirement.variant.service.name",
+        read_only=True,
+    )
+    #: **The basis every quote on this requirement is compared on.** `_required_tax_basis` forces
+    #: each proposal onto whichever basis the first vendor used and refuses a mismatch — against a
+    #: vendor the second one cannot see. Blank means nobody has quoted yet and this vendor sets it
+    #: (`M2-FE-311`).
+    required_tax_basis = serializers.SerializerMethodField()
+    #: The quotes this vendor has already submitted against this enquiry, so the composer opens on
+    #: the current revision rather than on an empty form.
+    proposals = serializers.SerializerMethodField()
     questions = RequirementQuestionSerializer(many=True, read_only=True)
     site_visits = SiteVisitSerializer(many=True, read_only=True)
+    #: The one read carrying a hard `responds_by`. Without the server's own clock beside it a
+    #: countdown is drawn against a browser clock that may have drifted, on the field that decides
+    #: whether the vendor still has a slot.
+    server_now = serializers.SerializerMethodField()
 
     class Meta(EnquirySummarySerializer.Meta):
         fields = (
             *EnquirySummarySerializer.Meta.fields,
+            "service_name",
             "answers",
             "additional_details",
             "budget_min_paise",
             "budget_max_paise",
+            "required_tax_basis",
             "decline_reason_code",
+            "proposals",
             "questions",
             "site_visits",
+            "server_now",
         )
         read_only_fields = fields
+
+    def get_required_tax_basis(self, obj: VendorInvitation) -> str:
+        from apps.requirements.proposals import required_tax_basis  # noqa: PLC0415 - import cycle
+
+        return required_tax_basis(obj.requirement)
+
+    def get_proposals(self, obj: VendorInvitation) -> list[dict[str, Any]]:
+        queryset = Proposal.objects.filter(invitation=obj).order_by("-revision")
+        return list(ProposalSerializer(queryset, many=True).data)
+
+    def get_server_now(self, _obj: VendorInvitation) -> str:
+        return timezone.now().isoformat()
 
 
 class EnquiryDeclineSerializer(serializers.Serializer[dict[str, Any]]):
     #: Required, and the database agrees: `requirements_decline_needs_reason` refuses a declined
     #: invitation with an empty reason. Declines without reasons make replacement guesswork.
-    reason_code = serializers.SlugField(max_length=80)
+    #: Constrained to `INVITATION_DECLINE_REASONS` since 1.24.0 — an unconstrained slug meant every
+    #: app invented its own strings and no Operations report could group them.
+    reason_code = serializers.ChoiceField(choices=INVITATION_DECLINE_REASONS)
+
+
+class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
+    """One A5 milestone, published so two vendors cannot send two incomparable structures.
+
+    Until 1.24.0 `stages` was an untyped list and the domain read exactly one key, `amount_paise`.
+    Everything a Customer needs to *read* a stage — what it delivers, when it ends — was
+    client-authored, so the comparison view had nothing stable to render (`M2-FE-309`).
+
+    `title` is required and the rest are not: a stage with a name and an amount is a comparable
+    stage, and refusing one because a vendor did not fill in an end date would push them back to
+    a single-line quote.
+    """
+
+    title = serializers.CharField(max_length=200)
+    deliverable = serializers.CharField(
+        required=False, allow_blank=True, max_length=2000, default=""
+    )
+    amount_paise = serializers.IntegerField(min_value=0)
+    ends_on = serializers.DateField(required=False, allow_null=True, default=None)
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        """Read a stored stage defensively; the column is a `JSONField`, not a table.
+
+        Stages are stored as JSON, so a row written before this shape existed can be missing any
+        key — and the declared-field path would raise `KeyError` on the *read*, turning an old
+        proposal into a 500 on the screen that compares quotes. Reading through `.get` publishes the
+        same four keys for every row and degrades an unknown stage to a blank title rather than an
+        error page. `label` is accepted as a `title` alias because `engagements._a5_stages` already
+        reads both.
+        """
+        stage = instance if isinstance(instance, dict) else {}
+        return {
+            "title": str(stage.get("title") or stage.get("label") or ""),
+            "deliverable": str(stage.get("deliverable") or ""),
+            "amount_paise": int(stage.get("amount_paise") or 0),
+            "ends_on": stage.get("ends_on"),
+        }
 
 
 class ProposalSerializer(serializers.ModelSerializer[Proposal]):
-    """A vendor's own quote, read back to that vendor.
+    """A vendor's own quote, read back to that vendor."""
 
-    Not the Customer-facing quote view — that requires an active unlock and arrives with BE4.
-    """
+    stages = ProposalStageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Proposal
@@ -513,6 +678,12 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "revision",
             "status",
             "usability",
+            "rejection_reason",
+            #: The completed visit this estimate was priced on. Null for every A3 quote.
+            "site_visit",
+            #: Set when the Customer asked for a fresh price on an expired quote. The vendor's
+            #: answer is a supersession, and it reuses the unlock or plan already paid for.
+            "revalidation_requested_at",
             "rate_paise_per_worker_day",
             "minimum_days",
             "worker_count",
@@ -529,6 +700,12 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "submitted_at",
         )
         read_only_fields = fields
+
+
+class ProposalPageSerializer(serializers.Serializer[dict[str, Any]]):
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = ProposalSerializer(many=True)
 
 
 class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
@@ -551,12 +728,17 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     minimum_days = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     worker_count = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
-    stages = serializers.ListField(child=serializers.JSONField(), required=False)
+    stages = ProposalStageSerializer(many=True, required=False)
     inclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     exclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     warranty_terms = serializers.CharField(required=False, allow_blank=True, max_length=4000)
     valid_until = serializers.DateTimeField(required=False, allow_null=True)
     commission_treatment = serializers.CharField(required=False, allow_blank=True, max_length=24)
+    #: **Required for an A5 estimate**, and the field that was missing: `submit_proposal` has always
+    #: taken a `site_visit_id` and no serializer published one, so an on-site estimate could not be
+    #: submitted over HTTP at all. The domain refuses a visit that is not `COMPLETED` and not this
+    #: vendor's, so this is an identifier and never an assertion.
+    site_visit_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         if attrs.get("tax_paise", 0) > attrs["total_paise"]:
@@ -564,6 +746,400 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
                 {"tax_paise": "Tax cannot be more than the quoted total."}
             )
         return attrs
+
+
+# ---------------------------------------------------------------------------
+# Wave C2: the two front doors, selection and the engagement
+#
+# Every serializer below obeys the same rule the teaser obeys in the other direction: a payload
+# that crosses a paywall carries what the payer bought and nothing else. A visit-plan read goes to
+# a Customer who may not have paid yet, so it carries slot times and vendor *presence* — never a
+# vendor's contact details, and never another vendor's price.
+# ---------------------------------------------------------------------------
+
+
+class AccessCheckoutSerializer(serializers.Serializer[dict[str, Any]]):
+    """What a client needs to hand a charge to the payment provider, and nothing more.
+
+    No provider payload, no key, no signature — `M2-BE-415` asks for payment status without
+    leaking provider internals, and the order id plus the amount is the whole of what a checkout
+    sheet needs. **The status here is never the grant.** `PROVIDER_PENDING` and `CAPTURED` describe
+    the *attempt*; whether the Customer actually has an unlock or a charged plan is the `unlock` or
+    `visit_plan` object beside it, and only a verified callback moves that.
+    """
+
+    payment_attempt_id = serializers.UUIDField(read_only=True)
+    amount_paise = serializers.IntegerField(read_only=True)
+    currency = serializers.CharField(read_only=True)
+    provider = serializers.CharField(read_only=True)
+    provider_order_id = serializers.CharField(read_only=True, allow_blank=True)
+    status = serializers.CharField(read_only=True)
+    #: When the held visit slot — and therefore this charge — lapses. Null for the A3 unlock, which
+    #: holds nothing and expires with nothing.
+    expires_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class QuoteUnlockSerializer(serializers.ModelSerializer[QuoteUnlock]):
+    """The A3 purchase. `ACTIVE` is only ever reached from a verified provider callback."""
+
+    class Meta:
+        model = QuoteUnlock
+        fields = (
+            "id",
+            "status",
+            "price_paise",
+            "non_responsive_rejection_count",
+            "receipt_series",
+            "receipt_sequence",
+            "activated_at",
+            "consumed_at",
+            "refunded_at",
+        )
+        read_only_fields = fields
+
+
+class UnlockStateSerializer(serializers.Serializer[dict[str, Any]]):
+    """The A3 paywall as one read: what it costs, whether it can be bought, and whether it was."""
+
+    #: Null while nothing has been started. A `null` unlock with `is_available: true` is the state
+    #: the buy button exists for.
+    unlock = QuoteUnlockSerializer(read_only=True, allow_null=True)
+    #: Mirrors the command's own guard so the control can be disabled — never so the client can
+    #: decide. `create_unlock_checkout` re-checks under the requirement's row lock.
+    is_available = serializers.BooleanField(read_only=True)
+    #: Null when Operations has loaded no effective price. The screen says we cannot offer this
+    #: yet; it does not invent INR 149.
+    price_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    usable_quote_count = serializers.IntegerField(read_only=True)
+    can_read_full_quotes = serializers.BooleanField(read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class VisitPlanShareSerializer(serializers.ModelSerializer[VisitPlanShare]):
+    """One slot of the plan and the money that follows it.
+
+    The split is published because the Customer is entitled to know what their money bought: a
+    vendor visit payout and a Vsolve platform share, in paise, per slot. `REFUNDED` returns both.
+    """
+
+    class Meta:
+        model = VisitPlanShare
+        fields = (
+            "id",
+            "position",
+            "status",
+            "amount_paise",
+            "vendor_payout_paise",
+            "platform_share_paise",
+            "settlement_reason_code",
+            "committed_at",
+            "earned_at",
+            "refunded_at",
+        )
+        read_only_fields = fields
+
+
+class VisitPlanTierSerializer(serializers.Serializer[dict[str, Any]]):
+    """One row of the review screen's chooser. An empty list is the honest unpriced state."""
+
+    plan_size = serializers.IntegerField(read_only=True)
+    price_paise = serializers.IntegerField(read_only=True)
+
+
+class VisitPlanSerializer(serializers.ModelSerializer[VisitPlan]):
+    shares = VisitPlanShareSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VisitPlan
+        fields = (
+            "id",
+            "status",
+            "plan_size",
+            "price_paise",
+            #: What the Customer still owes: the tier price less any credit carried over from an
+            #: A3 unlock when Operations reclassified the request. `M2-BE-427` — never charge twice.
+            "credit_paise",
+            "chargeable_paise",
+            "shares",
+            "receipt_series",
+            "receipt_sequence",
+            #: When every slot should be filled. Unfilled shares auto-refund past it.
+            "fill_due_at",
+            "chosen_at",
+            "charged_at",
+            "settled_at",
+        )
+        read_only_fields = fields
+
+
+class VisitPlanStateSerializer(serializers.Serializer[dict[str, Any]]):
+    """The A5 front door as one read: the chooser before, the tracker after.
+
+    Deliberately one endpoint for both. Before a plan exists it carries the priced tiers the review
+    screen offers; after one exists it carries the plan, its shares and the confirmed visits with
+    their times. Two endpoints would have meant the tracker and the chooser could disagree about
+    which plan the Customer has.
+    """
+
+    plan = VisitPlanSerializer(read_only=True, allow_null=True)
+    available_tiers = VisitPlanTierSerializer(many=True, read_only=True)
+    #: The confirmed visits, in slot order. This is what `M2-FE-421`'s tracker renders: when each
+    #: professional is coming. Vendor identity is disclosed here **only** for a confirmed visit —
+    #: somebody entering a home must be nameable — and never for an open slot.
+    visits = SiteVisitSerializer(many=True, read_only=True)
+    #: Mirrors `create_visit_plan_checkout`'s guard: true once a vendor holds a slot and the plan
+    #: has not been paid for. The command re-checks.
+    checkout_available = serializers.BooleanField(read_only=True)
+    can_read_full_estimates = serializers.BooleanField(read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class VisitPlanChooseSerializer(serializers.Serializer[dict[str, Any]]):
+    #: 1, 2 or 3 professionals. No default: how many people come to a Customer's home is their
+    #: decision, and a default would be the platform quietly making it.
+    plan_size = serializers.IntegerField(min_value=1, max_value=3)
+
+
+class VendorCardSerializer(serializers.Serializer[dict[str, Any]]):
+    """A responding vendor, as much of one as the Customer has paid to see.
+
+    An explicit field list for the same reason `QuoteTeaserSerializer` is one. Before a visit is
+    confirmed this is a badge, a rating and a type — no name, no photo, no contact. After
+    confirmation the name is disclosed, because a person is entering the Customer's home and must
+    be nameable; contact stays masked until the engagement.
+    """
+
+    partner_id = serializers.UUIDField(read_only=True)
+    vendor_type = serializers.CharField(read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+    #: Present only once this vendor has confirmed a visit slot. Null otherwise, always.
+    display_name = serializers.CharField(read_only=True, allow_null=True)
+
+
+class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
+    """A full quote or estimate, for a Customer who has paid to read it.
+
+    The entitlement is checked in the view before this serializer is ever constructed. Vendor
+    identity is present because it is exactly what the unlock or the visit plan bought; contact
+    details are not, because they are released by the engagement and not by the fee.
+    """
+
+    vendor = serializers.SerializerMethodField()
+    stages = ProposalStageSerializer(many=True, read_only=True)
+    site_visit = SiteVisitSerializer(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Proposal
+        fields = (
+            "id",
+            "status",
+            "usability",
+            "rejection_reason",
+            "revision",
+            "revalidation_requested_at",
+            "vendor",
+            "site_visit",
+            "rate_paise_per_worker_day",
+            "minimum_days",
+            "worker_count",
+            "total_paise",
+            "tax_paise",
+            "tax_basis",
+            "commission_treatment",
+            "inclusions",
+            "exclusions",
+            "stages",
+            "warranty_terms",
+            "valid_until",
+            "submitted_at",
+        )
+        read_only_fields = fields
+
+    def get_vendor(self, obj: Proposal) -> dict[str, Any]:
+        business = getattr(obj.partner, "business_profile", None)
+        return {
+            "partner_id": obj.partner_id,
+            "vendor_type": business.business_type if business is not None else "INDIVIDUAL",
+            "is_verified": True,
+            "display_name": (
+                business.legal_name if business is not None else obj.partner.display_name
+            ),
+        }
+
+
+class CustomerQuoteListSerializer(serializers.Serializer[dict[str, Any]]):
+    quotes = CustomerProposalSerializer(many=True, read_only=True)
+    #: How many free non-responsive replacements are left. Read from configuration and **null when
+    #: the owner has not set the cap** — the screen must not offer a replacement on a policy that
+    #: does not exist yet.
+    non_responsive_rejections_remaining = serializers.IntegerField(read_only=True, allow_null=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class ProposalRejectSerializer(serializers.Serializer[dict[str, Any]]):
+    reason = serializers.ChoiceField(choices=Proposal.RejectionReason.choices)
+    note = serializers.CharField(required=False, allow_blank=True, max_length=2000, default="")
+
+
+class ProposalSelectionSerializer(serializers.ModelSerializer[ProposalSelection]):
+    """Selection is not a booking, and this shape says so.
+
+    `reconfirm_by` is the whole point: the Customer has chosen and the vendor has not yet agreed.
+    Null when the area carries no operating windows and no business-hours deadline could be
+    computed — which is an unset clock, not an unlimited one.
+    """
+
+    engagement_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProposalSelection
+        fields = (
+            "id",
+            "requirement",
+            "proposal",
+            "partner",
+            "status",
+            "reconfirm_by",
+            "decided_at",
+            "decline_reason_code",
+            "engagement_id",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_engagement_id(self, obj: ProposalSelection) -> str | None:
+        engagement = getattr(obj, "engagement", None)
+        return str(engagement.id) if engagement is not None else None
+
+
+class SelectionCreateSerializer(serializers.Serializer[dict[str, Any]]):
+    proposal_id = serializers.UUIDField()
+
+
+class SelectionDeclineSerializer(serializers.Serializer[dict[str, Any]]):
+    reason_code = serializers.SlugField(max_length=80)
+
+
+class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
+    class Meta:
+        model = EngagementStage
+        fields = (
+            "id",
+            "position",
+            "label",
+            "amount_paise",
+            "scheduled_on",
+            "status",
+            "funding_state",
+            "funded_at",
+        )
+        read_only_fields = fields
+
+
+class EngagementSerializer(serializers.ModelSerializer[Engagement]):
+    """The agreement, frozen at reconfirmation.
+
+    `commercial_mode` is the field the UI must read before it promises anything. `LEAD_ONLY` means
+    the Customer pays the vendor directly and Vsolve's protection is matching and replacement;
+    calling that a protected booking is the promise this platform cannot keep.
+    """
+
+    stages = EngagementStageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Engagement
+        fields = (
+            "id",
+            "requirement",
+            "proposal",
+            "partner",
+            "archetype",
+            "commercial_mode",
+            "status",
+            "total_paise",
+            "tax_paise",
+            "tax_basis",
+            "commission_paise",
+            "commission_treatment",
+            "contact_released_at",
+            "work_may_start_at",
+            "stages",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+# ---------------------------------------------------------------------------
+# Partner: A5 visit slots
+# ---------------------------------------------------------------------------
+
+
+class VisitSlotSerializer(serializers.Serializer[dict[str, Any]]):
+    """One candidate start, in `booking/windows/` field order and with one field removed.
+
+    `capacity` is deliberately absent. The A1 grid publishes it to a Customer choosing between
+    Partners; this grid is scoped to the **one invited vendor**, so a capacity number here would be
+    a live readout of that vendor's own diary depth and nothing a slot picker needs.
+    """
+
+    id = serializers.CharField(read_only=True)
+    starts_at = serializers.DateTimeField(read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+    is_available = serializers.BooleanField(read_only=True)
+    unavailable_reason = serializers.ChoiceField(
+        choices=("PAST", "TOO_SOON", "OUTSIDE_OPERATING_WINDOW", "NO_CAPACITY"),
+        read_only=True,
+        allow_null=True,
+    )
+
+
+class VisitSlotDaySerializer(serializers.Serializer[dict[str, Any]]):
+    date = serializers.DateField(read_only=True)
+    is_today = serializers.BooleanField(read_only=True)
+    slots = VisitSlotSerializer(many=True, read_only=True)
+
+
+class VisitSlotGridSerializer(serializers.Serializer[dict[str, Any]]):
+    """Candidate visit starts for one invited vendor.
+
+    The Partner-side twin of `POST /api/v1/booking/windows/`, drawn from the same
+    `carts.availability` snapshot and the same window loop. **The browser never computes
+    availability** — it renders these slots and posts back an `id`, which is a signed token bound
+    to this invitation and this start.
+    """
+
+    server_now = serializers.DateTimeField(read_only=True)
+    visit_duration_minutes = serializers.IntegerField(read_only=True)
+    availability_is_preliminary = serializers.BooleanField(read_only=True)
+    timezone = serializers.CharField(read_only=True)
+    days = VisitSlotDaySerializer(many=True, read_only=True)
+
+
+class VisitSlotConfirmSerializer(serializers.Serializer[dict[str, Any]]):
+    #: The opaque `id` of a slot this grid returned. Signed and bound to the invitation, so a
+    #: vendor cannot book a competitor's slot or a time the grid never offered.
+    slot_id = serializers.CharField(max_length=2000)
+
+
+class VisitSlotConfirmationSerializer(serializers.Serializer[dict[str, Any]]):
+    visit = SiteVisitSerializer(read_only=True)
+    share = VisitPlanShareSerializer(read_only=True)
+    #: True when this confirmation is the one that opens the Customer's plan checkout. The vendor
+    #: sees a held slot rather than a scheduled one until that payment is verified, and the copy
+    #: has to say so — the hold lapses harmlessly if the Customer never pays.
+    opens_plan_checkout = serializers.BooleanField(read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class VisitArrivalSerializer(serializers.Serializer[dict[str, Any]]):
+    """Arrival on the non-OTP fallback. No body: presence is the assertion, and who made it is
+    the session."""
+
+
+class VisitNoShowSerializer(serializers.Serializer[dict[str, Any]]):
+    party = serializers.ChoiceField(choices=VISIT_NO_SHOW_PARTIES)
+    reason_code = serializers.SlugField(max_length=80, required=False, allow_blank=True, default="")
 
 
 # ---------------------------------------------------------------------------

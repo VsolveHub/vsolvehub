@@ -28,8 +28,9 @@ from apps.requirements.exceptions import (
     RequirementIncompleteError,
     RequirementLockedError,
     RequirementTransitionError,
+    VisitPlanRequiredError,
 )
-from apps.requirements.models import CustomerRequirement, RequirementTransition
+from apps.requirements.models import CustomerRequirement, RequirementTransition, VisitPlan
 from apps.requirements.sla import ServiceAreaNeverOpenError, quote_deadlines
 
 M2_ARCHETYPES = (
@@ -139,7 +140,7 @@ def create_draft(
         answers=answers,
         language=language,
     )
-    _record_transition(
+    record_transition(
         requirement=requirement,
         from_status="",
         to_status=requirement.status,
@@ -220,6 +221,24 @@ def _assert_submittable(requirement: CustomerRequirement) -> ServiceArea:
     return area
 
 
+def _assert_visit_plan_chosen(requirement: CustomerRequirement) -> None:
+    """An A5 requirement cannot be submitted without a visit plan (`M2-BE-215`).
+
+    The plan bounds the invitation wave, so submitting without one would send an unbounded wave for
+    a product the Customer has not chosen the size of. It charges nothing — this is a completeness
+    check on the review screen, not a paywall in front of matching.
+
+    Reads `VisitPlan` directly rather than calling `access.assert_visit_plan_chosen`: the access
+    module imports `record_transition` from here, and importing it back would close a cycle for the
+    sake of three lines.
+    """
+    if requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        return
+    plan = VisitPlan.objects.filter(requirement=requirement).first()
+    if plan is None or plan.status == VisitPlan.Status.VOID:
+        raise VisitPlanRequiredError()
+
+
 @transaction.atomic
 def submit_requirement(
     *,
@@ -237,6 +256,7 @@ def submit_requirement(
         raise RequirementTransitionError("This request has already been sent to vendors.")
 
     service_area = _assert_submittable(requirement)
+    _assert_visit_plan_chosen(requirement)
     configuration = requirement.configuration or active_configuration(requirement.variant)
     try:
         validate_scope(schema=configuration.question_schema, scope=requirement.answers)
@@ -284,7 +304,7 @@ def submit_requirement(
             "updated_at",
         )
     )
-    _record_transition(
+    record_transition(
         requirement=requirement,
         from_status=CustomerRequirement.Status.DRAFT,
         to_status=requirement.status,
@@ -331,7 +351,7 @@ def reclassify_requirement(
     from_archetype = requirement.archetype
     requirement.archetype = to_archetype
     requirement.save(update_fields=("archetype", "updated_at"))
-    _record_transition(
+    record_transition(
         requirement=requirement,
         from_status=requirement.status,
         to_status=requirement.status,
@@ -374,7 +394,7 @@ def close_requirement(
     requirement.closed_at = timezone.now()
     requirement.closed_reason_code = reason_code
     requirement.save(update_fields=("status", "closed_at", "closed_reason_code", "updated_at"))
-    _record_transition(
+    record_transition(
         requirement=requirement,
         from_status=from_status,
         to_status=status,
@@ -425,7 +445,7 @@ def sla_breached_requirement_ids(*, at: Any = None) -> list[uuid.UUID]:
     )
 
 
-def _record_transition(
+def record_transition(
     *,
     requirement: CustomerRequirement,
     from_status: str,
@@ -434,6 +454,18 @@ def _record_transition(
     reason_code: str,
     reason: str = "",
 ) -> None:
+    """Append one immutable row to a requirement's audit trail.
+
+    Public since Wave C2, and the rename is the point rather than a tidy-up. Every command that
+    takes an `actor` has to be able to say *who did this* somewhere durable; the access and
+    engagement commands took one and recorded nothing, so the money-moving half of M2 had no audit
+    trail at all. A private helper in this module was the reason — the only way to record a
+    transition was to be `services.py`.
+
+    A row where `from_status == to_status` is deliberate and already established by
+    `reclassify_requirement`: not every auditable act is a state change, and "this Customer started
+    the unlock checkout at this moment" is exactly the fact a payment dispute asks for.
+    """
     RequirementTransition.objects.create(
         requirement=requirement,
         from_status=from_status,
