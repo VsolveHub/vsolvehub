@@ -171,7 +171,7 @@ def propose_engagement_amendment(
     stop.
     """
     engagement = (
-        Engagement.objects.select_for_update()
+        Engagement.objects.select_for_update(of=("self",))
         .select_related("requirement__configuration", "partner")
         .get(pk=engagement_id)
     )
@@ -301,7 +301,7 @@ def _assert_reduction_is_possible(*, stage: EngagementStage | None, delta_paise:
 
 def _locked_link(amendment_id: uuid.UUID) -> EngagementAmendment:
     return (
-        EngagementAmendment.objects.select_for_update()
+        EngagementAmendment.objects.select_for_update(of=("self",))
         .select_related("amendment", "engagement__requirement__configuration", "stage")
         .get(pk=amendment_id)
     )
@@ -429,7 +429,7 @@ def complete_engagement_amendment_payment(
     rather than creating another one.
     """
     link = (
-        EngagementAmendment.objects.select_for_update()
+        EngagementAmendment.objects.select_for_update(of=("self",))
         .select_related("amendment", "engagement__requirement__configuration", "payment_attempt")
         .filter(payment_attempt_id=payment_attempt_id)
         .first()

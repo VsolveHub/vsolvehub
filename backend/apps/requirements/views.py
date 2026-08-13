@@ -52,6 +52,7 @@ from apps.requirements import (
     visit_slots,
 )
 from apps.requirements.exceptions import (
+    LifecycleNotSupportedError,
     PolicyUnavailableError,
     RequirementDomainError,
     RequirementNotFoundError,
@@ -79,6 +80,7 @@ from apps.requirements.selectors import (
     partner_engagements,
     partner_invitations,
     partner_proposals,
+    question_asker_role,
     requirement_for_customer,
     requirement_summary_text,
     requirement_timeline,
@@ -87,6 +89,7 @@ from apps.requirements.selectors import (
     stage_for_customer,
     stage_for_participant,
     stage_for_partner,
+    vendor_cards,
 )
 from apps.requirements.serializers import (
     AccessCheckoutSerializer,
@@ -144,6 +147,7 @@ from apps.requirements.serializers import (
     StageEvidenceUploadRequestSerializer,
     UnlockStateSerializer,
     VendorAttachmentListSerializer,
+    VendorCardListSerializer,
     VisitArrivalSerializer,
     VisitNoShowSerializer,
     VisitPlanChooseSerializer,
@@ -598,6 +602,133 @@ class RequirementTeaserListView(APIView):
         )
 
 
+class RequirementVendorCardListView(APIView):
+    """The A5 responding pool, on the disclosure ladder (`M2-FE-419`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Access"],
+        operation_id="m2_vendor_card_list",
+        description=(
+            "The professionals responding to one A5 request. **A5 only** — an A3 request's "
+            "pre-unlock surface is the quote teaser, and a second one would be a way around the "
+            "unlock.\n\n"
+            "The ladder, exactly: verification badge, vendor type and a coarse distance band for "
+            "every responding vendor; the vendor's **name once they have committed to a visit "
+            "slot**, because somebody entering a home has to be nameable; and **no contact "
+            "details at any status**, which the engagement releases and the plan fee does not.\n\n"
+            "`distance_band_km` is the 5 km band the matcher ranked on, read back from the "
+            "invitation's own provenance rather than recomputed, and is `null` when we have no "
+            "fresh position for that vendor — the ordinary case for an agency that never runs the "
+            "technician app. **No rating is published**: this platform has no review model, and a "
+            "number with nothing behind it is worse than none."
+        ),
+        responses={
+            200: VendorCardListSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_lifecycle_not_supported` on an A3 request.",
+            ),
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user),
+                requirement_id=requirement_id,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        if requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+            _raise_api_error(
+                LifecycleNotSupportedError(
+                    "Workforce requests show quote teasers rather than professional cards.",
+                )
+            )
+
+        return Response(
+            VendorCardListSerializer(
+                {
+                    "vendor_cards": [asdict(card) for card in vendor_cards(requirement)],
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class RequirementQuoteQuestionView(APIView):
+    """The Customer's half of clarification (`M2-FE-409`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Quotes"],
+        operation_id="m2_customer_question_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        description=(
+            "Ask the professional behind one quote or estimate a question. Structured "
+            "clarification, not chat: one question, one answer, both on the shared timeline.\n\n"
+            "Addressed to a **proposal**, so it reaches the vendor who wrote it rather than "
+            "broadcasting to a pool that has already quoted. Gated on the paywall the archetype "
+            "uses — before the unlock (A3) or the charged plan (A5) the vendors are deliberately "
+            "not addressable, and a question would be a channel around the fee.\n\n"
+            "A question never changes a price. A new number is a superseding proposal."
+        ),
+        request=QuestionCreateSerializer,
+        responses={
+            201: RequirementQuestionSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_unlock_required` before an A3 unlock.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_visit_plan_required` before an A5 plan is charged; "
+                "`m2_requirement_transition_not_allowed` once the request is closed.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID, proposal_id: uuid.UUID) -> Response:
+        serializer = QuestionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+            proposal = _proposal_for_customer(requirement=requirement, proposal_id=proposal_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                question = proposals.ask_vendor_question(
+                    proposal_id=proposal.id,
+                    asked_by=customer,
+                    question=serializer.validated_data["question"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], RequirementQuestionSerializer(question).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.question.ask",
+            key=key,
+            request_payload={
+                "proposal_id": str(proposal_id),
+                **serializer.validated_data,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
 class RequirementAttachmentCollectionView(APIView):
     """Presign an attachment upload. Bytes go straight to storage, never through Django."""
 
@@ -773,13 +904,19 @@ class RequirementAttachmentDetailView(APIView):
 
 
 class RequirementQuestionAnswerView(APIView):
-    """The Customer's half of structured clarification."""
+    """The Customer answers a vendor's question."""
 
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
         tags=["M2 - Requirements"],
         operation_id="m2_requirement_question_answer",
+        description=(
+            "Answer a question a professional asked about this request. Since 1.26.0 "
+            "clarification runs both ways, so this route answers **the vendor's** questions only: "
+            "a Customer's own question is answered by the vendor at "
+            "`POST /api/v1/partner/questions/{question_id}/answer/`."
+        ),
         request=QuestionAnswerSerializer,
         responses={
             200: RequirementQuestionSerializer,
@@ -791,17 +928,75 @@ class RequirementQuestionAnswerView(APIView):
         serializer = QuestionAnswerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         customer = cast(User, request.user)
-        question = RequirementQuestion.objects.filter(
-            id=question_id,
-            requirement__customer=customer,
-        ).first()
-        if question is None:
+        question = (
+            RequirementQuestion.objects.select_related("requirement", "invitation__partner")
+            .filter(id=question_id, requirement__customer=customer)
+            .first()
+        )
+        # A Customer answering their own question is not a clarification, it is a monologue — and
+        # the row would then be `answered` with the vendor never having seen it. `404` rather than
+        # a refusal code: from the answering surface's point of view there is no such question to
+        # answer, and the Customer already sees it on the timeline as one they asked.
+        if question is None or question_asker_role(question) == "CUSTOMER":
             _raise_api_error(RequirementNotFoundError())
 
         try:
             answered = proposals.answer_question(
                 question_id=question.id,
                 answered_by=customer,
+                answer=serializer.validated_data["answer"],
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(RequirementQuestionSerializer(answered).data)
+
+
+class PartnerQuestionAnswerView(APIView):
+    """The vendor answers a Customer's question.
+
+    The mirror of `RequirementQuestionAnswerView`, and it exists because the Customer-asks command
+    would otherwise create a question nobody could answer — which is not clarification, it is a
+    suggestion box.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Partner enquiries"],
+        operation_id="m2_partner_question_answer",
+        description=(
+            "Answer a question the Customer asked about one of your quotes. Scoped to this "
+            "vendor's own enquiries, and refuses a question this vendor asked — an answer to your "
+            "own question would close the row without the Customer ever seeing it."
+        ),
+        request=QuestionAnswerSerializer,
+        responses={
+            200: RequirementQuestionSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, question_id: uuid.UUID) -> Response:
+        serializer = QuestionAnswerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        actor = cast(User, request.user)
+        try:
+            profile = _partner_profile(request)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        question = (
+            RequirementQuestion.objects.select_related("requirement", "invitation__partner")
+            .filter(id=question_id, invitation__partner=profile)
+            .first()
+        )
+        if question is None or question_asker_role(question) != "CUSTOMER":
+            _raise_api_error(RequirementNotFoundError())
+
+        try:
+            answered = proposals.answer_question(
+                question_id=question.id,
+                answered_by=actor,
                 answer=serializer.validated_data["answer"],
             )
         except RequirementDomainError as exc:

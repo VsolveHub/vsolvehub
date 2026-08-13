@@ -81,33 +81,36 @@ export type ProposalSelectionStatus = Schemas["ProposalSelectionStatusEnum"];
    -------------------------------------------------------------------------- */
 
 /**
- * Cache keys for the four 1.24.0 reads `m2-keys.ts` predates.
+ * Cache keys for the 1.24.0 reads, three of them published and one still not.
  *
- * `m2-keys.ts` is frozen and was written against proposal 0012, which had no
- * visit plan, no full-quote read and no selection. Rather than edit a frozen
- * file mid-wave, these are composed **from** it, and every one of them nests
- * under `m2QueryKeys.requirements.detail(id)` — the same construction
- * `requirements.timeline` already uses.
+ * **The visit plan moved at the Wave I gate.** It was composed here, nested
+ * under `m2QueryKeys.requirements.detail(id)`, because `m2-keys.ts` predated
+ * revision 3 and is frozen. The §7 request was granted: the factory now carries
+ * a `visits` namespace, `visits.plan(requirementId)` is keyed by requirement for
+ * exactly the reason argued for the unlock, and `requirementScope` lists it — so
+ * a `NON_RESPONSIVE` rejection now correctly refetches the plan whose share it
+ * sent back to owing a free replacement visit. **Delegating rather than keeping
+ * the local composition is the point**: two names for one cache entry is how the
+ * customer's tracker and the server's own invalidation stop agreeing.
  *
- * Nesting is the load-bearing part, not tidiness. `M2_INVALIDATION`'s
- * `requirementScope` invalidates `requirements.detail(id)` as a *prefix*, so
- * selecting a proposal or rejecting one already clears the visit plan and the
- * selection beneath it. A sibling namespace would have needed every one of
- * those rows edited to stay correct, in the file nobody may edit.
+ * `selection` is still composed locally and still nests under
+ * `requirements.detail(id)`. Nesting is the load-bearing part rather than
+ * tidiness: `M2_INVALIDATION`'s `requirementScope` invalidates that key as a
+ * *prefix*, so selecting or rejecting a proposal clears the selection beneath it
+ * without a row being edited in the file nobody may edit.
  *
- * The unlock is the exception and keeps its own published key: it already
- * exists in the frozen factory, and `m2-keys.ts` argues there for why it is
- * keyed by requirement rather than by unlock id — after a lost payment redirect
- * the client holds no unlock id at all.
- *
- * Promotion into `m2-keys.ts` is requested in `frontend-execution-plan.md` §7.
+ * The unlock, the teasers and the quotes all keep their published keys.
+ * Promotion of `selection` is still requested in `frontend-execution-plan.md` §7.
  */
 export const m2AccessKeys = {
   /** `GET /requirements/{id}/unlock/` — A3. */
   unlock: (requirementId: string) => m2QueryKeys.unlock.forRequirement(requirementId),
-  /** `GET /requirements/{id}/visit-plan/` — A5's chooser and its tracker in one read. */
-  visitPlan: (requirementId: string) =>
-    [...m2QueryKeys.requirements.detail(requirementId), "visit-plan"] as const,
+  /**
+   * `GET /requirements/{id}/visit-plan/` — A5's chooser and its tracker in one read.
+   *
+   * The published key, not a local composition. See the note above.
+   */
+  visitPlan: (requirementId: string) => m2QueryKeys.visits.plan(requirementId),
   /** `GET /requirements/{id}/quotes/teasers/` — A3, pre-unlock. */
   teasers: (requirementId: string) => m2QueryKeys.proposals.teasers(requirementId),
   /** `GET /requirements/{id}/quotes/` — the full quotes or estimates, post-entitlement. */

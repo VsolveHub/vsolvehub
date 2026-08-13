@@ -14,7 +14,9 @@ Two rules run through this file and neither is negotiable:
 from datetime import datetime
 from typing import Any
 
+from django.conf import settings
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.models import ServiceVariant
@@ -36,10 +38,13 @@ from apps.requirements.models import (
     VisitPlanShare,
 )
 from apps.requirements.selectors import (
+    QUESTION_ASKER_ROLES,
+    access_receipt_for,
     closure_reason,
     confirmed_teaser_count,
     lifecycle_explanation,
     missing_answer_codes,
+    question_asker_role,
 )
 
 #: Why a vendor declined an enquiry, published so both apps render one vocabulary.
@@ -64,6 +69,28 @@ INVITATION_DECLINE_REASONS = (
 VISIT_NO_SHOW_PARTIES = (
     ("VENDOR", "Vendor"),
     ("CUSTOMER", "Customer"),
+)
+
+#: Why the visit did not happen. Published at 1.26.0; until then `reason_code` was an unconstrained
+#: slug declared required with an empty default, so the Partner app sent it **blank** rather than
+#: invent a vocabulary Operations would then have to report on.
+#:
+#: These six are deliberately about the *fact*, not about the settlement. The settlement is already
+#: decided by `party` and is not a thing either side gets to nominate: a vendor no-show replaces the
+#: slot at no charge to the Customer, and a Customer no-show still pays the vendor's visit payout
+#: because they travelled. A reason code that could change the money would be a refund button
+#: labelled as a dropdown.
+#:
+#: `cancellation_reason_code` on the model stays an unconstrained slug for the reason
+#: `decline_reason_code` does: the same column also carries the platform's own writes
+#: (`vendor_no_show`, `customer_no_show` from the sweeps), and constraining it would refuse them.
+VISIT_NO_SHOW_REASONS = (
+    ("NOBODY_ON_SITE", "Nobody was at the address"),
+    ("SITE_INACCESSIBLE", "Could not get access to the site"),
+    ("ADDRESS_WRONG", "The address was wrong or could not be found"),
+    ("VENDOR_DID_NOT_ARRIVE", "The professional never arrived"),
+    ("CANCELLED_ON_THE_DAY", "The other party cancelled on the day"),
+    ("OTHER", "Another reason"),
 )
 
 # ---------------------------------------------------------------------------
@@ -396,10 +423,37 @@ class QuoteTeaserListSerializer(serializers.Serializer[dict[str, Any]]):
 
 
 class RequirementQuestionSerializer(serializers.ModelSerializer[RequirementQuestion]):
+    """One question and its answer, on the timeline both parties read.
+
+    `asked_by_role` is new at 1.26.0 and is not decoration: clarification ran one way until this
+    release, so "who asked" was implied by the surface you were looking at. Now that a Customer can
+    ask a vendor about a delivered quote, a client with no direction field renders both halves of a
+    conversation as though the other side started it, and neither app can tell whose turn it is.
+
+    Derived by **identity comparison, not by inference**: the requirement records its Customer and
+    the invitation records its Partner's user, so the three answers are exact rather than guessed.
+    `OPERATIONS` covers an assisted question, which has no route yet and will have one in Wave C6 —
+    naming it now is what stops the answer defaulting to `VENDOR` when it arrives.
+    """
+
+    asked_by_role = serializers.SerializerMethodField()
+
     class Meta:
         model = RequirementQuestion
-        fields = ("id", "invitation", "question", "answer", "asked_at", "answered_at")
+        fields = (
+            "id",
+            "invitation",
+            "asked_by_role",
+            "question",
+            "answer",
+            "asked_at",
+            "answered_at",
+        )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.ChoiceField(choices=QUESTION_ASKER_ROLES))
+    def get_asked_by_role(self, obj: RequirementQuestion) -> str:
+        return question_asker_role(obj)
 
 
 class QuestionCreateSerializer(serializers.Serializer[dict[str, Any]]):
@@ -421,6 +475,12 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
     """
 
     is_plan_visit = serializers.SerializerMethodField()
+    #: The service area's own IANA zone, so a client renders "Tuesday 10am" in the hours the area
+    #: actually keeps. `BookingWindows` has published one since M1 and the visit — booked against
+    #: the *same* `carts.availability` grid — carried only an instant, so every caller fell back to
+    #: a deprecated Hyderabad-only constant: correct while the platform is one city and wrong the
+    #: day it is not (`M2-FE-421`).
+    timezone = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteVisit
@@ -428,6 +488,7 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
             "id",
             "status",
             "is_plan_visit",
+            "timezone",
             "fee_paise",
             "adjusts_against_final_price",
             "scheduled_for",
@@ -445,6 +506,17 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
 
     def get_is_plan_visit(self, obj: SiteVisit) -> bool:
         return obj.plan_share_id is not None
+
+    def get_timezone(self, obj: SiteVisit) -> str:
+        """The area's zone, or the platform's own as a last resort.
+
+        A visit cannot exist on a requirement without a serviceable area — `_assert_submittable`
+        refuses the submit — so the fallback is unreachable through any live path. It is written as
+        the deployment's `TIME_ZONE` rather than a literal so that the one impossible case cannot
+        become a second place Hyderabad is hardcoded.
+        """
+        area = getattr(obj.requirement, "service_area", None)
+        return str(area.timezone) if area is not None else str(settings.TIME_ZONE)
 
 
 class SiteVisitRequestSerializer(serializers.Serializer[dict[str, Any]]):
@@ -483,6 +555,13 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
         source="requirement.variant.service.slug",
         read_only=True,
     )
+    #: The catalogue's own name. It landed on `EnquiryDetail` at 1.24.0 and not here, so the
+    #: **inbox list** went on de-slugging `category_slug` into a title — presentation of a server
+    #: value that the server already holds correctly.
+    service_name = serializers.CharField(
+        source="requirement.variant.service.name",
+        read_only=True,
+    )
     archetype = serializers.CharField(source="snapshot.archetype", read_only=True)
     requested_start = serializers.DateTimeField(source="snapshot.requested_start", read_only=True)
     service_by = serializers.DateField(source="snapshot.service_by", read_only=True)
@@ -499,6 +578,7 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "id",
             "requirement_id",
             "category_slug",
+            "service_name",
             "archetype",
             "status",
             "wave",
@@ -571,11 +651,6 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         read_only=True,
         allow_null=True,
     )
-    #: See `RequirementDraftSerializer.service_name` — the vendor's inbox had the same slug problem.
-    service_name = serializers.CharField(
-        source="requirement.variant.service.name",
-        read_only=True,
-    )
     #: **The basis every quote on this requirement is compared on.** `_required_tax_basis` forces
     #: each proposal onto whichever basis the first vendor used and refuses a mismatch — against a
     #: vendor the second one cannot see. Blank means nobody has quoted yet and this vendor sets it
@@ -594,7 +669,6 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
     class Meta(EnquirySummarySerializer.Meta):
         fields = (
             *EnquirySummarySerializer.Meta.fields,
-            "service_name",
             "answers",
             "additional_details",
             "budget_min_paise",
@@ -667,10 +741,49 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
         }
 
 
+class ProposalMaterialLineSerializer(serializers.Serializer[dict[str, Any]]):
+    """One material line on an A5 estimate — **not** a stage, and that is the whole point.
+
+    Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing cement
+    sent it as a `ProposalStage` with their own title. A stage is a unit of evidence, approval and
+    release, so that made a bag of cement a fundable milestone somebody had to *approve as work*.
+    `README.md` is explicit that material money is spent rather than earned and therefore cannot be
+    recovered like an unearned work stage; a row type that cannot tell the two apart cannot carry
+    that rule (`M2-BE-543`).
+
+    `quantity` and `unit` are here because a material line without them is unreadable in a
+    comparison — "cement, 1,20,000 paise" against "cement, 40 bags at 3,000" is the difference
+    between two quotes a Customer can compare and two they cannot. `unit` is free text on purpose:
+    bags, cubic metres, running feet and coils are all real, and a closed vocabulary authored here
+    would refuse whichever trade nobody thought of.
+    """
+
+    title = serializers.CharField(max_length=200)
+    quantity = serializers.IntegerField(min_value=1, required=False, default=1)
+    unit = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
+    amount_paise = serializers.IntegerField(min_value=0)
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        """Read a stored line defensively; the column is a `JSONField`, not a table.
+
+        The same rule as `ProposalStageSerializer.to_representation` and for the same reason: a row
+        written before this shape existed must degrade rather than turn a comparison screen into a
+        500.
+        """
+        line = instance if isinstance(instance, dict) else {}
+        return {
+            "title": str(line.get("title") or ""),
+            "quantity": int(line.get("quantity") or 1),
+            "unit": str(line.get("unit") or ""),
+            "amount_paise": int(line.get("amount_paise") or 0),
+        }
+
+
 class ProposalSerializer(serializers.ModelSerializer[Proposal]):
     """A vendor's own quote, read back to that vendor."""
 
     stages = ProposalStageSerializer(many=True, read_only=True)
+    material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
 
     class Meta:
         model = Proposal
@@ -697,6 +810,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "inclusions",
             "exclusions",
             "stages",
+            "material_lines",
             "warranty_terms",
             "valid_until",
             "vendor_confirmed_at",
@@ -732,6 +846,9 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     worker_count = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
     stages = ProposalStageSerializer(many=True, required=False)
+    #: A5 only. Refused on an A3 quote — a workforce quote is a rate per worker per day, and a
+    #: vendor supplying their own materials on a labour hire is not a shape this platform brokers.
+    material_lines = ProposalMaterialLineSerializer(many=True, required=False)
     inclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     exclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     warranty_terms = serializers.CharField(required=False, allow_blank=True, max_length=4000)
@@ -915,9 +1032,30 @@ class VendorCardSerializer(serializers.Serializer[dict[str, Any]]):
 
     partner_id = serializers.UUIDField(read_only=True)
     vendor_type = serializers.CharField(read_only=True)
+    #: The real badge since 1.26.0: an Operations-approved `PartnerApplication`. It was hardcoded
+    #: `True`, which made one of the four signals a Customer weighs meaningless.
     is_verified = serializers.BooleanField(read_only=True)
     #: Present only once this vendor has confirmed a visit slot. Null otherwise, always.
     display_name = serializers.CharField(read_only=True, allow_null=True)
+    #: The 5 km band the matcher ranked on, from this invitation's own `ranking_provenance`. Null
+    #: when we hold no fresh position for the vendor — published as null rather than filled with
+    #: the pool median, because the median is a ranking device and printing it here would tell the
+    #: Customer a distance nobody measured.
+    distance_band_km = serializers.IntegerField(read_only=True, allow_null=True)
+
+
+class VendorCardListSerializer(serializers.Serializer[dict[str, Any]]):
+    """The A5 responding pool.
+
+    **No rating field, and that is a decision rather than an omission.** `README.md` lists a rating
+    among the four pre-confirmation signals and this platform has no review model — `carts`'
+    professional card already refuses to publish one for the same reason. A star count invented
+    here would be this serializer deciding what a vendor's reputation is. The field arrives when a
+    review aggregate does.
+    """
+
+    vendor_cards = VendorCardSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
 
 
 class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
@@ -930,6 +1068,7 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
 
     vendor = serializers.SerializerMethodField()
     stages = ProposalStageSerializer(many=True, read_only=True)
+    material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
     site_visit = SiteVisitSerializer(read_only=True, allow_null=True)
 
     class Meta:
@@ -953,6 +1092,7 @@ class CustomerProposalSerializer(serializers.ModelSerializer[Proposal]):
             "inclusions",
             "exclusions",
             "stages",
+            "material_lines",
             "warranty_terms",
             "valid_until",
             "submitted_at",
@@ -1129,6 +1269,10 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
             "position",
             "label",
             "amount_paise",
+            #: `WORK` or `MATERIAL_ADVANCE`. Read it before rendering a stage: a material advance
+            #: is money spent on goods, not a milestone somebody performs, and it does not refund
+            #: like unearned work.
+            "kind",
             "scheduled_on",
             "status",
             "funding_state",
@@ -1151,6 +1295,27 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
         read_only_fields = fields
 
 
+class AccessReceiptSerializer(serializers.Serializer[dict[str, Any]]):
+    """The durable reference for the access fee Vsolve actually collected (`M2-BE-415`).
+
+    Not an invoice. `TaxDocument.order` is not nullable and an access fee has no `Order`, so making
+    it nullable to fit one would weaken the invariant every M1 invoice depends on; the number comes
+    from the same `commerce.DocumentSequence` under an `M2A-` series, which is gapless and is the
+    one numbering authority. GST treatment of the unlock and the visit-plan fee is blocking owner
+    decision 5, so this is a receipt reference and says so.
+
+    `number` is formatted server-side in the `series-sequence` shape
+    `commerce.TaxDocumentSerializer.get_number` already publishes, because the string a Customer
+    quotes to support should not be assembled differently by each app that renders it.
+    """
+
+    kind = serializers.CharField(read_only=True)
+    number = serializers.CharField(read_only=True)
+    series = serializers.CharField(read_only=True)
+    sequence = serializers.IntegerField(read_only=True)
+    amount_paise = serializers.IntegerField(read_only=True)
+
+
 class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     """The agreement, frozen at reconfirmation.
 
@@ -1164,6 +1329,12 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     """
 
     stages = EngagementStageSerializer(many=True, read_only=True)
+    #: The access fee this agreement came out of — the A3 unlock or the A5 visit plan — with its
+    #: durable receipt number. `M2-FE-418` asks the agreement screen for a receipt and there was
+    #: nothing to link to: `Engagement` published no order id and no document id, so the screen
+    #: could only say where the record lives. Null when the fee was never charged, which is real:
+    #: a plan whose whole price was covered by a reclassification credit takes no payment.
+    access_receipt = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
@@ -1190,10 +1361,15 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "work_may_start_at",
             "disputed_at",
             "completed_at",
+            "access_receipt",
             "stages",
             "created_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(AccessReceiptSerializer(allow_null=True))
+    def get_access_receipt(self, obj: Engagement) -> dict[str, Any] | None:
+        return access_receipt_for(obj)
 
 
 class EngagementPageSerializer(serializers.Serializer[dict[str, Any]]):
@@ -1385,8 +1561,15 @@ class VisitArrivalSerializer(serializers.Serializer[dict[str, Any]]):
 
 
 class VisitNoShowSerializer(serializers.Serializer[dict[str, Any]]):
+    """Report that a scheduled visit did not happen.
+
+    `party` decides the settlement and `reason_code` decides nothing — see `VISIT_NO_SHOW_REASONS`.
+    The reason is still required, because "nobody turned up" without a cause is a row Operations
+    cannot act on and a vendor cannot appeal.
+    """
+
     party = serializers.ChoiceField(choices=VISIT_NO_SHOW_PARTIES)
-    reason_code = serializers.SlugField(max_length=80, required=False, allow_blank=True, default="")
+    reason_code = serializers.ChoiceField(choices=VISIT_NO_SHOW_REASONS)
 
 
 # ---------------------------------------------------------------------------

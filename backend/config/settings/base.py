@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.25.0",
+    "VERSION": "1.26.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -402,6 +402,16 @@ SPECTACULAR_SETTINGS = {
         "EngagementAmendmentKindEnum": "apps.requirements.models.EngagementAmendment.Kind",
         "StageDisputeReasonEnum": "apps.requirements.serializers.STAGE_DISPUTE_REASONS",
         "StageDisputeOutcomeEnum": "apps.requirements.serializers.STAGE_DISPUTE_OUTCOMES",
+        # M2 Wave C3.5 — the material line, the no-show vocabulary and the question direction.
+        #
+        # `kind` is now the most contested field name in the schema — eleven choice sets share it —
+        # so a twelfth goes in this table on arrival rather than after a rename breaks a client.
+        # The other two are serializer-layer vocabularies, published for the same reason
+        # `InvitationDeclineReasonEnum` is: the model column also carries the platform's own writes
+        # and constraining it would refuse them.
+        "EngagementStageKindEnum": "apps.requirements.models.EngagementStage.Kind",
+        "VisitNoShowReasonEnum": "apps.requirements.serializers.VISIT_NO_SHOW_REASONS",
+        "QuestionAskerRoleEnum": "apps.requirements.selectors.QUESTION_ASKER_ROLES",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")

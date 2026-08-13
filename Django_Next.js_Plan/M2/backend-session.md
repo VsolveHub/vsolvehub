@@ -809,6 +809,139 @@ component was removed or renamed.**
 
 ---
 
+## Wave C3.5 — The dev seed and the Wave I defects — **`[~]` shipped 13 August 2026**
+
+Contract **1.26.0**, 3 new paths and 3 new operations. Full account in §"C3.5 outcome" below.
+
+**Not a phase.** Three frontend columns built against 1.25.0 and logged thirty-four findings in
+`frontend-execution-plan.md` §7; about a dozen were the backend's. This wave closes those and makes
+the platform demonstrable.
+
+- [~] **`manage.py seed_m2_demo`** — placeholder configuration for every owner-blocked value, as
+  data behind a dev-only door, never as a default in code. Runbook: `docs/runbooks/m2-demo-seed.md`.
+- [~] `VendorCardSerializer` published at `GET /requirements/{id}/vendor-cards/` (`M2-FE-419`).
+- [~] Real verification badge on teasers and cards; distance band published; **rating refused with
+  a reason** — the platform has no review model.
+- [~] `ProposalMaterialLine` + `EngagementStage.kind` — a material advance is a distinct money
+  purpose with its own recovery rule (`M2-BE-543` groundwork).
+- [~] Customer-initiated clarification, and the vendor's answer route (`M2-FE-409`).
+- [~] `service_name` on `EnquirySummary`, `timezone` on `SiteVisit`, `access_receipt` on
+  `Engagement`, `VisitNoShowReasonEnum`.
+- [~] A5 plan-visit reschedule now moves its grid reservation.
+- [~] **24 `select_for_update` + nullable-join sites fixed** — every one was a live `500`.
+
+---
+
+### C3.5 outcome — 13 August 2026
+
+**Built.** Contract **1.26.0**: 3 new paths, 3 new operations (78 M2 operations → 81), one migration
+(`requirements.0007`), one new management command and one new runbook. Eight additive fields, one
+breaking request-shape change, three new enum overrides. **402 published components → 410; none
+removed, none renamed.**
+
+#### The seed is the deliverable, and its shape is the argument
+
+`seed_m2_demo` writes nine owner-blocked values, a catalog, an area and three approved vendors, and
+**every one of them goes into the table the fail-closed reader already reads**. Nothing in `apps/`
+gained a fallback; `pricing.py` is untouched. Three doors, all of which must be open: `DEBUG`, an
+explicit `--i-understand-this-is-dev-only`, and — the one that matters most operationally — a
+`source_reference` check that **refuses to overwrite a row somebody loaded on purpose**. A price
+without the `DEV SEED — not an owner decision` marker is a real decision and is left alone with a
+warning naming it.
+
+Two decisions inside it worth carrying forward:
+
+1. **It writes `catalog.ServiceQuestion` rows *and* `M2VariantConfiguration.question_schema` from
+   one authored table.** §7 records the split as a latent trap: screen 1 renders the first and
+   `submit_requirement` validates the second, and their vocabularies differ
+   (`NUMBER`/`SINGLE_CHOICE` against `INTEGER`/`SELECT`). A seed that wrote one would have produced
+   a four-screen flow whose last screen refuses what its first collected. The mapping between the
+   two vocabularies now exists in exactly one place.
+2. **It seeds no `PartnerLocation`, on purpose.** A GPS fix goes stale in 30 minutes, so a seeded
+   one shows a distance band on the first invitation and `null` an hour later — flaky demo
+   behaviour indistinguishable from a bug. `distance_band_km` stays `null` until a vendor's app
+   reports a position, which is what the field means.
+
+#### Two live defects the seed found by being run
+
+Neither was findable by reading, and both had shipped.
+
+**`select_for_update()` beside `select_related()` over a nullable FK is a `500` on PostgreSQL.**
+`FOR UPDATE cannot be applied to the nullable side of an outer join`. **Twenty-four sites**, covering
+most of the C2 and C3 money surface — `submit_proposal`, `create_unlock_checkout`,
+`choose_visit_plan`, `complete_visit_plan`, `complete_plan_visit`, `report_visit_no_show`,
+`select_proposal`, `reconfirm_selection`, `complete_stage_funding`, every amendment command — **and
+two M1 commands in `fulfilment/amendments.py` that Wave C3 broke** by making `ScopeAmendment.booking`
+nullable: an inner join became an outer one and the lock became illegal. Every site now locks
+`of=("self",)`, which is what each of them intended. This is the strongest argument in the wave for
+the seed: a fully configured platform was still a wall of 500s, and no amount of static analysis was
+going to say so.
+
+**A plan visit could be rescheduled off its own grid reservation.** `schedule_site_visit` moved
+`scheduled_for` and left the `assignments.Reservation` where it was — so the vendor's diary stayed
+blocked at a time nobody was coming and *open at the time they were*, and the A1 checkout could
+double-book the new slot without the exclusion constraint ever seeing it. `access.reschedule_plan_visit`
+now re-books through the same grid: check, release, re-take, in that order (releasing first would
+lose the vendor both times on a refusal; taking first would collide with their own hold on any
+overlapping move), preserving tentative-or-confirmed state so a reschedule cannot harden a hold the
+Customer has not paid for.
+
+#### Five decisions worth carrying forward
+
+1. **A material line is a distinct row on the wire and a distinct *kind* of stage in the engagement.**
+   The tempting shapes were both wrong: a `kind` discriminator on `ProposalStage` leaves a bag of
+   cement carrying an evidence cycle and an approval, and a separate `EngagementMaterialLine` table
+   breaks `staged_total_paise = total_paise` and forks the money spine. `EngagementStage.kind`
+   keeps one spine and one constraint while giving `M2-BE-543` something to read — and it bites
+   immediately rather than waiting for C5: `route_suspended_capability_engagements` no longer
+   refunds a funded material advance as unearned work.
+2. **Material stages are laid out last, and that is a control rather than an ordering.** Funding
+   runs in position order, so a project whose first collection is a materials advance is exactly the
+   prepay-then-vanish shape staged funding exists to prevent. Work is funded first.
+3. **The rating is refused, with the reason published.** `README.md` names it in the disclosure
+   ladder and this platform has no review model; `carts`' professional card already refuses to
+   publish one for the same reason. A star count invented in a serializer would be the API deciding
+   what a vendor's reputation is. Recorded in §7 so it is a decision rather than a gap.
+4. **A Customer's question hangs off a proposal, not the requirement, and is gated on the paywall.**
+   A question aimed at the pool is a broadcast nobody owns; an ungated one is a channel around the
+   fee, since not being addressable is the entire teaser rule. It also keeps
+   `RequirementQuestion.invitation` non-nullable, so no migration. `asked_by_role` is derived from
+   two non-null foreign keys — the C1 `actor_kind` objection does not apply, because each of the
+   three answers is a fact.
+5. **The no-show reason vocabulary is about the fact, never the settlement.** `party` decides the
+   money and no dropdown may. A reason code that could move money would be a refund button labelled
+   as a dropdown.
+
+#### Verified
+
+`.\scripts\quality-static.cmd`: ruff format and ruff check clean across **347 files**, **strict MyPy
+clean across 228 source files**, `makemigrations --check` no changes, `spectacular --validate` with
+**zero warnings** after three new `ENUM_NAME_OVERRIDES` entries, committed-contract drift check
+clean. `manage.py check` clean. **No published path, operation or schema component was removed or
+renamed** — verified by diffing generated component names against the committed contract.
+
+The seed and both walkthroughs were driven end to end **against a throwaway database created and
+destroyed in the same process** (`connection.creation.create_test_db` / `destroy_test_db`). No test
+case was executed and the developer's own database was never written to; this is what found the two
+defects above. Recorded because "unrun" would be inaccurate and "tested" would be untrue.
+
+#### Not done, and why
+
+- **No test was written or run**, per the build-first amendment. This wave's test debt is the whole
+  of it: the vendor-card disclosure ladder, the material-line reconciliation, the two-way
+  clarification, the reschedule reservation move and the `of=("self",)` fix all want regression
+  tests before M2 acceptance.
+- **`VisitNoShowRequest.reason_code` is now required**, which is a **breaking request-shape change**
+  for a client that has not regenerated. Flagged in §7 for both columns.
+- **The frontend client is not regenerated.** **1.26.0 needs regeneration by the orchestrator.**
+- **No rating**, for the reason above.
+- **Contact disclosure and the callback flow** remain untouched — both need an owner decision.
+- **The nullable-join fix was applied mechanically at 24 sites and is unproven at 22 of them.** Two
+  were exercised by the walkthrough drive; the rest compile and follow the identical pattern. Worth
+  a deliberate pass when test authoring resumes.
+
+---
+
 ## Wave C4 — Workforce stages, A3 (`BE5A`)
 
 `M2-BE-521..535`. Thin tail on the C3 spine.
@@ -864,6 +997,7 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | C1 remainder | `BE-102/106/107/110/115/301/303/306/310/317` | `[~]` built — static gates green | `[~]` **4 more paths at contract 1.23.0 (37 total)**, plus two corrected list envelopes | Ruff, strict MyPy across 218 files, `makemigrations --check`, `spectacular --validate` (zero warnings) and the drift check all clean. **The wage-floor guard can now fire**; both list operations declare the envelope they always sent and accept a `cursor`. Migrations `catalog.0007`, `locations.0003`, `partners.0009`. **Tests deferred per the build-first amendment**; two existing fixtures corrected for the fail-closed wage floor. |
 | C2 | `BE-215`, `BE-401..428` (revision 3: A3 unlock + A5 visit plan) | `[~]` built — static gates green | `[~]` **14 new paths / 19 new operations at contract 1.24.0 (62 M2 operations)** | Ruff format and check clean across 342 files, strict MyPy across 222 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 11 named enums, drift check clean. Migrations `requirements.0005`, `catalog.0008`, `commerce.0007`, `assignments.0008`; five new beat entries. **The candidate-visit-starts read is published** at `GET /partner/enquiries/{id}/visit-slots/`. All eight §7 serializer gaps landed. **Tests deferred per the build-first amendment** (`BE-417`/`418`/`428`). **1.24.0 needs client regeneration by the orchestrator.** |
 | C3 | `BE-501..509` | `[~]` built — static gates green | `[~]` **15 new paths / 16 new operations at contract 1.25.0 (78 M2 operations)** | Ruff format and check clean across 345 files, strict MyPy across 225 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 5 enum entries (one **pin** preventing a rename of the published `ProcessingStatusEnum`), drift check clean. Migrations `requirements.0006`, `catalog.0009`, `commerce.0008`, `fulfilment.0002`; three new beat entries. **One stage spine for both archetypes**; scope amendments run on the M1 engine with `booking` made nullable and two new line kinds. **`M2-BE-113` unblocked and built.** Three defects closed: `simulate_capture` refused every M2 charge, an A3 total was client-supplied, and a new enum would have renamed a published component. **Tests deferred per the build-first amendment** (`BE-509`); smoke script at `docs/runbooks/m2-engagement-spine-smoke.md`. **1.25.0 needs client regeneration by the orchestrator.** |
+| C3.5 | Dev seed + the Wave I §7 defects | `[~]` built — static gates green | `[~]` **3 new paths / 3 new operations at contract 1.26.0 (81 M2 operations)** | Ruff format and check clean across 347 files, strict MyPy across 228 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 3 enum entries, drift check clean. Migration `requirements.0007`. **`manage.py seed_m2_demo`** loads every owner-blocked value as dev-only data behind three guards; runbook `docs/runbooks/m2-demo-seed.md`. Vendor cards, two-way clarification, `ProposalMaterialLine` + `EngagementStage.kind`, real verification badge, distance band, `service_name`, visit `timezone`, engagement `access_receipt`, no-show vocabulary. **Two live defects closed: 24 `select_for_update`-over-a-nullable-join `500`s (two of them M1 regressions from C3), and a plan-visit reschedule that abandoned its grid reservation.** `VisitNoShowRequest.reason_code` is now required — breaking for an un-regenerated client. **Tests deferred per the build-first amendment.** **1.26.0 needs client regeneration by the orchestrator.** |
 | C4 | `BE-521..535` | `[ ]` | `[ ]` | |
 | C5 | `BE-541..550` | `[ ]` | `[ ]` | |
 | C6 | `BE-701..717` | `[ ]` | `[ ]` | |

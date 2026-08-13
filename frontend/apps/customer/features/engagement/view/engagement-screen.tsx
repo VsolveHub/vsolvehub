@@ -5,11 +5,29 @@ import { Badge, Button, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
-import { toEngagementView, type EngagementView, type StageView } from "../adapters";
-import { useEngagement, useFundStage } from "../queries";
+import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
+import { useEngagement, useEngagementAmendments, useFundStage } from "../queries";
+import { AgreedWorkPanel } from "./agreed-work-panel";
+import { AgreementHistory } from "./agreement-history";
+import { AmendmentPanel } from "./amendment-panel";
+import { CompletionPanel } from "./completion-panel";
+import { EngagementTimeline } from "./engagement-timeline";
+import {
+  EngagementStatusBadge,
+  StageStatusBadge,
+  nextActionCopy,
+  nounsFor,
+  type ModeNouns,
+} from "./engagement-status";
+import { NotBuiltYet } from "./not-built-yet";
 
 /**
- * The agreement — `M2-FE-415`..`M2-FE-418`.
+ * The engagement workspace — `M2-FE-415`..`418` (Wave A2) and `M2-FE-509`,
+ * `511`, `512`, `608`, `610`, `613` (Wave A3).
+ *
+ * One route for both archetypes, because there is one spine. What changes is the
+ * nouns, the money panels and which promises the screen is allowed to make —
+ * never the structure.
  *
  * ## The first thing this screen reads, and everything else follows from it
  *
@@ -18,30 +36,37 @@ import { useEngagement, useFundStage } from "../queries";
  * published rather than derived precisely so a client cannot keep promising
  * protection through a policy change.
  *
- * - **`LEAD_ONLY` (A3).** `M2-FE-415`. The Customer pays the vendor directly.
- *   Service payment, service refunds and warranty are **between the Customer and
- *   the vendor**, and Vsolve's protection is matching, quote support and
+ * - **`LEAD_ONLY` (A3).** The Customer pays the vendor directly. Service
+ *   payment, service refunds and warranty are **between the Customer and the
+ *   vendor**, and Vsolve's protection is matching, quote support and
  *   replacement. This screen must never describe it as a protected booking, and
  *   the panel below says the opposite in as many words — because a Customer who
  *   believes they are covered will not ask the questions that actually protect
  *   them.
- * - **`MANAGED_PAYMENT_REQUIRED` (A5).** `M2-FE-416`. One stage at a time, **at
- *   face value**. There is no stage credit: the visit-plan money was spent on the
- *   visits themselves, and discounting a stage by it would pay for those visits
- *   twice out of the vendor's work. Nothing on this screen subtracts anything
- *   from a stage.
+ * - **`MANAGED_PAYMENT_REQUIRED` (A5).** One stage at a time, **at face value**.
+ *   There is no stage credit: the visit-plan money was spent on the visits
+ *   themselves, and discounting a stage by it would pay for those visits twice
+ *   out of the vendor's work. Nothing on this screen subtracts anything from a
+ *   stage.
  * - **Anything else** renders as "we cannot describe this". On this surface the
  *   optimistic fallback is "protected booking", which is the one claim M2 must
  *   not make wrongly.
  *
- * ## `M2-FE-418` — durable access, and what it can honestly offer
+ * ## Money is read, never re-added
  *
- * The agreement, its stages and its amounts are readable from this route for as
- * long as the engagement exists, by both parties through their own projections.
- * A receipt or invoice document is **not** reachable from here: `Engagement`
- * publishes no order id and no tax-document id, and `GET /tax-documents/{id}/`
- * needs one. The screen says where the record is rather than linking to a
- * document it cannot name. Logged in `frontend-execution-plan.md` §7.
+ * Six running totals are published on the engagement and four per stage, and
+ * `staged_total_paise = total_paise + amendment_delta_paise` is a database
+ * constraint — so "agreed, then changed by, now owed" is three published numbers
+ * side by side. Wave A2 summed `FUNDED` stages to get a funded total because no
+ * field carried one; that arithmetic is gone.
+ *
+ * ## What is deliberately absent
+ *
+ * A receipt or invoice (`M2-FE-418`): `Engagement` publishes no order id and no
+ * tax-document id, and `GET /tax-documents/{id}/` needs one. The screen says
+ * where the record is rather than linking to a document it cannot name.
+ * `M2-FE-612`, the vendor-replacement path, needs C5 and is marked rather than
+ * mocked.
  */
 
 export interface EngagementScreenProps {
@@ -56,20 +81,29 @@ export interface EngagementScreenProps {
   requestHrefFor: (requirementId: string) => string;
   /** Where the Customer's own list of requests lives, for a failed read. */
   requestsHref: string;
+  /** One stage's own review route. */
+  stageHrefFor: (engagementId: string, stageId: string) => string;
+  /** The list this engagement belongs to, per archetype. */
+  listHrefFor: (mode: "lead_only" | "managed") => string;
 }
 
 export function EngagementScreen({
   engagementId,
   requestHrefFor,
   requestsHref,
+  stageHrefFor,
+  listHrefFor,
 }: EngagementScreenProps) {
   const engagementQuery = useEngagement(engagementId);
+  const amendmentsQuery = useEngagementAmendments(engagementId);
   const fund = useFundStage();
 
   const view = engagementQuery.data === undefined ? null : toEngagementView(engagementQuery.data);
+  const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
   // Only known once the record has loaded. A failed read falls back to the
   // list, which is a real page, rather than to a requirement id we do not have.
   const requestHref = view === null ? requestsHref : requestHrefFor(view.requirementId);
+  const nouns = nounsFor(view?.mode ?? "unknown");
 
   if (engagementQuery.isPending) {
     return (
@@ -94,30 +128,73 @@ export function EngagementScreen({
           onAction={() => void engagementQuery.refetch()}
           reference={presentation.reference}
         />
-        <BackLink href={requestHref} />
+        <BackLink href={requestHref} label="Back to this request" />
       </Wrapper>
     );
   }
 
+  const refetchAll = () => {
+    void engagementQuery.refetch();
+    void amendmentsQuery.refetch();
+  };
+
   return (
     <Wrapper>
       <header>
-        <h1 className="text-xl font-semibold text-text">Your agreement</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Agreed on {view.createdAt}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h1 className="text-xl font-semibold text-text">{nouns.engagementTitle}</h1>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {view.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
+            <EngagementStatusBadge status={view.status} />
+          </div>
+        </div>
+        {view.createdAt !== null ? (
+          <p className="mt-1 text-sm text-text-secondary">Agreed on {view.createdAt}</p>
+        ) : null}
       </header>
 
       <ModePanel view={view} />
+
+      {/* `M2-FE-608`: progress, active stage and next action, at the top, from
+          the server's own numbers. */}
+      <ProgressPanel view={view} nouns={nouns} />
+
+      {/* `M2-FE-509`: who is doing the work, the agreed crew composition and the
+          contact rule — read back off the quote the engagement was frozen from,
+          because the engagement projection carries none of it. */}
+      <AgreedWorkPanel
+        engagement={view}
+        nouns={nouns}
+        quotesHref={`${requestHref}/quotes`}
+      />
 
       <section aria-labelledby="totals-heading" className="mt-6">
         <h2 id="totals-heading" className="text-lg font-semibold text-text">
           What was agreed
         </h2>
         <dl className="mt-3 rounded-card border border-line bg-surface">
-          <Row label="Total" value={view.totalLabel} strong />
+          {/* Three published numbers, not a subtraction. `total_paise` never
+              moves, so the number both parties originally agreed to stays
+              readable beside the number they now owe. */}
+          <Row label="Originally agreed" value={view.totalLabel} />
+          {view.amendmentDeltaPaise !== 0 ? (
+            <Row
+              label={view.amendmentDeltaPaise < 0 ? "Changes took off" : "Changes added"}
+              value={view.amendmentDeltaLabel}
+            />
+          ) : null}
+          <Row label="Agreed now" value={view.stagedTotalLabel} strong />
           <Row label="Tax" value={view.taxLabel} />
-          {view.mode === "managed" ? <Row label="Funded so far" value={view.fundedLabel} /> : null}
+          {view.mode === "managed" ? (
+            <>
+              <Row label="You have funded" value={view.fundedTotalLabel} />
+              <Row label="Approved" value={view.approvedTotalLabel} />
+              <Row label="Paid to the professional" value={view.releasedTotalLabel} />
+              {view.hasRefund ? (
+                <Row label="Refunded to you" value={view.refundedTotalLabel} />
+              ) : null}
+            </>
+          ) : null}
           {view.commissionTreatment !== null ? (
             <Row label="Commission" value={view.commissionTreatment} />
           ) : null}
@@ -126,6 +203,8 @@ export function EngagementScreen({
 
       <StageList
         view={view}
+        nouns={nouns}
+        stageHrefFor={stageHrefFor}
         onFund={(stageId) => fund.mutate({ engagementId, stageId })}
         isFunding={fund.isPending}
       />
@@ -133,48 +212,88 @@ export function EngagementScreen({
       {isStageNotFundable(fund.error) ? (
         <div className="mt-4">
           <ErrorState
-            title="That stage cannot be funded right now"
-            message="Either it is already funded, an earlier stage is not, or this agreement is paid directly to the professional. We have re-read it — what you see now is what is actually there."
+            title={`That ${nouns.stage} cannot be funded right now`}
+            message="Either it is already funded, an earlier one is not, or this agreement is paid directly to the professional. We have re-read it — what you see now is what is actually there."
             severity="warning"
             inline
           />
         </div>
       ) : (
         <div className="mt-4">
-          <AccessRefusal error={fund.error} attempting="fund this stage" />
+          <AccessRefusal error={fund.error} attempting={`fund this ${nouns.stage}`} />
         </div>
       )}
+
+      <AmendmentPanel engagement={view} nouns={nouns} />
+
+      <CompletionPanel engagement={view} nouns={nouns} onDone={refetchAll} />
+
+      {/* `M2-FE-612` — what happens if the professional walks away. Needs C5;
+          nothing publishes what transfers or what the price difference would be,
+          and inventing either would be the client authoring a remedy. Shown only
+          where it is a live question. */}
+      {view.status === "CANCELLED" || view.isDisputed ? (
+        <NotBuiltYet
+          className="mt-8"
+          title="If the professional cannot finish"
+          body="Moving the job to somebody else — what stays funded, what carries over and what the price difference would be — is not built yet. Nothing you have funded is lost. Contact support and we will work it out with you before anything moves."
+          taskId="M2-FE-612"
+        />
+      ) : null}
+
+      <section aria-labelledby="history-heading" className="mt-8">
+        <h2 id="history-heading" className="text-lg font-semibold text-text">
+          What was agreed, and how it changed
+        </h2>
+        {amendments === null ? (
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            We could not read the change history just now, so we are not going to
+            show you a version of this agreement we cannot vouch for.
+          </p>
+        ) : (
+          <AgreementHistory
+            engagement={view}
+            amendments={amendments}
+            originalTotalPaise={view.stagedTotalPaise - view.amendmentDeltaPaise}
+          />
+        )}
+      </section>
+
+      <EngagementTimeline engagementId={engagementId} />
 
       <section aria-labelledby="record-heading" className="mt-8">
         <h2 id="record-heading" className="text-lg font-semibold text-text">
           The record
         </h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          Everything that has happened on this job — what you asked for, who was
-          invited, what they quoted, when they visited and what you chose — stays
-          on the request it came from, for both of you.
+          What you asked for, who was invited, what they quoted, when they visited
+          and what you chose all stay on the request it came from, for both of
+          you. A receipt or invoice is not available from here yet.
         </p>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Link href={requestHref} className={buttonStyles({ variant: "outline" })}>
             Open the full history
           </Link>
+          {view.mode !== "unknown" ? (
+            <Link href={listHrefFor(view.mode)} className={buttonStyles({ variant: "ghost" })}>
+              All your {nouns.engagement}s
+            </Link>
+          ) : null}
         </div>
       </section>
-
-      <BackLink href={requestHref} />
     </Wrapper>
   );
 }
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-2xl flex-col px-4 py-6">{children}</div>;
+  return <div className="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-6">{children}</div>;
 }
 
-function BackLink({ href }: { href: string }) {
+function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <div className="mt-8">
       <Link href={href} className={buttonStyles({ variant: "ghost" })}>
-        Back to this request
+        {label}
       </Link>
     </div>
   );
@@ -200,20 +319,22 @@ function ModePanel({ view }: { view: EngagementView }) {
         </div>
         <p className="mt-2 max-w-prose text-sm leading-6 text-text">
           We connected you and we will help if the connection fails — we will find
-          you somebody else. We do{" "}
-          <strong className="font-semibold">not</strong> hold your money for this
-          work, so{" "}
+          you somebody else. We do <strong className="font-semibold">not</strong>{" "}
+          hold your money for this work, so{" "}
           <strong className="font-semibold">
             payment, refunds and any guarantee on the work are between you and
             them
           </strong>
           . Agree what you are paying, and when, before anybody starts.
         </p>
-        {view.contactReleasedAt !== null ? (
-          <p className="mt-2 text-sm text-text-secondary">
-            You can contact each other from {view.contactReleasedAt}.
-          </p>
-        ) : null}
+        {/* `M2-FE-509` — the contact rule, from the server's own field. No phone
+            number is published anywhere at 1.25.0, so this says when contact is
+            permitted and never implies a number is available here. */}
+        <p className="mt-2 text-sm text-text-secondary">
+          {view.contactReleasedAt !== null
+            ? `You can contact each other from ${view.contactReleasedAt}. We do not show their number on this screen — it reaches you the way we agreed with them.`
+            : "Contact details are not released yet."}
+        </p>
       </section>
     );
   }
@@ -256,22 +377,56 @@ function ModePanel({ view }: { view: EngagementView }) {
   );
 }
 
+/** `M2-FE-608` — progress, the active stage and the one next action. */
+function ProgressPanel({ view, nouns }: { view: EngagementView; nouns: ModeNouns }) {
+  const { done, total } = view.progress;
+  const active = view.stages.find((stage) => stage.stageId === view.activeStageId) ?? null;
+
+  return (
+    <section aria-labelledby="progress-heading" className="mt-6">
+      <h2 id="progress-heading" className="sr-only">
+        Where this has got to
+      </h2>
+      <div className="rounded-card border border-line bg-surface p-4">
+        <p className="text-sm text-text-secondary">
+          {/* Counted in {nouns.stages}, not in money — a money ratio reads 0% for
+              a finished lead-only booking, because Vsolve collects nothing. */}
+          {done} of {total} {total === 1 ? nouns.stage : nouns.stages} done
+        </p>
+        {active !== null ? (
+          <p className="mt-1 font-medium text-text">
+            Now: {active.label}
+            {active.scheduledOn !== null ? ` · ${active.scheduledOn}` : ""}
+          </p>
+        ) : null}
+        <p className="mt-2 text-sm leading-6 text-text">
+          {nextActionCopy(view.nextAction, nouns)}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 /**
- * The stages, and the single funding control.
+ * The stages, the single funding control, and the way in to each review.
  *
- * Exactly one stage can carry a button, and it is the first unsettled one:
- * `POST /engagement-stages/{id}/funding/` refuses a later stage while an earlier
- * one is unfunded, so a second button would be a second refusal. A stage whose
- * charge is in flight shows the pending state and no control — `M2-FE-417`, and
- * the same rule as every other charge in this wave: **never a false confirmed
- * state, and never a second charge while the first is unresolved.**
+ * Exactly one stage can carry a funding button, and it is the first unsettled
+ * one: `POST /engagement-stages/{id}/funding/` refuses a later stage while an
+ * earlier one is unfunded, so a second button would be a second refusal. A stage
+ * whose charge is in flight shows the pending state and no control — `M2-FE-417`,
+ * and the same rule as every other charge in this wave: **never a false
+ * confirmed state, and never a second charge while the first is unresolved.**
  */
 function StageList({
   view,
+  nouns,
+  stageHrefFor,
   onFund,
   isFunding,
 }: {
   view: EngagementView;
+  nouns: ModeNouns;
+  stageHrefFor: (engagementId: string, stageId: string) => string;
   onFund: (stageId: string) => void;
   isFunding: boolean;
 }) {
@@ -280,7 +435,7 @@ function StageList({
   return (
     <section aria-labelledby="stages-heading" className="mt-6">
       <h2 id="stages-heading" className="text-lg font-semibold text-text">
-        {view.mode === "lead_only" ? "The days you agreed" : "The stages"}
+        {nouns.stagesHeading}
       </h2>
       <ol className="mt-3 flex list-none flex-col gap-2 p-0">
         {view.stages.map((stage) => (
@@ -288,6 +443,8 @@ function StageList({
             key={stage.stageId}
             stage={stage}
             mode={view.mode}
+            nouns={nouns}
+            reviewHref={stageHrefFor(view.engagementId, stage.stageId)}
             onFund={onFund}
             isFunding={isFunding}
           />
@@ -297,24 +454,18 @@ function StageList({
   );
 }
 
-const STAGE_STATUS_LABEL: Record<StageView["status"], string> = {
-  PENDING: "Not started",
-  IN_PROGRESS: "In progress",
-  AWAITING_REVIEW: "Waiting for you to check",
-  APPROVED: "Approved",
-  CORRECTION_REQUESTED: "Correction asked for",
-  DISPUTED: "Disputed",
-  RELEASED: "Paid out",
-};
-
 function StageRow({
   stage,
   mode,
+  nouns,
+  reviewHref,
   onFund,
   isFunding,
 }: {
   stage: StageView;
   mode: EngagementView["mode"];
+  nouns: ModeNouns;
+  reviewHref: string;
   onFund: (stageId: string) => void;
   isFunding: boolean;
 }) {
@@ -326,12 +477,34 @@ function StageRow({
           {stage.scheduledOn !== null ? (
             <p className="mt-0.5 text-sm text-text-secondary">{stage.scheduledOn}</p>
           ) : null}
-          <p className="mt-0.5 text-sm text-text-secondary">
-            {STAGE_STATUS_LABEL[stage.status] ?? "We cannot describe this"}
-          </p>
+          <div className="mt-1">
+            <StageStatusBadge status={stage.status} />
+          </div>
         </div>
         <p className="shrink-0 font-medium text-text">{stage.amountLabel}</p>
       </div>
+
+      {/* The review is the money screen, so it gets a real link whenever there is
+          something to decide — and whenever there is not, so the evidence and
+          the decision that was taken stay readable. */}
+      {stage.status !== "PENDING" ? (
+        <div className="mt-3">
+          <Link href={reviewHref} className={buttonStyles({ variant: stage.canApprove ? "primary" : "outline" })}>
+            {stage.canApprove ? "Check the work" : `See this ${nouns.stage}`}
+          </Link>
+        </div>
+      ) : null}
+
+      {stage.clock === "auto_approves" && stage.autoApprovalDeadlineLabel !== null ? (
+        <p className="mt-2 text-sm leading-6 text-warning-text">
+          Approved automatically on {stage.autoApprovalDeadlineLabel} if you do
+          not decide.
+        </p>
+      ) : stage.clock === "no_deadline" ? (
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          No deadline is set, so nothing is approved automatically.
+        </p>
+      ) : null}
 
       {mode !== "managed" ? null : stage.isFundingPending ? (
         <p className="mt-3 text-sm leading-6 text-text-secondary" role="status">

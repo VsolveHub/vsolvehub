@@ -156,7 +156,7 @@ def add_engagement_money(engagement_id: uuid.UUID, **deltas: int) -> None:
 
 def _locked_stage(stage_id: uuid.UUID) -> EngagementStage:
     return (
-        EngagementStage.objects.select_for_update()
+        EngagementStage.objects.select_for_update(of=("self",))
         .select_related("engagement__requirement__configuration", "engagement__partner")
         .get(pk=stage_id)
     )

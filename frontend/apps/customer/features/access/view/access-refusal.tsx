@@ -1,35 +1,37 @@
 "use client";
 
-import { isAccessPriceUnavailable, isPolicyUnavailable, describeError } from "@vsolve/query";
+import { describeError } from "@vsolve/query";
 import { ErrorState } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 /**
- * The two refusals that arrive on a **well-formed request**, and how they read.
+ * The one place a refusal is rendered on the M2 money surfaces.
  *
- * `m2_access_price_unavailable` and `m2_policy_unavailable` are `409`s, neither
- * is a field error and neither is retryable by the Customer. They exist because
- * every owner-blocked value in M2 fails closed by design: no effective price row
- * means nothing can be sold, and an unset cap or disposition rule means a
- * promise the platform has not decided how to keep.
+ * ## The two fail-closed codes are now in the error table, and this got smaller
  *
- * ## Why they are handled here rather than in the error layer
+ * `m2_access_price_unavailable` and `m2_policy_unavailable` are `409`s that
+ * arrive on a **well-formed request**, because every owner-blocked value in M2
+ * fails closed by design: no effective price row means nothing can be sold, and
+ * an unset cap or disposition rule means a promise the platform has not decided
+ * how to keep. Neither is a field error and neither is retryable.
  *
- * `packages/api-client/src/errors.ts` is frozen and carries neither code, so
- * `ApiRequestError.recovery` falls back to `defaultRecoveryForStatus(409)` and
- * `describeError` offers **"Choose another option"** — advice that is wrong in
- * the one direction that matters, because there is no other option and pressing
- * anything changes nothing. Adding both codes to the table is requested in
- * `frontend-execution-plan.md` §7; until that lands, every screen in this wave
- * routes its refusals through this component so the wrong affordance cannot
- * appear.
+ * Wave A2 wrote two branches here with hand-authored copy, because the frozen
+ * `errors.ts` carried neither code and `describeError` therefore offered "Choose
+ * another option" — the one piece of advice that is wrong on an unset owner
+ * decision, since there is no other option and pressing anything changes
+ * nothing. The §7 request was granted at the Wave I gate: **both codes now map
+ * to `contact_support`**, and the two branches are gone rather than left as a
+ * second, drifting copy of a rule the error layer already states. Three
+ * transition refusals landed as `choose_again` in the same change.
  *
- * ## What the copy may and may not say
+ * ## What remains, and why the component still exists
  *
- * It may say we cannot offer this yet and that support can help. It may not
- * apologise for a fault the Customer might think is theirs, and it may not
- * offer a retry — a "Try again" on a missing price row teaches somebody to
- * press a button that will refuse them every time.
+ * One rule the error layer cannot express: **an action is offered only when the
+ * caller passes one.** `describeError` always returns an `action`, and rendering
+ * it unconditionally is how "Try again" appears on a refusal that will refuse
+ * every time. `onRetry` is therefore opt-in per call site, and the support route
+ * is rendered beneath rather than as the primary action — contacting support is
+ * a choice, not the next step in a flow.
  */
 
 export interface AccessRefusalProps {
@@ -52,64 +54,28 @@ export function AccessRefusal({
 }: AccessRefusalProps) {
   if (error === null || error === undefined) return null;
 
-  if (isAccessPriceUnavailable(error)) {
-    return (
-      <UnavailableNotice
-        title="We cannot offer this yet"
-        message={`We have not set a price for this, so we cannot let you ${attempting}. Nothing has been charged. This is on us to finish, not something you can fix by trying again.`}
-        supportAction={supportAction}
-        inline={inline}
-      />
-    );
-  }
-
-  if (isPolicyUnavailable(error)) {
-    return (
-      <UnavailableNotice
-        title="We cannot do that yet"
-        message={`We have not finished setting the rules this depends on, so we cannot ${attempting}. Nothing has been charged and nothing has changed.`}
-        supportAction={supportAction}
-        inline={inline}
-      />
-    );
-  }
-
   const presentation = describeError(error, "financial");
-  return (
-    <ErrorState
-      title={presentation.title}
-      message={presentation.message}
-      severity={presentation.severity}
-      actionLabel={onRetry === undefined ? undefined : (presentation.action?.label ?? "Try again")}
-      onAction={onRetry}
-      reference={presentation.reference}
-      inline={inline}
-    />
-  );
-}
+  const isSupportOnly = presentation.action?.intent === "contact_support";
 
-/**
- * A refusal with no action on it.
- *
- * `ErrorState` renders `actionLabel`/`onAction` as a pair, so omitting both is
- * how a state says "there is nothing to press". The support route is rendered
- * beneath rather than as the primary action, because contacting support is a
- * choice and not the next step in a flow.
- */
-function UnavailableNotice({
-  title,
-  message,
-  supportAction,
-  inline,
-}: {
-  title: string;
-  message: string;
-  supportAction?: ReactNode;
-  inline: boolean;
-}) {
   return (
     <div>
-      <ErrorState title={title} message={message} severity="warning" inline={inline} />
+      <ErrorState
+        title={presentation.title}
+        // `attempting` names what the Customer was doing, because the server's
+        // message describes the refusal and not the screen it landed on.
+        message={
+          isSupportOnly
+            ? `${presentation.message} We could not let you ${attempting}, and this is not something trying again will fix.`
+            : presentation.message
+        }
+        severity={presentation.severity}
+        // `ErrorState` renders `actionLabel`/`onAction` as a pair, so omitting
+        // both is how a state says "there is nothing to press".
+        actionLabel={onRetry === undefined ? undefined : (presentation.action?.label ?? "Try again")}
+        onAction={onRetry}
+        reference={presentation.reference}
+        inline={inline}
+      />
       {supportAction !== undefined ? <div className="mt-3">{supportAction}</div> : null}
     </div>
   );

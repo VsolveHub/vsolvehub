@@ -179,7 +179,7 @@ def create_unlock_checkout(
     row lock in the same transaction that creates the attempt.
     """
     requirement = (
-        CustomerRequirement.objects.select_for_update()
+        CustomerRequirement.objects.select_for_update(of=("self",))
         .select_related("configuration")
         .get(pk=requirement_id)
     )
@@ -250,7 +250,7 @@ def complete_unlock(*, payment_attempt_id: uuid.UUID) -> QuoteUnlock | None:
     function were somehow entered twice for one requirement.
     """
     unlock = (
-        QuoteUnlock.objects.select_for_update()
+        QuoteUnlock.objects.select_for_update(of=("self",))
         .select_related("requirement", "payment_attempt")
         .filter(payment_attempt_id=payment_attempt_id)
         .first()
@@ -369,7 +369,7 @@ def choose_visit_plan(*, requirement_id: uuid.UUID, plan_size: int, actor: User)
     and a Customer changing their mind before submitting is not an error.
     """
     requirement = (
-        CustomerRequirement.objects.select_for_update()
+        CustomerRequirement.objects.select_for_update(of=("self",))
         .select_related("configuration")
         .get(pk=requirement_id)
     )
@@ -645,7 +645,7 @@ def create_visit_plan_checkout(
     than merely unlikely.
     """
     requirement = (
-        CustomerRequirement.objects.select_for_update()
+        CustomerRequirement.objects.select_for_update(of=("self",))
         .select_related("configuration")
         .get(pk=requirement_id)
     )
@@ -702,7 +702,7 @@ def complete_visit_plan(*, payment_attempt_id: uuid.UUID) -> VisitPlan | None:
     not become real.
     """
     plan = (
-        VisitPlan.objects.select_for_update()
+        VisitPlan.objects.select_for_update(of=("self",))
         .select_related("requirement__configuration", "payment_attempt")
         .filter(payment_attempt_id=payment_attempt_id)
         .first()
@@ -759,6 +759,59 @@ def complete_visit_plan(*, payment_attempt_id: uuid.UUID) -> VisitPlan | None:
     return plan
 
 
+@transaction.atomic
+def reschedule_plan_visit(*, visit: SiteVisit, scheduled_for: datetime) -> SiteVisit:
+    """Move an A5 plan visit, and move its reservation with it.
+
+    A plan visit's slot is a **grid reservation**, not a timestamp. `_hold_grid_slot` wrote an
+    `assignments.Reservation` over the instants it occupies, and the exclusion constraint on
+    `(partner, occupied_range)` is what makes "a visit and an A1 job cannot double-book" a database
+    fact rather than a hope. Rescheduling therefore has to be a re-booking:
+
+    1. check the new start is free for this vendor on the same snapshot the picker drew from;
+    2. release the old reservation;
+    3. take the new one, at the same width and the same tentative-or-confirmed state.
+
+    The order matters. Releasing first would hand the vendor's original time back before knowing
+    the new one is available, so a refused reschedule would leave them with neither — and taking
+    the new one first would collide with their own old reservation whenever the two overlap, which
+    is exactly what a fifteen-minute nudge is.
+
+    The **state is preserved rather than recomputed**: a held slot on an unpaid plan stays held,
+    because moving a visit is not a payment and a reschedule must not harden a hold the Customer
+    has not paid for.
+    """
+    partner = visit.invitation.partner
+    duration = visit.duration_minutes or visit_slots.visit_duration_minutes(visit.requirement)
+    choice = visit_slots.VisitSlotChoice(starts_at=scheduled_for, duration_minutes=duration)
+    if choice.starts_at <= timezone.now():
+        raise VisitSlotUnavailableError("That time has passed. Pick another.")
+
+    existing = list(
+        Reservation.objects.select_for_update().filter(
+            site_visit=visit,
+            status__in=(Reservation.Status.TENTATIVE, Reservation.Status.CONFIRMED),
+        )
+    )
+    # Free for this vendor *apart from the reservation being moved*. Their own current hold is the
+    # one overlap that must not block the move, and `slot_is_still_free` cannot know that, so the
+    # old rows are released inside the transaction and the check runs against the grid without
+    # them. A refusal rolls the whole thing back, hold included.
+    was_tentative = any(item.status == Reservation.Status.TENTATIVE for item in existing)
+    for reservation in existing:
+        reservation.release()
+    if not visit_slots.slot_is_still_free(invitation=visit.invitation, choice=choice):
+        raise VisitSlotUnavailableError()
+
+    _hold_grid_slot(visit=visit, partner=partner, choice=choice, tentative=was_tentative)
+    visit.scheduled_for = choice.starts_at
+    visit.duration_minutes = duration
+    # A held first slot stays `REQUESTED` until the plan is paid for. Only a visit that was already
+    # scheduled stays scheduled.
+    visit.save(update_fields=("scheduled_for", "duration_minutes", "updated_at"))
+    return visit
+
+
 # ---------------------------------------------------------------------------
 # Visit arrival and completion (`M2-BE-423`)
 # ---------------------------------------------------------------------------
@@ -802,7 +855,7 @@ def complete_plan_visit(*, site_visit_id: uuid.UUID, outcome_notes: str = "") ->
     vendor pricing from a desk, the second stops one taking a slot and never estimating.
     """
     visit = (
-        SiteVisit.objects.select_for_update()
+        SiteVisit.objects.select_for_update(of=("self",))
         .select_related("requirement__configuration")
         .get(pk=site_visit_id)
     )
@@ -840,7 +893,7 @@ def report_visit_no_show(
     fail-closed rather than guessed.
     """
     visit = (
-        SiteVisit.objects.select_for_update()
+        SiteVisit.objects.select_for_update(of=("self",))
         .select_related("requirement__configuration", "plan_share__plan", "invitation__partner")
         .get(pk=site_visit_id)
     )
@@ -1039,7 +1092,7 @@ def release_visit_payout_hold(*, share_id: uuid.UUID) -> PartnerLedgerEntry | No
     and deleting it to tidy the queue would be writing off somebody else's money.
     """
     share = (
-        VisitPlanShare.objects.select_for_update()
+        VisitPlanShare.objects.select_for_update(of=("self",))
         .select_related("ledger_entry", "partner")
         .get(pk=share_id)
     )
@@ -1160,7 +1213,11 @@ def release_expired_visit_hold(*, site_visit_id: uuid.UUID) -> SiteVisit:
     Idempotent by state, like every other sweep command here, so two overlapping ticks settle on
     one outcome rather than cancelling a visit somebody has since paid for.
     """
-    visit = SiteVisit.objects.select_for_update().select_related("plan_share").get(pk=site_visit_id)
+    visit = (
+        SiteVisit.objects.select_for_update(of=("self",))
+        .select_related("plan_share")
+        .get(pk=site_visit_id)
+    )
     if visit.status != SiteVisit.Status.REQUESTED:
         return visit
     visit.status = SiteVisit.Status.CANCELLED
@@ -1182,7 +1239,7 @@ def release_expired_visit_hold(*, site_visit_id: uuid.UUID) -> SiteVisit:
 def settle_missed_estimate(*, site_visit_id: uuid.UUID) -> SiteVisit:
     """A completed visit produced nothing in the window: refund or replace that share."""
     visit = (
-        SiteVisit.objects.select_for_update()
+        SiteVisit.objects.select_for_update(of=("self",))
         .select_related("plan_share__plan__requirement__configuration")
         .get(pk=site_visit_id)
     )

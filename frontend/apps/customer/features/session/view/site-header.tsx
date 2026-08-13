@@ -46,6 +46,14 @@ const LINKS: readonly NavLink[] = [
   // from a visitor who has already added something to it would be absurd.
   { href: "/cart", label: "Basket" },
   { href: "/bookings", label: "My bookings", private: true },
+  // The M2 surfaces, added at the Wave A3 gate for exactly the reason this
+  // file's own note gives about `/bookings`: three waves of requirement,
+  // quote, visit and engagement screens were reachable only by typing a URL.
+  // `/bookings/workforce` is deliberately *not* a fifth tab — it lives under
+  // `My bookings`, which `startsWith` already marks as current for it, and is
+  // linked from that page.
+  { href: "/requests", label: "My requests", private: true },
+  { href: "/projects", label: "My projects", private: true },
   // Private for the same reason as bookings: every screen behind it is
   // `IsAuthenticated`, so showing it to a visitor is offering a link that
   // bounces straight to login.

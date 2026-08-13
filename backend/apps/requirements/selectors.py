@@ -8,6 +8,7 @@ narrow is load-bearing.
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -17,7 +18,12 @@ from django.db.models import Count, Q, QuerySet
 from apps.catalog.models import ServiceVariant
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User
-from apps.partners.models import PartnerCapability, PartnerProfile, PartnerServiceArea
+from apps.partners.models import (
+    PartnerApplication,
+    PartnerCapability,
+    PartnerProfile,
+    PartnerServiceArea,
+)
 from apps.requirements.exceptions import RequirementNotFoundError
 from apps.requirements.models import (
     CustomerRequirement,
@@ -27,10 +33,12 @@ from apps.requirements.models import (
     EngagementStage,
     Proposal,
     ProposalSelection,
+    QuoteUnlock,
     RequirementQuestion,
     RequirementTransition,
     SiteVisit,
     VendorInvitation,
+    VisitPlan,
 )
 
 #: The sentence the Customer actually reads. Server-authored because it is what tells them what
@@ -53,6 +61,33 @@ def lifecycle_explanation(archetype: str) -> str | None:
     unexplained lifecycle should show the Customer nothing, not a generic reassurance.
     """
     return LIFECYCLE_EXPLANATIONS.get(archetype)
+
+
+#: Who asked a clarification question. A wire vocabulary with no column behind it — the answer is
+#: two identity comparisons, and storing a fourth copy of a fact the two foreign keys already carry
+#: is the kind of duplicate that drifts.
+QUESTION_ASKER_ROLES = (
+    ("CUSTOMER", "Customer"),
+    ("VENDOR", "Vendor"),
+    ("OPERATIONS", "Operations"),
+)
+
+
+def question_asker_role(question: RequirementQuestion) -> str:
+    """`CUSTOMER`, `VENDOR` or `OPERATIONS`, decided by identity rather than by inference.
+
+    The C1 lesson about `actor_kind` applies in reverse here. That field was refused because
+    `PartnerCapabilityTransition.actor` is null for two different causes, so a derived answer would
+    have confidently mislabelled the case that mattered. This one is derived from two non-null
+    foreign keys — the requirement's Customer and the invitation's Partner user — so each of the
+    three answers is a fact, and the third exists so an assisted question does not silently read as
+    the vendor's.
+    """
+    if question.asked_by_id == question.requirement.customer_id:
+        return "CUSTOMER"
+    if question.asked_by_id == question.invitation.partner.user_id:
+        return "VENDOR"
+    return "OPERATIONS"
 
 
 def missing_answer_codes(requirement: CustomerRequirement) -> list[str]:
@@ -277,6 +312,153 @@ def demand_preview(partner: PartnerProfile) -> tuple[list[DemandSummary], int]:
     return summaries, len(eligible_variant_ids)
 
 
+# ---------------------------------------------------------------------------
+# The A5 disclosure ladder (`M2-FE-419`)
+#
+# `README.md` §"Matching and the two front doors": before any visit is confirmed the Customer sees
+# **vendor cards** for the responding pool — verification badge, rating, vendor type and a distance
+# band, no contact details. When a vendor confirms a visit slot their name is disclosed, because
+# somebody is entering the Customer's home and must be nameable.
+#
+# Three of those four are published below. **The rating is not, and the reason is not an
+# oversight**: this platform has no review model. `apps/carts/serializers.py` already refuses to
+# publish one on the A1 professional card for the same reason — "publishing a number with nothing
+# behind it would be worse than publishing none" — and inventing a second, M2-only rating source
+# would be this module deciding what a vendor's reputation is. The field arrives when a review
+# aggregate does.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class VendorCard:
+    """One responding vendor, as much of one as the Customer is entitled to see."""
+
+    partner_id: uuid.UUID
+    vendor_type: str
+    is_verified: bool
+    #: Non-null **only** once this vendor holds a live visit on the plan. Null at every other
+    #: moment, including for a vendor who merely accepted the enquiry.
+    display_name: str | None
+    #: Coarse band in kilometres, from the same 5 km banding the matcher ranked on. `None` when we
+    #: have no fresh position for this vendor, which is the ordinary case for an agency that never
+    #: runs the technician app — and `None` is published as `None` rather than filled with the
+    #: pool median, because the median is a *ranking* device and printing it on a card would tell
+    #: the Customer a distance nobody measured.
+    distance_band_km: int | None
+
+
+def partner_is_verified(partner: PartnerProfile) -> bool:
+    """The verification badge, from the one thing that actually verifies a Partner.
+
+    `PartnerApplication.status == APPROVED` is what an Operations reviewer decided after identity
+    documents and consents, and it is the gate `assert_kyc_complete` enforces before a vendor may
+    accept anything. Until 1.26.0 both the teaser and the vendor card hardcoded `True`, which was a
+    small lie with a large surface: the badge is one of four things a Customer weighs before paying,
+    and a badge that is always on is not a badge.
+    """
+    application = getattr(partner, "application", None)
+    return application is not None and application.status == PartnerApplication.Status.APPROVED
+
+
+def verified_partner_ids(partner_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+    """The badge for a whole pool in one query, for the list reads."""
+    if not partner_ids:
+        return set()
+    return set(
+        PartnerApplication.objects.filter(
+            partner_id__in=list(partner_ids),
+            status=PartnerApplication.Status.APPROVED,
+        ).values_list("partner_id", flat=True)
+    )
+
+
+def invitation_distance_band_km(invitation: VendorInvitation) -> int | None:
+    """The distance band the matcher measured for this vendor, out of its own provenance.
+
+    `VendorInvitation.ranking_provenance` already records `signals.distance_band_km` per ranked
+    candidate — `matching.RankingSignals.as_record` writes it — so this reads a number the platform
+    computed at invitation time rather than recomputing one now. That matters beyond query count:
+    a band recomputed today would move as the vendor drives around, and the Customer would watch a
+    "12 km away" card become "4 km away" with nothing having happened.
+
+    Reads defensively because the column is JSON written by an earlier policy version.
+    """
+    provenance = invitation.ranking_provenance
+    if not isinstance(provenance, dict):
+        return None
+    ranked = provenance.get("ranked")
+    if not isinstance(ranked, list):
+        return None
+    for entry in ranked:
+        if not isinstance(entry, dict) or entry.get("partner_id") != str(invitation.partner_id):
+            continue
+        signals = entry.get("signals")
+        if not isinstance(signals, dict):
+            return None
+        band = signals.get("distance_band_km")
+        return band if isinstance(band, int) and not isinstance(band, bool) else None
+    return None
+
+
+def vendor_cards(requirement: CustomerRequirement) -> list[VendorCard]:
+    """The responding pool for one A5 request, on the disclosure ladder.
+
+    **Responding** is the word `README.md` uses and it is load-bearing: a vendor who was merely
+    invited has done nothing, and publishing a card for them would tell the Customer three
+    professionals are engaged with their request when none of them has opened it. Only `ACCEPTED`
+    and `QUOTED` invitations produce a card.
+
+    Name disclosure follows `SiteVisit.SHARE_HOLDING_STATUSES` — a vendor who has committed to a
+    slot, including the first vendor's slot while it is still held pending the plan checkout. That
+    boundary is `confirm_visit_slot`'s own: the vendor has said "I will be there at this time", and
+    `README.md`'s copy for the checkout screen is literally *"Vendor X confirmed Tuesday 10am"*. A
+    Customer being asked to pay for visits is entitled to know whose visit they are paying for.
+
+    Contact details appear at no point on this read, at any status. They are released by the
+    engagement, not by the visit and not by the plan fee.
+    """
+    invitations = list(
+        VendorInvitation.objects.filter(
+            requirement=requirement,
+            status__in=(VendorInvitation.Status.ACCEPTED, VendorInvitation.Status.QUOTED),
+        )
+        .select_related("partner", "partner__business_profile")
+        .order_by("created_at", "id")
+    )
+    if not invitations:
+        return []
+
+    partner_ids = [invitation.partner_id for invitation in invitations]
+    verified = verified_partner_ids(partner_ids)
+    named_partner_ids = set(
+        SiteVisit.objects.filter(
+            requirement=requirement,
+            plan_share__isnull=False,
+            status__in=SiteVisit.SHARE_HOLDING_STATUSES,
+        ).values_list("invitation__partner_id", flat=True)
+    )
+
+    cards: list[VendorCard] = []
+    for invitation in invitations:
+        partner = invitation.partner
+        business = getattr(partner, "business_profile", None)
+        is_named = partner.id in named_partner_ids
+        cards.append(
+            VendorCard(
+                partner_id=partner.id,
+                vendor_type=(business.business_type if business is not None else "INDIVIDUAL"),
+                is_verified=partner.id in verified,
+                display_name=(
+                    (business.legal_name if business is not None else "") or partner.display_name
+                    if is_named
+                    else None
+                ),
+                distance_band_km=invitation_distance_band_km(invitation),
+            )
+        )
+    return cards
+
+
 def site_visit_for_participant(*, user: User, site_visit_id: uuid.UUID) -> SiteVisit:
     """One site visit, if the caller is either party to it. A 404 otherwise.
 
@@ -406,6 +588,54 @@ def engagement_events(engagement: Engagement) -> QuerySet[EngagementEvent]:
         .select_related("stage")
         .order_by("occurred_at", "id")
     )
+
+
+def access_receipt_for(engagement: Engagement) -> dict[str, Any] | None:
+    """The receipt for the access fee this agreement grew out of (`M2-FE-418`).
+
+    One fee per requirement and one per archetype: A3 charged an unlock, A5 charged a visit plan,
+    and neither can exist on the other. Both already allocate a gapless `M2A-` number at capture —
+    what was missing was any way to reach it from the agreement screen, which is the screen a
+    Customer is on when they want the receipt.
+
+    `None` for three honest reasons rather than one: no fee has been charged yet, the plan's whole
+    price was covered by a reclassification credit, or the row predates receipt numbering. Each of
+    them means the same thing to the screen — there is no number to show — and none of them is an
+    error.
+    """
+    requirement_id = engagement.requirement_id
+    if engagement.archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        plan = (
+            VisitPlan.objects.filter(requirement_id=requirement_id)
+            .exclude(receipt_series="")
+            .order_by("-charged_at")
+            .first()
+        )
+        if plan is None:
+            return None
+        return {
+            "kind": "A5_VISIT_PLAN",
+            "number": f"{plan.receipt_series}-{plan.receipt_sequence}",
+            "series": plan.receipt_series,
+            "sequence": plan.receipt_sequence,
+            "amount_paise": plan.chargeable_paise,
+        }
+
+    unlock = (
+        QuoteUnlock.objects.filter(requirement_id=requirement_id)
+        .exclude(receipt_series="")
+        .order_by("-activated_at")
+        .first()
+    )
+    if unlock is None:
+        return None
+    return {
+        "kind": "A3_QUOTE_UNLOCK",
+        "number": f"{unlock.receipt_series}-{unlock.receipt_sequence}",
+        "series": unlock.receipt_series,
+        "sequence": unlock.receipt_sequence,
+        "amount_paise": unlock.price_paise,
+    }
 
 
 def customer_engagements(customer: User) -> QuerySet[Engagement]:

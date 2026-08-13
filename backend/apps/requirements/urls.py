@@ -37,6 +37,7 @@ from apps.requirements.views import (
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
     PartnerProposalWithdrawView,
+    PartnerQuestionAnswerView,
     PartnerWorkspaceListView,
     RequirementAttachmentCollectionView,
     RequirementAttachmentDetailView,
@@ -46,6 +47,7 @@ from apps.requirements.views import (
     RequirementDuplicateCheckView,
     RequirementQuestionAnswerView,
     RequirementQuoteListView,
+    RequirementQuoteQuestionView,
     RequirementQuoteRejectView,
     RequirementQuoteRevalidateView,
     RequirementSelectionView,
@@ -53,6 +55,7 @@ from apps.requirements.views import (
     RequirementTeaserListView,
     RequirementTimelineView,
     RequirementUnlockView,
+    RequirementVendorCardListView,
     RequirementVisitPlanCheckoutView,
     RequirementVisitPlanView,
     SelectionDeclineView,
@@ -96,6 +99,13 @@ urlpatterns = [
         RequirementQuestionAnswerView.as_view(),
         name="m2-requirement-question-answer",
     ),
+    # The A5 responding pool, on the disclosure ladder. Sits beside `visit-plan/` rather than under
+    # it because a card exists from the first vendor response, which is before any plan is charged.
+    path(
+        "requirements/<uuid:requirement_id>/vendor-cards/",
+        RequirementVendorCardListView.as_view(),
+        name="m2-requirement-vendor-cards",
+    ),
     # Wave C2 — the two front doors. `unlock/` is A3-only and `visit-plan/` is A5-only; each
     # refuses on the other archetype rather than quietly doing nothing, so a client that mounted
     # the wrong one finds out immediately.
@@ -118,6 +128,13 @@ urlpatterns = [
         "requirements/<uuid:requirement_id>/quotes/",
         RequirementQuoteListView.as_view(),
         name="m2-requirement-quotes",
+    ),
+    # The Customer's half of clarification. Nested under the quote because a question is addressed
+    # to the vendor who wrote that quote — a question aimed at the pool is a broadcast nobody owns.
+    path(
+        "requirements/<uuid:requirement_id>/quotes/<uuid:proposal_id>/questions/",
+        RequirementQuoteQuestionView.as_view(),
+        name="m2-requirement-quote-question",
     ),
     path(
         "requirements/<uuid:requirement_id>/quotes/<uuid:proposal_id>/reject/",
@@ -319,6 +336,11 @@ urlpatterns = [
         "partner/enquiries/<uuid:invitation_id>/visit-slots/",
         PartnerEnquiryVisitSlotView.as_view(),
         name="m2-partner-enquiry-visit-slots",
+    ),
+    path(
+        "partner/questions/<uuid:question_id>/answer/",
+        PartnerQuestionAnswerView.as_view(),
+        name="m2-partner-question-answer",
     ),
     path("proposals/", PartnerProposalCollectionView.as_view(), name="m2-proposal-create"),
     path(

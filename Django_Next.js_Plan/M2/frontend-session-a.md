@@ -213,25 +213,32 @@ state names and permitted actions — do not name a state from what your screen 
 
 ### Workforce booking (A3)
 
-- [ ] `M2-FE-509` `My bookings`: schedule, agreed crew composition, permitted identity summary,
-  contact rules, direct-payment reminder, next action.
+- [~] `M2-FE-509` `My bookings`: schedule, agreed crew composition, permitted identity summary,
+  contact rules, direct-payment reminder, next action. **Built** — `/bookings/workforce`.
 - [ ] `M2-FE-510` Confirm or dispute the day's attendance in **one tap**. Per-worker detail captured
-  only inside the dispute flow.
-- [ ] `M2-FE-511` Acknowledge crew changes, approve/reject time extensions, confirm completion or open
-  an issue inside the documented window.
-- [ ] `M2-FE-512` Partial service, replacement, refund, dispute and closure in one chronological timeline.
+  only inside the dispute flow. **Wave III — needs C4's attendance model.** An honest
+  not-built-yet block sits where it goes.
+- [~] `M2-FE-511` Acknowledge crew changes, approve/reject time extensions, confirm completion or open
+  an issue inside the documented window. **Built, minus crew-change acknowledgement (C4).**
+- [~] `M2-FE-512` Partial service, replacement, refund, dispute and closure in one chronological timeline.
+  **Built** — one feed, `GET /engagements/{id}/events/`, nothing synthesised.
 
 ### Project workspace (A5)
 
-- [ ] `M2-FE-608` `My projects`: overall progress, active stage, funded amount, next action, issue status.
-- [ ] `M2-FE-609` Stage review: evidence viewer, approve, request clarification, dispute.
-- [ ] `M2-FE-610` Amendment comparison against the current agreement; explicit acceptance plus
-  additional payment or refund handling.
+- [~] `M2-FE-608` `My projects`: overall progress, active stage, funded amount, next action, issue status.
+  **Built** — `/projects`, and the workspace header on `/engagements/{id}`.
+- [~] `M2-FE-609` Stage review: evidence viewer, approve, request clarification, dispute. **Built** —
+  `/engagements/{id}/stages/{stageId}`. Evidence **cannot be opened**: no download route exists.
+- [~] `M2-FE-610` Amendment comparison against the current agreement; explicit acceptance plus
+  additional payment or refund handling. **Built.**
 - [ ] `M2-FE-611` Deliverable acceptance, project completion, warranty issue reporting — with clear
-  deadlines and the retention release date.
+  deadlines and the retention release date. **Wave III — needs C5.** Not-built-yet block on the
+  completion panel.
 - [ ] `M2-FE-612` Vendor-replacement path if a project is abandoned: what is funded, what transfers,
-  what the price difference is.
-- [ ] `M2-FE-613` Original and amended agreement versions preserved in a readable history.
+  what the price difference is. **Wave III — needs C5.** Not-built-yet block, shown only where it
+  is a live question.
+- [~] `M2-FE-613` Original and amended agreement versions preserved in a readable history. **Built** —
+  money and change lines per version; the *scope* of a version is not published.
 
 **Evidence to record:** the one-tap attendance path (count the taps), that clarification and evidence
 upload can never read as approved scope or completed stage.
@@ -279,7 +286,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 |---|---|---|---|---|
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
 | A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. |
-| A3 | `FE-509..512`, `FE-608..613` | `[ ]` | `[ ]` | |
+| A3 | `FE-509..512`, `FE-608..613` | `[~]` 7 of 10 | `[ ]` | The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `FE-510`/`611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
 
@@ -741,3 +748,174 @@ one view away from finishable.
 | 2026-08-13 | `FE-409` | No Customer-asks-a-question endpoint exists. Built as re-validation plus an honest statement. | yes |
 | 2026-08-13 | `FE-418` receipt | `Engagement` carries no order or tax-document id. | yes |
 | 2026-08-13 | `FE-422` reschedule | No Customer-scoped candidate-slot read. | yes |
+
+### Wave A3 progress — 2026-08-13 · the shared spine, Customer half, at 1.25.0
+
+`pnpm lint --max-warnings 0` clean; `pnpm typecheck --filter=customer --filter=@vsolve/query` green
+(re-run with `--force`, and `tsc --listFiles` checked, to confirm the twelve new files are in the
+programme rather than passing on a stale cache — the same false green Wave A2 caught); `pnpm build
+--filter=customer` green with **three new dynamic routes**. **No tests were run and none were
+written** — the build-first amendment. What replaces them is
+`apps/customer/features/engagement/SMOKE.md`: the exact clicks that prove the stage spine, including
+the two negative checks that matter more than the happy path.
+
+**Three routes.**
+
+| Route | What it is | Rendering |
+|---|---|---|
+| `/bookings/workforce` | `My bookings` for A3 — `FE-509` | `force-dynamic`, `robots: noindex`, inside the existing `/bookings` `CustomerShell` gate |
+| `/projects` | `My projects` for A5 — `FE-608` | `force-dynamic`, `robots: noindex`, own `CustomerShell` layout + `loading.tsx` + `error.tsx` |
+| `/engagements/[engagementId]/stages/[stageId]` | Stage review — `FE-609` | `force-dynamic`, `robots: noindex` |
+
+#### Two nouns for the lists, one route for the detail
+
+The information architecture files A3 under a booking noun and A5 under `/projects`, and its reason
+is the only one that matters here: **one set of words cannot cover two different promises about who
+holds the money.** That reason bites at the list, where a Customer decides what kind of thing they
+are looking at — so there are two list screens with two headings, two empty states and two money
+columns, fed by one `GET /engagements/` and split on `commercial_mode`.
+
+It does **not** bite at the detail, because `/engagements/{id}` already branches every promise it
+makes on that same field, and because the noun a reader sees is the `<h1>` rather than the URL. So
+Wave A2's route stays the one engagement workspace and this wave extended it. Two detail routes for
+one aggregate would have been two screens each claiming to be the record.
+
+The IA's own `/bookings/[engagementId]` **cannot be built**: `/bookings/[groupId]` has been the M1
+Booking Group detail since Milestone 1 and Next.js refuses two slug names at one path level. A static
+`/bookings/workforce` segment beside it is legal and reads correctly. Logged in §7 as an IA
+correction, since that document is Session C's.
+
+#### The rules the screens are built on, and where each one shows
+
+**Approval releases money, so the screen says what each button does before it is pressed.** Not a
+warning — a sentence per control, derived from `commercial_mode` and repeated in the confirmation.
+The same `POST .../approve/` writes the vendor's earning *held* on A5 and moves nothing at all on A3,
+where nothing was ever collected and the Customer still owes the professional directly. Two
+sentences, one command, and an unknown mode says nothing about money at all rather than picking the
+friendlier reading.
+
+**A correction is not an amendment**, and the panel says so in the same breath as offering it: it
+asks for the *agreed* work to be done properly, moves no money, and anybody wanting something
+different is pointed at a change order the professional has to agree to. Without that sentence a
+correction becomes the cheap amendment, and `m2_amendment_required` becomes a refusal nobody
+understands.
+
+**A dispute stops only the disputed allocation.** Every screen that mentions it says the rest of the
+job carries on and anything already paid out stays paid out. Nothing renders a disputed stage as a
+frozen engagement.
+
+**Review timeouts auto-approve, so the deadline is on the screen — and so is its absence.** Three
+states, modelled as `reviewClock` rather than as a nullable date, because the nullable date is what
+gets rendered as time in hand:
+
+| State | What it means | What the screen says |
+|---|---|---|
+| `auto_approves` | `AWAITING_REVIEW`, window configured | The date, plus that silence approves it and that only a dispute stops it |
+| `no_deadline` | `AWAITING_REVIEW`, `review_due_at` **null** | “No deadline is set — nothing is approved automatically.” Never a countdown, never a synthesised default |
+| `stopped` | `DISPUTED` | “The clock is stopped.” The server clears `review_due_at` and refuses the timeout, so this is a fact rather than a reassurance |
+
+The countdown is `useServerCountdown` and is **presentation, never authority**: reaching zero locally
+replaces the actions with “this window has closed — check what happened” and one refetch, rather
+than asserting an approval the server may not have made.
+
+**A5 stages fund at face value.** Nothing in this wave subtracts visit money from a stage, and the
+managed panel says out loud that the visit money is already spent on the visits.
+
+#### The one thing `M2-FE-610` exists to prevent, and the four things that prevent it
+
+A proposed amendment must never read as approved scope. So: it is drawn in its own bordered block
+with a **“Requested — not agreed”** badge; it is absent from the agreement's own totals, which keep
+showing `staged_total_paise`; it is absent from the version history until the server stamps
+`applied_at`; and an **unrecognised status offers nothing at all** rather than falling through to
+decidable, which would be one keystroke from the failure itself.
+
+The comparison is three rows — agreed now, this change, **if you accept** — and the third is
+labelled as a projection because nothing publishes a would-be total. It is formatted at the call site
+rather than in the adapter, deliberately, so it cannot be filed among the real totals.
+
+Money before scope is rendered as the three routes the contract defines. `checkout: null` on a
+`LEAD_ONLY` extension applies at once; `null` on a managed reduction refunds *before* the scope
+shrinks, so there is no instant in which the Customer owns less work than they have paid for; and a
+`PaymentAttempt` renders as **waiting with nothing to press**, because every control on a pending
+charge is a way to pay twice.
+
+#### Money is read, not re-added
+
+1.25.0 publishes six running totals on the engagement and four per stage. `fundedTotalPaise` — the
+1.24.0 helper that summed `FUNDED` stage amounts, and the §7 row that forced it — is **deleted**, not
+deprecated. `staged_total_paise = total_paise + amendment_delta_paise` is a database constraint, so
+“agreed, then changed by, now owed” is three published numbers side by side and a mismatch is a
+server bug visible in the right place.
+
+One derivation survives and it is deliberately not money: **progress is counted in stages.** A money
+ratio reads 0% for a finished `LEAD_ONLY` booking, because Vsolve collects nothing on A3, and a bar
+that tells somebody their completed job has not started is worse than no bar.
+
+#### The two frozen-file changes were used, not worked around
+
+- **`m2-keys.ts` gained `visits`.** `m2AccessKeys.visitPlan` now delegates to
+  `m2QueryKeys.visits.plan(requirementId)` instead of composing under `requirements.detail`. Two
+  names for one cache entry is how the tracker and the server's own invalidation stop agreeing, and
+  `visits.plan` joining `requirementScope` is what makes a `NON_RESPONSIVE` rejection refetch the
+  plan whose share it just sent back to owing a free replacement visit.
+- **`errors.ts` gained both fail-closed codes as `contact_support`.** `access-refusal.tsx` lost both
+  hand-authored branches, exactly as the Wave A2 note promised it would. What is left is the one rule
+  the error layer cannot express: an action is rendered only when the call site passes one, because
+  `describeError` always returns one.
+
+#### Three things this wave was told not to build, and did not
+
+`FE-510` (attendance), `FE-611` (deliverable acceptance, warranty, retention release) and `FE-612`
+(vendor replacement) need C4 and C5. Each renders a dashed, labelled block with **no control**, at
+the exact place the feature will sit, saying what will be there and what to do meanwhile. An
+attendance control wired to nothing teaches a Customer that confirming does nothing; a retention date
+invented here is a promise the platform has not made; and rendering *nothing* would read as “this
+product does not do that” — which on the warranty panel reads as “I have no cover”.
+`view/not-built-yet.tsx` is deleted when they land and is deliberately ugly to leave in place.
+
+#### The wave's largest hole, and it is not a missing screen
+
+**Stage evidence cannot be opened by the party being asked to approve it.** `object_key` is correctly
+unpublished and 1.25.0 ships no download route for `StageEvidence`, though `RequirementAttachment`
+has one. So a Customer is asked to release money against evidence whose metadata they can read and
+whose content they cannot. The viewer says so plainly rather than offering a control that 404s, and
+the scan status still gates: `PENDING` means the checksum matched and the safety question is
+unanswered, and anything unrecognised fails closed.
+
+#### One defect fixed that predates this wave
+
+**The whole Customer M2 surface was dark from the chrome.** `/requests` was never in the site header,
+so three waves of screens — requests, quotes, the visit tracker, the engagement — were reachable only
+by typing a URL. That is the identical defect `site-header.tsx`'s own note records about `/bookings`
+in M1, and this column had now shipped it twice. `My requests` and `My projects` are private header
+links; `/bookings/workforce` is linked from `/bookings` rather than taking a fifth tab, since
+`startsWith` already marks `My bookings` as current for it.
+
+#### Files
+
+- `packages/query/src/m2-engagement-customer.ts` (rewritten at 1.25.0), the one-line key change in
+  `packages/query/src/m2-quotes.ts`, and the export block in `packages/query/src/index.ts`.
+- `apps/customer/features/engagement/**` — `queries.ts`, `model/stage-review.ts`,
+  `adapters/index.ts`, `view/{engagement-status,engagement-list-screen,stage-review-screen,
+  stage-evidence,agreed-work-panel,amendment-panel,agreement-history,engagement-timeline,
+  completion-panel,not-built-yet,engagement-screen}.tsx`, `SMOKE.md`.
+- Touched: `features/access/view/access-refusal.tsx` (two branches deleted),
+  `features/session/view/site-header.tsx`, `app/(flow)/bookings/page.tsx`,
+  `app/(flow)/engagements/[engagementId]/page.tsx`.
+- Routes: `app/(flow)/bookings/workforce/page.tsx`, `app/(flow)/projects/{layout,page,loading,error}.tsx`,
+  `app/(flow)/engagements/[engagementId]/stages/[stageId]/page.tsx`.
+
+**Twelve rows added to the execution plan §7.** The two to read first: **no stage-evidence download
+route**, which is the one gap that changes what a Customer is being asked to consent to; and
+**`/bookings/[engagementId]` cannot exist**, which the information architecture still claims.
+
+### Blocked / handed off — Wave A3
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-13 | `FE-510` | C4's attendance model. Nothing publishes an attendance record. Not-built-yet block rendered. | yes |
+| 2026-08-13 | `FE-611` | C5. `Engagement` carries no retention amount and no warranty window. Not-built-yet block rendered. | yes |
+| 2026-08-13 | `FE-612` | C5. Nothing publishes what transfers or what the price difference would be. Not-built-yet block rendered. | yes |
+| 2026-08-13 | `FE-609` evidence viewer | No download route for `StageEvidence`. Metadata renders; the file cannot be opened. | yes |
+| 2026-08-13 | `FE-509` crew and identity | Not on the engagement projection. Read back off the accepted quote, degrading to a link. | yes |
+| 2026-08-13 | `FE-613` scope per version | No proposal snapshot on the engagement. Money and change lines only. | yes |

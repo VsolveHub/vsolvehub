@@ -591,8 +591,23 @@ class Proposal(models.Model):
 
     inclusions = models.JSONField(default=list, blank=True)
     exclusions = models.JSONField(default=list, blank=True)
-    #: A5 stage breakdown. Stage totals must reconcile to `total_paise` before selection.
+    #: A5 stage breakdown. Stage totals plus material lines must reconcile to `total_paise`
+    #: before selection.
     stages = models.JSONField(default=list, blank=True)
+    #: A5 material lines, and the reason they are **not** stages (`M2-BE-543`).
+    #:
+    #: Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing
+    #: cement sent it as a stage — which made a bag of cement a fundable milestone with an
+    #: evidence cycle, an approval and a release. `README.md` is explicit that material money is
+    #: *spent rather than earned*, so it cannot be recovered like an unearned work stage when a
+    #: project ends early; a row type that cannot tell the two apart cannot express that rule.
+    #:
+    #: Each entry is `{title, quantity, unit, amount_paise}`. They still reconcile into
+    #: `total_paise` — the Customer pays for the materials — and they still become
+    #: `EngagementStage` rows, because there is one money spine and a second one would be the
+    #: duplication this plan forbids. What changes is the *kind* of stage they become, which is
+    #: what the recovery rule reads.
+    material_lines = models.JSONField(default=list, blank=True)
     warranty_terms = models.TextField(blank=True)
     valid_until = models.DateTimeField(null=True, blank=True)
 
@@ -1455,6 +1470,21 @@ class EngagementStage(models.Model):
         PENDING = "PENDING", "Awaiting the provider"
         FUNDED = "FUNDED", "Funded"
 
+    class Kind(models.TextChoices):
+        """What this row's money buys, and therefore how it can be recovered (`M2-BE-543`).
+
+        There is still exactly **one** money spine — a second table for materials would be the
+        duplication this plan forbids — but "a milestone of work" and "an advance against
+        materials" are not the same promise and cannot share a recovery rule. `README.md`:
+        *material money is spent, not earned, so it cannot be recovered like an unearned work
+        stage when a project ends early.* Without this column that sentence has nothing to read,
+        and `route_suspended_capability_engagements` would refund a Customer for cement the
+        vendor has already bought.
+        """
+
+        WORK = "WORK", "Work"
+        MATERIAL_ADVANCE = "MATERIAL_ADVANCE", "Material advance"
+
     #: Statuses in which the vendor still owes work on this stage.
     OPEN_STATUSES = (
         Status.PENDING,
@@ -1471,6 +1501,10 @@ class EngagementStage(models.Model):
     position = models.PositiveSmallIntegerField()
     label = models.CharField(max_length=200)
     amount_paise = models.PositiveBigIntegerField()
+    #: `WORK` for every A3 shift-day and every A5 milestone; `MATERIAL_ADVANCE` for a material
+    #: line the vendor priced on their estimate. Defaulted rather than nullable so every row
+    #: written before 1.26.0 reads as what it was.
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.WORK)
     scheduled_on = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING)
     funding_state = models.CharField(
@@ -1621,10 +1655,24 @@ class EngagementStage(models.Model):
         `apps.requirements.amendments` is its only caller — after the amendment reached
         `AUTHORIZED`, which for an A5 engagement means a verified provider callback moved it
         there.
+
+        `kind` is refused outright rather than gated on the amendment, because there is no
+        legitimate write at all: whether a row is work or a material advance is decided by the
+        estimate the Customer selected, and changing it afterwards would move a stage between two
+        different recovery rules with nobody's agreement.
         """
         if not self._state.adding:
             update_fields = set(kwargs.get("update_fields") or ())
-            changes_amount = "amount_paise" in update_fields or not update_fields
+            touches_everything = not update_fields
+            if "kind" in update_fields or touches_everything:
+                stored_kind = (
+                    EngagementStage.objects.filter(pk=self.pk)
+                    .values_list("kind", flat=True)
+                    .first()
+                )
+                if stored_kind is not None and stored_kind != self.kind:
+                    raise ValueError("A stage's kind is fixed by the selected estimate.")
+            changes_amount = "amount_paise" in update_fields or touches_everything
             if changes_amount and not self.applying_authorized_amendment:
                 raise ValueError(
                     "A stage amount changes only through an authorized scope amendment."

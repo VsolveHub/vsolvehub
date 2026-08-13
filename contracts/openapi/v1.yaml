@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.25.0
+  version: 1.26.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -7883,6 +7883,61 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/partner/questions/{question_id}/answer/:
+    post:
+      operationId: m2_partner_question_answer
+      description: Answer a question the Customer asked about one of your quotes.
+        Scoped to this vendor's own enquiries, and refuses a question this vendor
+        asked — an answer to your own question would close the row without the Customer
+        ever seeing it.
+      parameters:
+      - in: path
+        name: question_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Partner enquiries
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionAnswerRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuestionAnswerRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuestionAnswerRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementQuestion'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/partner/required-consents/:
     get:
       operationId: partner_required_consents_list
@@ -8812,6 +8867,78 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_visit_plan_required` — no A5 visit plan has been charged,
             so no estimate has been bought yet.'
+  /api/v1/requirements/{requirement_id}/quotes/{proposal_id}/questions/:
+    post:
+      operationId: m2_customer_question_create
+      description: |-
+        Ask the professional behind one quote or estimate a question. Structured clarification, not chat: one question, one answer, both on the shared timeline.
+
+        Addressed to a **proposal**, so it reaches the vendor who wrote it rather than broadcasting to a pool that has already quoted. Gated on the paywall the archetype uses — before the unlock (A3) or the charged plan (A5) the vendors are deliberately not addressable, and a question would be a channel around the fee.
+
+        A question never changes a price. A new number is a superseding proposal.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: proposal_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Quotes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuestionCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuestionCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementQuestion'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_unlock_required` before an A3 unlock.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_visit_plan_required` before an A5 plan is charged; `m2_requirement_transition_not_allowed`
+            once the request is closed.'
   /api/v1/requirements/{requirement_id}/quotes/{proposal_id}/reject/:
     post:
       operationId: m2_quote_reject
@@ -9242,6 +9369,45 @@ paths:
             or the request is already unlocked; `m2_access_price_unavailable` when
             Operations has loaded no effective price — this **fails closed** rather
             than charging a guess.'
+  /api/v1/requirements/{requirement_id}/vendor-cards/:
+    get:
+      operationId: m2_vendor_card_list
+      description: |-
+        The professionals responding to one A5 request. **A5 only** — an A3 request's pre-unlock surface is the quote teaser, and a second one would be a way around the unlock.
+
+        The ladder, exactly: verification badge, vendor type and a coarse distance band for every responding vendor; the vendor's **name once they have committed to a visit slot**, because somebody entering a home has to be nameable; and **no contact details at any status**, which the engagement releases and the plan fee does not.
+
+        `distance_band_km` is the 5 km band the matcher ranked on, read back from the invitation's own provenance rather than recomputed, and is `null` when we have no fresh position for that vendor — the ordinary case for an agency that never runs the technician app. **No rating is published**: this platform has no review model, and a number with nothing behind it is worse than none.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Access
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorCardList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_lifecycle_not_supported` on an A3 request.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/requirements/{requirement_id}/visit-plan/:
     get:
       operationId: m2_visit_plan_read
@@ -9439,7 +9605,10 @@ paths:
   /api/v1/requirements/questions/{question_id}/answer/:
     post:
       operationId: m2_requirement_question_answer
-      description: The Customer's half of structured clarification.
+      description: 'Answer a question a professional asked about this request. Since
+        1.26.0 clarification runs both ways, so this route answers **the vendor''s**
+        questions only: a Customer''s own question is answered by the vendor at `POST
+        /api/v1/partner/questions/{question_id}/answer/`.'
       parameters:
       - in: path
         name: question_id
@@ -10153,6 +10322,42 @@ components:
       - provider_order_id
       - server_now
       - status
+    AccessReceipt:
+      type: object
+      description: |-
+        The durable reference for the access fee Vsolve actually collected (`M2-BE-415`).
+
+        Not an invoice. `TaxDocument.order` is not nullable and an access fee has no `Order`, so making
+        it nullable to fit one would weaken the invariant every M1 invoice depends on; the number comes
+        from the same `commerce.DocumentSequence` under an `M2A-` series, which is gapless and is the
+        one numbering authority. GST treatment of the unlock and the visit-plan fee is blocking owner
+        decision 5, so this is a receipt reference and says so.
+
+        `number` is formatted server-side in the `series-sequence` shape
+        `commerce.TaxDocumentSerializer.get_number` already publishes, because the string a Customer
+        quotes to support should not be assembled differently by each app that renders it.
+      properties:
+        kind:
+          type: string
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+        series:
+          type: string
+          readOnly: true
+        sequence:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+      required:
+      - amount_paise
+      - kind
+      - number
+      - sequence
+      - series
     ActionEnum:
       enum:
       - KEEP_CUSTOMER
@@ -12163,6 +12368,11 @@ components:
           items:
             $ref: '#/components/schemas/ProposalStage'
           readOnly: true
+        material_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialLine'
+          readOnly: true
         warranty_terms:
           type: string
           readOnly: true
@@ -12180,6 +12390,7 @@ components:
       - exclusions
       - id
       - inclusions
+      - material_lines
       - minimum_days
       - rate_paise_per_worker_day
       - rejection_reason
@@ -12560,6 +12771,11 @@ components:
           format: date-time
           readOnly: true
           nullable: true
+        access_receipt:
+          allOf:
+          - $ref: '#/components/schemas/AccessReceipt'
+          nullable: true
+          readOnly: true
         stages:
           type: array
           items:
@@ -12570,6 +12786,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - access_receipt
       - amendment_delta_paise
       - approved_total_paise
       - archetype
@@ -12852,6 +13069,10 @@ components:
         amount_paise:
           type: integer
           readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/EngagementStageKindEnum'
+          readOnly: true
         scheduled_on:
           type: string
           format: date
@@ -12942,6 +13163,7 @@ components:
       - funded_paise
       - funding_state
       - id
+      - kind
       - label
       - payout_release_due_at
       - position
@@ -12964,6 +13186,14 @@ components:
         * `REQUIRED` - Funding required
         * `PENDING` - Awaiting the provider
         * `FUNDED` - Funded
+    EngagementStageKindEnum:
+      enum:
+      - WORK
+      - MATERIAL_ADVANCE
+      type: string
+      description: |-
+        * `WORK` - Work
+        * `MATERIAL_ADVANCE` - Material advance
     EngagementStageStatusEnum:
       enum:
       - PENDING
@@ -13030,6 +13260,9 @@ components:
           type: string
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
+        service_name:
+          type: string
+          readOnly: true
         archetype:
           type: string
           readOnly: true
@@ -13058,9 +13291,6 @@ components:
         created_at:
           type: string
           format: date-time
-          readOnly: true
-        service_name:
-          type: string
           readOnly: true
         answers:
           readOnly: true
@@ -13145,6 +13375,9 @@ components:
           type: string
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
+        service_name:
+          type: string
+          readOnly: true
         archetype:
           type: string
           readOnly: true
@@ -13184,6 +13417,7 @@ components:
       - requirement_id
       - responds_by
       - service_by
+      - service_name
       - status
       - wave
     EnquirySummaryPage:
@@ -17658,6 +17892,11 @@ components:
           items:
             $ref: '#/components/schemas/ProposalStage'
           readOnly: true
+        material_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialLine'
+          readOnly: true
         warranty_terms:
           type: string
           readOnly: true
@@ -17681,6 +17920,7 @@ components:
       - id
       - inclusions
       - invitation
+      - material_lines
       - minimum_days
       - rate_paise_per_worker_day
       - rejection_reason
@@ -17737,6 +17977,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ProposalStageRequest'
+        material_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProposalMaterialLineRequest'
         inclusions:
           type: array
           items:
@@ -17767,6 +18011,77 @@ components:
       - invitation_id
       - tax_basis
       - total_paise
+    ProposalMaterialLine:
+      type: object
+      description: |-
+        One material line on an A5 estimate — **not** a stage, and that is the whole point.
+
+        Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing cement
+        sent it as a `ProposalStage` with their own title. A stage is a unit of evidence, approval and
+        release, so that made a bag of cement a fundable milestone somebody had to *approve as work*.
+        `README.md` is explicit that material money is spent rather than earned and therefore cannot be
+        recovered like an unearned work stage; a row type that cannot tell the two apart cannot carry
+        that rule (`M2-BE-543`).
+
+        `quantity` and `unit` are here because a material line without them is unreadable in a
+        comparison — "cement, 1,20,000 paise" against "cement, 40 bags at 3,000" is the difference
+        between two quotes a Customer can compare and two they cannot. `unit` is free text on purpose:
+        bags, cubic metres, running feet and coils are all real, and a closed vocabulary authored here
+        would refuse whichever trade nobody thought of.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        unit:
+          type: string
+          default: ''
+          maxLength: 32
+        amount_paise:
+          type: integer
+          minimum: 0
+      required:
+      - amount_paise
+      - title
+    ProposalMaterialLineRequest:
+      type: object
+      description: |-
+        One material line on an A5 estimate — **not** a stage, and that is the whole point.
+
+        Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing cement
+        sent it as a `ProposalStage` with their own title. A stage is a unit of evidence, approval and
+        release, so that made a bag of cement a fundable milestone somebody had to *approve as work*.
+        `README.md` is explicit that material money is spent rather than earned and therefore cannot be
+        recovered like an unearned work stage; a row type that cannot tell the two apart cannot carry
+        that rule (`M2-BE-543`).
+
+        `quantity` and `unit` are here because a material line without them is unreadable in a
+        comparison — "cement, 1,20,000 paise" against "cement, 40 bags at 3,000" is the difference
+        between two quotes a Customer can compare and two they cannot. `unit` is free text on purpose:
+        bags, cubic metres, running feet and coils are all real, and a closed vocabulary authored here
+        would refuse whichever trade nobody thought of.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        unit:
+          type: string
+          default: ''
+          maxLength: 32
+        amount_paise:
+          type: integer
+          minimum: 0
+      required:
+      - amount_paise
+      - title
     ProposalPage:
       type: object
       properties:
@@ -18041,6 +18356,16 @@ components:
           maxLength: 2000
       required:
       - answer
+    QuestionAskerRoleEnum:
+      enum:
+      - CUSTOMER
+      - VENDOR
+      - OPERATIONS
+      type: string
+      description: |-
+        * `CUSTOMER` - Customer
+        * `VENDOR` - Vendor
+        * `OPERATIONS` - Operations
     QuestionCreateRequest:
       type: object
       properties:
@@ -18749,6 +19074,18 @@ components:
       - teaser_count
     RequirementQuestion:
       type: object
+      description: |-
+        One question and its answer, on the timeline both parties read.
+
+        `asked_by_role` is new at 1.26.0 and is not decoration: clarification ran one way until this
+        release, so "who asked" was implied by the surface you were looking at. Now that a Customer can
+        ask a vendor about a delivered quote, a client with no direction field renders both halves of a
+        conversation as though the other side started it, and neither app can tell whose turn it is.
+
+        Derived by **identity comparison, not by inference**: the requirement records its Customer and
+        the invitation records its Partner's user, so the three answers are exact rather than guessed.
+        `OPERATIONS` covers an assisted question, which has no route yet and will have one in Wave C6 —
+        naming it now is what stops the answer defaulting to `VENDOR` when it arrives.
       properties:
         id:
           type: string
@@ -18757,6 +19094,10 @@ components:
         invitation:
           type: string
           format: uuid
+          readOnly: true
+        asked_by_role:
+          allOf:
+          - $ref: '#/components/schemas/QuestionAskerRoleEnum'
           readOnly: true
         question:
           type: string
@@ -18777,6 +19118,7 @@ components:
       - answer
       - answered_at
       - asked_at
+      - asked_by_role
       - id
       - invitation
       - question
@@ -19733,6 +20075,16 @@ components:
         is_plan_visit:
           type: boolean
           readOnly: true
+        timezone:
+          type: string
+          description: |-
+            The area's zone, or the platform's own as a last resort.
+
+            A visit cannot exist on a requirement without a serviceable area — `_assert_submittable`
+            refuses the submit — so the fallback is unreachable through any live path. It is written as
+            the deployment's `TIME_ZONE` rather than a literal so that the one impossible case cannot
+            become a second place Hyderabad is hardcoded.
+          readOnly: true
         fee_paise:
           type: integer
           readOnly: true
@@ -19784,6 +20136,7 @@ components:
       - is_plan_visit
       - scheduled_for
       - status
+      - timezone
     SiteVisitCompleteRequest:
       type: object
       properties:
@@ -20480,6 +20833,63 @@ components:
       - attachments
       - has_access
       - server_now
+    VendorCard:
+      type: object
+      description: |-
+        A responding vendor, as much of one as the Customer has paid to see.
+
+        An explicit field list for the same reason `QuoteTeaserSerializer` is one. Before a visit is
+        confirmed this is a badge, a rating and a type — no name, no photo, no contact. After
+        confirmation the name is disclosed, because a person is entering the Customer's home and must
+        be nameable; contact stays masked until the engagement.
+      properties:
+        partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+        vendor_type:
+          type: string
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+          nullable: true
+        distance_band_km:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - display_name
+      - distance_band_km
+      - is_verified
+      - partner_id
+      - vendor_type
+    VendorCardList:
+      type: object
+      description: |-
+        The A5 responding pool.
+
+        **No rating field, and that is a decision rather than an omission.** `README.md` lists a rating
+        among the four pre-confirmation signals and this platform has no review model — `carts`'
+        professional card already refuses to publish one for the same reason. A star count invented
+        here would be this serializer deciding what a vendor's reputation is. The field arrives when a
+        review aggregate does.
+      properties:
+        vendor_cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/VendorCard'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - server_now
+      - vendor_cards
     VendorInvitationStatusEnum:
       enum:
       - INVITED
@@ -20542,18 +20952,38 @@ components:
       description: |-
         * `VENDOR` - Vendor
         * `CUSTOMER` - Customer
+    VisitNoShowReasonEnum:
+      enum:
+      - NOBODY_ON_SITE
+      - SITE_INACCESSIBLE
+      - ADDRESS_WRONG
+      - VENDOR_DID_NOT_ARRIVE
+      - CANCELLED_ON_THE_DAY
+      - OTHER
+      type: string
+      description: |-
+        * `NOBODY_ON_SITE` - Nobody was at the address
+        * `SITE_INACCESSIBLE` - Could not get access to the site
+        * `ADDRESS_WRONG` - The address was wrong or could not be found
+        * `VENDOR_DID_NOT_ARRIVE` - The professional never arrived
+        * `CANCELLED_ON_THE_DAY` - The other party cancelled on the day
+        * `OTHER` - Another reason
     VisitNoShowRequest:
       type: object
+      description: |-
+        Report that a scheduled visit did not happen.
+
+        `party` decides the settlement and `reason_code` decides nothing — see `VISIT_NO_SHOW_REASONS`.
+        The reason is still required, because "nobody turned up" without a cause is a row Operations
+        cannot act on and a vendor cannot appeal.
       properties:
         party:
           $ref: '#/components/schemas/VisitNoShowPartyEnum'
         reason_code:
-          type: string
-          default: ''
-          maxLength: 80
-          pattern: ^[-a-zA-Z0-9_]+$
+          $ref: '#/components/schemas/VisitNoShowReasonEnum'
       required:
       - party
+      - reason_code
     VisitPlan:
       type: object
       properties:

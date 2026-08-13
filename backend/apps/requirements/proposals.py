@@ -29,6 +29,7 @@ from apps.requirements.exceptions import (
     ProposalNotSelectableError,
     ProposalShapeError,
     RejectionCapReachedError,
+    RequirementNotFoundError,
     RequirementTransitionError,
     VisitNotCompletedError,
 )
@@ -41,6 +42,7 @@ from apps.requirements.models import (
     VendorInvitation,
     VisitPlanShare,
 )
+from apps.requirements.selectors import verified_partner_ids
 from apps.requirements.services import record_transition
 
 #: Digits that look like an Indian phone number, or an off-platform handle. A review signal only.
@@ -100,14 +102,27 @@ def _assert_a3_shape(payload: dict[str, Any]) -> None:
 
 
 def _assert_a5_shape(payload: dict[str, Any]) -> None:
+    """Stages **and** material lines reconcile to the quoted total (`M2-BE-543`).
+
+    Materials are their own row type since 1.26.0, and the reconciliation had to move with them
+    or the guard would have refused every estimate that priced a bag of cement. Both sets are
+    money the Customer pays, so both are inside `total_paise`; what separates them is that a
+    material advance is *spent* and a work milestone is *earned*, which is a recovery rule rather
+    than an arithmetic one.
+
+    A material-only estimate is refused. "We will buy you materials and do no work" is not a
+    project, and it is exactly the shape an advance-harvesting vendor would send.
+    """
     stages = payload.get("stages") or []
+    materials = payload.get("material_lines") or []
     if not stages:
         raise ProposalShapeError("A project quote needs at least one stage.")
     total = payload.get("total_paise") or 0
     stage_total = sum(int(stage.get("amount_paise", 0)) for stage in stages)
-    if stage_total != total:
+    material_total = sum(int(line.get("amount_paise", 0)) for line in materials)
+    if stage_total + material_total != total:
         raise ProposalShapeError(
-            "The stage amounts must add up to the quoted total.",
+            "The stage and material amounts must add up to the quoted total.",
         )
 
 
@@ -227,6 +242,7 @@ def submit_proposal(
     minimum_days: int | None = None,
     worker_count: int | None = None,
     stages: list[dict[str, Any]] | None = None,
+    material_lines: list[dict[str, Any]] | None = None,
     inclusions: list[str] | None = None,
     exclusions: list[str] | None = None,
     warranty_terms: str = "",
@@ -245,7 +261,7 @@ def submit_proposal(
     genuinely needs to name a state and a skill.
     """
     invitation = (
-        VendorInvitation.objects.select_for_update()
+        VendorInvitation.objects.select_for_update(of=("self",))
         .select_related(
             "requirement__configuration", "requirement__service_area", "snapshot", "partner"
         )
@@ -266,10 +282,13 @@ def submit_proposal(
         "minimum_days": minimum_days,
         "worker_count": worker_count,
         "stages": stages or [],
+        "material_lines": material_lines or [],
         "total_paise": total_paise,
     }
     site_visit: SiteVisit | None = None
     if requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
+        if material_lines:
+            raise ProposalShapeError("A workforce quote does not have material lines.")
         _assert_a3_shape(payload)
     else:
         _assert_a5_shape(payload)
@@ -328,6 +347,7 @@ def submit_proposal(
         inclusions=inclusions or [],
         exclusions=exclusions or [],
         stages=stages or [],
+        material_lines=material_lines or [],
         warranty_terms=warranty_terms,
         valid_until=valid_until,
         captured_by=captured_by,
@@ -499,7 +519,7 @@ def reject_proposal(
     replacement it has not decided the terms of.
     """
     requirement = (
-        CustomerRequirement.objects.select_for_update()
+        CustomerRequirement.objects.select_for_update(of=("self",))
         .select_related("configuration")
         .get(pk=requirement_id)
     )
@@ -509,7 +529,7 @@ def reject_proposal(
         raise ProposalShapeError("That is not a rejection reason we record.")
 
     proposal = (
-        Proposal.objects.select_for_update()
+        Proposal.objects.select_for_update(of=("self",))
         .select_related("requirement", "invitation", "site_visit__plan_share")
         .get(pk=proposal_id, requirement=requirement)
     )
@@ -599,7 +619,7 @@ def request_revalidation(
     vendor can put a live price back on the table, because a price is the vendor's statement.
     """
     requirement = (
-        CustomerRequirement.objects.select_for_update()
+        CustomerRequirement.objects.select_for_update(of=("self",))
         .select_related("configuration")
         .get(pk=requirement_id)
     )
@@ -671,15 +691,19 @@ def teasers_for(requirement: CustomerRequirement) -> list[QuoteTeaser]:
     The price *band* is the point: enough for the Customer to judge whether unlocking is worth it,
     not enough to act on without unlocking.
     """
-    proposals = (
+    proposals = list(
         Proposal.objects.filter(
             requirement=requirement,
             status=Proposal.Status.SUBMITTED,
             vendor_confirmed_at__isnull=False,
         )
-        .select_related("partner")
+        .select_related("partner", "partner__business_profile")
         .order_by("total_paise")
     )
+    # The badge, from the only thing that verifies a Partner. It read `True` for every teaser until
+    # 1.26.0 — a small lie on one of the four signals a Customer weighs before paying INR 149, and
+    # a badge that is always on is not a badge. Batched because a teaser list is a list.
+    verified = verified_partner_ids([proposal.partner_id for proposal in proposals])
 
     teasers: list[QuoteTeaser] = []
     for proposal in proposals:
@@ -689,7 +713,7 @@ def teasers_for(requirement: CustomerRequirement) -> list[QuoteTeaser]:
             QuoteTeaser(
                 proposal_id=proposal.id,
                 vendor_type=(business.business_type if business is not None else "INDIVIDUAL"),
-                is_verified=True,
+                is_verified=proposal.partner_id in verified,
                 price_band_low_paise=proposal.total_paise - band,
                 price_band_high_paise=proposal.total_paise + band,
                 usability=proposal.usability,
@@ -713,6 +737,50 @@ def ask_question(*, invitation_id: uuid.UUID, asked_by: User, question: str) -> 
     return RequirementQuestion.objects.create(
         requirement=invitation.requirement,
         invitation=invitation,
+        asked_by=asked_by,
+        question=question,
+        contact_sharing_flagged=looks_like_contact_sharing(question),
+    )
+
+
+@transaction.atomic
+def ask_vendor_question(
+    *, proposal_id: uuid.UUID, asked_by: User, question: str
+) -> RequirementQuestion:
+    """The Customer's half of clarification, which did not exist until 1.26.0 (`M2-FE-409`).
+
+    Clarification ran one way. A vendor could ask about the requirement; a Customer reading three
+    quotes and wanting to know what "site clearance excluded" covers had nowhere to put the
+    question, and the screen had to say so.
+
+    Two shape decisions, both about who a question is addressed to:
+
+    * **It hangs off a proposal, not off the requirement.** A question aimed at nobody in
+      particular is a broadcast to a pool, and a vendor who has already quoted has no reason to
+      answer one. Naming the proposal names the vendor, and reuses the existing
+      `RequirementQuestion.invitation` link rather than making it nullable.
+    * **It is gated on the paywall.** Before the unlock (A3) or the charged plan (A5) the vendors
+      are deliberately not addressable — that is the entire teaser rule — so asking one a question
+      would be a channel around the fee. `assert_customer_may_read_full_quotes` raises the
+      archetype's own refusal.
+
+    Nothing here changes a price. A vendor's answer is text; a new number is a supersession.
+    """
+    proposal = (
+        Proposal.objects.select_related("requirement", "invitation").filter(pk=proposal_id).first()
+    )
+    if proposal is None:
+        raise RequirementNotFoundError()
+    requirement = proposal.requirement
+    if requirement.customer_id != asked_by.id:
+        raise RequirementNotFoundError()
+    if requirement.status in CustomerRequirement.CLOSED_STATUSES:
+        raise RequirementTransitionError("This request is closed.")
+    access.assert_customer_may_read_full_quotes(requirement)
+
+    return RequirementQuestion.objects.create(
+        requirement=requirement,
+        invitation=proposal.invitation,
         asked_by=asked_by,
         question=question,
         contact_sharing_flagged=looks_like_contact_sharing(question),
@@ -757,9 +825,32 @@ def request_site_visit(
 
 @transaction.atomic
 def schedule_site_visit(*, site_visit_id: uuid.UUID, scheduled_for: Any) -> SiteVisit:
-    visit = SiteVisit.objects.select_for_update().get(pk=site_visit_id)
+    """Put a time on a visit, or move one — and move its grid reservation with it.
+
+    **The reservation half was a live defect until 1.26.0.** An A5 plan visit is not only a row
+    with a `scheduled_for`: `confirm_visit_slot` writes an `assignments.Reservation` over the
+    instants it occupies, and that reservation is the entire reason a visit and an A1 booking
+    cannot double-book. Moving the timestamp without moving the reservation left the vendor's
+    diary blocked at a time nobody was coming and open at the time they were — so a Tuesday
+    reschedule could be double-booked by the A1 checkout that same afternoon, and the exclusion
+    constraint would never see it.
+
+    A plan visit therefore reschedules through the **same grid** it was booked on, and refuses
+    with `m2_visit_slot_unavailable` when the new time is not free for that vendor. An ad-hoc A3
+    visit holds no reservation and keeps the simple move below — it is an agreement between two
+    people about when somebody will travel, not a claim on shared capacity.
+    """
+    visit = (
+        SiteVisit.objects.select_for_update()
+        .select_related("requirement", "invitation__partner")
+        .get(pk=site_visit_id)
+    )
     if visit.status not in (SiteVisit.Status.REQUESTED, SiteVisit.Status.SCHEDULED):
         raise RequirementTransitionError("This visit can no longer be scheduled.")
+
+    if visit.plan_share_id is not None:
+        return access.reschedule_plan_visit(visit=visit, scheduled_for=scheduled_for)
+
     visit.status = SiteVisit.Status.SCHEDULED
     visit.scheduled_for = scheduled_for
     visit.save(update_fields=("status", "scheduled_for", "updated_at"))

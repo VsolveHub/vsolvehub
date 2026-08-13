@@ -91,7 +91,7 @@ def select_proposal(
     allowance would have made routine.
     """
     requirement = (
-        CustomerRequirement.objects.select_for_update()
+        CustomerRequirement.objects.select_for_update(of=("self",))
         .select_related("configuration")
         .get(pk=requirement_id)
     )
@@ -106,7 +106,7 @@ def select_proposal(
         raise SelectionConflictError()
 
     proposal = (
-        Proposal.objects.select_for_update()
+        Proposal.objects.select_for_update(of=("self",))
         .select_related("invitation", "partner", "site_visit")
         .get(pk=proposal_id, requirement=requirement)
     )
@@ -255,7 +255,7 @@ def reconfirm_selection(*, selection_id: uuid.UUID) -> Engagement:
     committing must not end up holding authorized money against unauthorized work.
     """
     selection = (
-        ProposalSelection.objects.select_for_update()
+        ProposalSelection.objects.select_for_update(of=("self",))
         .select_related("requirement__configuration", "proposal", "partner")
         .get(pk=selection_id)
     )
@@ -355,10 +355,22 @@ def _a3_stages(proposal: Proposal) -> list[dict[str, Any]]:
 
 
 def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
-    """Milestones, as the vendor structured them and the composer already reconciled.
+    """Milestones, then material advances, as the vendor structured them.
 
-    `proposals._assert_a5_shape` refuses a quote whose stage amounts do not add up to its total, so
-    by the time an engagement is opened the breakdown is known to reconcile.
+    `proposals._assert_a5_shape` refuses a quote whose stage **and material** amounts do not add up
+    to its total, so by the time an engagement is opened the breakdown is known to reconcile.
+
+    Material lines land **after** every work milestone and carry `kind=MATERIAL_ADVANCE`
+    (`M2-BE-543`). Two consequences, and both are the reason the column exists:
+
+    * they fund through `PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE` rather than
+      `M2_STAGE_FUNDING`, so the ledger can tell an advance from a milestone payment;
+    * they are **not** clawed back as unearned work when a capability is suspended — the vendor
+      bought the cement, and refunding it would take money for goods that already exist.
+
+    Placing them last is deliberate rather than cosmetic: `create_stage_funding_checkout` funds in
+    position order, and a project whose first collection is a materials advance is the
+    prepay-then-vanish shape staged funding exists to prevent. Work is funded first.
     """
     stages: list[dict[str, Any]] = []
     for index, stage in enumerate(proposal.stages or [], start=1):
@@ -367,6 +379,16 @@ def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
                 "label": str(stage.get("title") or stage.get("label") or f"Stage {index}"),
                 "amount_paise": int(stage.get("amount_paise", 0)),
                 "scheduled_on": stage.get("ends_on"),
+                "kind": EngagementStage.Kind.WORK,
+            }
+        )
+    for index, line in enumerate(proposal.material_lines or [], start=1):
+        stages.append(
+            {
+                "label": str(line.get("title") or f"Materials {index}"),
+                "amount_paise": int(line.get("amount_paise", 0)),
+                "scheduled_on": None,
+                "kind": EngagementStage.Kind.MATERIAL_ADVANCE,
             }
         )
     return stages
@@ -437,6 +459,7 @@ def _open_engagement(
                 position=position,
                 label=row["label"][:200],
                 amount_paise=int(row["amount_paise"]),
+                kind=str(row.get("kind") or EngagementStage.Kind.WORK),
                 scheduled_on=row.get("scheduled_on") or None,
                 funding_state=(
                     EngagementStage.FundingState.NOT_REQUIRED
@@ -517,8 +540,16 @@ def create_stage_funding_checkout(
     if unfunded_earlier:
         raise StageNotFundedError("Fund the earlier stages of this project first.")
 
+    # A material advance is a different money purpose from a work milestone (`M2-BE-543`), and the
+    # purpose is what carries that difference into the ledger, the reconciliation report and the
+    # refund rules. Same table, same capture path, same face-value rule — a different name for
+    # money that is spent rather than earned.
     attempt = initiate_standalone_payment_attempt(
-        purpose=PaymentAttempt.Purpose.M2_STAGE_FUNDING,
+        purpose=(
+            PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE
+            if stage.kind == EngagementStage.Kind.MATERIAL_ADVANCE
+            else PaymentAttempt.Purpose.M2_STAGE_FUNDING
+        ),
         amount_paise=stage.amount_paise,
         idempotency_key=idempotency_key,
     )
@@ -541,7 +572,7 @@ def create_stage_funding_checkout(
 def complete_stage_funding(*, payment_attempt_id: uuid.UUID) -> EngagementStage | None:
     """Verified callback only. Funding the first stage is what starts an A5 project."""
     stage = (
-        EngagementStage.objects.select_for_update()
+        EngagementStage.objects.select_for_update(of=("self",))
         .select_related("engagement", "payment_attempt")
         .filter(payment_attempt_id=payment_attempt_id)
         .first()
@@ -658,8 +689,13 @@ def route_suspended_capability_engagements(
 
     * **Work already approved or released stays settled.** It happened, the vendor did it, and a
       suspension is not a reason to claw back money for work a Customer accepted.
-    * **A funded stage nobody has started is refunded.** Vsolve is holding money for work this
-      vendor is no longer permitted to do.
+    * **A funded *work* stage nobody has started is refunded.** Vsolve is holding money for work
+      this vendor is no longer permitted to do.
+    * **A funded *material advance* is never swept back.** `README.md`: material money is spent,
+      not earned. The vendor has bought the cement, so the money is gone in the physical world and
+      refunding it automatically would be Vsolve deciding a goods dispute with a cron job. It is
+      flagged for replacement instead, which is where a human decides whether the materials exist
+      and who they belong to (`M2-BE-543`).
     * **Everything else is flagged for replacement.** A stage in progress or awaiting review is a
       judgement call — did the work happen? — and `README.md` is explicit that Operations makes it
       through a case rather than a sweep guessing.
@@ -679,7 +715,8 @@ def route_suspended_capability_engagements(
             status__in=EngagementStage.OPEN_STATUSES,
         ):
             unstarted = stage.status == EngagementStage.Status.PENDING
-            if unstarted and stage.funded_paise > stage.refunded_amount_paise:
+            is_material = stage.kind == EngagementStage.Kind.MATERIAL_ADVANCE
+            if unstarted and not is_material and stage.funded_paise > stage.refunded_amount_paise:
                 refundable = stage.funded_paise - stage.refunded_amount_paise
                 if (
                     stages.refund_stage_amount(
@@ -690,7 +727,7 @@ def route_suspended_capability_engagements(
                     is not None
                 ):
                     refunded.append(stage.id)
-            if not unstarted:
+            if not unstarted or (is_material and stage.funded_paise > 0):
                 needs_replacement = True
         if needs_replacement:
             replacements.append(engagement.id)

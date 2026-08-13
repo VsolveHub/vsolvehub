@@ -4,6 +4,175 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.26.0 - M2 Wave C3.5: the defects Wave I found, and a demo that can actually be walked
+
+**Three new paths and three new operations (78 M2 operations → 81), plus eight additive fields and
+one breaking request-shape change, named below. No path was removed, no operation changed its
+method or route, and no published schema component was renamed** — checked by diffing generated
+component names against the committed contract, which is the standing check the 1.24.0 and 1.25.0
+notes both ask for. 402 components → 410; nothing left the set.
+
+This release closes defects rather than opening a phase. Three frontend agents built against 1.25.0
+and logged thirty-four findings in `Django_Next.js_Plan/M2/frontend-execution-plan.md` §7; roughly a
+dozen of them were the backend's, and they are answered here.
+
+### The three new paths
+
+| Path | Method | Operation |
+|---|---|---|
+| `/api/v1/requirements/{requirement_id}/vendor-cards/` | `GET` | `m2_vendor_card_list` |
+| `/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/questions/` | `POST` | `m2_customer_question_create` |
+| `/api/v1/partner/questions/{question_id}/answer/` | `POST` | `m2_partner_question_answer` |
+
+**`VendorCardSerializer` existed on no path.** The shape was built in Wave C2 and never wired, so
+`M2-FE-419` — the A5 responding pool, before any visit is confirmed — had no data source and
+rendered an honest empty state. The read is now published, on the disclosure ladder `README.md`
+defines: verification badge, vendor type and a **distance band** for every responding vendor; the
+vendor's **name once they hold a confirmed visit slot**, because somebody entering a home has to be
+nameable; and **no contact details at any status**, which the engagement releases and the plan fee
+does not. A3 answers `400 m2_lifecycle_not_supported` — its pre-unlock surface is the quote teaser,
+and a second one would be a way around the unlock.
+
+`distance_band_km` is the 5 km band the matcher ranked on, read back out of the invitation's own
+`ranking_provenance` rather than recomputed. That is deliberate: a band recomputed on each read
+would move as the vendor drives around, and a Customer would watch "12 km away" become "4 km away"
+with nothing having happened. It is `null` when no fresh position exists for that vendor — the
+ordinary case for an agency that never runs the technician app — and it is published as `null`
+rather than filled with the pool median, because the median is a *ranking* device and printing it
+on a card would state a distance nobody measured.
+
+**No rating is published, and that is a decision rather than an omission.** `README.md` lists a
+rating among the four pre-confirmation signals and this platform has no review model: `carts`'
+professional card already refuses to publish one for exactly this reason. A star count invented in
+a serializer would be the API deciding what a vendor's reputation is. The field arrives when a
+review aggregate does; `M2-FE-401` and `M2-FE-419` should keep rendering the three signals that
+exist.
+
+**Clarification now runs both ways.** `M2-FE-409` asked for Customer-initiated clarification and
+only the vendor could open a question. A Customer may now ask the professional behind one quote,
+and the vendor answers on the mirror route. Two shape decisions:
+
+- the question hangs off a **proposal**, not the requirement, so it reaches the vendor who wrote
+  that quote — a question aimed at the pool is a broadcast nobody owns, and it reuses the existing
+  non-nullable `RequirementQuestion.invitation` rather than making it nullable;
+- it is **gated on the archetype's paywall** (`403 m2_unlock_required` on A3,
+  `409 m2_visit_plan_required` on A5). Before the fee the vendors are deliberately not addressable
+   — that is the whole teaser rule — so an ungated question would be a channel around it.
+
+`RequirementQuestion` gains **`asked_by_role`** (`CUSTOMER` | `VENDOR` | `OPERATIONS`), because a
+client with no direction field renders both halves of a two-way conversation as though the other
+side started it. Derived by identity comparison against two non-null foreign keys, so each of the
+three answers is a fact rather than an inference. Each answer route refuses a question its own side
+asked: answering your own question is a monologue that closes the row before the counterparty sees
+it.
+
+### The material line — a product defect, not a missing field
+
+`M2-FE-315` reported that material lines had no row shape and were being sent as **stages**, because
+the wire carried exactly one money-carrying row type. A stage is a unit of evidence, approval and
+release, so a bag of cement arrived as a fundable milestone somebody had to approve as work. That is
+the thing `M2-BE-543` exists to prevent: *material money is spent, not earned, so it cannot be
+recovered like an unearned work stage when a project ends early.*
+
+- **`ProposalMaterialLine`** is published — `{title, quantity, unit, amount_paise}` — and
+  `Proposal.material_lines` carries it on every proposal read. `quantity` and `unit` are there
+  because "cement, 1,20,000 paise" and "cement, 40 bags at 3,000" are the difference between two
+  quotes a Customer can compare and two they cannot; `unit` is free text because bags, cubic metres
+  and running feet are all real and a closed vocabulary would refuse whichever trade nobody thought
+  of. **Refused on an A3 quote** (`400 m2_proposal_invalid_shape`).
+- **Reconciliation moved with it.** `_assert_a5_shape` now requires
+  `Σ stages + Σ material lines == total_paise`. A material-only estimate is still refused: "we will
+  buy materials and do no work" is not a project, and it is exactly the shape an advance-harvesting
+  vendor sends.
+- **`EngagementStage.kind`** is published — `WORK` | `MATERIAL_ADVANCE`. There is still one money
+  spine (a second table for materials would be the duplication this plan forbids), and
+  `staged_total_paise = total_paise` still holds by database constraint; what the column buys is the
+  three places the two rows now genuinely differ:
+  - material stages fund through **`PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE`**, which already
+    existed and had no writer, instead of `M2_STAGE_FUNDING`;
+  - they are laid out **after** every work milestone, because funding runs in position order and a
+    project whose first collection is a materials advance is the prepay-then-vanish shape staged
+    funding exists to prevent;
+  - **`route_suspended_capability_engagements` no longer claws them back.** A funded, unstarted
+    *work* stage still refunds when a capability is suspended; a funded material advance is flagged
+    for replacement instead, because the vendor has bought the cement and refunding it automatically
+    would be a cron job deciding a goods dispute.
+
+  `kind` is immutable after creation, enforced in `save()` beside the existing `amount_paise` guard.
+  There is no legitimate write: which recovery rule a row lives under is decided by the estimate the
+  Customer selected.
+
+### Small reads that were load-bearing
+
+| Field | On | Why it was missing mattered |
+|---|---|---|
+| `service_name` | `EnquirySummary` | It landed on `EnquiryDetail` at 1.24.0 and not on the list, so the **Partner inbox** went on de-slugging `category_slug` into a title. |
+| `timezone` | `SiteVisit` | A visit is booked against the same `carts.availability` grid `BookingWindows` publishes a zone for, and carried only an instant — so `formatVisitSlot` fell back to a deprecated Hyderabad-only constant. |
+| `access_receipt` | `Engagement` | `M2-FE-418` asks the agreement screen for a receipt and there was nothing to link to. Carries the durable `M2A-` number already allocated for the A3 unlock or the A5 visit plan, in the `series-sequence` shape `TaxDocumentSerializer` publishes. **Not an invoice** — GST treatment of both access fees is blocking owner decision 5. `null` when no fee was charged, which is real: a plan covered entirely by a reclassification credit takes no payment. |
+| `is_verified` | `QuoteTeaser`, `VendorCard` | **It was hardcoded `true`.** It now reads an Operations-approved `PartnerApplication`, which is what `assert_kyc_complete` gates the first accept on. A badge that is always on is not a badge, and it is one of four signals a Customer weighs before paying. |
+
+**A funded total on `Engagement` was already closed** — `funded_total_paise` and its five siblings
+shipped at 1.25.0. `M2-FE-608`'s note was written against 1.24.0; `packages/query`'s
+`fundedTotalPaise` helper can be deleted in favour of the server's own column, which is a
+constraint-checked number rather than a client sum.
+
+### One breaking request-shape change
+
+**`VisitNoShowRequest.reason_code` is now a required `VisitNoShowReasonEnum`.** It was an
+unconstrained slug declared required with an empty default, so the Partner app sent it blank rather
+than invent a vocabulary Operations would then have to report on (`M2-FE-314`). Six codes:
+`NOBODY_ON_SITE`, `SITE_INACCESSIBLE`, `ADDRESS_WRONG`, `VENDOR_DID_NOT_ARRIVE`,
+`CANCELLED_ON_THE_DAY`, `OTHER`.
+
+They are about the **fact**, not the settlement. The settlement is decided by `party` and is not
+something either side may nominate: a vendor no-show replaces the slot at no charge to the Customer,
+and a Customer no-show still pays the vendor's visit payout because they travelled. A reason code
+that could move money would be a refund button labelled as a dropdown. The model column stays an
+unconstrained slug, because it also carries the platform's own writes from the sweeps.
+
+**A caller sending `reason_code: ""` now gets a `400`.** Regenerate the client before calling this
+route.
+
+### Two defects found while wiring it, both live
+
+**`select_for_update()` beside `select_related()` over a nullable foreign key is a `500` on
+PostgreSQL** — `FOR UPDATE cannot be applied to the nullable side of an outer join`. Twenty-four
+sites had it, covering most of the C2 and C3 money surface: `submit_proposal`, `create_unlock_checkout`,
+`choose_visit_plan`, `complete_visit_plan`, `complete_plan_visit`, `report_visit_no_show`,
+`select_proposal`, `reconfirm_selection`, `complete_stage_funding`, every amendment command, and
+**two M1 commands in `fulfilment/amendments.py`** that Wave C3 broke by making `ScopeAmendment.booking`
+nullable — an inner join became an outer one and the lock became illegal. Every site now locks
+`of=("self",)`, which is what each of them intended: they lock the row they fetched and re-read
+related state without needing it locked. Found by running the new seed and driving a walkthrough,
+not by reading.
+
+**An A5 plan visit could be rescheduled off its own grid reservation.** `schedule_site_visit` moved
+`scheduled_for` and left the `assignments.Reservation` where it was, so the vendor's diary stayed
+blocked at a time nobody was coming and open at the time they were — and the A1 checkout could
+double-book the new slot that same afternoon without the exclusion constraint ever seeing it. A plan
+visit now reschedules through the same grid it was booked on: check, release, re-take, in that
+order, at the same width and preserving tentative-or-confirmed state so a reschedule cannot harden
+a hold the Customer has not paid for. `409 m2_visit_slot_unavailable` when the new time is not free.
+An ad-hoc A3 visit holds no reservation and keeps the simple move.
+
+### Enum names
+
+Three new components, all named in `ENUM_NAME_OVERRIDES` on arrival rather than after a rename
+breaks a client: **`EngagementStageKindEnum`** — `kind` is now the most contested field name in the
+schema at twelve choice sets — plus **`VisitNoShowReasonEnum`** and **`QuestionAskerRoleEnum`**,
+both serializer-layer vocabularies published for the reason `InvitationDeclineReasonEnum` is: the
+model column also carries the platform's own writes and constraining it would refuse them.
+
+### Not in this release
+
+- **The frontend client is not regenerated.** `frontend/packages/api-client/src/generated/**` is
+  frozen and only the orchestrator regenerates it. **1.26.0 needs regeneration** before either
+  frontend column can consume any of this — and the no-show change means an un-regenerated client
+  will start receiving `400`s on that one route.
+- **No rating**, for the reason above.
+- **Contact disclosure and the callback flow** remain untouched, deliberately: both need an owner
+  decision, and publishing a disclosure surface before that decision would be the product making it.
+
 ## 1.25.0 - M2 Wave C3: the engagement spine, one set of stage commands for both archetypes
 
 **Fifteen new paths and sixteen new operations (62 M2 operations → 78). Additive only: no path was

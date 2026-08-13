@@ -1,31 +1,144 @@
 import {
-  fundedTotalPaise,
+  activeStage,
+  amendmentDirection,
+  appliedAmendments,
+  autoApprovalDeadline,
+  canAcceptCompletion,
+  canApproveStage,
+  canDisputeStage,
+  canRequestCorrection,
+  disputedStages,
+  eventsOldestFirst,
+  isAmendmentApplied,
+  isAmendmentAwaitingPayment,
+  isAmendmentDecidable,
+  isEngagementDisputed,
+  isEvidenceReadable,
+  isKnownAmendmentKind,
+  isKnownAmendmentStatus,
   isKnownCommercialMode,
   isLeadOnly,
+  nextCustomerAction,
   nextFundableStage,
+  orderedStages,
+  payoutReleaseDeadline,
+  reviewClock,
+  stageProgress,
+  type AmendmentDirection,
+  type CustomerNextAction,
   type Engagement,
+  type EngagementAmendment,
+  type EngagementAmendmentList,
+  type EngagementCommercialMode,
+  type EngagementEventList,
   type EngagementStage,
+  type ReviewClock,
+  type StageEvidence,
+  type StageEvidenceKind,
 } from "@vsolve/query";
 import { formatMoney } from "@vsolve/ui";
 
 /**
  * The engagement wire, turned into something a screen can render.
  *
- * Same layering as the other three features. The one judgement here is that
- * **`commercial_mode` is carried through as a decided fact rather than as a
- * string**: `mode` below is a closed union with an `unknown` member, so a screen
- * cannot fall through to the optimistic reading of a mode this build has never
- * heard of — and on this surface the optimistic reading is "protected booking",
- * which is the one claim M2 must not make wrongly.
+ * Same layering as the other four features. Two judgements are load-bearing:
+ *
+ * **`commercial_mode` is carried through as a decided fact, not a string.**
+ * `mode` below is a closed union with an `unknown` member, so a screen cannot
+ * fall through to the optimistic reading of a mode this build has never heard of
+ * — and on this surface the optimistic reading is "protected booking", which is
+ * the one claim M2 must not make wrongly.
+ *
+ * **Money is read, never re-added.** 1.25.0 publishes six running totals on the
+ * engagement and four per stage. Nothing below sums a stage array to produce a
+ * total; `staged_total_paise = total_paise + amendment_delta_paise` is a database
+ * constraint, so "agreed, then changed by, now owed" is three published numbers
+ * rather than a subtraction this client could get wrong in a dispute.
  */
 
 export type EngagementMode = "lead_only" | "managed" | "unknown";
+
+/* --------------------------------------------------------------------------
+   Dates
+   -------------------------------------------------------------------------- */
+
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const DATE_FORMAT = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
+/** A server instant, as a person reads it. Null in, null out — never "Invalid Date". */
+export function formatInstant(iso: string | null): string | null {
+  if (iso === null) return null;
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? null : DATE_TIME_FORMAT.format(at);
+}
+
+/** A calendar day — a shift-day or a milestone date, which carry no time. */
+export function formatDay(isoDate: string | null): string | null {
+  if (isoDate === null) return null;
+  const at = new Date(isoDate);
+  return Number.isNaN(at.getTime()) ? null : DATE_FORMAT.format(at);
+}
+
+/* --------------------------------------------------------------------------
+   Stage evidence — `M2-FE-609`
+   -------------------------------------------------------------------------- */
+
+export interface EvidenceView {
+  evidenceId: string;
+  kind: StageEvidenceKind;
+  /** The vendor's own words. Blank is a real state on a file-only row. */
+  note: string | null;
+  /** Present only on an uploaded file; a `NOTE` row carries no bytes. */
+  sizeBytes: number | null;
+  contentType: string | null;
+  /**
+   * Whether the file has been scanned and cleared.
+   *
+   * `PENDING` means the checksum matched and the safety question is unanswered —
+   * two different questions, deliberately. Anything unrecognised fails closed.
+   */
+  isReadable: boolean;
+  scanStatus: StageEvidence["processing_status"];
+  failureReason: string | null;
+  submittedAt: string | null;
+}
+
+export function toEvidenceView(evidence: StageEvidence): EvidenceView {
+  const isFile = evidence.kind !== "NOTE";
+  return {
+    evidenceId: evidence.id,
+    kind: evidence.kind,
+    note: evidence.note.trim() === "" ? null : evidence.note,
+    sizeBytes: isFile ? evidence.size_bytes : null,
+    contentType: isFile && evidence.content_type.trim() !== "" ? evidence.content_type : null,
+    isReadable: isEvidenceReadable(evidence),
+    scanStatus: evidence.processing_status,
+    failureReason: evidence.failure_reason.trim() === "" ? null : evidence.failure_reason,
+    submittedAt: formatInstant(evidence.created_at),
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Stages
+   -------------------------------------------------------------------------- */
 
 export interface StageView {
   stageId: string;
   position: number;
   label: string;
+  amountPaise: number;
   amountLabel: string;
+  /** The calendar day this stage is for, when the agreement named one. */
   scheduledOn: string | null;
   status: EngagementStage["status"];
   fundingState: EngagementStage["funding_state"];
@@ -33,7 +146,106 @@ export interface StageView {
   isNextToFund: boolean;
   /** True while a funding charge on this stage is unresolved. */
   isFundingPending: boolean;
+
+  /** The four published money numbers, formatted. Never summed here. */
+  fundedLabel: string;
+  approvedLabel: string;
+  releasedLabel: string;
+  refundedLabel: string;
+  hasRefund: boolean;
+
+  /**
+   * What the review deadline means, as a decided state rather than a nullable
+   * date. `no_deadline` is a policy state — nothing auto-approves — and must
+   * never render as time in hand.
+   */
+  clock: ReviewClock;
+  /**
+   * The raw instant silence approves this stage at, or null.
+   *
+   * Raw rather than formatted because `useServerCountdown` measures against the
+   * **server's** clock and takes an ISO string; handing it a formatted date
+   * would be handing it the device's reading of the deadline.
+   */
+  autoApprovalDeadline: string | null;
+  /** The same instant, as a person reads it. Null for the same three reasons. */
+  autoApprovalDeadlineLabel: string | null;
+  /** Non-null only when a payout hold is configured on a managed engagement. */
+  payoutReleaseDeadline: string | null;
+  payoutReleaseDeadlineLabel: string | null;
+
+  canApprove: boolean;
+  canRequestCorrection: boolean;
+  canDispute: boolean;
+
+  /** What the Customer asked for last time, when they sent this stage back. */
+  correctionNote: string | null;
+  /** The server's own reason code for an open dispute. Carried verbatim. */
+  disputeReasonCode: string | null;
+
+  evidence: readonly EvidenceView[];
+  evidenceSubmittedAt: string | null;
+  approvedAt: string | null;
+  releasedAt: string | null;
+  disputedAt: string | null;
 }
+
+function toStageView(stage: EngagementStage, nextFundableStageId: string | null): StageView {
+  return {
+    stageId: stage.id,
+    position: stage.position,
+    // A stage stored with no label still has a position, and "Stage 2" is a
+    // truthful name for it. An empty heading is not.
+    label: stage.label.trim() === "" ? `Stage ${stage.position}` : stage.label,
+    amountPaise: stage.amount_paise,
+    amountLabel: formatMoney(stage.amount_paise),
+    scheduledOn: formatDay(stage.scheduled_on),
+    status: stage.status,
+    fundingState: stage.funding_state,
+    isNextToFund: nextFundableStageId === stage.id,
+    isFundingPending: stage.funding_state === "PENDING",
+
+    fundedLabel: formatMoney(stage.funded_paise),
+    approvedLabel: formatMoney(stage.approved_amount_paise),
+    releasedLabel: formatMoney(stage.released_amount_paise),
+    refundedLabel: formatMoney(stage.refunded_amount_paise),
+    hasRefund: stage.refunded_amount_paise > 0,
+
+    clock: reviewClock(stage),
+    autoApprovalDeadline: autoApprovalDeadline(stage),
+    autoApprovalDeadlineLabel: formatInstant(autoApprovalDeadline(stage)),
+    payoutReleaseDeadline: payoutReleaseDeadline(stage),
+    payoutReleaseDeadlineLabel: formatInstant(payoutReleaseDeadline(stage)),
+
+    canApprove: canApproveStage(stage),
+    canRequestCorrection: canRequestCorrection(stage),
+    canDispute: canDisputeStage(stage),
+
+    correctionNote: stage.correction_note.trim() === "" ? null : stage.correction_note,
+    disputeReasonCode: stage.dispute_reason_code.trim() === "" ? null : stage.dispute_reason_code,
+
+    evidence: stage.evidence.map(toEvidenceView),
+    evidenceSubmittedAt: formatInstant(stage.evidence_submitted_at),
+    approvedAt: formatInstant(stage.approved_at),
+    releasedAt: formatInstant(stage.released_at),
+    disputedAt: formatInstant(stage.disputed_at),
+  };
+}
+
+/**
+ * One stage read from its own route, where no engagement is in hand yet.
+ *
+ * `isNextToFund` is false by construction: funding order is a property of the
+ * whole agreement and a single stage cannot know whether an earlier one is
+ * unfunded. The stage review does not offer funding, so nothing is lost.
+ */
+export function toStandaloneStageView(stage: EngagementStage): StageView {
+  return toStageView(stage, null);
+}
+
+/* --------------------------------------------------------------------------
+   The engagement
+   -------------------------------------------------------------------------- */
 
 export interface EngagementView {
   engagementId: string;
@@ -46,8 +258,17 @@ export interface EngagementView {
    */
   requirementId: string;
   mode: EngagementMode;
+  commercialMode: EngagementCommercialMode | null;
   status: Engagement["status"];
+
+  /** What was agreed at the start. Never moves, by design. */
   totalLabel: string;
+  /** What the accepted amendments have added or removed since. */
+  amendmentDeltaPaise: number;
+  amendmentDeltaLabel: string;
+  /** `total + delta`, by database constraint. Read, not computed. */
+  stagedTotalLabel: string;
+  stagedTotalPaise: number;
   taxLabel: string;
   /**
    * How platform commission is treated on this agreement.
@@ -56,16 +277,33 @@ export interface EngagementView {
    * See `features/quotes/adapters` for why nothing here invents a code.
    */
   commissionTreatment: string | null;
-  /** Summed from `FUNDED` stages. The only derived number on this screen. */
-  fundedLabel: string;
+
+  /** The four published running totals. */
+  fundedTotalLabel: string;
+  approvedTotalLabel: string;
+  releasedTotalLabel: string;
+  refundedTotalLabel: string;
+  hasRefund: boolean;
+
   stages: readonly StageView[];
+  /** Counted in stages, not in money — see `stageProgress`. */
+  progress: { done: number; total: number };
+  activeStageId: string | null;
   /** Null on A3, and on A5 whenever nothing is currently fundable. */
   nextFundableStageId: string | null;
+  /** Every stage waiting on the Customer, earliest first. */
+  stagesAwaitingReviewIds: readonly string[];
+  disputedStageIds: readonly string[];
+  isDisputed: boolean;
+  nextAction: CustomerNextAction;
+  canAcceptCompletion: boolean;
+
   /** When contact may be exchanged. A3 at engagement creation; A5 at first funding. */
   contactReleasedAt: string | null;
   /** When work may begin, on the server's own record. */
   workMayStartAt: string | null;
-  createdAt: string;
+  completedAt: string | null;
+  createdAt: string | null;
 }
 
 function toMode(engagement: Engagement): EngagementMode {
@@ -75,39 +313,363 @@ function toMode(engagement: Engagement): EngagementMode {
 
 export function toEngagementView(engagement: Engagement): EngagementView {
   const nextStage = nextFundableStage(engagement);
-
-  const stages = [...engagement.stages]
-    .sort((left, right) => left.position - right.position)
-    .map(
-      (stage): StageView => ({
-        stageId: stage.id,
-        position: stage.position,
-        // A stage stored with no label still has a position, and "Stage 2" is a
-        // truthful name for it. An empty heading is not.
-        label: stage.label.trim() === "" ? `Stage ${stage.position}` : stage.label,
-        amountLabel: formatMoney(stage.amount_paise),
-        scheduledOn: stage.scheduled_on,
-        status: stage.status,
-        fundingState: stage.funding_state,
-        isNextToFund: nextStage !== null && nextStage.id === stage.id,
-        isFundingPending: stage.funding_state === "PENDING",
-      }),
-    );
+  const stages = orderedStages(engagement).map((stage) => toStageView(stage, nextStage?.id ?? null));
+  const mode = toMode(engagement);
 
   return {
     engagementId: engagement.id,
     requirementId: engagement.requirement,
-    mode: toMode(engagement),
+    mode,
+    commercialMode: mode === "unknown" ? null : engagement.commercial_mode,
     status: engagement.status,
+
     totalLabel: formatMoney(engagement.total_paise),
+    amendmentDeltaPaise: engagement.amendment_delta_paise,
+    amendmentDeltaLabel: formatMoney(Math.abs(engagement.amendment_delta_paise)),
+    stagedTotalLabel: formatMoney(engagement.staged_total_paise),
+    stagedTotalPaise: engagement.staged_total_paise,
     taxLabel: formatMoney(engagement.tax_paise),
     commissionTreatment:
       engagement.commission_treatment.trim() === "" ? null : engagement.commission_treatment,
-    fundedLabel: formatMoney(fundedTotalPaise(engagement)),
+
+    fundedTotalLabel: formatMoney(engagement.funded_total_paise),
+    approvedTotalLabel: formatMoney(engagement.approved_total_paise),
+    releasedTotalLabel: formatMoney(engagement.released_total_paise),
+    refundedTotalLabel: formatMoney(engagement.refunded_total_paise),
+    hasRefund: engagement.refunded_total_paise > 0,
+
     stages,
+    progress: stageProgress(engagement),
+    activeStageId: activeStage(engagement)?.id ?? null,
     nextFundableStageId: nextStage?.id ?? null,
-    contactReleasedAt: engagement.contact_released_at,
-    workMayStartAt: engagement.work_may_start_at,
-    createdAt: engagement.created_at,
+    stagesAwaitingReviewIds: stages
+      .filter((stage) => stage.status === "AWAITING_REVIEW")
+      .map((stage) => stage.stageId),
+    disputedStageIds: disputedStages(engagement).map((stage) => stage.id),
+    isDisputed: isEngagementDisputed(engagement),
+    nextAction: nextCustomerAction(engagement),
+    canAcceptCompletion: canAcceptCompletion(engagement),
+
+    contactReleasedAt: formatInstant(engagement.contact_released_at),
+    workMayStartAt: formatInstant(engagement.work_may_start_at),
+    completedAt: formatInstant(engagement.completed_at),
+    createdAt: formatInstant(engagement.created_at),
   };
+}
+
+/* --------------------------------------------------------------------------
+   The lists — `M2-FE-509` (A3) and `M2-FE-608` (A5)
+   -------------------------------------------------------------------------- */
+
+export interface EngagementRowView {
+  engagementId: string;
+  requirementId: string;
+  mode: EngagementMode;
+  status: Engagement["status"];
+  /** The active stage's label, or null when every stage is settled. */
+  activeStageLabel: string | null;
+  /** The day the active stage is scheduled for, when it has one. */
+  activeStageOn: string | null;
+  progress: { done: number; total: number };
+  stagedTotalLabel: string;
+  fundedTotalLabel: string;
+  nextAction: CustomerNextAction;
+  /** The stage the next action is about, when it is about one. */
+  actionStageId: string | null;
+  isDisputed: boolean;
+  createdAt: string | null;
+}
+
+function toRow(engagement: Engagement): EngagementRowView {
+  const view = toEngagementView(engagement);
+  const active = view.stages.find((stage) => stage.stageId === view.activeStageId) ?? null;
+
+  const actionStageId =
+    view.nextAction === "review_stage"
+      ? (view.stagesAwaitingReviewIds[0] ?? null)
+      : view.nextAction === "fund_stage"
+        ? view.nextFundableStageId
+        : view.nextAction === "awaiting_case"
+          ? (view.disputedStageIds[0] ?? null)
+          : null;
+
+  return {
+    engagementId: view.engagementId,
+    requirementId: view.requirementId,
+    mode: view.mode,
+    status: view.status,
+    activeStageLabel: active?.label ?? null,
+    activeStageOn: active?.scheduledOn ?? null,
+    progress: view.progress,
+    stagedTotalLabel: view.stagedTotalLabel,
+    fundedTotalLabel: view.fundedTotalLabel,
+    nextAction: view.nextAction,
+    actionStageId,
+    isDisputed: view.isDisputed,
+    createdAt: view.createdAt,
+  };
+}
+
+/**
+ * Splits the one published list into the two the two screens read.
+ *
+ * `GET /engagements/` returns every engagement the caller has, both archetypes.
+ * The two lists are two different promises about who holds the money — that is
+ * the whole reason they are separate screens with separate nouns — so the split
+ * is on `commercial_mode` and **an engagement in a mode this build cannot
+ * describe appears in neither**. It is not dropped silently: `unknown` is
+ * returned beside them so the screens can say a record exists that they will not
+ * guess about, which is the same rule `toRequestRow` learned the hard way when
+ * `VISITS_BOOKED` made A5 requests vanish from `My requests`.
+ */
+export interface EngagementLists {
+  workforce: readonly EngagementRowView[];
+  projects: readonly EngagementRowView[];
+  undescribable: readonly EngagementRowView[];
+}
+
+export function toEngagementLists(engagements: readonly Engagement[]): EngagementLists {
+  const rows = engagements.map(toRow);
+  return {
+    workforce: rows.filter((row) => row.mode === "lead_only"),
+    projects: rows.filter((row) => row.mode === "managed"),
+    undescribable: rows.filter((row) => row.mode === "unknown"),
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Amendments — `M2-FE-610`, `M2-FE-511`, `M2-FE-613`
+   -------------------------------------------------------------------------- */
+
+export interface AmendmentLineView {
+  position: number;
+  title: string;
+  quantity: number;
+  /** Absolute value, formatted. The sign is `removesScope`, not a minus glyph. */
+  amountLabel: string;
+  /** `amount_paise` is signed on the wire: negative removes scope. */
+  removesScope: boolean;
+  kind: string;
+}
+
+export interface AmendmentView {
+  amendmentId: string;
+  /** `TIME_EXTENSION` (A3) or `CHANGE_ORDER` (A5). Unknown kinds are flagged. */
+  kind: string;
+  isKnownKind: boolean;
+  /** The raw wire status. `EngagementAmendment.status` is a string, not an enum. */
+  status: string;
+  isKnownStatus: boolean;
+  /**
+   * Whether this is still the Customer's to decide.
+   *
+   * The single most important field on this screen. Everything the view renders
+   * as an action is gated on it, and it is false for every status this build
+   * does not recognise.
+   */
+  isDecidable: boolean;
+  isAwaitingPayment: boolean;
+  isApplied: boolean;
+  /** The vendor's stated reason. Required by the endpoint, so never blank. */
+  reason: string;
+  direction: AmendmentDirection;
+  deltaPaise: number;
+  /** Absolute value. The direction carries the sign. */
+  deltaLabel: string;
+  lines: readonly AmendmentLineView[];
+  /** The stage this change is about, when it is about one. */
+  stageId: string | null;
+  expiresAt: string | null;
+  /** The raw instant, for a server-clock countdown. Never formatted first. */
+  expiresAtIso: string;
+  respondedAt: string | null;
+  appliedAt: string | null;
+  createdAt: string | null;
+}
+
+function toAmendmentView(amendment: EngagementAmendment): AmendmentView {
+  return {
+    amendmentId: amendment.id,
+    kind: amendment.kind,
+    isKnownKind: isKnownAmendmentKind(amendment),
+    status: amendment.status,
+    isKnownStatus: isKnownAmendmentStatus(amendment),
+    isDecidable: isAmendmentDecidable(amendment),
+    isAwaitingPayment: isAmendmentAwaitingPayment(amendment),
+    isApplied: isAmendmentApplied(amendment),
+    reason: amendment.reason,
+    direction: amendmentDirection(amendment),
+    deltaPaise: amendment.delta_paise,
+    deltaLabel: formatMoney(Math.abs(amendment.delta_paise)),
+    lines: [...amendment.lines]
+      .sort((left, right) => left.position - right.position)
+      .map((line) => ({
+        position: line.position,
+        title: line.title.trim() === "" ? `Item ${line.position}` : line.title,
+        quantity: line.quantity,
+        amountLabel: formatMoney(Math.abs(line.amount_paise)),
+        removesScope: line.amount_paise < 0,
+        kind: line.kind,
+      })),
+    stageId: amendment.stage_id,
+    expiresAt: formatInstant(amendment.expires_at),
+    expiresAtIso: amendment.expires_at,
+    respondedAt: formatInstant(amendment.responded_at),
+    appliedAt: formatInstant(amendment.applied_at),
+    createdAt: formatInstant(amendment.created_at),
+  };
+}
+
+export interface AmendmentsView {
+  /**
+   * The one live change request, or null.
+   *
+   * One at a time is a server rule (`m2_amendment_not_actionable` when one is
+   * already open), so this is a single value rather than a list — a screen that
+   * rendered two would be rendering a state that cannot exist and would offer
+   * two acceptances of which one must fail.
+   */
+  live: AmendmentView | null;
+  /** Every change request, newest first, live one included. */
+  all: readonly AmendmentView[];
+  /** Only the ones the server stamped `applied_at` on — the agreement's versions. */
+  applied: readonly AmendmentView[];
+}
+
+export function toAmendmentsView(list: EngagementAmendmentList): AmendmentsView {
+  const all = [...list.amendments]
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    .map(toAmendmentView);
+
+  return {
+    live: all.find((amendment) => amendment.isDecidable || amendment.isAwaitingPayment) ?? null,
+    all,
+    applied: appliedAmendments(list).map(toAmendmentView),
+  };
+}
+
+/**
+ * What the agreement has been, version by version — `M2-FE-613`.
+ *
+ * Version 0 is what both parties originally agreed. Every applied amendment
+ * after it is a version, in the order the server applied them, and the running
+ * total is carried forward so a reader can follow the money without doing the
+ * arithmetic themselves.
+ *
+ * **A proposed amendment is never a version.** It is a request, and putting it
+ * in this list is exactly the failure `M2-FE-610` exists to prevent — which is
+ * why the input is `appliedAmendments` and not the whole list.
+ */
+export interface AgreementVersionView {
+  /** 0 for the original agreement, then 1, 2, … */
+  version: number;
+  title: string;
+  /** The engagement total as at this version. */
+  totalLabel: string;
+  /** Null on version 0 — nothing changed to get there. */
+  changeLabel: string | null;
+  removesScope: boolean;
+  reason: string | null;
+  at: string | null;
+  lines: readonly AmendmentLineView[];
+}
+
+export function toAgreementHistory(
+  engagement: EngagementView,
+  amendments: AmendmentsView,
+  originalTotalPaise: number,
+): readonly AgreementVersionView[] {
+  const versions: AgreementVersionView[] = [
+    {
+      version: 0,
+      title: "What you agreed",
+      totalLabel: formatMoney(originalTotalPaise),
+      changeLabel: null,
+      removesScope: false,
+      reason: null,
+      at: engagement.createdAt,
+      lines: [],
+    },
+  ];
+
+  // Oldest applied first, so the running total moves forward the way it did.
+  let runningPaise = originalTotalPaise;
+  const oldestFirst = [...amendments.applied].reverse();
+
+  oldestFirst.forEach((amendment, index) => {
+    runningPaise += amendment.deltaPaise;
+    versions.push({
+      version: index + 1,
+      title: amendment.kind === "TIME_EXTENSION" ? "Extra time agreed" : "Scope changed",
+      totalLabel: formatMoney(runningPaise),
+      changeLabel: amendment.deltaLabel,
+      removesScope: amendment.deltaPaise < 0,
+      reason: amendment.reason.trim() === "" ? null : amendment.reason,
+      at: amendment.appliedAt,
+      lines: amendment.lines,
+    });
+  });
+
+  return versions;
+}
+
+/* --------------------------------------------------------------------------
+   The event record — `M2-FE-512`
+   -------------------------------------------------------------------------- */
+
+export interface EngagementEventView {
+  eventId: string;
+  /** The stage this event is about, when it is about one. */
+  stageId: string | null;
+  /**
+   * What the server called it. Never a sentence this client invented.
+   *
+   * `reason` is the server's own user-safe words where it has any; the code
+   * de-slugged is the fallback, and it is a fallback rather than a lookup table
+   * because `reason_code` carries **no published vocabulary** — a client-side
+   * copy table over it would silently render "Update" for every code added after
+   * this build. Logged in §7.
+   */
+  title: string;
+  /** "From X to Y", de-slugged, when the transition names two states. */
+  transition: string | null;
+  /**
+   * Whether a clock did this rather than a person.
+   *
+   * The one thing about the actor that is published, and it is the one that
+   * matters: "approved" and "approved because the review window closed" are
+   * different events. Actor identity is deliberately never on the wire.
+   */
+  actorIsSystem: boolean;
+  at: string | null;
+  atIso: string;
+}
+
+/** `AWAITING_REVIEW` → "Awaiting review". Never a lookup this client authored. */
+function deSlug(value: string): string {
+  const words = value.trim().replace(/[_-]+/g, " ").toLowerCase();
+  return words === "" ? "" : words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export function toEngagementEvents(
+  list: EngagementEventList,
+): readonly EngagementEventView[] {
+  return eventsOldestFirst(list).map((event) => {
+    const fromLabel = deSlug(event.from_status);
+    const toLabel = deSlug(event.to_status);
+
+    return {
+      eventId: event.id,
+      stageId: event.stage,
+      title:
+        event.reason.trim() !== ""
+          ? event.reason
+          : deSlug(event.reason_code) || (toLabel === "" ? "Something changed" : toLabel),
+      transition:
+        fromLabel !== "" && toLabel !== "" ? `${fromLabel} to ${toLabel}` : null,
+      actorIsSystem: event.actor_is_system,
+      at: formatInstant(event.occurred_at),
+      atIso: event.occurred_at,
+    };
+  });
 }

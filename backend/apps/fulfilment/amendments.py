@@ -190,7 +190,9 @@ def decline_scope_amendment(
     *, amendment_id: UUID, customer_id: UUID, idempotency_key: str = ""
 ) -> ScopeAmendment:
     amendment = (
-        ScopeAmendment.objects.select_for_update().select_related("booking").get(id=amendment_id)
+        ScopeAmendment.objects.select_for_update(of=("self",))
+        .select_related("booking")
+        .get(id=amendment_id)
     )
     booking = _booking_of(amendment)
     if booking.customer_id != customer_id:
@@ -225,7 +227,9 @@ def approve_scope_amendment(
     a Customer cannot approve extra work that never gets billed."""
 
     amendment = (
-        ScopeAmendment.objects.select_for_update().select_related("booking").get(id=amendment_id)
+        ScopeAmendment.objects.select_for_update(of=("self",))
+        .select_related("booking")
+        .get(id=amendment_id)
     )
     booking = _booking_of(amendment)
     if booking.customer_id != customer_id:

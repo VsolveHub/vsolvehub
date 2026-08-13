@@ -828,6 +828,10 @@ Build this once for both archetypes. Do not create parallel workforce and projec
 - [ ] `M2-BE-509` **Tests deferred per the build-first amendment** (`task.md` §"Build-first amendment
   (2026-08-13)"). This row is Wave C3's test debt, recorded as one line. The smoke script that
   replaces it for the sprint is `docs/runbooks/m2-engagement-spine-smoke.md`.
+  **Wave C3.5's debt is recorded on the same line**: the vendor-card disclosure ladder, the
+  material-line reconciliation, two-way clarification, the plan-visit reschedule moving its grid
+  reservation, and the 24-site `select_for_update(of=("self",))` fix. Its smoke script is
+  `docs/runbooks/m2-demo-seed.md`, which also documents the seed both walkthroughs need.
 
 **BE5 gate:** Both archetypes run on one spine with one set of stage commands, and no duplicate
 agreement, amendment or approval subsystem exists.
@@ -881,8 +885,17 @@ Customer remedy and financial settlement, with no per-worker device dependency.
   exclusions, dates, warranty and stage amounts.
 - [ ] `M2-BE-542` Implement stage funding, start, evidence submission, Customer review, approval,
   rejection and timeout through the shared spine commands.
-- [ ] `M2-BE-543` Model **material advance** as a distinct money purpose with its own recovery rule,
+- [~] `M2-BE-543` Model **material advance** as a distinct money purpose with its own recovery rule,
   because material money is spent rather than earned. `GAP-028`
+  **Half built in Wave C3.5 (1.26.0), and the half that is built is the half the rest depends on.**
+  A material line is now its own wire shape (`ProposalMaterialLine`, distinct from `ProposalStage`)
+  and its own kind of engagement row (`EngagementStage.kind = MATERIAL_ADVANCE`), it funds through
+  `PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE` rather than `M2_STAGE_FUNDING`, and the first
+  recovery rule that can tell the two apart is live: `route_suspended_capability_engagements`
+  refunds a funded, unstarted **work** stage and refuses to claw back a funded material advance,
+  because the vendor has already bought the goods. **Still open:** the abandonment and
+  early-termination recovery rules themselves, which belong with `M2-BE-545` in Wave C5 — this wave
+  built the discriminator they will read, not the rules.
 - [ ] `M2-BE-544` Implement a Customer-caused delay claim with evidence and a schedule-extension
   request. `GAP-030`
 - [ ] `M2-BE-545` Implement vendor-abandonment recovery that transfers remaining stages to a replacement

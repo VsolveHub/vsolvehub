@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { BookingGroupList } from "@/features/bookings/view/group-list";
 
@@ -27,6 +28,20 @@ export default function BookingsPage() {
       <div className="mt-6">
         <BookingGroupList />
       </div>
+
+      {/* The way in to `M2-FE-509`. A workforce engagement is a booking from the
+          Customer's side, so it belongs under this noun — but it is a different
+          record on a different endpoint, and merging the two lists would put one
+          set of words over two different promises about who holds the money.
+          A link rather than a section: most Customers have never hired a crew,
+          and an empty second list on this page would be noise for them. */}
+      <p className="mt-8 text-sm leading-6 text-text-secondary">
+        Hired workers for a job through Vsolve?{" "}
+        <Link href="/bookings/workforce" className="font-medium text-text-link hover:underline">
+          Those bookings are here
+        </Link>
+        .
+      </p>
     </main>
   );
 }

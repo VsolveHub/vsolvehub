@@ -575,6 +575,10 @@ M2_CAPTURE_PURPOSES = (
     PaymentAttempt.Purpose.M2_QUOTE_UNLOCK,
     PaymentAttempt.Purpose.M2_VISIT_PLAN,
     PaymentAttempt.Purpose.M2_STAGE_FUNDING,
+    # A material advance is a distinct purpose and the *same* completion (`M2-BE-543`). What it
+    # buys differs — goods rather than work — and that difference lives in the recovery rules and
+    # the ledger, not in how a captured payment funds its stage.
+    PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE,
     PaymentAttempt.Purpose.M2_SCOPE_AMENDMENT,
 )
 
@@ -596,7 +600,10 @@ def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
         access.complete_unlock(payment_attempt_id=attempt.id)
     elif attempt.purpose == PaymentAttempt.Purpose.M2_VISIT_PLAN:
         access.complete_visit_plan(payment_attempt_id=attempt.id)
-    elif attempt.purpose == PaymentAttempt.Purpose.M2_STAGE_FUNDING:
+    elif attempt.purpose in (
+        PaymentAttempt.Purpose.M2_STAGE_FUNDING,
+        PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE,
+    ):
         from apps.requirements import engagements  # noqa: PLC0415 - same cycle
 
         engagements.complete_stage_funding(payment_attempt_id=attempt.id)
@@ -1277,7 +1284,10 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
         return VisitPlan.objects.filter(
             payment_attempt=attempt, requirement__customer_id=customer_id
         ).exists()
-    if purpose == PaymentAttempt.Purpose.M2_STAGE_FUNDING:
+    if purpose in (
+        PaymentAttempt.Purpose.M2_STAGE_FUNDING,
+        PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE,
+    ):
         return EngagementStage.objects.filter(
             payment_attempt=attempt, engagement__customer_id=customer_id
         ).exists()

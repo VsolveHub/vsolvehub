@@ -39,6 +39,13 @@ export default async function EngagementPage({
         engagementId={engagementId}
         requestHrefFor={(requirementId) => `/requests/${requirementId}`}
         requestsHref="/requests"
+        stageHrefFor={(id, stageId) => `/engagements/${id}/stages/${stageId}`}
+        // The list an engagement belongs to depends on how it is paid for, and
+        // that is only known once the record has loaded — so the route supplies
+        // both and the screen picks. A single href here would send an A3
+        // Customer to `Your projects`, which is the wrong promise as well as the
+        // wrong page.
+        listHrefFor={(mode) => (mode === "lead_only" ? "/bookings/workforce" : "/projects")}
       />
     </main>
   );
