@@ -202,6 +202,10 @@ export interface RequestRowView {
 const REQUEST_STATUSES: readonly RequestStatus[] = [
   "DRAFT",
   "MATCHING",
+  // Added in Wave A2. Its absence was exactly the failure this list documents
+  // itself against: an A5 request whose first visit was booked was silently
+  // dropped from `My requests` by `toRequestRow`'s own filter.
+  "VISITS_BOOKED",
   "QUOTES_READY",
   "UNLOCKED",
   "SELECTED",
@@ -277,6 +281,33 @@ export function toLifecycleVerdict(draft: RequirementDraft): LifecycleVerdict | 
     explanation: draft.lifecycle_explanation,
     missingRequiredAnswers: draft.missing_required_answers,
   };
+}
+
+/**
+ * The archetype, for the one decision that genuinely turns on it.
+ *
+ * The Customer never picks an archetype and never sees the word — the review
+ * screen renders the server's plain-language sentence, not this. But **which
+ * door the money goes through is not a matter of presentation**: A3 sells an
+ * unlock over remote quotes and A5 sells a visit plan, and the two have
+ * different endpoints, different refusals and different screens. Mounting the
+ * wrong one produces `400 m2_lifecycle_not_supported` in front of a Customer.
+ *
+ * Separate from `toLifecycleVerdict` because that one returns null without an
+ * explanation — correct there, since the explanation is the only part the
+ * Customer reads, and wrong here, since a missing sentence is no reason to stop
+ * knowing which surface to mount.
+ *
+ * Null for a third archetype. Wave A2 builds A3 and A5 and nothing else, and a
+ * lifecycle this bundle has no screens for must render nothing rather than the
+ * closest-looking thing.
+ */
+export type RequirementArchetype = "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
+
+export function toArchetype(draft: RequirementDraft): RequirementArchetype | null {
+  if (draft.inferred_lifecycle === "A3_TIME_BLOCK") return "A3_TIME_BLOCK";
+  if (draft.inferred_lifecycle === "A5_CUSTOM_PROJECT") return "A5_CUSTOM_PROJECT";
+  return null;
 }
 
 /**

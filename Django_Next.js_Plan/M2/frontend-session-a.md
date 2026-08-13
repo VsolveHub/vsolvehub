@@ -278,7 +278,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | Wave | Scope | Built `[~]` | Integrated `[x]` | Evidence |
 |---|---|---|---|---|
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
-| A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[ ]` | `[ ]` | |
+| A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. |
 | A3 | `FE-509..512`, `FE-608..613` | `[ ]` | `[ ]` | |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
@@ -585,3 +585,159 @@ The e2e spec covers `/requests` and `/requests/{id}` and **not the four-screen f
 reads happen during a server render, where `page.route` cannot reach. Faking them would need a second
 stand-in that proves nothing about either half. That belongs in `django.e2e.ts` against a real
 backend and is an open gap, stated in the spec's own header rather than left as a silent absence.
+
+### Wave A2 progress — 2026-08-13 · both money doors, built against 1.24.0
+
+`pnpm lint --max-warnings 0` clean; `pnpm typecheck --filter=customer --filter=@vsolve/query` green
+(re-run with `--force`, and `tsc --listFiles` checked, to confirm the eighteen new files are actually
+in the programme rather than passing on a stale cache); `pnpm build --filter=customer` green with
+**three new dynamic routes**. **No tests were run and none were written** — the build-first
+amendment. What replaces them is `apps/customer/features/access/SMOKE.md`: the exact clicks that
+prove the A3 unlock and the A5 visit plan end to end, including the one step that cannot happen in a
+browser.
+
+**Three routes.**
+
+| Route | What it is | Rendering |
+|---|---|---|
+| `/requests/[requirementId]/quotes` | Full quotes and estimates, comparison, rejection, re-validation, selection — `FE-407..414`, `FE-423` | `force-dynamic`, `robots: noindex` |
+| `/requests/[requirementId]/book-visits` | The A5 visit-plan checkout — `FE-420` | `force-dynamic`, `robots: noindex` |
+| `/engagements/[engagementId]` | The agreement and stage funding — `FE-415..418` | `force-dynamic`, `robots: noindex`, own `CustomerShell` layout |
+
+The first two sit inside the existing `app/(flow)/requests/layout.tsx` gate. `/engagements` gets its
+own layout rather than living under `/requests`, because an engagement **outlives the request that
+produced it and is addressed by its own id** — somebody reaches it from a notification months later
+with no requirement id in hand. The requirement is on the record, so the route passes
+`requestHrefFor` and the screen applies it once the engagement has loaded.
+
+`FE-216` mounts no route at all, deliberately: it is a control **inside** the review screen, and
+`SCREENS.length === 4` still passes.
+
+#### The rule the whole wave is built on, and the thing that made it the only option
+
+**Only a verified provider callback grants anything.** `unlockPhase` and `visitPlanPhase` in
+`packages/query/src/m2-quotes.ts` derive from the `unlock` / `plan` object on the state read and from
+nothing else. There is no redirect handler, no success route, and no place where an `AccessCheckout`
+response is read as a purchase — the checkout responses are used for exactly what they are, proof
+that an attempt exists.
+
+That turned out to be the *only* available design, not merely the correct one. **A Customer cannot
+read an M2 payment attempt at all**: `GET /api/v1/payment-attempts/{id}/` resolves ownership through
+`checkout__customer`, and every M2 access charge is created by
+`commerce.services.initiate_standalone_payment_attempt` with `checkout=None`. The read answers `404`,
+`reconcile` answers `404`, and `simulate_capture` raises `PermissionError` and answers `403`. So the
+M1 payment feature — `paymentPhase`, `usePaymentAttempt`, the simulated-capture control — is unusable
+here and none of it is imported. The state read polls instead, `boundedPoll` stops the moment the
+server has an answer, and §5 of the smoke script drives capture from the Django shell because there
+is no other way to complete a charge in dev. Logged in the execution plan §7.
+
+The pending panels therefore **offer nothing to press**. Every control that could exist on a pending
+charge is a way to pay twice. The retry appears only on a server-confirmed `FAILED`, where it first
+clears the stored idempotency key so the press is a genuinely new command rather than a replay of the
+persisted `201` describing the attempt that already failed — the same move the attachment uploader
+makes on a spent upload intent.
+
+#### The prices are not in the code, and that is the feature
+
+`price_paise` is nullable and `available_tiers` can be empty, because the unlock price and the visit
+tiers are blocking owner decision 1 and `apps.requirements.pricing` fails closed. **Neither 149 nor
+49/99/199 appears anywhere in this wave.** A null price renders "we cannot offer this yet"; an empty
+tier list renders the same for visits.
+
+`m2_access_price_unavailable` and `m2_policy_unavailable` are the command-side twins, and both are
+`409`s that arrive on a **well-formed** request. Both are missing from the frozen `errors.ts`, so
+`describeError` offers "Choose another option" — the one piece of advice that is wrong here, because
+there is no other option and nothing the Customer presses changes the answer.
+`features/access/view/access-refusal.tsx` is the single component every refusal in this wave routes
+through; it names those two codes explicitly and renders them with **no action at all**. Requested in
+§7 — when they land in the table, that component's first two branches collapse.
+
+#### Four seams worth recording
+
+**The visit tracker is driven by shares, not visits.** The shares are the slots the Customer chose and
+paid for; an unfilled one is exactly the row `FE-421` calls "awaiting" and exactly the row whose
+refund they most need to see. Driving it from `visits` would make that row vanish. Shares and visits
+are joined **by position**, because the server publishes no key between them and position is what the
+plan's own `price / size` arithmetic is defined on.
+
+**`held` is not a status.** A visit reads `REQUESTED` both while a plan is unpaid and immediately
+after it is charged, and only the plan can tell the two apart — so `visitSlotState(visit,
+planIsCharged)` takes the plan as a parameter. Rendering a held slot as scheduled would promise a
+vendor a job nobody has bought, and promise the Customer a visit that lapses harmlessly if they never
+pay.
+
+**The no-show party is hard-coded.** You report the other party's absence, never your own, and the
+server answers `403` to the reverse. `useReportVendorNoShow` sends `VENDOR` at the one call site that
+could set it, so there is no party control anywhere in this app to get wrong.
+
+**Slot times use the checkout picker's own formatter.** `formatVisitSlot` reproduces
+`features/booking/adapters/windows.ts` — `en-IN`, weekday/day/month, lowercased 12-hour, booking
+timezone — because an A5 visit is booked against the *same* `carts.availability` grid as an A1 visit,
+and two formatters over one grid is how one reservation reads two ways on two screens.
+
+#### One Wave A1 defect, found by reading the enum
+
+**`VISITS_BOOKED` was missing from the client's status union, and it silently deleted requests.**
+`RequirementStatusEnum` has carried it since 1.21.0, and revision 3 made it the state most A5 requests
+sit in. `toRequestRow` drops a row whose status it cannot name — by design, and correctly — so an A5
+Customer whose first professional had confirmed a visit watched their request **disappear from `My
+requests`** until an estimate landed. Nothing errored; a filter did its job. Fixed in
+`model/request-state.ts`, `adapters/index.ts` and the copy table, where it now reads "A visit is
+booked" and deliberately not "Quotes ready": the Customer has bought a visit, not a price.
+
+#### What could not be built, and was not faked
+
+- **`FE-419` vendor cards.** `VendorCardSerializer` exists in the backend with exactly the right
+  disclosure shape and is published on **no path**; `SiteVisit` carries no partner either, and no
+  rating or distance band exists anywhere on the wire. So no card list exists. The tracker names a
+  professional only where a delivered estimate carries one (`CustomerProposal.vendor` joined on
+  `site_visit.id`), every other slot says the name is given before they arrive, and the panel states
+  the disclosure rule so a Customer reads it as policy rather than as a fault.
+- **Reschedule (`FE-422`).** `POST /site-visits/{id}/schedule/` exists, and nothing published lets a
+  *Customer* see candidate starts for a specific vendor — `visit-slots/` is Partner-scoped. A picker
+  over times we cannot confirm would be worse than none.
+- **A receipt (`FE-418`).** `Engagement` publishes no order id and no tax-document id.
+- **Cancellation terms (`FE-416`).** No field carries them, and quoting them from the proposal the
+  engagement froze would be this client authoring the agreement.
+- **Customer-initiated clarification (`FE-409`).** Clarification runs one way at 1.24.0. The invariant
+  the task exists for — no control edits a vendor price or an agreement field — holds absolutely.
+
+#### Keys and freshness, without touching the frozen file
+
+`m2-keys.ts` predates revision 3 and has no visit-plan or selection key.
+`packages/query/src/m2-quotes.ts › m2AccessKeys` composes them **from** the frozen factory, nested
+under `m2QueryKeys.requirements.detail(id)` — the same construction `requirements.timeline` uses — so
+`M2_INVALIDATION`'s existing `requirementScope` clears them by prefix without a single row being
+edited in the file nobody may edit. The plan read borrows `M2_FRESHNESS.unlock`, which is the tier
+that module argues for. Promotion requested in §7.
+
+#### Files
+
+- `packages/query/src/m2-quotes.ts`, `packages/query/src/m2-engagement-customer.ts`, and the
+  append-only block in `packages/query/src/index.ts`.
+- `apps/customer/features/access/**` — `queries.ts`, `adapters/index.ts`, `view/{access-refusal,
+  unlock-panel,visit-plan-chooser,visit-tracker,book-visits-screen,request-access-panel}.tsx`,
+  `SMOKE.md`.
+- `apps/customer/features/quotes/**` — `queries.ts`, `adapters/index.ts`, `view/{quote-card,
+  quote-comparison,reject-quote-dialog,selection-status,quotes-screen}.tsx`.
+- `apps/customer/features/engagement/**` — `queries.ts`, `adapters/index.ts`,
+  `view/engagement-screen.tsx`.
+- Touched in `features/requirement/`: `model/request-state.ts`, `adapters/index.ts`,
+  `view/{request-state,request-detail-screen,review-screen,requirement-flow}.tsx`.
+- Routes: `app/(flow)/requests/[requirementId]/{quotes,book-visits}/page.tsx`,
+  `app/(flow)/engagements/{layout.tsx,[engagementId]/page.tsx}`.
+
+**Ten rows added to the execution plan §7.** The two to read first: **no M2 payment attempt is
+readable or capturable by its own Customer**, which makes every money path uncompletable from a
+browser in any environment; and **`VendorCardSerializer` exists with no route**, which leaves `FE-419`
+one view away from finishable.
+
+### Blocked / handed off — Wave A2
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-13 | `FE-403`, `FE-404`, `FE-420`, `FE-417` | Not blocked for building. Blocked for *demonstrating*: no M2 payment attempt is readable or capturable by its Customer, so the smoke script captures from the Django shell. | yes |
+| 2026-08-13 | `FE-419` | `VendorCardSerializer` is published on no path; `SiteVisit` carries no partner. Built to the disclosure the wire allows. | yes |
+| 2026-08-13 | `FE-409` | No Customer-asks-a-question endpoint exists. Built as re-validation plus an honest statement. | yes |
+| 2026-08-13 | `FE-418` receipt | `Engagement` carries no order or tax-document id. | yes |
+| 2026-08-13 | `FE-422` reschedule | No Customer-scoped candidate-slot read. | yes |

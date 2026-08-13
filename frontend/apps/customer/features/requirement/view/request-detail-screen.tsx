@@ -5,7 +5,8 @@ import { buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
+import { RequestAccessPanel } from "@/features/access/view/request-access-panel";
+import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
 import {
   isAlreadyRemoved,
   useRemoveAttachment,
@@ -88,6 +89,21 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
 
       {draft !== null ? (
         <div className="mx-auto w-full max-w-2xl px-4 pb-10">
+          {/* Wave A2. The A3 unlock or the A5 visit tracker, chosen from the
+              server's inferred archetype — never both, and nothing at all for a
+              lifecycle this build has no screens for. It sits directly under the
+              state notice because "what is happening" and "what it costs" are
+              the same question to somebody who just opened this page. */}
+          <div className="mb-6">
+            <RequestAccessPanel
+              requirementId={requirementId}
+              archetype={toArchetype(draft)}
+              quotesHref={`/requests/${requirementId}/quotes`}
+              bookVisitsHref={`/requests/${requirementId}/book-visits`}
+              supportAction={supportAction}
+            />
+          </div>
+
           {/* The removal affordance the server keeps open in every status, for
               the one case it keeps it open for: a file the malware scan
               rejected. See `RequestAttachments`. */}

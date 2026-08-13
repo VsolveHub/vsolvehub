@@ -4,6 +4,9 @@ import { describeError, isLifecycleUnsupported } from "@vsolve/query";
 import { ErrorState } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
+import { toPlanTierViews } from "@/features/access/adapters";
+import { useChooseVisitPlan, useVisitPlan } from "@/features/access/queries";
+import { VisitPlanChooser } from "@/features/access/view/visit-plan-chooser";
 import {
   flexibilityDaysFor,
   toDuplicateView,
@@ -171,6 +174,24 @@ function FlowBody({
     });
   }, [serverAttachments, dispatch]);
 
+  /**
+   * The A5 visit plan — `M2-FE-216`.
+   *
+   * Read only once the server has said this requirement is A5, and only once a
+   * draft exists to hang a plan on. Both conditions are the server's: the
+   * archetype is inferred from the answers and the Customer never picks it, and
+   * `POST .../visit-plan/` needs a requirement id.
+   *
+   * On A3 nothing is mounted at all. The endpoint answers `400
+   * m2_lifecycle_not_supported` there, and a refusal on every workforce request
+   * would be noise that eventually hides a real one.
+   */
+  const isA5 = state.verdict?.lifecycle === "A5_CUSTOM_PROJECT";
+  const planQuery = useVisitPlan(state.requirementId, isA5);
+  const choosePlan = useChooseVisitPlan();
+  const planState = planQuery.data ?? null;
+  const chosenPlanSize = planState?.plan?.plan_size ?? null;
+
   const submitted = submitRequirement.data;
 
   useEffect(() => {
@@ -335,6 +356,35 @@ function FlowBody({
           onSubmit={handleSubmit}
           isSubmitting={submitRequirement.isPending}
           submitError={submitFailureCopy(submitRequirement.error)}
+          visitPlanChooser={
+            isA5 && state.requirementId !== null ? (
+              <VisitPlanChooser
+                tiers={toPlanTierViews(planState?.available_tiers ?? [])}
+                chosenPlanSize={chosenPlanSize}
+                // Nothing can have committed to a slot on a requirement that has
+                // not been submitted, so this is always false here. Passed
+                // explicitly rather than omitted: the same component renders on
+                // a live request, and a default would decide the harder case.
+                locked={false}
+                isLoading={planQuery.isPending}
+                readError={planQuery.error}
+                onRetryRead={() => void planQuery.refetch()}
+                onChoose={(planSize) =>
+                  choosePlan.mutate({ requirementId: state.requirementId!, planSize })
+                }
+                isChoosing={choosePlan.isPending}
+                chooseError={choosePlan.error}
+              />
+            ) : undefined
+          }
+          // `_assert_visit_plan_chosen` refuses an A5 submit without a plan.
+          // Stated here rather than met as a 409 after the Send button — the one
+          // place a Customer reads a refusal for something that was on screen.
+          submitBlockedReason={
+            isA5 && chosenPlanSize === null
+              ? "Choose how many professionals should visit before you send this. It costs nothing now."
+              : null
+          }
         />
       )}
     </RequirementWorkspace>

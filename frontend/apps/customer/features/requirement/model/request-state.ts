@@ -19,6 +19,18 @@
 export type RequestStatus =
   | "DRAFT"
   | "MATCHING"
+  /**
+   * A5 only, and missing from this union until Wave A2 — a real defect rather
+   * than a new value.
+   *
+   * `RequirementStatusEnum` has carried `VISITS_BOOKED` since 1.21.0 and
+   * revision 3 made it the state most A5 requests sit in: a vendor has confirmed
+   * a visit slot and the plan is charged, before any estimate exists. An
+   * unrecognised status is dropped by `toRequestRow`, so an A5 Customer whose
+   * first professional had confirmed watched their request **disappear from `My
+   * requests`** until an estimate landed. Nothing failed; a filter did its job.
+   */
+  | "VISITS_BOOKED"
   | "QUOTES_READY"
   | "UNLOCKED"
   | "SELECTED"

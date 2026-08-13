@@ -286,10 +286,17 @@ typecheck, partner build green. Nothing here exceeds `[~]`: the registration vie
   deadlines; require explicit confirmation for material edits. `GAP-015`
 - [~] `M2-FE-212` State clearly on submission that the requirement is free and that nothing is charged
   until quotes arrive (A3) or a professional confirms a visit (A5). `FLOW-01`
-- [ ] `M2-FE-216` **(Revision 3)** Build the A5 visit-plan chooser as a control on the review screen:
-  1/2/3 professionals at the server-published tier prices, plain-language statement that choosing
-  charges nothing and the plan is charged only when the first professional confirms a visit slot.
-  Never renders for A3; never a fifth screen (`SCREENS.length === 4` stands).
+- [~] `M2-FE-216` built — static gates green, owner manual verification pending. The chooser is a
+  control **inside** `review-screen.tsx`, passed in as a node exactly as the four optional-detail
+  panels are, so `SCREENS.length === 4` still holds and the stepper is unchanged. Tiers come from
+  `available_tiers` and **an empty list renders as "we cannot offer visits here yet"** — the proposed
+  49/99/199 appear nowhere in the code. Mounted only when the server's inferred lifecycle is A5, so
+  `POST .../visit-plan/` cannot reach an A3 request. Re-choosing works (the size is in the
+  idempotency key) and `Send this request` is **disabled with a stated reason** until a plan exists,
+  because `_assert_visit_plan_chosen` refuses the submit otherwise and meeting that as a 409 after
+  the button is the one refusal a Customer should never see.
+  — `access/view/visit-plan-chooser.tsx`, `access/queries.ts › useChooseVisitPlan`,
+  `requirement/view/{review-screen,requirement-flow}.tsx`.
 
 ### Customer tracking
 
@@ -442,70 +449,163 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
 
 ### A3 teasers and unlock
 
-- [ ] `M2-FE-401` Show quote **teasers**: vendor verification badge, rating, vendor type and headline
-  price band. No full scope, no vendor identity, no contact. `FLOW-01`
-- [ ] `M2-FE-402` Present the INR 149 unlock against visible delivered value, stating exactly what it
-  unlocks and that it is charged once. `FLOW-01`, `SIM-04`
-- [ ] `M2-FE-403` Build checkout using the server-created payment order; handle UPI pending, failed,
-  cancelled, late success and browser-close recovery truthfully.
-- [ ] `M2-FE-404` Never show success from the payment redirect alone; resolve final status from the
-  backend and provide a safe retry without duplicate purchase.
-- [ ] `M2-FE-405` Mark out-of-budget quotes and estimates as such rather than presenting them as
-  ordinary options. `GAP-003`
-- [ ] `M2-FE-406` Build non-responsive rejection with its reason, the remaining rejection allowance and
-  the replacement it triggers (A3: a quote slot; A5: a free replacement visit). `GAP-009`
+- [~] `M2-FE-401` built — static gates green, owner manual verification pending. Teaser rows carry the
+  three fields the wire has: verification, vendor type and the price **band**. **A rating is not
+  published** and none is invented — logged in `frontend-execution-plan.md` §7.
+  — `access/adapters › toTeaserView`, `access/view/unlock-panel.tsx`.
+- [~] `M2-FE-402` built — static gates green, owner manual verification pending. **The number 149
+  appears nowhere in the code.** `price_paise` is nullable because the price is blocking owner
+  decision 1 and `apps.requirements.pricing` fails closed; a null renders as "we cannot offer this
+  yet". The charge is offered only beneath the teasers it buys, and the copy states it is once per
+  request rather than per quote.
+- [~] `M2-FE-403` built — static gates green, owner manual verification pending.
+  `POST /requirements/{id}/unlock/` under a **requirement-scoped stable idempotency key**, which the
+  domain reinforces by resuming a `PENDING` attempt rather than starting a second charge. Pending,
+  failed and refunded are three distinct screens. Browser-close recovery works from the requirement
+  id alone — there is nothing in `sessionStorage` the path depends on.
+- [~] `M2-FE-404` built — static gates green, owner manual verification pending. **No screen reads a
+  redirect.** `unlockPhase` and `visitPlanPhase` derive solely from the `unlock`/`plan` object on the
+  state read, which polls (`boundedPoll`) only while a charge is `PENDING`. The pending panel offers
+  **no control at all**, because every control that could exist there is a way to pay twice; the
+  retry appears only on a server-confirmed `FAILED`, and clears the stored key first so it is a new
+  command rather than a replay of the failed one.
+  — `packages/query/src/m2-quotes.ts`, `access/view/{unlock-panel,book-visits-screen}.tsx`.
+- [~] `M2-FE-405` built — static gates green, owner manual verification pending. `OUT_OF_BUDGET` is a
+  server verdict and is **labelled, kept and explained** on both the teaser row and the full quote —
+  never hidden, never presented as an ordinary option. The comparison table badges it in the column
+  header too, so a cheapest-total marker cannot be read past it.
+- [~] `M2-FE-406` built — static gates green, owner manual verification pending. Two reasons as two
+  distinct choices rather than a dropdown, each with its consequence written next to it.
+  **`non_responsive_rejections_remaining` is nullable and null suppresses the replacement path
+  entirely** — offering a free replacement on a cap the owner has not set would be the client
+  inventing policy, and `POST .../reject/` answers `m2_policy_unavailable` to prove it. Zero reads
+  differently from null. The replacement is named per archetype: another quote slot on A3, a free
+  replacement visit on A5.
+  — `quotes/view/reject-quote-dialog.tsx`, `quotes/queries.ts › useRejectQuote`.
 
 ### A5 visits and estimates (revision 3)
 
-- [ ] `M2-FE-419` Show **vendor cards** for the responding A5 pool before any visit is confirmed:
-  verification badge, rating, vendor type, distance band. No identity, no contact. Identity (name,
-  photo, verification) appears only once that vendor confirms a visit slot.
-- [ ] `M2-FE-420` Build the **visit-plan checkout**, opened when the first vendor holds a slot
-  ("Vendor confirmed Tuesday 10am — book your visits"): server-created payment order, UPI pending,
-  failed, cancelled, late success and browser-close recovery, never success from the redirect alone.
-  States plainly that one payment covers the whole plan and unfilled visits refund themselves.
-- [ ] `M2-FE-421` Build the **visit tracker** on the request detail: each plan slot with its state
-  (awaiting a professional, slot held, scheduled with date/time and the professional's disclosed
-  identity, completed, refunded/replaced), reusing the checkout slot-picker presentation for times.
-- [ ] `M2-FE-422` Build visit-day states: arrival confirmation through the non-OTP fallback (start
-  OTP arrives in M3), reschedule, vendor no-show and customer no-show reporting with honest
-  consequences on screen.
-- [ ] `M2-FE-423` Show delivered **estimates in full** — scope, working days, material lines, taxes,
-  commission treatment, total, exclusions, validity — with no paywall state anywhere in the A5
-  journey, each linked to its completed visit.
-- [ ] `M2-FE-424` Show the **visit money** truthfully on both sides, server-calculated and never
-  client-derived: the Customer sees where each slot's money went (paid to the professional who
-  visited and estimated, or refunded); the Partner sees the visit payout land in Money once the
-  estimate is in, and sees plainly that a visit without an estimate pays nothing.
+- [~] `M2-FE-419` built as far as the contract allows — **and the honest answer is that it cannot be
+  finished.** `VendorCardSerializer` exists in `apps/requirements/serializers.py` with exactly the
+  right disclosure shape and **is published on no path**; `SiteVisit` carries no partner either, and
+  no rating or distance band exists anywhere. So no card list is faked: the tracker names a
+  professional only where a delivered estimate carries one (`CustomerProposal.vendor` joined on
+  `site_visit.id`), every other slot says the name is given before they arrive, and the panel states
+  the disclosure rule in plain words so a Customer knows it is policy rather than a fault. **No
+  identity and no contact appears anywhere before that.** Logged in
+  `frontend-execution-plan.md` §7.
+- [~] `M2-FE-420` built — static gates green, owner manual verification pending. `/requests/[id]/
+  book-visits`, a real route so a lost UPI redirect resumes from a URL. Opened by
+  `checkout_available` and by the held slot appearing on the tracker with the professional's own
+  confirmed time. **One payment for the whole plan**, quoted from `chargeable_paise` so a
+  reclassification credit is honoured, and the screen says in as many words that unfilled visits
+  refund themselves. Pending, failed and void are separate screens; the pending one offers nothing
+  to press.
+  — `access/view/book-visits-screen.tsx`, `access/queries.ts › useStartVisitPlanCheckout`.
+- [~] `M2-FE-421` built — static gates green, owner manual verification pending. The tracker is driven
+  by the plan's **shares**, not its visits, so an unfilled slot is a row that shows the refund it is
+  owed rather than a row that does not exist. Per-slot states: awaiting, **held** (a `REQUESTED`
+  visit on an unpaid plan — the distinction the whole flow turns on), scheduled, on site, visited,
+  cancelled, vendor no-show, customer no-show. Times render through `formatVisitSlot`, which is the
+  checkout picker's own `en-IN` weekday/day/month + lowercased 12-hour format on the booking
+  timezone, because both book against the same `carts.availability` grid.
+  — `access/adapters › toVisitTrackerView`, `access/view/visit-tracker.tsx`.
+- [~] `M2-FE-422` built — static gates green, owner manual verification pending. Arrival is the
+  **non-OTP fallback as the default path**, offered on a scheduled slot only, so a held slot on an
+  unpaid plan cannot be marked arrived. No-show is a confirmation with the consequence stated first,
+  and **the party is hard-coded to `VENDOR`** — you report the other party's absence, never your
+  own, and the server answers `403` to the reverse, so no control exists that could send `CUSTOMER`.
+  Reschedule is **not** built: `POST /site-visits/{id}/schedule/` exists but nothing published lets a
+  Customer see candidate starts for a specific vendor (`visit-slots/` is Partner-scoped), so the
+  screen offers no time picker rather than one over times we cannot confirm.
+- [~] `M2-FE-423` built — static gates green, owner manual verification pending. **There is no paywall
+  state in `quote-card.tsx` and there must never be one.** Scope, stages, material rows, inclusions,
+  exclusions, warranty, tax basis, commission treatment, validity and total all render whole. The
+  entitlement is checked once by the server before the payload is constructed; nothing downstream
+  re-decides it, and each estimate carries its completed visit.
+- [~] `M2-FE-424` (Customer half) built — static gates green, owner manual verification pending. Each
+  slot's money reads from the share's own `amount_paise`, `vendor_payout_paise` and
+  `platform_share_paise`; **nothing is summed or derived**. Five sentences for five share states:
+  set aside, committed, paid to the professional who came and wrote your estimate, refunded whole
+  because nobody earns from an undelivered visit, or owed a free replacement. The Partner half is
+  Session B's.
 
 ### Comparison and selection
 
-- [ ] `M2-FE-407` Display each unlocked quote (A3) or delivered estimate (A5) with vendor
-  verification summary, validity, scope, schedule, taxes, commission treatment, total and exclusions.
-- [ ] `M2-FE-408` Build an accessible comparison view that normalizes equivalent fields on the single
-  tax basis while clearly showing non-equivalent assumptions. `GAP-017`
-- [ ] `M2-FE-409` Allow Customer clarification and revision requests without editing vendor prices or
-  agreement fields.
-- [ ] `M2-FE-410` Make selection reference a specific proposal and show a final scope/cost summary
-  before confirmation.
-- [ ] `M2-FE-411` Show vendor reconfirmation as a pending state, not a confirmed booking.
-- [ ] `M2-FE-412` When a vendor declines or times out, guide the Customer to another unlocked quote,
-  another estimate or a free replacement (visit) without losing history and without a second charge.
-  `FLOW-01`
-- [ ] `M2-FE-413` Offer one-tap re-validation when a quote's or estimate's validity has expired,
-  reusing the existing unlock or plan. `GAP-019`
-- [ ] `M2-FE-414` Prevent double selection and recover gracefully from stale proposal or concurrent
-  action errors.
+- [~] `M2-FE-407` built — static gates green, owner manual verification pending. One card per quote or
+  estimate at `/requests/[id]/quotes`, carrying verification, validity, scope, the A3 rate/days/
+  headcount or the A5 stages, tax basis, commission treatment, total, inclusions, exclusions and
+  warranty. **Contact appears nowhere at any status** — it is absent from the response, not merely
+  unrendered, because it is released by the engagement and not by the fee.
+  — `quotes/adapters › toQuoteCard`, `quotes/view/quote-card.tsx`.
+- [~] `M2-FE-408` built — static gates green, owner manual verification pending. A real `<table>` with
+  a row header per field, so a screen reader announces the vendor and the field rather than reading
+  unlabelled cells; wide content scrolls inside its own container. Equivalent rows are normalised on
+  **what you actually pay** (`comparableTotalPaise` adds tax to an `EXCLUSIVE` total) and may be
+  ranked — `cheapestIndex` returns null on a tie rather than picking arbitrarily. Non-equivalent
+  rows sit under their own captioned group with a per-row caveat and **no ranking**: a shorter
+  exclusion list is not a better offer. Possible for the first time at 1.24.0 because
+  `required_tax_basis` forces one basis and `ProposalStage` is a published shape.
+  — `quotes/adapters › toComparisonRows`, `quotes/view/quote-comparison.tsx`.
+- [~] `M2-FE-409` built as far as the contract allows. Clarification runs one way at 1.24.0 — a vendor
+  asks, the Customer answers on the request timeline — and there is **no Customer-asks endpoint**;
+  the only revision request that exists is `M2-FE-413`'s re-validation, limited to an expired quote.
+  So the screen offers that, states where a professional's questions live, and says plainly that
+  neither the Customer nor Vsolve can change a price. **No control edits a vendor price or an
+  agreement field**, which is the invariant the task exists for. Logged in
+  `frontend-execution-plan.md` §7.
+- [~] `M2-FE-410` built — static gates green, owner manual verification pending. Choosing posts a
+  specific `proposal_id`, from the card that carries the full scope and total the Customer is
+  looking at — the summary *is* the card, which is why there is no separate confirmation screen.
+- [~] `M2-FE-411` built — static gates green, owner manual verification pending. **The pending panel
+  says "This is not a booking yet" in bold, is toned warning, and has no green on it anywhere.** It
+  carries the vendor's `reconfirm_by` as a server countdown, and states that a null deadline is an
+  unset clock rather than an unlimited one.
+  — `quotes/view/selection-status.tsx`.
+- [~] `M2-FE-412` built — static gates green, owner manual verification pending. Decline and timeout
+  are one state for the Customer because the next step and the guarantee are identical, and the
+  panel says the entitlement survives and **choosing another costs nothing more**. Every other quote
+  stays on screen and regains its Choose control; nothing is removed from the list.
+- [~] `M2-FE-413` built — static gates green, owner manual verification pending. Offered only on a
+  server-set `EXPIRED` status, never derived from `valid_until` against a browser clock — a device an
+  hour fast would otherwise hide a live quote's Choose control. The button says **"Ask for a fresh
+  price — free"** and the copy states it reuses what has already been paid, because a Customer who
+  suspects a second charge simply will not press it. `revalidation_requested_at` turns it into a
+  statement afterwards: only a vendor can state a price.
+- [~] `M2-FE-414` built — static gates green, owner manual verification pending. A live selection
+  **withholds** every Choose and Not-this-one control rather than disabling them, so a stale render
+  cannot start a second selection. `m2_selection_conflict` is handled as what the contract says it
+  is — retryable because the answer changes on its own — so it re-reads the selection and says
+  "Somebody chose first" **without resending the choice**. `m2_proposal_not_selectable` falls through
+  to the shared refusal path and the card's own non-selectable state.
 
 ### Engagement
 
-- [ ] `M2-FE-415` For A3, show direct-payment responsibility and limited Vsolve protection before
-  contact/connection completion. Never present it as a protected booking. `SIM-03`
-- [ ] `M2-FE-416` For A5, show stages, funding schedule, commission/tax presentation, cancellation
-  terms and protection before the first stage checkout.
-- [ ] `M2-FE-417` Handle stage-payment pending, failed, retry and late success without creating a false
-  confirmed engagement.
-- [ ] `M2-FE-418` Provide durable agreement, receipt/invoice and timeline access to both parties.
+- [~] `M2-FE-415` built — static gates green, owner manual verification pending. Read from
+  `engagement.commercial_mode`, never inferred from the archetype — that is the field that decides
+  whether the UI promises protection, and a client that computes it keeps promising protection
+  through a policy change. `LEAD_ONLY` renders badged **"Not a Vsolve booking"** and says payment,
+  refunds and any guarantee on the work are between the Customer and the vendor. **A third mode
+  renders "we cannot describe this agreement"**, because on this surface the optimistic fallback is
+  "protected booking".
+  — `packages/query/src/m2-engagement-customer.ts`, `engagement/view/engagement-screen.tsx`.
+- [~] `M2-FE-416` built — static gates green, owner manual verification pending. Stages, amounts,
+  schedule, commission treatment and tax all render before the first funding control. Funding is
+  **at face value** and the screen states that the visit-plan money is already spent on the visits
+  and does not come off a stage — there is no stage credit and nothing here subtracts anything.
+  Cancellation terms are **not** rendered: `Engagement` publishes no cancellation-terms field, and
+  quoting one from a proposal the engagement froze would be this client authoring the agreement.
+- [~] `M2-FE-417` built — static gates green, owner manual verification pending. Exactly one stage
+  can carry a funding button — the first unsettled one, because the server refuses a later stage
+  while an earlier one is unfunded. A stage whose charge is `PENDING` shows the waiting state and
+  **no control**, and `m2_stage_not_funded` re-reads and states what it found rather than offering a
+  retry. The engagement read polls only while a stage funding charge is unresolved.
+- [~] `M2-FE-418` built as far as the contract allows. The agreement and its stages are durable at
+  `/engagements/[id]`, keyed by the engagement rather than by the request so a notification opened
+  months later resolves, and the full timeline is one link away on the request the record names.
+  **The receipt is not linkable**: `Engagement` publishes no order id and no tax-document id, and
+  `GET /tax-documents/{id}/` needs one — so the screen says where the record lives rather than
+  linking to a document it cannot name. Logged in `frontend-execution-plan.md` §7.
 
 **FE4 gate:** Money is only ever requested against a real accepted commitment — visible delivered
 quotes (A3) or a confirmed visit (A5) — and Customer and Partner see the same immutable proposal,

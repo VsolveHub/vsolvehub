@@ -1,7 +1,7 @@
 "use client";
 
 import { AddressSummary, Button, ErrorState, ScheduleSummary } from "@vsolve/ui";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { OPTIONAL_DETAILS, OPTIONAL_DETAIL_LABELS, type Screen } from "../model/screens";
 import type { DraftAttachment } from "../model/state";
@@ -80,6 +80,30 @@ export interface ReviewScreenProps {
   isSubmitting: boolean;
   /** A refusal from the submit command, already turned into a sentence. */
   submitError: string | null;
+  /**
+   * The A5 visit-plan chooser — `M2-FE-216`.
+   *
+   * A **control on this screen**, not a fifth screen: `SCREENS.length === 4` is
+   * asserted by `boundary.test.ts` and this is passed in as a node rather than
+   * added to the sequence, exactly as the four optional-detail panels are. It is
+   * `undefined` for A3, where there is no visit to plan and
+   * `POST .../visit-plan/` answers `400 m2_lifecycle_not_supported`.
+   *
+   * Injected rather than mounted here, for the reason the whole `view/` layer is
+   * built on: this file holds copy and layout and calls no endpoint.
+   */
+  visitPlanChooser?: ReactNode;
+  /**
+   * A reason to refuse submit that the reducer cannot know.
+   *
+   * The reducer's own `blocked` is derived from the Customer's answers.
+   * `_assert_visit_plan_chosen` refuses an A5 submit with
+   * `m2_visit_plan_required` until a plan exists — a **server** fact about a
+   * record this screen only just created, and one no local guard can compute.
+   * Passing it in keeps the disabled-*and*-explained pairing intact without
+   * teaching the reducer about an endpoint.
+   */
+  submitBlockedReason?: string | null;
 }
 
 export function ReviewScreen({
@@ -89,6 +113,8 @@ export function ReviewScreen({
   onSubmit,
   isSubmitting,
   submitError,
+  visitPlanChooser,
+  submitBlockedReason = null,
 }: ReviewScreenProps) {
   const { state, goTo, blocked } = useRequirement();
   const [openExtra, setOpenExtra] = useState<string | null>(null);
@@ -199,6 +225,12 @@ export function ReviewScreen({
         </div>
       ) : null}
 
+      {/* Above the optional extras, deliberately. This is not optional on A5 —
+          the submit is refused without it — and putting a required control
+          under a heading that says "only if you need them" would be the screen
+          mislabelling its own requirement. */}
+      {visitPlanChooser}
+
       <section className="mt-6" aria-labelledby="extras-heading">
         <h3 id="extras-heading" className="text-sm font-semibold text-text">
           Optional — only if you need them
@@ -253,16 +285,27 @@ export function ReviewScreen({
       ) : null}
 
       <div className="mt-6">
-        <Button onClick={onSubmit} loading={isSubmitting} loadingLabel="Sending your request" disabled={blocked !== null}>
+        <Button
+          onClick={onSubmit}
+          loading={isSubmitting}
+          loadingLabel="Sending your request"
+          disabled={blocked !== null || submitBlockedReason !== null}
+        >
           Send this request
         </Button>
         {/* Review has no "Next", so the workspace never states the block reason
             here. Repeating the pairing — disabled control *and* stated reason —
             is what stops the final screen being the one place a Customer can
-            dead-end with nothing to read. */}
+            dead-end with nothing to read. The reducer's reason wins when both
+            exist: an unanswered question has to be fixed before a visit plan
+            can matter. */}
         {blocked !== null ? (
           <p role="status" className="mt-2 max-w-prose text-sm text-text-secondary">
             {BLOCK_COPY[blocked]}
+          </p>
+        ) : submitBlockedReason !== null ? (
+          <p role="status" className="mt-2 max-w-prose text-sm text-text-secondary">
+            {submitBlockedReason}
           </p>
         ) : null}
         {isFree === true ? (
