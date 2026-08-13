@@ -32,7 +32,22 @@ import type { EnquiryStatus } from "./enquiry-state";
 export interface EnquiryRow {
   readonly id: string;
   readonly requirementId: string;
-  readonly categorySlug: string;
+  /**
+   * The catalogue's own name for the service.
+   *
+   * Landed on `EnquiryDetail` at 1.24.0 and on `EnquirySummary` at **1.26.0**,
+   * which is what moved it up here from `EnquiryRecord`. Until then the inbox
+   * row titled itself by de-slugging `category_slug` — which is
+   * `variant.service.slug`, a routing key rather than a name, and misnamed
+   * besides. Declared non-null on both projections (`variant.service.name` is a
+   * required column), so there is no nullable case to handle; a blank one is
+   * still said plainly rather than rendered as an empty heading.
+   *
+   * `category_slug` is deliberately **not** projected any more. Nothing may read
+   * it: it is a routing key, and the only thing this app ever did with it was
+   * format it into a title.
+   */
+  readonly serviceName: string;
   /** The server's archetype for this record. Decides which composer opens. */
   readonly archetype: string;
   readonly status: EnquiryStatus;
@@ -44,15 +59,6 @@ export interface EnquiryRow {
 }
 
 export interface EnquiryRecord extends EnquiryRow {
-  /**
-   * The catalogue's own name for the service (1.24.0).
-   *
-   * The detail screen used to title itself by de-slugging `category_slug`, which
-   * is `variant.service.slug` and misnamed besides. A slug is a routing key, not
-   * a name, and "ac-repair-servicing" title-cased is not what the catalogue
-   * calls it. Published now, so the slug is no longer formatted into a heading.
-   */
-  readonly serviceName: string;
   readonly answers: AnswerMap;
   readonly additionalDetails: string;
   readonly budgetMinPaise: number | null;
@@ -95,7 +101,7 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
   return {
     id: summary.id,
     requirementId: summary.requirement_id,
-    categorySlug: summary.category_slug,
+    serviceName: summary.service_name,
     archetype: summary.archetype,
     status: summary.status,
     requestedStart: nullableInstant(summary.requested_start),
@@ -109,7 +115,6 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
 export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryRecord {
   return {
     ...readEnquiryRow(detail),
-    serviceName: detail.service_name,
     answers: readAnswers(detail.answers),
     additionalDetails: detail.additional_details,
     budgetMinPaise: detail.budget_min_paise,

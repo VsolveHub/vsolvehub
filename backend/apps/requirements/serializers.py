@@ -21,6 +21,7 @@ from rest_framework import serializers
 
 from apps.catalog.models import ServiceVariant
 from apps.requirements.models import (
+    BookingFee,
     CustomerRequirement,
     Engagement,
     EngagementAmendment,
@@ -29,6 +30,8 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     QuoteUnlock,
+    RateCard,
+    RateCardBooking,
     RequirementAttachment,
     RequirementQuestion,
     SiteVisit,
@@ -1634,3 +1637,275 @@ class DemandPreviewSerializer(serializers.Serializer[dict[str, Any]]):
     summaries = DemandSummarySerializer(many=True, read_only=True)
     matched_service_count = serializers.IntegerField(read_only=True)
     server_now = serializers.DateTimeField(read_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Wave C2R / revision 4: the rate-card A3 front door.
+#
+# One disclosure rule runs through every shape below and it is the mirror of the teaser rule at the
+# top of this file: **the Customer's screen never shows the lead's wage split, and the lead's
+# screen never shows the Customer's all-inclusive rate.** The Customer is entitled to the whole
+# number they pay and to how it divides between "paid to the crew" and "paid to Vsolve"; they are
+# not entitled to the supervision margin, which is the mestri's livelihood. The lead is entitled to
+# their own number and to nothing that includes this platform's fee, because a vendor shown a
+# number they do not receive is a vendor who will argue about it on site.
+# ---------------------------------------------------------------------------
+
+
+class RateCardSerializer(serializers.ModelSerializer[RateCard]):
+    """One published card, as Operations reads it back.
+
+    The three components are published **on this surface only**. It is the Operations review
+    calendar's read and the wage-floor cross-check happens against the same numbers, so hiding the
+    split here would make the monthly review a screen you cannot review from.
+    """
+
+    lead_day_receipt_paise = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = RateCard
+        fields = (
+            "id",
+            "service_area",
+            "skill",
+            "worker_day_wage_paise",
+            "supervision_margin_paise",
+            "booking_fee_paise",
+            "customer_day_rate_paise",
+            "lead_day_receipt_paise",
+            "standard_day_hours",
+            "overtime_hourly_paise",
+            "add_on_rates",
+            "inclusions",
+            "effective_from",
+            "source_reference",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class RateCardPublishSerializer(serializers.Serializer[dict[str, Any]]):
+    """Operations publishes a card. Every value is required; none has a default.
+
+    A default on any of these would be this file deciding a price, a shift length or an overtime
+    rate. `effective_from` is required for the same reason: "today" is the one value a publisher
+    should never get by omission, because it is the value that lands under live bookings.
+    """
+
+    service_area_id = serializers.UUIDField()
+    skill_id = serializers.UUIDField()
+    worker_day_wage_paise = serializers.IntegerField(min_value=1)
+    supervision_margin_paise = serializers.IntegerField(min_value=1)
+    booking_fee_paise = serializers.IntegerField(min_value=1)
+    standard_day_hours = serializers.IntegerField(min_value=1, max_value=24)
+    overtime_hourly_paise = serializers.IntegerField(min_value=1)
+    #: What the preset's scope includes, in the Customer's words. Printed on the booking screen and
+    #: frozen onto every booking made against this card.
+    inclusions = serializers.ListField(child=serializers.CharField(max_length=200), min_length=1)
+    #: Published add-on rates, keyed by add-on code, in paise. Extras run through the amendment
+    #: engine at exactly these numbers.
+    add_on_rates = serializers.DictField(child=serializers.IntegerField(min_value=1), default=dict)
+    effective_from = serializers.DateField()
+    source_reference = serializers.CharField(max_length=200, allow_blank=True, default="")
+
+
+class RateCardListSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Empty is the honest answer while Operations has published nothing, and the reason instant
+    #: booking is refused everywhere. Never a 404.
+    rate_cards = RateCardSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class RatePreviewSerializer(serializers.Serializer[dict[str, Any]]):
+    """What instant booking would cost, on the screen the Customer reads **before** booking.
+
+    `total_customer_paise = lead_receipt_paise + booking_fee_paise`, server-calculated, so the two
+    sentences the screen shows always add to the one number the Customer agrees to. The
+    supervision margin is deliberately not here: the split the Customer needs is "to the crew" and
+    "to Vsolve", not the lead's own business.
+    """
+
+    is_available = serializers.BooleanField(read_only=True)
+    rate_card_id = serializers.UUIDField(read_only=True, allow_null=True)
+    headcount = serializers.IntegerField(read_only=True, allow_null=True)
+    days = serializers.IntegerField(read_only=True, allow_null=True)
+    day_rate_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    total_customer_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    #: Paid directly to the lead at day end. **Vsolve never holds this money** and the screen must
+    #: not imply otherwise — an A3 booking is not wage-protected and saying so is the promise this
+    #: platform cannot keep.
+    lead_receipt_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    booking_fee_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    standard_day_hours = serializers.IntegerField(read_only=True, allow_null=True)
+    overtime_hourly_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    add_on_rates = serializers.DictField(
+        child=serializers.IntegerField(), read_only=True, allow_null=True
+    )
+    inclusions = serializers.ListField(
+        child=serializers.CharField(), read_only=True, allow_null=True
+    )
+    #: Why instant booking is unavailable, when it is. `m2_rate_card_unavailable` or
+    #: `m2_policy_unavailable` — published as a state on a `200` rather than as an error, because
+    #: the Customer can still submit this request; it will simply collect quotes instead.
+    unavailable_code = serializers.CharField(read_only=True, allow_null=True)
+    unavailable_reason = serializers.CharField(read_only=True, allow_null=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class RateCardBookSerializer(serializers.Serializer[dict[str, Any]]):
+    #: The same explicit override `POST /requirements/{id}/submit/` takes. A Customer who has been
+    #: shown a probable duplicate and wants both is making a decision, not an error.
+    allow_duplicate = serializers.BooleanField(default=False)
+
+
+class RateCardBookingSerializer(serializers.ModelSerializer[RateCardBooking]):
+    """The Customer's booking, frozen at the rate it was made at."""
+
+    class Meta:
+        model = RateCardBooking
+        fields = (
+            "id",
+            "status",
+            "headcount",
+            "days",
+            "day_rate_paise",
+            "total_customer_paise",
+            "lead_receipt_paise",
+            "booking_fee_paise",
+            "standard_day_hours",
+            "overtime_hourly_paise",
+            "add_on_rates",
+            "inclusions",
+            "wave",
+            "hold_expires_at",
+            "fallback_reason_code",
+            "fell_back_at",
+            "confirmed_at",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
+    """The one online charge, and how it was settled.
+
+    The forfeit split is published because the Customer is entitled to know where their money went
+    when a booking they missed was settled: a travel-compensation share to the crew that travelled,
+    and the remainder to Vsolve. Publishing zero for both on an unsettled fee is not a placeholder
+    — it is the true amount so far.
+    """
+
+    class Meta:
+        model = BookingFee
+        fields = (
+            "id",
+            "status",
+            "amount_paise",
+            "travel_compensation_paise",
+            "platform_share_paise",
+            "receipt_series",
+            "receipt_sequence",
+            "settlement_reason_code",
+            "failure_code",
+            "activated_at",
+            "earned_at",
+            "settled_at",
+        )
+        read_only_fields = fields
+
+
+class RateCardStateSerializer(serializers.Serializer[dict[str, Any]]):
+    """The whole A3 instant path as one read: the price before, the crew and the fee after.
+
+    One endpoint rather than three, for the reason `VisitPlanStateSerializer` gives: the screen
+    that offers instant booking and the screen that tracks it are the same screen at two moments,
+    and two endpoints would let them disagree about which booking the Customer has.
+    """
+
+    preview = RatePreviewSerializer(read_only=True)
+    booking = RateCardBookingSerializer(read_only=True, allow_null=True)
+    booking_fee = BookingFeeSerializer(read_only=True, allow_null=True)
+    #: Mirrors `create_booking_fee_checkout`'s guard so the pay button can be disabled — never so
+    #: the client can decide. The command re-checks under the booking's row lock.
+    checkout_available = serializers.BooleanField(read_only=True)
+    #: The lead holding this job, named only once the fee is verified. Before that the Customer
+    #: sees that *a* crew is holding it and not who — vendor identity is released by the
+    #: confirmation, not by the hold.
+    confirmed_partner_id = serializers.UUIDField(read_only=True, allow_null=True)
+    confirmed_partner_name = serializers.CharField(read_only=True, allow_null=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class CrewOfferSerializer(serializers.Serializer[dict[str, Any]]):
+    """One crew offer as the **lead** sees it (`M2-BE-435`).
+
+    An explicit field list, like the teaser, and the omission is the point: there is no
+    `total_customer_paise` and no `booking_fee_paise` here at any status. ADR-0009 fixes the offer
+    screen as "what they receive per day for the requested crew, paid directly by the customer at
+    day end", and a lead shown the Customer's all-inclusive number would reasonably expect to
+    receive it.
+    """
+
+    invitation_id = serializers.UUIDField(read_only=True)
+    requirement_id = serializers.UUIDField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    headcount = serializers.IntegerField(read_only=True)
+    days = serializers.IntegerField(read_only=True)
+    #: **Your** number: what you receive per day for the whole requested crew.
+    lead_day_receipt_paise = serializers.IntegerField(read_only=True)
+    lead_total_receipt_paise = serializers.IntegerField(read_only=True)
+    standard_day_hours = serializers.IntegerField(read_only=True)
+    overtime_hourly_paise = serializers.IntegerField(read_only=True)
+    inclusions = serializers.ListField(child=serializers.CharField(), read_only=True)
+    #: Wall-clock, minutes away. A crew offer runs on the M1 dispatch clock, not business hours.
+    responds_by = serializers.DateTimeField(read_only=True, allow_null=True)
+    #: Your verified roster size, published so the refusal is explainable before it happens rather
+    #: than after: an offer you cannot accept should say why on the screen that offers it.
+    verified_roster_size = serializers.IntegerField(read_only=True)
+    requested_start = serializers.DateTimeField(read_only=True, allow_null=True)
+    area_label = serializers.CharField(read_only=True, allow_blank=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+class CrewOfferListSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Empty is a real answer — no live offers is the ordinary state — and must be `200 []`.
+    offers = CrewOfferSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
+#: Why a lead passed on a crew offer. Published as its own vocabulary rather than reusing
+#: `INVITATION_DECLINE_REASONS`, because these answers are what the decline-rate alarm reads and
+#: the one that matters most has no equivalent on a quote enquiry: **the rate is below the street
+#: rate this week.** A vendor who can only say "no capacity" cannot tell Operations their price is
+#: wrong, which is the single signal ADR-0009 says the instant product lives or dies on.
+CREW_OFFER_DECLINE_REASONS = (
+    ("RATE_TOO_LOW", "The published rate is below the going rate"),
+    ("NO_CREW_AVAILABLE", "No crew free on those dates"),
+    ("TOO_FAR", "Too far to travel"),
+    ("SITE_UNSUITABLE", "The site or the work is not something we do"),
+    ("OTHER", "Another reason"),
+)
+
+
+class CrewOfferDeclineSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Required. A decline with no reason is a data point that cannot distinguish "your price is
+    #: wrong" from "I am on holiday", and the alarm depends on telling those apart.
+    reason_code = serializers.ChoiceField(choices=CREW_OFFER_DECLINE_REASONS)
+    note = serializers.CharField(max_length=500, allow_blank=True, default="")
+
+
+#: What happened on day one. About the **fact**, never the settlement — `party` decides the money
+#: and no dropdown may, which is the rule `VISIT_NO_SHOW_REASONS` established at 1.26.0.
+CREW_NO_SHOW_REASONS = (
+    ("customer_no_show", "Nobody was at the site"),
+    ("gate_locked", "The site was locked"),
+    ("vendor_no_show", "The crew did not arrive"),
+)
+
+
+class CrewNoShowSerializer(serializers.Serializer[dict[str, Any]]):
+    #: Who was not there. **This field decides the money** — a vendor no-show refunds in full and
+    #: re-dispatches free, a customer no-show forfeits and splits — which is why it is a required
+    #: choice with no default and why the reason code below cannot move it.
+    party = serializers.ChoiceField(choices=VISIT_NO_SHOW_PARTIES)
+    reason_code = serializers.ChoiceField(choices=CREW_NO_SHOW_REASONS)

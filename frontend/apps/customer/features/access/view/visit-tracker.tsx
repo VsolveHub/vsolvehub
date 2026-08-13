@@ -287,7 +287,8 @@ function VisitRow({
 }) {
   const [reporting, setReporting] = useState(false);
   const badge = SLOT_BADGE[row.state] ?? SLOT_BADGE.awaiting;
-  const when = formatVisitSlot(row.scheduledFor);
+  // The visit's own zone since 1.26.0, not the deprecated single-city constant.
+  const when = formatVisitSlot(row.scheduledFor, row.timeZone);
 
   return (
     <li className="rounded-card border border-line p-3">
@@ -306,7 +307,8 @@ function VisitRow({
 
       {row.state === "completed" && row.estimateDueAt !== null ? (
         <p className="mt-2 text-sm text-text-secondary">
-          Their written estimate is due by {formatVisitSlot(row.estimateDueAt)}. If
+          Their written estimate is due by{" "}
+          {formatVisitSlot(row.estimateDueAt, row.timeZone)}. If
           it does not arrive, this visit refunds its share or we send somebody
           else, free.
         </p>

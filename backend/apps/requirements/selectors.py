@@ -26,6 +26,7 @@ from apps.partners.models import (
 )
 from apps.requirements.exceptions import RequirementNotFoundError
 from apps.requirements.models import (
+    BookingFee,
     CustomerRequirement,
     Engagement,
     EngagementAmendment,
@@ -619,6 +620,25 @@ def access_receipt_for(engagement: Engagement) -> dict[str, Any] | None:
             "series": plan.receipt_series,
             "sequence": plan.receipt_sequence,
             "amount_paise": plan.chargeable_paise,
+        }
+
+    # Revision 4: an A3 engagement now grows out of one of two fees. The booking fee is checked
+    # first because it is the primary path — an A3 requirement that ran the rate-card cascade never
+    # bought an unlock, and one that fell back to the quote flow never paid a booking fee, so the
+    # two are mutually exclusive in practice and the order only decides which is found first.
+    booking_fee = (
+        BookingFee.objects.filter(requirement_id=requirement_id)
+        .exclude(receipt_series="")
+        .order_by("-activated_at")
+        .first()
+    )
+    if booking_fee is not None:
+        return {
+            "kind": "A3_BOOKING_FEE",
+            "number": f"{booking_fee.receipt_series}-{booking_fee.receipt_sequence}",
+            "series": booking_fee.receipt_series,
+            "sequence": booking_fee.receipt_sequence,
+            "amount_paise": booking_fee.amount_paise,
         }
 
     unlock = (

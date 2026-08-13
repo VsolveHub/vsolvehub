@@ -37,7 +37,14 @@ import {
   useStage,
 } from "../queries";
 import { StageEvidenceList } from "./stage-evidence";
-import { StageStatusBadge, nounsFor, type ModeNouns } from "./engagement-status";
+import {
+  StageKindBadge,
+  StageStatusBadge,
+  nounsFor,
+  stageKindCopy,
+  stageRowNoun,
+  type ModeNouns,
+} from "./engagement-status";
 import { NotBuiltYet } from "./not-built-yet";
 
 /**
@@ -79,6 +86,20 @@ import { NotBuiltYet } from "./not-built-yet";
  * And `review_due_at` is nullable. A null is a policy state: no review window is
  * configured, so this stage will never auto-approve. It renders as "no deadline
  * is set", never as time in hand, and no default is synthesised.
+ *
+ * ## The row may not be work at all
+ *
+ * `EngagementStage.kind` (1.26.0) separates a milestone from a
+ * `MATERIAL_ADVANCE`, and on a materials row every heading above was wrong:
+ * there is nothing to inspect for workmanship and nothing to approve the
+ * *quality* of — the question is whether the goods are what was agreed. So the
+ * evidence, approval and correction headings come from `stageKindCopy` and the
+ * money panel says plainly that this money buys goods and is not returned the
+ * way unfinished work is (`M2-BE-543`: material money is spent, not earned).
+ *
+ * **No control is removed for a materials row.** The server runs one spine and
+ * permits all three commands on it, and hiding the dispute would take away the
+ * Customer's only objection to a delivery that never arrived.
  */
 
 export interface StageReviewScreenProps {
@@ -132,7 +153,10 @@ export function StageReviewScreen({
       <header>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h1 className="text-xl font-semibold text-text">{stage.label}</h1>
-          <StageStatusBadge status={stage.status} />
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <StageKindBadge kind={stage.kind} nouns={nouns} />
+            <StageStatusBadge status={stage.status} />
+          </div>
         </div>
         {stage.scheduledOn !== null ? (
           <p className="mt-1 text-sm text-text-secondary">{stage.scheduledOn}</p>
@@ -162,7 +186,7 @@ export function StageReviewScreen({
 
       <section aria-labelledby="evidence-heading" className="mt-6">
         <h2 id="evidence-heading" className="text-lg font-semibold text-text">
-          What the professional showed
+          {stageKindCopy(stage.kind, nouns).evidenceHeading}
         </h2>
         <StageEvidenceList evidence={stage.evidence} stageNoun={nouns.stage} />
       </section>
@@ -244,6 +268,7 @@ function ReviewClockPanel({
   // presentation and never authority: reaching zero locally does not approve
   // anything — the server decides, and the screen finds out by re-reading.
   const countdown = useServerCountdown(stage.autoApprovalDeadline, 30_000);
+  const rowNoun = stageRowNoun(stage.kind, nouns);
 
   if (stage.clock === "not_running") return null;
 
@@ -252,7 +277,7 @@ function ReviewClockPanel({
       <section className="mt-4 rounded-card border border-danger-line bg-danger-surface p-4">
         <h2 className="font-semibold text-text">The clock is stopped</h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text">
-          You raised a problem on this {nouns.stage}, so it will{" "}
+          You raised a problem on this {rowNoun}, so it will{" "}
           <strong className="font-semibold">not</strong> be approved automatically
           and no money moves on it while we look into it.
         </p>
@@ -265,7 +290,7 @@ function ReviewClockPanel({
       <section className="mt-4 rounded-card border border-line bg-surface-sunken p-4">
         <h2 className="font-semibold text-text">No deadline is set for this</h2>
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          Nothing is approved automatically. This {nouns.stage} waits until you
+          Nothing is approved automatically. This {rowNoun} waits until you
           decide, however long that takes.
         </p>
       </section>
@@ -284,7 +309,7 @@ function ReviewClockPanel({
       {expiredLocally ? (
         <>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text">
-            By our clock the window has passed, so this {nouns.stage} may already
+            By our clock the window has passed, so this {rowNoun} may already
             have been approved automatically. We have not assumed either way.
           </p>
           <div className="mt-3">
@@ -296,7 +321,7 @@ function ReviewClockPanel({
       ) : (
         <>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text">
-            This {nouns.stage} is approved automatically on{" "}
+            This {rowNoun} is approved automatically on{" "}
             <strong className="font-semibold">{stage.autoApprovalDeadlineLabel}</strong> if
             you do not decide before then — and approving is what moves the money.
             Raising a problem is the only thing that stops it.
@@ -328,7 +353,7 @@ function MoneyPanel({
   return (
     <section aria-labelledby="stage-money-heading" className="mt-6">
       <h2 id="stage-money-heading" className="text-lg font-semibold text-text">
-        The money on this {nouns.stage}
+        The money on this {stageRowNoun(stage.kind, nouns)}
       </h2>
 
       <dl className="mt-3 rounded-card border border-line bg-surface">
@@ -354,6 +379,20 @@ function MoneyPanel({
         </p>
       ) : null}
 
+      {/* `M2-BE-543` / `GAP-028`: material money is spent, not earned. The
+          recovery rule genuinely differs — a funded, unstarted *work* stage is
+          refunded when a capability is suspended and a funded material advance
+          is not, because the vendor has already bought the goods. Said here
+          because this is the screen where somebody decides about that money. */}
+      {stage.kind === "material_advance" ? (
+        <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
+          This is money for materials, not for work. Once the professional has
+          spent it on goods it is not returned the way unfinished work is — if
+          the job stops, the materials are dealt with as goods rather than
+          refunded automatically.
+        </p>
+      ) : null}
+
       {mode === "managed" && stage.payoutReleaseDeadlineLabel !== null ? (
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
           Once approved, the money is held until {stage.payoutReleaseDeadlineLabel}{" "}
@@ -376,9 +415,11 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 function DisputedPanel({ stage, nouns }: { stage: StageView; nouns: ModeNouns }) {
   return (
     <section className="mt-6 rounded-card border border-danger-line bg-danger-surface p-4">
-      <h2 className="font-semibold text-text">You raised a problem on this {nouns.stage}</h2>
+      <h2 className="font-semibold text-text">
+        You raised a problem on this {stageRowNoun(stage.kind, nouns)}
+      </h2>
       <p className="mt-1 max-w-prose text-sm leading-6 text-text">
-        We are looking into it. This {nouns.stage}&apos;s money is on hold and
+        We are looking into it. This {stageRowNoun(stage.kind, nouns)}&apos;s money is on hold and
         nothing is approved automatically. The rest of the job carries on, and
         anything already paid out stays paid out.
       </p>
@@ -428,6 +469,9 @@ function StageActions({
 
   const anyPending = approve.isPending || correction.isPending || dispute.isPending;
   const commandError = approve.error ?? correction.error ?? dispute.error;
+  const kindCopy = stageKindCopy(stage.kind, nouns);
+  const isMaterial = stage.kind === "material_advance";
+  const rowNoun = stageRowNoun(stage.kind, nouns);
 
   if (!stage.canApprove && !stage.canRequestCorrection && !stage.canDispute) {
     return (
@@ -435,7 +479,7 @@ function StageActions({
         {/* Nothing is offered, and the screen says why rather than showing an
             empty space where three buttons used to be. */}
         <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm leading-6 text-text-secondary">
-          There is nothing to decide on this {nouns.stage} right now.
+          There is nothing to decide on this {rowNoun} right now.
         </p>
       </div>
     );
@@ -450,11 +494,18 @@ function StageActions({
    * rather than picking the friendlier of the two.
    */
   const approvalConsequence = ((): string => {
+    // An unrecognised kind outranks the mode: we cannot say what approving does
+    // to money without knowing what the money was for.
+    if (stage.kind === "unknown") {
+      return "This app does not recognise what this money is for, so we will not tell you what approving does to it. Please contact support before approving.";
+    }
     switch (approvalMoneyEffect(commercialMode)) {
       case "releases_held_earning":
-        return `${stage.amountLabel} is approved and set aside for the professional. Once the hold period ends it is theirs, and you cannot take it back from this screen.`;
+        return isMaterial
+          ? `${stage.amountLabel} is approved and set aside for the professional to buy the materials. Once the hold period ends it is theirs, and you cannot take it back from this screen.`
+          : `${stage.amountLabel} is approved and set aside for the professional. Once the hold period ends it is theirs, and you cannot take it back from this screen.`;
       case "no_platform_money":
-        return `This records that the ${nouns.stage} was done. Vsolve is not holding your money for this job, so no payment is sent — you still owe the professional ${stage.amountLabel} directly.`;
+        return `This records that the ${rowNoun} was as agreed. Vsolve is not holding your money for this job, so no payment is sent — you still owe the professional ${stage.amountLabel} directly.`;
       default:
         return "This app cannot describe how this agreement is paid for, so we will not tell you what this does to your money. Please contact support before approving.";
     }
@@ -469,19 +520,19 @@ function StageActions({
       {/* Approve */}
       {stage.canApprove ? (
         <div className="mt-3 rounded-card border border-line bg-surface p-4">
-          <h3 className="font-semibold text-text">This is done properly</h3>
+          <h3 className="font-semibold text-text">{kindCopy.approveHeading}</h3>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
             {approvalConsequence}
           </p>
           <div className="mt-3">
             <Button onClick={() => setConfirmingApproval(true)} disabled={anyPending}>
-              Approve this {nouns.stage}
+              Approve this {rowNoun}
             </Button>
           </div>
           <ConfirmAction
             open={confirmingApproval}
             onOpenChange={setConfirmingApproval}
-            title={`Approve this ${nouns.stage}?`}
+            title={`Approve this ${rowNoun}?`}
             consequence={approvalConsequence}
             confirmLabel="Yes, approve it"
             pending={approve.isPending}
@@ -503,9 +554,11 @@ function StageActions({
       {/* Correction — the one that moves no money */}
       {stage.canRequestCorrection ? (
         <div className="mt-3 rounded-card border border-line bg-surface p-4">
-          <h3 className="font-semibold text-text">Something needs redoing</h3>
+          <h3 className="font-semibold text-text">{kindCopy.correctionHeading}</h3>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            Sends it back to be done properly.{" "}
+            {isMaterial
+              ? "Sends it back so the materials match what you agreed — the right quantity, the right thing. "
+              : "Sends it back to be done properly. "}
             <strong className="font-semibold">No money moves</strong>, and nothing
             about what you agreed changes. When they submit again you get a fresh
             window to check it. If you want something{" "}
@@ -513,7 +566,7 @@ function StageActions({
             and the professional has to agree to it — ask them for one instead.
           </p>
           <Field
-            label="What needs doing"
+            label={isMaterial ? "What is wrong with them" : "What needs doing"}
             description="They see exactly what you write here."
             required
             className="mt-3"
@@ -521,7 +574,11 @@ function StageActions({
             <Textarea
               value={correctionNote}
               onChange={(event) => setCorrectionNote(event.target.value)}
-              placeholder="The second coat was missed on the back wall."
+              placeholder={
+                isMaterial
+                  ? "Only 30 of the 40 bags were delivered."
+                  : "The second coat was missed on the back wall."
+              }
             />
           </Field>
           <div className="mt-3">
@@ -547,7 +604,7 @@ function StageActions({
           </div>
           {!canSubmitCorrection(correctionNote) ? (
             <p className="mt-2 text-sm text-text-secondary">
-              Say what needs doing first — a {nouns.stage} sent back with no
+              Say what needs doing first — a {rowNoun} sent back with no
               instruction helps nobody.
             </p>
           ) : null}
@@ -560,9 +617,9 @@ function StageActions({
           <h3 className="font-semibold text-text">Something is wrong</h3>
           <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
             {mode === "managed"
-              ? `Holds ${stage.amountLabel} on this ${nouns.stage} and asks us to look into it. `
-              : `Records a problem on this ${nouns.stage} and asks us to look into it. `}
-            It stops <strong className="font-semibold">only this {nouns.stage}</strong> —
+              ? `Holds ${stage.amountLabel} on this ${rowNoun} and asks us to look into it. `
+              : `Records a problem on this ${rowNoun} and asks us to look into it. `}
+            It stops <strong className="font-semibold">only this {rowNoun}</strong> —
             the rest of the job carries on and anything already paid out stays
             paid out. It is also the one thing that stops this being approved
             automatically.
@@ -613,12 +670,12 @@ function StageActions({
           <ConfirmAction
             open={confirmingDispute}
             onOpenChange={setConfirmingDispute}
-            title="Raise a problem on this work?"
+            title={isMaterial ? "Raise a problem on these materials?" : "Raise a problem on this work?"}
             destructive
             consequence={
               mode === "managed"
-                ? `${stage.amountLabel} stays where it is and does not reach the professional while we look into this. The rest of the job carries on. This ${nouns.stage} will not be approved automatically.`
-                : `We record the problem and look into it. Vsolve is not holding money for this job, so nothing is held back — but this ${nouns.stage} will not be approved automatically.`
+                ? `${stage.amountLabel} stays where it is and does not reach the professional while we look into this. The rest of the job carries on. This ${rowNoun} will not be approved automatically.`
+                : `We record the problem and look into it. Vsolve is not holding money for this job, so nothing is held back — but this ${rowNoun} will not be approved automatically.`
             }
             confirmLabel="Yes, raise it"
             pending={dispute.isPending}

@@ -11,9 +11,15 @@ modules and sync gates. Session columns: [A — Customer](frontend-session-a.md)
 carries 17 M2 paths**, so tasks covering those paths may now be integrated. Every other M2 task is
 still capped at `[~] built` — see [frontend-execution-plan.md](frontend-execution-plan.md) §2 for the
 table of what is and is not published, and for the caveat that C0 shipped with no tests.
-**Revision:** 3 - visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
-revision 2 simplifications remain in force. Revision 3 changes only the **unbuilt** FE4 wave plus one
-review-screen control and two Partner tasks; everything built and wired is untouched.
+**Revision:** 4 - rate-card A3 per [ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md);
+revision 3 (visit-first A5, [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md)) and the
+revision 2 simplifications remain in force. Revision 3 changed only the **unbuilt** FE4 wave plus one
+review-screen control and two Partner tasks. Revision 4 touches **built** surface for the first time:
+the A3 access work (teasers/unlock, Wave A2) is demoted to the thin-supply fallback — nothing shipped
+is deleted and no task ID is renumbered — and the primary A3 front door is new, unstarted work: waves
+A2R (`M2-FE-425..429`, Customer) and B2R (`M2-FE-316`, Partner), both blocked on backend wave C2R
+publishing the rate-card contract, plus the fulfilment additions (`M2-FE-513..515`, with C4's
+settlement model) and the Operations rate-card surface (`M2-FE-712..713`).
 
 Continue using the same Partner application and authenticated shell. The backend returns
 `{workspace_key, actions[]}` after login; a typed frontend registry maps known keys to owned routes,
@@ -50,9 +56,9 @@ Revision 2 fixed the following limits. Exceeding one is a design regression, not
 | Flow | Budget |
 |---|---|
 | Customer requirement submission | 4 screens: What, Where/When, Details, Review. The A5 visit-plan chooser is a control on Review, never a fifth screen. |
-| Customer payments before work starts | A3: one (the unlock). A5: two (the visit plan, the first stage) |
+| Customer payments before work starts | A3: one (the booking fee, at vendor accept — revision 4; the unlock only on the fallback). A5: two (the visit plan, the first stage) |
 | Confirmation steps before submit | One. The review screen is the confirmation. |
-| A3 Partner enquiry response | One screen: rate, days, inclusions, accept/decline |
+| A3 Partner enquiry response | One screen. Primary path (revision 4): the crew offer — the lead's own number, accept/decline with reason. Fallback: the composer — rate, days, inclusions, accept/decline |
 | A5 Partner enquiry response | One screen: the visit-slot confirmation (slot picker + accept/decline) |
 | Partner steps before seeing a real lead | Phone, name, one service, one city |
 
@@ -97,6 +103,9 @@ Two standing caveats apply to every `[~]` below and are not repeated per task:
   Evidence: [08-frontend-information-architecture.md](08-frontend-information-architecture.md) §1 —
   13 routes under the existing `(flow)` group. A3 files under `/bookings`, A5 under `/projects`,
   because the two make different promises about who holds the money.
+  **Revision 4:** the rate-card front door — the catalog `Book a crew` preset entry, the rate and
+  inclusion-list display, the booking-fee checkout and the cascade holding/fallback states — is added
+  to IA §1 as unbuilt wave-A2R rows, and the teaser/unlock surface is relabelled the A3 fallback.
 - [x] `M2-FE-002` Map Partner routes inside the existing app as contextual workspace families, not one
   universal menu. Preserve A1 Offers/Jobs and define M2 Workforce Enquiries/Shifts/Crew and Project
   Enquiries/Projects routes.
@@ -119,6 +128,9 @@ Two standing caveats apply to every `[~]` below and are not repeated per task:
   managed. `SIM-03`
   Evidence: IA §5 — one diagram per archetype, three columns (Customer, Partner, Money), with the
   payment count visible. No commercial-mode branch appears in either.
+  **Revision 4:** the A3 diagram is redrawn in IA §5 for the rate-card flow — preset → rate shown →
+  cascade → lead accepts → booking fee (the only charge) → attendance and the Day-settled taps —
+  with a note that the fallback keeps the old shape. The A5 diagram is untouched.
 
 ### Shared UI and API behavior
 
@@ -129,6 +141,10 @@ Two standing caveats apply to every `[~]` below and are not repeated per task:
   path — with request and response examples, per-endpoint error and recovery tables, cross-cutting
   idempotency/auth/clock/money rules, one open question on how a 202 domain refusal should reach the
   client, and 13 acceptance criteria. Nothing has been integrated, which is the task's own condition.
+  **Revision 4:** the teaser/unlock/selection section of 0012 now describes the A3 **fallback**; the
+  rate-card surface (rate-card read, book-at-rate, crew offers, booking-fee checkout/state) has no
+  proposal yet and is awaited from backend wave C2R — file it as a new numbered proposal, never a
+  rewrite of 0012.
 
   **File-history note (2026-08-10).** This file was written twice. A second session, told the task was
   still open, wrote a full replacement at 13:53 without re-checking that the 13:49 version existed —
@@ -166,6 +182,10 @@ Two standing caveats apply to every `[~]` below and are not repeated per task:
   says where. **Unverified against real responses**, and the 202 carrying
   `m2_unlock_payment_pending` may never reach the layer at all depending on how the contract declares
   it; raised as the open question in proposal 0012.
+  **Revision 4** adds four codes to §8 — `m2_rate_card_unavailable`, `m2_roster_insufficient`,
+  `m2_booking_fee_not_chargeable` and `m2_booking_fee_payment_pending` (202, the booking fee's own
+  pending question) — none yet in the frozen table; a frozen-file request lands them at a wave-A2R
+  gate.
 - [~] `M2-FE-010` Define query keys, invalidation rules and polling/event refresh behavior for
   requirement, invitation, proposal, unlock, engagement, stage and case states.
   `frontend/packages/query/src/m2-keys.ts`: keys for all seven domains, `M2_FRESHNESS` assigning each
@@ -174,6 +194,11 @@ Two standing caveats apply to every `[~]` below and are not repeated per task:
   quotes are separate keys so a teaser response can never carry vendor identity into an unpaid client.
   **Deliberately kept out of `queryKeys`** until the endpoints publish, so the standing rule in
   `keys.ts` stays true. Cases reuse the existing `queryKeys.operations.cases`.
+  **Revision 4** adds two read domains with no key yet — the published rate card and the booking-fee
+  state — and the §6 commands `book_at_published_rate`, `accept_crew_offer`, `decline_crew_offer`,
+  `create_booking_fee_checkout`, `complete_booking_fee`, `forfeit_booking_fee`, `refund_booking_fee`,
+  `fall_back_to_quote_flow`, `confirm_day_settled` and `report_cash_demand` to the invalidation map's
+  backlog; the frozen factory takes them the way it took the `visits` namespace, at a gate.
 - [~] `M2-FE-011` Add analytics naming that excludes clarification bodies, KYC data, precise personal
   details and payment payloads, and that captures the success measures in `README.md`. `PLN-05`
   `frontend/packages/config/src/analytics.ts`: 38 event names covering all eight success measures, and
@@ -300,8 +325,10 @@ typecheck, partner build green. Nothing here exceeds `[~]`: the registration vie
 
 ### Customer tracking
 
-- [~] `M2-FE-213` Add `My requests` with matching status, quote teaser count (A3) / visit-plan state
-  (A5, revision 3 — arrives with Wave A2), the delivery deadline, latest activity and support action.
+- [~] `M2-FE-213` Add `My requests` with matching status, quote teaser count (A3 — the fallback
+  signal under revision 4; the primary path shows cascade and booking-fee state, wave A2R) /
+  visit-plan state (A5, revision 3 — arrives with Wave A2), the delivery deadline, latest activity
+  and support action.
 - [~] `M2-FE-214` Add a request detail timeline covering the requirement, matching, invitations at an
   aggregate level, questions, site visits, quote delivery and recovery.
 - [~] `M2-FE-215` Add honest empty, no-supply, delayed-match, SLA-breached and service-by-expired states
@@ -339,10 +366,13 @@ understands exactly when and whether they will be asked to pay.
 > the ones that changed what could be built. Per-task evidence in
 > [frontend-session-b.md](frontend-session-b.md) § Wave B2.
 
-- [~] `M2-FE-301` Add an enquiry list with type, area, schedule, response deadline and fit summary while
+- [~] `M2-FE-301` built — static gates green, owner manual verification pending. Add an enquiry list
+  with type, area, schedule, response deadline and fit summary while
   limiting private Customer data before acceptance.
-  **Area and fit summary are not published**; nothing stands in for them, and the list states when the
-  server is holding pages the unpublished `cursor` parameter cannot reach.
+  **Area and fit summary are not published**; nothing stands in for them. Two workarounds are gone
+  at contract 1.26.0/1.23.0: the row titles itself from **`EnquirySummary.service_name`** instead of
+  de-slugging `category_slug` (the slug is no longer projected at all), and the inbox **pages** on
+  the published `cursor` parameter instead of stating that it is truncated.
 - [~] `M2-FE-302` Build enquiry detail with the structured requirement, attachment viewer, capacity
   check and clear accept/decline consequences, including the capacity hold taken on acceptance.
   `GAP-012`
@@ -360,8 +390,13 @@ understands exactly when and whether they will be asked to pay.
 
 ### Safe clarification
 
-- [~] `M2-FE-305` Build **structured clarification**: post a question, read the Customer's answer, both
+- [~] `M2-FE-305` built — static gates green, owner manual verification pending. Build **structured
+  clarification**: post a question, read the Customer's answer, both
   on the shared timeline. Do not build a chat thread, participant list or read receipts. `SIM-07`
+  **Both directions since 1.26.0.** Every row is titled from `RequirementQuestion.asked_by_role`
+  (`CUSTOMER` / `VENDOR` / `OPERATIONS`, all three named, an unknown one neutral) rather than
+  assumed to be the vendor's, and a customer-asked question carries the answer composer on
+  `POST /partner/questions/{id}/answer/`. Still one question, one answer, no thread.
 - [~] `M2-FE-306` Add callback request/scheduling and **paid** site-visit request flows, showing the fee
   and how it adjusts against the final price, without exposing personal numbers before server-authorized
   disclosure. `SIM-08`
@@ -381,6 +416,8 @@ understands exactly when and whether they will be asked to pay.
 - [~] `M2-FE-308` Build the **A3 one-screen composer**: rate per worker per day, minimum days, what is
   included. Nothing else. `SIM-11`, `FLOW-08`
   Five controls, fixed by `A3_COMPOSER_FIELDS` and asserted against the DOM — a sixth fails a test.
+  **Revision 4: fallback only.** The composer serves quote-flow enquiries; on the primary path the
+  platform publishes the rate and nothing is composed. Built, kept.
 - [~] `M2-FE-309` Build the A5 composer for deliverables, line items, stages, taxes, exclusions,
   assumptions, dates, warranty and validity.
   Stages carry the deliverables, line items and dates, and the shape is **published now**
@@ -393,15 +430,21 @@ understands exactly when and whether they will be asked to pay.
   clearly when a rate falls below it. `GAP-023`
   **No floor is published and the server guard is inert over HTTP.** The rule is stated with no figure
   invented; the refusal is routed to the rate field.
+  **Revision 4: fallback only** — and the same floor now also binds the platform's own rate cards,
+  checked server-side at publish.
 - [~] `M2-FE-311` Show the required tax basis and the commission-treatment statement on every proposal
   so the vendor knows what the Customer will compare. `GAP-016`, `GAP-017`
   **Half closed at 1.24.0.** `required_tax_basis` is published, so the on-site composer names the
   basis a second vendor is compared on and says plainly when a blank one means *this* vendor fixes
   it for everyone. `commission_treatment` still has no vocabulary and no M2 policy, so the field is
   left unsent rather than authored.
+  **Revision 4:** applies to A5 and the A3 **fallback** — the rate-card path has no proposal to carry
+  either statement.
 - [~] `M2-FE-312` Show server-calculated totals and prevent editing the final arithmetic in local state.
   No total input in either composer; after submission the figure shown is Django's echoed
   `total_paise`. **The server does not reconcile an A3 total** — only the A5 stage sum is checked.
+  **Revision 4:** the A3 half is fallback-only — the rate-card path has no vendor-entered figure at
+  all.
 - [~] `M2-FE-313` Support draft, preview, submit and supersede; never overwrite a submitted proposal.
   Show withdrawn, expired, selected and superseded states with permitted next actions. `SIM-06`
   **Closed at 1.24.0.** `GET /proposals/?requirement=` mounts on `m2QueryKeys.proposals.mine`, so a
@@ -424,6 +467,10 @@ understands exactly when and whether they will be asked to pay.
   rendered as **held, not scheduled**, with the lapse stated.
   — `visit/model/{slot-grid,visit-state}.ts`, `visit/queries.ts`,
   `visit/view/{visit-slot-picker,visit-response,visit-day-panel}.tsx`.
+  **`SiteVisit.timezone` (1.26.0) is consumed:** a confirmed visit now shows the day and clock time
+  in the *site's* zone with the zone named, instead of only "in two days" — and degrades to the
+  device's clock, saying so, on a runtime that does not carry the IANA name. `reason_code` on the
+  no-show report is the published `VisitNoShowReasonEnum`.
 - [~] `M2-FE-315` built — static gates green, owner manual verification pending. The A5 composer's
   **on-site mode** on its own route: prefilled from the requirement (`duration_days`,
   `requested_start`, `required_tax_basis`) and the visit, **working days as the schedule** with the
@@ -435,8 +482,24 @@ understands exactly when and whether they will be asked to pay.
   a button that refuses on a stale read is the dead submit this task forbids.
   — `proposal/model/onsite-draft.ts`, `proposal/view/{onsite-composer,onsite-screen}.tsx`,
   `app/projects/enquiries/[invitationId]/estimate/page.tsx`.
-  **One gap:** material lines are sent as `ProposalStage` rows because the wire has one
-  money-carrying row type — logged in `frontend-execution-plan.md` §7 as a `kind` request.
+  **The gap is closed at 1.26.0 and the workaround is deleted.** Material lines are sent on
+  `ProposalCreateRequest.material_lines` as `ProposalMaterialLine` — `{title, quantity, unit,
+  amount_paise}` — so a bag of cement is no longer a stage carrying an approval and a release. The
+  composer collects quantity and units beside the cost, the on-screen caveat that explained the old
+  behaviour is gone, and `proposal-status.tsx` renders materials as their own block. A material
+  advance is labelled as one on the engagement too, from `EngagementStage.kind`.
+
+### A3 crew offer (revision 4)
+
+- [ ] `M2-FE-316` **Revision 4 — wave B2R, blocked on backend C2R.** The A3 primary-path enquiry is a
+  **crew offer** on one phone screen: it always shows the lead's own number — "You receive ₹X/day for
+  N helpers; the customer pays you directly at day end" — with accept or decline and a decline reason
+  (declines feed the rate card's decline-rate alarm). Accepting the job is accepting the published
+  rate for that job; accept takes a roster-sized capacity hold (`m2_roster_insufficient` when the
+  roster is short) and holds the win while the Customer pays the booking fee — a held win is not a
+  confirmed job, and the copy says "do not travel yet" exactly as the A5 held slot does. Minutes-level
+  timeouts on the M1 dispatch clock, not business-hours deadlines. There is no composer on this path;
+  the one-screen composer above remains for fallback quote-flow enquiries.
 
 **FE3 Partner gate:** An eligible A3 vendor can respond to a lead on one phone screen; an A5 vendor
 can confirm a visit slot on one screen and submit a comparable estimate from the site; neither has
@@ -447,7 +510,11 @@ unsupported contact or pricing shortcuts.
 Revision 3 splits this wave by archetype. The A3 tasks are unchanged from revision 2. The A5 tasks
 replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbuilt at the split.
 
-### A3 teasers and unlock
+Revision 4 (ADR-0009) then demoted the A3 half after it shipped: the teasers and the unlock are the
+**thin-supply fallback**, kept in full — nothing below is deleted or renumbered — and the primary A3
+front door is the new, unstarted wave-A2R subsection below.
+
+### A3 teasers and unlock (the A3 fallback since revision 4 — built, kept)
 
 - [~] `M2-FE-401` built — static gates green, owner manual verification pending. Teaser rows carry the
   three fields the wire has: verification, vendor type and the price **band**. **A rating is not
@@ -483,6 +550,34 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
   replacement visit on A5.
   — `quotes/view/reject-quote-dialog.tsx`, `quotes/queries.ts › useRejectQuote`.
 
+### A3 rate-card front door (wave A2R — revision 4)
+
+All of this subsection is **new, unstarted work** — not a rework of the fallback files above — and
+all of it is blocked on backend wave C2R publishing the rate-card contract (rate-card read,
+book-at-rate, crew offers, booking-fee checkout/state; the machine, commands and codes are
+[07-state-machines-and-permissions.md](07-state-machines-and-permissions.md) §1, §2, §4c, §6, §8).
+
+- [ ] `M2-FE-425` **Revision 4.** The A3 preset capture: skill, headcount, dates and the 3–4
+  price-moving facts for the preset (floor number, lift, carry distance, packing), opened by the
+  catalog's `Book a crew` action. Never the four-screen flow — that remains the A5 shape and the
+  fallback's.
+- [ ] `M2-FE-426` **Revision 4.** The published rate and its inclusion list on screen **before**
+  booking: one all-inclusive number per worker per 8-hour day, what counts as a day, when overtime
+  starts and at what published rate, what the preset's scope includes. Fails closed on
+  `m2_rate_card_unavailable` — no rate card, no instant booking, never a guessed price.
+- [ ] `M2-FE-427` **Revision 4.** The cascade holding state — "confirming your crew — usually within
+  2 hours" — widening honestly, and the fallback handoff past the configured threshold: the
+  requirement falls back to the quote flow (the surface above) with an explanation and nothing
+  charged.
+- [ ] `M2-FE-428` **Revision 4.** The booking-fee checkout: offered only against a held accepted
+  offer (`m2_booking_fee_not_chargeable`, 409), pending as `m2_booking_fee_payment_pending` (202)
+  with nothing to press, and hardened **only** by the verified provider callback that also creates
+  the engagement — mirrored from the visit-plan checkout, never success from a redirect.
+- [ ] `M2-FE-429` **Revision 4.** Forfeit and refund state surfaces: the free-cancel window until T
+  hours before the slot; the forfeit split on customer no-show / locked gate / late cancel (lead
+  travel compensation + platform share) stated truthfully; vendor no-show shown as full auto-refund,
+  free re-dispatch and a standing hit.
+
 ### A5 visits and estimates (revision 3)
 
 - [~] `M2-FE-419` built as far as the contract allows — **and the honest answer is that it cannot be
@@ -507,8 +602,10 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
   owed rather than a row that does not exist. Per-slot states: awaiting, **held** (a `REQUESTED`
   visit on an unpaid plan — the distinction the whole flow turns on), scheduled, on site, visited,
   cancelled, vendor no-show, customer no-show. Times render through `formatVisitSlot`, which is the
-  checkout picker's own `en-IN` weekday/day/month + lowercased 12-hour format on the booking
-  timezone, because both book against the same `carts.availability` grid.
+  checkout picker's own `en-IN` weekday/day/month + lowercased 12-hour format, because both book
+  against the same `carts.availability` grid. Since Wave J the zone is **`SiteVisit.timezone`**
+  (1.26.0) rather than the deprecated single-city constant, memoised per zone and falling back to the
+  booking zone — never the device's — for a slot no vendor has taken yet.
   — `access/adapters › toVisitTrackerView`, `access/view/visit-tracker.tsx`.
 - [~] `M2-FE-422` built — static gates green, owner manual verification pending. Arrival is the
   **non-OTP fallback as the default path**, offered on a scheduled slot only, so a held slot on an
@@ -537,6 +634,8 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
   headcount or the A5 stages, tax basis, commission treatment, total, inclusions, exclusions and
   warranty. **Contact appears nowhere at any status** — it is absent from the response, not merely
   unrendered, because it is released by the engagement and not by the fee.
+  **Revision 4:** the A3 rate/days/headcount cards arise on the **fallback** only — the rate-card
+  path has no quotes to render.
   — `quotes/adapters › toQuoteCard`, `quotes/view/quote-card.tsx`.
 - [~] `M2-FE-408` built — static gates green, owner manual verification pending. A real `<table>` with
   a row header per field, so a screen reader announces the vendor and the field rather than reading
@@ -557,6 +656,9 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
 - [~] `M2-FE-410` built — static gates green, owner manual verification pending. Choosing posts a
   specific `proposal_id`, from the card that carries the full scope and total the Customer is
   looking at — the summary *is* the card, which is why there is no separate confirmation screen.
+  **Revision 4:** selection exists for A5 and the A3 fallback only — the rate-card path has no
+  selection step; the first accepting lead is the crew and the verified booking fee is the
+  confirmation.
 - [~] `M2-FE-411` built — static gates green, owner manual verification pending. **The pending panel
   says "This is not a booking yet" in bold, is toned warning, and has no green on it anywhere.** It
   carries the vendor's `reconfirm_by` as a server countdown, and states that a null deadline is an
@@ -588,6 +690,9 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
   refunds and any guarantee on the work are between the Customer and the vendor. **A third mode
   renders "we cannot describe this agreement"**, because on this surface the optimistic fallback is
   "protected booking".
+  **Revision 4** extends the `LEAD_ONLY` copy with the day-end sentence: the Customer pays the lead
+  directly at day end — the evening dual "Day settled?" taps, with a UPI link at the exact published
+  amount as a convenience.
   — `packages/query/src/m2-engagement-customer.ts`, `engagement/view/engagement-screen.tsx`.
 - [~] `M2-FE-416` built — static gates green, owner manual verification pending. Stages, amounts,
   schedule, commission treatment and tax all render before the first funding control. Funding is
@@ -600,16 +705,20 @@ replace the A5 use of teasers/unlock with the visit journey. All of FE4 was unbu
   while an earlier one is unfunded. A stage whose charge is `PENDING` shows the waiting state and
   **no control**, and `m2_stage_not_funded` re-reads and states what it found rather than offering a
   retry. The engagement read polls only while a stage funding charge is unresolved.
-- [~] `M2-FE-418` built as far as the contract allows. The agreement and its stages are durable at
-  `/engagements/[id]`, keyed by the engagement rather than by the request so a notification opened
-  months later resolves, and the full timeline is one link away on the request the record names.
-  **The receipt is not linkable**: `Engagement` publishes no order id and no tax-document id, and
-  `GET /tax-documents/{id}/` needs one — so the screen says where the record lives rather than
-  linking to a document it cannot name. Logged in `frontend-execution-plan.md` §7.
+- [~] `M2-FE-418` built — static gates green, owner manual verification pending. The agreement and
+  its stages are durable at `/engagements/[id]`, keyed by the engagement rather than by the request
+  so a notification opened months later resolves, and the full timeline is one link away on the
+  request the record names. **The receipt is now on the screen** (1.26.0, Wave J):
+  `Engagement.access_receipt` carries the gapless `M2A-` number for the A3 unlock or the A5 visit
+  plan, and it is rendered as a **reference, not a link** — `AccessReceipt` publishes no document id
+  because `TaxDocument.order` is not nullable and an access fee has no `Order`. The word *invoice* is
+  deliberately not used: GST treatment of both access fees is an open owner decision. `null` says
+  there is no number rather than claiming nothing was paid, because the field cannot distinguish
+  "no fee" from "covered by a reclassification credit" from "predates numbering".
 
-**FE4 gate:** Money is only ever requested against a real accepted commitment — visible delivered
-quotes (A3) or a confirmed visit (A5) — and Customer and Partner see the same immutable proposal,
-engagement state and commercial protections.
+**FE4 gate:** Money is only ever requested against a real accepted commitment — an accepted crew
+offer (A3, revision 4), visible delivered quotes (A3 fallback) or a confirmed visit (A5) — and
+Customer and Partner see the same immutable proposal, engagement state and commercial protections.
 
 ## FE5A - Workforce fulfilment experience
 
@@ -633,6 +742,10 @@ engagement state and commercial protections.
   reporting with evidence and support escalation.
 - [ ] `M2-FE-508` Build the **safety incident** report flow with severity, evidence and immediate
   escalation, separate from cancellation. `GAP-022`
+- [ ] `M2-FE-513` **Revision 4.** Build the supervisor's evening **"Day settled?"** one-tap with a
+  UPI QR/deep-link at the exact published amount — a convenience only; the wage money is P2P at day
+  end and the platform never holds it. Settlement is per worker-day present, beside the `M2-FE-505`
+  attendance count. Lands with C4's attendance/settlement model.
 
 ### Customer booking
 
@@ -643,6 +756,9 @@ engagement state and commercial protections.
   identity**, so both are read back off the accepted quote (`CONSUMED` unlocks stay readable) and
   degrade to a link rather than an error when that read is refused. No phone number exists on the
   wire; the panel states the contact rule and never implies one is here (plan §7).
+  **Revision 4:** a rate-card engagement has no accepted quote — its crew composition and terms read
+  off the **booking record** (the published rate and its inclusion list) instead; the `CONSUMED`
+  unlock read remains the fallback engagement's path.
 - [ ] `M2-FE-510` Let the Customer confirm or dispute the day's attendance in **one tap**, and capture
   per-worker detail only inside the dispute flow. `SIM-02`
 - [~] `M2-FE-511` built — static gates green, owner manual verification pending. The amendment and completion halves.
@@ -651,11 +767,23 @@ engagement state and commercial protections.
   it answers `409` before that. **Crew-change acknowledgement is not built** — it needs C4's
   attendance model — and "open an issue" is routed to the per-stage dispute, which is the only
   issue command that exists.
+  **Revision 4:** A3 time extensions and extras price at the card's **published add-on rates**;
+  overtime counts only at the card's published rate after Customer one-tap approval.
 - [~] `M2-FE-512` built — static gates green, owner manual verification pending. One feed, `GET /engagements/{id}/events/`,
   and **nothing on it is synthesised**. `actor_is_system` is rendered as the difference between a
   person deciding and a clock deciding; actor identity is never published and none is guessed. Titles
   come from the server's own `reason`, with a de-slugged `reason_code` as fallback rather than a
-  client-authored copy table over an unpublished vocabulary (plan §7).
+  client-authored copy table over an unpublished vocabulary (plan §7). Since Wave J the read is keyed
+  on the factory's own `m2QueryKeys.engagements.events(id)` and `M2_FRESHNESS.engagementEvents`; the
+  locally-composed key is gone. Still nested under `engagements.detail`, so the existing engagement
+  invalidations clear it by prefix — checked rather than assumed.
+- [ ] `M2-FE-514` **Revision 4.** Build the Customer's evening **"Day settled?"** one-tap with the
+  UPI link at the exact published amount, and the per-worker-day settlement view: a 3-of-4 day
+  settles at 3 workers' published rate, with the shortfall choices — continue short, add a day, or
+  cancel the shortfall free. Lands with C4's settlement model.
+- [ ] `M2-FE-515` **Revision 4.** Build the one-tap **"extra demanded in cash"** report — a standing
+  hit, removal on a pattern; genuine extras route through the amendment panel at the card's
+  published add-on rates.
 
 **FE5A gate:** Customer and Partner can run a multi-worker, multi-day engagement from mobile devices,
 including partial attendance and no-show recovery, without a per-worker device dependency.
@@ -683,6 +811,8 @@ including partial attendance and no-show recovery, without a per-worker device d
   the frozen rate; A5 prices each line with a signed amount and the server sums them. **A reduction
   that would empty a stage is refused before it is sent** — that is a cancellation, and `M2-BE-545` is
   Wave C5. `m2_policy_unavailable` renders as the honest owner-blocked refusal.
+  **Revision 4** makes the A3 rule the product: the frozen rate is the published card's, and the
+  add-on/overtime figures the server prices from are the card's published rates.
 - [ ] `M2-FE-605` Build the Customer-caused delay claim with evidence and a schedule-extension request.
   `GAP-030`
 - [ ] `M2-FE-606` Build digital deliverable handover for Event and Media, with Customer acceptance.
@@ -698,7 +828,9 @@ including partial attendance and no-show recovery, without a per-worker device d
 - [~] `M2-FE-608` built — static gates green, owner manual verification pending. `/projects`, plus the workspace header on
   `/engagements/{id}`. Progress is counted in **stages, not rupees** — a money ratio reads 0% for a
   finished `LEAD_ONLY` job — and every money figure is a published running total. The 1.24.0
-  `fundedTotalPaise` summing helper is deleted, not deprecated. Exactly one next action per row.
+  `fundedTotalPaise` summing helper is deleted, not deprecated. Exactly one next action per row, and
+  since Wave J that action names the right money: a `MATERIAL_ADVANCE` row reads "pay for the
+  materials so the professional can buy them", never "fund the next stage to start it".
 - [~] `M2-FE-609` built — static gates green, owner manual verification pending. `/engagements/{id}/stages/{stageId}`, its
   own route because it is reached from a notification and because approval releases money. What each
   of the three controls does to money is stated **before** it is pressed and again in the
@@ -706,13 +838,25 @@ including partial attendance and no-show recovery, without a per-worker device d
   a held earning on A5 and moves nothing on A3. A null `review_due_at` renders **"no deadline is
   set"**, never time in hand. Disputing is presented as the action that stops the clock, because it
   is. **Evidence cannot be opened**: `object_key` is unpublished and no download route exists, so the
-  viewer says so rather than offering a control that 404s (plan §7).
+  viewer says so rather than offering a control that 404s (plan §7). Since Wave J the screen also
+  reads **`EngagementStage.kind`** (1.26.0): on a `MATERIAL_ADVANCE` the evidence, approval and
+  correction headings change — there is nothing to inspect for workmanship and nothing to approve the
+  *quality* of — and the money panel states that material money is spent rather than earned, so it is
+  not returned the way unfinished work is. **No control is removed**, because the server permits all
+  three commands on a materials row and hiding the dispute would take away the Customer's only
+  objection to a delivery that never arrived. An unrecognised kind offers **no funding control at
+  all** and says why.
 - [~] `M2-FE-610` built — static gates green, owner manual verification pending. A proposed amendment is drawn in its own
   block with a **"Requested — not agreed"** badge, is absent from the agreement totals and absent
   from the version history until the server stamps `applied_at`. The comparison is explicit — agreed
   now / this change / **if you accept** — with the third labelled as a projection, because nothing
   publishes a would-be total. A managed positive delta renders as **waiting with nothing to press**
-  until the provider callback lands; an unrecognised status offers no action at all.
+  until the provider callback lands; an unrecognised status offers no action at all. Since Wave J the
+  amendment list reads `m2QueryKeys.engagements.amendments(id)` on the `EXPIRING_STATE` tier the
+  factory wrote for it, and no longer borrows `engagements.agreement(id)` — a live change request
+  with a deadline and a money delta may not be served from a session-long cache, which is how a
+  Customer approves a delta that expired an hour ago. `agreement` keeps `SESSION_STATE` for the
+  immutable terms and nothing in this app reads amendments off it.
 - [ ] `M2-FE-611` Build deliverable acceptance, project completion and warranty issue reporting with
   clear deadlines and the retention release date. `GAP-031`, `GAP-032`
 - [ ] `M2-FE-612` Show the vendor-replacement path if a project is abandoned, including what is funded,
@@ -742,7 +886,8 @@ approved scope, payment or stage completion, and an abandoned project shows a ro
   deadline extension, contact review, payout hold and escalation. `GAP-006`
 - [ ] `M2-FE-705` Build assisted quote capture as a **primary A3 path** with a call script, visibly
   attributing the quote to the Partner and recording consent; Operations must not become the vendor.
-  `SIM-10`
+  `SIM-10` **Revision 4:** primary for the quote-flow **fallback** only — on the rate-card path
+  there is nothing to compose; the platform published the price.
 
 ### Cases, refunds and leakage review
 
@@ -758,6 +903,16 @@ approved scope, payment or stage completion, and an abandoned project shows a ro
   evidence and history, never as an automatic guilt label. `GAP-009`, `GAP-010`
 - [ ] `M2-FE-711` Surface the Operations-touches-per-request measure in the workspace so the design can
   be checked against the approved unit economics. `GAP-033`
+
+### Rate cards (revision 4)
+
+- [ ] `M2-FE-712` **Revision 4.** Build rate-card publish and revise per city and skill: the three
+  components (worker day-wage — never below the statutory floor, checked at publish; the lead's
+  supervision margin; the platform booking fee), the printed inclusion list and the published add-on
+  and overtime rates — effective-dated like `M2AccessPrice`, never backdated under a live booking.
+- [ ] `M2-FE-713` **Revision 4.** Build the decline-rate **alarm** view: a sustained decline rate
+  above the configured threshold at a rate **pages Operations** to raise it — an alarm, not a report
+  — with the per-card decline reasons behind it and the monthly review calendar as the backstop.
 
 **FE6 gate:** Operations can identify and recover every documented stuck state through authorized UI
 actions without requesting database edits.
@@ -781,10 +936,12 @@ actions without requesting database edits.
 
 ### Release readiness
 
-- [ ] `M2-FE-807` Add critical Playwright journeys for A3, A5, vendor rejection/replacement, teaser to
-  unlock, unlock payment pending, plan chooser to visit-plan checkout, visit no-show and unfilled-slot
-  refund, on-site estimate to selection, non-responsive rejection, cancellation conflict, refund and
-  Operations recovery.
+- [ ] `M2-FE-807` Add critical Playwright journeys for the A3 rate-card path (preset → cascade →
+  lead accept → booking fee → engagement → attendance → day settled — revision 4), the A3 fallback
+  (teaser to unlock, unlock payment pending), A5, vendor rejection/replacement, plan chooser to
+  visit-plan checkout, visit no-show and unfilled-slot refund, on-site estimate to selection,
+  non-responsive rejection, cancellation conflict, refund and Operations recovery. During the build
+  sprint e2e is neither written nor run (build-first amendment); this lands at release.
 - [ ] `M2-FE-808` Add visual/regression coverage for capability combinations, long content, empty and
   exception states.
 - [ ] `M2-FE-809` Validate generated client synchronization and fail CI on stale generated API usage.

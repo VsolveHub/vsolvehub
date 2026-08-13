@@ -1,7 +1,8 @@
 # M2 Build Sprint — Multi-Agent Orchestration
 
-**Purpose:** finish the entire M2 build (revision 3 flow) with parallel agents, build-first: no
-tests written or run, static gates only, owner tests manually once the UI is visible.
+**Purpose:** finish the entire M2 build (revision 4 flow: rate-card A3 · visit-first A5) with
+parallel agents, build-first: no tests written or run, static gates only, owner tests manually once
+the UI is visible.
 **Convention:** `task.md` §"Verification convention" → "Build-first amendment (2026-08-13)".
 **Branch:** everything on `feat/m2-workforce-projects`. Never `main`.
 
@@ -10,8 +11,8 @@ tests written or run, static gates only, owner tests manually once the UI is vis
 ```text
 C1 remainder (backend gaps, M2-BE-317 first)          ── solo, short
         │
-C2  BE4: A3 unlock + A5 visit plan, selection, engagement entry   ── the gate for everything
-        │  publishes contract paths
+C2  BE4: A3 unlock (the A3 fallback surface since revision 4) + A5 visit plan, selection,
+        │  engagement entry — the gate for everything; publishes contract paths
         ├──────────────┬──────────────────────┐
         A2 (customer:  B: FE-314/315          C3 engagement spine (backend, solo —
         FE-216,        (visit-slot confirm,   both frontends build against it)
@@ -25,6 +26,27 @@ C2  BE4: A3 unlock + A5 visit plan, selection, engagement entry   ── the gat
                         Wave 5 cross-app pass (solo) + smoke scripts
 ```
 
+Revision 4 (ADR-0009, 2026-08-13) adds three unstarted waves. The shipped C2/A2 unlock surface
+stays and is relabelled the A3 fallback; every piece of rate-card work is new build:
+
+```text
+C2 (landed) + apps.assignments ──► C2R backend: RateCard (publish/read, wage-floor-guarded,
+                                   fail-closed) + book_at_published_rate preset capture + the
+                                   cascade caller (accept/decline_crew_offer, roster-sized hold)
+                                   + BookingFee (checkout, webhook, forfeit split, refund)
+                                   + fall_back_to_quote_flow — publishes contract paths
+                                        ├──► A2R customer: the A3 preset front door — rate +
+                                        │    inclusion list before booking, booking-fee checkout,
+                                        │    honest holding state, fallback handoff to the built
+                                        │    unlock surface
+                                        └──► B2R partner: the one-screen crew offer — the lead's
+                                             own number, accept / decline with reason
+```
+
+C2R is a backend wave (one agent in `backend/**`, as ever) and can start any time after C2 —
+sequenced against C3–C6 by the orchestrator. A2R and B2R fan out only after C2R publishes, and
+obey the same A/B file-ownership map as every other frontend wave.
+
 Frontend columns A and B share **no source file** (ownership map:
 `frontend-execution-plan.md` §3). Backend is one column — never run two agents inside
 `backend/**` at once. So the widest safe fan-out at any moment is **3 agents**: backend wave +
@@ -37,12 +59,13 @@ You are the M2 build-sprint orchestrator for C:\dev\vsolve, on branch feat/m2-wo
 Use multi-agent orchestration: run parallel subagents for independent columns, sequential where
 the dependency order below requires it. I explicitly opt in to workflows/subagents.
 
-GOAL: complete the entire commercial M2 build per the revision 3 flow, build-first. I will test
+GOAL: complete the entire commercial M2 build per the revision 4 flow, build-first. I will test
 manually at the end. Do not stop until every phase P1–P6 is built and both apps run, or you hit a
 blocker only I can resolve.
 
 READ FIRST (and have every subagent read its own column's files):
-1. Django_Next.js_Plan/M2/README.md            — the revision 3 flow (visit-first A5, split money)
+1. Django_Next.js_Plan/M2/README.md            — the revision 4 flow (rate-card A3, visit-first
+   A5, split money) plus docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md
 2. Django_Next.js_Plan/M2/07-state-machines-and-permissions.md — THE design authority
 3. Django_Next.js_Plan/M2/task.md              — status board + "Build-first amendment (2026-08-13)"
 4. Django_Next.js_Plan/M2/09-build-sprint-orchestration.md — this plan, dependency order, agent rules
@@ -57,14 +80,20 @@ NON-NEGOTIABLE RULES FOR EVERY AGENT:
 - STATIC GATES ARE MANDATORY before a wave is reported: backend `.\scripts\quality-static.cmd`
   (ruff, strict mypy, makemigrations --check, spectacular --validate, contract drift); frontend
   `pnpm lint --max-warnings 0`, `pnpm typecheck`, `pnpm build --filter=<app>`. Red gate = not done.
-- Revision 3 flow rules (05-roadmap-and-prompts.md §Non-negotiable): requirement free; A3 = ₹149
-  unlock after usable quote; A5 = visit plan (49/99/199 config placeholders) charged at first
+- Revision 4 flow rules (05-roadmap-and-prompts.md §Non-negotiable): requirement free; A3 = the
+  published rate card per city+skill (effective-dated, fails closed), offer cascade to leads via
+  apps.assignments (first accept wins, roster >= headcount), booking fee charged at vendor accept
+  on the split rails (forfeit = lead travel compensation + platform share; vendor no-show refunds
+  in full + free re-dispatch), wages direct/daily/P2P never held, ₹149 unlock demoted to the
+  thin-supply fallback; A5 = visit plan (49/99/199 config placeholders) charged at first
   confirmed visit slot; per-slot split = vendor visit payout + Vsolve platform share, payout on
   completed visit + usable estimate via M1 payout rails; NO stage credit; estimates need a
   COMPLETED visit; visit slots book against carts.availability; no per-worker attendance; one
   engagement spine; M1 amendment engine for scope changes; provider TEST callbacks + non-OTP
   fallback only (no live payments/OTP — that is M3).
-- Owner-blocked values (tier prices, splits, SLAs, wage floors, no-show policy) are read from
+- Owner-blocked values (tier prices, splits, SLAs, wage floors, no-show policy; the booking-fee
+  value, forfeit split and free-cancel T; seed rate-card values and the decline-alarm threshold;
+  cascade wave size, per-offer timeout, widening steps and fallback threshold) are read from
   configuration and FAIL CLOSED when unset. For the demo, seed sensible dev-only config values in
   a clearly-marked dev seed (never a code default) so I can click through.
 - File ownership is law: backend agent owns backend/** + contracts/openapi/**; agent A owns
@@ -77,12 +106,23 @@ NON-NEGOTIABLE RULES FOR EVERY AGENT:
 
 EXECUTION ORDER (fan out where marked ∥, never two agents in backend/** at once):
 0. Orchestrator: sweep 33 published paths for the two known schema defects (list envelope vs
-   declared array; wage-floor guard inert M2-BE-317) — fix in C1 remainder.
+   declared array; wage-floor guard inert M2-BE-317 — the same guard also gates publish_rate_card:
+   a card whose wage component sits below the floor cannot publish) — fix in C1 remainder.
 1. Backend agent — C1 remainder (backend-session.md list, M2-BE-317 first).
 2. Backend agent — C2 (BE-215, BE-401..428): A3 unlock + A5 VisitPlan/slot-hold/checkout/split
    payouts + selection/reconfirmation/engagement entry. Publish contract (bump version, CHANGELOG,
    pnpm contract:generate). This is the critical path — start it immediately after C1.
 3. ∥ after C2 publishes: Agent A — Wave A2 (FE-216, FE-401..424) ∥ Agent B — FE-314/315.
+3R. Backend agent — C2R (revision 4, new build): RateCard + publish_rate_card,
+    book_at_published_rate preset capture, the cascade caller into apps.assignments
+    (accept/decline_crew_offer, roster-sized hold, m2_roster_insufficient), BookingFee
+    (checkout/webhook/forfeit split/refund; engagement only on the verified callback) and
+    fall_back_to_quote_flow — per 07 §1, §2, §4c, §6. Publish contract. Sequence this backend
+    wave against C3–C6 (one backend agent, always).
+4R. ∥ after C2R publishes: Agent A — Wave A2R (customer A3 front door: preset, rate + inclusion
+    list before booking, booking-fee checkout, honest holding state, fallback handoff to the
+    built unlock surface) ∥ Agent B — Wave B2R (partner one-screen crew offer: the lead's own
+    number, accept/decline with reason; the fallback composer stays).
 4. Backend agent — C3 engagement spine (BE-501..509), then ∥ C4 (BE-521..535) and C5 (BE-541..550)
    sequentially in one agent (same column), publishing contract paths as they land.
 5. ∥ after C3 publishes: Agent A — Wave A3 (FE-509..512, FE-608..613) ∥ Agent B — Wave B3
@@ -90,8 +130,9 @@ EXECUTION ORDER (fan out where marked ∥, never two agents in backend/** at onc
 6. Backend agent — C6 Operations APIs (BE-701..718). Then ∥ Agent A — A4 (features/m2-cases) ∥
    Agent B — B4 (features/m2-requests + app/operations routes).
 7. Orchestrator solo — cross-app pass: frozen-file change requests from §7 logs, barrel exports,
-   full static gates on the merged tree, dev seed so one demo walk-through exists for A3 and A5
-   end to end, and a final SMOKE.md at Django_Next.js_Plan/M2/ listing exactly what I click to
+   full static gates on the merged tree, dev seed so one demo walk-through exists for A3 (rate
+   card), the A3 fallback and A5 end to end, and a final SMOKE.md at Django_Next.js_Plan/M2/
+   listing exactly what I click to
    verify each phase (both apps + admin).
 AFTER EVERY WAVE: update the column session file, 02/03 checkboxes to
 "[~] built — static gates green, owner manual verification pending", and task.md in the same
@@ -119,8 +160,9 @@ Report at each wave gate: what got built, static-gate output summary, the smoke 
 
 ## What "done" means for this sprint
 
-Both apps + admin build clean; a seeded dev walk-through exists for: A3 (request → quotes →
-unlock → select → engagement → attendance) and A5 (request + plan → slot confirm → plan checkout →
-visit → on-site estimate → select → stage funding → evidence → approval → payout eligibility with
-the visit split); `SMOKE.md` tells the owner exactly what to click. Tests come after that manual
+Both apps + admin build clean; a seeded dev walk-through exists for: A3 (preset → rate shown →
+book → lead accepts → booking fee → engagement → attendance → day settled), the shorter A3
+fallback (request → quotes → unlock → select) and A5 (request + plan → slot confirm → plan
+checkout → visit → on-site estimate → select → stage funding → evidence → approval → payout
+eligibility with the visit split); `SMOKE.md` tells the owner exactly what to click. Tests come after that manual
 pass, per the amendment.

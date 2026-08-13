@@ -1,6 +1,6 @@
 "use client";
 
-import { describeError, isStageNotFundable } from "@vsolve/query";
+import { describeError, isStageNotFundable, type StageKind } from "@vsolve/query";
 
 import {
   REQUESTS_HREF,
@@ -21,9 +21,11 @@ import { CompletionPanel } from "./completion-panel";
 import { EngagementTimeline } from "./engagement-timeline";
 import {
   EngagementStatusBadge,
+  StageKindBadge,
   StageStatusBadge,
   nextActionCopy,
   nounsFor,
+  stageKindCopy,
   type ModeNouns,
 } from "./engagement-status";
 import { NotBuiltYet } from "./not-built-yet";
@@ -67,13 +69,22 @@ import { NotBuiltYet } from "./not-built-yet";
  * side by side. Wave A2 summed `FUNDED` stages to get a funded total because no
  * field carried one; that arithmetic is gone.
  *
+ * ## Stage kind, and why it changes the copy rather than the layout
+ *
+ * `EngagementStage.kind` (1.26.0) separates a work milestone from a
+ * `MATERIAL_ADVANCE`. Material money is **spent, not earned**: it is not
+ * recovered like an unearned work stage when a project ends early
+ * (`M2-BE-543`), so what a Customer consents to when they fund one is a
+ * different thing. The row therefore carries its own tag and its own funding
+ * sentence, and an unrecognised kind gets **no funding control at all** —
+ * asking somebody to pay for something this app cannot name is worse than
+ * making them wait for a newer build.
+ *
  * ## What is deliberately absent
  *
- * A receipt or invoice (`M2-FE-418`): `Engagement` publishes no order id and no
- * tax-document id, and `GET /tax-documents/{id}/` needs one. The screen says
- * where the record is rather than linking to a document it cannot name.
  * `M2-FE-612`, the vendor-replacement path, needs C5 and is marked rather than
- * mocked.
+ * mocked. The receipt is no longer absent: `Engagement.access_receipt` landed
+ * at 1.26.0 and is a **reference, not a document** — see "The record" below.
  */
 
 export interface EngagementScreenProps {
@@ -254,8 +265,11 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
           What you asked for, who was invited, what they quoted, when they visited
           and what you chose all stay on the request it came from, for both of
-          you. A receipt or invoice is not available from here yet.
+          you.
         </p>
+
+        <AccessReceiptPanel view={view} />
+
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href={requestLink} className={buttonStyles({ variant: "outline" })}>
             Open the full history
@@ -290,6 +304,52 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
     <div className="flex items-baseline justify-between gap-3 border-b border-line p-4 last:border-0">
       <dt className="text-sm text-text-secondary">{label}</dt>
       <dd className={strong ? "text-lg font-semibold text-text" : "text-text"}>{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * The access fee's receipt — `M2-FE-418`, closed by 1.26.0.
+ *
+ * **A number, not a link, and deliberately not called an invoice.**
+ * `AccessReceipt` carries `{kind, number, series, sequence, amount_paise}` and
+ * no document id: `TaxDocument.order` is not nullable and an access fee has no
+ * `Order`, so there is nothing to download. The number is allocated from the
+ * same gapless `commerce.DocumentSequence` under an `M2A-` series, which makes
+ * it exactly what it is presented as — the durable reference a Customer quotes
+ * to support. GST treatment of both access fees is an open owner decision, so
+ * this screen does not use the word "invoice" or imply a tax document exists.
+ *
+ * `null` means one of three things — no fee charged yet, a plan covered entirely
+ * by a reclassification credit, or a row that predates receipt numbering — and
+ * none of them is an error. The panel says there is no number rather than
+ * asserting nothing was ever paid, because it cannot tell the three apart.
+ */
+function AccessReceiptPanel({ view }: { view: EngagementView }) {
+  const receipt = view.accessReceipt;
+
+  if (receipt === null) {
+    return (
+      <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
+        There is no access-fee receipt number on this agreement. That is normal
+        if nothing was charged to reach it. If you paid one and it is not here,
+        contact support with the date and we will find it.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-card border border-line bg-surface-sunken p-4">
+      <h3 className="text-sm font-semibold text-text">Your receipt number</h3>
+      <p className="mt-1 font-mono text-base text-text">{receipt.number}</p>
+      <p className="mt-1 text-sm text-text-secondary">
+        {receipt.purpose} · {receipt.amountLabel}
+      </p>
+      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
+        Quote this number to support and they can find the payment. It is a
+        receipt reference for the fee you paid us — not a tax invoice, and not
+        the money you pay the professional for the work itself.
+      </p>
     </div>
   );
 }
@@ -363,6 +423,23 @@ function ModePanel({ view }: { view: EngagementView }) {
   );
 }
 
+/**
+ * The kind of the row the next action is about, or null.
+ *
+ * Only two of the six actions are about one row, and they are about *different*
+ * rows: funding is about the next fundable stage and a review is about the
+ * earliest one awaiting review. Reading either from `activeStage` would name
+ * the wrong row on a project where a milestone is in progress while a materials
+ * line waits to be paid for.
+ */
+function actionStageKind(view: EngagementView): StageKind | null {
+  if (view.nextAction === "fund_stage") return view.nextFundableStageKind;
+  if (view.nextAction !== "review_stage") return null;
+  const reviewing = view.stagesAwaitingReviewIds[0] ?? null;
+  if (reviewing === null) return null;
+  return view.stages.find((stage) => stage.stageId === reviewing)?.kind ?? null;
+}
+
 /** `M2-FE-608` — progress, the active stage and the one next action. */
 function ProgressPanel({ view, nouns }: { view: EngagementView; nouns: ModeNouns }) {
   const { done, total } = view.progress;
@@ -386,7 +463,7 @@ function ProgressPanel({ view, nouns }: { view: EngagementView; nouns: ModeNouns
           </p>
         ) : null}
         <p className="mt-2 text-sm leading-6 text-text">
-          {nextActionCopy(view.nextAction, nouns)}
+          {nextActionCopy(view.nextAction, nouns, actionStageKind(view))}
         </p>
       </div>
     </section>
@@ -453,6 +530,9 @@ function StageRow({
   onFund: (stageId: string) => void;
   isFunding: boolean;
 }) {
+  const kindCopy = stageKindCopy(stage.kind, nouns);
+  const isMaterial = stage.kind === "material_advance";
+
   return (
     <li className="rounded-card border border-line p-3">
       <div className="flex items-start justify-between gap-3">
@@ -461,8 +541,12 @@ function StageRow({
           {stage.scheduledOn !== null ? (
             <p className="mt-0.5 text-sm text-text-secondary">{stage.scheduledOn}</p>
           ) : null}
-          <div className="mt-1">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <StageStatusBadge status={stage.status} />
+            {/* `EngagementStage.kind` — a materials line is money for goods, not
+                a milestone somebody performs, and it is laid out after every
+                work stage on purpose. Tagged so the row is not read as one. */}
+            <StageKindBadge kind={stage.kind} nouns={nouns} />
           </div>
         </div>
         <p className="shrink-0 font-medium text-text">{stage.amountLabel}</p>
@@ -474,7 +558,13 @@ function StageRow({
       {stage.status !== "PENDING" ? (
         <div className="mt-3">
           <Link href={reviewHref} className={buttonStyles({ variant: stage.canApprove ? "primary" : "outline" })}>
-            {stage.canApprove ? "Check the work" : `See this ${nouns.stage}`}
+            {stage.canApprove
+              ? isMaterial
+                ? "Check the materials"
+                : "Check the work"
+              : isMaterial
+                ? "See this materials payment"
+                : `See this ${nouns.stage}`}
           </Link>
         </div>
       ) : null}
@@ -497,13 +587,22 @@ function StageRow({
         </p>
       ) : stage.fundingState === "FUNDED" ? (
         <p className="mt-3 text-sm text-text-secondary">
-          Funded. It reaches the professional once you approve the work.
+          {isMaterial
+            ? "Funded. The professional buys the materials with it."
+            : "Funded. It reaches the professional once you approve the work."}
+        </p>
+      ) : stage.isNextToFund && stage.kind === "unknown" ? (
+        // Fail closed. This app cannot name what the money is for, so it does
+        // not collect it — the same rule the unknown commercial mode follows,
+        // and for the same reason: the optimistic reading is the wrong one.
+        <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
+          {kindCopy.fundingPurpose}
         </p>
       ) : stage.isNextToFund ? (
         <div className="mt-3">
           <p className="max-w-prose text-sm leading-6 text-text-secondary">
-            Funding this at its full price — {stage.amountLabel} — is what starts
-            it.
+            {kindCopy.fundingPurpose} It is {stage.amountLabel}, at its full
+            price.
           </p>
           <div className="mt-2">
             <Button
@@ -511,13 +610,17 @@ function StageRow({
               loading={isFunding}
               loadingLabel="Starting your payment"
             >
-              Fund this stage — {stage.amountLabel}
+              {isMaterial
+                ? `Pay for these materials — ${stage.amountLabel}`
+                : `Fund this stage — ${stage.amountLabel}`}
             </Button>
           </div>
         </div>
       ) : stage.fundingState === "REQUIRED" ? (
         <p className="mt-3 text-sm text-text-secondary">
-          You will be asked for this when the stage before it is done.
+          {isMaterial
+            ? "You will be asked for this when the work before it is done."
+            : "You will be asked for this when the stage before it is done."}
         </p>
       ) : null}
     </li>

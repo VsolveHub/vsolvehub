@@ -89,7 +89,8 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
-from apps.requirements.models import M2AccessPrice
+from apps.requirements.models import M2AccessPrice, RateCard
+from apps.requirements.rate_cards import publish_rate_card
 
 #: The words that make an invented value identifiable forever. Written into `source_reference` on
 #: every effective-dated row this command creates, and checked before overwriting one.
@@ -232,6 +233,81 @@ STAGE_REVIEW_WINDOW_HOURS = 48
 STAGE_PAYOUT_HOLD_HOURS = 24
 AMENDMENT_RESPONSE_HOURS = 48
 
+# ---------------------------------------------------------------------------
+# Wave C2R / revision 4 (ADR-0009): the A3 rate card and its cascade.
+#
+# **Every number below is invented.** ADR-0009 says a real card is seeded by an Operations phone
+# survey of ten to fifteen contractors per launch city, cross-checked against the wage floor. No
+# contractor was called. These stand in for owner decisions 12 and 13 and are written with the
+# dev-seed marker so it is obvious which rows were guessed when real ones arrive.
+# ---------------------------------------------------------------------------
+
+#: The three components of the published day rate, per worker per eight-hour day, in paise. The
+#: wage clears `WAGE_FLOOR_PAISE_PER_DAY` above **by construction**: publish refuses a card below
+#: the floor, so a seed that ignored it would fail rather than write a bad row — which is the guard
+#: working. Owner decision 13 for the survey, decision 7 for the floor beneath it.
+RATE_CARD_WORKER_DAY_WAGE_PAISE = 70_000
+RATE_CARD_SUPERVISION_MARGIN_PAISE = 15_000
+#: Owner decision 12. Per worker-day, because it is one of three parts of a per-worker-day price;
+#: the fee actually charged is this over the whole booking.
+RATE_CARD_BOOKING_FEE_PAISE = 5_000
+#: What counts as a day, and what an hour past it costs.
+RATE_CARD_STANDARD_DAY_HOURS = 8
+RATE_CARD_OVERTIME_HOURLY_PAISE = 12_000
+#: The printed inclusion list and the published add-on rates. Extras run through the amendment
+#: engine at exactly these numbers, which is what leaves the on-site renegotiation nowhere to live.
+RATE_CARD_INCLUSIONS = (
+    "One 8-hour shift per worker, including a 30-minute break.",
+    "Loading, carrying and unloading on the ground and first floor.",
+    "The supervisor is on site for the whole shift.",
+    "Overtime is charged only after you approve it in the app.",
+)
+RATE_CARD_ADD_ON_RATES: dict[str, int] = {
+    "floor_above_first_per_worker_day": 5_000,
+    "no_lift_per_worker_day": 7_500,
+    "carry_distance_over_50m_per_worker_day": 5_000,
+    "packing_materials_per_worker_day": 10_000,
+}
+
+#: The A3 preset: the price-moving facts ADR-0009 names for shifting work. Without these the
+#: instant path refuses — an instant booking whose scope was never pinned down is the "third floor,
+#: no lift? Extra, bhaiya" the rate card exists to prevent.
+A3_PRESET_QUESTIONS: tuple[QuestionSeed, ...] = (
+    ("floor_number", "Which floor?", ServiceQuestion.Kind.NUMBER, True, 0),
+    ("has_lift", "Is there a working lift?", ServiceQuestion.Kind.BOOLEAN, True, None),
+    (
+        "carry_distance_m",
+        "How far from the vehicle to the door, in metres?",
+        ServiceQuestion.Kind.NUMBER,
+        True,
+        0,
+    ),
+    ("needs_packing", "Do you need packing as well?", ServiceQuestion.Kind.BOOLEAN, True, None),
+)
+
+#: The cascade's shape. Pre-phase decision list, all four of them. A wave of three, widening by two
+#: each time, four waves before the fallback, and a two-minute offer timeout on the M1 dispatch
+#: clock — deliberately minutes rather than business hours, because that is the whole difference
+#: between an instant product and a quote.
+CREW_WAVE_SIZE = 3
+CREW_WAVE_WIDENING_STEP = 2
+CREW_OFFER_TIMEOUT_SECONDS = 120
+CREW_CASCADE_MAX_WAVES = 4
+#: How long an accepted offer holds the job while the Customer pays. Fifteen minutes, matching the
+#: order of magnitude of `M2_VISIT_PLAN_HOLD_SECONDS`.
+CREW_OFFER_HOLD_SECONDS = 900
+
+#: Owner decision 12. Twelve hours of free cancellation, and 60% of a forfeited fee to the lead as
+#: travel compensation with the remaining 40% as the platform share. Both invented; the split
+#: percentage mirrors the shape of the A5 visit split above rather than any decision.
+BOOKING_FEE_FREE_CANCEL_HOURS = 12
+BOOKING_FEE_TRAVEL_COMPENSATION_BASIS_POINTS = 6_000
+
+#: Owner decision 13. Page Operations when more than 60% of offers at a rate are declined or
+#: ignored, once at least five have gone out. Unset, **no alarm fires at all**.
+CREW_DECLINE_ALARM_BASIS_POINTS = 6_000
+CREW_DECLINE_ALARM_MIN_OFFERS = 5
+
 
 class Command(BaseCommand):
     help = (
@@ -294,6 +370,7 @@ class Command(BaseCommand):
         self._seed_a3_configuration(variant=a3_variant, skill=skill)
         self._seed_a5_configuration(variant=a5_variant)
         wage_floor_written = self._seed_wage_floor(skill=skill)
+        rate_card_published = self._seed_rate_card(area=area, skill=skill)
         prices_written, prices_skipped = self._seed_access_prices()
 
         vendors = self._seed_vendors(
@@ -305,6 +382,7 @@ class Command(BaseCommand):
 
         self._report(
             wage_floor_written=wage_floor_written,
+            rate_card_published=rate_card_published,
             prices_written=prices_written,
             prices_skipped=prices_skipped,
             vendors=vendors,
@@ -479,10 +557,28 @@ class Command(BaseCommand):
             registration_questions=A3_REGISTRATION_QUESTIONS,
             extra={
                 "wage_floor_skill": skill,
+                # The quote-flow clocks stay set: revision 4 demoted that path to the thin-supply
+                # fallback rather than deleting it, and a fallback with no SLA never closes.
                 "first_quote_sla_hours": FIRST_QUOTE_SLA_HOURS,
                 "quote_delivery_sla_hours": QUOTE_DELIVERY_SLA_HOURS,
                 "max_quotes": MAX_QUOTES,
                 "non_responsive_rejection_cap": NON_RESPONSIVE_REJECTION_CAP,
+                # Wave C2R (revision 4). Every value below is read fail-closed by
+                # `requirements.rate_cards`, so until they are written here the instant path
+                # refuses with `m2_policy_unavailable` on every request — the preset schema and
+                # the cascade policy are both consulted before the card itself is.
+                "a3_preset_question_schema": _question_schema(A3_PRESET_QUESTIONS),
+                "crew_wave_size": CREW_WAVE_SIZE,
+                "crew_wave_widening_step": CREW_WAVE_WIDENING_STEP,
+                "crew_offer_timeout_seconds": CREW_OFFER_TIMEOUT_SECONDS,
+                "crew_cascade_max_waves": CREW_CASCADE_MAX_WAVES,
+                "crew_offer_hold_seconds": CREW_OFFER_HOLD_SECONDS,
+                "crew_decline_alarm_basis_points": CREW_DECLINE_ALARM_BASIS_POINTS,
+                "crew_decline_alarm_min_offers": CREW_DECLINE_ALARM_MIN_OFFERS,
+                "booking_fee_free_cancel_hours": BOOKING_FEE_FREE_CANCEL_HOURS,
+                "booking_fee_travel_compensation_basis_points": (
+                    BOOKING_FEE_TRAVEL_COMPENSATION_BASIS_POINTS
+                ),
             },
         )
 
@@ -568,6 +664,50 @@ class Command(BaseCommand):
                     "enforcement per state and skill are unresolved. No gazette was consulted."
                 ),
             },
+        )
+        return True
+
+    def _seed_rate_card(self, *, area: ServiceArea, skill: Skill) -> bool:
+        """The A3 published day rate — the row without which the instant path is shut.
+
+        Published through `rate_cards.publish_rate_card` rather than written straight to the
+        table, deliberately: that is where the wage-floor guard lives, and a seed that bypassed
+        it could write a card below the floor and leave the guard looking green. Going through
+        the command means the seed is held to the rule Operations is held to — if
+        `RATE_CARD_WORKER_DAY_WAGE_PAISE` ever drops under `WAGE_FLOOR_PAISE_PER_DAY`, this
+        raises rather than seeding an illegal card.
+
+        `actor=None` because no Operations user performed this; the source reference carries the
+        dev-seed marker so a real published card is never mistaken for one of these.
+        """
+        existing = RateCard.objects.filter(
+            service_area=area,
+            skill=skill,
+            effective_from=DEV_SEED_EFFECTIVE_FROM,
+        ).first()
+        label = f"rate card {area.slug}/{skill.code}"
+        if not self._may_overwrite(
+            existing_reference=None if existing is None else existing.source_reference,
+            label=label,
+        ):
+            return False
+        publish_rate_card(
+            service_area_id=area.id,
+            skill_id=skill.id,
+            worker_day_wage_paise=RATE_CARD_WORKER_DAY_WAGE_PAISE,
+            supervision_margin_paise=RATE_CARD_SUPERVISION_MARGIN_PAISE,
+            booking_fee_paise=RATE_CARD_BOOKING_FEE_PAISE,
+            standard_day_hours=RATE_CARD_STANDARD_DAY_HOURS,
+            overtime_hourly_paise=RATE_CARD_OVERTIME_HOURLY_PAISE,
+            inclusions=list(RATE_CARD_INCLUSIONS),
+            add_on_rates=dict(RATE_CARD_ADD_ON_RATES),
+            effective_from=DEV_SEED_EFFECTIVE_FROM,
+            actor=None,
+            source_reference=(
+                f"{DEV_SEED_MARKER}. Owner decisions 12 and 13: ADR-0009 seeds a real card from "
+                "an Operations phone survey of ten to fifteen contractors per launch city. No "
+                "contractor was called; every component here is invented."
+            ),
         )
         return True
 
@@ -886,15 +1026,32 @@ class Command(BaseCommand):
         self,
         *,
         wage_floor_written: bool,
+        rate_card_published: bool,
         prices_written: int,
         prices_skipped: int,
         vendors: list[str],
     ) -> None:
+        day_rate_paise = (
+            RATE_CARD_WORKER_DAY_WAGE_PAISE
+            + RATE_CARD_SUPERVISION_MARGIN_PAISE
+            + RATE_CARD_BOOKING_FEE_PAISE
+        )
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("M2 demo configuration loaded."))
         self.stdout.write(
-            f"  A3 service : /{A3_SERVICE_SLUG}  (unlock INR {A3_UNLOCK_PAISE / 100:.0f})"
+            f"  A3 service : /{A3_SERVICE_SLUG}  (unlock INR {A3_UNLOCK_PAISE / 100:.0f} on the "
+            "thin-supply fallback)"
         )
+        if rate_card_published:
+            self.stdout.write(
+                f"  A3 rate    : INR {day_rate_paise / 100:.0f} per worker per "
+                f"{RATE_CARD_STANDARD_DAY_HOURS}-hour day "
+                f"(wage {RATE_CARD_WORKER_DAY_WAGE_PAISE / 100:.0f} + margin "
+                f"{RATE_CARD_SUPERVISION_MARGIN_PAISE / 100:.0f} + fee "
+                f"{RATE_CARD_BOOKING_FEE_PAISE / 100:.0f})"
+            )
+        else:
+            self.stdout.write("  A3 rate    : left alone; a real card is already published")
         tiers = ", ".join(
             f"{size}x INR {A5_TIER_PAISE[size] / 100:.0f}" for size in sorted(A5_TIER_PAISE)
         )

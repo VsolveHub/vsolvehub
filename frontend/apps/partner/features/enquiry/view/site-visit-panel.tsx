@@ -5,6 +5,7 @@ import { describeError } from "@vsolve/query";
 import { useState } from "react";
 
 import { timeAgo } from "@/lib/format";
+import { formatVisitInstant } from "@/features/visit/model/slot-grid";
 import { permissionsFor } from "../model/enquiry-state";
 import type { EnquiryRecord } from "../model/wire";
 import { useRequestSiteVisit } from "../queries";
@@ -103,7 +104,15 @@ export function SiteVisitPanel({ enquiry }: SiteVisitPanelProps) {
 
       {existing.length > 0 ? (
         <ul className="flex list-none flex-col gap-2 p-0">
-          {existing.map((visit) => (
+          {existing.map((visit) => {
+            // `SiteVisit.timezone` (1.26.0). Formatted once per row so the
+            // unsupported-zone signal can be honoured below rather than
+            // dropped — `visit-day-panel` says so and this must not stay
+            // quieter about the same degrade.
+            const when = visit.scheduled_for
+              ? formatVisitInstant(visit.scheduled_for, visit.timezone)
+              : null;
+            return (
             <li
               key={visit.id}
               className="rounded-control border border-line bg-surface-sunken p-3"
@@ -121,10 +130,19 @@ export function SiteVisitPanel({ enquiry }: SiteVisitPanelProps) {
                   ? "Comes off your final price if the customer goes ahead with you."
                   : "Charged whether or not the customer goes ahead with you."}
               </p>
-              {visit.scheduled_for ? (
-                <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  Scheduled for {timeAgo(visit.scheduled_for)}
-                </p>
+              {when && visit.scheduled_for ? (
+                <>
+                  <p className="mt-1 text-sm leading-6 text-text-secondary">
+                    {/* `SiteVisit.timezone` (1.26.0). A visit is somewhere, and
+                        "in two days" is not a time to arrive at. */}
+                    Scheduled for {when.label} ({timeAgo(visit.scheduled_for)})
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-text-muted">
+                    {when.zoneUnsupported
+                      ? `Shown in your device's clock — this phone does not recognise ${visit.timezone}, which is the site's own timezone.`
+                      : `Times are in ${visit.timezone}, the timezone of the place you are going to.`}
+                  </p>
+                </>
               ) : (
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
                   Vsolve has your request. A date needs the customer to agree to it as well, and
@@ -132,7 +150,8 @@ export function SiteVisitPanel({ enquiry }: SiteVisitPanelProps) {
                 </p>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : null}
 

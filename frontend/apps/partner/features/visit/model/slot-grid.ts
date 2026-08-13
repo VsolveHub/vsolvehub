@@ -131,6 +131,37 @@ function dayFormatter(timeZone: string | undefined): Intl.DateTimeFormat {
 }
 
 /**
+ * One instant, in the zone the server says the visit happens in.
+ *
+ * `SiteVisit.timezone` is published at contract **1.26.0** and this is what it
+ * is for. A visit is booked against the same `carts.availability` grid
+ * `BookingWindows` publishes a zone for and used to carry only an instant, so
+ * the vendor's own screen could only say "in two days" — which is not a time
+ * anybody can turn up at.
+ *
+ * The zone is the *service area's*, not the device's, and that distinction is
+ * the whole point: a vendor travelling for a job is on the site's clock. Where
+ * the runtime does not carry the IANA name — an old WebView on a cheap Android
+ * phone, exactly the device this is read on — it degrades to the device's own
+ * clock and says so, rather than throwing a `RangeError` over a date label.
+ */
+export function formatVisitInstant(
+  instant: string,
+  timeZone: string,
+): { readonly label: string; readonly zoneUnsupported: boolean } {
+  const unsupported = timeZone.trim() === "" || !supportsTimeZone(timeZone);
+  const zone = unsupported ? undefined : timeZone;
+  const when = new Date(instant);
+  if (Number.isNaN(when.getTime())) {
+    return { label: instant, zoneUnsupported: unsupported };
+  }
+  return {
+    label: `${dayFormatter(zone).format(when)}, ${timeFormatter(zone).format(when)}`,
+    zoneUnsupported: unsupported,
+  };
+}
+
+/**
  * The grid as the picker renders it.
  *
  * Order is the server's throughout — days in the order they arrived, slots in

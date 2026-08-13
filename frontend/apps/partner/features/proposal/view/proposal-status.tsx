@@ -175,6 +175,16 @@ export function ProposalStatus({
                 },
               ]
             : []),
+          ...(current.material_lines.length > 0
+            ? [
+                {
+                  label: "Materials",
+                  value: `${current.material_lines.length} ${
+                    current.material_lines.length === 1 ? "line" : "lines"
+                  }`,
+                },
+              ]
+            : []),
           ...(current.site_visit !== null
             ? [{ label: "Written", value: "On site, after your visit" }]
             : []),
@@ -186,6 +196,10 @@ export function ProposalStatus({
       />
 
       {current.stages.length > 0 ? <StageBreakdown stages={current.stages} /> : null}
+
+      {current.material_lines.length > 0 ? (
+        <MaterialBreakdown lines={current.material_lines} />
+      ) : null}
 
       {usability ? <p className="text-sm leading-6 text-warning-text">{usability}</p> : null}
 
@@ -289,6 +303,58 @@ function StageBreakdown({ stages }: { readonly stages: Proposal["stages"] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The materials, kept visibly apart from the work.
+ *
+ * `Proposal.material_lines` is published at 1.26.0 and is **not** a stage list.
+ * Rendering the two in one column would undo the whole point of the row type:
+ * the customer funds a material line as an advance and signs off a stage as
+ * work, and the vendor should see their own estimate the way the money will
+ * actually move.
+ *
+ * `quantity` and `unit` are shown only where they say something — a line of one
+ * with no unit reads as "1" and a blank, which is noise beside the name the
+ * vendor wrote.
+ */
+function MaterialBreakdown({ lines }: { readonly lines: Proposal["material_lines"] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+        Materials (paid as an advance)
+      </h3>
+      <ul className="flex list-none flex-col gap-2 p-0">
+        {lines.map((line, index) => {
+          const measure = [
+            line.quantity > 1 ? String(line.quantity) : null,
+            line.unit.trim() === "" ? null : line.unit.trim(),
+          ]
+            .filter((part): part is string => part !== null)
+            .join(" ");
+
+          return (
+            <li
+              key={`${line.title}-${index}`}
+              className="flex items-start justify-between gap-3 rounded-control border border-line p-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text">
+                  {line.title.trim() === "" ? `Material ${index + 1}` : line.title}
+                </p>
+                {measure === "" ? null : (
+                  <p className="mt-0.5 text-xs text-text-muted">{measure}</p>
+                )}
+              </div>
+              <span className="shrink-0 text-sm font-semibold text-text">
+                {formatMoney(line.amount_paise)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

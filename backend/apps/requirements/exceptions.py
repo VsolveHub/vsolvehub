@@ -391,3 +391,80 @@ class AmendmentNotActionableError(RequirementDomainError):
             message=message or "This change request has already been decided.",
             status_code=409,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wave C2R (revision 4, ADR-0009): the rate-card A3 front door.
+#
+# All four codes are `07-state-machines-and-permissions.md` §8 codes and are published exactly as
+# named there. One status differs from §8's table and the divergence is deliberate:
+# `m2_booking_fee_payment_pending` is a **409 retryable**, not a `202`.
+#
+# Proposal 0012's review settled that a refusal is always `>=400` and that `202` is reserved for
+# genuine acceptance carrying a projection; `m2_unlock_payment_pending` was moved from `202` to
+# `409` on that decision at 1.21.0 and `m2_visit_plan_payment_pending` was built as a `409` at
+# 1.24.0. Publishing the third member of the same family as a `202` would make one of three
+# identical "your bank has not confirmed yet" refusals arrive as a success to every generated
+# client. Logged as a contract note rather than silently diverging.
+# ---------------------------------------------------------------------------
+
+
+class RateCardUnavailableError(RequirementDomainError):
+    """No published rate card covers this city and skill, so nothing can be booked instantly.
+
+    Fails closed to the quote flow rather than guessing a price. A rate card is Operations'
+    published number for a city and a statutory skill; inventing one would make the platform quote
+    a street rate it has never surveyed, and a customer cannot tell an invented price from an
+    approved one once they have been charged against it.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_rate_card_unavailable",
+            message=message
+            or "We have not published a day rate for this work here yet, so we will collect "
+            "quotes for you instead.",
+            status_code=409,
+        )
+
+
+class RosterInsufficientError(RequirementDomainError):
+    """The lead's verified roster is smaller than the headcount they are accepting.
+
+    Checked against **verified** memberships rather than the roster's raw size: an unverified
+    worker is a name, and dispatching a crew on names is how the same person gets promised through
+    two agencies.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_roster_insufficient",
+            message=message or "Your verified roster is smaller than the crew this job needs.",
+            status_code=409,
+        )
+
+
+class BookingFeeNotChargeableError(RequirementDomainError):
+    """A booking-fee checkout was attempted with no held accepted offer behind it.
+
+    The A3 twin of `m2_visit_plan_not_chargeable` and `m2_unlock_not_available`: all three make
+    "paid but nothing happened" unreachable rather than merely unlikely, because the guard runs
+    under the requirement's own row lock in the transaction that creates the attempt.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_booking_fee_not_chargeable",
+            message=message or "No crew is holding this job yet, so there is nothing to confirm.",
+            status_code=409,
+        )
+
+
+class BookingFeePaymentPendingError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_booking_fee_payment_pending",
+            message="We are waiting for your bank to confirm. Your crew is held until it does.",
+            status_code=409,
+            retryable=True,
+        )

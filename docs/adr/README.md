@@ -43,7 +43,7 @@ Numbers are allocated at merge time, not when drafting. Two branches that both r
 number in advance will collide; take the next free number when the record actually lands. Numbers
 are never reused, including for records that are superseded or withdrawn.
 
-The next free number is **0008**.
+The next free number is **0010**.
 
 ## Index
 
@@ -55,5 +55,6 @@ The next free number is **0008**.
 | [0004](0004-fail-closed-provider-selection.md) | Fail-closed provider selection | Accepted |
 | [0005](0005-server-clock-calibration.md) | Server clock calibration | Accepted |
 | [0006](0006-outbox-visibility-deadline-recovery.md) | Outbox visibility deadline and recovery | Accepted |
-| [0007](0007-m2-engagement-spine-and-fee-after-value.md) | M2 engagement spine and fee after value | Accepted (A5 fee model superseded by 0008) |
-| [0008](0008-m2-visit-first-estimation-for-a5.md) | M2 visit-first estimation and tiered visit plans for A5 | Accepted |
+| [0007](0007-m2-engagement-spine-and-fee-after-value.md) | M2 engagement spine and fee after value | Accepted (A5 fee model superseded by 0008; A3 front door superseded by 0009) |
+| [0008](0008-m2-visit-first-estimation-for-a5.md) | M2 visit-first estimation and tiered visit plans for A5 | Accepted (its "A3 unchanged" statements superseded by 0009) |
+| [0009](0009-m2-rate-card-instant-dispatch-for-a3.md) | M2 published rate card and instant crew dispatch for A3 | Accepted |

@@ -18,7 +18,13 @@ import { Play } from "lucide-react";
 import { shortDate, timeAgo } from "@/lib/format";
 
 import { useStartStage } from "../queries";
-import { describeStageStatus, stageTitle, type StageWording } from "../model/engagement-copy";
+import {
+  MATERIAL_ADVANCE_NOTE,
+  describeStageStatus,
+  isMaterialAdvance,
+  stageTitle,
+  type StageWording,
+} from "../model/engagement-copy";
 import { EvidenceComposer } from "./evidence-composer";
 
 /**
@@ -39,6 +45,14 @@ import { EvidenceComposer } from "./evidence-composer";
  * Offered where this screen's copy of the record could be a minute old, which is
  * the `M2-FE-315` precedent: the state is explained above the control and the
  * server's refusal routes to the same explanation.
+ *
+ * ## Materials are marked, not separated
+ *
+ * `EngagementStage.kind` (1.26.0) tells a material advance from a work
+ * milestone. Both live on the one spine and take the same commands, so this
+ * component still renders both — what changes is that a material row says what
+ * it is. Hiding it, or giving it its own list, would be this client inventing a
+ * second money surface the server does not have.
  *
  * ## The correction block
  *
@@ -67,6 +81,7 @@ export function StagePanel({ engagement, stage, wording }: StagePanelProps) {
   const status = describeStageStatus(stage, wording);
   const commands = vendorStageCommands(engagement, stage);
   const correction = correctionRequested(stage);
+  const material = isMaterialAdvance(stage);
   const start = useStartStage(engagement.id);
 
   return (
@@ -77,13 +92,19 @@ export function StagePanel({ engagement, stage, wording }: StagePanelProps) {
             <h2 className="truncate text-base font-semibold text-text">
               {stageTitle(stage, wording)}
             </h2>
-            {status ? (
-              <Badge tone={TONE[status.tone]} dot>
-                {status.label}
-              </Badge>
-            ) : (
-              <Badge tone="neutral">State not recognised</Badge>
-            )}
+            <span className="flex flex-wrap items-center gap-2">
+              {status ? (
+                <Badge tone={TONE[status.tone]} dot>
+                  {status.label}
+                </Badge>
+              ) : (
+                <Badge tone="neutral">State not recognised</Badge>
+              )}
+              {/* `EngagementStage.kind`, published at 1.26.0. Without it a
+                  material advance renders as an ordinary milestone and a vendor
+                  reads the customer as approving cement as work. */}
+              {material ? <Badge tone="neutral">Materials advance</Badge> : null}
+            </span>
           </div>
           <span className="text-sm font-semibold tabular-nums text-text">
             {formatMoney(stage.amount_paise)}
@@ -94,6 +115,10 @@ export function StagePanel({ engagement, stage, wording }: StagePanelProps) {
           {status?.sentence ??
             `Vsolve sent a state this version of the app cannot describe. Nothing here is wrong with your ${wording.parent} — updating the app usually resolves it.`}
         </p>
+
+        {material ? (
+          <p className="text-sm leading-6 text-text-secondary">{MATERIAL_ADVANCE_NOTE}</p>
+        ) : null}
 
         {stage.scheduled_on === null ? null : (
           <p className="text-xs text-text-muted">Scheduled for {shortDate(stage.scheduled_on)}</p>

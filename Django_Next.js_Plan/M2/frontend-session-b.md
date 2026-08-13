@@ -109,6 +109,16 @@
 > server declines; `a5-composer.tsx` stays in the tree carrying a note that says so, and
 > `onsite-composer.tsx` took its place on the route.
 
+> **Revision 4 — rate-card A3 (2026-08-13, ADR-0009).** A3 becomes **rate-card-first**: dispatch
+> goes to leads through the A1 offer cascade, and the primary-path A3 enquiry becomes a **crew
+> offer** — one screen, always the lead's own number, accept/decline with a reason, no composer.
+> One task joins your column when backend **C2R** publishes the contract: `M2-FE-316` (Wave B2R
+> below). Nothing you have built changes: the A3 composer, the enquiry inbox and clarification all
+> stand as the **thin-supply fallback** — the quote flow serves a requirement only after the
+> cascade's configured threshold passes. Decline reasons gain a duty: crew-offer declines feed the
+> rate card's **decline-rate alarm**. The A3 fulfilment tail gains the supervisor's evening "Day
+> settled?" tap (`M2-FE-513`, with C4) and published add-on/overtime rates on extras.
+
 ## Standing constraints
 
 - **Owned paths only:** `apps/partner/**`, `apps/admin/**`,
@@ -317,6 +327,8 @@ submits a comparable proposal — with no unsupported contact or pricing shortcu
 - [~] `M2-FE-308` **A3 one-screen composer**: rate per worker per day, minimum days, what is included.
   Nothing else. — `proposal/view/a3-composer.tsx`. Five controls, fixed by `A3_COMPOSER_FIELDS` and
   asserted in `a3-composer.test.tsx`. Headcount is prefilled from the customer's own answer.
+  **Revision 4: fallback only** (built, kept) — on the primary path the platform publishes the rate
+  and nothing is composed; the composer serves quote-flow enquiries.
 - [~] `M2-FE-309` A5 composer: deliverables, line items, stages, taxes, exclusions, assumptions,
   dates, warranty, validity. — `proposal/view/a5-composer.tsx`. Stages carry the deliverables, the
   line items and the dates. **Assumptions has no wire field and was not built** — DRF drops unknown
@@ -324,6 +336,8 @@ submits a comparable proposal — with no unsupported contact or pricing shortcu
 - [~] `M2-FE-310` Minimum-wage floor shown inline on the A3 composer; surface the server rejection
   clearly. — `proposal/model/terms.ts`, refusal routed to the rate field. **No floor is published,
   and the server-side guard is inert over HTTP** (plan §7). The rule is stated; no figure invented.
+  **Revision 4: fallback only** (built, kept) — and the same floor binds the platform's own rate
+  cards, checked server-side at publish.
 - [~] `M2-FE-311` Required tax basis and commission-treatment statement on every proposal. —
   `proposal/view/proposal-terms.tsx`. **Neither is readable**: the required basis is another vendor's
   and unpublished, and `commission_treatment` is a 24-character field with no vocabulary and no M2
@@ -400,7 +414,7 @@ all in owned files, all fixed before anything new was built:
 |---|---|---|
 | `enquiry/fixtures.ts` | `EnquiryDetail` requires `service_name`, `required_tax_basis`, `proposals`, `server_now`; `SiteVisit` requires six new fields; `Proposal` requires `rejection_reason`, `site_visit`, `revalidation_requested_at` | Fields added. A second fixture, `planVisit()`, was added beside `siteVisit()` — `is_plan_visit` decides how the whole record reads, and one fixture for both would hide the field that decides it. |
 | `enquiry/queries.ts` | `reason_code` is `InvitationDeclineReasonEnum` | `DeclineInput.reasonCode` typed against the enum; `decline-dialog.tsx` **narrows** rather than casts, so a select value outside the published set is refused client-side instead of earning a 400. |
-| `enquiry/model/decline-reasons.ts` | the vocabulary is published | Rewritten as `Record<DeclineReasonCode, …>` over the generated enum. The retired `crew_too_small` is **gone rather than mapped** — `NO_CAPACITY` is the server's name for the same fact. |
+| `enquiry/model/decline-reasons.ts` | the vocabulary is published | Rewritten as `Record<DeclineReasonCode, …>` over the generated enum. The retired `crew_too_small` is **gone rather than mapped** — `NO_CAPACITY` is the server's name for the same fact. *(Revision 4: crew-offer declines — `decline_crew_offer` — carry a reason that feeds the rate card's decline-rate alarm; the vocabulary gains that duty when C2R publishes.)* |
 | `proposal/model/proposal-state.ts` | `ACCEPTED` and `LAPSED` | Written as three separate stories: `REJECTED` is the *Customer's* refusal, `LAPSED` is this vendor declining or timing out after selection, `ACCEPTED` is them reconfirming. `permissionsFor` refuses supersession from all three. |
 | `proposal/model/proposal-draft.ts` | `ProposalStage.amount_paise` is non-null | `toStageRequests` maps onto the generated type and **throws** on a null amount rather than coercing to zero — the one field whose absence would otherwise become a real stage quoted at no money. |
 
@@ -488,7 +502,7 @@ and the disclosure notice would put four screens of reading above the first fiel
 |---|---|
 | `/projects/enquiries/[invitationId]` | Visit-slot confirmation, the visit-day panel, the quote record and the way into the estimate — replacing accept/decline for A5 |
 | `/projects/enquiries/[invitationId]/estimate` | **New.** The on-site composer, `ƒ` and `robots: noindex`, behind `WorkspaceRoute` with `actions: ["enquiry.view"]` |
-| `/workforce/enquiries/[invitationId]` | Unchanged — A3 keeps accept, decline and the one-screen composer |
+| `/workforce/enquiries/[invitationId]` | Unchanged — A3 keeps accept, decline and the one-screen composer. **Revision 4:** on the primary path this inbox's A3 rows become **crew offers** — one screen, always the lead's own number ("You receive ₹X/day for N helpers; the customer pays you directly at day end"), accept/decline with reason only, no composer (`M2-FE-316`, Wave B2R, blocked on C2R); the composer remains for fallback quote-flow enquiries |
 
 ### Smoke script — the exact clicks
 
@@ -530,6 +544,26 @@ touched, and not in this column's scope to fix.
 
 ---
 
+## Wave B2R — the A3 crew offer (revision 4)
+
+**Depends on:** backend **C2R** publishing the crew-offer contract — nothing exists to build against
+until it does. **Gate:** an A3 lead reads the offer, their own number and the consequence on one
+phone screen, and accepting is accepting the published rate for that job.
+
+- [ ] `M2-FE-316` The crew offer screen: always the lead's own number — "You receive ₹X/day for N
+  helpers; the customer pays you directly at day end" — with accept or decline and a published
+  decline reason (declines feed the rate card's decline-rate alarm). Accept takes a roster-sized
+  capacity hold (`m2_roster_insufficient` when the roster is short) and **holds the win while the
+  Customer pays the booking fee** — held is not confirmed, "do not travel yet", exactly the
+  `opens_plan_checkout` discipline `FE-314` already renders. Minutes-level timeouts on the M1
+  dispatch clock, not business-hours deadlines. No composer on this path; the one-screen composer
+  stays for fallback quote-flow enquiries.
+
+**Not started.** The A3 composer, teasers and unlock stay built as the thin-supply fallback; nothing
+in Wave B2 is deleted or reworked.
+
+---
+
 ## Wave B3 — Partner fulfilment (workforce and projects)
 
 **Depends on:** B2. **Watch:** Session A builds the customer half of the same spine this wave. Read
@@ -549,9 +583,14 @@ would sit. Tests deferred per the build-first amendment.
 - [ ] `M2-FE-503` **Wave III, needs C4.** Replacement request/notification with Customer approval.
 - [ ] `M2-FE-504` **Wave III, needs C4.** Arrival confirmation on the non-OTP fallback path.
 - [ ] `M2-FE-505` **Wave III, needs C4.** Supervisor daily attendance, "n of m present today".
-- [ ] `M2-FE-506` **Wave III, needs C4.** Overtime as a scope amendment.
+- [ ] `M2-FE-506` **Wave III, needs C4.** Overtime as a scope amendment. Revision 4: at the card's
+  **published overtime rate**, and only after Customer one-tap approval.
 - [ ] `M2-FE-507` **Wave III, needs C4.** No-show, partial crew, unsafe site reporting.
 - [ ] `M2-FE-508` **Wave III, needs C4.** Safety incident report, separate from cancellation.
+- [ ] `M2-FE-513` **Revision 4 — Wave III, needs C4.** The supervisor's evening "Day settled?"
+  one-tap with the UPI QR/deep-link at the exact published amount — the wage money is P2P at day
+  end and never platform-held; settlement is per worker-day present, beside the `FE-505` attendance
+  count.
 
 ### Project workspace (A5)
 
@@ -775,9 +814,160 @@ the customer pays you directly and Vsolve holds none of it.
 
 ### What Wave III must pick up
 
-`M2-FE-502..508` on Wave C4 and `M2-FE-605`/`606` on Wave C5. Each has a `NotBuiltYet` block on the
-screen where it belongs, naming the capability, saying what to do meanwhile and citing its task id.
-Replacing one is replacing a block, not restructuring a screen.
+`M2-FE-502..508` on Wave C4 — joined by `M2-FE-513` (revision 4: the supervisor's Day-settled tap) —
+and `M2-FE-605`/`606` on Wave C5. Each has a `NotBuiltYet` block on the screen where it belongs,
+naming the capability, saying what to do meanwhile and citing its task id. Replacing one is
+replacing a block, not restructuring a screen.
+
+---
+
+## Wave B-C3.5 — the 1.26.0 consumption pass (2026-08-14)
+
+**Depends on:** the orchestrator's regeneration of the typed client, now at **1.28.0**.
+**Gate:** nothing in this column is still working around something the contract publishes, and
+every workaround removed took its on-screen explanation with it.
+
+Not a new wave of screens. Five things were published between 1.23.0 and 1.28.0 that this column
+was still compensating for, and each fix is a re-point plus a deletion — the deletion is the part
+that matters, because a caveat left beside a fixed field is how a screen starts lying slowly.
+
+### `service_name` on the enquiry inbox (`M2-FE-301`)
+
+The detail screen was fixed at 1.24.0 and the list row was not, because the field was on
+`EnquiryDetail` only. It is on `EnquirySummary` at 1.26.0, declared **non-null** on both — checked
+in the generated type before consuming it, so there was no nullable case to design for. A blank name
+is still said (`Service not named`) rather than rendered as an empty heading, which costs one
+ternary and cannot happen on a published service.
+
+`category_slug` is **no longer projected onto `EnquiryRow` at all.** Deleting the de-slugging line
+would have left the slug sitting there for the next screen to format; deleting the field makes it
+impossible. The `capitalize` class went too — it was there to rescue a slug, and it mangles a real
+name ("Interior fit-out project" → "Interior Fit-Out Project").
+
+### Material lines are their own rows (`M2-FE-315`)
+
+The §7 row this closes recorded *why* the old shape was wrong commercially: a stage is a unit of
+evidence, approval and release, so a bag of cement arrived as a fundable milestone somebody had to
+approve **as work** — against the plan's own rule that material money is spent rather than earned.
+
+1.26.0 publishes `ProposalMaterialLine` (`{title, quantity, unit, amount_paise}`) on
+`ProposalCreateRequest.material_lines`, and `EngagementStage.kind` (`WORK` | `MATERIAL_ADVANCE`)
+carries the distinction through to the engagement. So:
+
+- `toOnsiteRequest` sends work in `stages` and materials in `material_lines`. The
+  `deliverable: "Materials supplied for this job"` string — the one place this client wrote a fixed
+  word into a row so a customer could tell cement from labour — is gone, because the row type now
+  says it.
+- The composer collects **quantity and units** beside the cost. They are not decoration:
+  "cement, ₹1,20,000" against "cement, 40 bags at ₹3,000" is the difference between two quotes a
+  Customer can compare and two they cannot. Both are optional to the vendor and default exactly as
+  the serializer does — `quantity` to 1, `unit` to blank — rather than to a word ("each") nobody
+  typed. `unit` is capped at the wire's 32 characters client-side, because a refusal earned on a
+  finished estimate costs more than a keystroke.
+- The on-screen caveat that existed only to explain the workaround is **deleted**, and what replaces
+  it is a true sentence rather than a shorter version of the same warning: materials are paid as an
+  advance rather than signed off like a piece of work.
+- `proposal-status.tsx` renders materials as their own block under the stage breakdown, with
+  quantity and unit shown only where they say something — a line of one with no unit is noise beside
+  the name the vendor wrote.
+- On the engagement side a `MATERIAL_ADVANCE` stage is badged and explained on the vendor's stage
+  panel. It is **not** given its own list: one spine, one set of commands, and a second money
+  surface invented here would be exactly the duplication the plan forbids.
+
+**One live migration hazard, handled.** A vendor who half-wrote an estimate before this deploy has
+`{description, amountPaise}` material rows in `localStorage`, and the composer now reads
+`unit.trim()`. `loadOnsiteDraft` fills the two new keys with the serializer's own defaults rather
+than dropping the draft — throwing away twenty minutes of a vendor's typing to avoid a crash is the
+wrong half of that trade.
+
+The composer's existing discipline is untouched: it still sends `site_visit_id`, still refuses to be
+a dead button on a stale visit read, and still routes `m2_visit_not_completed` to the same
+explanation.
+
+### Three more workarounds the sweep found
+
+- **The enquiry inbox pages** (`M2-FE-301`). `cursor` has been published since **1.23.0** and this
+  column was still rendering "Vsolve is holding older enquiries that this screen cannot ask for" —
+  an honest notice over a truncated inbox. `usePartnerEnquiries` is an `useInfiniteQuery` on the
+  admin partner-directory precedent, `cursorFromNextUrl` reads the opaque cursor out of the server's
+  own `next` link, and **Load older enquiries** replaces the notice. Called inside `queryFn` as well
+  as in `getNextPageParam`, deliberately: a `next` link this client cannot follow fails the read
+  rather than presenting a partial inbox as a complete one. Not an infinite scroll — a vendor on a
+  metered connection decides when another request happens. `useApplyEnquiryResult` maps every page
+  rather than hunting for the one holding the row.
+- **Clarification runs both ways** (`M2-FE-305`). 1.26.0 gave the Customer a question route and
+  published `RequirementQuestion.asked_by_role`, so every row on this timeline was titled "You
+  asked" over questions the vendor had not asked. Rows are titled from the field; all three
+  published roles are named and an unknown one degrades to a neutral title. A `CUSTOMER` row carries
+  an answer composer on `POST /partner/questions/{id}/answer/` — without it a customer's question is
+  a dead row, and the loop Session A built the other half of does not close. An `OPERATIONS` row
+  offers no control, because the route refuses the side that asked and Vsolve's question is not the
+  customer's.
+- **A visit has a clock time again** (`M2-FE-314`, `M2-FE-306`). `SiteVisit.timezone` (1.26.0) is
+  the *service area's* zone, which is the clock a travelling vendor is on. The visit panel read "in
+  two days"; it now reads the day and time, names the zone, and degrades to the device's clock
+  **saying so** where the runtime does not carry the IANA name — reusing the slot grid's own
+  `supportsTimeZone` probe rather than a second one. The relative phrase is kept beside the absolute
+  one, because it is what answers "is this today".
+
+### What was checked and deliberately not changed
+
+- **`VisitNoShowRequest.reason_code`** was already re-pointed to `VisitNoShowReasonEnum` at the
+  regeneration commit; `NOBODY_ON_SITE` remains the only member this control can honestly send.
+- **`ServiceCard.starting_price` is nullable at 1.27.0** and `request_archetypes` is new. Neither is
+  read by this app: `features/catalog/queries.ts` projects variants for the capability picker and
+  touches no money field, so the M2 services that 1.27.0 made visible add requests and nothing else.
+- **The A3 one-screen composer stays**, per ADR-0009: it is the thin-supply fallback, not dead code.
+
+### Smoke script — the exact clicks
+
+**See the real service name, and page the inbox.** Sign in as a Partner approved for
+`A3_TIME_BLOCK` → `/workforce` → **Enquiries**. Expect each row's heading to be the catalogue's own
+name ("Construction helpers"), in the catalogue's own casing — **not** "construction helpers" or
+"Construction Helpers", which is what the de-slugged slug looked like. With more than twenty
+enquiries on the account, expect a **Load older enquiries** card at the bottom instead of the old
+"this screen cannot ask for" notice; tap it and expect the older rows to append below, the button to
+disappear on the last page, and no duplicate rows. On an account with none in this workspace, expect
+the empty state *with* that button under it if other-archetype enquiries exist beyond page one.
+
+**Answer a question the customer asked.** Have the Customer ask a question against your quote
+(`POST /requirements/{id}/quotes/{proposal_id}/questions/` — the A5 route needs a paid visit plan,
+the A3 one an unlock). Open the enquiry → **Questions**. Expect the row titled **The customer
+asked**, not "You asked", and an answer box under it. Send an answer → expect the row to become
+*You answered ⟨time⟩* with your text, and the box to disappear. Your own questions still read **You
+asked** with "waiting for the customer" under them.
+
+**Write an estimate with materials.** `/projects` → **Enquiries** → an enquiry whose visit you have
+closed → **Write the estimate**. Fill Part 1 (name, days, price) → **Add a material** → expect four
+fields: what it is, **how many**, **units**, and cost of the whole line. Enter "2.5mm copper cable /
+90 / metres / 12000". Add a second part, set the tax basis, **Send the estimate**. Expect Django's
+own total echoed, and on the quote record expect a **Materials (paid as an advance)** block listing
+"2.5mm copper cable · 90 metres · ₹12,000" *below* the parts — not mixed in with them, and not
+carrying a "Materials supplied for this job" line. Leave a material row named with no cost and
+expect *"Put a price on every material, or remove the row."* before anything is sent. Type 40
+characters into **Units** and expect the length refusal client-side.
+
+**Prove the old draft still opens.** With a half-written estimate saved (type into two fields, blur,
+do not send), reload — the values are still there, the material rows have empty quantity and unit
+boxes rather than a crash, and the form is the one you left.
+
+**See a material advance on the engagement.** On a project whose accepted estimate carried
+materials: `/projects/stages/{engagementId}` → expect the materials row **after** every work stage,
+badged **Materials advance**, with the sentence saying it is the materials money and is kept
+separate from the work you are paid for. Work stages carry no such badge.
+
+**See a visit's actual time.** On an A5 enquiry with a `SCHEDULED` plan visit, expect **When** to
+read e.g. *"Tue 18 Aug, 10:00 am (in 2 days)"* with a line underneath naming the timezone as the
+site's. Never a bare relative phrase.
+
+### Static gates — 2026-08-14
+
+- `npx eslint apps/partner apps/admin packages/query --max-warnings 0` — **clean**.
+- `npx turbo run typecheck --filter=partner --filter=admin --filter=@vsolve/query` — **3 of 3**.
+- `npx turbo run build --filter=partner` — **succeeds**; all M2 routes `ƒ`.
+- **No test was run and none was written** — build-first amendment. One assertion in
+  `enquiry-list.test.tsx` is now stale by design and is recorded in plan §7 beside the three suites
+  already logged on 13 August.
 
 ---
 
@@ -822,8 +1012,10 @@ lint during the waves; the browser suite runs once at the wave gate.
 |---|---|---|---|---|
 | B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-12 — 1399/1399 frontend tests, lint clean, 9/9 typecheck, partner build green. `GET /partner/workspaces/` wired and all 7 registry routes mounted. `FE-105` not started; the registration views are still route-less, so nothing exceeds `[~]`. |
 | B2r3 | `FE-314..315` | `[~]` 2 of 2 | `[ ]` | 2026-08-13 — the A5 visit response and the on-site estimate, against contract 1.24.0. `apps/partner` was red at head from the regeneration and is green. Lint clean on owned paths, typecheck 3/3, partner build green with the new `/estimate` route dynamic. **Tests deferred per the build-first amendment.** 12 §7 rows appended, 6 of them closures. |
-| B2 | `FE-301..313` | `[~]` 13 of 13 | `[ ]` | 2026-08-12 — built and wired against contract 1.21.0 on 4 routes. Lint clean, 9/9 typecheck, partner build green, all 4 routes dynamic. **12 unit/component test files and 1 Playwright spec written and not run** — see the owner verification queue in `task.md`. 23 gaps logged in plan §7, of which 3 are backend defects (declared list shape vs. the page envelope Django sends, the inert wage-floor guard, the unreconciled A3 total) and 1 is structural (a Partner cannot read their own quote back). |
-| B3 | `FE-501..508`, `FE-601..607` | `[~]` 6 of 15 | `[ ]` | 2026-08-13 — the **shared spine half only**, against contract 1.25.0: `FE-501`, `FE-601`, `FE-602`, `FE-603`, `FE-604`, `FE-607` on 4 routes (2 replaced, 2 new), all `ƒ`. The nine archetype tails are Wave III and each renders a named not-built-yet block rather than a half-built control. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment.** 13 §7 rows appended, of which 1 closes both Wave I frozen-file grants and 2 are schema corrections (an undeclared `role` parameter, two enums published as bare strings). Two defects found in this column's own wiring and fixed before the gate. |
+| B2 | `FE-301..313` | `[~]` 13 of 13 | `[ ]` | 2026-08-12 — built and wired against contract 1.21.0 on 4 routes. Lint clean, 9/9 typecheck, partner build green, all 4 routes dynamic. **12 unit/component test files and 1 Playwright spec written and not run** — see the owner verification queue in `task.md`. 23 gaps logged in plan §7, of which 3 are backend defects (declared list shape vs. the page envelope Django sends, the inert wage-floor guard, the unreconciled A3 total) and 1 is structural (a Partner cannot read their own quote back). **Revision 4 (ADR-0009): the A3 composer half is the thin-supply fallback — kept as built.** |
+| B2R | `FE-316` (revision 4: crew offer screen) | `[ ]` | `[ ]` | Not started — blocked on backend C2R publishing the crew-offer contract. The A3 composer stays as the fallback response. |
+| B3 | `FE-501..508`, `FE-601..607` (+ `FE-513`, revision 4 — Day-settled tap, with C4) | `[~]` 6 of 15 | `[ ]` | 2026-08-13 — the **shared spine half only**, against contract 1.25.0: `FE-501`, `FE-601`, `FE-602`, `FE-603`, `FE-604`, `FE-607` on 4 routes (2 replaced, 2 new), all `ƒ`. The nine archetype tails are Wave III and each renders a named not-built-yet block rather than a half-built control. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment.** 13 §7 rows appended, of which 1 closes both Wave I frozen-file grants and 2 are schema corrections (an undeclared `role` parameter, two enums published as bare strings). Two defects found in this column's own wiring and fixed before the gate. |
+| B-C3.5 | 1.26.0 consumption pass — `FE-301`, `FE-305`, `FE-314`, `FE-315` | `[~]` 4 of 4 | `[ ]` | 2026-08-14 — five workarounds removed against contract 1.28.0: `service_name` on the inbox row (and `category_slug` unprojected), `ProposalMaterialLine` as first-class rows with the stage-shaped workaround and its on-screen caveat deleted, `EngagementStage.kind` badged on the vendor's stage panel, two-way clarification with the Partner's answer route, cursor paging on the inbox, and `SiteVisit.timezone` on the visit panel. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment**; one stale assertion recorded. 6 §7 rows appended — 5 closures and 1 frozen-file request (`M2_INVALIDATION.answer_question` targets a key this app does not mount). |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |
 | B5 | quality share | `[ ]` | `[ ]` | |
 

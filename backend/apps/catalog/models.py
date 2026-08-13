@@ -300,6 +300,58 @@ class M2VariantConfiguration(models.Model):
     #: somebody's money, and `fulfilment.ScopeAmendment.expires_at` is not nullable.
     amendment_response_hours = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # --- Wave C2R / revision 4 (ADR-0009): the rate-card A3 preset, cascade and fee policy. ----
+    #
+    # Every one of these is nullable for the reason the eleven above are, and each names the
+    # consequence of leaving it unset. They live here rather than on `RateCard` because a rate
+    # card is a *price* and these are *policy*: the split percentage, the cancellation window and
+    # the cascade shape do not change when a city's day rate moves, and putting them on the card
+    # would block publishing a rate until somebody decided a refund rule.
+    #
+    # `apps.requirements.rate_cards` is the only reader and refuses with `m2_policy_unavailable`
+    # while one is unset.
+
+    #: The A3 preset: the three or four **price-moving facts** for this variant — floor number,
+    #: lift, carry distance, packing. Same shape, same `carts.item_inputs.validate_scope` validator
+    #: and same version as `question_schema`, because a second question subsystem is the thing
+    #: `02-backend-tasks.md` §"Reuse before building" names. Empty means this variant has no preset
+    #: and `book_at_published_rate` refuses: an instant booking whose scope was never pinned down
+    #: is exactly the on-site renegotiation ADR-0009 exists to prevent.
+    a3_preset_question_schema = models.JSONField(default=dict, blank=True)
+    #: How many leads one cascade wave offers the job to. Null blocks the cascade entirely — a
+    #: wave size guessed here is a decision about how much of a city's supply one request burns.
+    crew_wave_size = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: How many extra leads each subsequent wave adds as the cascade widens.
+    crew_wave_widening_step = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: **Seconds**, not business hours. ADR-0009 is explicit that the crew offer runs on the M1
+    #: dispatch clock — small wave, first accept wins, minutes-level timeouts — because an instant
+    #: product cannot wait for a service area to open tomorrow morning.
+    crew_offer_timeout_seconds = models.PositiveIntegerField(null=True, blank=True)
+    #: How many waves may go out before `fall_back_to_quote_flow` runs. Null blocks the fallback,
+    #: which would leave a request cascading forever behind a holding state.
+    crew_cascade_max_waves = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: How long an accepted offer holds the job while the Customer pays the booking fee, in
+    #: seconds. Null blocks acceptance: a hold with no expiry is a lead's Saturday taken off the
+    #: market by a Customer who may never pay.
+    crew_offer_hold_seconds = models.PositiveIntegerField(null=True, blank=True)
+    #: The decline-rate alarm (`M2-BE-434`): the rate above which sustained declines page
+    #: Operations, in basis points, and the minimum number of offers before the rate means
+    #: anything. Owner decision 13. Null means **no alarm fires** — the honest consequence, and the
+    #: reason the alarm is recorded as blocked rather than shipped with an invented threshold.
+    crew_decline_alarm_basis_points = models.PositiveIntegerField(null=True, blank=True)
+    crew_decline_alarm_min_offers = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: The free-cancel window T, in hours before the requested start. A Customer cancelling at or
+    #: beyond T refunds in full; inside T the forfeit split runs. Owner decision 12. Null blocks
+    #: Customer cancellation of a paid booking outright — deciding between a full refund and a
+    #: forfeit by guessing is deciding whose money it is.
+    booking_fee_free_cancel_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: The forfeit split: the lead's travel-compensation share of a forfeited booking fee, in
+    #: basis points. The remainder is the platform share. Owner decision 12. Null blocks the
+    #: forfeit, which leaves the fee `ACTIVE` and visible rather than split on an invented ratio.
+    booking_fee_travel_compensation_basis_points = models.PositiveIntegerField(
+        null=True, blank=True
+    )
+
     evidence_policy = models.JSONField(default=dict)
     contact_policy = models.JSONField(default=dict)
     created_by = models.ForeignKey(
@@ -343,6 +395,16 @@ class M2VariantConfiguration(models.Model):
                 condition=models.Q(commission_basis_points__isnull=True)
                 | models.Q(commission_basis_points__lte=10000),
                 name="catalog_m2_configuration_commission_within_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(booking_fee_travel_compensation_basis_points__isnull=True)
+                | models.Q(booking_fee_travel_compensation_basis_points__lte=10000),
+                name="catalog_m2_configuration_forfeit_split_within_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(crew_decline_alarm_basis_points__isnull=True)
+                | models.Q(crew_decline_alarm_basis_points__lte=10000),
+                name="catalog_m2_configuration_decline_alarm_within_range",
             ),
         ]
 

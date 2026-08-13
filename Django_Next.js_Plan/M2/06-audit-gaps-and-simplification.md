@@ -9,11 +9,16 @@ and `frontend/apps/**`.
 and `05-roadmap-and-prompts.md` as revision 2. This document is retained as the reasoning record.
 See [Adoption record](#adoption-record) for what landed where and what is still an open decision.
 
-> **Partly superseded, 2026-08-12.** Revision 3
+> **Partly superseded, 2026-08-12 and again 2026-08-13.** Revision 3
 > ([ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md)) replaces `FLOW-01`'s
 > application to **A5** with a visit-first model: a tiered visit plan charged at the first confirmed
-> visit slot, on-site estimates, no unlock paywall. `FLOW-01` still governs A3 exactly as written,
-> and every other finding in this document stands. Nothing below was edited — this is history.
+> visit slot, on-site estimates, no unlock paywall. Revision 4
+> ([ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md), 2026-08-13) supersedes
+> `FLOW-01`'s **A3** half as well: the free→teaser→unlock inversion now governs only the A3
+> **thin-supply fallback**, and the primary A3 path is an Operations-published **rate card** with a
+> booking fee charged at vendor accept — see ADR-0009 and the revision 4 sections of `README.md`.
+> Every other finding in this document stands. Nothing below was edited — this is history; revision 4
+> is recorded only in this banner and the dated addenda at the end.
 
 ---
 
@@ -361,6 +366,21 @@ the revision 2 documents.
 | One payment before work for A3, two for A5 (`FLOW-05`) | Flow-weight budget; `M2-AC-320` |
 | Progressive KYC and late crew roster (`FLOW-06`, `FLOW-07`) | `M2-BE-109`; `M2-FE-101`, `M2-FE-102`, `M2-FE-107`; `M2-AC-002`, `M2-AC-003` |
 
+### Revision 4 addendum — 2026-08-13, ADR-0009
+
+Recorded here without editing the rows above, which stay true as the history of revision 2. The
+owner's rate-card decision changes their standing as follows:
+
+| Adopted finding above | Standing after revision 4 (2026-08-13) |
+|---|---|
+| Free requirement; INR 149 unlock after a usable quote (`FLOW-01`, `SIM-04`) | The A3 half is demoted to the **thin-supply fallback**. The primary A3 path is a published rate card with a **booking fee charged at vendor accept**; the built unlock surface (backend Wave C2 at contract 1.24.0, Customer Wave A2) stays built as that fallback and nothing is deleted. Whether the fallback keeps charging the unlock is new owner decision 14. |
+| Fixed mode per archetype (`SIM-03`) | Reaffirmed: A3 remains `LEAD_ONLY`; the booking fee replaces the unlock as the only platform money on the primary path, and wages are direct, daily, P2P — never held. |
+| Assisted A3 quote capture as a primary path (`SIM-10`) | Primary on the fallback only. On the rate-card path nothing is composed — accepting the published rate is the whole vendor response. |
+| Two composers; single-screen A3 response (`SIM-11`, `FLOW-08`) | The fallback composer stays one screen; the primary A3 response is a one-screen crew offer showing the lead's own number. |
+| One payment before work for A3 (`FLOW-05`) | Still exactly one platform payment — now the booking fee at vendor accept instead of the unlock. |
+| `GAP-033` A3 unit economics | The rate-card model is revision 4's answer to `GAP-033`'s A3 question, restated against the **booking fee's platform share** (README decision 10). |
+| New owner decisions | 12 (booking-fee value, forfeit split percentages, free-cancel window T), 13 (seed rate-card values, decline-alarm threshold, review calendar owner) and 14 (the fallback unlock question) join the README blocking list. |
+
 ### Edge cases now carried by tasks
 
 All 36 `GAP` findings are referenced inline by the task that closes them. Spot checks: `GAP-022`
@@ -373,10 +393,19 @@ project) at `M2-BE-545`/`M2-FE-612`/`M2-AC-609`.
 These could not be resolved by a plan rewrite and remain in the blocking list in `README.md`:
 
 - Commission visibility on A5 proposals (`GAP-016`).
-- GST, invoicing and principal-versus-agent treatment per mode (`GAP-017`, `GAP-018`, `GAP-034`).
+- GST, invoicing and principal-versus-agent treatment per mode (`GAP-017`, `GAP-018`, `GAP-034`) —
+  since 2026-08-13 (revision 4) also covering the A3 booking fee and its forfeit travel
+  compensation (README decision 5).
 - Worker insurance and injury liability position (`GAP-022`) - blocking for Construction Labour.
 - Minimum-wage floor source per state and skill (`GAP-023`).
-- Unit economics: Operations touches per request against INR 149 (`GAP-033`, `PLN-07`).
+- Unit economics: Operations touches per request (`GAP-033`, `PLN-07`) — originally against
+  INR 149; since revision 4 (2026-08-13) restated against the A3 booking fee's platform share
+  (README decision 10), the rate-card model being revision 4's answer to `GAP-033`'s A3 question.
+- Added 2026-08-13 (revision 4): the A3 booking-fee value, forfeit split percentages and
+  free-cancel window T (README decision 12); the seed rate-card values per launch city+skill, the
+  decline-alarm threshold and the review calendar owner (README decision 13); and whether the A3
+  fallback keeps charging the INR 149 unlock or delivers its quotes readable free (README
+  decision 14).
 - The wallet contradiction with `milestones.md` M3 (`PLN-01`).
 - The M2/M3 milestone boundary given that `milestones.md` excludes payments and OTP (`PLN-08`,
   `PLN-04`).

@@ -24,18 +24,26 @@ from contextlib import suppress
 from uuid import UUID
 
 from celery import shared_task
+from django.utils import timezone
 
+from apps.identity.models import User
+from apps.notifications.models import NotificationIntent
+from apps.notifications.services import request_notification
 from apps.requirements import (
     access,
     attachments,
+    booking_fees,
+    crew_dispatch,
     engagements,
     matching,
     proposals,
     services,
     stages,
 )
+from apps.requirements.exceptions import RequirementTransitionError
 from apps.requirements.models import (
     CustomerRequirement,
+    RateCardBooking,
     RequirementAttachmentUpload,
     StageEvidenceUpload,
 )
@@ -463,3 +471,210 @@ def sweep_orphaned_attachment_uploads() -> int:
             get_attachment_storage().delete_object(object_key=upload.object_key)
         swept += 1
     return swept
+
+
+# ---------------------------------------------------------------------------
+# Wave C2R — the rate-card cascade, the fee, and the decline alarm.
+#
+# These run on the **M1 dispatch cadence**, not the M2 business-hours one. Everything above sweeps
+# a clock measured in business hours and ticks every two to fifteen minutes; a crew offer times out
+# in minutes of wall time, so a two-minute sweep is the *slow* end of what it needs and the
+# cadences below say so.
+# ---------------------------------------------------------------------------
+
+#: How far back the decline-rate alarm looks. A day, because ADR-0009's failure mode is a rate that
+#: went stale *this week* and a window long enough to smooth that out is a monthly report wearing
+#: an alarm's clothes.
+DECLINE_ALARM_WINDOW_HOURS = 24
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def expire_one_crew_offer(_self: object, invitation_id: str) -> None:
+    crew_dispatch.expire_crew_offer_and_advance(invitation_id=UUID(invitation_id))
+
+
+@shared_task
+def sweep_expired_crew_offers() -> int:
+    """Expire crew offers past their wall-clock deadline and widen the cascade.
+
+    Deliberately not folded into `sweep_expired_invitations`. That sweep replaces one invitation
+    with one other on a business-hours deadline, which is right for a quote and wrong for a crew:
+    the recovery here is the cascade widening, and routing a crew offer through the quote sweep
+    would re-invite one lead tomorrow morning instead of three more in two minutes.
+    """
+    swept = 0
+    for invitation_id in crew_dispatch.expired_crew_offer_ids()[:SWEEP_BATCH_SIZE]:
+        expire_one_crew_offer.delay(str(invitation_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def release_one_offer_hold(_self: object, booking_id: str) -> None:
+    with suppress(RequirementTransitionError):
+        crew_dispatch.release_expired_offer_hold(booking_id=UUID(booking_id))
+
+
+@shared_task
+def sweep_expired_offer_holds() -> int:
+    """Hand back a lead's dates when the Customer never paid the booking fee.
+
+    §4c: the hold "expires harmlessly" — no charge was made, the lead's standing is untouched, and
+    the cascade proceeds. The suppression above is the idempotency: a booking somebody paid for
+    between the selector and the task is no longer holding an offer, and that is the expected
+    outcome rather than an error.
+    """
+    swept = 0
+    for booking_id in crew_dispatch.expired_offer_hold_booking_ids()[:SWEEP_BATCH_SIZE]:
+        release_one_offer_hold.delay(str(booking_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def advance_one_cascade(_self: object, booking_id: str) -> None:
+    booking = RateCardBooking.objects.filter(id=UUID(booking_id)).first()
+    if booking is None:
+        return
+    crew_dispatch.advance_cascade(requirement_id=booking.requirement_id)
+
+
+@shared_task
+def sweep_stalled_rate_card_bookings() -> int:
+    """Nudge any booking that is matching with no live offer against it.
+
+    Every ordinary path calls `advance_cascade` directly; this is the watchdog for the paths that
+    do not happen. Without it, a wave whose last invitation was expired by the quote sweep leaves
+    the Customer watching a holding state that resolves to nothing.
+    """
+    swept = 0
+    for booking_id in crew_dispatch.stalled_rate_card_booking_ids()[:SWEEP_BATCH_SIZE]:
+        advance_one_cascade.delay(str(booking_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def refund_one_unearned_booking_fee(_self: object, requirement_id: str) -> None:
+    with suppress(RequirementTransitionError):
+        booking_fees.refund_booking_fee(
+            requirement_id=UUID(requirement_id),
+            reason_code=booking_fees.REASON_REQUIREMENT_EXPIRED,
+        )
+
+
+@shared_task
+def sweep_unearned_booking_fees() -> int:
+    """Refund any booking fee still unearned on a requirement that has closed.
+
+    §1: `* → CLOSED_EXPIRED` refunds unearned booking-fee value in full. Kept out of
+    `close_requirement` on purpose — a refund adapter timing out must not stop a requirement whose
+    needed-by date has passed from closing.
+    """
+    swept = 0
+    for requirement_id in booking_fees.unearned_fee_requirement_ids_for_expiry()[:SWEEP_BATCH_SIZE]:
+        refund_one_unearned_booking_fee.delay(str(requirement_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def release_one_travel_compensation(_self: object, booking_fee_id: str) -> None:
+    booking_fees.release_travel_compensation_hold(booking_fee_id=UUID(booking_fee_id))
+
+
+@shared_task
+def sweep_travel_compensation_holds() -> int:
+    """Make forfeit payouts payable once the lead's bank details land.
+
+    The booking-fee twin of the visit-payout half of `sweep_stage_payout_holds`, and it exists for
+    the same structural reason: `payouts.release_payout_hold` resolves an entry by Booking, and a
+    travel-compensation earning has none.
+    """
+    swept = 0
+    for fee_id in booking_fees.held_travel_compensation_fee_ids()[:SWEEP_BATCH_SIZE]:
+        release_one_travel_compensation.delay(str(fee_id))
+        swept += 1
+    return swept
+
+
+@shared_task
+def sweep_rate_card_decline_alarm() -> int:
+    """Page Operations when a published rate is being declined out of the market (`M2-BE-434`).
+
+    **An alarm, not a report.** ADR-0009 is explicit about why: a rate below the street rate that
+    week makes leads silently decline everything and the instant product dies quietly, so this has
+    to reach a person on the day rather than appear in a monthly review.
+
+    It reaches them through the M1 notification rail — `notifications.request_notification` with an
+    in-app-equivalent channel and an idempotency key per card per day, so a five-minute sweep pages
+    once and not two hundred and eighty-eight times. A card whose variant has no configured
+    threshold is skipped: owner decision 13 is open, and **no alarm fires** while it is, which is
+    recorded as a gap rather than papered over with an invented percentage.
+    """
+    breaches = crew_dispatch.breached_decline_rates(window_hours=DECLINE_ALARM_WINDOW_HOURS)
+    if not breaches:
+        return 0
+    recipients = list(
+        User.objects.filter(
+            userrole__role__code="operations",
+            userrole__revoked_at__isnull=True,
+            is_active=True,
+        )
+        .distinct()
+        .values_list("id", flat=True)
+    )
+    today = timezone.localdate().isoformat()
+    paged = 0
+    for breach in breaches:
+        for recipient_id in recipients:
+            request_notification(
+                recipient_id=recipient_id,
+                purpose="m2_rate_card_decline_alarm",
+                channel=NotificationIntent.Channel.EMAIL,
+                template_code="m2_rate_card_decline_alarm",
+                context={
+                    "rate_card_id": str(breach.card.id),
+                    "service_area": breach.card.service_area.slug,
+                    "skill": breach.card.skill.code,
+                    "customer_day_rate_paise": breach.card.customer_day_rate_paise,
+                    "offers": breach.offers,
+                    "declines": breach.declines,
+                    "decline_rate_basis_points": breach.rate_basis_points,
+                    "threshold_basis_points": breach.threshold_basis_points,
+                    "window_hours": DECLINE_ALARM_WINDOW_HOURS,
+                },
+                idempotency_key=f"m2-decline-alarm:{breach.card.id}:{recipient_id}:{today}",
+            )
+            paged += 1
+    return paged

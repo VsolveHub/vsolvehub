@@ -9,11 +9,26 @@ dev-only seed `manage.py seed_m2_demo`). Background sweeps are on Celery beat.
 Frontend: FE0 foundation built; **Customer Waves A1, A2 and A3 are built and mounted**, as is
 **Wave I** (the cross-cutting customer pass); **Partner Waves B1 and B2 are built and mounted, and
 B3's project half is landed**. Operations/admin: **nothing started**.
-**Remaining work:** backend **C2R** (the rate-card A3 front door) and **C4–C7**; frontend **A2R**
-and **B2R** (the revision 4 consumption of C2R), the workforce fulfilment UI, and **A4/B4** (the
-Operations application).
+**Wave C2R is built and published at contract 1.29.0** (Gate 1, 2026-08-14): the `RateCard`
+aggregate and `publish_rate_card`, the A3 preset and `book_at_published_rate`, the crew-offer
+cascade caller, `BookingFee` with its forfeit split and refunds, and `fall_back_to_quote_flow` —
+ten new paths. Both frontend columns consumed their outstanding contract fields in the same gate.
+**Remaining work:** backend **C4–C7**; frontend **A2R** and **B2R** (the revision 4 *UI* for C2R —
+no rate-card screen exists in either app yet), the workforce fulfilment UI, and **A4/B4** (the M2
+Operations surfaces; note the admin app is a working M1 Operations app already — only its M2
+screens are missing).
 HTTP tests **exist for the C0–C2 paths and have not been run**; the C3 onward waves wrote none, per
 the build-first amendment. No phase has passed its gate.
+
+> **Gate 1 found two runtime blockers in C2R that every static gate passed**, and both are worth
+> remembering for the waves still to come: a check constraint whose purpose list had drifted from
+> the tuple it claimed to be generated from (so `makemigrations --check` stayed green while the
+> booking-fee checkout raised `IntegrityError`), and ten configuration columns with a reader, a
+> column and a migration but **no writer anywhere**, which made the A3 booking path refuse
+> unconditionally in every environment. Both fixed and verified against the database. **Green
+> static gates prove the code compiles, not that a single request can complete** — the demo seed
+> and a real walkthrough are what prove that, and they are cheap. Full account in
+> [frontend-execution-plan.md](frontend-execution-plan.md) §7, 2026-08-14.
 **Revision 4 (2026-08-13, ADR-0009):** A3 is now **rate-card-first** — the built unlock surface
 above is demoted to the thin-supply fallback, and the primary A3 front door (rate card, offer
 cascade to leads, booking fee at vendor accept, daily direct wages) is new, unstarted work. See the

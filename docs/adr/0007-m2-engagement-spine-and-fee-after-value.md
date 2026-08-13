@@ -1,7 +1,9 @@
 # 7. M2 engagement spine and fee after value
 
-- Status: Accepted; the A5 fee model is superseded by ADR-0008 (visit-first estimation). The
-  engagement spine, mode-per-archetype and the A3 unlock remain in force.
+- Status: Accepted; the A5 fee model is superseded by ADR-0008 (visit-first estimation), and the
+  A3 front door (teasers and the INR 149 unlock as the primary path) is superseded by ADR-0009
+  (rate-card instant dispatch; the unlock machinery remains as the thin-supply fallback). The
+  engagement spine and mode-per-archetype remain in force.
 - Date: 2026-08-10
 
 ## Context

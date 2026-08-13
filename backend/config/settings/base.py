@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.28.0",
+    "VERSION": "1.29.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -412,6 +412,23 @@ SPECTACULAR_SETTINGS = {
         "EngagementStageKindEnum": "apps.requirements.models.EngagementStage.Kind",
         "VisitNoShowReasonEnum": "apps.requirements.serializers.VISIT_NO_SHOW_REASONS",
         "QuestionAskerRoleEnum": "apps.requirements.selectors.QUESTION_ASKER_ROLES",
+        # M2 Wave C2R — the rate-card A3 front door (revision 4).
+        #
+        # Two more `status` sets and two more `reason_code` ones. `status` is the most reused field
+        # name in the schema and `reason_code` is now second, so both go in on arrival: an unnamed
+        # set publishes positionally and its digits move the next time an unrelated app adds a
+        # field with the same name, which is the failure the 1.24.0 `ReasonEnum` note records.
+        #
+        # The crew no-show **party** deliberately has no entry: it is the same two-value choice set
+        # as `VISIT_NO_SHOW_PARTIES`, so the generator resolves both to the already-published
+        # `VisitNoShowPartyEnum` and gives the two surfaces one component. Naming a second one here
+        # would split it and rename nothing usefully.
+        "BookingFeeStatusEnum": "apps.requirements.models.BookingFee.Status",
+        "RateCardBookingStatusEnum": "apps.requirements.models.RateCardBooking.Status",
+        "CrewOfferDeclineReasonCodeEnum": (
+            "apps.requirements.serializers.CREW_OFFER_DECLINE_REASONS"
+        ),
+        "CrewNoShowReasonCodeEnum": "apps.requirements.serializers.CREW_NO_SHOW_REASONS",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -731,6 +748,47 @@ CELERY_BEAT_SCHEDULE = {
         # Hourly, like its two upload-intent twins. An abandoned intent costs storage and nothing
         # else.
         "schedule": 60.0 * 60,
+    },
+    # M2 Wave C2R — the rate-card crew cascade (revision 4). These run on the **M1 dispatch
+    # cadence**, not the M2 business-hours one, and that is the whole difference: a crew offer
+    # times out in minutes of wall time, so a two-minute tick is the slow end of what it needs
+    # rather than the fast end.
+    "sweep-expired-crew-offers": {
+        "task": "apps.requirements.tasks.sweep_expired_crew_offers",
+        # 60 seconds. This is the sweep the instant promise depends on: every second an expired
+        # offer sits unswept is a second the Customer is watching a holding state that has already
+        # failed, and the recovery is a wider wave rather than a longer wait.
+        "schedule": 60.0,
+    },
+    "sweep-expired-offer-holds": {
+        "task": "apps.requirements.tasks.sweep_expired_offer_holds",
+        # 60 seconds. It hands a lead's dates back after a Customer who never paid, and those
+        # dates are also capacity the A1 grid and the next crew offer both want.
+        "schedule": 60.0,
+    },
+    "sweep-stalled-rate-card-bookings": {
+        "task": "apps.requirements.tasks.sweep_stalled_rate_card_bookings",
+        # 2 minutes. A watchdog on a watchdog: everything ordinary advances the cascade inline, so
+        # this only ever catches a booking the ordinary paths left behind.
+        "schedule": 60.0 * 2,
+    },
+    "sweep-unearned-booking-fees": {
+        "task": "apps.requirements.tasks.sweep_unearned_booking_fees",
+        # 15 minutes, matching `sweep-unfilled-visit-shares`. The refund is owed from the instant
+        # the requirement closes, and a quarter-hour is not the slow part of a bank refund.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-travel-compensation-holds": {
+        "task": "apps.requirements.tasks.sweep_travel_compensation_holds",
+        # Hourly, matching every other payout-hold sweep and `reconcile-payouts`.
+        "schedule": 60.0 * 60,
+    },
+    "sweep-rate-card-decline-alarm": {
+        "task": "apps.requirements.tasks.sweep_rate_card_decline_alarm",
+        # 15 minutes. ADR-0009 makes this load-bearing — a stale rate kills the instant product
+        # quietly — and the notification is keyed per card per day, so a frequent tick pages once
+        # and then stops rather than repeating itself.
+        "schedule": 60.0 * 15,
     },
 }
 

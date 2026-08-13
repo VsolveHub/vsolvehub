@@ -166,10 +166,17 @@ export function useStage(engagementId: string, stageId: string | null) {
  * `actor_is_system` is the field that keeps it honest: "approved by a person"
  * and "approved because the review window closed" are different sentences, and
  * a timeline that renders them identically is lying about who decided.
+ *
+ * Keyed on `m2QueryKeys.engagements.events(id)`, which the frozen factory landed
+ * on this column's §7 request. Wave A3 composed it locally as
+ * `detail(id) + "events"` — correct by construction and unreviewable, because a
+ * key nobody can find in the factory is a key nobody can check the invalidation
+ * of. The shape is unchanged: still nested under the detail, so every existing
+ * engagement invalidation still clears it by prefix.
  */
 export function useEngagementEvents(engagementId: string | null) {
   return useQuery({
-    queryKey: [...m2QueryKeys.engagements.detail(engagementId ?? ""), "events"] as const,
+    queryKey: m2QueryKeys.engagements.events(engagementId ?? ""),
     queryFn: () =>
       request(() =>
         getApiClient().GET("/api/v1/engagements/{engagement_id}/events/", {
@@ -177,7 +184,10 @@ export function useEngagementEvents(engagementId: string | null) {
         }),
       ),
     enabled: engagementId !== null,
-    ...M2_FRESHNESS.engagementDetail,
+    // The factory wrote this read its own tier: transitions land whenever the
+    // other party or a sweep acts, which is the volatile question, not an
+    // expiring one — nothing on this list has a deadline the Customer acts on.
+    ...M2_FRESHNESS.engagementEvents,
     retry: shouldRetryM2Read,
   });
 }
@@ -190,16 +200,24 @@ export function useEngagementEvents(engagementId: string | null) {
  * history, and the declined or expired ones that explain why the agreement did
  * not change.
  *
- * Keyed under the engagement's `agreement` key, which the frozen factory already
- * carries and describes as "the immutable agreement and its amendment history".
- * `M2_FRESHNESS.agreement` is `SESSION_STATE` and is deliberately **not** used:
- * that tier is for something immutable, and a live change request with a
- * deadline on it is the opposite. It takes the engagement's own tier and polls
- * while a charge is unresolved.
+ * Keyed on `m2QueryKeys.engagements.amendments(id)` and on
+ * `M2_FRESHNESS.amendments`, both landed by the frozen factory on this column's
+ * §7 request. Wave A3 borrowed `engagements.agreement(id)` because the key's own
+ * doc said "the immutable agreement **and its amendment history**" — and then
+ * had to refuse that key's `SESSION_STATE` tier, which is the tell that one key
+ * was carrying two reads. They have opposite freshness: the agreement is written
+ * once and never changes, and a *proposed* amendment is a live change request
+ * with a deadline and a money delta on it, decided from two devices. Serving one
+ * from a session-long cache is how a Customer approves a delta that expired an
+ * hour ago.
+ *
+ * `agreement` keeps `SESSION_STATE` for the immutable terms and nothing in this
+ * app reads amendments off it any more. Still nested under `engagements.detail`,
+ * so the existing invalidation rows clear it by prefix.
  */
 export function useEngagementAmendments(engagementId: string | null) {
   return useQuery({
-    queryKey: m2QueryKeys.engagements.agreement(engagementId ?? ""),
+    queryKey: m2QueryKeys.engagements.amendments(engagementId ?? ""),
     queryFn: () =>
       request(() =>
         getApiClient().GET("/api/v1/engagements/{engagement_id}/amendments/", {
@@ -207,7 +225,7 @@ export function useEngagementAmendments(engagementId: string | null) {
         }),
       ),
     enabled: engagementId !== null,
-    ...M2_FRESHNESS.engagementDetail,
+    ...M2_FRESHNESS.amendments,
     ...boundedPoll<EngagementAmendmentList>({ isSettled: isAmendmentListSettled }),
     retry: shouldRetryM2Read,
   });

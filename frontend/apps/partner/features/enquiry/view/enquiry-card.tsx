@@ -49,9 +49,11 @@ export interface EnquiryCardProps {
 
 export function EnquiryCard({ enquiry, basePath }: EnquiryCardProps) {
   const status = describeStatus(enquiry.status);
-  // The service is the vendor's own vocabulary for the work. The archetype code
-  // is never rendered — it decides which composer opens, and nothing else.
-  const service = enquiry.categorySlug.replace(/[-_]+/g, " ");
+  // The catalogue's own name (1.26.0). This row used to de-slug `category_slug`
+  // into a title, which was presentation of a routing key — "housekeeping-staff"
+  // rather than what the catalogue calls the service. The archetype code is
+  // still never rendered: it decides which composer opens, and nothing else.
+  const service = enquiry.serviceName.trim();
 
   const schedule = [
     enquiry.requestedStart ? `Starts ${shortDate(enquiry.requestedStart)}` : null,
@@ -68,7 +70,14 @@ export function EnquiryCard({ enquiry, basePath }: EnquiryCardProps) {
       >
         <span className="flex min-w-0 flex-col gap-1.5">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-semibold capitalize text-text">{service}</span>
+            {/* No `capitalize`: this is the catalogue's own casing now, and
+                title-casing a real name mangles it ("Interior fit-out project"
+                becomes "Interior Fit-Out Project"). A blank name cannot happen
+                on a published service and is said rather than left as an empty
+                heading if it ever does. */}
+            <span className="truncate text-sm font-semibold text-text">
+              {service === "" ? "Service not named" : service}
+            </span>
             <Badge tone={TONE[status.tone]} dot>
               {status.label}
             </Badge>

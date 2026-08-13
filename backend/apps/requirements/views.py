@@ -20,7 +20,7 @@ from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 from apps.catalog.models import ServiceVariant
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
-from apps.locations.models import Address
+from apps.locations.models import Address, ServiceArea
 from apps.locations.services import check_serviceability
 from apps.partners.capabilities import (
     assert_capability_active,
@@ -37,16 +37,20 @@ from apps.partners.capabilities import (
     workspace_grants,
 )
 from apps.partners.exceptions import PartnerDomainError
+from apps.partners.models import Skill
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
 from apps.requirements import (
     access,
     amendments,
     attachments,
+    booking_fees,
+    crew_dispatch,
     engagements,
     matching,
     pricing,
     proposals,
+    rate_cards,
     services,
     stages,
     visit_slots,
@@ -54,6 +58,7 @@ from apps.requirements import (
 from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
     PolicyUnavailableError,
+    RateCardUnavailableError,
     RequirementDomainError,
     RequirementNotFoundError,
     RequirementTransitionError,
@@ -62,9 +67,11 @@ from apps.requirements.models import (
     CustomerRequirement,
     EngagementStage,
     Proposal,
+    RateCardBooking,
     RequirementAttachment,
     RequirementQuestion,
     SiteVisit,
+    VendorInvitation,
     VisitPlan,
 )
 from apps.requirements.selectors import (
@@ -96,6 +103,11 @@ from apps.requirements.serializers import (
     AttachmentFinalizeSerializer,
     AttachmentUploadGrantSerializer,
     AttachmentUploadRequestSerializer,
+    BookingFeeSerializer,
+    CrewNoShowSerializer,
+    CrewOfferDeclineSerializer,
+    CrewOfferListSerializer,
+    CrewOfferSerializer,
     CustomerProposalSerializer,
     CustomerQuoteListSerializer,
     DemandPreviewSerializer,
@@ -121,6 +133,12 @@ from apps.requirements.serializers import (
     QuestionAnswerSerializer,
     QuestionCreateSerializer,
     QuoteTeaserListSerializer,
+    RateCardBookingSerializer,
+    RateCardBookSerializer,
+    RateCardListSerializer,
+    RateCardPublishSerializer,
+    RateCardSerializer,
+    RateCardStateSerializer,
     RequirementAttachmentSerializer,
     RequirementCreateSerializer,
     RequirementDraftSerializer,
@@ -3622,6 +3640,10 @@ __all__ = [
     "EngagementStageFundingView",
     "EngagementStageStartView",
     "EngagementStageSubmitView",
+    "OperationsRateCardView",
+    "PartnerCrewOfferAcceptView",
+    "PartnerCrewOfferDeclineView",
+    "PartnerCrewOfferListView",
     "PartnerDemandPreviewView",
     "PartnerEnquiryAcceptView",
     "PartnerEnquiryAttachmentListView",
@@ -3638,13 +3660,19 @@ __all__ = [
     "RequirementAttachmentCollectionView",
     "RequirementAttachmentDetailView",
     "RequirementAttachmentFinalizeView",
+    "RequirementBookingFeeCancelView",
+    "RequirementBookingFeeCheckoutView",
     "RequirementCollectionView",
+    "RequirementCrewArrivalView",
+    "RequirementCrewNoShowView",
     "RequirementDetailView",
     "RequirementDuplicateCheckView",
     "RequirementQuestionAnswerView",
     "RequirementQuoteListView",
     "RequirementQuoteRejectView",
     "RequirementQuoteRevalidateView",
+    "RequirementRateCardBookView",
+    "RequirementRateCardView",
     "RequirementSelectionView",
     "RequirementSubmitView",
     "RequirementTeaserListView",
@@ -3659,3 +3687,727 @@ __all__ = [
     "SiteVisitNoShowView",
     "SiteVisitScheduleView",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Wave C2R / revision 4 (ADR-0009): the rate-card A3 front door.
+#
+# Thin, like everything else in this file. The one thing worth noticing is that the read below
+# publishes *unavailability as a state on a `200`*, not as an error. An A3 Customer whose city has
+# no published card can still submit their request — it simply collects quotes — so refusing the
+# whole screen because instant booking is not offered here would hide a path that works. The
+# **commands** still fail closed, with the published code, because a command that guessed would
+# book a crew at a price nobody approved.
+# ---------------------------------------------------------------------------
+
+
+def _rate_card_preview_payload(requirement: CustomerRequirement) -> dict[str, object]:
+    """The published rate, or an honest reason there is none.
+
+    Catches exactly the two fail-closed refusals and no others. A `m2_rate_card_unavailable` or a
+    `m2_policy_unavailable` here means "we do not offer instant booking for this request"; anything
+    else is a genuine failure and must not be flattened into a screen that says the same thing.
+    """
+    try:
+        preview = crew_dispatch.preview_published_rate(requirement)
+    except (RateCardUnavailableError, PolicyUnavailableError) as exc:
+        return {
+            "is_available": False,
+            "rate_card_id": None,
+            "headcount": None,
+            "days": None,
+            "day_rate_paise": None,
+            "total_customer_paise": None,
+            "lead_receipt_paise": None,
+            "booking_fee_paise": None,
+            "standard_day_hours": None,
+            "overtime_hourly_paise": None,
+            "add_on_rates": None,
+            "inclusions": None,
+            "unavailable_code": exc.code,
+            "unavailable_reason": exc.message,
+            "server_now": timezone.now(),
+        }
+    except RequirementDomainError as exc:
+        # A preset with no headcount or no days is the Customer's own unfinished draft, not an
+        # unpriced city. Reported with its own code so the screen can say "tell us how many
+        # people" rather than "we do not cover this area".
+        return {
+            "is_available": False,
+            "rate_card_id": None,
+            "headcount": None,
+            "days": None,
+            "day_rate_paise": None,
+            "total_customer_paise": None,
+            "lead_receipt_paise": None,
+            "booking_fee_paise": None,
+            "standard_day_hours": None,
+            "overtime_hourly_paise": None,
+            "add_on_rates": None,
+            "inclusions": None,
+            "unavailable_code": exc.code,
+            "unavailable_reason": exc.message,
+            "server_now": timezone.now(),
+        }
+    return {
+        "is_available": True,
+        "rate_card_id": preview.card.id,
+        "headcount": preview.quote.headcount,
+        "days": preview.quote.days,
+        "day_rate_paise": preview.quote.day_rate_paise,
+        "total_customer_paise": preview.quote.total_customer_paise,
+        "lead_receipt_paise": preview.quote.lead_receipt_paise,
+        "booking_fee_paise": preview.quote.booking_fee_paise,
+        "standard_day_hours": preview.standard_day_hours,
+        "overtime_hourly_paise": preview.overtime_hourly_paise,
+        "add_on_rates": preview.add_on_rates,
+        "inclusions": preview.inclusions,
+        "unavailable_code": None,
+        "unavailable_reason": None,
+        "server_now": timezone.now(),
+    }
+
+
+def _rate_card_state_payload(requirement: CustomerRequirement) -> dict[str, object]:
+    booking = RateCardBooking.objects.filter(requirement=requirement).first()
+    fee = booking_fees.latest_booking_fee(requirement)
+    holder = booking_fees.crew_offer_holder(requirement)
+    # Identity is released by the confirmation, never by the hold. A Customer watching a held
+    # booking sees that *a* crew took it; they learn who once the fee is verified.
+    confirmed = (
+        holder
+        if booking is not None and booking.status == RateCardBooking.Status.CONFIRMED
+        else None
+    )
+    return {
+        "preview": _rate_card_preview_payload(requirement),
+        "booking": booking,
+        "booking_fee": fee,
+        "checkout_available": booking_fees.booking_fee_checkout_availability(requirement),
+        "confirmed_partner_id": confirmed.partner_id if confirmed is not None else None,
+        "confirmed_partner_name": (
+            confirmed.partner.display_name if confirmed is not None else None
+        ),
+        "server_now": timezone.now(),
+    }
+
+
+class RequirementRateCardView(APIView):
+    """The A3 instant path as one read: the price before, the crew and the fee after."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_rate_card_read",
+        description=(
+            "The published day rate for this request and everything that has happened to it "
+            "since. **`preview.is_available: false` is not an error** — it means this city and "
+            "skill have no published card, or instant dispatch is not configured for this "
+            "service, and the request will collect quotes instead. `unavailable_code` says "
+            "which.\n\n"
+            "The money split published here is the Customer's: `total_customer_paise` divides "
+            "into `lead_receipt_paise`, **paid directly to the crew at day end and never held by "
+            "Vsolve**, and `booking_fee_paise`, the one online charge. The lead's own wage and "
+            "supervision split is deliberately absent."
+        ),
+        responses={
+            200: RateCardStateSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = requirement_for_customer(
+                customer=cast(User, request.user), requirement_id=requirement_id
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(RateCardStateSerializer(_rate_card_state_payload(requirement)).data)
+
+
+class RequirementRateCardBookView(APIView):
+    """Submit an A3 preset at the published rate and start the crew cascade, in one step."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_rate_card_book",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=RateCardBookSerializer,
+        description=(
+            "Book a crew at the published day rate. The rate and its inclusion list are shown by "
+            "`m2_rate_card_read` **before** this runs and are frozen onto the booking here, so a "
+            "rate loaded between the screen and the tap cannot become what the Customer agreed "
+            "to.\n\n"
+            "**Nothing is charged by this call.** It submits the requirement and sends the first "
+            "wave of crew offers on the M1 dispatch clock — minutes, not business hours. The "
+            "booking fee is charged only once a lead has accepted, through "
+            "`m2_booking_fee_checkout_create`."
+        ),
+        responses={
+            201: RateCardStateSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_rate_card_unavailable` when no card is published for this city "
+                "and skill — the Customer is routed to the quote flow, which is the honest "
+                "degradation rather than a guessed price. `m2_policy_unavailable` when instant "
+                "dispatch is not configured for this service. `m2_requirement_duplicate` unless "
+                "`allow_duplicate` is set.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        serializer = RateCardBookSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        allow_duplicate = bool(serializer.validated_data["allow_duplicate"])
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                result = crew_dispatch.book_at_published_rate(
+                    requirement_id=requirement.id,
+                    actor=customer,
+                    allow_duplicate=allow_duplicate,
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object],
+                RateCardStateSerializer(_rate_card_state_payload(result.requirement)).data,
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.rate_card.book",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "allow_duplicate": allow_duplicate,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class RequirementBookingFeeCheckoutView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_booking_fee_checkout_create",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Pay the booking fee against a lead who is holding this job right now. The hold is "
+            "checked under the booking's own row lock in the same transaction that creates the "
+            "attempt, so paying for a crew nobody is holding is unreachable rather than merely "
+            "unlikely.\n\n"
+            "**The crew is not confirmed by this response.** Only a verified provider callback "
+            "moves the fee to `ACTIVE`, and that same callback creates the engagement; until it "
+            "lands the fee reads `PENDING` and `m2_booking_fee_payment_pending` is the refusal "
+            "anything gated on confirmation returns. If the Customer never pays, the hold lapses "
+            "harmlessly and the next offer or wave proceeds."
+        ),
+        responses={
+            201: AccessCheckoutSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_booking_fee_not_chargeable` when no lead is holding the job, "
+                "when the hold has expired, or when the fee is already settled; "
+                "`m2_lifecycle_not_supported` on a request that is on the quote flow.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                _fee, attempt = booking_fees.create_booking_fee_checkout(
+                    requirement_id=requirement.id,
+                    actor=customer,
+                    idempotency_key=key,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], AccessCheckoutSerializer(_checkout_payload(attempt)).data
+            )
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.booking_fee.checkout",
+            key=key,
+            request_payload={"requirement_id": str(requirement_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class RequirementBookingFeeCancelView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_booking_fee_cancel",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Cancel a booked crew. **The free-cancellation window decides the money**, server-side "
+            "and never from the client: at or beyond T hours before the requested start the "
+            "booking fee refunds in full; inside T it forfeits and splits, because the lead has "
+            "already turned other work down for that day.\n\n"
+            "T is an open owner decision and is read fail-closed: while it is unset this refuses "
+            "with `m2_policy_unavailable` rather than guessing which way a real Customer's money "
+            "should go."
+        ),
+        responses={
+            200: BookingFeeSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_policy_unavailable` while the free-cancellation window is unset; "
+                "`m2_booking_fee_not_chargeable` when there is no fee on this request; "
+                "`m2_requirement_transition_not_allowed` once the fee is settled.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            requirement = requirement_for_customer(customer=customer, requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                fee = booking_fees.cancel_booking(requirement_id=requirement.id, actor=customer)
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], BookingFeeSerializer(fee).data)
+
+        result = execute_idempotent(
+            actor=customer,
+            operation="m2.booking_fee.cancel",
+            key=key,
+            request_payload={"requirement_id": str(requirement_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+def _rate_card_participant(request: Request, requirement_id: uuid.UUID) -> CustomerRequirement:
+    """The requirement, resolved by **participation** — either the Customer or the booked lead.
+
+    Day-one arrival and a no-show are facts about what happened at a site, and both parties were
+    there. Resolving by participation rather than by role is the same choice
+    `site_visit_for_participant` made, and it answers `404` to anybody else because existence is
+    private.
+    """
+    user = cast(User, request.user)
+    requirement = CustomerRequirement.objects.filter(pk=requirement_id).first()
+    if requirement is None:
+        _raise_api_error(RequirementNotFoundError())
+    if requirement.customer_id == user.id:
+        return requirement
+    profile = partner_profile_for_user(user)
+    booking = RateCardBooking.objects.filter(requirement=requirement).first()
+    if (
+        profile is not None
+        and booking is not None
+        and booking.accepted_invitation is not None
+        and booking.accepted_invitation.partner_id == profile.id
+    ):
+        return requirement
+    _raise_api_error(RequirementNotFoundError())
+
+
+class RequirementCrewArrivalView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_crew_arrival_confirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Confirm the crew arrived on day one, which is the moment the booking fee is earned. "
+            "Either party may record it. **Non-OTP** — the start OTP is deferred to M3, so this "
+            "is the default path in M2 rather than a degraded one.\n\n"
+            "Nothing is paid out here: the fee is Vsolve's revenue once the crew arrived, and the "
+            "wages are peer-to-peer and settle at day end."
+        ),
+        responses={
+            200: BookingFeeSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        requirement = _rate_card_participant(request, requirement_id)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                fee = booking_fees.earn_booking_fee(requirement_id=requirement.id, actor=actor)
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], BookingFeeSerializer(fee).data)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.crew.arrival",
+            key=key,
+            request_payload={"requirement_id": str(requirement_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class RequirementCrewNoShowView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_crew_no_show_report",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CrewNoShowSerializer,
+        description=(
+            "Report that day one did not happen. **`party` decides the money and the reason code "
+            "cannot move it.**\n\n"
+            "`VENDOR`: the booking fee refunds in full, no travel compensation is paid — neither "
+            "party earns from an undelivered crew — the request returns to matching for a **free "
+            "re-dispatch**, and the vendor's standing carries the record.\n\n"
+            "`CUSTOMER`: the fee forfeits and splits. A configured share pays the lead as travel "
+            "compensation through the payout rails, and the remainder is the platform share; the "
+            "two reconcile to the fee in integer paise."
+        ),
+        responses={
+            200: BookingFeeSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_policy_unavailable` while the forfeit split is unset — the fee "
+                "stays `ACTIVE` and visible rather than being split on an invented ratio.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        requirement = _rate_card_participant(request, requirement_id)
+        serializer = CrewNoShowSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        party = str(serializer.validated_data["party"])
+        reason_code = str(serializer.validated_data["reason_code"])
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                fee = booking_fees.report_crew_no_show(
+                    requirement_id=requirement.id, party=party, reason_code=reason_code
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], BookingFeeSerializer(fee).data)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.crew.no_show",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "party": party,
+                "reason_code": reason_code,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Partner: crew offers
+# ---------------------------------------------------------------------------
+
+
+def _crew_offer_payload(offer: crew_dispatch.CrewOffer) -> dict[str, object]:
+    invitation = offer.invitation
+    requirement = invitation.requirement
+    area = requirement.service_area
+    return {
+        "invitation_id": invitation.id,
+        "requirement_id": requirement.id,
+        "status": invitation.status,
+        "headcount": offer.headcount,
+        "days": offer.days,
+        "lead_day_receipt_paise": offer.lead_day_receipt_paise,
+        "lead_total_receipt_paise": offer.lead_total_receipt_paise,
+        "standard_day_hours": offer.standard_day_hours,
+        "overtime_hourly_paise": offer.overtime_hourly_paise,
+        "inclusions": offer.inclusions,
+        "responds_by": offer.responds_by,
+        "verified_roster_size": offer.verified_roster_size,
+        "requested_start": requirement.requested_start,
+        "area_label": area.name if area is not None else "",
+        "server_now": timezone.now(),
+    }
+
+
+class PartnerCrewOfferListView(APIView):
+    """Live crew offers for this lead, each carrying **their own** number."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_crew_offer_list",
+        description=(
+            "Crew offers this lead can still answer, on the M1 dispatch clock — `responds_by` is "
+            "wall-clock and minutes away, not a business-hours deadline.\n\n"
+            "**Every offer carries the lead's own number**: what they receive per day for the "
+            "requested crew, paid directly by the Customer at day end. The Customer's "
+            "all-inclusive rate is not in this payload at any status, because it contains this "
+            "platform's booking fee and showing a vendor money they do not receive is how a "
+            "published rate starts an argument on site."
+        ),
+        responses={200: CrewOfferListSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        profile = _partner_profile(request)
+        invitations = (
+            VendorInvitation.objects.filter(
+                partner=profile,
+                status=VendorInvitation.Status.INVITED,
+                requirement__rate_card_booking__isnull=False,
+            )
+            .select_related("requirement__service_area", "partner")
+            .order_by("responds_by", "created_at")
+        )
+        offers = [
+            _crew_offer_payload(offer)
+            for offer in (crew_dispatch.crew_offer_for(item) for item in invitations)
+            if offer is not None
+        ]
+        return Response(
+            CrewOfferListSerializer({"offers": offers, "server_now": timezone.now()}).data
+        )
+
+
+class PartnerCrewOfferAcceptView(APIView):
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_crew_offer_accept",
+        request=None,
+        description=(
+            "Take the job at the published rate. **First accept wins** — a rate-card request has "
+            "exactly one slot, so the second lead to arrive is refused with "
+            "`m2_invitation_slots_exhausted` rather than losing a race.\n\n"
+            "Accepting takes a soft capacity hold for the requested dates, records this lead's "
+            "acceptance of the published card, and holds the job while the Customer pays the "
+            "booking fee. If they never pay, the hold lapses, the vendor keeps their standing, "
+            "and the cascade moves on.\n\n"
+            "Refused with `m2_roster_insufficient` when the lead's **verified** roster is smaller "
+            "than the headcount. Crews are never aggregated across vendors: one lead is "
+            "accountable for the whole crew."
+        ),
+        responses={
+            200: RateCardBookingSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_roster_insufficient`, `m2_invitation_slots_exhausted` when "
+                "another lead took the job, `m2_capacity_unavailable` when this lead is already "
+                "committed on those dates, or `m2_invitation_expired`.",
+            ),
+        },
+    )
+    def post(self, request: Request, invitation_id: uuid.UUID) -> Response:
+        profile = _partner_profile(request)
+        try:
+            invitation = invitation_for_partner(partner=profile, invitation_id=invitation_id)
+            assert_kyc_complete(profile)
+            booking = crew_dispatch.accept_crew_offer(invitation_id=invitation.id)
+        except (RequirementDomainError, PartnerDomainError) as exc:
+            _raise_api_error(exc)
+        return Response(RateCardBookingSerializer(booking).data)
+
+
+class PartnerCrewOfferDeclineView(APIView):
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_crew_offer_decline",
+        request=CrewOfferDeclineSerializer,
+        description=(
+            "Pass on a crew offer. **The reason is required and is read by the decline-rate "
+            "alarm.** `RATE_TOO_LOW` is the answer that matters most: a published rate below the "
+            "street rate makes leads decline everything and the instant product dies quietly, so "
+            "a sustained decline rate pages Operations rather than appearing in a monthly report.\n"
+            "\nDeclining releases the slot and moves the cascade to its next, wider wave."
+        ),
+        responses={
+            200: CrewOfferSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, invitation_id: uuid.UUID) -> Response:
+        profile = _partner_profile(request)
+        serializer = CrewOfferDeclineSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            invitation = invitation_for_partner(partner=profile, invitation_id=invitation_id)
+            declined = crew_dispatch.decline_crew_offer(
+                invitation_id=invitation.id,
+                reason_code=str(serializer.validated_data["reason_code"]),
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        offer = crew_dispatch.crew_offer_for(declined)
+        if offer is None:
+            _raise_api_error(RequirementNotFoundError())
+        return Response(CrewOfferSerializer(_crew_offer_payload(offer)).data)
+
+
+# ---------------------------------------------------------------------------
+# Operations: publishing rate cards
+# ---------------------------------------------------------------------------
+
+
+class OperationsRateCardView(APIView):
+    """Publish and review the day rates this platform sets."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_rate_card_list",
+        parameters=[
+            OpenApiParameter(
+                name="service_area",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Narrow to one city.",
+            )
+        ],
+        description=(
+            "Every published card, newest effective date first. This is the monthly review "
+            "calendar's read and the only surface that publishes the three components, because "
+            "reviewing a rate against the wage floor means seeing the wage part of it."
+        ),
+        responses={200: RateCardListSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        raw_area = request.query_params.get("service_area")
+        area_id: uuid.UUID | None = None
+        if raw_area:
+            try:
+                area_id = uuid.UUID(raw_area)
+            except ValueError as exc:
+                raise ValidationError(
+                    {"service_area": "Must be a UUID."}, code="invalid_service_area"
+                ) from exc
+        cards = rate_cards.published_rate_cards(service_area_id=area_id)
+        return Response(
+            RateCardListSerializer({"rate_cards": cards, "server_now": timezone.now()}).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_rate_card_publish",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=RateCardPublishSerializer,
+        description=(
+            "Publish a day rate for one city and one statutory skill, effective from a date. A "
+            "card is **loaded, never edited**: a booking made last week reconciles against the "
+            "number it was made at, and raising a rate is one more row.\n\n"
+            "Two refusals are the point of this endpoint. The wage component is checked against "
+            "the statutory floor with the same fail-closed guard vendor quotes pass — a platform "
+            "that refuses a vendor's rate for being below the floor and publishes its own below "
+            "it has no rule at all. And a card cannot be **backdated under a live booking**, "
+            "because that would retroactively change the number a live booking was priced at."
+        ),
+        responses={
+            201: RateCardSerializer,
+            400: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_proposal_below_wage_floor` when the wage component is under the "
+                "statutory floor for that state and skill.",
+            ),
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_wage_floor_unavailable` when no floor is loaded for the area's "
+                "state and this skill, or when the area carries no state code — the check fails "
+                "closed rather than being skipped. "
+                "`m2_requirement_transition_not_allowed` when the effective date would land on or "
+                "before a live booking made at the current rate.",
+            ),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        serializer = RateCardPublishSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                card = rate_cards.publish_rate_card(
+                    service_area_id=data["service_area_id"],
+                    skill_id=data["skill_id"],
+                    worker_day_wage_paise=int(data["worker_day_wage_paise"]),
+                    supervision_margin_paise=int(data["supervision_margin_paise"]),
+                    booking_fee_paise=int(data["booking_fee_paise"]),
+                    standard_day_hours=int(data["standard_day_hours"]),
+                    overtime_hourly_paise=int(data["overtime_hourly_paise"]),
+                    inclusions=list(data["inclusions"]),
+                    add_on_rates=dict(data["add_on_rates"]),
+                    effective_from=data["effective_from"],
+                    actor=actor,
+                    source_reference=str(data["source_reference"]),
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            except (ServiceArea.DoesNotExist, Skill.DoesNotExist) as exc:
+                raise NotFound("That service area or skill does not exist.") from exc
+            return status.HTTP_201_CREATED, cast(dict[str, object], RateCardSerializer(card).data)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.rate_card.publish",
+            key=key,
+            request_payload={key_name: str(value) for key_name, value in sorted(data.items())},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)

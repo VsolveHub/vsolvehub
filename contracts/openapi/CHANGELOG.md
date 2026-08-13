@@ -4,6 +4,66 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.29.0 - The A3 front door: a published rate, a crew offer, a booking fee
+
+**Wave C2R, revision 4 ([ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md)).**
+Ten new paths and the aggregates behind them. Entirely additive — the A3 unlock surface published
+at 1.24.0 is untouched and keeps working, demoted to the thin-supply fallback rather than removed.
+
+### Why
+
+Day labour is a commodity at a street rate the whole market already knows. Quote-first made a
+customer wait 72 hours and pay a paywall to compare numbers the street agrees on, and it left the
+on-site renegotiation — "third floor, no lift? Extra, bhaiya" — nowhere to be caught. The unit of
+value is a confirmed crew at a published price, so Operations publishes the price and the platform
+sells the booking.
+
+### New paths
+
+| Path | operationId |
+|---|---|
+| `GET /requirements/{id}/rate-card/` | `m2_rate_card_read` |
+| `POST /requirements/{id}/rate-card/book/` | `m2_rate_card_book` |
+| `POST /requirements/{id}/booking-fee/checkout/` | `m2_booking_fee_checkout_create` |
+| `POST /requirements/{id}/booking-fee/cancel/` | `m2_booking_fee_cancel` |
+| `POST /requirements/{id}/crew/arrival/` | `m2_crew_arrival_confirm` |
+| `POST /requirements/{id}/crew/no-show/` | `m2_crew_no_show_report` |
+| `GET /partner/crew-offers/` | `m2_crew_offer_list` |
+| `POST /partner/crew-offers/{invitation_id}/accept/` | `m2_crew_offer_accept` |
+| `POST /partner/crew-offers/{invitation_id}/decline/` | `m2_crew_offer_decline` |
+| `GET`/`POST /operations/rate-cards/` | `m2_rate_card_list` / `m2_rate_card_publish` |
+
+New components: `RateCard`, `RateCardList`, `RateCardPublishRequest`, `RateCardState`,
+`RateCardBooking`, `RateCardBookingStatusEnum`, `RateCardBookRequest`, `RatePreview`, `BookingFee`,
+`BookingFeeStatusEnum`, `CrewOffer`, `CrewOfferList`, `CrewOfferDeclineRequest`,
+`CrewOfferDeclineReasonCodeEnum`.
+
+Crew no-show deliberately **reuses** `VisitNoShowPartyEnum` rather than naming a fifth enum: the
+party that failed to appear is the same question with the same two answers, and a second
+vocabulary for it is how two names for one fact start disagreeing.
+
+### Error codes reachable for the first time
+
+- `m2_rate_card_unavailable` — no live card for this city and skill. **Fail-closed**: no card means
+  no instant booking, never a guessed price. Also raised when the area carries no `state_code`,
+  because the wage-floor check cannot run without one and a guard that silently skips is
+  indistinguishable from one that passed.
+- `m2_roster_insufficient` — the lead's verified roster is smaller than the requested headcount.
+- `m2_booking_fee_not_chargeable` — no accepted offer is being held, so there is nothing to pay for.
+
+`m2_booking_fee_payment_pending` is **declared and not yet raised by any path**. Its description
+claims it is the refusal returned while a charge is unresolved; nothing returns it today. Recorded
+here rather than quietly removed, because the client contract already mentions it — see the C2R
+entry in `frontend-execution-plan.md` §7.
+
+### Money, said plainly
+
+The booking fee is the **only** money Vsolve collects on the A3 rate-card path. Wages are paid
+direct, daily, peer-to-peer at day end and the platform never holds them — no endpoint here moves
+wage money, and none should be added. `RateCard` publishes the three components separately
+(worker day-wage, supervision margin, platform booking fee) precisely so both disclosure screens
+can show what the customer is paying for without either side inferring it.
+
 ## 1.28.0 - The requirement flow can find the variant it needs
 
 **One new field on `ServiceDetail`, and it is the other half of 1.27.0's fix.**

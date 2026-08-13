@@ -9,10 +9,17 @@ import {
 } from "@vsolve/api-client";
 import {
   M2_FRESHNESS,
+  cursorFromNextUrl,
   invalidateForM2Command,
   m2QueryKeys,
 } from "@vsolve/query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
 
@@ -76,9 +83,8 @@ export type SiteVisit = Schemas["SiteVisit"];
  * parameter, so the runtime both-shapes narrowing is deleted and the generated
  * type is trusted — the request in `frontend-execution-plan.md` §7 is answered.
  * This is exactly the "re-point, not rewrite" §2 describes. What survives is the
- * projection down to the two fields the inbox actually uses, so `next` staying
- * non-null keeps carrying the truncation notice until the cursor is threaded
- * through.
+ * projection down to the two fields the inbox actually uses: `results`, and the
+ * `next` link the cursor for the following page is read out of.
  */
 export interface EnquiryPage {
   readonly results: readonly EnquirySummary[];
@@ -107,14 +113,40 @@ export function readEnquiryPage(page: Schemas["EnquirySummaryPage"]): EnquiryPag
  * runs in business hours, so a five-second poll would be thousands of requests
  * to observe something that moves once a day. Focus and reconnect revalidation
  * carry it.
+ *
+ * ## It pages now, and the truncation notice is gone with the gap
+ *
+ * `EnquiryCursorPagination` answers twenty rows at a time. Until 1.23.0 the
+ * operation published **no `cursor` parameter**, so the typed client had nothing
+ * to send and a Partner with more than twenty enquiries was shown a notice
+ * saying their history was longer than the screen. The parameter is published,
+ * so this is an `useInfiniteQuery` on the admin directory's precedent and the
+ * notice is replaced by a control that actually fetches the rest.
+ *
+ * The cursor is opaque and is never decoded: `cursorFromNextUrl` pulls it out of
+ * the server's own `next` link and it is resent as the typed parameter. It is
+ * also called inside `queryFn`, deliberately — a `next` link the client cannot
+ * follow fails the read rather than silently presenting a partial inbox as
+ * complete.
  */
 export function usePartnerEnquiries(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     // One bucket key for one server read. The client-side buckets are
     // presentation over this list, not separate cache entries.
     queryKey: m2QueryKeys.invitations.list("all"),
-    queryFn: async () =>
-      readEnquiryPage(await request(() => getApiClient().GET("/api/v1/partner/enquiries/"))),
+    queryFn: async ({ pageParam }) => {
+      const page = readEnquiryPage(
+        await request(() =>
+          getApiClient().GET("/api/v1/partner/enquiries/", {
+            params: { query: pageParam ? { cursor: pageParam } : {} },
+          }),
+        ),
+      );
+      cursorFromNextUrl(page.next);
+      return page;
+    },
+    initialPageParam: "" as string,
+    getNextPageParam: (lastPage) => cursorFromNextUrl(lastPage.next),
     enabled,
     ...M2_FRESHNESS.invitationList,
     retry: (failureCount, error) =>
@@ -173,15 +205,23 @@ function useApplyEnquiryResult() {
 
   return (detail: EnquiryDetail) => {
     queryClient.setQueryData(m2QueryKeys.invitations.detail(detail.id), detail);
-    queryClient.setQueryData<EnquiryPage>(m2QueryKeys.invitations.list("all"), (page) =>
-      page
-        ? {
-            ...page,
-            results: page.results.map((row) =>
-              row.id === detail.id ? { ...row, status: detail.status } : row,
-            ),
-          }
-        : page,
+    // The inbox is paged, so the row being patched can be on any page that has
+    // been read. Mapping every page is cheaper than finding the right one and
+    // cannot miss it.
+    queryClient.setQueryData<InfiniteData<EnquiryPage, string>>(
+      m2QueryKeys.invitations.list("all"),
+      (data) =>
+        data
+          ? {
+              ...data,
+              pages: data.pages.map((page) => ({
+                ...page,
+                results: page.results.map((row) =>
+                  row.id === detail.id ? { ...row, status: detail.status } : row,
+                ),
+              })),
+            }
+          : data,
     );
   };
 }
@@ -310,6 +350,58 @@ export function useAskQuestion(invitationId: string) {
     // No idempotency key is declared for this path, so a retry would post the
     // same question twice. The in-flight guard on the composer is the only
     // protection there is; automatic retry would defeat it.
+    retry: false,
+  });
+}
+
+export interface AnswerQuestionInput {
+  readonly questionId: string;
+  readonly answer: string;
+}
+
+/**
+ * Answer a question **the customer asked about your quote** (contract 1.26.0).
+ *
+ * Clarification ran one way until 1.26.0: the vendor asked, the customer
+ * answered. `POST /api/v1/partner/questions/{question_id}/answer/` is the mirror
+ * of the route the Customer app already had, and it is what makes a
+ * customer-asked question something other than a dead row on this screen.
+ *
+ * The server refuses a question this vendor asked themselves — an answer to your
+ * own question closes the row before the counterparty ever sees it — so the
+ * screen offers the control only where `asked_by_role` is `CUSTOMER`. That is
+ * the server's own field, not an inference: `RequirementQuestion.asked_by_role`
+ * is derived by identity comparison against two non-null foreign keys.
+ *
+ * No idempotency key is declared on this path either, so the composer's in-flight
+ * guard is the only duplicate protection and a retry would be a second answer
+ * against a row that accepts one.
+ */
+export function useAnswerQuestion(invitationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: AnswerQuestionInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/partner/questions/{question_id}/answer/", {
+          params: { path: { question_id: input.questionId } },
+          body: { answer: input.answer },
+        }),
+      ),
+    onSuccess: (answered) => {
+      queryClient.setQueryData<EnquiryDetail>(
+        m2QueryKeys.invitations.detail(invitationId),
+        (detail) =>
+          detail
+            ? {
+                ...detail,
+                questions: detail.questions.map((row) =>
+                  row.id === answered.id ? answered : row,
+                ),
+              }
+            : detail,
+      );
+    },
     retry: false,
   });
 }

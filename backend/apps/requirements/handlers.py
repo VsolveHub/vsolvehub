@@ -18,6 +18,7 @@ from uuid import UUID
 
 from apps.foundation.models import OutboxEvent
 from apps.foundation.tasks import register_outbox_handler
+from apps.requirements.crew_dispatch import record_acceptances_for_approved_capability
 from apps.requirements.engagements import route_suspended_capability_engagements
 
 
@@ -39,3 +40,21 @@ def handle_capability_suspended(event: OutboxEvent) -> None:
         variant_ids=[UUID(variant_id)],
         reason_code=str(event.payload.get("reason_code") or "capability_suspended"),
     )
+
+
+@register_outbox_handler(event_type="m2.capability.approved")
+def handle_capability_approved(event: OutboxEvent) -> None:
+    """Record this lead's acceptance of every live rate card their new capability can serve.
+
+    `M2-BE-435`: accepting the card is part of A3 capability approval, and accepting a job is
+    accepting that rate for that job. This is the first half; `crew_dispatch.accept_crew_offer`
+    writes the second.
+
+    Idempotent by the unique constraint on `(capability, rate_card)` rather than by key, so a
+    re-driven event records nothing twice. A capability approved for a city with no published card
+    records nothing at all, which is correct — there is no number to have agreed to yet.
+    """
+    capability_id = event.payload.get("partner_capability_id")
+    if not isinstance(capability_id, str):
+        raise ValueError("m2.capability.approved requires partner_capability_id.")
+    record_acceptances_for_approved_capability(capability_id=UUID(capability_id))

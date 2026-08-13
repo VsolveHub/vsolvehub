@@ -121,6 +121,26 @@ class Booking(models.Model):
         return str(self.id)
 
 
+#: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`.
+#:
+#: Module-level so that `PaymentAttempt.Meta` can reference it: a nested class body cannot see
+#: the enclosing class's namespace, which is why the check constraint below used to carry its own
+#: hand-copied duplicate of this list. That duplicate drifted — `M2_BOOKING_FEE` was added to the
+#: tuple and not to the constraint, and because the model's `Meta` and its migration agreed with
+#: each other, `makemigrations --check` stayed green while every booking-fee checkout raised
+#: `IntegrityError` at the database. One list, referenced twice, is the fix.
+CHECKOUT_FREE_PURPOSES = (
+    "SCOPE_AMENDMENT_REVISION",
+    "M2_QUOTE_UNLOCK",
+    "M2_VISIT_PLAN",
+    "M2_SITE_VISIT_FEE",
+    "M2_STAGE_FUNDING",
+    "M2_MATERIAL_ADVANCE",
+    "M2_SCOPE_AMENDMENT",
+    "M2_BOOKING_FEE",
+)
+
+
 class PaymentAttempt(models.Model):
     class Purpose(models.TextChoices):
         """Why money is being collected. One enum, one payment path.
@@ -151,19 +171,16 @@ class PaymentAttempt(models.Model):
         #: reusing it would route an M2 payment into a lookup that cannot succeed. One amendment
         #: engine, two aggregates, two capture routes.
         M2_SCOPE_AMENDMENT = "M2_SCOPE_AMENDMENT", "M2 engagement scope amendment"
+        #: A3 rate-card (revision 4): the booking fee charged once at vendor accept, and the only
+        #: money Vsolve collects on that path. Deliberately not `M2_QUOTE_UNLOCK` — the unlock is
+        #: the demoted fallback's product and refunds on different rules, and a shared purpose
+        #: would route a forfeit split into the unlock's completion.
+        M2_BOOKING_FEE = "M2_BOOKING_FEE", "M2 booking fee"
 
-    #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. The
-    #: check constraint below is generated from this tuple so adding a purpose without deciding
-    #: which side of the rule it sits on is not possible.
-    CHECKOUT_FREE_PURPOSES = (
-        "SCOPE_AMENDMENT_REVISION",
-        "M2_QUOTE_UNLOCK",
-        "M2_VISIT_PLAN",
-        "M2_SITE_VISIT_FEE",
-        "M2_STAGE_FUNDING",
-        "M2_MATERIAL_ADVANCE",
-        "M2_SCOPE_AMENDMENT",
-    )
+    #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. Bound
+    #: from the module-level tuple, which the check constraint below reads from the same name, so
+    #: adding a purpose to one and not the other is no longer possible.
+    CHECKOUT_FREE_PURPOSES = CHECKOUT_FREE_PURPOSES
 
     class Status(models.TextChoices):
         PROVIDER_PENDING = "PROVIDER_PENDING", "Provider pending"
@@ -258,15 +275,7 @@ class PaymentAttempt(models.Model):
                 condition=(
                     models.Q(purpose="BOOKING_GROUP", checkout__isnull=False)
                     | models.Q(
-                        purpose__in=(
-                            "SCOPE_AMENDMENT_REVISION",
-                            "M2_QUOTE_UNLOCK",
-                            "M2_VISIT_PLAN",
-                            "M2_SITE_VISIT_FEE",
-                            "M2_STAGE_FUNDING",
-                            "M2_MATERIAL_ADVANCE",
-                            "M2_SCOPE_AMENDMENT",
-                        ),
+                        purpose__in=CHECKOUT_FREE_PURPOSES,
                         checkout__isnull=True,
                     )
                 ),

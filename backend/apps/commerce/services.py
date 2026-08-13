@@ -580,6 +580,11 @@ M2_CAPTURE_PURPOSES = (
     # the ledger, not in how a captured payment funds its stage.
     PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE,
     PaymentAttempt.Purpose.M2_SCOPE_AMENDMENT,
+    # A3 rate-card (revision 4). Its completion does two things at once — hardens the booking and
+    # opens the engagement — for the same reason the unlock's does one: a commit boundary between
+    # the money moving and the Customer getting what they paid for is a support ticket per lost
+    # event.
+    PaymentAttempt.Purpose.M2_BOOKING_FEE,
 )
 
 
@@ -611,6 +616,10 @@ def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
         from apps.requirements import amendments  # noqa: PLC0415 - same cycle
 
         amendments.complete_engagement_amendment_payment(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.M2_BOOKING_FEE:
+        from apps.requirements import booking_fees  # noqa: PLC0415 - same cycle
+
+        booking_fees.complete_booking_fee(payment_attempt_id=attempt.id)
 
 
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:
@@ -1269,6 +1278,7 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
     this module, and these two calls are the only ones going the other way.
     """
     from apps.requirements.models import (  # noqa: PLC0415 - avoids a module import cycle
+        BookingFee,
         EngagementAmendment,
         EngagementStage,
         QuoteUnlock,
@@ -1276,6 +1286,10 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
     )
 
     purpose = attempt.purpose
+    if purpose == PaymentAttempt.Purpose.M2_BOOKING_FEE:
+        return BookingFee.objects.filter(
+            payment_attempt=attempt, requirement__customer_id=customer_id
+        ).exists()
     if purpose == PaymentAttempt.Purpose.M2_QUOTE_UNLOCK:
         return QuoteUnlock.objects.filter(
             payment_attempt=attempt, requirement__customer_id=customer_id

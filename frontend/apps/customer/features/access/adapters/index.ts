@@ -46,30 +46,74 @@ import { BOOKING_TIME_ZONE } from "@/features/booking/adapters";
  * booking timezone rather than the device's — a Customer travelling must not see
  * their visit move.
  *
- * The zone is the deprecated constant because a `SiteVisit` publishes no
- * timezone of its own, unlike `BookingWindows`. Requesting one is logged in
- * `frontend-execution-plan.md` §7; until then this is the same fallback every
- * other caller without a response uses.
+ * **The zone is the visit's own, since contract 1.26.0.** `SiteVisit.timezone`
+ * publishes the service area's zone — the same thing `BookingWindows` publishes
+ * for the A1 grid — and until it landed this fell back to the deprecated
+ * Hyderabad-only constant, which was correct only while the platform had one
+ * city. `toWindowsView` makes exactly this read on the A1 side; a row with no
+ * zone in hand still falls back rather than rendering the device's, because a
+ * Customer travelling must not watch their visit move.
+ *
+ * Formatters are memoised per zone the way `formattersFor` is: constructing an
+ * `Intl.DateTimeFormat` per row is measurable on a three-slot tracker that
+ * re-renders on every poll.
  */
-const VISIT_DAY_FORMAT = new Intl.DateTimeFormat("en-IN", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  timeZone: BOOKING_TIME_ZONE,
-});
+interface VisitFormatters {
+  day: Intl.DateTimeFormat;
+  time: Intl.DateTimeFormat;
+}
 
-const VISIT_TIME_FORMAT = new Intl.DateTimeFormat("en-IN", {
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-  timeZone: BOOKING_TIME_ZONE,
-});
+const VISIT_FORMATTERS = new Map<string, VisitFormatters>();
 
-export function formatVisitSlot(instant: string | null): string | null {
+function buildVisitFormatters(timeZone: string): VisitFormatters {
+  return {
+    day: new Intl.DateTimeFormat("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone,
+    }),
+    time: new Intl.DateTimeFormat("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone,
+    }),
+  };
+}
+
+function visitFormattersFor(timeZone: string): VisitFormatters {
+  const cached = VISIT_FORMATTERS.get(timeZone);
+  if (cached !== undefined) return cached;
+  let formatters: VisitFormatters;
+  try {
+    formatters = buildVisitFormatters(timeZone);
+  } catch {
+    // `Intl.DateTimeFormat` throws `RangeError` on a zone it does not know, and
+    // the alternative to catching it is a blank visit tracker. The fallback is
+    // the booking zone, never the device's — a Customer travelling must not
+    // watch their visit move.
+    formatters = buildVisitFormatters(BOOKING_TIME_ZONE);
+  }
+  VISIT_FORMATTERS.set(timeZone, formatters);
+  return formatters;
+}
+
+export function formatVisitSlot(
+  instant: string | null,
+  timeZone: string | null = null,
+): string | null {
   if (instant === null) return null;
   const at = new Date(instant);
   if (Number.isNaN(at.getTime())) return null;
-  return `${VISIT_DAY_FORMAT.format(at)}, ${VISIT_TIME_FORMAT.format(at).toLowerCase()}`;
+  return visitSlotLabel(at, timeZone);
+}
+
+function visitSlotLabel(at: Date, timeZone: string | null): string {
+  const formatters = visitFormattersFor(
+    timeZone !== null && timeZone.trim() !== "" ? timeZone : BOOKING_TIME_ZONE,
+  );
+  return `${formatters.day.format(at)}, ${formatters.time.format(at).toLowerCase()}`;
 }
 
 /* --------------------------------------------------------------------------
@@ -236,6 +280,14 @@ export interface VisitSlotRow {
   state: VisitSlotState | "awaiting";
   scheduledFor: string | null;
   /**
+   * The service area's own zone, from `SiteVisit.timezone` (contract 1.26.0).
+   *
+   * Null until a vendor has taken the slot, because the zone is published on the
+   * visit rather than on the plan. `formatVisitSlot` falls back to the booking
+   * zone for that row, which is the same fallback the A1 grid uses.
+   */
+  timeZone: string | null;
+  /**
    * The professional's name, once we are entitled to publish it.
    *
    * Disclosure is per vendor and starts at slot confirmation — someone entering
@@ -311,6 +363,7 @@ export function toVisitTrackerView(
       visitId: visit?.id ?? null,
       state: visit === null ? "awaiting" : visitSlotState(visit, isCharged),
       scheduledFor: visit?.scheduled_for ?? null,
+      timeZone: visit?.timezone ?? null,
       vendorName: visit === null ? null : (vendorNames.get(visit.id) ?? null),
       money: toSlotMoney(share),
       estimateDueAt: visit?.estimate_due_at ?? null,

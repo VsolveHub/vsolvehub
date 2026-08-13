@@ -142,7 +142,12 @@ chooser on review (`FE-216`, an A1-wave follow-up), vendor cards, visit-plan che
 on-site estimates readable in full. Teasers and the unlock are A3-only. Reuse the checkout
 slot-picker presentation (`features/checkout/view/slots-modal.tsx`) for visit times.
 
-### A3 teasers and unlock
+**Revision 4 (ADR-0009, 2026-08-13) reshaped it again — after it shipped.** A3 is rate-card-first,
+so the teasers and the unlock below are the **thin-supply fallback**: built, kept, nothing deleted
+or reworked. The primary A3 front door — preset, published rate, booking-fee checkout — is
+**Wave A2R below**, new and unstarted.
+
+### A3 teasers and unlock (the A3 fallback since revision 4 — built, kept)
 
 - [ ] `M2-FE-401` Quote **teasers**: verification badge, rating, vendor type, headline price band.
   No full scope, no vendor identity, no contact.
@@ -205,6 +210,38 @@ list proving no identity leaks before slot confirmation (A5), the unfilled-share
 
 ---
 
+## Wave A2R — the A3 rate-card front door (revision 4)
+
+**Depends on:** backend **C2R** publishing the rate-card contract (rate-card read, book-at-rate,
+crew offers, booking-fee checkout/state) — nothing here can start before it exists. **Gate:** an A3
+Customer sees the published rate and its inclusion list before booking, and the only charge is the
+booking fee, taken against a held accepted crew offer and hardened only by the verified provider
+callback.
+
+Nothing in Wave A2 is reworked: the teaser/unlock surface above stays as built and becomes the
+thin-supply fallback. The checkout below mirrors `book-visits-screen.tsx` — the same held-commitment
+gating, the same pending-with-nothing-to-press, the same callback-only hardening.
+
+- [ ] `M2-FE-425` The preset capture: skill, headcount, dates and the 3–4 price-moving facts —
+  opened from the catalog's `Book a crew` action, never the four-screen flow.
+- [ ] `M2-FE-426` The published rate and its inclusion list on screen **before** booking; fails
+  closed on `m2_rate_card_unavailable` — never a guessed price.
+- [ ] `M2-FE-427` The cascade holding state ("confirming your crew — usually within 2 hours") and
+  the honest fallback handoff past the configured threshold — nothing charged, the quote flow takes
+  over.
+- [ ] `M2-FE-428` The booking-fee checkout: held-offer gating (`m2_booking_fee_not_chargeable`),
+  pending as `m2_booking_fee_payment_pending` (202) with nothing to press, verified-callback-only
+  hardening — the callback also creates the engagement.
+- [ ] `M2-FE-429` Forfeit and refund states: the free-cancel window until T hours before the slot;
+  the forfeit split on customer no-show / locked gate / late cancel (lead travel compensation +
+  platform share); full auto-refund plus free re-dispatch on vendor no-show.
+
+**Evidence to record:** the rate and inclusion list provably on screen before the book control; the
+held-offer gating refusing a checkout with no accepted offer; the pending panel offering no control;
+the fallback handoff charging nothing.
+
+---
+
 ## Wave A3 — Customer fulfilment (A3 bookings and A5 projects)
 
 **Depends on:** A2. **Watch:** Session B builds the partner half of the same spine this wave. Read
@@ -222,6 +259,13 @@ state names and permitted actions — do not name a state from what your screen 
   an issue inside the documented window. **Built, minus crew-change acknowledgement (C4).**
 - [~] `M2-FE-512` Partial service, replacement, refund, dispute and closure in one chronological timeline.
   **Built** — one feed, `GET /engagements/{id}/events/`, nothing synthesised.
+- [ ] `M2-FE-514` **Revision 4 — with C4's settlement model.** The Customer's evening "Day settled?"
+  one-tap with the UPI link at the exact published amount, and the per-worker-day settlement view: a
+  3-of-4 day settles at 3 workers' published rate, with the shortfall choices — continue short, add
+  a day, or cancel the shortfall free.
+- [ ] `M2-FE-515` **Revision 4.** The one-tap "extra demanded in cash" report — a standing hit,
+  removal on a pattern; genuine extras route to the amendment panel at the card's published add-on
+  rates.
 
 ### Project workspace (A5)
 
@@ -285,8 +329,9 @@ lint during the waves; the browser suite runs once at the wave gate.
 | Wave | Scope | Built `[~]` | Integrated `[x]` | Evidence |
 |---|---|---|---|---|
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
-| A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. |
-| A3 | `FE-509..512`, `FE-608..613` | `[~]` 7 of 10 | `[ ]` | The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `FE-510`/`611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. |
+| A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. **Revision 4 (ADR-0009) demotes the A3 teasers/unlock half to the thin-supply fallback — kept as built.** Wave J (2026-08-14) closes `FE-418`'s receipt from `Engagement.access_receipt` and moves `FE-421`'s slot times onto `SiteVisit.timezone`. `FE-419` and `FE-409` are now publishable and unstarted. |
+| A2R | `FE-425..429` (revision 4: rate-card front door) | `[ ]` | `[ ]` | Not started — blocked on backend C2R publishing the rate-card contract. The Wave A2 unlock surface stays as the fallback. |
+| A3 | `FE-509..512`, `FE-608..613` | `[~]` 7 of 10 | `[ ]` | **Wave J (2026-08-14) consumed `EngagementStage.kind`** across the list, the workspace and the stage review, and re-pointed the event and amendment reads onto the factory's own keys and tiers — see the Wave J section. The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `FE-510`/`611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. Revision 4 adds `FE-514`/`FE-515` (Day-settled tap, settlement view, cash-demand report) — not started, with C4. |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
 
@@ -919,3 +964,170 @@ route**, which is the one gap that changes what a Customer is being asked to con
 | 2026-08-13 | `FE-609` evidence viewer | No download route for `StageEvidence`. Metadata renders; the file cannot be opened. | yes |
 | 2026-08-13 | `FE-509` crew and identity | Not on the engagement projection. Read back off the accepted quote, degrading to a link. | yes |
 | 2026-08-13 | `FE-613` scope per version | No proposal snapshot on the engagement. Money and change lines only. | yes |
+
+### Wave J — 2026-08-14 · the 1.28.0 consumption pass
+
+`pnpm lint --max-warnings 0` clean; `pnpm typecheck` **9 of 9 green** (run with
+`--force` on `customer` + `@vsolve/query` first, so nothing passed on a stale
+cache, then the full workspace); `pnpm build --filter=customer` green with the
+same 31 routes — **no route was added or removed this pass**, which is the point:
+this was a consumption pass, not a build. **No tests were run and none were
+written**, per the build-first amendment. What replaces them is the **Wave J
+addendum** appended to both existing smoke docs — `features/engagement/SMOKE.md`
+§J1–J3 and `features/access/SMOKE.md` §J4–J5.
+
+Four things published between 1.26.0 and 1.28.0 that this column was still
+working around. All four are consumed and every workaround is deleted rather than
+left beside its replacement.
+
+#### 1. `EngagementStage.kind` — a bag of cement had been arriving as a milestone
+
+The screens rendered a `MATERIAL_ADVANCE` as an ordinary fundable work stage,
+with **"This is done properly"** over the approve button and *"funding this is
+what starts it"* over the funding button. Neither sentence is true of materials,
+and the second is the consequential half: what a Customer consents to when they
+fund a milestone is work that can be left undone and refunded, and what they
+consent to here is **goods that will exist**.
+`route_suspended_capability_engagements` already encodes exactly that difference
+— it refunds a funded, unstarted *work* stage and refuses to claw back a funded
+material advance — so the platform's own recovery rule and the screen's own copy
+had been disagreeing since 1.26.0.
+
+`stageKind` in `packages/query/src/m2-engagement-customer.ts` is the seam, and it
+returns a three-member union rather than the wire enum. The third member is the
+whole reason it is not a boolean: **an unrecognised kind fails closed**, the same
+rule `isKnownCommercialMode` follows, because the optimistic fallback for a third
+kind is "ordinary work milestone" — precisely the reading `kind` was published to
+prevent. On screen that means **no funding control at all** and a sentence saying
+why. Asking somebody to pay for something this app cannot name is worse than
+making them wait for a newer build.
+
+`view/engagement-status.tsx › stageKindCopy` is the one table, beside the status
+and noun tables already there, so a materials row cannot be worded one way on the
+list and another on the review. **Two things it deliberately does not do:**
+
+- **It removes no control.** The server runs one spine and permits approve,
+  correction and dispute on a materials row. Hiding the dispute would take away
+  the Customer's only objection to a delivery that never arrived, and hiding the
+  correction would leave "only 30 of the 40 bags came" with nowhere to go.
+- **It subtracts nothing.** A material advance funds at face value like every
+  other row. Nothing in this column has ever credited visit money against a stage
+  and nothing here starts.
+
+The list row's one sentence moved with it, through `nextActionCopy`'s new third
+parameter: "Fund the next stage to start it" is false of a materials line, and
+that line is what a Customer reads before deciding whether to open anything. The
+kind it names is the **next fundable** stage for funding and the **earliest
+awaiting review** for a review — two different rows, and reading either off
+`activeStage` would have named the wrong one on a project where a milestone is in
+progress while a materials line waits to be paid for.
+
+#### 2. `Engagement.access_receipt` — `M2-FE-418` closes, and it is not a link
+
+The screen said a receipt was not available. It is, and the shape decides how it
+is rendered: `AccessReceipt` is `{kind, number, series, sequence, amount_paise}`
+with **no document id and no URL**, because `TaxDocument.order` is not nullable
+and an access fee has no `Order`. So the panel shows the gapless `M2A-` number a
+Customer quotes to support, and offers nothing to download — a download control
+over a field that carries no document is the dead link `FE-810` forbids.
+
+It also does not use the word **invoice**, and that is the contract's own
+instruction rather than caution: GST treatment of both access fees is blocking
+owner decision 5, and calling a receipt reference an invoice would be this client
+making a tax claim.
+
+`number` is carried through verbatim and never re-assembled from `series` and
+`sequence`. The server formats it precisely so every app quotes the same string,
+and a second assembly here is how support ends up being read two different
+numbers for one payment.
+
+**`null` is three states, not one** — no fee charged, a plan covered entirely by a
+reclassification credit, or a row predating receipt numbering — and the panel
+cannot tell them apart, so it says there is no number rather than asserting
+nothing was ever paid.
+
+#### 3. The two frozen-file grants, consumed, with the workarounds deleted
+
+- **`engagements.events(id)`.** The local `detail(id) + "events"` composition is
+  gone. It was correct by construction and *unreviewable*, which is the argument
+  the factory's own new doc comment makes: a key nobody can find in the factory
+  is a key nobody can check the invalidation of. The read also moved to
+  `M2_FRESHNESS.engagementEvents`, the tier written for it.
+- **`engagements.amendments(id)` + `M2_FRESHNESS.amendments`.** The amendment
+  list had been borrowing `engagements.agreement(id)` and then **refusing that
+  key's tier** — which was the tell that one key was carrying two reads with
+  opposite freshness. The agreement is written once and never changes, which is
+  what earns it `SESSION_STATE`; a proposed amendment is a live change request
+  with a deadline and a money delta, decided from two devices, and serving one
+  from a session-long cache is how a Customer approves a delta that expired an
+  hour ago. `agreement` keeps `SESSION_STATE` for the immutable terms and
+  **nothing in this app reads amendments off it any more** — checked with a
+  workspace grep, not assumed.
+
+Prefix nesting was **verified rather than trusted**: both keys are
+`[...engagements.detail(id), tail]`, `detail(id)` is a strict prefix of each, and
+every invalidation in `features/engagement/queries.ts` targets
+`engagements.detail(engagementId)` or `engagements.list("customer")`. So a stage
+command still clears the timeline and the amendment panel in one call.
+
+#### 4. The sweep
+
+- **`VisitNoShowRequest.reason_code` was already fixed** at the orchestrator's
+  1.26.0 regeneration commit (`212d119`): `VisitNoShowReason` is typed off
+  `Schemas["VisitNoShowRequest"]["reason_code"]` and the one call site sends
+  `VENDOR_DID_NOT_ARRIVE`. Verified by reading the call site rather than trusting
+  the §7 row, since the prediction was that it would be a live `400`. It is not.
+  Smoke step J5 exists so a regression is caught by a person rather than by a
+  Customer.
+- **`SiteVisit.timezone` (1.26.0) is now read.** `formatVisitSlot` was formatting
+  every slot in `BOOKING_TIME_ZONE` — the deprecated single-city constant — which
+  was correct while the platform was Hyderabad-only and silently wrong the day it
+  is not. It now takes the visit's own zone, memoised per zone the way
+  `formattersFor` is on the A1 side, because a three-slot tracker re-renders on
+  every poll. It falls back to the booking zone and **never to the device's**: a
+  Customer travelling must not watch their visit move. An unknown zone string
+  throws `RangeError` out of `Intl.DateTimeFormat`, so the fallback sits inside a
+  `catch` — the alternative is a blank tracker.
+
+#### What was found available and deliberately not built
+
+Two 1.26.0 paths are published and unconsumed, and neither is a workaround this
+column can re-point in a small change — both are new surfaces, which is exactly
+the seam test the brief sets:
+
+- **`GET /requirements/{id}/vendor-cards/`** finally gives `M2-FE-419` its data
+  source. That is a **new list view** on the A5 pre-visit surface, not a
+  re-point, and it is A5-only (`400 m2_lifecycle_not_supported` on A3). The
+  tracker's honest degraded copy stays correct meanwhile.
+- **`POST /requirements/{id}/quotes/{proposal_id}/questions/`** closes
+  `M2-FE-409`'s Customer-asks half. Also a new surface: a compose control, a
+  thread, `asked_by_role` rendering, and the archetype paywall gate.
+
+Both are logged in §7 as available-and-unstarted rather than carried silently.
+
+#### Files
+
+- `packages/query/src/m2-engagement-customer.ts` (`StageKind`, `stageKind`,
+  `isMaterialAdvance`) and the append-only export block in
+  `packages/query/src/index.ts`.
+- `apps/customer/features/engagement/` — `queries.ts` (both keys, both tiers),
+  `adapters/index.ts` (`kind`, `accessReceipt`, `nextFundableStageKind`,
+  `actionStageKind`), `view/engagement-status.tsx` (`stageKindCopy`,
+  `stageRowNoun`, `StageKindBadge`, `nextActionCopy`'s third parameter),
+  `view/engagement-screen.tsx` (`AccessReceiptPanel`, the stage row),
+  `view/stage-review-screen.tsx`, `view/engagement-list-screen.tsx`, `SMOKE.md`.
+- `apps/customer/features/access/` — `adapters/index.ts` (`formatVisitSlot`,
+  `VisitSlotRow.timeZone`), `view/visit-tracker.tsx`,
+  `view/book-visits-screen.tsx`, `SMOKE.md`.
+
+**Three rows added to the execution plan §7.** The one to read first: the two
+published-and-unstarted paths above, because they are the only remaining M2
+Customer surface where the contract is ahead of the app.
+
+### Blocked / handed off — Wave J
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-14 | `FE-419` vendor cards | Not blocked. Published at 1.26.0 and unstarted — a new list surface, not a re-point. | yes |
+| 2026-08-14 | `FE-409` Customer questions | Not blocked. Published at 1.26.0 and unstarted — a new compose-and-thread surface. | yes |
+| 2026-08-14 | `FE-609` evidence viewer | Still no download route for `StageEvidence` at 1.28.0. Unchanged. | already logged |

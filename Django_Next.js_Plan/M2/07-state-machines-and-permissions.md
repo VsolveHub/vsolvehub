@@ -2,7 +2,8 @@
 
 **Closes:** `M2-BE-009`, `M2-BE-010`, `M2-BE-011`, `M2-BE-012`
 **Architecture:** [ADR-0007](../../docs/adr/0007-m2-engagement-spine-and-fee-after-value.md) ·
-[ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md) (revision 3: visit-first A5)
+[ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md) (revision 3: visit-first A5) ·
+[ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md) (revision 4: rate-card A3)
 **Flow:** [README.md](README.md)
 
 This is the design contract every M2 backend module implements. A transition not listed here does not
@@ -10,24 +11,28 @@ exist. A command not listed here is not a domain command.
 
 ## 1. Requirement
 
-The archetype selects the middle of the machine. A3 runs quote-first through the unlock; A5 runs
-visit-first through the visit plan. The ends — draft, matching, closure, selection, engagement — are
-shared.
+The archetype selects the middle of the machine. A3 runs rate-card-first through the offer cascade
+and the booking fee, degrading to the quote-first fallback past the cascade threshold; A5 runs
+visit-first through the visit plan. The ends — draft, matching, closure, engagement — are shared.
 
 ```text
-A3 (quote-first):
+A3 (rate-card-first, revision 4):
 
-DRAFT ──submit──> MATCHING ──first usable quote──> QUOTES_READY
-  │                  │                                  │
-  │                  │                          unlock  │
-  │                  ▼                                  ▼
-  │              CLOSED_NO_SUPPLY                   UNLOCKED ──select──> SELECTED
-  │              CLOSED_SLA_BREACH                                          │
-  │              CLOSED_EXPIRED                                             ▼
-  └──abandon──> CLOSED_ABANDONED                                        ENGAGED
-                                                                            │
-                                                                    CLOSED_COMPLETE
-                                                                    CLOSED_CANCELLED
+DRAFT ──book──> MATCHING ──lead accepts + verified booking fee──> ENGAGED
+  │      (rate     │                                                 │
+  │      shown     │ cascade threshold passes              CLOSED_COMPLETE
+  │      first)    ▼                                       CLOSED_CANCELLED
+  │             falls back to the quote flow below
+  │             (or CLOSED_NO_SUPPLY / CLOSED_SLA_BREACH
+  │              / CLOSED_EXPIRED when the fallback also ends)
+  └──abandon──> CLOSED_ABANDONED
+
+A3 fallback (quote-first, as built):
+
+MATCHING ──first usable quote──> QUOTES_READY ──unlock──> UNLOCKED ──select──> SELECTED
+    │                                                                             │
+    ▼                                                                             ▼
+CLOSED_NO_SUPPLY · CLOSED_SLA_BREACH · CLOSED_EXPIRED                         ENGAGED
 
 A5 (visit-first):
 
@@ -46,23 +51,28 @@ DRAFT ──submit──> MATCHING ──first visit slot confirmed──> VISIT
 
 | Transition | Trigger | Guard |
 |---|---|---|
-| `DRAFT → MATCHING` | Customer submits | Answers valid, `service_by` in the future, lifecycle inferred; A5 additionally has a chosen visit plan |
-| `MATCHING → QUOTES_READY` (A3) | First usable proposal | Proposal complete and within budget band |
+| `DRAFT → MATCHING` | Customer submits (A3: books at the published rate) | Answers/preset valid, `service_by` in the future, lifecycle inferred; A3 has a published rate card for the city+skill (fails closed to the quote flow otherwise); A5 additionally has a chosen visit plan |
+| `MATCHING → ENGAGED` (A3 rate-card) | Verified booking-fee payment against a held accepted offer | A lead with approved capability and roster ≥ headcount accepted; capacity hold live; only a verified provider callback moves it |
+| `MATCHING → MATCHING (quote mode)` (A3) | Cascade threshold passes | Fallback is recorded and explained to the Customer; nothing has been charged |
+| `MATCHING → QUOTES_READY` (A3 fallback) | First usable proposal | Proposal complete and within budget band |
 | `MATCHING → VISITS_BOOKED` (A5) | First confirmed visit slot | Slot booked on the availability grid; verified plan payment charges here |
 | `VISITS_BOOKED → QUOTES_READY` (A5) | First usable estimate | Proposal complete, submitted against a completed visit |
-| `MATCHING → CLOSED_NO_SUPPLY` | No eligible vendor after final wave | No charge has occurred |
-| `MATCHING → CLOSED_SLA_BREACH` | Delivery SLA elapsed | No charge has occurred (A3: no quote; A5: no visit ever confirmed) |
-| `* → CLOSED_EXPIRED` | `service_by` passes | Any unlock or unconsumed visit-plan value is refunded in full |
-| `QUOTES_READY → UNLOCKED` (A3 only) | Verified unlock payment | At least one usable quote still live |
-| `UNLOCKED → SELECTED` (A3) | Customer selects a proposal | Proposal `SUBMITTED`, validity live, no other active selection |
+| `MATCHING → CLOSED_NO_SUPPLY` | No eligible vendor after final wave (A3: after the fallback also exhausted) | No charge has occurred |
+| `MATCHING → CLOSED_SLA_BREACH` | Delivery SLA elapsed | No charge has occurred (A3 fallback: no quote; A5: no visit ever confirmed) |
+| `* → CLOSED_EXPIRED` | `service_by` passes | Any unearned booking fee, unlock or unconsumed visit-plan value is refunded in full |
+| `QUOTES_READY → UNLOCKED` (A3 fallback only) | Verified unlock payment | At least one usable quote still live |
+| `UNLOCKED → SELECTED` (A3 fallback) | Customer selects a proposal | Proposal `SUBMITTED`, validity live, no other active selection |
 | `QUOTES_READY → SELECTED` (A5) | Customer selects an estimate | Proposal `SUBMITTED`, from a completed visit, validity live, no other active selection |
-| `SELECTED → UNLOCKED` (A3) / `SELECTED → QUOTES_READY` (A5) | Vendor declines or reconfirmation expires | Unlock / plan entitlement preserved, no new charge |
-| `SELECTED → ENGAGED` | Vendor reconfirms (A3) or first stage funded (A5) | Capability still approved; A5 first stage funds at face value (visit money settles per share, §4a) |
+| `SELECTED → UNLOCKED` (A3 fallback) / `SELECTED → QUOTES_READY` (A5) | Vendor declines or reconfirmation expires | Unlock / plan entitlement preserved, no new charge |
+| `SELECTED → ENGAGED` | Vendor reconfirms (A3 fallback) or first stage funded (A5) | Capability still approved; A5 first stage funds at face value (visit money settles per share, §4a) |
 
-`CLOSED_EXPIRED` is reachable from every non-terminal state. A quote or visit delivered after the
-customer's work date is worthless, so the clock outranks every other transition. `UNLOCKED` is
+`CLOSED_EXPIRED` is reachable from every non-terminal state. A crew, quote or visit delivered after
+the customer's work date is worthless, so the clock outranks every other transition. `UNLOCKED` is
 unreachable for an A5 requirement, and `VISITS_BOOKED` for an A3 one — the guard is the archetype,
-enforced server-side.
+enforced server-side. The A3 rate-card path never passes through `QUOTES_READY`, `UNLOCKED` or
+`SELECTED`: the first accepting lead is the crew and the verified booking fee is the confirmation.
+A vendor no-show before day 1 refunds the booking fee in full and returns the requirement to
+`MATCHING` for a free re-dispatch.
 
 ## 2. Vendor invitation
 
@@ -78,6 +88,15 @@ Accepting takes a **soft capacity hold** for the requested dates and writes an i
 `RequirementSnapshot`. Declining, expiring or withdrawing releases the hold and the quote slot, and
 triggers the next wave. `ACCEPTED → WITHDRAWN` is penalty-free when the requirement changed materially
 after acceptance.
+
+**A3 rate-card (revision 4):** the invitation is a **crew offer** through the A1 cascade — small
+wave, first accept wins, minutes-level timeouts on the M1 dispatch clock rather than business-hours
+deadlines. The offer is sent only to leads whose approved capability and verified roster cover the
+headcount and always shows the lead's own number. `accept` takes the soft capacity hold **sized
+against the roster** and holds the win while the Customer pays the booking fee; there is no
+`QUOTED` — nothing is composed. A decline records its reason and feeds the decline-rate alarm on
+the rate card. When every wave exhausts, the cascade widens; past the configured threshold the
+requirement falls back to the quote flow and this machine reverts to the invitation shape above.
 
 **A5:** acceptance is expressed by `confirm_visit_slot` — the vendor commits to a scheduled visit,
 which also takes the grid slot hold. Declining, expiring or withdrawing releases the visit slot back
@@ -103,7 +122,7 @@ subject to the configured cap.
 missing, scheduled or cancelled visit is refused with `m2_visit_not_completed`. A3 proposals carry no
 visit reference (an ad-hoc paid site visit may exist beside them but is not a submission guard).
 
-## 4. Quote unlock (A3 only)
+## 4. Quote unlock (A3 fallback only)
 
 ```text
 OFFERED ──pay──> PENDING ──verified──> ACTIVE ──> CONSUMED
@@ -114,7 +133,32 @@ OFFERED ──pay──> PENDING ──verified──> ACTIVE ──> CONSUMED
 `ACTIVE → REFUNDED` occurs on `service_by` expiry or when every unlocked vendor falls through before
 selection. `ACTIVE → CONSUMED` occurs at engagement creation; the fee is earned from that point.
 An unlock is never granted from a client redirect — only a verified provider callback moves
-`PENDING → ACTIVE`. An unlock cannot exist on an A5 requirement.
+`PENDING → ACTIVE`. An unlock cannot exist on an A5 requirement, and under revision 4 it exists on
+an A3 requirement only after the fallback threshold; whether the fallback keeps charging it is owner
+decision 14.
+
+## 4c. Booking fee (A3 rate-card only, revision 4)
+
+```text
+OFFER_ACCEPTED ──checkout──> PENDING ──verified──> ACTIVE ──first day arrival confirmed──> EARNED
+      │                         │                    │
+      │                         └──failed──> FAILED  ├──customer no-show / gate locked──> FORFEIT_SPLIT
+      │                            (offer hold       ├──vendor no-show──> REFUNDED (free re-dispatch)
+      │                             lapses)          └──customer cancels ≥ T hours out──> REFUNDED
+      └──customer never pays──> the hold expires harmlessly; next offer or wave proceeds
+```
+
+- The fee is priced by the rate card's fee component, server-side, effective-dated and fail-closed —
+  the `M2AccessPrice` pattern. It is never charged from a client redirect; only a verified provider
+  callback moves `PENDING → ACTIVE`, and that same callback creates the engagement.
+- `FORFEIT_SPLIT` executes the 2026-08-13 split shape: a configured share pays the lead as travel
+  compensation through the M1 payout and ledger rails (payout details required first, per the
+  progressive gate); the remainder is the platform share. Reconciliation in integer paise:
+  `fee = travel compensation + platform share`.
+- The free-cancel window runs until T hours before the slot: a Customer cancellation at or beyond
+  T hours out refunds in full; under T hours it executes the forfeit split.
+- A vendor no-show always refunds the whole fee and never pays travel compensation — neither party
+  earns from an undelivered crew — and triggers a free re-dispatch plus a standing hit.
 
 ## 4a. Visit plan (A5 only)
 
@@ -186,7 +230,10 @@ EngagementStage: PENDING ──fund/start──> IN_PROGRESS ──evidence─�
                  RELEASED                                          case-resolved
 ```
 
-A3 maps a stage to a shift-day; funding is not required because A3 is `LEAD_ONLY`. A5 maps a stage to
+A3 maps a stage to a shift-day; funding is not required because A3 is `LEAD_ONLY`. Each A3 shift-day
+closes with the dual "Day settled?" taps — supervisor and Customer — carrying a UPI deep-link at the
+exact published amount as a convenience; the wage money is P2P and the platform never holds it. A
+one-sided settlement claim without the tap trail reaches Operations as unproven. A5 maps a stage to
 a milestone; `PENDING → IN_PROGRESS` requires verified stage funding at face value — visit money is
 settled per share in §4a and never discounts a stage. `AWAITING_REVIEW → APPROVED` may occur on
 review timeout **except** while the stage is `DISPUTED`.
@@ -205,7 +252,7 @@ likewise own at-least-once delivery and re-drive.
 | Command | Actor | Idempotent | Notes |
 |---|---|---|---|
 | `submit_requirement` | Customer | Key | Emits matching outbox event |
-| `reclassify_requirement` | Operations | Key | Voids invitations, preserves unlock |
+| `reclassify_requirement` | Operations | Key | Voids invitations and offers; preserves paid value (booking fee, unlock or plan) |
 | `merge_duplicate_requirement` | Customer, Operations | Key | — |
 | `invite_wave` | System | Natural | Bounded by wave size and exposure cap |
 | `accept_invitation` | Partner | Natural | Takes capacity hold; fails closed if slots exhausted |
@@ -222,8 +269,19 @@ likewise own at-least-once delivery and re-drive.
 | `complete_visit_plan` | System (webhook) | Natural | One charge per plan; finalizes the held slot to `SCHEDULED` |
 | `confirm_visit_arrival` | Both | Key | Non-OTP fallback in M2; start OTP in M3 |
 | `refund_unfilled_visit_shares` | System | Natural | Visit-SLA sweep; share-level, idempotent |
-| `create_unlock_checkout` | Customer | Key | A3 only; rejects if no usable quote |
+| `create_unlock_checkout` | Customer | Key | A3 fallback only; rejects if no usable quote |
 | `complete_unlock` | System (webhook) | Natural | One unlock per successful payment |
+| `publish_rate_card` | Operations | Key | Effective-dated per city+skill; wage component checked against the floor at publish |
+| `book_at_published_rate` | Customer | Key | A3 only; submits the preset and starts the cascade; rejects without a live rate card (`m2_rate_card_unavailable`) |
+| `accept_crew_offer` | Partner (lead) | Natural | First accept wins; roster-sized capacity hold; refuses when roster < headcount (`m2_roster_insufficient`) |
+| `decline_crew_offer` | Partner (lead) | Natural | Reason required; feeds the decline-rate alarm |
+| `create_booking_fee_checkout` | Customer | Key | Rejects with no held accepted offer (`m2_booking_fee_not_chargeable`) |
+| `complete_booking_fee` | System (webhook) | Natural | One charge per booking; creates the engagement |
+| `forfeit_booking_fee` | System | Natural | Customer no-show / gate locked / late cancel; executes the split (travel compensation + platform share) |
+| `refund_booking_fee` | System | Natural | Vendor no-show or free-window cancel; full refund; no-show triggers free re-dispatch |
+| `fall_back_to_quote_flow` | System | Natural | Cascade threshold passed; recorded and explained; nothing charged |
+| `confirm_day_settled` | Both (supervisor / Customer) | Key | Evening dual tap; UPI link at the published amount is a convenience, the money is P2P |
+| `report_cash_demand` | Customer | Key | One tap; standing hit, removal on pattern |
 | `reject_proposal` | Customer | Key | `NON_RESPONSIVE` releases the slot |
 | `select_proposal` | Customer | Key | Atomic requirement lock |
 | `reconfirm_selection` | Partner | Key | Rechecks capability, schedule, capacity |
@@ -245,10 +303,10 @@ money or a commercial term writes an audit event carrying actor, reason code and
 
 | Actor | May | May never |
 |---|---|---|
-| Customer | Own requirement, unlock (A3), visit plan and visit confirmations (A5), selection, stage approval, dispute, amendment acceptance | See vendor identity before unlock (A3) or visit confirmation (A5); edit a submitted proposal; set a price |
-| Partner owner | Own capability, crew, invitations, proposals, stages, attendance, amendments | Read another Partner's records; accept on a customer's behalf; change mode |
+| Customer | Own requirement, booking at the published rate and the booking fee (A3), unlock (A3 fallback), visit plan and visit confirmations (A5), selection, stage approval, day-settled confirmation, cash-demand report, dispute, amendment acceptance | See vendor identity before crew confirmation (A3), unlock (A3 fallback) or visit confirmation (A5); edit a submitted proposal; set or negotiate a price |
+| Partner owner | Own capability, crew, offers (accept/decline at the published rate), invitations, proposals, stages, attendance, day-settled confirmation, amendments | Read another Partner's records; accept on a customer's behalf; change mode; charge above the rate card or demand a cash extra |
 | Partner staff | Operate assigned engagements and attendance | KYC, bank details, capability changes, payout actions |
-| Operations | Reclassify, rematch, extend deadlines, assisted capture, case resolution, refund review, payout hold | Accept an invitation for a vendor; author a proposal without vendor confirmation; edit rows directly |
+| Operations | Reclassify, rematch, extend deadlines, assisted capture, case resolution, refund review, payout hold; publish and revise rate cards, effective-dated | Accept an invitation or offer for a vendor; author a proposal without vendor confirmation; edit rows directly; backdate a rate card under a live booking; publish a wage component below the floor |
 | System jobs | Waves, expiries, SLA closure, reconciliation, outbox | Any action requiring consent or human judgement |
 
 Object-level authorization is enforced per record, not per route. Every M2 endpoint carries a
@@ -280,9 +338,13 @@ Codes follow the M1 `PartnerDomainError` shape: stable `code`, user-safe `messag
 | `m2_proposal_invalid_shape` | 400 | no | Wrong composer shape for the lifecycle |
 | `m2_proposal_not_selectable` | 409 | no | Superseded, withdrawn or expired |
 | `m2_proposal_slot_conflict` | 409 | no | Identity cluster already holds a slot |
-| `m2_unlock_not_available` | 409 | no | A3: no usable quote yet |
-| `m2_unlock_required` | 403 | no | A3: action needs an active unlock |
+| `m2_unlock_not_available` | 409 | no | A3 fallback: no usable quote yet |
+| `m2_unlock_required` | 403 | no | A3 fallback: action needs an active unlock |
 | `m2_unlock_payment_pending` | 202 | yes | Awaiting provider confirmation |
+| `m2_rate_card_unavailable` | 409 | no | A3: no published rate for the city+skill; instant booking refused, never a guessed price |
+| `m2_roster_insufficient` | 409 | no | A3: lead's verified roster smaller than the requested headcount |
+| `m2_booking_fee_not_chargeable` | 409 | no | A3: fee checkout attempted with no held accepted offer |
+| `m2_booking_fee_payment_pending` | 202 | yes | Awaiting provider confirmation of the booking fee |
 | `m2_visit_plan_required` | 409 | no | A5 submit without a chosen visit plan |
 | `m2_visit_plan_not_chargeable` | 409 | no | Plan checkout attempted with no held visit slot |
 | `m2_visit_plan_payment_pending` | 409 | yes | Awaiting provider confirmation of the plan charge |
@@ -306,15 +368,20 @@ them from configuration and fail closed when unset — no default is baked into 
 
 | Config | Blocked decision |
 |---|---|
-| Unlock price, tax treatment | Decision 5 and the decided model in `README.md` |
+| Unlock price, tax treatment (A3 fallback) | Decisions 5 and 14 and the decided model in `README.md` |
 | Visit-plan tier prices; the per-slot split (vendor visit payout % vs platform share %) | Decision 1 |
-| Quote-delivery SLA (A3); visit-delivery SLA and post-visit estimate window (A5), per category | Decision 2 |
-| Customer no-show: platform-share disposition (vendor payout always pays) | Decision 3 |
+| Booking-fee value; the forfeit split (lead travel compensation % vs platform share %); the free-cancel window T | Decision 12 |
+| Seed rate-card values per launch city+skill; the decline-alarm threshold; the review calendar owner | Decision 13 |
+| Whether the A3 fallback keeps charging the unlock | Decision 14 |
+| Quote-delivery SLA (A3 fallback); visit-delivery SLA and post-visit estimate window (A5), per category | Decision 2 |
+| Cascade wave size, per-offer timeout, widening steps, fallback threshold (A3) | Pre-phase decision list |
+| Preset price-moving facts per skill; published add-on and overtime rates per card | Pre-phase decision list |
+| Customer no-show: platform-share disposition (vendor payout always pays) (A5) | Decision 3 |
 | Non-responsive rejection cap | Pre-phase decision list |
 | Commission treatment and display | Decision 4 |
-| Minimum-wage floor values | Decision 7 |
+| Minimum-wage floor values (also the floor under every rate card's wage component) | Decision 7 |
 | Retention percentage, warranty window | Pre-phase decision list |
 | Insurance requirement per capability | Decision 6 |
 
-Decision numbers refer to the revision 3 blocking list in `README.md` §"Decisions required before M2
+Decision numbers refer to the revision 4 blocking list in `README.md` §"Decisions required before M2
 acceptance".

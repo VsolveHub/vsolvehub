@@ -1,3 +1,4 @@
+import { isMaterialAdvance } from "@vsolve/query";
 import type { Engagement, EngagementStage } from "@vsolve/query";
 
 /**
@@ -165,6 +166,42 @@ export function describeStageStatus(
 export function stageTitle(stage: EngagementStage, wording: StageWording): string {
   const label = stage.label.trim();
   if (label !== "") return label;
+  if (isMaterialAdvance(stage)) return `Materials ${stage.position}`;
   const noun = wording.one.charAt(0).toUpperCase() + wording.one.slice(1);
   return `${noun} ${stage.position}`;
 }
+
+/**
+ * Whether this row is money for materials rather than a piece of work.
+ *
+ * `EngagementStage.kind` is published at contract **1.26.0** — `WORK` |
+ * `MATERIAL_ADVANCE` — and before it there was one row type for both, so a bag
+ * of cement arrived on this screen as a milestone to be signed off as work. It
+ * is one spine and one set of commands still; what the column carries is that a
+ * material advance funds through its own payment purpose, is laid out after
+ * every work milestone, and is **not** clawed back as unearned work if a
+ * capability is suspended — the vendor has already bought the materials.
+ *
+ * Compared against the published enum rather than parsed out of a label. A
+ * client reading "materials" out of the vendor's own wording would be inferring
+ * a money rule from free text.
+ *
+ * Re-exported from `@vsolve/query` rather than reimplemented here. The Customer
+ * app classifies the same rows, off the same `Schemas["EngagementStage"]`, by
+ * the same rule; two copies of a money classification are two chances to
+ * disagree about what a bag of cement is when a third `kind` is published.
+ */
+export { isMaterialAdvance };
+
+/**
+ * What a material advance is, said to the vendor on the row itself.
+ *
+ * Deliberately says what it *is* and not what will happen to it in a
+ * cancellation: the recovery rules are the server's and the copy that would
+ * describe them ("this is never refunded") is broader than the rule actually
+ * published.
+ */
+export const MATERIAL_ADVANCE_NOTE =
+  "This is the materials money from your estimate, not a piece of work. The customer funds it " +
+  "as an advance so you can buy what the job needs, and Vsolve keeps it separate from the work " +
+  "you are paid for.";

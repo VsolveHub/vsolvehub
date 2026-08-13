@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.28.0)
- * Checksum: 38c6565538b4198c
+ * Source:   contracts/openapi/v1.yaml (version 1.29.0)
+ * Checksum: 344d5a76b18ddc85
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1860,6 +1860,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/rate-cards/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every published card, newest effective date first. This is the monthly review calendar's read and the only surface that publishes the three components, because reviewing a rate against the wage floor means seeing the wage part of it. */
+        get: operations["m2_rate_card_list"];
+        put?: never;
+        /**
+         * @description Publish a day rate for one city and one statutory skill, effective from a date. A card is **loaded, never edited**: a booking made last week reconciles against the number it was made at, and raising a rate is one more row.
+         *
+         *     Two refusals are the point of this endpoint. The wage component is checked against the statutory floor with the same fail-closed guard vendor quotes pass — a platform that refuses a vendor's rate for being below the floor and publishes its own below it has no rule at all. And a card cannot be **backdated under a live booking**, because that would retroactively change the number a live booking was priced at.
+         */
+        post: operations["m2_rate_card_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/reservations/{reservation_id}/release/": {
         parameters: {
             query?: never;
@@ -2369,6 +2391,71 @@ export interface paths {
         put?: never;
         /** @description Add a worker. **`201` for a new membership, `200` for a reinstated one**, so the UI can say "we put Ramesh back on your roster" instead of silently succeeding on a name the Partner thought was gone. */
         post: operations["m2_partner_crew_add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew-offers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Crew offers this lead can still answer, on the M1 dispatch clock — `responds_by` is wall-clock and minutes away, not a business-hours deadline.
+         *
+         *     **Every offer carries the lead's own number**: what they receive per day for the requested crew, paid directly by the Customer at day end. The Customer's all-inclusive rate is not in this payload at any status, because it contains this platform's booking fee and showing a vendor money they do not receive is how a published rate starts an argument on site.
+         */
+        get: operations["m2_crew_offer_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew-offers/{invitation_id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Take the job at the published rate. **First accept wins** — a rate-card request has exactly one slot, so the second lead to arrive is refused with `m2_invitation_slots_exhausted` rather than losing a race.
+         *
+         *     Accepting takes a soft capacity hold for the requested dates, records this lead's acceptance of the published card, and holds the job while the Customer pays the booking fee. If they never pay, the hold lapses, the vendor keeps their standing, and the cascade moves on.
+         *
+         *     Refused with `m2_roster_insufficient` when the lead's **verified** roster is smaller than the headcount. Crews are never aggregated across vendors: one lead is accountable for the whole crew.
+         */
+        post: operations["m2_crew_offer_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/crew-offers/{invitation_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Pass on a crew offer. **The reason is required and is read by the decline-rate alarm.** `RATE_TOO_LOW` is the answer that matters most: a published rate below the street rate makes leads decline everything and the instant product dies quietly, so a sustained decline rate pages Operations rather than appearing in a monthly report.
+         *
+         *     Declining releases the slot and moves the cascade to its next, wider wave.
+         */
+        post: operations["m2_crew_offer_decline"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3230,6 +3317,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/booking-fee/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Cancel a booked crew. **The free-cancellation window decides the money**, server-side and never from the client: at or beyond T hours before the requested start the booking fee refunds in full; inside T it forfeits and splits, because the lead has already turned other work down for that day.
+         *
+         *     T is an open owner decision and is read fail-closed: while it is unset this refuses with `m2_policy_unavailable` rather than guessing which way a real Customer's money should go.
+         */
+        post: operations["m2_booking_fee_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/booking-fee/checkout/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Pay the booking fee against a lead who is holding this job right now. The hold is checked under the booking's own row lock in the same transaction that creates the attempt, so paying for a crew nobody is holding is unreachable rather than merely unlikely.
+         *
+         *     **The crew is not confirmed by this response.** Only a verified provider callback moves the fee to `ACTIVE`, and that same callback creates the engagement; until it lands the fee reads `PENDING` and `m2_booking_fee_payment_pending` is the refusal anything gated on confirmation returns. If the Customer never pays, the hold lapses harmlessly and the next offer or wave proceeds.
+         */
+        post: operations["m2_booking_fee_checkout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/crew/arrival/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Confirm the crew arrived on day one, which is the moment the booking fee is earned. Either party may record it. **Non-OTP** — the start OTP is deferred to M3, so this is the default path in M2 rather than a degraded one.
+         *
+         *     Nothing is paid out here: the fee is Vsolve's revenue once the crew arrived, and the wages are peer-to-peer and settle at day end.
+         */
+        post: operations["m2_crew_arrival_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/crew/no-show/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Report that day one did not happen. **`party` decides the money and the reason code cannot move it.**
+         *
+         *     `VENDOR`: the booking fee refunds in full, no travel compensation is paid — neither party earns from an undelivered crew — the request returns to matching for a **free re-dispatch**, and the vendor's standing carries the record.
+         *
+         *     `CUSTOMER`: the fee forfeits and splits. A configured share pays the lead as travel compensation through the payout rails, and the remainder is the platform share; the two reconcile to the fee in integer paise.
+         */
+        post: operations["m2_crew_no_show_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/quotes/": {
         parameters: {
             query?: never;
@@ -3315,6 +3488,48 @@ export interface paths {
         get: operations["m2_quote_teaser_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/rate-card/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The published day rate for this request and everything that has happened to it since. **`preview.is_available: false` is not an error** — it means this city and skill have no published card, or instant dispatch is not configured for this service, and the request will collect quotes instead. `unavailable_code` says which.
+         *
+         *     The money split published here is the Customer's: `total_customer_paise` divides into `lead_receipt_paise`, **paid directly to the crew at day end and never held by Vsolve**, and `booking_fee_paise`, the one online charge. The lead's own wage and supervision split is deliberately absent.
+         */
+        get: operations["m2_rate_card_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/rate-card/book/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Book a crew at the published day rate. The rate and its inclusion list are shown by `m2_rate_card_read` **before** this runs and are frozen onto the booking here, so a rate loaded between the screen and the tap cannot become what the Customer agreed to.
+         *
+         *     **Nothing is charged by this call.** It submits the requirement and sends the first wave of crew offers on the M1 dispatch clock — minutes, not business hours. The booking fee is charged only once a lead has accepted, through `m2_booking_fee_checkout_create`.
+         */
+        post: operations["m2_rate_card_book"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3953,6 +4168,43 @@ export interface components {
             booking: components["schemas"]["CustomerBooking"];
             refund_ids: string[];
         };
+        /**
+         * @description The one online charge, and how it was settled.
+         *
+         *     The forfeit split is published because the Customer is entitled to know where their money went
+         *     when a booking they missed was settled: a travel-compensation share to the crew that travelled,
+         *     and the remainder to Vsolve. Publishing zero for both on an unsettled fee is not a placeholder
+         *     — it is the true amount so far.
+         */
+        BookingFee: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["BookingFeeStatusEnum"];
+            readonly amount_paise: number;
+            readonly travel_compensation_paise: number;
+            readonly platform_share_paise: number;
+            readonly receipt_series: string;
+            readonly receipt_sequence: number | null;
+            readonly settlement_reason_code: string;
+            readonly failure_code: string;
+            /** Format: date-time */
+            readonly activated_at: string | null;
+            /** Format: date-time */
+            readonly earned_at: string | null;
+            /** Format: date-time */
+            readonly settled_at: string | null;
+        };
+        /**
+         * @description * `OFFER_ACCEPTED` - A lead accepted; the Customer has not paid yet
+         *     * `PENDING` - Awaiting the provider
+         *     * `ACTIVE` - Paid; the crew is confirmed
+         *     * `EARNED` - The crew arrived on day one
+         *     * `FORFEIT_SPLIT` - Forfeited and split with the lead
+         *     * `REFUNDED` - Refunded in full
+         *     * `FAILED` - Payment failed
+         * @enum {string}
+         */
+        BookingFeeStatusEnum: "OFFER_ACCEPTED" | "PENDING" | "ACTIVE" | "EARNED" | "FORFEIT_SPLIT" | "REFUNDED" | "FAILED";
         BookingGroup: {
             /** Format: uuid */
             readonly id: string;
@@ -4483,6 +4735,67 @@ export interface components {
             /** @default false */
             is_supervisor: boolean;
         };
+        /**
+         * @description * `customer_no_show` - Nobody was at the site
+         *     * `gate_locked` - The site was locked
+         *     * `vendor_no_show` - The crew did not arrive
+         * @enum {string}
+         */
+        CrewNoShowReasonCodeEnum: "customer_no_show" | "gate_locked" | "vendor_no_show";
+        CrewNoShowRequest: {
+            party: components["schemas"]["VisitNoShowPartyEnum"];
+            reason_code: components["schemas"]["CrewNoShowReasonCodeEnum"];
+        };
+        /**
+         * @description One crew offer as the **lead** sees it (`M2-BE-435`).
+         *
+         *     An explicit field list, like the teaser, and the omission is the point: there is no
+         *     `total_customer_paise` and no `booking_fee_paise` here at any status. ADR-0009 fixes the offer
+         *     screen as "what they receive per day for the requested crew, paid directly by the customer at
+         *     day end", and a lead shown the Customer's all-inclusive number would reasonably expect to
+         *     receive it.
+         */
+        CrewOffer: {
+            /** Format: uuid */
+            readonly invitation_id: string;
+            /** Format: uuid */
+            readonly requirement_id: string;
+            readonly status: string;
+            readonly headcount: number;
+            readonly days: number;
+            readonly lead_day_receipt_paise: number;
+            readonly lead_total_receipt_paise: number;
+            readonly standard_day_hours: number;
+            readonly overtime_hourly_paise: number;
+            readonly inclusions: string[];
+            /** Format: date-time */
+            readonly responds_by: string | null;
+            readonly verified_roster_size: number;
+            /** Format: date-time */
+            readonly requested_start: string | null;
+            readonly area_label: string;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description * `RATE_TOO_LOW` - The published rate is below the going rate
+         *     * `NO_CREW_AVAILABLE` - No crew free on those dates
+         *     * `TOO_FAR` - Too far to travel
+         *     * `SITE_UNSUITABLE` - The site or the work is not something we do
+         *     * `OTHER` - Another reason
+         * @enum {string}
+         */
+        CrewOfferDeclineReasonCodeEnum: "RATE_TOO_LOW" | "NO_CREW_AVAILABLE" | "TOO_FAR" | "SITE_UNSUITABLE" | "OTHER";
+        CrewOfferDeclineRequest: {
+            reason_code: components["schemas"]["CrewOfferDeclineReasonCodeEnum"];
+            /** @default  */
+            note: string;
+        };
+        CrewOfferList: {
+            readonly offers: components["schemas"]["CrewOffer"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
         CsrfToken: {
             readonly csrf_token: string;
         };
@@ -4693,7 +5006,7 @@ export interface components {
             /** Format: uuid */
             readonly requirement: string;
             /** Format: uuid */
-            readonly proposal: string;
+            readonly proposal: string | null;
             /** Format: uuid */
             readonly partner: string;
             readonly archetype: string;
@@ -6939,9 +7252,10 @@ export interface components {
          *     * `M2_STAGE_FUNDING` - M2 stage funding
          *     * `M2_MATERIAL_ADVANCE` - M2 material advance
          *     * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+         *     * `M2_BOOKING_FEE` - M2 booking fee
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE" | "M2_SCOPE_AMENDMENT" | "M2_BOOKING_FEE";
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -7059,6 +7373,152 @@ export interface components {
             factors: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * @description One published card, as Operations reads it back.
+         *
+         *     The three components are published **on this surface only**. It is the Operations review
+         *     calendar's read and the wage-floor cross-check happens against the same numbers, so hiding the
+         *     split here would make the monthly review a screen you cannot review from.
+         */
+        RateCard: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly service_area: string;
+            /** Format: uuid */
+            readonly skill: string;
+            readonly worker_day_wage_paise: number;
+            readonly supervision_margin_paise: number;
+            readonly booking_fee_paise: number;
+            readonly customer_day_rate_paise: number;
+            readonly lead_day_receipt_paise: number;
+            readonly standard_day_hours: number;
+            readonly overtime_hourly_paise: number;
+            readonly add_on_rates: unknown;
+            readonly inclusions: unknown;
+            /** Format: date */
+            readonly effective_from: string;
+            readonly source_reference: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        RateCardBookRequest: {
+            /** @default false */
+            allow_duplicate: boolean;
+        };
+        /** @description The Customer's booking, frozen at the rate it was made at. */
+        RateCardBooking: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["RateCardBookingStatusEnum"];
+            readonly headcount: number;
+            readonly days: number;
+            readonly day_rate_paise: number;
+            readonly total_customer_paise: number;
+            readonly lead_receipt_paise: number;
+            readonly booking_fee_paise: number;
+            readonly standard_day_hours: number;
+            readonly overtime_hourly_paise: number;
+            readonly add_on_rates: unknown;
+            readonly inclusions: unknown;
+            readonly wave: number;
+            /** Format: date-time */
+            readonly hold_expires_at: string | null;
+            readonly fallback_reason_code: string;
+            /** Format: date-time */
+            readonly fell_back_at: string | null;
+            /** Format: date-time */
+            readonly confirmed_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `MATCHING` - Looking for a crew
+         *     * `OFFER_HELD` - A lead is holding this job
+         *     * `CONFIRMED` - Crew confirmed and the booking fee is paid
+         *     * `FELL_BACK` - Fell back to the quote flow
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        RateCardBookingStatusEnum: "MATCHING" | "OFFER_HELD" | "CONFIRMED" | "FELL_BACK" | "CANCELLED";
+        RateCardList: {
+            readonly rate_cards: components["schemas"]["RateCard"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description Operations publishes a card. Every value is required; none has a default.
+         *
+         *     A default on any of these would be this file deciding a price, a shift length or an overtime
+         *     rate. `effective_from` is required for the same reason: "today" is the one value a publisher
+         *     should never get by omission, because it is the value that lands under live bookings.
+         */
+        RateCardPublishRequest: {
+            /** Format: uuid */
+            service_area_id: string;
+            /** Format: uuid */
+            skill_id: string;
+            worker_day_wage_paise: number;
+            supervision_margin_paise: number;
+            booking_fee_paise: number;
+            standard_day_hours: number;
+            overtime_hourly_paise: number;
+            inclusions: string[];
+            add_on_rates?: {
+                [key: string]: number;
+            };
+            /** Format: date */
+            effective_from: string;
+            /** @default  */
+            source_reference: string;
+        };
+        /**
+         * @description The whole A3 instant path as one read: the price before, the crew and the fee after.
+         *
+         *     One endpoint rather than three, for the reason `VisitPlanStateSerializer` gives: the screen
+         *     that offers instant booking and the screen that tracks it are the same screen at two moments,
+         *     and two endpoints would let them disagree about which booking the Customer has.
+         */
+        RateCardState: {
+            readonly preview: components["schemas"]["RatePreview"];
+            readonly booking: components["schemas"]["RateCardBooking"] | null;
+            readonly booking_fee: components["schemas"]["BookingFee"] | null;
+            readonly checkout_available: boolean;
+            /** Format: uuid */
+            readonly confirmed_partner_id: string | null;
+            readonly confirmed_partner_name: string | null;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description What instant booking would cost, on the screen the Customer reads **before** booking.
+         *
+         *     `total_customer_paise = lead_receipt_paise + booking_fee_paise`, server-calculated, so the two
+         *     sentences the screen shows always add to the one number the Customer agrees to. The
+         *     supervision margin is deliberately not here: the split the Customer needs is "to the crew" and
+         *     "to Vsolve", not the lead's own business.
+         */
+        RatePreview: {
+            readonly is_available: boolean;
+            /** Format: uuid */
+            readonly rate_card_id: string | null;
+            readonly headcount: number | null;
+            readonly days: number | null;
+            readonly day_rate_paise: number | null;
+            readonly total_customer_paise: number | null;
+            readonly lead_receipt_paise: number | null;
+            readonly booking_fee_paise: number | null;
+            readonly standard_day_hours: number | null;
+            readonly overtime_hourly_paise: number | null;
+            readonly add_on_rates: {
+                [key: string]: number;
+            } | null;
+            readonly inclusions: string[] | null;
+            readonly unavailable_code: string | null;
+            readonly unavailable_reason: string | null;
+            /** Format: date-time */
+            readonly server_now: string;
         };
         /**
          * @description * `PARTNER_UNREACHABLE` - Partner unreachable
@@ -13096,6 +13556,98 @@ export interface operations {
             };
         };
     };
+    m2_rate_card_list: {
+        parameters: {
+            query?: {
+                /** @description Narrow to one city. */
+                service_area?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCardList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_rate_card_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RateCardPublishRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RateCardPublishRequest"];
+                "multipart/form-data": components["schemas"]["RateCardPublishRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCard"];
+                };
+            };
+            /** @description `m2_proposal_below_wage_floor` when the wage component is under the statutory floor for that state and skill. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_wage_floor_unavailable` when no floor is loaded for the area's state and this skill, or when the area carries no state code — the check fails closed rather than being skipped. `m2_requirement_transition_not_allowed` when the effective date would land on or before a live booking made at the current rate. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_reservation_release: {
         parameters: {
             query?: never;
@@ -14610,6 +15162,138 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_crew_offer_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewOfferList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_crew_offer_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCardBooking"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_roster_insufficient`, `m2_invitation_slots_exhausted` when another lead took the job, `m2_capacity_unavailable` when this lead is already committed on those dates, or `m2_invitation_expired`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_crew_offer_decline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewOfferDeclineRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewOfferDeclineRequest"];
+                "multipart/form-data": components["schemas"]["CrewOfferDeclineRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewOffer"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16741,6 +17425,207 @@ export interface operations {
             };
         };
     };
+    m2_booking_fee_cancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingFee"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_policy_unavailable` while the free-cancellation window is unset; `m2_booking_fee_not_chargeable` when there is no fee on this request; `m2_requirement_transition_not_allowed` once the fee is settled. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_booking_fee_checkout_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCheckout"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_booking_fee_not_chargeable` when no lead is holding the job, when the hold has expired, or when the fee is already settled; `m2_lifecycle_not_supported` on a request that is on the quote flow. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_crew_arrival_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingFee"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_crew_no_show_report: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewNoShowRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewNoShowRequest"];
+                "multipart/form-data": components["schemas"]["CrewNoShowRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingFee"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_policy_unavailable` while the forfeit split is unset — the fee stays `ACTIVE` and visible rather than being split on an invented ratio. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_quote_list: {
         parameters: {
             query?: never;
@@ -16963,6 +17848,98 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_rate_card_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCardState"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_rate_card_book: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RateCardBookRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RateCardBookRequest"];
+                "multipart/form-data": components["schemas"]["RateCardBookRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCardState"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_rate_card_unavailable` when no card is published for this city and skill — the Customer is routed to the quote flow, which is the honest degradation rather than a guessed price. `m2_policy_unavailable` when instant dispatch is not configured for this service. `m2_requirement_duplicate` unless `allow_duplicate` is set. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

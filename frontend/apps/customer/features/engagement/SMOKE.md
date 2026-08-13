@@ -230,3 +230,89 @@ wave was explicitly told to avoid.
 | Blocking `GET /engagements/{id}/events/` only | The timeline fails alone and says the record itself is safe |
 | Pasting another Customer's engagement id | `404`, rendered as gone-or-not-yours, with no retry loop |
 | An engagement whose `commercial_mode` is neither published value | It appears on **neither** list, and both lists say a record exists that they will not describe |
+
+---
+
+# Wave J addendum — contract 1.28.0 consumption (2026-08-14)
+
+Three things the generated client now carries that this screen did not consume.
+Run these **after** §1–§11 above; they need the same engagements.
+
+## J1. A material advance stops reading as a work milestone — `EngagementStage.kind`
+
+You need an A5 estimate with **at least one material line**. Have the Partner
+submit one (`ProposalMaterialLine` — title, quantity, unit, amount) alongside its
+work stages, and select it. The engagement opens with the material lines laid
+out **after** every milestone; that ordering is the server's, and if a materials
+row is ever first, report it as a backend bug rather than a display one.
+
+1. On `/engagements/{id}`, find the materials row in **The stages**. It must
+   carry a **`Materials`** badge beside its status badge. A milestone must carry
+   no kind badge at all — the ordinary case is untagged on purpose.
+2. Its funding line must read **"This pays for materials the professional buys
+   for your job — it is not work being done. Once it is spent on goods it is not
+   returned the way unfinished work is…"**, and its button must read **"Pay for
+   these materials"**, never "Fund this stage". This is the whole point: what a
+   Customer consents to here is not what they consent to on a milestone.
+3. Check the amount on that line is the **face value** with nothing subtracted.
+   No visit money comes off it, exactly as for a work stage.
+4. Open the materials row → the stage review. Check **all four** of:
+   - the heading over the evidence list reads **"What the professional bought"**,
+     not "What the professional showed";
+   - the approve panel reads **"The materials are what we agreed"**, not "This is
+     done properly";
+   - the correction panel reads **"The materials are not right"** and its field
+     asks *what is wrong with them*;
+   - the money panel carries the sentence that this money is **not returned the
+     way unfinished work is**.
+5. **Nothing is removed.** Approve, correction and dispute must all still be
+   offered on a materials row — the server permits all three, and hiding the
+   dispute would take away the only objection to a delivery that never arrived.
+   If any control has vanished, that is the bug.
+6. Open the same project on `/projects`. When the materials row is the next thing
+   to pay for, the row's one sentence must read **"Pay for the materials so the
+   professional can buy them"** and never "Fund the next stage to start it".
+7. **The negative check.** Do the same walk on an A5 project with no material
+   lines. Every row must be untagged and every sentence must be the work wording
+   from §4 — the kind copy must be invisible when there are no materials.
+
+## J2. The receipt number — `M2-FE-418`, `Engagement.access_receipt`
+
+1. On `/engagements/{id}`, scroll to **The record**. The sentence *"A receipt or
+   invoice is not available from here yet"* must be **gone**.
+2. On an A5 project whose visit plan was charged, a **Your receipt number** block
+   appears with an `M2A-…-n` number, *Your site visits*, and the amount.
+3. On an A3 booking that went through the ₹149 unlock, the same block appears
+   reading *Seeing your quotes in full*.
+4. Check what it does **not** say. There is no download link and there must never
+   be one — `AccessReceipt` carries a number, not a document — and it must not
+   use the word *invoice*: GST treatment of both access fees is still an open
+   owner decision, so it is a receipt reference and says so.
+5. **The null case is a pass, not a gap.** On an engagement reached without an
+   access fee — an A5 plan covered entirely by a reclassification credit is the
+   clean way to produce one — the block is replaced by *"There is no access-fee
+   receipt number on this agreement."* It must **not** claim nothing was ever
+   paid: the field cannot tell "no fee" from "credit-covered" from "predates
+   numbering".
+
+## J3. The two cache keys — invisible unless you look for them
+
+Nothing on screen changes. What changes is which cache entry the reads live in,
+so this is checked by behaviour rather than by appearance.
+
+1. Open `/engagements/{id}` and leave it for a few minutes. Have the Partner
+   **propose an amendment**. Switch back to the tab (focus it) — the change
+   request must appear without a hard reload.
+
+   > This step passed before this pass as well, and saying otherwise would be
+   > false: the amendment list borrowed the agreement *key* but never its
+   > `SESSION_STATE` tier, and all three tiers refetch on focus anyway. What the
+   > move buys is separability and an honest tier name, which steps 2 and 3
+   > actually test — this step only proves nothing regressed.
+2. Approve a stage. The engagement totals, the stage, **the event timeline and
+   the amendment panel** must all refresh from the one invalidation, with no
+   manual reload. Both keys are still nested under the engagement detail, so this
+   is the check that the nesting survived the move.
+3. In devtools, block `GET /engagements/{id}/amendments/` only. The agreement and
+   the stages must still render and the change panel must fail on its own — same
+   as §11, and worth re-running because the key moved.

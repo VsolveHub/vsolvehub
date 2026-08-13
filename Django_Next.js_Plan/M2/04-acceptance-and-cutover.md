@@ -2,8 +2,10 @@
 
 **Purpose:** Joint backend/frontend proof required before an M2 launch category is enabled
 **Status:** Not started
-**Revision:** 3 - visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
-section D is split by archetype and section D5 (visits) is new. Revision 2 simplifications remain.
+**Revision:** 4 - rate-card A3 per [ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md):
+the D1–D4 unlock scenarios now govern the A3 fallback only and section D6 (rate-card booking) is new.
+Revision 3 (visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md))
+split section D by archetype and added D5 (visits). Revision 2 simplifications remain.
 
 These are business outcomes, not only UI tests. Execute them against the same integrated environment
 with real database constraints, asynchronous workers and payment-provider **test** callbacks.
@@ -103,9 +105,10 @@ with real database constraints, asynchronous workers and payment-provider **test
 - [ ] `M2-AC-218` Operations captures an assisted A3 quote by phone; it is attributed to the Partner, the
   Partner confirms it, and only then is it visible to the Customer.
 
-## D - Access and selection (D1–D4 A3 unlock · D5 A5 visits)
+## D - Access and selection (D1–D4 A3-fallback unlock · D5 A5 visits · D6 A3 rate-card booking)
 
-A3 unlock scenarios (unchanged from revision 2):
+A3 **fallback** unlock scenarios (scenario text unchanged from revision 2; since revision 4 these
+govern the quote-flow fallback only — the primary A3 door is D6):
 
 - [ ] `M2-AC-301` Before unlocking, the Customer sees only verification, rating, vendor type and a price
   band - no scope, identity or contact.
@@ -175,6 +178,40 @@ D5 — A5 visit plan (revision 3):
 - [ ] `M2-AC-335` The plan checkout, visit tracker and estimate list agree after refresh and a new
   login session, and the Partner's slot confirmation screen shows the same slot the Customer sees.
 
+D6 — A3 rate-card booking (revision 4):
+
+- [ ] `M2-AC-336` The published rate and its full inclusion list (what counts as a day, when
+  overtime starts and at what rate, what the preset's scope includes) are on the screen before the
+  Customer books, and no instant booking is possible for a city+skill without a live
+  effective-dated rate card (`m2_rate_card_unavailable`) — the requirement routes to the quote
+  flow, never a guessed price.
+- [ ] `M2-AC-337` A crew offer reaches only leads with an approved A3 capability and a verified
+  roster covering the requested headcount; a lead whose roster is smaller is refused with
+  `m2_roster_insufficient`.
+- [ ] `M2-AC-338` Two leads race to accept the same offer; exactly one wins, the win takes a
+  roster-sized soft capacity hold, and the global crew-identity check still blocks the same worker
+  promised through two agencies on that day.
+- [ ] `M2-AC-339` Duplicate webhooks, browser retries and late success charge exactly one booking
+  fee; only the verified provider callback hardens the booking and creates the engagement — never
+  a client redirect.
+- [ ] `M2-AC-340` The accepted-offer hold expires harmlessly when the Customer never completes the
+  booking-fee checkout: the lead's calendar is released, nothing is charged and nothing is owed.
+- [ ] `M2-AC-341` A Customer no-show or locked gate on day 1 executes the forfeit split: the
+  configured share reaches the lead as travel compensation through the M1 payout rails, the
+  remainder is the platform share, and the ledger reconciles `fee = travel compensation + platform
+  share` in integer paise.
+- [ ] `M2-AC-342` A vendor no-show on an accepted booking auto-refunds the booking fee in full,
+  offers free re-dispatch through the cascade without a support ticket and records the standing
+  hit; travel compensation is never paid.
+- [ ] `M2-AC-343` The free-cancel boundary holds on both sides: a Customer cancellation at or
+  beyond T hours before the slot refunds the fee in full; one inside T hours executes the forfeit
+  split, and both parties see the same recorded outcome.
+- [ ] `M2-AC-344` When no lead accepts, the Customer sees an honest holding state while the
+  cascade widens, and past the configured threshold the requirement falls back to the quote flow
+  with an explanation and nothing charged.
+- [ ] `M2-AC-345` A sustained decline rate above the configured threshold at a rate card fires the
+  Operations alarm, with decline reasons recorded — it does not merely appear in a monthly report.
+
 ## E - Engagement spine
 
 - [ ] `M2-AC-401` An A3 shift-day and an A5 milestone run through the same stage commands with the same
@@ -209,6 +246,23 @@ D5 — A5 visit plan (revision 3):
   not a cancellation reason.
 - [ ] `M2-AC-513` Conflicting attendance claims open a case and hold settlement.
 
+Revision 4 — daily direct settlement (rate-card A3):
+
+- [ ] `M2-AC-514` Each evening both sides receive the one-tap "Day settled?" prompt carrying a UPI
+  link at the exact published amount; both taps land and the day records as settled, with the
+  platform never holding or routing the wage money.
+- [ ] `M2-AC-515` A one-sided settlement claim without the dual tap trail reaches Operations as
+  unproven — an evidence-pack case (attendance record + published rate), never an automatic
+  finding.
+- [ ] `M2-AC-516` A 3-of-4 day settles at three workers' published rate, and the Customer is
+  offered exactly the three choices — continue short, add a day, or cancel the shortfall free —
+  with repeated shortfall hitting the lead's matching priority.
+- [ ] `M2-AC-517` A genuine extra counts only through a one-tap scope amendment at the card's
+  published add-on rates before it counts, and overtime counts only at the published overtime rate
+  after Customer one-tap approval (the retroactive window of `M2-AC-509` unchanged).
+- [ ] `M2-AC-518` "Extra demanded in cash" is a one-tap Customer report that records against
+  vendor standing and removes the vendor on a pattern.
+
 ## G - Project fulfilment
 
 - [ ] `M2-AC-601` A funded stage starts and the vendor submits evidence for review.
@@ -236,8 +290,8 @@ D5 — A5 visit plan (revision 3):
   dispute it.
 - [ ] `M2-AC-703` Customer reports that work and cash payment occurred while the Partner claims
   cancellation; payout/refund does not auto-resolve and Operations receives evidence review.
-- [ ] `M2-AC-704` In an A3 connection both parties transact directly; Vsolve retains only the earned
-  unlock fee and does not promise managed protection.
+- [ ] `M2-AC-704` In an A3 fallback connection both parties transact directly; Vsolve retains only
+  the earned unlock fee and does not promise managed protection.
 - [ ] `M2-AC-705` An A5 Partner requests off-platform payment; the Customer can report it and Operations
   can review without exposing the reporter unnecessarily.
 - [ ] `M2-AC-706` Partner claims the Customer forced offline payment; the same neutral evidence process
@@ -246,12 +300,17 @@ D5 — A5 visit plan (revision 3):
   the approved case policy and both parties can respond.
 - [ ] `M2-AC-708` Duplicate refund test callbacks do not duplicate ledger credit.
 - [ ] `M2-AC-709` Refund provider failure stays pending/retryable and does not display completed.
-- [ ] `M2-AC-710` A chargeback on the unlock or visit-plan fee itself is handled through the standard
-  dispute path and raises the rate alert.
+- [ ] `M2-AC-710` A chargeback on the booking, unlock or visit-plan fee itself is handled through the
+  standard dispute path and raises the rate alert.
 - [ ] `M2-AC-711` A chargeback or reversed payment after payout freezes unsafe settlement and reaches
   reconciliation.
-- [ ] `M2-AC-712` Unlock fee, visit-plan fee (and its per-slot shares), site-visit fee, stage funding,
-  material advance, refund, commission and payout reconcile independently.
+- [ ] `M2-AC-712` Booking fee (and its forfeit split), unlock fee, visit-plan fee (and its per-slot
+  shares), site-visit fee, stage funding, material advance, refund, commission and payout reconcile
+  independently.
+- [ ] `M2-AC-713` In an A3 rate-card booking the wages settle directly between Customer and lead at
+  day end; Vsolve retains only the earned booking fee — or, on a forfeit, its platform share beside
+  the lead's travel compensation — and never records the direct wage money as platform revenue or
+  promises managed protection.
 
 ## I - Operations and resilience
 
@@ -280,27 +339,35 @@ D5 — A5 visit plan (revision 3):
 - [ ] `M2-AC-904` Upload, validation, payment pending and state-change results are announced accessibly.
 - [ ] `M2-AC-905` Quote comparison remains understandable with long descriptions and two distinct scopes.
 - [ ] `M2-AC-906` Slow network and duplicate taps do not produce duplicate commercial actions.
-- [ ] `M2-AC-907` Customer-facing language distinguishes request, quote, unlock (A3), visit plan,
-  visit, estimate (A5), selection, booking and completion, and never calls an A3 connection a
-  protected booking.
+- [ ] `M2-AC-907` Customer-facing language distinguishes request, rate card, booking fee (A3),
+  quote, unlock (A3 fallback), visit plan, visit, estimate (A5), selection, booking and completion,
+  and never calls an A3 connection a protected — or an A3 crew booking a wage-protected — booking.
+  Two sentences are required copy: the Customer sees that wages are paid directly to the lead,
+  daily, at day end; the vendor offer screen shows the lead's own number — "You receive ₹X/day for
+  N helpers; the customer pays you directly at day end."
 - [ ] `M2-AC-908` Currency, dates, time zone, phone and address presentation are appropriate for India.
 
 ## Controlled cutover
 
 ### Before rollout
 
-- [ ] Freeze launch category, city/service areas, lifecycle, quote-delivery SLA (A3), visit-delivery
-  SLA and post-visit estimate window (A5).
-- [ ] Freeze the visit-plan tier prices and the per-slot split: vendor visit payout versus Vsolve
-  platform share.
+- [ ] Freeze launch category, city/service areas, lifecycle, the A3 cascade shape (wave size,
+  per-offer timeout, widening steps) and its fallback threshold, quote-delivery SLA (A3 fallback),
+  visit-delivery SLA and post-visit estimate window (A5).
+- [ ] Freeze the visit-plan tier prices and the per-slot split (vendor visit payout versus Vsolve
+  platform share), and the A3 booking-fee value, its forfeit split and the free-cancel window T.
 - [ ] Verify enough approved supply exists before exposing the category.
-- [ ] Confirm the minimum-wage floor table is populated for the launch states and skills.
+- [ ] Confirm the minimum-wage floor table is populated for the launch states and skills, and rate
+  cards are published for every launch city+skill, seeded from the Operations phone survey and
+  cross-checked against the floor.
 - [ ] Confirm the insurance and liability position is published in the Partner terms.
 - [ ] Run migrations, backfills and reconciliation in staging using production-like volume.
 - [ ] Test rollback and confirm M1 flows remain unaffected when M2 flags are off.
 - [ ] Train Operations on request recovery, reclassification, refund, payout hold, safety incidents and
   leakage review.
-- [ ] Publish Customer and Partner terms, unlock-fee explanation, cancellation policy and support path.
+- [ ] Publish Customer and Partner terms, the rate-card and booking-fee explanation (inclusion
+  list, free-cancel window and forfeit split), the unlock-fee explanation (A3 fallback),
+  cancellation policy and support path.
 - [ ] Activate dashboards, alerts, on-call ownership and external-adapter runbooks.
 - [ ] Record baselines and targets for every success measure in `README.md`.
 
@@ -310,17 +377,21 @@ D5 — A5 visit plan (revision 3):
 - [ ] Selected Partners and invited Customers in one service area with hard volume limits.
 - [ ] One A3 category limited rollout after BE5A/FE5A acceptance passes.
 - [ ] One A5 category limited rollout after BE5B/FE5B acceptance passes.
-- [ ] Expand only when quote fill rate, unlock conversion, cancellation, dispute and refund thresholds
-  remain healthy and Operations touches per request stay within the unit economics model.
+- [ ] Expand only when crew fill rate, decline rate, fallback rate, booking-fee forfeit/refund
+  rates and day-settled tap completion (A3), quote fill rate and unlock conversion (A3 fallback),
+  cancellation, dispute and refund thresholds remain healthy and Operations touches per request
+  stay within the unit economics model.
 
 ### Stop conditions
 
-Pause new M2 unlocks and visit-plan charges while preserving existing work when any approved
-threshold is breached for:
+Pause new M2 instant bookings, unlocks and visit-plan charges while preserving existing work when
+any approved threshold is breached for:
 
 - payment, refund, ledger or payout reconciliation mismatch;
-- quote-delivery (A3) or visit-delivery (A5) SLA breach rate;
-- unlock or visit-plan refund rate;
+- crew-confirmation (A3), quote-delivery (A3 fallback) or visit-delivery (A5) SLA breach rate;
+- booking-fee forfeit or refund rate, unlock (A3 fallback) or visit-plan refund rate;
+- a sustained decline rate above the alarm threshold at any rate card, a fallback rate that shows
+  instant being sold where it cannot be delivered, or collapsing day-settled tap completion;
 - vendor visit no-show rate or visit-to-estimate conversion;
 - unauthorized data exposure or unsafe contact disclosure;
 - repeated vendor no-show, Customer harm or any unhandled safety incident;

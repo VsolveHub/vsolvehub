@@ -18,6 +18,7 @@ import { timeAgo } from "@/lib/format";
 import type { EnquiryRecord } from "@/features/enquiry/model/wire";
 import { planVisitOf } from "@/features/enquiry/model/wire";
 
+import { formatVisitInstant } from "../model/slot-grid";
 import {
   describeEstimateWindow,
   describeVisitStatus,
@@ -90,6 +91,11 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
   const pending = arrival.isPending || complete.isPending || noShow.isPending;
   const error = arrival.error ?? complete.error ?? noShow.error;
   const presentation = error ? describeError(error, "mutation") : null;
+  // `SiteVisit.timezone` (1.26.0). Until it was published this row could only
+  // say "in two days", which is not a time a vendor can turn up at.
+  const when = visit.scheduled_for
+    ? formatVisitInstant(visit.scheduled_for, visit.timezone)
+    : null;
 
   return (
     <Card className="flex flex-col gap-4 p-4">
@@ -108,9 +114,10 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
             label: "When",
             // Null while a first-vendor slot is held and the customer's plan
             // payment is still being verified. Said plainly rather than blank.
-            value: visit.scheduled_for
-              ? timeAgo(visit.scheduled_for)
-              : "Held — confirmed once the customer pays",
+            value:
+              when && visit.scheduled_for
+                ? `${when.label} (${timeAgo(visit.scheduled_for)})`
+                : "Held — confirmed once the customer pays",
           },
           ...(visit.duration_minutes !== null
             ? [{ label: "On site for", value: `${visit.duration_minutes} minutes` }]
@@ -123,6 +130,14 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
             : []),
         ]}
       />
+
+      {when ? (
+        <p className="text-xs leading-5 text-text-muted">
+          {when.zoneUnsupported
+            ? `Shown in your device's clock — this phone does not recognise ${visit.timezone}, which is the site's own timezone.`
+            : `Times are in ${visit.timezone}, the timezone of the place you are going to.`}
+        </p>
+      ) : null}
 
       {visit.status === "COMPLETED" ? (
         <div className="flex flex-col gap-2">

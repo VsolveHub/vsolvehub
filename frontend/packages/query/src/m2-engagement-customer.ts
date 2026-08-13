@@ -27,6 +27,14 @@
  * that decides whether the UI promises protection, and a client that computes it
  * keeps promising protection straight through a policy change.
  *
+ * ## The second field, added at 1.26.0
+ *
+ * `EngagementStage.kind`. `WORK` and `MATERIAL_ADVANCE` share one spine and one
+ * table, and differ in what the money is *for*: a material advance buys goods,
+ * so it is spent rather than earned and is not recovered like an unearned work
+ * stage. See `stageKind` below — a screen must read it before it describes what
+ * funding or approving a row does.
+ *
  * ## Nothing here sums money the server has already added up
  *
  * 1.25.0 publishes six running totals on the engagement and four per stage,
@@ -48,6 +56,7 @@ import type { Schemas } from "@vsolve/api-client";
 export type Engagement = Schemas["Engagement"];
 export type EngagementPage = Schemas["EngagementPage"];
 export type EngagementStage = Schemas["EngagementStage"];
+export type EngagementStageKind = Schemas["EngagementStageKindEnum"];
 export type EngagementStatus = Schemas["EngagementStatusEnum"];
 export type EngagementStageStatus = Schemas["EngagementStageStatusEnum"];
 export type EngagementStageFundingState = Schemas["EngagementStageFundingStateEnum"];
@@ -99,6 +108,59 @@ export function isManagedPayment(engagement: Engagement): boolean {
  */
 export function isKnownCommercialMode(engagement: Engagement): boolean {
   return isLeadOnly(engagement) || isManagedPayment(engagement);
+}
+
+/* --------------------------------------------------------------------------
+   Stage kind — the second field a screen must read before it promises anything
+   -------------------------------------------------------------------------- */
+
+/**
+ * What a stage row's money is **for**, published at contract 1.26.0.
+ *
+ * There is one money spine and one stage table, which is correct — a second
+ * table for materials would be the duplication this plan forbids. What `kind`
+ * buys is the sentence a screen is allowed to say, and the three places the two
+ * rows genuinely differ (`M2-BE-543`, `GAP-028`):
+ *
+ * - a `MATERIAL_ADVANCE` funds through `PaymentAttempt.Purpose.M2_MATERIAL_ADVANCE`
+ *   rather than `M2_STAGE_FUNDING`;
+ * - it is laid out **after** every work milestone, because funding runs in
+ *   position order and a project whose first collection is a materials advance
+ *   is the prepay-then-vanish shape staged funding exists to prevent;
+ * - **it is not clawed back as unearned work.**
+ *   `route_suspended_capability_engagements` refunds a funded, unstarted *work*
+ *   stage and refuses to recover a funded material advance, because the vendor
+ *   has already bought the goods.
+ *
+ * That third one is the reason this reaches the UI at all. *Material money is
+ * spent, not earned*, so what a Customer is agreeing to when they fund one is
+ * materially different from what they agree to when they fund a milestone — and
+ * a screen that renders it as an ordinary fundable work stage is asking for
+ * consent to the wrong thing.
+ *
+ * `kind` is immutable after creation, enforced in `save()`, so a row never
+ * changes which recovery rule it lives under.
+ */
+export type StageKind = "work" | "material_advance" | "unknown";
+
+/**
+ * Which kind this build can describe.
+ *
+ * Fail-closed, the same rule as `isKnownCommercialMode` and for the same reason:
+ * the optimistic fallback for a third kind is "ordinary work milestone", which
+ * is exactly the reading `EngagementStage.kind` was published to prevent. An
+ * unrecognised kind renders as "we cannot describe what this money is for"
+ * rather than as the nearest-looking thing.
+ */
+export function stageKind(stage: EngagementStage): StageKind {
+  if (stage.kind === "WORK") return "work";
+  if (stage.kind === "MATERIAL_ADVANCE") return "material_advance";
+  return "unknown";
+}
+
+/** Money for goods the vendor buys, not for work somebody performs. */
+export function isMaterialAdvance(stage: EngagementStage): boolean {
+  return stageKind(stage) === "material_advance";
 }
 
 /* --------------------------------------------------------------------------

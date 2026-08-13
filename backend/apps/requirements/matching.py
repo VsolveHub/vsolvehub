@@ -52,6 +52,7 @@ from apps.requirements.exceptions import (
 from apps.requirements.models import (
     CapacityHold,
     CustomerRequirement,
+    RateCardBooking,
     RequirementSnapshot,
     VendorInvitation,
     VisitPlan,
@@ -586,10 +587,21 @@ def evaluate_candidates(
     return RequirementMatching(evaluations=tuple(evaluations))
 
 
-def _cluster_key(partner: PartnerProfile) -> str:
-    """A stable key for the beneficial owner behind this Partner account."""
+def cluster_key(partner: PartnerProfile) -> str:
+    """A stable key for the beneficial owner behind this Partner account.
+
+    Public since Wave C2R: the rate-card crew cascade builds its own waves on the M1 dispatch
+    clock rather than on business hours, and it has to apply the *same* one-invitation-per-owner
+    rule. A second hash of the same cluster would be a second answer to "is this the same agency",
+    which is exactly the question the global crew-identity check exists to have one answer to.
+    """
     linked = clustered_partner_ids(partner)
     return hashlib.sha256(",".join(sorted(str(pid) for pid in linked)).encode()).hexdigest()
+
+
+#: Retained so the private name keeps working for the callers below and for the existing test that
+#: reaches for it. One function, two names, no second implementation.
+_cluster_key = cluster_key
 
 
 def live_slot_count(requirement: CustomerRequirement) -> int:
@@ -610,7 +622,16 @@ def _max_slots(requirement: CustomerRequirement) -> int:
     A5 with no plan falls through to the configured ceiling rather than to zero:
     `submit_requirement` already refuses an A5 requirement without a plan, so reaching here without
     one means Operations reclassified an in-flight A3, and stalling matching is the wrong recovery.
+
+    **A rate-card A3 requirement has exactly one slot** (revision 4). "First accept wins" is not a
+    convention in the cascade caller — it is this number. Leaving the quote ceiling in place would
+    let a second lead accept a job the first one is already holding, and both would arrive.
     """
+    if RateCardBooking.objects.filter(
+        requirement=requirement,
+        status__in=RateCardBooking.DISPATCHABLE_STATUSES,
+    ).exists():
+        return 1
     if requirement.archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
         plan = (
             VisitPlan.objects.filter(requirement=requirement)

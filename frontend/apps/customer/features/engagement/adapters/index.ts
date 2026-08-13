@@ -18,6 +18,7 @@ import {
   isKnownAmendmentStatus,
   isKnownCommercialMode,
   isLeadOnly,
+  stageKind,
   nextCustomerAction,
   nextFundableStage,
   orderedStages,
@@ -35,6 +36,7 @@ import {
   type ReviewClock,
   type StageEvidence,
   type StageEvidenceKind,
+  type StageKind,
 } from "@vsolve/query";
 import { formatMoney } from "@vsolve/ui";
 
@@ -136,6 +138,16 @@ export interface StageView {
   stageId: string;
   position: number;
   label: string;
+  /**
+   * What this row's money is for — contract 1.26.0.
+   *
+   * `work` is a shift-day or a milestone somebody performs. `material_advance`
+   * is money spent on goods, which is not recovered like unearned work if the
+   * project ends early — so it may never be described as an ordinary fundable
+   * milestone. `unknown` fails closed: no funding control and no claim about
+   * what the money does.
+   */
+  kind: StageKind;
   amountPaise: number;
   amountLabel: string;
   /** The calendar day this stage is for, when the agreement named one. */
@@ -197,6 +209,7 @@ function toStageView(stage: EngagementStage, nextFundableStageId: string | null)
     // A stage stored with no label still has a position, and "Stage 2" is a
     // truthful name for it. An empty heading is not.
     label: stage.label.trim() === "" ? `Stage ${stage.position}` : stage.label,
+    kind: stageKind(stage),
     amountPaise: stage.amount_paise,
     amountLabel: formatMoney(stage.amount_paise),
     scheduledOn: formatDay(stage.scheduled_on),
@@ -241,6 +254,52 @@ function toStageView(stage: EngagementStage, nextFundableStageId: string | null)
  */
 export function toStandaloneStageView(stage: EngagementStage): StageView {
   return toStageView(stage, null);
+}
+
+/* --------------------------------------------------------------------------
+   The access fee's receipt — `M2-FE-418`, published at 1.26.0
+   -------------------------------------------------------------------------- */
+
+/**
+ * The durable reference for the access fee this agreement grew out of.
+ *
+ * **A reference, not a document.** `AccessReceipt` is
+ * `{kind, number, series, sequence, amount_paise}` — there is no URL and no
+ * `TaxDocument` id, because `TaxDocument.order` is not nullable and an access
+ * fee has no `Order`. So the screen shows the number a Customer quotes to
+ * support; it does not offer a download, and it does not call it an invoice —
+ * GST treatment of both access fees is still an open owner decision.
+ *
+ * `number` is formatted server-side in the `series-sequence` shape, deliberately
+ * so that every app quotes the same string. It is carried through verbatim and
+ * never re-assembled here from `series` and `sequence`.
+ */
+export interface AccessReceiptView {
+  /** The `M2A-` number, exactly as the server formatted it. */
+  number: string;
+  /** What was paid for: the A3 unlock or the A5 visit plan. */
+  purpose: string;
+  amountLabel: string;
+}
+
+/** `A3_QUOTE_UNLOCK` / `A5_VISIT_PLAN` — the two the server can produce. */
+const ACCESS_RECEIPT_PURPOSE: Record<string, string> = {
+  A3_QUOTE_UNLOCK: "Seeing your quotes in full",
+  A5_VISIT_PLAN: "Your site visits",
+};
+
+function toAccessReceiptView(engagement: Engagement): AccessReceiptView | null {
+  const receipt = engagement.access_receipt;
+  if (receipt === null) return null;
+  return {
+    number: receipt.number,
+    // De-slugged rather than blank for a kind added later. `kind` is a plain
+    // string on the wire, not a published enum, so a lookup miss is a real
+    // possibility and an empty purpose line on a receipt is worse than the
+    // server's own word for it.
+    purpose: ACCESS_RECEIPT_PURPOSE[receipt.kind] ?? deSlug(receipt.kind),
+    amountLabel: formatMoney(receipt.amount_paise),
+  };
 }
 
 /* --------------------------------------------------------------------------
@@ -291,12 +350,31 @@ export interface EngagementView {
   activeStageId: string | null;
   /** Null on A3, and on A5 whenever nothing is currently fundable. */
   nextFundableStageId: string | null;
+  /**
+   * What the next fundable row's money is for.
+   *
+   * Carried up to the list row and the progress panel because "fund the next
+   * stage to start it" is the wrong sentence about a material advance — nothing
+   * starts, goods get bought — and that is the one sentence a Customer reads
+   * before they open anything.
+   */
+  nextFundableStageKind: StageKind | null;
   /** Every stage waiting on the Customer, earliest first. */
   stagesAwaitingReviewIds: readonly string[];
   disputedStageIds: readonly string[];
   isDisputed: boolean;
   nextAction: CustomerNextAction;
   canAcceptCompletion: boolean;
+
+  /**
+   * The access fee's receipt reference, or null — `M2-FE-418`.
+   *
+   * Null has three honest meanings and none of them is an error: no fee has
+   * been charged yet, the plan was covered entirely by a reclassification
+   * credit, or the row predates receipt numbering. All three mean the same
+   * thing to the screen — there is no number to show.
+   */
+  accessReceipt: AccessReceiptView | null;
 
   /** When contact may be exchanged. A3 at engagement creation; A5 at first funding. */
   contactReleasedAt: string | null;
@@ -342,6 +420,7 @@ export function toEngagementView(engagement: Engagement): EngagementView {
     progress: stageProgress(engagement),
     activeStageId: activeStage(engagement)?.id ?? null,
     nextFundableStageId: nextStage?.id ?? null,
+    nextFundableStageKind: nextStage === null ? null : stageKind(nextStage),
     stagesAwaitingReviewIds: stages
       .filter((stage) => stage.status === "AWAITING_REVIEW")
       .map((stage) => stage.stageId),
@@ -349,6 +428,8 @@ export function toEngagementView(engagement: Engagement): EngagementView {
     isDisputed: isEngagementDisputed(engagement),
     nextAction: nextCustomerAction(engagement),
     canAcceptCompletion: canAcceptCompletion(engagement),
+
+    accessReceipt: toAccessReceiptView(engagement),
 
     contactReleasedAt: formatInstant(engagement.contact_released_at),
     workMayStartAt: formatInstant(engagement.work_may_start_at),
@@ -376,6 +457,8 @@ export interface EngagementRowView {
   nextAction: CustomerNextAction;
   /** The stage the next action is about, when it is about one. */
   actionStageId: string | null;
+  /** That stage's kind, so the row's one sentence describes the right money. */
+  actionStageKind: StageKind | null;
   isDisputed: boolean;
   createdAt: string | null;
 }
@@ -405,6 +488,10 @@ function toRow(engagement: Engagement): EngagementRowView {
     fundedTotalLabel: view.fundedTotalLabel,
     nextAction: view.nextAction,
     actionStageId,
+    actionStageKind:
+      actionStageId === null
+        ? null
+        : (view.stages.find((stage) => stage.stageId === actionStageId)?.kind ?? null),
     isDisputed: view.isDisputed,
     createdAt: view.createdAt,
   };

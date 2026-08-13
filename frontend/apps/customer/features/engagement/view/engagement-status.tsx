@@ -1,6 +1,11 @@
 "use client";
 
-import type { CustomerNextAction, EngagementStageStatus, EngagementStatus } from "@vsolve/query";
+import type {
+  CustomerNextAction,
+  EngagementStageStatus,
+  EngagementStatus,
+  StageKind,
+} from "@vsolve/query";
 import { Badge } from "@vsolve/ui";
 import type { BadgeProps } from "@vsolve/ui";
 
@@ -79,6 +84,111 @@ export function nounsFor(mode: EngagementMode): ModeNouns {
 }
 
 /* --------------------------------------------------------------------------
+   Stage kind — what this row's money is for
+   -------------------------------------------------------------------------- */
+
+/**
+ * The words a stage row is allowed to use, decided by `EngagementStage.kind`.
+ *
+ * `kind` is published at 1.26.0 and it is not decoration. A `MATERIAL_ADVANCE`
+ * is money **spent on goods**, so it is not recovered like an unearned work
+ * stage when a project ends early (`M2-BE-543`, `GAP-028`) — and until this
+ * table existed a bag of cement rendered as an ordinary fundable milestone with
+ * "This is done properly" over the approve button. Nothing about the work-stage
+ * copy was wrong; it was simply being read out over the wrong kind of money.
+ *
+ * Two things it deliberately does **not** change:
+ *
+ * - **It removes no control.** The server runs one spine: a material advance
+ *   still funds, still takes evidence, still gets approved and can still be
+ *   corrected or disputed. Hiding the dispute control on a materials row would
+ *   take away the Customer's only objection to a delivery that never arrived.
+ * - **It subtracts nothing.** A material advance funds at face value like every
+ *   other row.
+ */
+export interface StageKindCopy {
+  /** Rendered beside the status. Null for work — the ordinary case needs no tag. */
+  badge: string | null;
+  /** Why this money is being asked for, above the funding control. */
+  fundingPurpose: string;
+  /** The heading over the evidence list on the review. */
+  evidenceHeading: string;
+  /** The heading over the approve control. */
+  approveHeading: string;
+  /** The heading over the correction control. */
+  correctionHeading: string;
+  /** How the list row's "next action" line names this money. */
+  fundNextAction: string;
+}
+
+function workCopy(nouns: ModeNouns): StageKindCopy {
+  return {
+    badge: null,
+    fundingPurpose: `Funding this ${nouns.stage} is what starts it.`,
+    evidenceHeading: "What the professional showed",
+    approveHeading: "This is done properly",
+    correctionHeading: "Something needs redoing",
+    fundNextAction: `Fund the next ${nouns.stage} to start it`,
+  };
+}
+
+const MATERIAL_ADVANCE_COPY: StageKindCopy = {
+  badge: "Materials",
+  // The sentence this whole field exists for. A Customer funding a milestone is
+  // buying work that can be left undone and refunded; a Customer funding this is
+  // buying goods that will exist. Those are different consents.
+  fundingPurpose:
+    "This pays for materials the professional buys for your job — it is not work being done. Once it is spent on goods it is not returned the way unfinished work is, so fund it when you are ready for them to buy.",
+  evidenceHeading: "What the professional bought",
+  approveHeading: "The materials are what we agreed",
+  correctionHeading: "The materials are not right",
+  fundNextAction: "Pay for the materials so the professional can buy them",
+};
+
+/**
+ * A kind this build has never seen.
+ *
+ * Fail-closed, the same rule the commercial mode follows: the optimistic
+ * fallback is "ordinary work milestone", which is the exact reading `kind` was
+ * published to stop. The screens pair this with **no funding control**, because
+ * asking somebody to pay for something we cannot name is worse than making them
+ * wait for a newer build.
+ */
+const UNKNOWN_KIND_COPY: StageKindCopy = {
+  badge: "We cannot describe this",
+  fundingPurpose:
+    "This app does not recognise what this money is for, so it is not going to guess. Contact support before paying anything against it.",
+  evidenceHeading: "What the professional submitted",
+  approveHeading: "Approving this",
+  correctionHeading: "Asking for a change",
+  fundNextAction: "Something on this needs paying for — we cannot describe it here",
+};
+
+export function stageKindCopy(kind: StageKind, nouns: ModeNouns): StageKindCopy {
+  if (kind === "material_advance") return MATERIAL_ADVANCE_COPY;
+  if (kind === "work") return workCopy(nouns);
+  return UNKNOWN_KIND_COPY;
+}
+
+/**
+ * What to call one row mid-sentence.
+ *
+ * "this day" / "this stage" for work — the archetype's own noun — and "this
+ * materials payment" for an advance, because calling a bag of cement a stage is
+ * the whole thing `kind` was published to stop. An unknown kind gets the
+ * mode's neutral noun rather than a guess.
+ */
+export function stageRowNoun(kind: StageKind, nouns: ModeNouns): string {
+  return kind === "material_advance" ? "materials payment" : nouns.stage;
+}
+
+export function StageKindBadge({ kind, nouns }: { kind: StageKind; nouns: ModeNouns }) {
+  const copy = stageKindCopy(kind, nouns);
+  if (copy.badge === null) return null;
+  return <Badge tone={kind === "unknown" ? "neutral" : "info"}>{copy.badge}</Badge>;
+}
+
+/* --------------------------------------------------------------------------
    Statuses
    -------------------------------------------------------------------------- */
 
@@ -131,15 +241,31 @@ export function StageStatusBadge({ status }: { status: EngagementStageStatus }) 
  * exactly one and this puts words on it. `awaiting_case` and `awaiting_vendor`
  * are two different kinds of waiting and are worded as such: one has somebody
  * working on it and the other is simply the vendor's move.
+ *
+ * `stageKind` is the kind of the row the action is *about*, when it is about
+ * one. It is here rather than defaulted because "fund the next stage to start
+ * it" is false of a material advance — nothing starts, goods get bought — and
+ * this line is what a Customer reads before deciding whether to open anything.
+ *
+ * `null` means the row named an action whose stage this build could not find,
+ * and it fails closed to `unknown` rather than to work. Defaulting to work here
+ * would reintroduce the optimistic reading `UNKNOWN_KIND_COPY` exists to refuse,
+ * on the one branch that asks for money.
  */
-export function nextActionCopy(action: CustomerNextAction, nouns: ModeNouns): string {
+export function nextActionCopy(
+  action: CustomerNextAction,
+  nouns: ModeNouns,
+  stageKind: StageKind | null = null,
+): string {
   switch (action) {
     case "review_stage":
-      return `Check the work on one ${nouns.stage}`;
+      if (stageKind === "material_advance") return "Check the materials on one line";
+      if (stageKind === "work") return `Check the work on one ${nouns.stage}`;
+      return `Check one ${nouns.stage}`;
     case "accept_completion":
       return "Confirm the work is finished";
     case "fund_stage":
-      return `Fund the next ${nouns.stage} to start it`;
+      return stageKindCopy(stageKind ?? "unknown", nouns).fundNextAction;
     case "awaiting_case":
       return "We are looking into the problem you raised";
     case "awaiting_vendor":

@@ -25,6 +25,10 @@ from apps.requirements.views import (
     EngagementStageFundingView,
     EngagementStageStartView,
     EngagementStageSubmitView,
+    OperationsRateCardView,
+    PartnerCrewOfferAcceptView,
+    PartnerCrewOfferDeclineView,
+    PartnerCrewOfferListView,
     PartnerDemandPreviewView,
     PartnerEnquiryAcceptView,
     PartnerEnquiryAttachmentListView,
@@ -42,7 +46,11 @@ from apps.requirements.views import (
     RequirementAttachmentCollectionView,
     RequirementAttachmentDetailView,
     RequirementAttachmentFinalizeView,
+    RequirementBookingFeeCancelView,
+    RequirementBookingFeeCheckoutView,
     RequirementCollectionView,
+    RequirementCrewArrivalView,
+    RequirementCrewNoShowView,
     RequirementDetailView,
     RequirementDuplicateCheckView,
     RequirementQuestionAnswerView,
@@ -50,6 +58,8 @@ from apps.requirements.views import (
     RequirementQuoteQuestionView,
     RequirementQuoteRejectView,
     RequirementQuoteRevalidateView,
+    RequirementRateCardBookView,
+    RequirementRateCardView,
     RequirementSelectionView,
     RequirementSubmitView,
     RequirementTeaserListView,
@@ -352,5 +362,64 @@ urlpatterns = [
         "proposals/<uuid:proposal_id>/withdraw/",
         PartnerProposalWithdrawView.as_view(),
         name="m2-proposal-withdraw",
+    ),
+    # Wave C2R — the A3 rate-card front door (revision 4, ADR-0009). `rate-card/` is the read the
+    # booking screen draws *and* the tracker afterwards; the C2 `unlock/` path above is untouched
+    # and is now the thin-supply fallback rather than the product.
+    path(
+        "requirements/<uuid:requirement_id>/rate-card/",
+        RequirementRateCardView.as_view(),
+        name="m2-requirement-rate-card",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/rate-card/book/",
+        RequirementRateCardBookView.as_view(),
+        name="m2-requirement-rate-card-book",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/booking-fee/checkout/",
+        RequirementBookingFeeCheckoutView.as_view(),
+        name="m2-requirement-booking-fee-checkout",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/booking-fee/cancel/",
+        RequirementBookingFeeCancelView.as_view(),
+        name="m2-requirement-booking-fee-cancel",
+    ),
+    # Day one. Both resolve by participation — either party was at the site and either can say
+    # what happened — and both are money-moving, which is why `party` on the no-show is a required
+    # choice rather than a default.
+    path(
+        "requirements/<uuid:requirement_id>/crew/arrival/",
+        RequirementCrewArrivalView.as_view(),
+        name="m2-requirement-crew-arrival",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/crew/no-show/",
+        RequirementCrewNoShowView.as_view(),
+        name="m2-requirement-crew-no-show",
+    ),
+    # The lead's side. Deliberately its own collection rather than a filter on `partner/enquiries/`:
+    # a crew offer runs on a wall-clock deadline and is answered with one tap, and mixing it into
+    # the quote inbox would put two different clocks in one list.
+    path(
+        "partner/crew-offers/",
+        PartnerCrewOfferListView.as_view(),
+        name="m2-partner-crew-offers",
+    ),
+    path(
+        "partner/crew-offers/<uuid:invitation_id>/accept/",
+        PartnerCrewOfferAcceptView.as_view(),
+        name="m2-partner-crew-offer-accept",
+    ),
+    path(
+        "partner/crew-offers/<uuid:invitation_id>/decline/",
+        PartnerCrewOfferDeclineView.as_view(),
+        name="m2-partner-crew-offer-decline",
+    ),
+    path(
+        "operations/rate-cards/",
+        OperationsRateCardView.as_view(),
+        name="m2-operations-rate-cards",
     ),
 ]

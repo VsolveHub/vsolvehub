@@ -208,9 +208,35 @@ export const m2QueryKeys = {
       [...m2QueryKeys.engagements.stages(engagementId), stageId] as const,
     attendance: (engagementId: string, stageId: string) =>
       [...m2QueryKeys.engagements.stage(engagementId, stageId), "attendance"] as const,
-    /** The immutable agreement and its amendment history, readable by both parties. */
+    /**
+     * The immutable agreement — the frozen terms, versioned.
+     *
+     * It used to be documented as "the agreement **and its amendment history**",
+     * and Session A's Wave A3 mounted the amendment list on it for exactly that
+     * reason. The two were split at the Wave II gate on Session A's own §7 row:
+     * they have opposite freshness. The agreement is written once and never
+     * changes, which is what earns it `SESSION_STATE`; a **proposed** amendment
+     * is a live change request with a deadline and a charge on it, and serving
+     * one from a session-long cache is how a customer approves a delta that
+     * expired an hour ago.
+     */
     agreement: (engagementId: string) =>
       [...m2QueryKeys.engagements.detail(engagementId), "agreement"] as const,
+    /** Proposed and accepted amendments. Live, deadlined — see `agreement` above. */
+    amendments: (engagementId: string) =>
+      [...m2QueryKeys.engagements.detail(engagementId), "amendments"] as const,
+    /**
+     * `GET /engagements/{id}/events/` — the transition record.
+     *
+     * Composed locally as `detail(id) + "events"` since Wave A3, which was
+     * correct by construction and unreviewable: a key nobody can find in this
+     * file is a key nobody can check the invalidation of. Promoted here on
+     * Session A's §7 request. Still nested under the detail, so every existing
+     * engagement invalidation clears it by prefix — the point of promoting it is
+     * the name, not the shape.
+     */
+    events: (engagementId: string) =>
+      [...m2QueryKeys.engagements.detail(engagementId), "events"] as const,
   },
 } as const;
 
@@ -262,6 +288,14 @@ export const M2_FRESHNESS = {
   attendance: EXPIRING_STATE,
   /** Immutable once written. */
   agreement: SESSION_STATE,
+  /**
+   * Not `SESSION_STATE`, and the distinction from `agreement` above is the whole
+   * reason this row exists: a proposed amendment carries a deadline and a money
+   * delta, and both parties act on it from two devices.
+   */
+  amendments: EXPIRING_STATE,
+  /** Transitions land whenever the other party or a sweep acts. */
+  engagementEvents: VOLATILE_STATE,
 } as const satisfies Record<string, FreshnessTier>;
 
 /* ---------------------------------------------------------------------------
@@ -411,8 +445,27 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
 
   // A question or an answer is a timeline event and nothing else. Invalidating
   // the requirement detail here would refetch the whole record on every message.
-  ask_question: (c) => (c.requirementId ? [K.requirements.timeline(c.requirementId)] : []),
-  answer_question: (c) => (c.requirementId ? [K.requirements.timeline(c.requirementId)] : []),
+  //
+  // Both rows return the **caller's own** projection of one conversation, which
+  // is why each names two keys rather than one. Until 1.26.0 clarification ran
+  // one way — the vendor asked, the Customer answered — so `requirements.timeline`
+  // was the only surface either command could move, and the Partner app issued
+  // neither. Two-way clarification made `answer_question` a command **both**
+  // columns send, and the Partner app mounts no requirement timeline: the row
+  // was invalidating a key that app has never held. A Partner therefore answered
+  // a Customer's question and watched the row keep saying it was unanswered.
+  //
+  // The fix is to key off the ids the caller actually holds, on `stageScope`'s
+  // precedent. The counterparty is deliberately NOT invalidated: one client
+  // cannot reach the other's cache, and each side learns through its own read.
+  ask_question: (c) => [
+    ...(c.requirementId ? [K.requirements.timeline(c.requirementId)] : []),
+    ...(c.invitationId ? [K.invitations.detail(c.invitationId)] : []),
+  ],
+  answer_question: (c) => [
+    ...(c.requirementId ? [K.requirements.timeline(c.requirementId)] : []),
+    ...(c.invitationId ? [K.invitations.detail(c.invitationId)] : []),
+  ],
   request_site_visit: (c) => (c.requirementId ? [K.requirements.timeline(c.requirementId)] : []),
   schedule_site_visit: (c) => (c.requirementId ? [K.requirements.timeline(c.requirementId)] : []),
 

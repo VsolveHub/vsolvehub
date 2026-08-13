@@ -48,11 +48,13 @@ import { ProposalTotal } from "./proposal-total";
  * 1. **Working days are the schedule.** The vendor types days; the screen shows
  *    the date they land on and says how it counted. See
  *    `model/onsite-draft.ts › scheduleFor`.
- * 2. **Material lines are their own rows**, entered separately from labour and
- *    totalled separately, so a vendor can see what the job costs before
- *    materials. They reach the customer as rows on the estimate — the wire has
- *    one row type — and the screen says so rather than letting the vendor
- *    discover it.
+ * 2. **Material lines are their own rows**, entered separately from labour,
+ *    totalled separately and — since contract 1.26.0 — **sent on their own wire
+ *    type**, `ProposalMaterialLine`. Before that they went out as stages, which
+ *    made a bag of cement a fundable milestone the customer had to approve as
+ *    work; the composer carried a caveat saying so and that caveat is now gone
+ *    with the workaround. What replaces it is a true sentence: materials are
+ *    paid as an advance, not signed off like a piece of work.
  * 3. **Every money and count field is a numeric keyboard** and every target is
  *    at least 44px. `inputMode="decimal"` for rupees, `inputMode="numeric"` for
  *    days.
@@ -331,8 +333,10 @@ export function OnsiteComposer({
         <fieldset className="m-0 flex flex-col gap-3 border-0 p-0">
           <legend className="text-sm font-semibold text-text">Materials</legend>
           <p className="text-sm leading-6 text-text-secondary">
-            Anything you buy for this job, priced separately from your labour. Each line appears on
-            the customer&rsquo;s estimate as its own row, so name it the way you would on paper.
+            Anything you buy for this job, priced separately from your labour. Materials are paid to
+            you as an advance rather than signed off like a piece of work — say how many and in what
+            units, because that is what lets the customer compare your price with anyone
+            else&rsquo;s.
           </p>
 
           {withLines.materials.map((material, index) => (
@@ -365,12 +369,41 @@ export function OnsiteComposer({
                   value={material.description}
                   onChange={(event) => updateMaterial(index, { description: event.target.value })}
                   onBlur={persist}
-                  placeholder="90m of 2.5mm copper cable"
+                  placeholder="2.5mm copper cable"
                   disabled={submit.isPending}
                 />
               </Field>
 
-              <Field label="Cost" required>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="How many" description="Leave blank for one.">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    className="min-h-12 text-lg"
+                    value={material.quantity === null ? "" : String(material.quantity)}
+                    onChange={(event) =>
+                      updateMaterial(index, { quantity: readCount(event.target.value) })
+                    }
+                    onBlur={persist}
+                    placeholder="90"
+                    disabled={submit.isPending}
+                  />
+                </Field>
+
+                <Field label="Units" description="Bags, metres, coils.">
+                  <Input
+                    className="min-h-12"
+                    value={material.unit}
+                    onChange={(event) => updateMaterial(index, { unit: event.target.value })}
+                    onBlur={persist}
+                    placeholder="metres"
+                    maxLength={32}
+                    disabled={submit.isPending}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Cost of the whole line" required>
                 <Input
                   type="text"
                   inputMode="decimal"

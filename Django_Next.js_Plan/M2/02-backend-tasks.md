@@ -5,14 +5,18 @@
 **Depends on:** M1 identity, Partner review, payments, refunds, ledger, scope amendments, cases and
 notifications
 **Master status:** [task.md](task.md)
-**Execution:** [backend-session.md](backend-session.md) — waves C0–C7, run as the third concurrent
+**Execution:** [backend-session.md](backend-session.md) — waves C0–C7 plus revision 4's C2R, run as
+the third concurrent
 session beside [frontend-session-a.md](frontend-session-a.md) and
 [frontend-session-b.md](frontend-session-b.md). **Start at Wave C0 (`M2-BE-013`); it gates all 108
 frontend tasks.**
-**Revision:** 3 - visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
+**Revision:** 4 - rate-card A3 per [ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md);
+revision 3 (visit-first A5, [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md)) and the
 revision 2 simplifications per [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
-remain in force. Revision 3 changes only the **unbuilt** BE4 surface plus one BE2 command; A3 and
-everything shipped are untouched.
+remain in force. Unlike revision 3, revision 4 touches built surface: the A3 quote-and-unlock path
+shipped in Wave C2 is **demoted to the thin-supply fallback, not deleted**, and the primary A3 front
+door — `RateCard`, the preset, the cascade caller and `BookingFee` — is **new, unstarted work**,
+carried as wave **C2R** in [backend-session.md](backend-session.md).
 
 Implement M2 as modules in the existing Django modular monolith. Keep views thin, place state
 transitions in explicit domain commands, calculate money in integer paise, and protect invariants with
@@ -80,7 +84,9 @@ would otherwise duplicate it.
 
 Nothing in M1 covers these, so they are built from scratch: the requirement aggregate and its
 `service_by` clock; the invitation snapshot; proposals and their supersession chain; quote teasers and
-`QuoteUnlock` (A3); **`VisitPlan` and its per-slot share settlement (A5, revision 3)**; structured
+`QuoteUnlock` (A3 — the thin-supply fallback since revision 4); **`RateCard`, `BookingFee` and the A3
+preset (revision 4)** — their dispatch reuses the A1 offer cascade in `apps.assignments`, a caller
+rather than a second engine; **`VisitPlan` and its per-slot share settlement (A5, revision 3)**; structured
 question-and-answer clarification; the engagement/stage spine; duplicate requirement detection;
 language routing and transcription; non-responsive rejection; price-band review signals; and the
 WhatsApp/IVR notification rungs.
@@ -109,7 +115,10 @@ depend on a live provider.
   [07-state-machines-and-permissions.md](07-state-machines-and-permissions.md) §1 and §4.
   Verified 2026-08-10. **Revision 3 (2026-08-12): the A5 half is superseded by ADR-0008 — visit-first,
   tiered visit plan charged at the first confirmed slot. The A3 half stands unchanged. §1, §4, §4a
-  and §4b of `07` carry the revised machines.**
+  and §4b of `07` carry the revised machines.** **Revision 4 (2026-08-13): the A3 half is superseded
+  by ADR-0009 — rate-card-first, a booking fee charged at vendor accept; the quote-and-unlock model
+  becomes the thin-supply fallback, and whether the fallback keeps charging the INR 149 is owner
+  decision 14. §1, §2, §4c, §6 and §8 of `07` carry the revised machines.**
 - [x] `M2-BE-003` Record the approved fixed mode per archetype (A3 `LEAD_ONLY`, A5
   `MANAGED_PAYMENT_REQUIRED`) and remove per-variant mode configuration from the design.
   Evidence: ADR-0007 Decision and Consequences; no mode field exists on the capability model.
@@ -243,7 +252,9 @@ run them.
   `GAP-023`
   Implemented: `MinimumWageFloor` with an effective-dated unique key, plus `live_wage_floor` and
   `assert_rate_meets_wage_floor`, which **fail closed** when no floor is loaded rather than defaulting.
-  Values are owner-loaded and remain blocked on decision 7.
+  Values are owner-loaded and remain blocked on decision 7. **Revision 4: the same floor now also
+  gates `publish_rate_card`** — a rate card's wage component passes the same fail-closed guard at
+  publish (`M2-BE-429`), so the platform's own price obeys the rule it enforces on vendor quotes.
 
 ### Commands and APIs
 
@@ -405,7 +416,8 @@ attachment paths at 1.22.0) with authorization and attachment tests **written an
   Implemented: `expired_requirement_ids`, an idempotent `close_requirement`, and — since C1 —
   `tasks.sweep_expired_requirements` on a 15-minute beat schedule. `close_requirement` emits
   `m2.requirement.closed`, which is the event the refund path will consume, so nothing has to be
-  re-plumbed. **The refund half waits for P4's unlock** (`M2-BE-705`).
+  re-plumbed. **The refund half waits for P4's unlock** (`M2-BE-705`). (Revision 4: the same sweep
+  also refunds any unearned booking fee in full — `M2-BE-719`.)
 
 - [~] built — static gates green, owner manual verification pending `M2-BE-215` Implement `choose_visit_plan` (revision 3): A5 only, recorded on the requirement
   from the review screen; tier (1/2/3 visits) and server-priced paise snapshot; charges nothing;
@@ -640,6 +652,8 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
   explicit vendor confirmation before Customer visibility; treat it as a primary A3 path. `SIM-10`
   Evidence: a captured proposal records `captured_by`, stays invisible to the Customer and does not
   promote the requirement until `confirm_captured_proposal` runs. Verified 2026-08-10.
+  **Revision 4: "primary A3 path" now reads against the A3 fallback — on the rate-card path nothing
+  is composed, so assisted capture matters less there.**
 
 ### Verification
 
@@ -662,8 +676,8 @@ site-visit paths published at 1.21.0/1.22.0; the four recovery sweeps are on Cel
 
 **BE3 gate:** Usable quotes are delivered inside the declared SLA or replacement and closure proceed
 without manual database intervention. Nothing has been charged. (Revision 3: demonstrable end to end
-on A3; the A5 estimate path additionally needs BE4's visit surface, since an A5 proposal requires a
-completed visit.)
+on A3 — under revision 4 that quote path is the A3 fallback; the A5 estimate path additionally needs
+BE4's visit surface, since an A5 proposal requires a completed visit.)
 
 **Gate not passed, and the reason has changed.** The "nothing has been charged" half still holds - no
 money path exists anywhere in P3. The delivery half is now mostly true: since C1 an unanswered wave
@@ -675,13 +689,25 @@ instead of skipping. What holds the gate open: **the tests are unrun**; replacem
 decline* is still unwired; and the wage-floor **values** are owner decision 7, so the fail-closed
 guard blocks A3 quoting per variant and area until Operations loads them.
 
-## BE4 - Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement
+## BE4 - Access (A3 booking fee · A3-fallback unlock · A5 visit plan), selection, reconfirmation and engagement
 
-Revision 3 splits the front door by archetype. The A3 unlock tasks are unchanged from revision 2;
-the A5 visit-plan tasks are new and replace the A5 use of the unlock. Nothing in this phase existed
-before the split.
+Revision 3 split the front door by archetype: the A3 unlock tasks were unchanged from revision 2 and
+the A5 visit-plan tasks replaced the A5 use of the unlock; nothing in this phase existed before that
+split. **Revision 4 (ADR-0009) splits A3 itself.** The unlock block below — shipped in Wave C2 at
+contract 1.24.0 — is **demoted to the thin-supply fallback, not deleted**: it serves a requirement
+only after the cascade threshold passes, and whether it still charges the unlock there is owner
+decision 14. The primary A3 front door is now the rate card, the offer cascade and the booking fee —
+**new, unstarted work**, carried as wave **C2R** in [backend-session.md](backend-session.md), with
+its own task block below. Selection and reconfirmation in this phase likewise serve A5 and the A3
+fallback only; the rate-card path has no selection step — the first accepting lead is the crew and
+the verified booking fee is the confirmation.
 
-### A3 unlock
+### A3 fallback — quote unlock (demoted by revision 4)
+
+Every task below keeps its build status: this surface shipped in Wave C2 and nothing here is
+deleted. It now serves the **fallback past the cascade threshold** (`fall_back_to_quote_flow`), and
+its fee status there — keep charging the unlock, or deliver fallback quotes readable free — is owner
+decision 14.
 
 - [~] built — static gates green, owner manual verification pending `M2-BE-401` Store the unlock price server-side in paise, with effective dates and immutable
   purchase snapshots.
@@ -697,6 +723,77 @@ before the split.
 - [~] built — static gates green, owner manual verification pending `M2-BE-406` Implement non-responsive rejection: release the slot, invite a replacement at no extra
   charge (A3: a quote slot; A5: a free replacement visit), enforce the configured cap and record the
   reason against vendor standing. `GAP-009`
+
+### A3 rate card and booking fee (revision 4, ADR-0009 — built at Gate 1, 2026-08-14)
+
+**Wave C2R is built and published at contract 1.29.0** — see [backend-session.md](backend-session.md).
+None of it reworks the fallback's files. Per the build-first amendment, tests for these rows are
+neither written nor run during the build sprint — static gates only — so the best a row can reach
+in-sprint is `[~] built — owner verification pending`, with the test debt recorded at the wave.
+
+> **Two runtime blockers were found at the Gate 1 integration audit and fixed there**, both of which
+> every static gate passed: the booking-fee checkout violated a check constraint whose purpose list
+> had drifted from `CHECKOUT_FREE_PURPOSES` (invisible to `makemigrations --check`, because model
+> and migration agreed with each other and both disagreed with the code), and ten
+> `M2VariantConfiguration` columns were read by `rate_cards.py` with no writer anywhere, which made
+> `book_at_published_rate` refuse unconditionally in every environment. Full account in
+> [frontend-execution-plan.md](frontend-execution-plan.md) §7, 2026-08-14. **The lesson for the
+> remaining waves: green static gates say the code compiles, not that any path can execute.**
+
+- [~] built - static gates green, owner manual verification pending `M2-BE-429` Model `RateCard` and implement `publish_rate_card` (Operations, effective-dated
+  per city+skill on the `M2AccessPrice` pattern — superseded, never edited, never backdated under a
+  live booking). The card carries the three configured components in integer paise — worker
+  day-wage, lead's supervision margin, platform booking fee — presented as one all-inclusive
+  customer price per worker per 8-hour day, plus the published overtime rate, the published add-on
+  rates and the printed inclusion list (what counts as a day, when overtime starts, what the
+  preset's scope includes). The wage component is checked against `MinimumWageFloor` at publish
+  through the same fail-closed guard vendor quotes pass (`M2-BE-108`, `M2-BE-317`). No live card for
+  the city+skill means `m2_rate_card_unavailable` — instant booking refused, never a guessed price.
+  One flat rate per city+skill, no zones and no surge; a demand multiplier, if ever added, is
+  displayed and never applied silently. Seed values (ops phone survey, 10–15 contractors per launch
+  city), the decline-alarm threshold and the review-calendar owner are owner decision 13.
+- [~] built - static gates green, owner manual verification pending `M2-BE-430` Implement the A3 **preset** on the existing `M2VariantConfiguration` — skill,
+  headcount, dates plus the 3–4 price-moving facts (for shifting: floor number, lift, carry
+  distance, packing) — and `book_at_published_rate`: a requirement submission that shows the
+  published rate and inclusion list **before** booking and starts the offer cascade in one step.
+  Without a live rate card it refuses with `m2_rate_card_unavailable` and routes the Customer to the
+  quote flow; an A3 requirement never renders the four-screen flow unless it falls back.
+- [~] built - static gates green, owner manual verification pending `M2-BE-431` Implement the cascade caller into **`apps.assignments`** — the A1 offer engine:
+  small wave, first accept wins, minutes-level timeouts on the M1 dispatch clock. Offers go only to
+  leads whose approved A3 capability and verified roster cover the headcount, with the lead's own
+  number on the offer screen. `accept_crew_offer` takes a roster-sized soft capacity hold and
+  refuses with `m2_roster_insufficient` when the verified roster is smaller than the headcount;
+  `decline_crew_offer` requires a reason and feeds the decline-rate alarm (`M2-BE-434`). When a wave
+  exhausts, the cascade widens behind an honest holding state; past the configured threshold
+  `fall_back_to_quote_flow` records the fallback, explains it to the Customer and hands the
+  requirement to the quote flow with nothing charged. M2 adds a caller, not a second dispatch
+  engine.
+- [~] built - static gates green, owner manual verification pending `M2-BE-432` Model the `BookingFee` aggregate (`OFFER_ACCEPTED → PENDING → ACTIVE → EARNED |
+  FORFEIT_SPLIT | REFUNDED | FAILED`; `EARNED` at first-day crew arrival) and implement
+  `create_booking_fee_checkout` and `complete_booking_fee` on the M1 payment abstractions with
+  provider test callbacks. The checkout refuses without a held accepted offer
+  (`m2_booking_fee_not_chargeable`); the fee is priced server-side from the card's fee component;
+  exactly one charge per booking under duplicate webhooks, browser retries and delayed callbacks;
+  never granted from a client redirect (`m2_booking_fee_payment_pending`, 202, while waiting). The
+  verified provider callback hardens the booking **and creates the engagement** — the A3 mirror of
+  the visit-plan charge, on the 2026-08-13 split rails.
+- [~] built - static gates green, owner manual verification pending `M2-BE-433` Implement the forfeit and refund machinery. `forfeit_booking_fee` (Customer
+  no-show, gate locked, or cancellation inside T hours of the slot) executes the split: a configured
+  share pays the lead as **travel compensation through the M1 payout and ledger rails** (gated on
+  the progressive payout-details rule) and the remainder books as the platform share, reconciling in
+  integer paise as `fee = travel compensation + platform share`. `refund_booking_fee` refunds in
+  full on a vendor no-show — plus a free re-dispatch through the cascade and a standing hit — and on
+  a Customer cancellation at or beyond T hours out. The fee value, the forfeit-split percentages and
+  the free-cancel window T are owner decision 12.
+- [~] built - static gates green, owner manual verification pending `M2-BE-434` Emit the **decline-rate alarm** per rate card: a sustained decline rate above the
+  configured threshold at a rate **pages Operations to raise it** — an alarm, not a monthly report,
+  because a rate below the street rate that week makes leads silently decline everything and the
+  instant product dies quietly. Fed by `decline_crew_offer` reasons; the threshold is owner
+  decision 13; the monthly review calendar is the backstop against inflation drift.
+- [~] built - static gates green, owner manual verification pending `M2-BE-435` Record **rate-card acceptance at A3 capability approval**: accepting the card is
+  part of the capability, the acceptance is auditable, and accepting a job is accepting that rate
+  for that job. The offer screen always shows the lead's own number — what they receive per day for
+  the requested crew, paid directly by the Customer at day end.
 
 ### A5 visit plan (revision 3, ADR-0008)
 
@@ -749,14 +846,18 @@ before the split.
 ### Engagement creation and money
 
 - [~] built — static gates green, owner manual verification pending `M2-BE-411` For A3 (`LEAD_ONLY`), create a connection engagement that records direct payment,
-  limited Vsolve protection and the earned unlock-fee policy.
+  limited Vsolve protection and the earned unlock-fee policy. **Revision 4: this creation path
+  serves the A3 fallback; on the rate-card path the verified booking fee creates the engagement
+  (`M2-BE-432`).**
 - [~] built — static gates green, owner manual verification pending `M2-BE-412` For A5 (`MANAGED_PAYMENT_REQUIRED`), create an immutable engagement snapshot only
   after vendor reconfirmation and require a verified funded first stage at face value before work
   may start. Visit money settles per share (`M2-BE-426`) and never discounts a stage.
 - [~] built — static gates green, owner manual verification pending `M2-BE-413` Server-calculate stage amounts, commission, tax and payout allocation in paise; reject
   client-supplied totals.
 - [~] built — static gates green, owner manual verification pending `M2-BE-414` Reuse M1 ledger and payment infrastructure with distinct money purposes for unlock
-  fee, visit-plan fee, site-visit fee, stage funding, material advance, refund, commission and vendor
+  fee (fallback), **booking fee (revision 4 — lands with wave C2R, `M2-BE-432`; its forfeit split
+  allocates a travel-compensation payout plus a platform share, `M2-BE-433`)**, visit-plan fee,
+  site-visit fee, stage funding, material advance, refund, commission and vendor
   payout. `GAP-028`
   Add them to the existing `commerce.PaymentAttempt.Purpose` enum exactly as
   `SCOPE_AMENDMENT_REVISION` did. Do not create a parallel payment path or a second ledger.
@@ -781,10 +882,11 @@ before the split.
 > (`task.md` §"Build-first amendment (2026-08-13)"). No test was written or run in Wave C2. These
 > three rows are the wave's test debt and are worked off after the owner's manual UI pass.
 
-**BE4 gate:** Money is collected only against a real accepted commitment — a usable quote (A3) or a
-confirmed visit (A5). An engagement exists only after valid selection, vendor reconfirmation and the
-archetype's own confirmation condition. All amounts, shares, payouts and platform shares reconcile
-to immutable engagement terms in integer paise.
+**BE4 gate:** Money is collected only against a real accepted commitment — a held accepted crew
+offer (A3, the booking fee), a usable quote (A3 fallback) or a confirmed visit (A5). An engagement
+exists only after the archetype's own confirmation condition — the verified booking fee (A3), or
+valid selection plus vendor reconfirmation (A3 fallback and A5). All amounts, fees, shares, payouts
+and platform shares reconcile to immutable engagement terms in integer paise.
 
 ## BE5 - Engagement spine
 
@@ -863,12 +965,36 @@ agreement, amendment or approval subsystem exists.
   site and force-majeure commands with evidence and reason codes.
 - [ ] `M2-BE-530` Model `SafetyIncident` as a first-class record with its own report flow, evidence,
   severity and Operations routing. It is not a cancellation reason. `GAP-022`
-- [ ] `M2-BE-531` Implement overtime as a scope amendment requiring Customer approval, plus a short
-  retroactive confirmation window; unconfirmed overtime is unpaid and stated in the vendor terms up
-  front. `GAP-026`
+- [ ] `M2-BE-531` Implement overtime as a scope amendment at the card's published overtime rate
+  (revision 4), requiring Customer approval, plus a short retroactive confirmation window;
+  unconfirmed overtime is unpaid and stated in the vendor terms up front. `GAP-026`
 - [ ] `M2-BE-532` Compute partial completion and settlement through explicit policy; disputed records
   must open a case rather than auto-complete.
 - [ ] `M2-BE-533` Release vendor payout only after the completion/dispute window and ledger checks.
+
+### Daily wage settlement (revision 4, ADR-0009 — not started)
+
+Wages are direct, daily, peer-to-peer at day end — the platform never holds them. These rows land
+with the rest of BE5A in Wave C4, which is unbuilt anyway; per the build-first amendment their tests
+are neither written nor run during the build sprint — static gates only.
+
+- [ ] `M2-BE-536` Implement `confirm_day_settled`: each evening both sides get a one-tap
+  "Day settled?" prompt — supervisor and Customer — carrying a UPI QR/deep-link to the lead's VPA at
+  the **exact published amount**, as a convenience only. The money is P2P and the platform never
+  holds wages; the dual tap trail is the evidence pack, and a one-sided settlement claim without it
+  reaches Operations as unproven, not as fact.
+- [ ] `M2-BE-537` Settle **per worker-day present, never per job**: the day settles at the present
+  workers' published rate ("3 of 4" settles at 3), reading `M2-BE-525`'s supervisor count. On a
+  shortfall the Customer chooses — continue short, add a day, or cancel the shortfall free; repeated
+  shortfall is a matching-priority hit. Multi-day engagements settle daily by default;
+  end-settlement only where the lead's own terms allow it — the app's convenience must not override
+  the gang's cash cycle.
+- [ ] `M2-BE-538` Route genuine extras through the M1 amendment engine **at the card's published
+  add-on rates**: a one-tap scope amendment, in-app, before the extra counts. The preset already
+  asked the price-moving facts, so the on-site surprise has nowhere to live.
+- [ ] `M2-BE-539` Implement `report_cash_demand`: a one-tap Customer report of a cash extra demanded
+  on site. The report hits vendor standing and removes the vendor on a pattern; it is never treated
+  as proof on its own.
 
 ### Verification
 
@@ -933,9 +1059,18 @@ project has a path to being finished; clarification cannot alter the agreement.
 
 ### Refund and payout integrity
 
-- [ ] `M2-BE-705` Implement unlock-fee outcomes (A3): full refund on `service_by` expiry or exhausted
-  vendors, free replacement on non-responsive rejection, earned fee once valid quotes were unlocked.
-  `FLOW-01`
+- [ ] `M2-BE-705` Implement unlock-fee outcomes (A3 fallback — revision 4): full refund on
+  `service_by` expiry or exhausted vendors, free replacement on non-responsive rejection, earned fee
+  once valid quotes were unlocked. Whether the fallback still charges the unlock at all is owner
+  decision 14; until decided, the built behaviour stands. `FLOW-01`
+- [ ] `M2-BE-719` Implement booking-fee outcomes (A3 rate-card, revision 4): full refund on a vendor
+  no-show (with a free re-dispatch and a standing hit), on a Customer cancellation at or beyond
+  T hours before the slot, and of any unearned fee on `service_by` expiry; the **forfeit split** on
+  a Customer no-show, a locked gate or a cancellation inside T — a configured share to the lead as
+  travel compensation through the M1 payout rails, the remainder the platform share; the fee earned
+  at first-day crew arrival. Every terminal state reconciles in integer paise —
+  `fee = travel compensation + platform share` on a forfeit — exactly as a consumed visit share
+  does.
 - [ ] `M2-BE-718` Implement visit-plan outcomes (A5): full refund of unconsumed value on `service_by`
   expiry; per-share refund on unfilled slots, vendor no-show and missed estimate windows; earned
   shares (vendor payout + platform share) once a completed visit produced a usable estimate; customer
@@ -945,8 +1080,8 @@ project has a path to being finished; clarification cannot alter the agreement.
   completion.
 - [ ] `M2-BE-707` Make refund initiation idempotent and ledger-backed; handle provider pending, failed,
   reversed and duplicate test callbacks.
-- [ ] `M2-BE-708` Handle a chargeback on the unlock or visit-plan fee itself through the standard
-  dispute path and alert on the rate. `GAP-035`
+- [ ] `M2-BE-708` Handle a chargeback on the booking, unlock or visit-plan fee itself through the
+  standard dispute path and alert on the rate. `GAP-035`
 - [ ] `M2-BE-709` Hold payout automatically when a qualifying case opens and release/reverse only
   through authorized commands.
 - [ ] `M2-BE-710` Reconcile payment, refund, ledger and payout records on a scheduled job with alerts for
@@ -954,8 +1089,9 @@ project has a path to being finished; clarification cannot alter the agreement.
 
 ### Operations workspace APIs
 
-- [ ] `M2-BE-711` Publish a unified request timeline with the requirement, snapshots, matching,
-  questions, proposals, unlock, engagement, stages, cases and financial events.
+- [ ] `M2-BE-711` Publish a unified request timeline with the requirement, snapshots, matching or
+  cascade offers, questions, proposals, booking fee, unlock, engagement, stages, cases and financial
+  events.
 - [ ] `M2-BE-712` Implement safe Operations actions for rematch, reclassification, deadline extension,
   refund review, capability hold, payout hold and case resolution.
 - [ ] `M2-BE-713` Implement assisted requirement clarification and assisted proposal capture on behalf
@@ -963,7 +1099,9 @@ project has a path to being finished; clarification cannot alter the agreement.
 - [ ] `M2-BE-714` Implement stuck-state queues and scheduled recovery for unmatched, under-quoted,
   SLA-breached, unconfirmed, inactive and unreconciled records.
 - [ ] `M2-BE-715` Emit the Operations-touches-per-request metric so the workspace design can be checked
-  against the approved unit economics. `GAP-033`
+  against the approved unit economics — for A3 that check is against the **booking fee's platform
+  share** (decision 10 as restated by ADR-0009), because the booking fee is the platform's entire A3
+  revenue. `GAP-033`
 
 ### Verification
 
@@ -991,10 +1129,13 @@ recovery command; money reconciles after retries.
 
 ### Reliability and operations
 
-- [ ] `M2-BE-806` Add structured metrics for the success measures in `README.md`: quote fill rate
-  (A3), visit fill rate and visit-to-estimate rate (A5), time to first quote / first confirmed visit
-  against SLA, unlock and plan conversion, unlock and visit-plan refund rates, vendor response rate,
-  selection-to-confirmation rate, dispute rate and Operations touches per request. `PLN-05`
+- [ ] `M2-BE-806` Add structured metrics for the success measures in `README.md`: crew-confirmation
+  rate, time-to-crew against the cascade SLA, the per-card decline rate (`M2-BE-434`) and the
+  fallback rate (A3, revision 4), quote fill rate and time to first quote (A3 fallback), visit fill
+  rate, visit-to-estimate rate and time to first confirmed visit against SLA (A5), booking-fee
+  conversion and refund/forfeit rates (A3), unlock and plan conversion, unlock and visit-plan refund
+  rates, vendor response rate, selection-to-confirmation rate, dispute rate and Operations touches
+  per request. `PLN-05`
 - [~] `M2-BE-807` Define and implement the notification escalation ladder (in-app, push, SMS, WhatsApp,
   call) so no deadline depends on an unread in-app notice. `PLN-06`
   Build on `notifications.NotificationIntent` / `NotificationDelivery` / `KillSwitch`, which already

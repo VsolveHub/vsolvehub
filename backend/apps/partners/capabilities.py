@@ -614,6 +614,28 @@ def transition_capability(
                 "reason_code": reason_code,
             },
         )
+    if to_status == PartnerCapability.Status.APPROVED:
+        # Revision 4 (`M2-BE-435`): accepting the published rate card is part of A3 capability
+        # approval, and the acceptance has to be auditable. Emitted through the outbox for exactly
+        # the reasons the suspension event is: `apps.requirements` imports this module, so the
+        # direct call would close an import cycle — and an approval must be recorded even if
+        # writing the acceptance rows fails.
+        #
+        # Keyed on the capability *and the moment*, like the suspension above: a capability can be
+        # approved, suspended and reinstated, and each approval agrees to whatever card is live
+        # then.
+        enqueue_outbox_event(
+            aggregate_type="partner_capability",
+            aggregate_id=capability.id,
+            event_type="m2.capability.approved",
+            idempotency_key=f"capability-approved:{capability.id}:{timezone.now().isoformat()}",
+            payload={
+                "partner_capability_id": str(capability.id),
+                "partner_id": str(capability.partner_id),
+                "variant_id": str(capability.variant_id),
+                "archetype": capability.archetype,
+            },
+        )
     return capability
 
 

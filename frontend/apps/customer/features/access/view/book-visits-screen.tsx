@@ -86,7 +86,7 @@ export function BookVisitsScreen({ requirementId, requestHref }: BookVisitsScree
         <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
           {heldSlot.vendorName ?? "A professional"} has confirmed{" "}
           <strong className="font-semibold text-text">
-            {formatVisitSlot(heldSlot.scheduledFor) ?? "a time"}
+            {formatVisitSlot(heldSlot.scheduledFor, heldSlot.timeZone) ?? "a time"}
           </strong>{" "}
           and is holding it while you finish this.
         </p>

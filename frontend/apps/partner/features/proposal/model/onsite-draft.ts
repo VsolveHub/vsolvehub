@@ -32,21 +32,32 @@ import { toStageRequests, type StageDraft, type TaxBasis } from "./proposal-draf
  * calendar for. `ends_on` is optional on the wire, so a vendor who will not
  * commit to a day simply leaves the field empty and no date is sent.
  *
- * ## Material lines, and the one thing the wire cannot carry
+ * ## Material lines are a row type of their own now
  *
- * `M2-FE-315` requires material line items as first-class rows, and the
- * published wire has exactly one money-carrying row type: `ProposalStage`
- * (`{title, deliverable, amount_paise, ends_on}`). There is no `ProposalLine`
- * and no `kind` discriminator, so a material line **is sent as a stage** — with
- * the vendor's own title, never an auto-generated prefix, because a magic string
- * this client invented would become a vocabulary Operations and the Customer's
- * comparison view would then have to parse.
+ * `M2-FE-315` requires material line items as first-class rows. Until 1.26.0 the
+ * wire carried exactly one money-carrying row type — `ProposalStage` — so a
+ * material line was **sent as a stage** and the composer carried an on-screen
+ * caveat saying so. That was commercially wrong rather than merely untidy: a
+ * stage is a unit of evidence, approval and release, so a bag of cement arrived
+ * as a fundable milestone somebody had to approve *as work*.
  *
- * The consequence is real and is stated to the vendor on screen: their material
- * lines appear to the customer as their own rows on the estimate. Requested in
- * `frontend-execution-plan.md` §7 as a `kind` on `ProposalStage`, because
- * material money is *spent* rather than earned and the plan already treats a
- * material advance as a distinct money purpose.
+ * **1.26.0 publishes `ProposalMaterialLine`** — `{title, quantity, unit,
+ * amount_paise}` — on `ProposalCreateRequest.material_lines`, and
+ * `EngagementStage.kind` (`WORK` | `MATERIAL_ADVANCE`) carries the distinction
+ * through to the engagement. So the workaround is gone: work rows go to
+ * `stages`, material rows go to `material_lines`, and the §7 row is closed.
+ *
+ * `quantity` and `unit` are collected because they are what makes a material
+ * line comparable — "cement, ₹1,20,000" against "cement, 40 bags at ₹3,000".
+ * `unit` is free text on the wire and here, because bags, cubic metres and
+ * running feet are all real and a closed list would refuse whichever trade
+ * nobody thought of. Both are optional to the vendor: `quantity` defaults to 1
+ * and `unit` to blank, exactly as the serializer does.
+ *
+ * `_assert_a5_shape` now reconciles **stages plus materials** against
+ * `total_paise` and still refuses a material-only estimate — "we will buy
+ * materials and do no work" is not a project — which is why `validateOnsite`
+ * keeps requiring at least one named piece of work.
  */
 
 export interface OnsiteStageDraft {
@@ -60,8 +71,18 @@ export interface OnsiteStageDraft {
 }
 
 export interface MaterialDraft {
-  /** What the material is, in the vendor's words. Sent as the stage `title`. */
+  /** What the material is, in the vendor's words. Sent as `title`. */
   readonly description: string;
+  /**
+   * How many. Null while unanswered; sent as the serializer's own default of 1.
+   *
+   * `quantity` is `IntegerField(min_value=1)` on the wire, so a fraction or a
+   * zero is refused there — `readCount` is what keeps it whole here.
+   */
+  readonly quantity: number | null;
+  /** Bags, metres, coils. Free text, capped at the wire's 32 characters. */
+  readonly unit: string;
+  /** The whole line's cost, not the unit price. The wire has one money field. */
   readonly amountPaise: number | null;
 }
 
@@ -84,7 +105,12 @@ export const EMPTY_ONSITE_STAGE: OnsiteStageDraft = {
   amountPaise: null,
 };
 
-export const EMPTY_MATERIAL: MaterialDraft = { description: "", amountPaise: null };
+export const EMPTY_MATERIAL: MaterialDraft = {
+  description: "",
+  quantity: null,
+  unit: "",
+  amountPaise: null,
+};
 
 export const EMPTY_ONSITE_DRAFT: OnsiteDraft = {
   startsOn: null,
@@ -230,6 +256,8 @@ export type DraftErrors = Readonly<Record<string, string>>;
 
 const MAX_LINE = 200;
 const MAX_WARRANTY = 4000;
+/** `ProposalMaterialLineRequest.unit` is `CharField(max_length=32)`. */
+const MAX_UNIT = 32;
 
 export function validateOnsite(draft: OnsiteDraft): DraftErrors {
   const errors: Record<string, string> = {};
@@ -255,6 +283,10 @@ export function validateOnsite(draft: OnsiteDraft): DraftErrors {
     )
   ) {
     errors.materials = "Put a price on every material, or remove the row.";
+  } else if (draft.materials.some((material) => material.unit.trim().length > MAX_UNIT)) {
+    // The wire's own ceiling. Refusing it here costs a keystroke; letting it
+    // through costs the vendor a 400 on a finished estimate.
+    errors.materials = `Keep the unit under ${MAX_UNIT} characters — "bags", "m", "coils".`;
   }
 
   if (draft.taxBasis === null) {
@@ -289,6 +321,37 @@ export function hasErrors(errors: DraftErrors): boolean {
    --------------------------------------------------------------------------- */
 
 /**
+ * The material rows as the published `ProposalMaterialLineRequest[]`.
+ *
+ * Throws on a null amount for the same reason `toStageRequests` does: only
+ * reachable once `validateOnsite` has returned nothing, so a null here is a
+ * programming error and coercing it to zero would put a real row on a real
+ * estimate at no money.
+ *
+ * `quantity` falls back to the serializer's own default of 1 rather than to a
+ * number this client picked — a line the vendor left unquantified is one item,
+ * which is what "40 bags" is the alternative to. `unit` stays blank when they
+ * did not say, because "each" would be a word they did not write.
+ */
+export function toMaterialLineRequests(
+  materials: readonly MaterialDraft[],
+): NonNullable<Schemas["ProposalCreateRequest"]["material_lines"]> {
+  return materials
+    .filter((material) => material.description.trim() !== "")
+    .map((material) => {
+      if (material.amountPaise === null) {
+        throw new Error("A material with no cost cannot be submitted.");
+      }
+      return {
+        title: material.description.trim(),
+        quantity: material.quantity ?? 1,
+        unit: material.unit.trim(),
+        amount_paise: material.amountPaise,
+      };
+    });
+}
+
+/**
  * The on-site draft as a `ProposalCreateRequest`.
  *
  * `site_visit_id` is required for this path, not optional. It is the field that
@@ -297,10 +360,12 @@ export function hasErrors(errors: DraftErrors): boolean {
  * it is what the server's `m2_visit_not_completed` guard is checked against.
  * Passing it is the difference between an estimate and a refusal.
  *
- * Work rows are sent in the vendor's own order, then material rows in theirs.
- * Materials carry no `ends_on`: a bag of cement has no completion date, and
- * inventing one would put a milestone on the customer's schedule that nobody
- * agreed to.
+ * **Work goes to `stages`, materials go to `material_lines`** (1.26.0). Both are
+ * inside `total_paise` — the customer pays both, and `_assert_a5_shape`
+ * reconciles the two sums against it — but only a stage carries an approval and
+ * a release, and only a material advance is money that is spent rather than
+ * earned. Materials carry no schedule field at all now, which is the honest
+ * shape: a bag of cement has no completion date.
  */
 export function toOnsiteRequest(input: {
   readonly invitationId: string;
@@ -321,26 +386,14 @@ export function toOnsiteRequest(input: {
     endsOn,
   }));
 
-  const materialRows: StageDraft[] = draft.materials
-    .filter((material) => material.description.trim() !== "")
-    .map((material) => ({
-      title: material.description.trim(),
-      // The one place a fixed word is written into a row, and it is a
-      // *description* the customer reads rather than a code anything parses.
-      // Without it the customer cannot tell a bag of cement from a day's labour,
-      // and the wire has no field that would say so.
-      deliverable: "Materials supplied for this job",
-      amountPaise: material.amountPaise,
-      endsOn: null,
-    }));
-
   return {
     invitation_id: input.invitationId,
     site_visit_id: input.siteVisitId,
     total_paise: total,
     tax_basis: draft.taxBasis,
     tax_paise: draft.taxBasis === "EXCLUSIVE" ? draft.taxPaise : 0,
-    stages: toStageRequests([...workRows, ...materialRows]),
+    stages: toStageRequests(workRows),
+    material_lines: toMaterialLineRequests(draft.materials),
     exclusions: draft.exclusions.map((line) => line.trim()).filter((line) => line !== ""),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,
@@ -386,7 +439,7 @@ export function loadOnsiteDraft(invitationId: string): OnsiteDraft | null {
     const raw = window.localStorage.getItem(storageKey(invitationId));
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
-    return isOnsiteDraft(parsed) ? parsed : null;
+    return isOnsiteDraft(parsed) ? withMaterialDefaults(parsed) : null;
   } catch {
     return null;
   }
@@ -414,4 +467,26 @@ function isOnsiteDraft(value: unknown): value is OnsiteDraft {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Partial<OnsiteDraft>;
   return Array.isArray(candidate.stages) && Array.isArray(candidate.materials);
+}
+
+/**
+ * Fills the two fields a material row gained when 1.26.0 published its own type.
+ *
+ * This is the concrete version of the untrusted-input rule above, and it is
+ * live *this* deploy: a vendor who half-wrote an estimate yesterday has
+ * `{description, amountPaise}` rows in storage, and the composer now reads
+ * `unit.trim()`. Dropping the whole draft over two missing keys would throw away
+ * their work to avoid a crash; filling them with the serializer's own defaults
+ * keeps it and changes nothing they typed.
+ */
+function withMaterialDefaults(draft: OnsiteDraft): OnsiteDraft {
+  return {
+    ...draft,
+    materials: draft.materials.map((material) => ({
+      ...EMPTY_MATERIAL,
+      ...material,
+      quantity: typeof material.quantity === "number" ? material.quantity : null,
+      unit: typeof material.unit === "string" ? material.unit : "",
+    })),
+  };
 }

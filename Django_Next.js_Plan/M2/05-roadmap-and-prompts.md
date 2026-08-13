@@ -2,7 +2,8 @@
 
 **Purpose:** Reusable prompts for implementing M2 phase by phase without losing quality or task status
 **Status source:** [task.md](task.md)
-**Revision:** 3 - visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
+**Revision:** 4 - rate-card A3 per [ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md);
+visit-first A5 per [ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md);
 revision 2 simplifications per [06-audit-gaps-and-simplification.md](06-audit-gaps-and-simplification.md)
 
 > **Partly superseded, 11 August 2026.** The execution-order table below describes one backend column
@@ -11,7 +12,7 @@ revision 2 simplifications per [06-audit-gaps-and-simplification.md](06-audit-ga
 > [backend-session.md](backend-session.md), [frontend-session-a.md](frontend-session-a.md) and
 > [frontend-session-b.md](frontend-session-b.md) for the live per-column task lists and kickoff
 > prompts. Read the table below as the **dependency order between phases**, which is still correct,
-> not as the scheduling plan, which is not. The **non-negotiable rules** (updated to revision 3) and
+> not as the scheduling plan, which is not. The **non-negotiable rules** (updated to revision 4) and
 > the base prompt further down remain live and binding.
 
 ## Recommended execution order
@@ -22,7 +23,7 @@ revision 2 simplifications per [06-audit-gaps-and-simplification.md](06-audit-ga
 | 2 | BE1 capability foundation | FE1 progressive registration and workspace registry | Partner reaches masked demand fast; approved Partner sees only authorized workspaces/actions |
 | 3 | BE2 free requirement and matching entry | FE2 four-screen requirement and tracking | A free requirement enters matching exactly once with a hard expiry |
 | 4 | BE3 matching, clarification and proposals | FE3 enquiries and the two composers | Usable quotes delivered inside SLA, nothing charged |
-| 5 | BE4 access: A3 unlock · A5 visit plan, selection and engagement | FE4 A3 teasers/unlock · A5 visits/estimates, comparison and selection | Money collected only against a real accepted commitment; one truthful engagement |
+| 5 | BE4 access: A3 rate card + booking fee (wave C2R) · A3-fallback unlock · A5 visit plan, selection and engagement | FE4 A3 preset and booking-fee front door (wave A2R) + crew offer screen (wave B2R) · A3-fallback teasers/unlock · A5 visits/estimates, comparison and selection | Money collected only against a real accepted commitment; one truthful engagement |
 | 6 | BE5 engagement spine | Shared stage/amendment UI | Both archetypes run on one spine with one command set |
 | 7A | BE5A workforce stages | FE5A workforce | A3 acceptance scenarios pass |
 | 7B | BE5B project stages | FE5B projects | A5 acceptance scenarios pass |
@@ -33,20 +34,29 @@ Build the spine at step 6 before either tail. Do not start payment UI from an un
 do not treat a published API schema as proof that its business behavior is complete. 7A and 7B can run
 in parallel after the step 6 gate.
 
-## Non-negotiable rules (revision 3)
+## Non-negotiable rules (revision 4)
 
 Every M2 session must honour these. They are the output of the audit plus the owner's 2026-08-12
-visit-first decision ([ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md)), and
-reversing one silently is a regression:
+visit-first decision ([ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md)) and
+2026-08-13 rate-card decision
+([ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md)), and reversing one
+silently is a regression:
 
-1. The requirement is **free**. Money is charged only against a real accepted commitment: for A3 the
-   INR 149 unlock only after a usable quote exists; for A5 the tiered **visit plan** only when the
-   first vendor confirms a visit slot — never at request time.
+1. The requirement is **free**. Money is charged only against a real accepted commitment: for A3
+   the **booking fee** only when a lead accepts the booking at the published rate (the INR 149
+   unlock, only after a usable quote exists, survives on the A3 **fallback**); for A5 the tiered
+   **visit plan** only when the first vendor confirms a visit slot — never at request time.
 2. **A5 is visit-first.** An A5 estimate is submitted on site against a `COMPLETED` visit through the
    full composer; estimates are fully readable with **no second paywall**; unfilled plan shares
    auto-refund at the visit SLA; each consumed share splits into a **vendor visit payout** (paid on
    completed visit + usable estimate, through the M1 payout rails) and a **Vsolve platform share** —
-   no stage credit. A3 keeps teasers and the unlock unchanged.
+   no stage credit. **A3 is rate-card-first (ADR-0009):** Operations publishes the all-inclusive
+   per-worker-day rate per city+skill, effective-dated and fail-closed; dispatch goes to leads
+   through the A1 offer cascade, first accept wins; the booking fee is charged at vendor accept on
+   the same split rails (forfeit = lead travel compensation + platform share; vendor no-show
+   refunds in full with free re-dispatch); **wages are direct, daily, P2P — the platform never
+   holds them**; extras count only through amendments at the published add-on rates. Teasers and
+   the unlock are demoted to the thin-supply fallback.
 3. Commercial mode is **fixed by archetype**: A3 is `LEAD_ONLY`, A5 is `MANAGED_PAYMENT_REQUIRED`.
    There is no per-variant mode configuration.
 4. Workforce and project fulfilment share **one** `Engagement` + `EngagementStage` spine. Scope changes
@@ -59,8 +69,11 @@ reversing one silently is a regression:
    slot engine** (`carts.availability` + the checkout slot-picker pattern) — never a second
    availability notion.
 9. Partner KYC is **progressive**, gated on money rather than on browsing.
-10. The customer requirement is **four screens** (the A5 plan chooser is a control on Review); the A3
-    enquiry response and the A5 visit-slot confirmation are each **one screen**.
+10. The customer requirement is **four screens** for A5 and the A3 fallback (the A5 plan chooser is
+    a control on Review); the primary A3 capture is the **preset** — skill, headcount, dates and
+    the 3–4 price-moving facts, with the published rate and inclusion list shown before booking.
+    The A3 crew offer, the A3-fallback enquiry response and the A5 visit-slot confirmation are
+    each **one screen**.
 11. Money and OTP are **built and proved with test callbacks and the non-OTP fallback** in M2; live
     activation is M3.
 
@@ -94,9 +107,17 @@ preserve all unrelated changes. Resolve existing patterns before introducing new
 product, policy, legal or contract decision is missing, do not hide it behind a default. Mark the task
 partial and report the exact blocking decision.
 
-Revision 3 rules that must not be silently reversed:
-- The requirement is free. A3: the INR 149 unlock is charged only after a usable quote exists.
-  A5: the tiered visit plan is charged only when the first vendor confirms a visit slot.
+Revision 4 rules that must not be silently reversed:
+- The requirement is free. A3: the booking fee is charged only when a lead accepts the booking at
+  the published rate (the INR 149 unlock, only after a usable quote exists, applies on the A3
+  fallback). A5: the tiered visit plan is charged only when the first vendor confirms a visit slot.
+- A3 is rate-card-first (ADR-0009): Operations publishes an all-inclusive per-worker-day rate per
+  city+skill, effective-dated and fail-closed; dispatch goes to leads through the A1 offer cascade
+  (apps.assignments), first accept wins, roster >= headcount; the booking fee forfeits on customer
+  no-show (lead travel compensation + platform share) and refunds in full on vendor no-show with
+  free re-dispatch; wages are direct, daily, P2P — never held by the platform; extras count only
+  through scope amendments at the published add-on rates; the quote flow and unlock are the
+  thin-supply fallback.
 - A5 is visit-first (ADR-0008): estimates are submitted on site against a COMPLETED visit, are fully
   readable with no second paywall, unfilled plan shares auto-refund at the visit SLA, and each
   consumed share splits into a vendor visit payout (completed visit + usable estimate, M1 payout
@@ -108,8 +129,8 @@ Revision 3 rules that must not be silently reversed:
 - Attendance is supervisor-level; per-worker detail only inside a dispute.
 - Requirement audit is an immutable snapshot written at invitation, not full versioning.
 - Proposals are append-only; clarification is structured question and answer, not chat.
-- Site visits are paid. Partner KYC is progressive. The requirement is four screens (the A5 plan
-  chooser is a control on Review).
+- Site visits are paid. Partner KYC is progressive. The requirement is four screens for A5 and the
+  A3 fallback (the A5 plan chooser is a control on Review); the primary A3 capture is the preset.
 - Money and OTP are built and proved with test callbacks and the non-OTP fallback; live activation is
   M3 per milestones.md.
 
@@ -211,9 +232,9 @@ Use the base prompt with one row at a time.
 | P1 | `M2-BE-101` to `M2-BE-117` | `M2-FE-101` to `M2-FE-115` | Progressive registration and capability-correct contextual workspaces |
 | P2 | `M2-BE-201` to `M2-BE-214` | `M2-FE-201` to `M2-FE-215` | A free requirement enters matching exactly once with a hard expiry |
 | P3 | `M2-BE-301` to `M2-BE-324` | `M2-FE-301` to `M2-FE-313` | Usable quotes delivered inside SLA with nothing charged |
-| P4 | `M2-BE-401` to `M2-BE-428` | `M2-FE-401` to `M2-FE-424` | Access (A3 unlock · A5 visit plan), selection, reconfirmation and engagement are truthful |
+| P4 | `M2-BE-401` to `M2-BE-428`, plus the revision 4 rate-card path (`M2-BE-429`+, wave C2R: `RateCard`, the cascade caller, `BookingFee`) | `M2-FE-401` to `M2-FE-424`, plus the A2R (Customer preset front door) and B2R (Partner crew offer) tasks | Access (A3 booking fee · A3-fallback unlock · A5 visit plan), selection, reconfirmation and engagement are truthful |
 | P5 | `M2-BE-501` to `M2-BE-509` | Shared stage/amendment UI in FE5A/FE5B | One spine, one command set, no duplicate subsystem |
-| P5A | `M2-BE-521` to `M2-BE-535` | `M2-FE-501` to `M2-FE-512` | Multi-worker, multi-day A3 work passes acceptance |
+| P5A | `M2-BE-521` to `M2-BE-535`, plus the revision 4 day-settled and cash-report commands (`confirm_day_settled`, `report_cash_demand`) | `M2-FE-501` to `M2-FE-512`, plus their day-settled and cash-report surfaces | Multi-worker, multi-day A3 work passes acceptance |
 | P5B | `M2-BE-541` to `M2-BE-550` | `M2-FE-601` to `M2-FE-613` | Stage and amendment A5 work passes acceptance |
 | P6 | `M2-BE-701` to `M2-BE-717` | `M2-FE-701` to `M2-FE-711` | Recovery/refunds work without direct database intervention |
 | P7 | `M2-BE-801` to `M2-BE-812` | `M2-FE-801` to `M2-FE-811` | Security, quality, runbooks and rollout sign-off pass |
@@ -226,9 +247,10 @@ Use this after backend and frontend work for a phase are both reported complete.
 Review M2 <PHASE> as an independent production-readiness reviewer. Do not implement unrelated future
 phases. Read the M2 flow, both role task files, acceptance matrix, the audit document, contracts and
 current code. Verify each checked task from behavior and tests; do not trust checkbox status. Confirm
-the revision 3 rules have not been silently reversed - particularly the free requirement, the
-archetype-split front door (A3 unlock, A5 visit-first), the fixed mode per archetype, the single
-engagement spine, supervisor-level attendance and the flow-weight budget. Focus findings on security, authorization, data integrity, state transitions, money
+the revision 4 rules have not been silently reversed - particularly the free requirement, the
+archetype-split front door (A3 rate card and booking fee with the unlock demoted to fallback per
+ADR-0009, A5 visit-first per ADR-0008), wages never held by the platform, the fixed mode per
+archetype, the single engagement spine, supervisor-level attendance and the flow-weight budget. Focus findings on security, authorization, data integrity, state transitions, money
 reconciliation, concurrency, privacy, accessibility, failure recovery and M1 regression risk. Run the
 relevant checks and exercise applicable end-to-end worst cases. If evidence is missing or behavior is
 partial, change [x] to [~] in both the detailed file and task.md with a concise reason. Keep [x] only

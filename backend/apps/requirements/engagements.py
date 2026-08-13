@@ -57,6 +57,7 @@ from apps.requirements.models import (
     EngagementStage,
     Proposal,
     ProposalSelection,
+    RateCardBooking,
     VendorInvitation,
 )
 from apps.requirements.services import record_transition
@@ -486,6 +487,131 @@ def _open_engagement(
         # The A3 fee is earned from this point. It is not refunded for a change of mind afterwards,
         # which the Customer was told before they paid it.
         access.consume_unlock(requirement=requirement)
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.engagement.opened",
+        idempotency_key=f"engagement-opened:{engagement.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "engagement_id": str(engagement.id),
+            "commercial_mode": engagement.commercial_mode,
+        },
+    )
+    return engagement
+
+
+# ---------------------------------------------------------------------------
+# A3 rate-card engagement (`M2-BE-432`, revision 4)
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def open_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
+    """Open the A3 engagement the verified booking fee just bought.
+
+    Called **only** from `booking_fees.complete_booking_fee`, inside the provider callback's own
+    transaction. §4c: "only a verified provider callback moves `PENDING → ACTIVE`, and that same
+    callback creates the engagement".
+
+    Three things are deliberately different from the quote path, and all three follow from there
+    being no proposal:
+
+    1. **`selection` and `proposal` are null.** §1 never routes a rate-card requirement through
+       `QUOTES_READY`, `UNLOCKED` or `SELECTED`, so there is no quote to point at. Fabricating one
+       would put a proposal nobody wrote into the table a dispute reads.
+    2. **`total_paise` is the lead's receipt, not the Customer's all-in total.** The engagement is
+       the *work agreement*, and the work is paid peer-to-peer at the published wage plus
+       supervision margin. The booking fee is Vsolve's own revenue with its own receipt — the same
+       relationship the unlock fee has to an A3 quote engagement, where the fee is likewise not
+       part of the agreed total.
+    3. **The stages are shift-days at the published rate**, laid out here rather than by
+       `_a3_stages`, which reads a proposal. Same arithmetic, same one-stage-per-day shape, same
+       `NOT_REQUIRED` funding state — because A3 is `LEAD_ONLY` and Vsolve funds nothing.
+    """
+    booking = (
+        RateCardBooking.objects.select_for_update(of=("self",))
+        .select_related("requirement", "accepted_invitation__partner")
+        .get(pk=booking_id)
+    )
+    existing = Engagement.objects.filter(requirement_id=booking.requirement_id).first()
+    if existing is not None:
+        # A re-driven callback finds the engagement it already created. `complete_booking_fee` is
+        # idempotent on the fee row; this is the second lock on the same door.
+        return existing
+    invitation = booking.accepted_invitation
+    if invitation is None:
+        raise RequirementTransitionError("This booking has no confirmed crew.")
+
+    requirement = booking.requirement
+    now = timezone.now()
+    per_day = booking.lead_day_receipt_paise
+    engagement = Engagement.objects.create(
+        requirement=requirement,
+        selection=None,
+        proposal=None,
+        partner=invitation.partner,
+        customer=requirement.customer,
+        archetype=A3,
+        commercial_mode=Engagement.CommercialMode.LEAD_ONLY,
+        status=Engagement.Status.ACTIVE,
+        total_paise=booking.lead_receipt_paise,
+        tax_paise=0,
+        # The published rate is what the Customer pays the lead; how that lead accounts for tax on
+        # it is between them and the law. Recording a basis here would be this platform asserting a
+        # treatment for money it never touches — and the GST question on the booking fee itself is
+        # owner decision 5.
+        tax_basis="UNKNOWN",
+        commission_paise=0,
+        commission_treatment="",
+        staged_total_paise=per_day * booking.days,
+        terms_snapshot={
+            "source": "rate_card",
+            "rate_card_id": str(booking.rate_card_id),
+            "rate_card_booking_id": str(booking.id),
+            "headcount": booking.headcount,
+            "days": booking.days,
+            "day_rate_paise": booking.day_rate_paise,
+            "worker_day_wage_paise": booking.worker_day_wage_paise,
+            "supervision_margin_paise": booking.supervision_margin_paise,
+            "booking_fee_component_paise": booking.booking_fee_component_paise,
+            "lead_day_receipt_paise": per_day,
+            "lead_receipt_paise": booking.lead_receipt_paise,
+            "booking_fee_paise": booking.booking_fee_paise,
+            "total_customer_paise": booking.total_customer_paise,
+            "standard_day_hours": booking.standard_day_hours,
+            "overtime_hourly_paise": booking.overtime_hourly_paise,
+            "add_on_rates": booking.add_on_rates,
+            "inclusions": booking.inclusions,
+        },
+        # A3 *is* a connection: contact and work start the moment the fee is verified.
+        contact_released_at=now,
+        work_may_start_at=now,
+    )
+    EngagementStage.objects.bulk_create(
+        [
+            EngagementStage(
+                engagement=engagement,
+                position=day,
+                label=f"Day {day}",
+                amount_paise=per_day,
+                kind=EngagementStage.Kind.WORK,
+                funding_state=EngagementStage.FundingState.NOT_REQUIRED,
+            )
+            for day in range(1, booking.days + 1)
+        ]
+    )
+    from_status = requirement.status
+    requirement.status = CustomerRequirement.Status.ENGAGED
+    requirement.save(update_fields=("status", "updated_at"))
+    record_transition(
+        requirement=requirement,
+        from_status=from_status,
+        to_status=requirement.status,
+        actor=None,
+        reason_code="booking_fee_verified",
+        reason=f"engagement:{engagement.id} from rate_card_booking:{booking.id}",
+    )
     enqueue_outbox_event(
         aggregate_type="requirement",
         aggregate_id=requirement.id,

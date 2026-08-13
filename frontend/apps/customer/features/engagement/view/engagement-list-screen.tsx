@@ -257,14 +257,18 @@ function Row({
         ) : null}
       </dl>
 
-      <p className="mt-3 text-sm leading-6 text-text">{nextActionCopy(row.nextAction, nouns)}</p>
+      {/* The kind of the row this action is about, so a materials line is never
+          announced as a stage that "starts" when it is funded. */}
+      <p className="mt-3 text-sm leading-6 text-text">
+        {nextActionCopy(row.nextAction, nouns, row.actionStageKind)}
+      </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {/* The stage link is offered only for the actions that are genuinely
             about one stage. A review is; waiting for the vendor is not. */}
         {actionHref !== null && row.nextAction === "review_stage" ? (
           <Link href={actionHref} className={buttonStyles({ variant: "primary" })}>
-            Check the work
+            {row.actionStageKind === "material_advance" ? "Check the materials" : "Check the work"}
           </Link>
         ) : null}
         <Link href={engagementHref} className={buttonStyles({ variant: "outline" })}>

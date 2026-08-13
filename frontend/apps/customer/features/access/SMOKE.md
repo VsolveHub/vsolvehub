@@ -220,3 +220,37 @@ neither is retryable:
 | Remove the visit tiers, then open Review on an A5 draft | `available_tiers: []`; chooser says we cannot offer visits here yet |
 | Leave the rejection cap unset, then reject a quote as non-responsive | The dialog does not offer the replacement path at all; if you force the call, `409 m2_policy_unavailable` |
 | Select from two tabs at once | One gets `409 m2_selection_conflict`; that tab says *"Somebody chose first"* and re-reads. **It must not retry the selection.** |
+
+---
+
+# Wave J addendum — contract 1.28.0 consumption (2026-08-14)
+
+## J4. Visit times are in the service area's own zone — `SiteVisit.timezone`
+
+`SiteVisit.timezone` landed at 1.26.0 and the tracker was formatting every slot
+in the deprecated single-city constant until this pass. That was correct while
+the platform was Hyderabad-only and silently wrong the day it was not.
+
+1. Book a visit plan and get one slot confirmed (§3–§5 above).
+2. On `/requests/{id}`, read the slot time on the visit tracker. It must match
+   the time the **Partner** sees for the same reservation, to the minute.
+3. **Change your machine's timezone** to something far away — US Pacific will do
+   — and reload. The slot time must **not move**. A Customer travelling must not
+   watch their visit shift; that is the whole reason the zone is read rather than
+   defaulted to the device.
+4. Set the service area's `timezone` to a different real zone in Django, reload,
+   and confirm the displayed time moves **with the area**. That is the check that
+   the value is genuinely being read and not just pinned to Asia/Kolkata.
+5. The estimate-due line on a completed visit and the held-slot sentence on
+   `/requests/{id}/book-visits` use the same formatter — check both moved too.
+
+## J5. The no-show vocabulary — `VisitNoShowReasonEnum`
+
+Fixed at the 1.26.0 regeneration; verify it rather than assume it.
+
+1. On a scheduled slot where nobody arrived, press **They did not come**.
+2. It must succeed. A `400` here means the client is sending the retired
+   lowercase slug `vendor_did_not_arrive` instead of the published
+   `VENDOR_DID_NOT_ARRIVE`, which is now a required enum.
+3. Check the slot moves to owing a **free replacement visit** and that nothing is
+   charged. `party` decides the money, never the reason code.

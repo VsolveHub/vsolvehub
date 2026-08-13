@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.28.0
+  version: 1.29.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -5059,6 +5059,104 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/rate-cards/:
+    get:
+      operationId: m2_rate_card_list
+      description: Every published card, newest effective date first. This is the
+        monthly review calendar's read and the only surface that publishes the three
+        components, because reviewing a rate against the wage floor means seeing the
+        wage part of it.
+      parameters:
+      - in: query
+        name: service_area
+        schema:
+          type: string
+          format: uuid
+        description: Narrow to one city.
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_rate_card_publish
+      description: |-
+        Publish a day rate for one city and one statutory skill, effective from a date. A card is **loaded, never edited**: a booking made last week reconciles against the number it was made at, and raising a rate is one more row.
+
+        Two refusals are the point of this endpoint. The wage component is checked against the statutory floor with the same fail-closed guard vendor quotes pass — a platform that refuses a vendor's rate for being below the floor and publishes its own below it has no rule at all. And a card cannot be **backdated under a live booking**, because that would retroactively change the number a live booking was priced at.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - M2 - Rate card
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateCardPublishRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RateCardPublishRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RateCardPublishRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCard'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_proposal_below_wage_floor` when the wage component is
+            under the statutory floor for that state and skill.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_wage_floor_unavailable` when no floor is loaded for the
+            area''s state and this skill, or when the area carries no state code —
+            the check fails closed rather than being skipped. `m2_requirement_transition_not_allowed`
+            when the effective date would land on or before a live booking made at
+            the current rate.'
   /api/v1/operations/reservations/{reservation_id}/release/:
     post:
       operationId: operations_reservation_release
@@ -6667,6 +6765,138 @@ paths:
           description: '`m2_capability_not_approved` when the Partner holds no approved
             workforce capability. The roster is not a general address book.'
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/crew-offers/:
+    get:
+      operationId: m2_crew_offer_list
+      description: |-
+        Crew offers this lead can still answer, on the M1 dispatch clock — `responds_by` is wall-clock and minutes away, not a business-hours deadline.
+
+        **Every offer carries the lead's own number**: what they receive per day for the requested crew, paid directly by the Customer at day end. The Customer's all-inclusive rate is not in this payload at any status, because it contains this platform's booking fee and showing a vendor money they do not receive is how a published rate starts an argument on site.
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewOfferList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/partner/crew-offers/{invitation_id}/accept/:
+    post:
+      operationId: m2_crew_offer_accept
+      description: |-
+        Take the job at the published rate. **First accept wins** — a rate-card request has exactly one slot, so the second lead to arrive is refused with `m2_invitation_slots_exhausted` rather than losing a race.
+
+        Accepting takes a soft capacity hold for the requested dates, records this lead's acceptance of the published card, and holds the job while the Customer pays the booking fee. If they never pay, the hold lapses, the vendor keeps their standing, and the cascade moves on.
+
+        Refused with `m2_roster_insufficient` when the lead's **verified** roster is smaller than the headcount. Crews are never aggregated across vendors: one lead is accountable for the whole crew.
+      parameters:
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardBooking'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_roster_insufficient`, `m2_invitation_slots_exhausted`
+            when another lead took the job, `m2_capacity_unavailable` when this lead
+            is already committed on those dates, or `m2_invitation_expired`.'
+  /api/v1/partner/crew-offers/{invitation_id}/decline/:
+    post:
+      operationId: m2_crew_offer_decline
+      description: |-
+        Pass on a crew offer. **The reason is required and is read by the decline-rate alarm.** `RATE_TOO_LOW` is the answer that matters most: a published rate below the street rate makes leads decline everything and the instant product dies quietly, so a sustained decline rate pages Operations rather than appearing in a monthly report.
+
+        Declining releases the slot and moves the cascade to its next, wider wave.
+      parameters:
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewOfferDeclineRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewOfferDeclineRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewOfferDeclineRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewOffer'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -8820,6 +9050,230 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_attachment_unavailable` when the storage adapter is down.
             Retryable, and the only retryable error on this path.'
+  /api/v1/requirements/{requirement_id}/booking-fee/cancel/:
+    post:
+      operationId: m2_booking_fee_cancel
+      description: |-
+        Cancel a booked crew. **The free-cancellation window decides the money**, server-side and never from the client: at or beyond T hours before the requested start the booking fee refunds in full; inside T it forfeits and splits, because the lead has already turned other work down for that day.
+
+        T is an open owner decision and is read fail-closed: while it is unset this refuses with `m2_policy_unavailable` rather than guessing which way a real Customer's money should go.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingFee'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_policy_unavailable` while the free-cancellation window
+            is unset; `m2_booking_fee_not_chargeable` when there is no fee on this
+            request; `m2_requirement_transition_not_allowed` once the fee is settled.'
+  /api/v1/requirements/{requirement_id}/booking-fee/checkout/:
+    post:
+      operationId: m2_booking_fee_checkout_create
+      description: |-
+        Pay the booking fee against a lead who is holding this job right now. The hold is checked under the booking's own row lock in the same transaction that creates the attempt, so paying for a crew nobody is holding is unreachable rather than merely unlikely.
+
+        **The crew is not confirmed by this response.** Only a verified provider callback moves the fee to `ACTIVE`, and that same callback creates the engagement; until it lands the fee reads `PENDING` and `m2_booking_fee_payment_pending` is the refusal anything gated on confirmation returns. If the Customer never pays, the hold lapses harmlessly and the next offer or wave proceeds.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessCheckout'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_booking_fee_not_chargeable` when no lead is holding the
+            job, when the hold has expired, or when the fee is already settled; `m2_lifecycle_not_supported`
+            on a request that is on the quote flow.'
+  /api/v1/requirements/{requirement_id}/crew/arrival/:
+    post:
+      operationId: m2_crew_arrival_confirm
+      description: |-
+        Confirm the crew arrived on day one, which is the moment the booking fee is earned. Either party may record it. **Non-OTP** — the start OTP is deferred to M3, so this is the default path in M2 rather than a degraded one.
+
+        Nothing is paid out here: the fee is Vsolve's revenue once the crew arrived, and the wages are peer-to-peer and settle at day end.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingFee'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/{requirement_id}/crew/no-show/:
+    post:
+      operationId: m2_crew_no_show_report
+      description: |-
+        Report that day one did not happen. **`party` decides the money and the reason code cannot move it.**
+
+        `VENDOR`: the booking fee refunds in full, no travel compensation is paid — neither party earns from an undelivered crew — the request returns to matching for a **free re-dispatch**, and the vendor's standing carries the record.
+
+        `CUSTOMER`: the fee forfeits and splits. A configured share pays the lead as travel compensation through the payout rails, and the remainder is the platform share; the two reconcile to the fee in integer paise.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewNoShowRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewNoShowRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewNoShowRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingFee'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_policy_unavailable` while the forfeit split is unset —
+            the fee stays `ACTIVE` and visible rather than being split on an invented
+            ratio.'
   /api/v1/requirements/{requirement_id}/quotes/:
     get:
       operationId: m2_quote_list
@@ -9096,6 +9550,109 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/requirements/{requirement_id}/rate-card/:
+    get:
+      operationId: m2_rate_card_read
+      description: |-
+        The published day rate for this request and everything that has happened to it since. **`preview.is_available: false` is not an error** — it means this city and skill have no published card, or instant dispatch is not configured for this service, and the request will collect quotes instead. `unavailable_code` says which.
+
+        The money split published here is the Customer's: `total_customer_paise` divides into `lead_receipt_paise`, **paid directly to the crew at day end and never held by Vsolve**, and `booking_fee_paise`, the one online charge. The lead's own wage and supervision split is deliberately absent.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardState'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/requirements/{requirement_id}/rate-card/book/:
+    post:
+      operationId: m2_rate_card_book
+      description: |-
+        Book a crew at the published day rate. The rate and its inclusion list are shown by `m2_rate_card_read` **before** this runs and are frozen onto the booking here, so a rate loaded between the screen and the tap cannot become what the Customer agreed to.
+
+        **Nothing is charged by this call.** It submits the requirement and sends the first wave of crew offers on the M1 dispatch clock — minutes, not business hours. The booking fee is charged only once a lead has accepted, through `m2_booking_fee_checkout_create`.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateCardBookRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RateCardBookRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RateCardBookRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardState'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_rate_card_unavailable` when no card is published for this
+            city and skill — the Customer is routed to the quote flow, which is the
+            honest degradation rather than a guessed price. `m2_policy_unavailable`
+            when instant dispatch is not configured for this service. `m2_requirement_duplicate`
+            unless `allow_duplicate` is set.'
   /api/v1/requirements/{requirement_id}/selection/:
     get:
       operationId: m2_selection_read
@@ -10817,6 +11374,94 @@ components:
       required:
       - booking
       - refund_ids
+    BookingFee:
+      type: object
+      description: |-
+        The one online charge, and how it was settled.
+
+        The forfeit split is published because the Customer is entitled to know where their money went
+        when a booking they missed was settled: a travel-compensation share to the crew that travelled,
+        and the remainder to Vsolve. Publishing zero for both on an unsettled fee is not a placeholder
+        — it is the true amount so far.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/BookingFeeStatusEnum'
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        travel_compensation_paise:
+          type: integer
+          readOnly: true
+        platform_share_paise:
+          type: integer
+          readOnly: true
+        receipt_series:
+          type: string
+          readOnly: true
+        receipt_sequence:
+          type: integer
+          readOnly: true
+          nullable: true
+        settlement_reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        failure_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        activated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        earned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        settled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - activated_at
+      - amount_paise
+      - earned_at
+      - failure_code
+      - id
+      - platform_share_paise
+      - receipt_sequence
+      - receipt_series
+      - settled_at
+      - settlement_reason_code
+      - status
+      - travel_compensation_paise
+    BookingFeeStatusEnum:
+      enum:
+      - OFFER_ACCEPTED
+      - PENDING
+      - ACTIVE
+      - EARNED
+      - FORFEIT_SPLIT
+      - REFUNDED
+      - FAILED
+      type: string
+      description: |-
+        * `OFFER_ACCEPTED` - A lead accepted; the Customer has not paid yet
+        * `PENDING` - Awaiting the provider
+        * `ACTIVE` - Paid; the crew is confirmed
+        * `EARNED` - The crew arrived on day one
+        * `FORFEIT_SPLIT` - Forfeited and split with the lead
+        * `REFUNDED` - Refunded in full
+        * `FAILED` - Payment failed
     BookingGroup:
       type: object
       properties:
@@ -12167,6 +12812,147 @@ components:
       required:
       - display_name
       - phone_e164
+    CrewNoShowReasonCodeEnum:
+      enum:
+      - customer_no_show
+      - gate_locked
+      - vendor_no_show
+      type: string
+      description: |-
+        * `customer_no_show` - Nobody was at the site
+        * `gate_locked` - The site was locked
+        * `vendor_no_show` - The crew did not arrive
+    CrewNoShowRequest:
+      type: object
+      properties:
+        party:
+          $ref: '#/components/schemas/VisitNoShowPartyEnum'
+        reason_code:
+          $ref: '#/components/schemas/CrewNoShowReasonCodeEnum'
+      required:
+      - party
+      - reason_code
+    CrewOffer:
+      type: object
+      description: |-
+        One crew offer as the **lead** sees it (`M2-BE-435`).
+
+        An explicit field list, like the teaser, and the omission is the point: there is no
+        `total_customer_paise` and no `booking_fee_paise` here at any status. ADR-0009 fixes the offer
+        screen as "what they receive per day for the requested crew, paid directly by the customer at
+        day end", and a lead shown the Customer's all-inclusive number would reasonably expect to
+        receive it.
+      properties:
+        invitation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        requirement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        headcount:
+          type: integer
+          readOnly: true
+        days:
+          type: integer
+          readOnly: true
+        lead_day_receipt_paise:
+          type: integer
+          readOnly: true
+        lead_total_receipt_paise:
+          type: integer
+          readOnly: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+        inclusions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        responds_by:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        verified_roster_size:
+          type: integer
+          readOnly: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        area_label:
+          type: string
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - area_label
+      - days
+      - headcount
+      - inclusions
+      - invitation_id
+      - lead_day_receipt_paise
+      - lead_total_receipt_paise
+      - overtime_hourly_paise
+      - requested_start
+      - requirement_id
+      - responds_by
+      - server_now
+      - standard_day_hours
+      - status
+      - verified_roster_size
+    CrewOfferDeclineReasonCodeEnum:
+      enum:
+      - RATE_TOO_LOW
+      - NO_CREW_AVAILABLE
+      - TOO_FAR
+      - SITE_UNSUITABLE
+      - OTHER
+      type: string
+      description: |-
+        * `RATE_TOO_LOW` - The published rate is below the going rate
+        * `NO_CREW_AVAILABLE` - No crew free on those dates
+        * `TOO_FAR` - Too far to travel
+        * `SITE_UNSUITABLE` - The site or the work is not something we do
+        * `OTHER` - Another reason
+    CrewOfferDeclineRequest:
+      type: object
+      properties:
+        reason_code:
+          $ref: '#/components/schemas/CrewOfferDeclineReasonCodeEnum'
+        note:
+          type: string
+          default: ''
+          maxLength: 500
+      required:
+      - reason_code
+    CrewOfferList:
+      type: object
+      properties:
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewOffer'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - offers
+      - server_now
     CsrfToken:
       type: object
       properties:
@@ -12703,6 +13489,7 @@ components:
           type: string
           format: uuid
           readOnly: true
+          nullable: true
         partner:
           type: string
           format: uuid
@@ -18337,6 +19124,7 @@ components:
       - M2_STAGE_FUNDING
       - M2_MATERIAL_ADVANCE
       - M2_SCOPE_AMENDMENT
+      - M2_BOOKING_FEE
       type: string
       description: |-
         * `BOOKING_GROUP` - Booking group
@@ -18347,6 +19135,7 @@ components:
         * `M2_STAGE_FUNDING` - M2 stage funding
         * `M2_MATERIAL_ADVANCE` - M2 material advance
         * `M2_SCOPE_AMENDMENT` - M2 engagement scope amendment
+        * `M2_BOOKING_FEE` - M2 booking fee
     QuestionAnswerRequest:
       type: object
       properties:
@@ -18660,6 +19449,396 @@ components:
       - factors
       - partner_id
       - rank
+    RateCard:
+      type: object
+      description: |-
+        One published card, as Operations reads it back.
+
+        The three components are published **on this surface only**. It is the Operations review
+        calendar's read and the wage-floor cross-check happens against the same numbers, so hiding the
+        split here would make the monthly review a screen you cannot review from.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        service_area:
+          type: string
+          format: uuid
+          readOnly: true
+        skill:
+          type: string
+          format: uuid
+          readOnly: true
+        worker_day_wage_paise:
+          type: integer
+          readOnly: true
+        supervision_margin_paise:
+          type: integer
+          readOnly: true
+        booking_fee_paise:
+          type: integer
+          readOnly: true
+        customer_day_rate_paise:
+          type: integer
+          readOnly: true
+        lead_day_receipt_paise:
+          type: integer
+          readOnly: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+        add_on_rates:
+          readOnly: true
+        inclusions:
+          readOnly: true
+        effective_from:
+          type: string
+          format: date
+          readOnly: true
+        source_reference:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - add_on_rates
+      - booking_fee_paise
+      - created_at
+      - customer_day_rate_paise
+      - effective_from
+      - id
+      - inclusions
+      - lead_day_receipt_paise
+      - overtime_hourly_paise
+      - service_area
+      - skill
+      - source_reference
+      - standard_day_hours
+      - supervision_margin_paise
+      - worker_day_wage_paise
+    RateCardBookRequest:
+      type: object
+      properties:
+        allow_duplicate:
+          type: boolean
+          default: false
+    RateCardBooking:
+      type: object
+      description: The Customer's booking, frozen at the rate it was made at.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RateCardBookingStatusEnum'
+          readOnly: true
+        headcount:
+          type: integer
+          readOnly: true
+        days:
+          type: integer
+          readOnly: true
+        day_rate_paise:
+          type: integer
+          readOnly: true
+        total_customer_paise:
+          type: integer
+          readOnly: true
+        lead_receipt_paise:
+          type: integer
+          readOnly: true
+        booking_fee_paise:
+          type: integer
+          readOnly: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+        add_on_rates:
+          readOnly: true
+        inclusions:
+          readOnly: true
+        wave:
+          type: integer
+          readOnly: true
+        hold_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        fallback_reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        fell_back_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - add_on_rates
+      - booking_fee_paise
+      - confirmed_at
+      - created_at
+      - day_rate_paise
+      - days
+      - fallback_reason_code
+      - fell_back_at
+      - headcount
+      - hold_expires_at
+      - id
+      - inclusions
+      - lead_receipt_paise
+      - overtime_hourly_paise
+      - standard_day_hours
+      - status
+      - total_customer_paise
+      - wave
+    RateCardBookingStatusEnum:
+      enum:
+      - MATCHING
+      - OFFER_HELD
+      - CONFIRMED
+      - FELL_BACK
+      - CANCELLED
+      type: string
+      description: |-
+        * `MATCHING` - Looking for a crew
+        * `OFFER_HELD` - A lead is holding this job
+        * `CONFIRMED` - Crew confirmed and the booking fee is paid
+        * `FELL_BACK` - Fell back to the quote flow
+        * `CANCELLED` - Cancelled
+    RateCardList:
+      type: object
+      properties:
+        rate_cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateCard'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - rate_cards
+      - server_now
+    RateCardPublishRequest:
+      type: object
+      description: |-
+        Operations publishes a card. Every value is required; none has a default.
+
+        A default on any of these would be this file deciding a price, a shift length or an overtime
+        rate. `effective_from` is required for the same reason: "today" is the one value a publisher
+        should never get by omission, because it is the value that lands under live bookings.
+      properties:
+        service_area_id:
+          type: string
+          format: uuid
+        skill_id:
+          type: string
+          format: uuid
+        worker_day_wage_paise:
+          type: integer
+          minimum: 1
+        supervision_margin_paise:
+          type: integer
+          minimum: 1
+        booking_fee_paise:
+          type: integer
+          minimum: 1
+        standard_day_hours:
+          type: integer
+          maximum: 24
+          minimum: 1
+        overtime_hourly_paise:
+          type: integer
+          minimum: 1
+        inclusions:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+          minItems: 1
+        add_on_rates:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+        effective_from:
+          type: string
+          format: date
+        source_reference:
+          type: string
+          default: ''
+          maxLength: 200
+      required:
+      - booking_fee_paise
+      - effective_from
+      - inclusions
+      - overtime_hourly_paise
+      - service_area_id
+      - skill_id
+      - standard_day_hours
+      - supervision_margin_paise
+      - worker_day_wage_paise
+    RateCardState:
+      type: object
+      description: |-
+        The whole A3 instant path as one read: the price before, the crew and the fee after.
+
+        One endpoint rather than three, for the reason `VisitPlanStateSerializer` gives: the screen
+        that offers instant booking and the screen that tracks it are the same screen at two moments,
+        and two endpoints would let them disagree about which booking the Customer has.
+      properties:
+        preview:
+          allOf:
+          - $ref: '#/components/schemas/RatePreview'
+          readOnly: true
+        booking:
+          allOf:
+          - $ref: '#/components/schemas/RateCardBooking'
+          readOnly: true
+          nullable: true
+        booking_fee:
+          allOf:
+          - $ref: '#/components/schemas/BookingFee'
+          readOnly: true
+          nullable: true
+        checkout_available:
+          type: boolean
+          readOnly: true
+        confirmed_partner_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        confirmed_partner_name:
+          type: string
+          readOnly: true
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - booking
+      - booking_fee
+      - checkout_available
+      - confirmed_partner_id
+      - confirmed_partner_name
+      - preview
+      - server_now
+    RatePreview:
+      type: object
+      description: |-
+        What instant booking would cost, on the screen the Customer reads **before** booking.
+
+        `total_customer_paise = lead_receipt_paise + booking_fee_paise`, server-calculated, so the two
+        sentences the screen shows always add to the one number the Customer agrees to. The
+        supervision margin is deliberately not here: the split the Customer needs is "to the crew" and
+        "to Vsolve", not the lead's own business.
+      properties:
+        is_available:
+          type: boolean
+          readOnly: true
+        rate_card_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        headcount:
+          type: integer
+          readOnly: true
+          nullable: true
+        days:
+          type: integer
+          readOnly: true
+          nullable: true
+        day_rate_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        total_customer_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        lead_receipt_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        booking_fee_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+          nullable: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        add_on_rates:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+          nullable: true
+        inclusions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          nullable: true
+        unavailable_code:
+          type: string
+          readOnly: true
+          nullable: true
+        unavailable_reason:
+          type: string
+          readOnly: true
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - add_on_rates
+      - booking_fee_paise
+      - day_rate_paise
+      - days
+      - headcount
+      - inclusions
+      - is_available
+      - lead_receipt_paise
+      - overtime_hourly_paise
+      - rate_card_id
+      - server_now
+      - standard_day_hours
+      - total_customer_paise
+      - unavailable_code
+      - unavailable_reason
     ReasonEnum:
       enum:
       - PARTNER_UNREACHABLE
