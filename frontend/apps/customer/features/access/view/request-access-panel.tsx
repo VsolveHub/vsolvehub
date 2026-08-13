@@ -149,7 +149,7 @@ function A5Access({
         // The reason code is fixed rather than collected. The Customer already
         // confirmed the one fact that matters — nobody turned up — and asking
         // them to classify it would be collecting a taxonomy nothing publishes.
-        noShow.mutate({ siteVisitId, requirementId, reasonCode: "vendor_did_not_arrive" })
+        noShow.mutate({ siteVisitId, requirementId, reasonCode: "VENDOR_DID_NOT_ARRIVE" })
       }
       isCommandPending={arrival.isPending || noShow.isPending}
       commandError={arrival.error ?? noShow.error}

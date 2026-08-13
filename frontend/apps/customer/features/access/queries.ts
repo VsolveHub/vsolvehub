@@ -1,7 +1,12 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { clearIdempotencyKey, getStableIdempotencyKey, request } from "@vsolve/api-client";
+import {
+  clearIdempotencyKey,
+  getStableIdempotencyKey,
+  request,
+  type Schemas,
+} from "@vsolve/api-client";
 import {
   M2_FRESHNESS,
   boundedPoll,
@@ -356,8 +361,21 @@ export function useConfirmVisitArrival() {
   });
 }
 
+/**
+ * Why the visit did not happen.
+ *
+ * Typed from the generated enum since contract 1.26.0, not `string`. It was a
+ * bare `string` while the server took an unconstrained slug, and this call site
+ * was sending a lowercase one — so the day the vocabulary was published, every
+ * no-show report would have been a `400` that no type check could see. Reading
+ * the enum off the schema is what makes the next vocabulary change a compile
+ * error instead of a runtime refusal.
+ */
+export type VisitNoShowReason =
+  Schemas["VisitNoShowRequest"]["reason_code"];
+
 export interface ReportNoShowInput extends SiteVisitCommandInput {
-  reasonCode: string;
+  reasonCode: VisitNoShowReason;
 }
 
 /**

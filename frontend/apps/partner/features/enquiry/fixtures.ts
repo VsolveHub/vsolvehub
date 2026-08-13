@@ -20,6 +20,9 @@ export function enquirySummary(
     id: "11111111-1111-4111-8111-111111111111",
     requirement_id: "22222222-2222-4222-8222-222222222222",
     category_slug: "housekeeping-staff",
+    // Required since 1.26.0. The inbox titled rows by de-slugging until the
+    // server started sending the name it should always have sent.
+    service_name: "Housekeeping staff",
     archetype: "A3_TIME_BLOCK",
     status: "INVITED",
     wave: 1,
@@ -60,6 +63,9 @@ export function question(
   return {
     id: "33333333-3333-4333-8333-333333333333",
     invitation: "11111111-1111-4111-8111-111111111111",
+    // Required since 1.26.0, when the Customer gained a question route of their
+    // own. Who asked decides who may answer, so it is never inferable.
+    asked_by_role: "VENDOR",
     question: "Is scaffolding already up?",
     answer: "",
     asked_at: "2026-08-12T07:00:00Z",
@@ -76,6 +82,9 @@ export function siteVisit(overrides: Partial<Schemas["SiteVisit"]> = {}): Schema
     // A5 shape; the two read differently enough that one fixture for both would
     // hide the field that decides which.
     is_plan_visit: false,
+    // Required since 1.26.0. A visit time without its zone is a time nobody
+    // can act on: the vendor travels in the area's zone, not the browser's.
+    timezone: "Asia/Kolkata",
     fee_paise: 50_000,
     adjusts_against_final_price: true,
     scheduled_for: null,
@@ -95,6 +104,7 @@ export function planVisit(overrides: Partial<Schemas["SiteVisit"]> = {}): Schema
     id: "66666666-6666-4666-8666-666666666666",
     status: "SCHEDULED",
     is_plan_visit: true,
+    timezone: "Asia/Kolkata",
     adjusts_against_final_price: false,
     scheduled_for: "2026-08-18T04:30:00Z",
     duration_minutes: 45,
@@ -122,6 +132,9 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     tax_paise: 0,
     tax_basis: "INCLUSIVE",
     commission_treatment: "",
+    // Required since 1.26.0. Materials are their own row type, not a stage —
+    // a stage carries an evidence cycle and a bag of cement does not.
+    material_lines: [],
     inclusions: ["Own tools"],
     exclusions: [],
     stages: [],

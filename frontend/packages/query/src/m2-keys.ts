@@ -353,6 +353,27 @@ const K = m2QueryKeys;
  * settled share against a quote they had just rejected. `reclassify_requirement`
  * moves plan money too (`M2-BE-427`), and `select_proposal` can consume it.
  */
+/**
+ * One stage's cache, from whatever ids the caller actually holds.
+ *
+ * A stage route carries a stage id; a list route carries an engagement id;
+ * neither reliably carries both. Returning the narrowest reachable prefix rather
+ * than demanding the pair is what stops a money-moving command from invalidating
+ * nothing — which is exactly what the four rows below did until this existed.
+ */
+function stageScope(ctx: M2CommandContext): KeyPrefix[] {
+  if (ctx.engagementId && ctx.stageId) {
+    return [K.engagements.stage(ctx.engagementId, ctx.stageId)];
+  }
+  if (ctx.engagementId) {
+    return [K.engagements.detail(ctx.engagementId)];
+  }
+  // No engagement id at all: the stage screens reach the record by stage id
+  // alone, so the only prefix guaranteed to contain it is the domain root.
+  // Broad, and correct — an unreachable narrow key is worse than a wide one.
+  return ctx.stageId ? [K.engagements.all] : [];
+}
+
 function requirementScope(requirementId: string): KeyPrefix[] {
   return [
     K.requirements.detail(requirementId),
@@ -456,14 +477,23 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
 
   fund_stage: (c) =>
     c.engagementId ? [K.engagements.detail(c.engagementId), K.engagements.list("active")] : [],
-  assign_crew: (c) =>
-    c.engagementId && c.stageId ? [K.engagements.stage(c.engagementId, c.stageId)] : [],
-  confirm_attendance: (c) =>
-    c.engagementId && c.stageId ? [K.engagements.stage(c.engagementId, c.stageId)] : [],
-  respond_attendance: (c) =>
-    c.engagementId && c.stageId ? [K.engagements.stage(c.engagementId, c.stageId)] : [],
-  submit_stage_evidence: (c) =>
-    c.engagementId && c.stageId ? [K.engagements.stage(c.engagementId, c.stageId)] : [],
+
+  // These four were no-ops until the Wave II gate, and the reason is worth
+  // keeping: they returned `engagements.stage(engagementId, stageId)` — a key
+  // **deeper than anything either app mounts**. A stage route carries a stage id
+  // and nothing else, so `engagementId` was absent, the guard fell through to
+  // `[]`, and a command that moves money invalidated nothing at all. Session B
+  // found it by noticing its own hook could not compose the key.
+  //
+  // The fix is to fall back rather than to flatten the key. `engagements.stage`
+  // stays nested — a cancelled engagement's stages go with it, and an
+  // engagement-wide refetch must still reach every one — but when the caller
+  // cannot name the engagement, invalidating the detail is both correct and
+  // reachable, because every stage read hangs beneath it.
+  assign_crew: (c) => stageScope(c),
+  confirm_attendance: (c) => stageScope(c),
+  respond_attendance: (c) => stageScope(c),
+  submit_stage_evidence: (c) => stageScope(c),
   // Approval releases money, which moves the engagement's own totals as well as
   // the stage — and the Partner's list, since the stage leaves their queue.
   approve_stage: (c) => (c.engagementId ? [K.engagements.detail(c.engagementId)] : []),

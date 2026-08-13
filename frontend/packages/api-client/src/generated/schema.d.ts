@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.25.0)
- * Checksum: 44774aef4ebca9c6
+ * Source:   contracts/openapi/v1.yaml (version 1.26.0)
+ * Checksum: eb84eef8e6419def
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -2875,6 +2875,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/questions/{question_id}/answer/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Answer a question the Customer asked about one of your quotes. Scoped to this vendor's own enquiries, and refuses a question this vendor asked — an answer to your own question would close the row without the Customer ever seeing it. */
+        post: operations["m2_partner_question_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/required-consents/": {
         parameters: {
             query?: never;
@@ -3230,6 +3247,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/questions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Ask the professional behind one quote or estimate a question. Structured clarification, not chat: one question, one answer, both on the shared timeline.
+         *
+         *     Addressed to a **proposal**, so it reaches the vendor who wrote it rather than broadcasting to a pool that has already quoted. Gated on the paywall the archetype uses — before the unlock (A3) or the charged plan (A5) the vendors are deliberately not addressable, and a question would be a channel around the fee.
+         *
+         *     A question never changes a price. A new number is a superseding proposal.
+         */
+        post: operations["m2_customer_question_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/reject/": {
         parameters: {
             query?: never;
@@ -3349,6 +3389,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/vendor-cards/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The professionals responding to one A5 request. **A5 only** — an A3 request's pre-unlock surface is the quote teaser, and a second one would be a way around the unlock.
+         *
+         *     The ladder, exactly: verification badge, vendor type and a coarse distance band for every responding vendor; the vendor's **name once they have committed to a visit slot**, because somebody entering a home has to be nameable; and **no contact details at any status**, which the engagement releases and the plan fee does not.
+         *
+         *     `distance_band_km` is the 5 km band the matcher ranked on, read back from the invitation's own provenance rather than recomputed, and is `null` when we have no fresh position for that vendor — the ordinary case for an agency that never runs the technician app. **No rating is published**: this platform has no review model, and a number with nothing behind it is worse than none.
+         */
+        get: operations["m2_vendor_card_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/visit-plan/": {
         parameters: {
             query?: never;
@@ -3409,7 +3472,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The Customer's half of structured clarification. */
+        /** @description Answer a question a professional asked about this request. Since 1.26.0 clarification runs both ways, so this route answers **the vendor's** questions only: a Customer's own question is answered by the vendor at `POST /api/v1/partner/questions/{question_id}/answer/`. */
         post: operations["m2_requirement_question_answer"];
         delete?: never;
         options?: never;
@@ -3687,6 +3750,26 @@ export interface components {
             readonly expires_at: string | null;
             /** Format: date-time */
             readonly server_now: string;
+        };
+        /**
+         * @description The durable reference for the access fee Vsolve actually collected (`M2-BE-415`).
+         *
+         *     Not an invoice. `TaxDocument.order` is not nullable and an access fee has no `Order`, so making
+         *     it nullable to fit one would weaken the invariant every M1 invoice depends on; the number comes
+         *     from the same `commerce.DocumentSequence` under an `M2A-` series, which is gapless and is the
+         *     one numbering authority. GST treatment of the unlock and the visit-plan fee is blocking owner
+         *     decision 5, so this is a receipt reference and says so.
+         *
+         *     `number` is formatted server-side in the `series-sequence` shape
+         *     `commerce.TaxDocumentSerializer.get_number` already publishes, because the string a Customer
+         *     quotes to support should not be assembled differently by each app that renders it.
+         */
+        AccessReceipt: {
+            readonly kind: string;
+            readonly number: string;
+            readonly series: string;
+            readonly sequence: number;
+            readonly amount_paise: number;
         };
         /**
          * @description * `KEEP_CUSTOMER` - KEEP_CUSTOMER
@@ -4472,6 +4555,7 @@ export interface components {
             readonly inclusions: unknown;
             readonly exclusions: unknown;
             readonly stages: components["schemas"]["ProposalStage"][];
+            readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -4634,6 +4718,7 @@ export interface components {
             readonly disputed_at: string | null;
             /** Format: date-time */
             readonly completed_at: string | null;
+            readonly access_receipt: components["schemas"]["AccessReceipt"] | null;
             readonly stages: components["schemas"]["EngagementStage"][];
             /** Format: date-time */
             readonly created_at: string;
@@ -4752,6 +4837,7 @@ export interface components {
             readonly position: number;
             readonly label: string;
             readonly amount_paise: number;
+            readonly kind: components["schemas"]["EngagementStageKindEnum"];
             /** Format: date */
             readonly scheduled_on: string | null;
             readonly status: components["schemas"]["EngagementStageStatusEnum"];
@@ -4788,6 +4874,12 @@ export interface components {
          * @enum {string}
          */
         EngagementStageFundingStateEnum: "NOT_REQUIRED" | "REQUIRED" | "PENDING" | "FUNDED";
+        /**
+         * @description * `WORK` - Work
+         *     * `MATERIAL_ADVANCE` - Material advance
+         * @enum {string}
+         */
+        EngagementStageKindEnum: "WORK" | "MATERIAL_ADVANCE";
         /**
          * @description * `PENDING` - Pending
          *     * `IN_PROGRESS` - In progress
@@ -4827,6 +4919,7 @@ export interface components {
             /** Format: uuid */
             readonly requirement_id: string;
             readonly category_slug: string;
+            readonly service_name: string;
             readonly archetype: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
             readonly wave: number;
@@ -4839,7 +4932,6 @@ export interface components {
             readonly responds_by: string;
             /** Format: date-time */
             readonly created_at: string;
-            readonly service_name: string;
             readonly answers: unknown;
             readonly additional_details: string;
             readonly budget_min_paise: number | null;
@@ -4866,6 +4958,7 @@ export interface components {
             /** Format: uuid */
             readonly requirement_id: string;
             readonly category_slug: string;
+            readonly service_name: string;
             readonly archetype: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
             readonly wave: number;
@@ -6622,6 +6715,7 @@ export interface components {
             readonly inclusions: unknown;
             readonly exclusions: unknown;
             readonly stages: components["schemas"]["ProposalStage"][];
+            readonly material_lines: components["schemas"]["ProposalMaterialLine"][];
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -6649,6 +6743,7 @@ export interface components {
             minimum_days?: number | null;
             worker_count?: number | null;
             stages?: components["schemas"]["ProposalStageRequest"][];
+            material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
             inclusions?: string[];
             exclusions?: string[];
             warranty_terms?: string;
@@ -6657,6 +6752,54 @@ export interface components {
             commission_treatment?: string;
             /** Format: uuid */
             site_visit_id?: string | null;
+        };
+        /**
+         * @description One material line on an A5 estimate — **not** a stage, and that is the whole point.
+         *
+         *     Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing cement
+         *     sent it as a `ProposalStage` with their own title. A stage is a unit of evidence, approval and
+         *     release, so that made a bag of cement a fundable milestone somebody had to *approve as work*.
+         *     `README.md` is explicit that material money is spent rather than earned and therefore cannot be
+         *     recovered like an unearned work stage; a row type that cannot tell the two apart cannot carry
+         *     that rule (`M2-BE-543`).
+         *
+         *     `quantity` and `unit` are here because a material line without them is unreadable in a
+         *     comparison — "cement, 1,20,000 paise" against "cement, 40 bags at 3,000" is the difference
+         *     between two quotes a Customer can compare and two they cannot. `unit` is free text on purpose:
+         *     bags, cubic metres, running feet and coils are all real, and a closed vocabulary authored here
+         *     would refuse whichever trade nobody thought of.
+         */
+        ProposalMaterialLine: {
+            title: string;
+            /** @default 1 */
+            quantity: number;
+            /** @default  */
+            unit: string;
+            amount_paise: number;
+        };
+        /**
+         * @description One material line on an A5 estimate — **not** a stage, and that is the whole point.
+         *
+         *     Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing cement
+         *     sent it as a `ProposalStage` with their own title. A stage is a unit of evidence, approval and
+         *     release, so that made a bag of cement a fundable milestone somebody had to *approve as work*.
+         *     `README.md` is explicit that material money is spent rather than earned and therefore cannot be
+         *     recovered like an unearned work stage; a row type that cannot tell the two apart cannot carry
+         *     that rule (`M2-BE-543`).
+         *
+         *     `quantity` and `unit` are here because a material line without them is unreadable in a
+         *     comparison — "cement, 1,20,000 paise" against "cement, 40 bags at 3,000" is the difference
+         *     between two quotes a Customer can compare and two they cannot. `unit` is free text on purpose:
+         *     bags, cubic metres, running feet and coils are all real, and a closed vocabulary authored here
+         *     would refuse whichever trade nobody thought of.
+         */
+        ProposalMaterialLineRequest: {
+            title: string;
+            /** @default 1 */
+            quantity: number;
+            /** @default  */
+            unit: string;
+            amount_paise: number;
         };
         ProposalPage: {
             /** Format: uri */
@@ -6802,6 +6945,13 @@ export interface components {
         QuestionAnswerRequest: {
             answer: string;
         };
+        /**
+         * @description * `CUSTOMER` - Customer
+         *     * `VENDOR` - Vendor
+         *     * `OPERATIONS` - Operations
+         * @enum {string}
+         */
+        QuestionAskerRoleEnum: "CUSTOMER" | "VENDOR" | "OPERATIONS";
         QuestionCreateRequest: {
             question: string;
         };
@@ -7085,11 +7235,25 @@ export interface components {
             readonly attachments: components["schemas"]["RequirementAttachment"][];
             readonly server_now: string;
         };
+        /**
+         * @description One question and its answer, on the timeline both parties read.
+         *
+         *     `asked_by_role` is new at 1.26.0 and is not decoration: clarification ran one way until this
+         *     release, so "who asked" was implied by the surface you were looking at. Now that a Customer can
+         *     ask a vendor about a delivered quote, a client with no direction field renders both halves of a
+         *     conversation as though the other side started it, and neither app can tell whose turn it is.
+         *
+         *     Derived by **identity comparison, not by inference**: the requirement records its Customer and
+         *     the invitation records its Partner's user, so the three answers are exact rather than guessed.
+         *     `OPERATIONS` covers an assisted question, which has no route yet and will have one in Wave C6 —
+         *     naming it now is what stops the answer defaulting to `VENDOR` when it arrives.
+         */
         RequirementQuestion: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             readonly invitation: string;
+            readonly asked_by_role: components["schemas"]["QuestionAskerRoleEnum"];
             readonly question: string;
             readonly answer: string;
             /** Format: date-time */
@@ -7464,6 +7628,15 @@ export interface components {
             readonly id: string;
             readonly status: components["schemas"]["SiteVisitStatusEnum"];
             readonly is_plan_visit: boolean;
+            /**
+             * @description The area's zone, or the platform's own as a last resort.
+             *
+             *     A visit cannot exist on a requirement without a serviceable area — `_assert_submittable`
+             *     refuses the submit — so the fallback is unreachable through any live path. It is written as
+             *     the deployment's `TIME_ZONE` rather than a literal so that the one impossible case cannot
+             *     become a second place Hyderabad is hardcoded.
+             */
+            readonly timezone: string;
             readonly fee_paise: number;
             readonly adjusts_against_final_price: boolean;
             /** Format: date-time */
@@ -7789,6 +7962,36 @@ export interface components {
             readonly server_now: string;
         };
         /**
+         * @description A responding vendor, as much of one as the Customer has paid to see.
+         *
+         *     An explicit field list for the same reason `QuoteTeaserSerializer` is one. Before a visit is
+         *     confirmed this is a badge, a rating and a type — no name, no photo, no contact. After
+         *     confirmation the name is disclosed, because a person is entering the Customer's home and must
+         *     be nameable; contact stays masked until the engagement.
+         */
+        VendorCard: {
+            /** Format: uuid */
+            readonly partner_id: string;
+            readonly vendor_type: string;
+            readonly is_verified: boolean;
+            readonly display_name: string | null;
+            readonly distance_band_km: number | null;
+        };
+        /**
+         * @description The A5 responding pool.
+         *
+         *     **No rating field, and that is a decision rather than an omission.** `README.md` lists a rating
+         *     among the four pre-confirmation signals and this platform has no review model — `carts`'
+         *     professional card already refuses to publish one for the same reason. A star count invented
+         *     here would be this serializer deciding what a vendor's reputation is. The field arrives when a
+         *     review aggregate does.
+         */
+        VendorCardList: {
+            readonly vendor_cards: components["schemas"]["VendorCard"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
          * @description * `INVITED` - Invited
          *     * `ACCEPTED` - Accepted
          *     * `QUOTED` - Quoted
@@ -7826,10 +8029,26 @@ export interface components {
          * @enum {string}
          */
         VisitNoShowPartyEnum: "VENDOR" | "CUSTOMER";
+        /**
+         * @description * `NOBODY_ON_SITE` - Nobody was at the address
+         *     * `SITE_INACCESSIBLE` - Could not get access to the site
+         *     * `ADDRESS_WRONG` - The address was wrong or could not be found
+         *     * `VENDOR_DID_NOT_ARRIVE` - The professional never arrived
+         *     * `CANCELLED_ON_THE_DAY` - The other party cancelled on the day
+         *     * `OTHER` - Another reason
+         * @enum {string}
+         */
+        VisitNoShowReasonEnum: "NOBODY_ON_SITE" | "SITE_INACCESSIBLE" | "ADDRESS_WRONG" | "VENDOR_DID_NOT_ARRIVE" | "CANCELLED_ON_THE_DAY" | "OTHER";
+        /**
+         * @description Report that a scheduled visit did not happen.
+         *
+         *     `party` decides the settlement and `reason_code` decides nothing — see `VISIT_NO_SHOW_REASONS`.
+         *     The reason is still required, because "nobody turned up" without a cause is a row Operations
+         *     cannot act on and a vendor cannot appeal.
+         */
         VisitNoShowRequest: {
             party: components["schemas"]["VisitNoShowPartyEnum"];
-            /** @default  */
-            reason_code: string;
+            reason_code: components["schemas"]["VisitNoShowReasonEnum"];
         };
         VisitPlan: {
             /** Format: uuid */
@@ -15586,6 +15805,57 @@ export interface operations {
             };
         };
     };
+    m2_partner_question_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionAnswerRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuestionAnswerRequest"];
+                "multipart/form-data": components["schemas"]["QuestionAnswerRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestion"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     partner_required_consents_list: {
         parameters: {
             query?: never;
@@ -16493,6 +16763,63 @@ export interface operations {
             };
         };
     };
+    m2_customer_question_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["QuestionCreateRequest"];
+                "multipart/form-data": components["schemas"]["QuestionCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestion"];
+                };
+            };
+            /** @description `m2_unlock_required` before an A3 unlock. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_visit_plan_required` before an A5 plan is charged; `m2_requirement_transition_not_allowed` once the request is closed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_quote_reject: {
         parameters: {
             query?: never;
@@ -16859,6 +17186,44 @@ export interface operations {
             };
             /** @description `m2_unlock_not_available` when no usable quote exists yet or the request is already unlocked; `m2_access_price_unavailable` when Operations has loaded no effective price — this **fails closed** rather than charging a guess. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_vendor_card_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorCardList"];
+                };
+            };
+            /** @description `m2_lifecycle_not_supported` on an A3 request. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

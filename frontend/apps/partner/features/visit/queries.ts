@@ -277,12 +277,13 @@ export function useReportCustomerNoShow(invitationId: string) {
               ),
             },
           },
-          // `reason_code` is a free `CharField` with no published vocabulary,
-          // and it is declared required with an empty default. Sent blank
-          // rather than authored: a slug invented here would become the value
-          // Operations reports on, and two clients would invent it differently.
-          // Requested in `frontend-execution-plan.md` §7.
-          body: { party: "CUSTOMER", reason_code: "" },
+          // The §7 request was granted at 1.26.0: `reason_code` is now
+          // `VisitNoShowReasonEnum` and required, so the blank this used to send
+          // would be a `400`. `NOBODY_ON_SITE` is the vendor's own report — they
+          // travelled and found nobody there, which is the only customer no-show
+          // this control can express. The other members belong to the Customer's
+          // side of the same endpoint or to Operations.
+          body: { party: "CUSTOMER", reason_code: "NOBODY_ON_SITE" },
         }),
       ),
     onSuccess: async (visit, input) => {
