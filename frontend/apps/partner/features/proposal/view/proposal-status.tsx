@@ -12,9 +12,11 @@ import {
   describeUsability,
   permissionsFor,
   resolveProposalView,
+  revalidationNoticeFor,
+  traceForInvitation,
   type Proposal,
 } from "../model/proposal-state";
-import { useWithdrawProposal } from "../queries";
+import { useMyProposals, useWithdrawProposal } from "../queries";
 
 /**
  * The quote a vendor already sent, its state, and what they may still do.
@@ -24,22 +26,26 @@ import { useWithdrawProposal } from "../queries";
  * the previous row `SUPERSEDED`, so the customer can always see what they were
  * first offered.
  *
- * ## The state this screen has to admit to
+ * ## The record survives the tab now
  *
- * There is no read that answers "which proposal did I send for this enquiry".
- * Contract 1.21.0 publishes submit, read-by-id and withdraw, and
- * `EnquiryDetail` carries questions and site visits but no proposal. So once the
- * id leaves this tab — a refresh, a second device, tomorrow — the only readable
- * truth is that the invitation is `QUOTED`.
+ * Until 1.24.0 no read answered "which proposal did I send for this enquiry", so
+ * the id lived only as long as the tab that submitted it and this component had
+ * an honest third state for that. **`GET /proposals/?requirement=` is
+ * published**, so the quote is read back from the server on every mount: a
+ * refresh, a second device and a new session all show the same record, and
+ * withdraw is reachable again from any of them.
  *
- * `unreadable` is that fact rendered honestly. Nothing is persisted locally to
- * fake the read: a client-held id survives neither a cleared tab nor another
- * phone, and a screen that works on one machine and not the next is worse than
- * one that is limited on both. The vendor is told plainly and offered the thing
- * that still works — sending a revision, which supersedes whatever is with the
- * customer.
+ * The session's own submission is still accepted as a prop and **wins** over the
+ * list. It is the newest thing that exists — the 201 that produced it has not
+ * necessarily propagated to a cursor page yet — and showing a vendor the quote
+ * they superseded thirty seconds ago would be a regression dressed as a refetch.
  *
- * Requested in `frontend-execution-plan.md` §7.
+ * ## The supersession trace is shown, not just the live row
+ *
+ * Every revision the vendor sent against this invitation is listed under the
+ * current one. That is the record: `submit_proposal` never overwrites, the
+ * customer keeps seeing what they were originally offered, and a dispute is
+ * argued from the chain rather than from the latest row.
  */
 
 const TONE = {
@@ -51,22 +57,36 @@ const TONE = {
 
 export interface ProposalStatusProps {
   readonly enquiryStatus: EnquiryStatus;
-  readonly proposal: Proposal | null;
+  readonly invitationId: string;
   readonly requirementId: string;
+  /** This session's own submission, if there is one. Newer than any list read. */
+  readonly submitted: Proposal | null;
   /** Opens the composer for a revision. */
   readonly onRevise: () => void;
 }
 
 export function ProposalStatus({
   enquiryStatus,
-  proposal,
+  invitationId,
   requirementId,
+  submitted,
   onRevise,
 }: ProposalStatusProps) {
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const withdraw = useWithdrawProposal();
 
-  const view = resolveProposalView({ enquiryStatus, proposal });
+  // Only asked for once the enquiry says a quote exists, or this session sent
+  // one. On an INVITED enquiry there is nothing to find and the request would be
+  // a guaranteed empty page on every open.
+  const shouldRead = enquiryStatus === "QUOTED" || enquiryStatus === "ACCEPTED";
+  const mine = useMyProposals(requirementId, shouldRead);
+
+  const trace = traceForInvitation({
+    proposals: mine.data?.results ?? [],
+    invitationId,
+  });
+  const record = submitted ?? trace.current;
+  const view = resolveProposalView({ enquiryStatus, proposal: record });
 
   if (view.kind === "none") return null;
 
@@ -74,18 +94,35 @@ export function ProposalStatus({
     return (
       <Card className="flex flex-col gap-3 p-4">
         <h2 className="text-sm font-semibold text-text">Your quote</h2>
-        <p className="text-sm leading-6 text-text-secondary">{UNREADABLE_PROPOSAL_NOTICE}</p>
-        <Button variant="outline" onClick={onRevise}>
-          Send a revised quote
-        </Button>
+        {mine.isPending ? (
+          <p className="text-sm leading-6 text-text-secondary">Loading the quote you sent…</p>
+        ) : (
+          <>
+            <p className="text-sm leading-6 text-text-secondary">{UNREADABLE_PROPOSAL_NOTICE}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => void mine.refetch()}
+                loading={mine.isFetching}
+                loadingLabel="Loading"
+              >
+                Try again
+              </Button>
+              <Button variant="ghost" onClick={onRevise}>
+                Send a new quote
+              </Button>
+            </div>
+          </>
+        )}
       </Card>
     );
   }
 
-  const record = view.proposal;
-  const status = describeProposalStatus(record.status);
-  const usability = describeUsability(record.usability);
-  const permissions = permissionsFor({ proposal: record, enquiryStatus });
+  const current = view.proposal;
+  const status = describeProposalStatus(current.status);
+  const usability = describeUsability(current.usability);
+  const revalidation = revalidationNoticeFor(current);
+  const permissions = permissionsFor({ proposal: current, enquiryStatus });
   const presentation = withdraw.error ? describeError(withdraw.error, "mutation") : null;
 
   return (
@@ -93,9 +130,9 @@ export function ProposalStatus({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-text">
           Your quote
-          {record.revision > 1 ? (
+          {current.revision > 1 ? (
             <span className="ml-2 font-normal text-text-secondary">
-              revision {record.revision}
+              revision {current.revision}
             </span>
           ) : null}
         </h2>
@@ -108,40 +145,55 @@ export function ProposalStatus({
 
       <FactList
         items={[
-          { label: "Total", value: formatMoney(record.total_paise) },
+          { label: "Total", value: formatMoney(current.total_paise) },
           {
             label: "Tax",
             value:
-              record.tax_basis === "INCLUSIVE"
+              current.tax_basis === "INCLUSIVE"
                 ? "Included in the total"
-                : `${formatMoney(record.tax_paise)} on top`,
+                : `${formatMoney(current.tax_paise)} on top`,
           },
-          ...(record.rate_paise_per_worker_day !== null
+          ...(current.rate_paise_per_worker_day !== null
             ? [
                 {
                   label: "Rate",
-                  value: `${formatMoney(record.rate_paise_per_worker_day)} per worker per day`,
+                  value: `${formatMoney(current.rate_paise_per_worker_day)} per worker per day`,
                 },
               ]
             : []),
-          ...(record.minimum_days !== null
-            ? [{ label: "Minimum", value: `${record.minimum_days} days` }]
+          ...(current.minimum_days !== null
+            ? [{ label: "Minimum", value: `${current.minimum_days} days` }]
             : []),
-          ...(record.worker_count !== null
-            ? [{ label: "Workers", value: String(record.worker_count) }]
+          ...(current.worker_count !== null
+            ? [{ label: "Workers", value: String(current.worker_count) }]
             : []),
-          ...(record.valid_until !== null
-            ? [{ label: "Valid until", value: timeAgo(record.valid_until) }]
+          ...(current.stages.length > 0
+            ? [
+                {
+                  label: "Broken into",
+                  value: `${current.stages.length} ${current.stages.length === 1 ? "part" : "parts"}`,
+                },
+              ]
             : []),
-          { label: "Sent", value: timeAgo(record.submitted_at) },
+          ...(current.site_visit !== null
+            ? [{ label: "Written", value: "On site, after your visit" }]
+            : []),
+          ...(current.valid_until !== null
+            ? [{ label: "Valid until", value: timeAgo(current.valid_until) }]
+            : []),
+          { label: "Sent", value: timeAgo(current.submitted_at) },
         ]}
       />
 
-      {usability ? (
-        <p className="text-sm leading-6 text-warning-text">{usability}</p>
+      {current.stages.length > 0 ? <StageBreakdown stages={current.stages} /> : null}
+
+      {usability ? <p className="text-sm leading-6 text-warning-text">{usability}</p> : null}
+
+      {revalidation ? (
+        <p className="text-sm leading-6 text-warning-text">{revalidation}</p>
       ) : null}
 
-      {record.vendor_confirmed_at === null ? (
+      {current.vendor_confirmed_at === null ? (
         // A quote Operations captured by phone. It is not shown to the customer
         // until the vendor confirms it, and confirmation has no published route
         // — so this states where it stands rather than offering a button that
@@ -182,6 +234,8 @@ export function ProposalStatus({
         ) : null}
       </div>
 
+      {trace.superseded.length > 0 ? <SupersessionTrace rows={trace.superseded} /> : null}
+
       <ConfirmAction
         open={confirmingWithdraw}
         onOpenChange={setConfirmingWithdraw}
@@ -192,11 +246,83 @@ export function ProposalStatus({
         pending={withdraw.isPending}
         onConfirm={() =>
           withdraw.mutate(
-            { proposalId: record.id, requirementId },
+            { proposalId: current.id, requirementId },
             { onSuccess: () => setConfirmingWithdraw(false) },
           )
         }
       />
     </Card>
+  );
+}
+
+/**
+ * What the quote is broken into, from the published `ProposalStage` shape.
+ *
+ * Until 1.24.0 `stages` was an untyped list and the domain read one key, so
+ * there was nothing stable to render. `{title, deliverable, amount_paise,
+ * ends_on}` is published now — and read defensively, because a stage stored
+ * before the shape existed can carry `label` instead of `title` and must degrade
+ * to a blank name rather than a crash.
+ */
+function StageBreakdown({ stages }: { readonly stages: Proposal["stages"] }) {
+  return (
+    <ul className="flex list-none flex-col gap-2 p-0">
+      {stages.map((stage, index) => (
+        <li
+          key={`${stage.title}-${index}`}
+          className="flex items-start justify-between gap-3 rounded-control border border-line p-3"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text">
+              {stage.title.trim() === "" ? `Part ${index + 1}` : stage.title}
+            </p>
+            {stage.deliverable ? (
+              <p className="mt-0.5 text-sm leading-6 text-text-secondary">{stage.deliverable}</p>
+            ) : null}
+            {stage.ends_on ? (
+              <p className="mt-0.5 text-xs text-text-muted">Done by {stage.ends_on}</p>
+            ) : null}
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-text">
+            {formatMoney(stage.amount_paise)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Everything this quote replaced.
+ *
+ * Read-only and never offered as selectable, because it is not: only the live
+ * row can be chosen. It is here because append-only is the point — a vendor
+ * arguing about what they quoted needs the chain, not the latest number.
+ */
+function SupersessionTrace({ rows }: { readonly rows: readonly Proposal[] }) {
+  return (
+    <details className="rounded-control border border-line p-3">
+      <summary className="min-h-11 cursor-pointer text-sm font-semibold text-text">
+        Earlier versions ({rows.length})
+      </summary>
+      <ul className="mt-2 flex list-none flex-col gap-2 p-0">
+        {rows.map((row) => {
+          const status = describeProposalStatus(row.status);
+          return (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm text-text-secondary">
+                Revision {row.revision} · {formatMoney(row.total_paise)} · sent{" "}
+                {timeAgo(row.submitted_at)}
+              </span>
+              <Badge tone={TONE[status.tone]}>{status.label}</Badge>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs leading-5 text-text-muted">
+        Vsolve never overwrites a quote. The customer can still see each of these, and none of them
+        can be chosen once it has been replaced.
+      </p>
+    </details>
   );
 }

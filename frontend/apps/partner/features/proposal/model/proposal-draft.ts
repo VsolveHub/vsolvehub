@@ -60,17 +60,21 @@ export interface A3Draft {
 /**
  * One stage of a project quote.
  *
- * ## This shape is client-authored, and that is a gap
+ * ## The wire shape is published now
  *
- * `ProposalCreateRequest.stages` is `unknown[]` and the domain reads exactly one
- * key from each entry — `amount_paise`, in `_assert_a5_shape`. Everything else a
- * stage needs to be readable by a customer (what it delivers, when it ends) has
- * no published shape, so two vendors could send two incomparable structures and
- * the customer's comparison view would have nothing stable to render.
+ * At 1.21.0 `ProposalCreateRequest.stages` was `unknown[]` and the domain read
+ * exactly one key from each entry — `amount_paise`, in `_assert_a5_shape` — so
+ * everything a customer needs to *read* a stage was client-authored and two
+ * vendors could send two incomparable structures. **1.24.0 publishes
+ * `ProposalStage` / `ProposalStageRequest`: `{title, deliverable, amount_paise,
+ * ends_on}`.** `toA5Request` now maps onto the generated type, so this draft is
+ * a form model rather than a private wire contract, and a field the server
+ * renames breaks the build here.
  *
- * The keys below are `snake_case` to match the one key the server does read, and
- * the request for a published `ProposalStage` schema is logged in
- * `frontend-execution-plan.md` §7.
+ * `amount_paise` is **required and non-null** on the published shape. It is
+ * nullable here because a half-typed form legitimately has no amount yet; the
+ * two are reconciled at the wire boundary, which throws rather than sending a
+ * stage worth nothing.
  */
 export interface StageDraft {
   /** What this stage is. Sent as `title`. */
@@ -284,9 +288,44 @@ export function toA3Request(input: {
   };
 }
 
+/**
+ * Stage drafts to the published `ProposalStageRequest[]`.
+ *
+ * Throws on a null amount rather than coercing it to zero. Only reachable once
+ * `validateA5` has returned nothing, so the throw is a programming-error guard
+ * on the one field whose absence would otherwise become a real stage quoted at
+ * no money.
+ */
+export function toStageRequests(
+  stages: readonly StageDraft[],
+): NonNullable<ProposalCreateRequest["stages"]> {
+  return stages.map((stage) => {
+    if (stage.amountPaise === null) {
+      throw new Error("A stage with no amount cannot be submitted.");
+    }
+    return {
+      title: stage.title.trim(),
+      deliverable: stage.deliverable.trim(),
+      amount_paise: stage.amountPaise,
+      ends_on: stage.endsOn,
+    };
+  });
+}
+
 export function toA5Request(input: {
   readonly invitationId: string;
   readonly draft: A5Draft;
+  /**
+   * The completed plan visit this estimate was written on, for an A5 on-site
+   * estimate.
+   *
+   * `ProposalCreateRequest.site_visit_id` landed at 1.24.0 and closed a defect
+   * rather than adding a feature: `submit_proposal` has always taken one and no
+   * serializer published it, so **an A5 on-site estimate could not be submitted
+   * over HTTP at all**. Omitted for the remote path, which the revision-3 flow
+   * retires but which the wire still accepts.
+   */
+  readonly siteVisitId?: string | null;
 }): ProposalCreateRequest {
   const { draft } = input;
   const total = a5Total(draft);
@@ -299,16 +338,12 @@ export function toA5Request(input: {
     total_paise: total,
     tax_basis: draft.taxBasis,
     tax_paise: draft.taxBasis === "EXCLUSIVE" ? draft.taxPaise : 0,
-    stages: draft.stages.map((stage) => ({
-      title: stage.title.trim(),
-      deliverable: stage.deliverable.trim(),
-      amount_paise: stage.amountPaise,
-      ends_on: stage.endsOn,
-    })),
+    stages: toStageRequests(draft.stages),
     inclusions: cleanLines(draft.inclusions),
     exclusions: cleanLines(draft.exclusions),
     warranty_terms: draft.warrantyTerms.trim(),
     valid_until: draft.validUntil,
+    ...(input.siteVisitId ? { site_visit_id: input.siteVisitId } : {}),
   };
 }
 

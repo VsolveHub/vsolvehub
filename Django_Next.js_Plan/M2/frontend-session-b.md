@@ -102,6 +102,12 @@
 > clarification all stand. The remote A5 quote path is retired at the flow level, so once C2 lands,
 > a proposal submit without a completed visit will be refused for A5 — the composer's mode, not its
 > fields, is what changes. Task detail in `03-frontend-tasks.md` §"A5 visit response".
+>
+> **Both are built as of 2026-08-13 against contract 1.24.0 — see § Wave B2r3 below.** One thing in
+> the paragraph above turned out otherwise: the remote A5 composer is not merely re-moded, it is
+> **unmounted**. An A5 estimate must reference a completed visit, so the remote form would be one the
+> server declines; `a5-composer.tsx` stays in the tree carrying a note that says so, and
+> `onsite-composer.tsx` took its place on the route.
 
 ## Standing constraints
 
@@ -374,6 +380,156 @@ submits a comparable proposal — with no unsupported contact or pricing shortcu
 
 ---
 
+## Wave B2r3 — the A5 visit response and the on-site estimate (`FE-314`, `FE-315`)
+
+**Depends on:** contract **1.24.0** (Wave C2). **Gate:** an A5 vendor confirms a visit slot on one
+screen and submits an estimate from the site, and neither is possible without the other.
+
+- [~] `M2-FE-314` built — static gates green, owner manual verification pending.
+- [~] `M2-FE-315` built — static gates green, owner manual verification pending.
+
+**Tests deferred per the build-first amendment** (`task.md` §"Build-first amendment"). None written,
+none run. The wave gate is the static gates plus the smoke script below.
+
+### Task zero — `apps/partner` was red at head, and every error was a re-point
+
+The client was regenerated at 1.24.0 in `b7c2465`, which left this column knowingly red. Six errors,
+all in owned files, all fixed before anything new was built:
+
+| File | What 1.24.0 changed | Fix |
+|---|---|---|
+| `enquiry/fixtures.ts` | `EnquiryDetail` requires `service_name`, `required_tax_basis`, `proposals`, `server_now`; `SiteVisit` requires six new fields; `Proposal` requires `rejection_reason`, `site_visit`, `revalidation_requested_at` | Fields added. A second fixture, `planVisit()`, was added beside `siteVisit()` — `is_plan_visit` decides how the whole record reads, and one fixture for both would hide the field that decides it. |
+| `enquiry/queries.ts` | `reason_code` is `InvitationDeclineReasonEnum` | `DeclineInput.reasonCode` typed against the enum; `decline-dialog.tsx` **narrows** rather than casts, so a select value outside the published set is refused client-side instead of earning a 400. |
+| `enquiry/model/decline-reasons.ts` | the vocabulary is published | Rewritten as `Record<DeclineReasonCode, …>` over the generated enum. The retired `crew_too_small` is **gone rather than mapped** — `NO_CAPACITY` is the server's name for the same fact. |
+| `proposal/model/proposal-state.ts` | `ACCEPTED` and `LAPSED` | Written as three separate stories: `REJECTED` is the *Customer's* refusal, `LAPSED` is this vendor declining or timing out after selection, `ACCEPTED` is them reconfirming. `permissionsFor` refuses supersession from all three. |
+| `proposal/model/proposal-draft.ts` | `ProposalStage.amount_paise` is non-null | `toStageRequests` maps onto the generated type and **throws** on a null amount rather than coercing to zero — the one field whose absence would otherwise become a real stage quoted at no money. |
+
+### `FE-314` — the visit response
+
+`GET`/`POST /api/v1/partner/enquiries/{id}/visit-slots/`, on the A5 enquiry detail, replacing
+Accept/Decline. There is no separate accept: `confirm_visit_slot` takes the quote slot, the soft
+capacity hold and a hard reservation on the shared grid in one command.
+
+**The five rules the screen is built on, and where each one lives:**
+
+- **The browser never computes availability.** `model/slot-grid.ts` maps the payload and nothing
+  else — no slot is filtered, re-derived or judged bookable. `capacity` is absent from this grid
+  (unlike the A1 one) because on a single-vendor grid it would be a readout of that vendor's own
+  diary depth.
+- **`id` is a signed token and is treated as opaque.** Posted back unchanged, never parsed, never
+  reconstructed into a time — the label comes from `starts_at`/`ends_at` beside it. Nothing is
+  persisted: a selection restored from storage would be a token the server refuses, presented as a
+  choice the vendor already made.
+- **Tokens expire, so the picker re-reads.** `EXPIRING_STATE`, refetch on focus and reconnect, an
+  explicit "Refresh times" that clears the selection with the grid, and
+  `m2_visit_slot_unavailable` → drop the selection, refetch, pick again. **The same id is never
+  resent**, and the mutation does not retry, because a retry would spend a round trip earning the
+  same refusal.
+- **An ineligible vendor gets a grid, not an error.** `gridShape` distinguishes four cases; when
+  *every* slot reads `NO_CAPACITY` the grid renders with "your service, your area or your calendar
+  does not cover this work — nothing is wrong with your account". A 403 in its place would tell a
+  vendor their account is broken. `closed` (mixed past / too soon / outside hours) is a different
+  sentence over the same grid, and `empty` is the one case with nothing to draw.
+- **`opens_plan_checkout` is held, not confirmed.** `describeConfirmation` returns two different
+  outcomes: the first vendor's slot is *held* while the Customer pays, reads `REQUESTED`, and
+  **lapses harmlessly if they never pay** — with "do not travel yet" said in those words. Showing it
+  as confirmed would promise a vendor a job nobody has bought.
+
+Decline is on the same screen, from the published vocabulary. `visit-day-panel.tsx` carries arrival,
+completion and the customer no-show report — completion is what stamps `estimate_due_at`, so without
+it `FE-315`'s guard would have no way to be satisfied and the estimate would be unreachable.
+
+### `FE-315` — the on-site estimate
+
+Its own route, `/projects/enquiries/[invitationId]/estimate`, because it is opened at a different
+moment and in a different place: standing at the customer's address after the visit, not at a desk
+deciding whether to travel. Sharing a scroll with the requirement summary, the clarification thread
+and the disclosure notice would put four screens of reading above the first field.
+
+- **Working days are the schedule.** The vendor types days; the screen derives the end date and
+  **states the arithmetic** — every day counted from the start, weekends included. A working-week
+  rule would need a holiday calendar this client does not have and the server does not publish for
+  `ends_on`, and a silently skipped Sunday is a date the vendor did not agree to. `ends_on` is
+  optional on the wire, so leaving days blank sends no date.
+- **Material lines are their own rows**, entered and totalled separately from labour.
+- **`site_visit_id` is sent**, which is the field that made this path submittable at all.
+- **The guard is explained, never a dead button.** The submit stays enabled even when this screen
+  believes the visit is open, because that belief can be a minute old — the vendor may have closed
+  the visit in another tab. The state is explained above the form with the one action that fixes it,
+  and the server's `m2_visit_not_completed` routes to the same explanation.
+- **Phone-first:** `inputMode="numeric"` for days, `"decimal"` for rupees, 44–48px targets, and
+  save-on-blur to `localStorage` scoped per invitation, cleared on a successful submit. A stored
+  draft is **narrowed before it is trusted** — it survives a deploy, so it can have been written by
+  an older bundle.
+- **Prefill, not placeholder.** Every prefilled value is a field the server sent: `duration_days`,
+  `requested_start`, and `required_tax_basis` *only when non-blank* — a blank basis means this
+  vendor sets it for everyone, which is a decision rather than a default.
+
+### Four §7 rows closed by reading one field each
+
+- **`GET /proposals/?requirement=`** — mounted as `useMyProposals` on `m2QueryKeys.proposals.mine`,
+  the key the frozen factory has held since Wave 0. A Partner reads their own quote back after a
+  reload, on a second device, in a new session; withdraw and the supersession trace are wired to it,
+  and `proposal-status.tsx` renders the replaced revisions beneath the live row. This was §7's
+  "largest hole in Wave B2".
+- **`required_tax_basis`** — the composer names the basis a second vendor is compared on, and says
+  plainly when a blank one means this vendor fixes it.
+- **`server_now`** — `unwrap` feeds it into `serverClock` at millisecond precision, so the
+  `responds_by` countdown is calibrated by the act of reading the enquiry. `enquiry-deadline.tsx`
+  reads nothing new on purpose: threading it through props would give that component a second,
+  staler clock than the one the app shares.
+- **`service_name`** — the detail titles itself from the catalogue's own name. The **inbox list
+  still de-slugs `category_slug`**, because 1.24.0 put the field on `EnquiryDetail` and not on
+  `EnquirySummary`. Logged.
+
+### Routes
+
+| Route | What renders |
+|---|---|
+| `/projects/enquiries/[invitationId]` | Visit-slot confirmation, the visit-day panel, the quote record and the way into the estimate — replacing accept/decline for A5 |
+| `/projects/enquiries/[invitationId]/estimate` | **New.** The on-site composer, `ƒ` and `robots: noindex`, behind `WorkspaceRoute` with `actions: ["enquiry.view"]` |
+| `/workforce/enquiries/[invitationId]` | Unchanged — A3 keeps accept, decline and the one-screen composer |
+
+### Smoke script — the exact clicks
+
+**Confirm a visit slot.** Sign in as a Partner approved for `A5_CUSTOM_PROJECT` → `/projects` →
+**Enquiries** → open a project enquiry in `INVITED`. Expect: the service's real name in the heading,
+the requirement summary, then **Confirm a visit slot** with a day row and a time grid. Check the
+grid says which timezone it is in and how long the visit takes. Tap a time → the button reads
+*Confirm 9:00 am – 9:45 am* → tap it → the dialog states the commitment (travel there, estimate
+there, no estimate pays nothing) → **Confirm the visit**. Expect one of two panels: *Your time is
+held* with "do not travel yet" (you are the first vendor and the customer is paying now), or *Visit
+confirmed*. Leave the screen open five minutes, tap **Refresh times**, and confirm the selection
+clears. To see the stale-token path, confirm the same slot from a second browser first — expect
+*That time has gone* and a refreshed grid, never a retry of the same time. To see the ineligible
+grid, open an enquiry outside your service area — expect a full grid with every slot struck through
+and "no slot on this request is open to you", not an error page.
+
+**Submit an on-site estimate.** On that enquiry, after the slot is `SCHEDULED`: **I am on site** →
+**Close the visit** → confirm. Expect the *Estimate due in* readout to appear. Tap **Write the
+estimate** → `/projects/enquiries/{id}/estimate`. Expect the start date prefilled from the
+customer's own answer and the first part's working days prefilled from `duration_days`. Fill Part 1
+(name, days, price), **Add another part**, **Add a material** (description, cost), set the tax
+basis, tap **Send the estimate**. Expect Django's own total echoed on the confirmation. To see the
+guard: open `/estimate` *before* closing the visit — expect the amber "Close the visit before you
+send this" block with a link back, and an enabled submit that earns the same explanation from the
+server. To see the autosave: type into two fields, blur, reload the page — the values are still
+there.
+
+### Static gates — 2026-08-13
+
+- `npx eslint apps/partner apps/admin packages/query --max-warnings 0` — **clean**.
+- `turbo run typecheck --filter=partner --filter=admin --filter=@vsolve/query` — **3 of 3**.
+- `turbo run build --filter=partner` — **succeeds**; all M2 routes `ƒ`, including the new
+  `/projects/enquiries/[invitationId]/estimate`.
+- **No test was run and none was written** — build-first amendment.
+
+One gate note worth keeping: `pnpm lint` across the whole workspace is red on two unused imports in
+`apps/customer` (`quotes-screen.tsx`, `review-screen.tsx`), which is Session A's live column. Not
+touched, and not in this column's scope to fix.
+
+---
+
 ## Wave B3 — Partner fulfilment (workforce and projects)
 
 **Depends on:** B2. **Watch:** Session A builds the customer half of the same spine this wave. Read
@@ -454,6 +610,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | Wave | Scope | Built `[~]` | Integrated `[x]` | Evidence |
 |---|---|---|---|---|
 | B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-12 — 1399/1399 frontend tests, lint clean, 9/9 typecheck, partner build green. `GET /partner/workspaces/` wired and all 7 registry routes mounted. `FE-105` not started; the registration views are still route-less, so nothing exceeds `[~]`. |
+| B2r3 | `FE-314..315` | `[~]` 2 of 2 | `[ ]` | 2026-08-13 — the A5 visit response and the on-site estimate, against contract 1.24.0. `apps/partner` was red at head from the regeneration and is green. Lint clean on owned paths, typecheck 3/3, partner build green with the new `/estimate` route dynamic. **Tests deferred per the build-first amendment.** 12 §7 rows appended, 6 of them closures. |
 | B2 | `FE-301..313` | `[~]` 13 of 13 | `[ ]` | 2026-08-12 — built and wired against contract 1.21.0 on 4 routes. Lint clean, 9/9 typecheck, partner build green, all 4 routes dynamic. **12 unit/component test files and 1 Playwright spec written and not run** — see the owner verification queue in `task.md`. 23 gaps logged in plan §7, of which 3 are backend defects (declared list shape vs. the page envelope Django sends, the inert wage-floor guard, the unreconciled A3 total) and 1 is structural (a Partner cannot read their own quote back). |
 | B3 | `FE-501..508`, `FE-601..607` | `[ ]` | `[ ]` | |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |

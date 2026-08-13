@@ -3,7 +3,12 @@
 import { Button, Dialog, Field, Select } from "@vsolve/ui";
 import { useId, useState } from "react";
 
-import { DECLINE_REASONS, findDeclineReason } from "../model/decline-reasons";
+import {
+  DECLINE_REASONS,
+  asDeclineReasonCode,
+  findDeclineReason,
+  type DeclineReasonCode,
+} from "../model/decline-reasons";
 
 /**
  * Turning an enquiry down, with the reason that makes the next invitation useful.
@@ -31,7 +36,7 @@ import { DECLINE_REASONS, findDeclineReason } from "../model/decline-reasons";
 export interface DeclineDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly onDecline: (reasonCode: string) => void;
+  readonly onDecline: (reasonCode: DeclineReasonCode) => void;
   readonly pending: boolean;
   /** A refusal from the last attempt, already presented. Kept visible in the dialog. */
   readonly error?: string | null;
@@ -53,8 +58,13 @@ export function DeclineDialog({
 
   const submit = () => {
     setTouched(true);
-    if (reasonCode === "") return;
-    onDecline(reasonCode);
+    // Narrowed against the published vocabulary rather than cast. The `<select>`
+    // can only hold a value this component rendered, so a miss here means the
+    // enum moved under the build — and posting an unpublished code would earn a
+    // 400 the vendor cannot act on.
+    const code = asDeclineReasonCode(reasonCode);
+    if (code === null) return;
+    onDecline(code);
   };
 
   return (

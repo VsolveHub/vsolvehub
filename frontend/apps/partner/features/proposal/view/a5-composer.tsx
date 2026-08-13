@@ -26,6 +26,20 @@ import { ProposalTotal } from "./proposal-total";
  * The A5 project quote: stages, what each one delivers, and the terms around
  * them.
  *
+ * ## Not mounted, as of revision 3 — and kept rather than deleted
+ *
+ * ADR-0008 makes A5 **visit-first**: an estimate must reference a `COMPLETED`
+ * site visit, and `m2_visit_not_completed` (reachable since 1.24.0 published
+ * `site_visit_id`) refuses one that does not. This composer sends no visit, so
+ * mounting it would be offering a vendor a long form the server now declines.
+ * `features/proposal/view/onsite-composer.tsx` replaced it on the A5 route.
+ *
+ * It stays in the tree because the remote path is retired at the *flow* level
+ * and not on the wire — `POST /proposals/` still accepts a submission without a
+ * visit, which is what an Operations-assisted capture would use — and because
+ * deleting a composer to re-derive it at Wave B4 is worse than an unmounted file
+ * that says why it is unmounted.
+ *
  * Closes `M2-FE-309`. Longer than the A3 composer on purpose — a project quote
  * is what the customer compares against two others and what the engagement's
  * stages are later funded from, so the flow-weight budget names only the A3

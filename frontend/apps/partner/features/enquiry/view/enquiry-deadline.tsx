@@ -16,16 +16,21 @@ import {
  * Closes `M2-FE-304`. Three rules, all of them the reason this is a component
  * rather than a line of JSX in the card:
  *
- * 1. **The countdown runs on the server clock.** `useServerCountdown` reads
- *    `serverClock`, which calibrates from the `Date` header on every response. A
- *    device two minutes fast would otherwise show a vendor a dead enquiry that
- *    Django still considers live, and the vendor would not take the job.
+ * 1. **The countdown runs on the server clock, calibrated by the read that
+ *    produced this deadline.** `useServerCountdown` reads `serverClock`, and
+ *    `EnquiryDetail.server_now` (1.24.0) is fed into it by `@vsolve/api-client`'s
+ *    `unwrap` on every response that carries one — at millisecond precision,
+ *    which outranks the `Date` header's one-second granularity and wins the
+ *    sample-selection rule in `server-clock.ts`.
  *
- *    The enquiry reads publish no `server_now` field — unlike every other M2
- *    read — so calibration here is header-only, at RFC 7231's one-second
- *    granularity. Fine for a deadline hours away; requested anyway in
- *    `frontend-execution-plan.md` §7, because it is the one read where a clock
- *    is load-bearing.
+ *    That closes the §7 request: this was the one M2 read carrying a hard
+ *    `responds_by` and no server reference beside it. A device two minutes fast
+ *    would otherwise show a vendor a dead enquiry that Django still considers
+ *    live, and the vendor would not take the job.
+ *
+ *    Nothing here reads `server_now` directly, deliberately. Threading it
+ *    through props would give this component a second, staler clock than the one
+ *    the whole app already shares.
  *
  * 2. **Reaching zero expires nothing.** Django expires invitations on its own
  *    schedule and `status` is the only thing that knows. So a passed deadline

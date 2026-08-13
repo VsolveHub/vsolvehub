@@ -37,13 +37,19 @@ export function enquiryDetail(
 ): Schemas["EnquiryDetail"] {
   return {
     ...enquirySummary(),
+    service_name: "Housekeeping staff",
     answers: { worker_count: 6, duration_days: 4, site_access: "Service lift after 8am" },
     additional_details: "Two floors, deep clean before a handover.",
     budget_min_paise: null,
     budget_max_paise: 4_000_000,
+    // Blank is the ordinary state: no vendor has quoted yet, so no basis is
+    // forced. A value here means somebody else already fixed it.
+    required_tax_basis: "",
     decline_reason_code: "",
+    proposals: [],
     questions: [],
     site_visits: [],
+    server_now: "2026-08-13T06:00:00Z",
     ...overrides,
   };
 }
@@ -66,12 +72,34 @@ export function siteVisit(overrides: Partial<Schemas["SiteVisit"]> = {}): Schema
   return {
     id: "44444444-4444-4444-8444-444444444444",
     status: "REQUESTED",
+    // The ad-hoc vendor-priced visit, not a plan slot. `planVisit` below is the
+    // A5 shape; the two read differently enough that one fixture for both would
+    // hide the field that decides which.
+    is_plan_visit: false,
     fee_paise: 50_000,
     adjusts_against_final_price: true,
     scheduled_for: null,
+    duration_minutes: null,
+    arrival_confirmed_at: null,
+    arrival_method: "NON_OTP_FALLBACK",
     completed_at: null,
+    estimate_due_at: null,
+    cancellation_reason_code: "",
     ...overrides,
   };
+}
+
+/** A confirmed A5 plan visit: paid out of the visit plan, opens an estimate window. */
+export function planVisit(overrides: Partial<Schemas["SiteVisit"]> = {}): Schemas["SiteVisit"] {
+  return siteVisit({
+    id: "66666666-6666-4666-8666-666666666666",
+    status: "SCHEDULED",
+    is_plan_visit: true,
+    adjusts_against_final_price: false,
+    scheduled_for: "2026-08-18T04:30:00Z",
+    duration_minutes: 45,
+    ...overrides,
+  });
 }
 
 export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas["Proposal"] {
@@ -82,6 +110,11 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     revision: 1,
     status: "SUBMITTED",
     usability: "USABLE",
+    // `NOT_CHOSEN` is the enum's zero-information member; it is only meaningful
+    // once `status` is REJECTED, which this fixture is not.
+    rejection_reason: "NOT_CHOSEN",
+    site_visit: null,
+    revalidation_requested_at: null,
     rate_paise_per_worker_day: 90_000,
     minimum_days: 4,
     worker_count: 6,

@@ -44,13 +44,43 @@ export interface EnquiryRow {
 }
 
 export interface EnquiryRecord extends EnquiryRow {
+  /**
+   * The catalogue's own name for the service (1.24.0).
+   *
+   * The detail screen used to title itself by de-slugging `category_slug`, which
+   * is `variant.service.slug` and misnamed besides. A slug is a routing key, not
+   * a name, and "ac-repair-servicing" title-cased is not what the catalogue
+   * calls it. Published now, so the slug is no longer formatted into a heading.
+   */
+  readonly serviceName: string;
   readonly answers: AnswerMap;
   readonly additionalDetails: string;
   readonly budgetMinPaise: number | null;
   readonly budgetMaxPaise: number | null;
+  /**
+   * The basis every quote on this requirement is compared on, or blank (1.24.0).
+   *
+   * `_required_tax_basis` forces every quote onto whichever basis the first
+   * vendor used and refuses a mismatch — previously against a vendor the second
+   * one could not see. Blank means no vendor has fixed it yet and **this vendor
+   * sets it**; a value means it is already decided and choosing the other one
+   * earns a refusal.
+   */
+  readonly requiredTaxBasis: string;
   readonly declineReasonCode: string;
   readonly questions: readonly Schemas["RequirementQuestion"][];
   readonly siteVisits: readonly Schemas["SiteVisit"][];
+  /**
+   * The server's own clock at the moment this enquiry was read (1.24.0).
+   *
+   * The `responds_by` countdown is measured against this, not against the
+   * device. `@vsolve/api-client`'s `unwrap` feeds any `server_now` in a response
+   * body straight into `serverClock` at millisecond precision, which outranks
+   * the `Date` header's one-second granularity — so every countdown on this
+   * screen is calibrated by the act of reading it. Kept on the record as well
+   * because "as of when" is a thing a screen can legitimately show.
+   */
+  readonly serverNow: string;
 }
 
 /** A declared-required string that the database allows to be null. */
@@ -79,12 +109,58 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
 export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryRecord {
   return {
     ...readEnquiryRow(detail),
+    serviceName: detail.service_name,
     answers: readAnswers(detail.answers),
     additionalDetails: detail.additional_details,
     budgetMinPaise: detail.budget_min_paise,
     budgetMaxPaise: detail.budget_max_paise,
+    requiredTaxBasis: detail.required_tax_basis,
     declineReasonCode: detail.decline_reason_code,
     questions: detail.questions,
     siteVisits: detail.site_visits,
+    serverNow: detail.server_now,
   };
+}
+
+/* ---------------------------------------------------------------------------
+   Site visits
+   --------------------------------------------------------------------------- */
+
+/**
+ * The A5 plan visit on this enquiry, or nothing.
+ *
+ * `is_plan_visit` is published (1.24.0) precisely so a client does not infer it
+ * from `fee_paise`. A plan visit is paid out of the Customer's visit plan,
+ * occupies one of its shares and opens the post-visit estimate window when it
+ * completes; an ad-hoc visit is a vendor-priced journey with none of that behind
+ * it. Rendering the two as one thing with a different price is the mistake the
+ * flag exists to prevent.
+ *
+ * At most one plan visit exists per invitation — one vendor takes one share — so
+ * the newest is returned when the server sends more than one, which it does
+ * after a cancelled slot is rebooked.
+ */
+export function planVisitOf(
+  visits: readonly Schemas["SiteVisit"][],
+): Schemas["SiteVisit"] | null {
+  const plan = visits.filter((visit) => visit.is_plan_visit);
+  if (plan.length === 0) return null;
+  // Later `scheduled_for` wins; a visit with no time yet sorts last, because a
+  // held slot awaiting the Customer's payment is not the one to estimate on.
+  return (
+    plan
+      .slice()
+      .sort((a, b) => (b.scheduled_for ?? "").localeCompare(a.scheduled_for ?? ""))[0] ?? null
+  );
+}
+
+/** Visit statuses from which no further vendor action is possible. */
+const VISIT_CLOSED: readonly Schemas["SiteVisitStatusEnum"][] = [
+  "CANCELLED",
+  "VENDOR_NO_SHOW",
+  "CUSTOMER_NO_SHOW",
+];
+
+export function isVisitClosed(status: Schemas["SiteVisitStatusEnum"]): boolean {
+  return VISIT_CLOSED.includes(status);
 }

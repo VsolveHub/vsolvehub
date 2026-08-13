@@ -13,21 +13,30 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * Submitting, reading and withdrawing this vendor's own quotes (contract 1.21.0).
+ * Submitting, reading and withdrawing this vendor's own quotes (contract 1.24.0).
  *
- * `M2-FE-308..313`. Three operations exist and no fourth: there is no list, no
- * patch and no delete, and a revision is another `POST /proposals/` rather than
- * an edit — `submit_proposal` marks the previous row `SUPERSEDED` and creates a
- * new one, so what the customer was originally offered survives a dispute.
+ * `M2-FE-308..313`, `M2-FE-315`. There is no patch and no delete, and a revision
+ * is another `POST /proposals/` rather than an edit — `submit_proposal` marks the
+ * previous row `SUPERSEDED` and creates a new one, so what the customer was
+ * originally offered survives a dispute.
  *
- * ## Why there is no proposal query keyed by enquiry
+ * ## The list read exists now, and it closes the largest hole in Wave B2
  *
- * Because there is no endpoint for one. `m2QueryKeys.proposals.mine(requirementId)`
- * exists in the frozen key factory and is deliberately **not mounted here** —
- * `m2-keys.ts` carries the rule that a key may not be used until its endpoint is
- * published, and inventing a read that walks proposal ids the client happens to
- * remember would be the same thing with extra steps. See
- * `proposal-state.resolveProposalView` for how the screen degrades instead.
+ * At 1.21.0 there was no way to answer "which proposal did I send for this
+ * enquiry": submit, read-by-id and withdraw, and `EnquiryDetail` carried
+ * questions and site visits but no proposal. A vendor could submit a quote and
+ * reach it only by remembering its id, so withdraw, the eight proposal states
+ * and the whole supersession trace ended when the tab closed.
+ *
+ * **`GET /api/v1/proposals/` (`m2_proposal_list`) is published at 1.24.0** — a
+ * cursor page scoped to the caller with an optional `requirement` filter. It
+ * mounts on `m2QueryKeys.proposals.mine(requirementId)`, which the frozen key
+ * factory has held for exactly this since Wave 0, so nothing about the
+ * invalidation table changes.
+ *
+ * The `requirement` filter narrows a set the caller already owns — the queryset
+ * is scoped to their own proposals *first* — so it cannot be used to discover a
+ * request they were never invited to.
  *
  * ## Idempotency
  *
@@ -82,6 +91,52 @@ export function useProposal(proposalId: string | null) {
         }),
       ),
     enabled: proposalId !== null && proposalId !== "",
+    ...M2_FRESHNESS.proposals,
+    retry: (failureCount, error) =>
+      error instanceof ApiRequestError && [401, 403, 404].includes(error.status)
+        ? false
+        : failureCount < 2,
+  });
+}
+
+/**
+ * One page of this vendor's own quotes, plus whether the server is holding more.
+ *
+ * Projected down to what the screens use, on the `readEnquiryPage` precedent: a
+ * non-null `next` keeps carrying a truncation notice until the cursor is
+ * threaded through, rather than a silently short list.
+ */
+export interface ProposalPage {
+  readonly results: readonly Proposal[];
+  readonly next: string | null;
+}
+
+/**
+ * This vendor's quotes for one requirement — every revision, append-only.
+ *
+ * Scoped by requirement rather than by invitation because that is the filter the
+ * server publishes; a vendor re-invited on a second wave holds two invitations
+ * on one requirement, and the screen narrows to its own with
+ * `proposal-state.traceForInvitation`. Doing that narrowing client-side costs
+ * one comparison and avoids a second endpoint.
+ *
+ * `EXPIRING_STATE` through `M2_FRESHNESS.proposals`: a quote's `status` moves
+ * without the vendor — the customer selects, rejects or lets it lapse, and
+ * `expired_proposal_ids` sweeps a lapsed `valid_until` — so a cached list is a
+ * list of commitments that may already have been decided.
+ */
+export function useMyProposals(requirementId: string, enabled = true) {
+  return useQuery({
+    queryKey: m2QueryKeys.proposals.mine(requirementId),
+    queryFn: async (): Promise<ProposalPage> => {
+      const page = await request(() =>
+        getApiClient().GET("/api/v1/proposals/", {
+          params: { query: { requirement: requirementId } },
+        }),
+      );
+      return { results: page.results, next: page.next };
+    },
+    enabled: enabled && requirementId !== "",
     ...M2_FRESHNESS.proposals,
     retry: (failureCount, error) =>
       error instanceof ApiRequestError && [401, 403, 404].includes(error.status)

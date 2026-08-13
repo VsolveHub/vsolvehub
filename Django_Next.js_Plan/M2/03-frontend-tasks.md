@@ -343,11 +343,13 @@ understands exactly when and whether they will be asked to pay.
 - [~] `M2-FE-303` Implement accept and decline with reason capture, stale-state handling and
   duplicate-click protection.
   Three layers of duplicate protection: a disabled control, a stable `Idempotency-Key`, `retry: false`.
-  **The decline vocabulary is client-owned** — the server publishes none.
+  **The decline vocabulary is the server's now** — `InvitationDeclineReasonEnum` at 1.24.0, rendered
+  from the generated type, so a code renamed on the server fails a type check rather than a request.
 - [~] `M2-FE-304` Show countdowns as guidance but rely on backend status for expiry and slot ownership;
   present business-hours deadlines truthfully. `GAP-014`
   A passed deadline stops offering an accept and never announces an expiry. "No deadline" is a real
-  state, not a zero.
+  state, not a zero. The countdown is calibrated against **`EnquiryDetail.server_now`** (1.24.0),
+  which `unwrap` feeds into `serverClock` at millisecond precision — no device clock is involved.
 
 ### Safe clarification
 
@@ -356,8 +358,12 @@ understands exactly when and whether they will be asked to pay.
 - [~] `M2-FE-306` Add callback request/scheduling and **paid** site-visit request flows, showing the fee
   and how it adjusts against the final price, without exposing personal numbers before server-authorized
   disclosure. `SIM-08`
-  The visit request is built. **Scheduling has no route and no callback endpoint exists at all** —
-  both stated on screen rather than faked.
+  The visit request is built. **`POST /site-visits/{id}/schedule/` is published (1.22.0) and this
+  app still does not call it for an ad-hoc visit** — scheduling takes both parties, and a one-sided
+  date picker would offer a time nobody agreed to. **No callback endpoint exists at all.** Both
+  stated on screen rather than faked. The A5 *plan* visit has neither problem: `confirm_visit_slot`
+  books it on the shared grid in one command (`M2-FE-314`), and the panel no longer lists it —
+  `is_plan_visit` separates the two.
 - [~] `M2-FE-307` Display consent and safety guidance before contact disclosure; record the server
   outcome and never reveal contact data from cached client state after revocation.
   **No disclosure surface exists**, so there is no consent to record and no cached contact to revoke.
@@ -370,36 +376,60 @@ understands exactly when and whether they will be asked to pay.
   Five controls, fixed by `A3_COMPOSER_FIELDS` and asserted against the DOM — a sixth fails a test.
 - [~] `M2-FE-309` Build the A5 composer for deliverables, line items, stages, taxes, exclusions,
   assumptions, dates, warranty and validity.
-  Stages carry the deliverables, line items and dates. **Assumptions has no wire field and was not
-  built** — DRF drops unknown keys silently, so the control would discard input without an error.
+  Stages carry the deliverables, line items and dates, and the shape is **published now**
+  (`ProposalStage` at 1.24.0), so `toStageRequests` maps onto the generated type instead of a
+  private one. **Assumptions has no wire field and was not built** — DRF drops unknown keys
+  silently, so the control would discard input without an error. The remote composer is
+  **unmounted** under revision 3 — an A5 estimate needs a completed visit — and kept in the tree
+  with a note saying why; `M2-FE-315` replaced it on the route.
 - [~] `M2-FE-310` Show the minimum-wage floor inline on the A3 composer and surface the server rejection
   clearly when a rate falls below it. `GAP-023`
   **No floor is published and the server guard is inert over HTTP.** The rule is stated with no figure
   invented; the refusal is routed to the rate field.
 - [~] `M2-FE-311` Show the required tax basis and the commission-treatment statement on every proposal
   so the vendor knows what the Customer will compare. `GAP-016`, `GAP-017`
-  **Neither is readable.** The required basis is another vendor's and unpublished; `commission_treatment`
-  has no vocabulary and no M2 policy, so the field is left unsent rather than authored.
+  **Half closed at 1.24.0.** `required_tax_basis` is published, so the on-site composer names the
+  basis a second vendor is compared on and says plainly when a blank one means *this* vendor fixes
+  it for everyone. `commission_treatment` still has no vocabulary and no M2 policy, so the field is
+  left unsent rather than authored.
 - [~] `M2-FE-312` Show server-calculated totals and prevent editing the final arithmetic in local state.
   No total input in either composer; after submission the figure shown is Django's echoed
   `total_paise`. **The server does not reconcile an A3 total** — only the A5 stage sum is checked.
 - [~] `M2-FE-313` Support draft, preview, submit and supersede; never overwrite a submitted proposal.
   Show withdrawn, expired, selected and superseded states with permitted next actions. `SIM-06`
-  **No read finds a Partner's own quote**, so the record survives only the tab that submitted it. That
-  is rendered as an honest third state rather than papered over with a locally persisted id.
+  **Closed at 1.24.0.** `GET /proposals/?requirement=` mounts on `m2QueryKeys.proposals.mine`, so a
+  Partner reads their own quote back after a reload, on a second device and in a new session, and
+  the supersession trace is rendered beneath the live row. Eight states now, not six: `ACCEPTED` and
+  `LAPSED` are written as the vendor's own reconfirmation and the vendor's own lapse — never as the
+  Customer's rejection, which would misreport their standing back to them.
 
 ### A5 visit response (revision 3)
 
-- [ ] `M2-FE-314` Build the A5 enquiry response as a **visit-slot confirmation on one screen**: the
-  requirement summary, a slot picker over the vendor's real availability (the same grid and picker
-  pattern as the A1 checkout `slots-modal.tsx`), and accept/decline with reason. Confirming states
-  the commitment plainly: travel to the site at that slot and estimate there. Waits on the BE4
-  visit-plan surface (Wave C2) for the slot-hold path.
-- [ ] `M2-FE-315` Extend the A5 composer with the **on-site mode**: prefilled from the requirement
-  and the visit, working days as the schedule, material line items as first-class rows, and the
-  completed-visit guard surfaced clearly (`m2_visit_not_completed` routed to a visible explanation,
-  never a dead submit). Optimised for a phone held standing up: large targets, numeric keyboards,
-  save-on-blur.
+- [~] `M2-FE-314` built — static gates green, owner manual verification pending. The A5 enquiry
+  response is a **visit-slot confirmation on one screen**: requirement summary, a slot picker over
+  `GET /partner/enquiries/{id}/visit-slots/`, and decline with a **published** reason
+  (`InvitationDeclineReasonEnum`). There is no separate Accept — `confirm_visit_slot` *is* A5
+  acceptance — and the commitment is stated before the tap: travel at that slot, estimate there.
+  The browser never computes availability; each slot `id` is a signed token posted back unchanged,
+  never parsed, never cached across a reload. `m2_visit_slot_unavailable` recovers by refreshing the
+  grid, never by resending the id. An ineligible vendor's grid — every slot `NO_CAPACITY` — renders
+  as a grid with the reason, not as an error and not as an empty screen. `opens_plan_checkout` is
+  rendered as **held, not scheduled**, with the lapse stated.
+  — `visit/model/{slot-grid,visit-state}.ts`, `visit/queries.ts`,
+  `visit/view/{visit-slot-picker,visit-response,visit-day-panel}.tsx`.
+- [~] `M2-FE-315` built — static gates green, owner manual verification pending. The A5 composer's
+  **on-site mode** on its own route: prefilled from the requirement (`duration_days`,
+  `requested_start`, `required_tax_basis`) and the visit, **working days as the schedule** with the
+  derived end date and its arithmetic stated, **material line items as first-class rows**, numeric
+  keyboards, 44px targets and save-on-blur to this device. `site_visit_id` is sent, which is what
+  made the path reachable at all. The completed-visit guard is explained above the form and the
+  server's `m2_visit_not_completed` routes to the same explanation — **the submit is never
+  disabled on this screen's own copy of the visit state**, because that copy can be a minute old and
+  a button that refuses on a stale read is the dead submit this task forbids.
+  — `proposal/model/onsite-draft.ts`, `proposal/view/{onsite-composer,onsite-screen}.tsx`,
+  `app/projects/enquiries/[invitationId]/estimate/page.tsx`.
+  **One gap:** material lines are sent as `ProposalStage` rows because the wire has one
+  money-carrying row type — logged in `frontend-execution-plan.md` §7 as a `kind` request.
 
 **FE3 Partner gate:** An eligible A3 vendor can respond to a lead on one phone screen; an A5 vendor
 can confirm a visit slot on one screen and submit a comparable estimate from the site; neither has

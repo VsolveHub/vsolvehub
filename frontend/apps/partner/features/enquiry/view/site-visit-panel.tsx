@@ -10,20 +10,30 @@ import type { EnquiryRecord } from "../model/wire";
 import { useRequestSiteVisit } from "../queries";
 
 /**
- * Asking for a paid visit before quoting.
+ * Asking for a paid **ad-hoc** visit, beside the A5 plan visit rather than
+ * instead of it.
  *
- * Closes what is buildable of `M2-FE-306`. Two holes are designed around here
- * rather than discovered later, and both are stated on screen:
+ * Closes what is buildable of `M2-FE-306`. Three things are designed around here
+ * rather than discovered later:
  *
- * ## The visit can be requested and never scheduled
+ * ## Plan visits are not this panel's
  *
- * `schedule_site_visit` and `complete_site_visit` exist in
- * `apps/requirements/proposals.py` and are published on **no route**. So a visit
- * this screen creates sits at `REQUESTED` and nothing in either app can move it.
- * The panel says exactly that. It does not render a "Scheduled" step nobody can
- * reach, and it does not quietly treat `REQUESTED` as though a date were coming
- * — an honest dead end beats a lifecycle that fakes its next transition.
- * Requested in `frontend-execution-plan.md` §7.
+ * `is_plan_visit` (1.24.0) separates the two, and the A5 plan visit belongs to
+ * `features/visit/view/visit-day-panel.tsx` — it is paid out of the customer's
+ * visit plan, occupies one of its shares, and opens the estimate window when it
+ * completes. Listing it here as well would show a vendor one visit twice, with
+ * two different sets of controls.
+ *
+ * ## An ad-hoc visit can be requested and this app cannot put a time on it
+ *
+ * `POST /site-visits/{id}/schedule/` is published (1.22.0) and takes both
+ * parties — the vendor proposes a slot they can travel in, the customer confirms
+ * a time somebody will be on site. **No screen in this app calls it for an
+ * ad-hoc visit**, because a one-sided date picker would offer a time nobody had
+ * agreed to. So a visit this panel creates sits at `REQUESTED` until Operations
+ * or the customer moves it, and the panel says exactly that rather than
+ * rendering a lifecycle it cannot advance. Logged in
+ * `frontend-execution-plan.md` §7.
  *
  * ## There is no callback flow at all
  *
@@ -46,9 +56,13 @@ import { useRequestSiteVisit } from "../queries";
 const STATUS_LABEL: Record<string, string> = {
   REQUESTED: "Requested",
   SCHEDULED: "Scheduled",
+  IN_PROGRESS: "On site",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
-  NO_SHOW: "No show",
+  // The enum carries no bare `NO_SHOW`; it names which party did not turn up,
+  // and the two settle completely differently.
+  VENDOR_NO_SHOW: "You did not arrive",
+  CUSTOMER_NO_SHOW: "Nobody was there",
 };
 
 export interface SiteVisitPanelProps {
@@ -73,7 +87,9 @@ export function SiteVisitPanel({ enquiry }: SiteVisitPanelProps) {
       ? "Enter what you charge to visit. Vsolve does not offer free site visits."
       : undefined;
 
-  const existing = enquiry.siteVisits;
+  // Ad-hoc visits only. The A5 plan visit is rendered by `VisitDayPanel`, which
+  // owns the arrival and completion commands that go with it.
+  const existing = enquiry.siteVisits.filter((visit) => !visit.is_plan_visit);
 
   return (
     <Card className="flex flex-col gap-4 p-4">
@@ -111,8 +127,8 @@ export function SiteVisitPanel({ enquiry }: SiteVisitPanelProps) {
                 </p>
               ) : (
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  Vsolve has your request. Scheduling a date is not built yet, so nobody can put a
-                  time against this from either app — Operations will arrange it with you directly.
+                  Vsolve has your request. A date needs the customer to agree to it as well, and
+                  this app cannot set one on its own — Operations will arrange it with you both.
                 </p>
               )}
             </li>

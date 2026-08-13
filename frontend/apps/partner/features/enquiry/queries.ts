@@ -239,7 +239,14 @@ export function useAcceptEnquiry(invitationId: string) {
 }
 
 export interface DeclineInput {
-  readonly reasonCode: string;
+  /**
+   * A published code, never a free slug.
+   *
+   * `InvitationDeclineReasonEnum` landed at 1.24.0 and the request body is typed
+   * against it, so a hand-written slug now fails the type check here rather than
+   * reaching a `400`. See `model/decline-reasons.ts`.
+   */
+  readonly reasonCode: Schemas["InvitationDeclineReasonEnum"];
 }
 
 /** Release the slot, with the reason that makes a replacement invitation useful. */
