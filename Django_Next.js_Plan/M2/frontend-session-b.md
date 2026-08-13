@@ -536,37 +536,248 @@ touched, and not in this column's scope to fix.
 [07-state-machines-and-permissions.md](07-state-machines-and-permissions.md) as the authority for
 state names and permitted actions.
 
+**Built 2026-08-13 against contract 1.25.0 — the shared spine half only.** Both archetypes run on
+one `Engagement` + `EngagementStage`, so the spine was built **once**; the archetype-specific tails
+are Wave III and were deliberately not started, each rendering a named not-built-yet block where it
+would sit. Tests deferred per the build-first amendment.
+
 ### Workforce workspace (A3)
 
-- [ ] `M2-FE-501` Workforce engagement lists grouped by crew-needed, upcoming, in-progress, exception, completed.
-- [ ] `M2-FE-502` **Per-stage** crew assignment with eligibility, conflict and worker-count feedback
-  from the backend, supporting legitimate day-to-day rotation.
-- [ ] `M2-FE-503` Replacement request/notification flows with Customer approval where required.
-- [ ] `M2-FE-504` Arrival confirmation on the **non-OTP fallback path**, retry-safe, never claiming
-  success until the backend acknowledges.
-- [ ] `M2-FE-505` **Supervisor daily attendance**: "n of m present today" in one action. Do not build
-  per-worker check-in/check-out.
-- [ ] `M2-FE-506` Overtime request as a scope amendment: additional amount, approval state, and the
-  plain statement that unapproved overtime is unpaid.
-- [ ] `M2-FE-507` No-show, partial crew, late arrival, unsafe site and Customer-unavailable reporting
-  with evidence and support escalation.
-- [ ] `M2-FE-508` **Safety incident** report flow with severity, evidence and immediate escalation —
-  separate from cancellation.
+- [~] `M2-FE-501` built — static gates green, owner manual verification pending.
+- [ ] `M2-FE-502` **Wave III, needs C4.** Per-stage crew assignment with eligibility, conflict and
+  worker-count feedback. Not started; `NotBuiltYet` block on the booking screen.
+- [ ] `M2-FE-503` **Wave III, needs C4.** Replacement request/notification with Customer approval.
+- [ ] `M2-FE-504` **Wave III, needs C4.** Arrival confirmation on the non-OTP fallback path.
+- [ ] `M2-FE-505` **Wave III, needs C4.** Supervisor daily attendance, "n of m present today".
+- [ ] `M2-FE-506` **Wave III, needs C4.** Overtime as a scope amendment.
+- [ ] `M2-FE-507` **Wave III, needs C4.** No-show, partial crew, unsafe site reporting.
+- [ ] `M2-FE-508` **Wave III, needs C4.** Safety incident report, separate from cancellation.
 
 ### Project workspace (A5)
 
-- [ ] `M2-FE-601` Project lists grouped by funding-needed, active stage, Customer review, disputed,
-  warranty, completed.
-- [ ] `M2-FE-602` Immutable agreement deliverables, stages, funded amounts, dates, retention, payout state.
-- [ ] `M2-FE-603` Stage evidence submission: upload progress, retry, declaration, history.
-- [ ] `M2-FE-604` Scope amendment (change order) with scope, schedule and server-calculated money
-  difference, using the shared amendment UI rather than a project-only one.
-- [ ] `M2-FE-605` Customer-caused delay claim with evidence and a schedule-extension request.
-- [ ] `M2-FE-606` Digital deliverable handover for Event and Media, with Customer acceptance.
-- [ ] `M2-FE-607` Payout holds, retention and dispute actions — without promising an unverified release date.
+- [~] `M2-FE-601` built — static gates green, owner manual verification pending.
+- [~] `M2-FE-602` built — static gates green, owner manual verification pending.
+- [~] `M2-FE-603` built — static gates green, owner manual verification pending.
+- [~] `M2-FE-604` built — static gates green, owner manual verification pending.
+- [ ] `M2-FE-605` **Wave III, needs C5.** Customer-caused delay claim. `NotBuiltYet` block.
+- [ ] `M2-FE-606` **Wave III, needs C5.** Digital deliverable handover. `NotBuiltYet` block.
+- [~] `M2-FE-607` built — static gates green, owner manual verification pending.
 
-**Evidence to record:** the attendance action count, that no per-worker device is required, and that
-an amendment proposal cannot read as approved scope.
+### Task zero — the barrel collided, and the fix was to delete rather than rename
+
+Session A grew `packages/query/src/m2-engagement-customer.ts` in the same wave, and by the time this
+column reached the barrel it exported seventeen names this module had also written: the type aliases
+(`StageEvidence`, `EngagementAmendment`, `EngagementEvent`, `AmendmentLine`, `StageDisputeReason`,
+`EngagementPage`, …), `orderedStages`, `disputedStages`, `isAmendmentApplied`, and the five shared
+refusal predicates including `isStageTransitionNotAllowed`.
+
+Renaming this column's copies would have compiled and been wrong. Two `isStageTransitionNotAllowed`
+implementations are two places for one rule to drift, and the failure mode is the quiet one — the two
+agree until somebody edits one. **They were deleted instead**, and `m2-engagement-partner.ts` now
+imports the shared vocabulary from `@vsolve/query` by name and keeps only what is uniquely the
+vendor's: what a vendor may *do*, what they are *owed*, and what a composer must refuse to compose.
+Its own type aliases are private, so the collision cannot come back.
+
+### The three rules the screens turn on
+
+- **A correction is not an amendment, and the screen says so in those words.** A sent-back stage
+  renders the customer's note in a warning block that states, immediately under it, that the price,
+  the scope and this stage's own amount are unchanged and no money has moved. `describeStageStatus`
+  gives `CORRECTION_REQUESTED` a label ("Sent back") that is not a dispute word, and
+  `projectBucketFor` files it under **Your move**, never under **Disputed**. Getting this wrong is
+  how a vendor concludes they have been paid less than they agreed.
+- **A dispute stops only the allocation.** `DISPUTED` on an engagement renders "one stage is being
+  argued about; everything else carries on, and anything already paid out stays paid" — and the
+  per-stage payout rows are the proof, because a disputed stage's siblings keep their own states.
+  `vendorStageCommands` deliberately still offers **attach evidence** on a disputed stage: a dispute
+  process where only one side may file is not one, and the server agrees
+  (`_assert_evidence_may_be_added` includes `DISPUTED`).
+- **A null `*_due_at` is a policy state.** `reviewClock` has four answers and each is a different
+  sentence; `stagePayoutState` distinguishes `held_until_date` from `held_no_date`. Where no payout
+  hold is configured the screen says **"no release date is set"** and explains that our team moves it
+  — never a date, never a countdown, never a guessed default.
+
+### `M2-FE-501` / `M2-FE-601` — one list, two vocabularies
+
+One `EngagementList` mounted twice. What the mount supplies is the bucket set, the noun and which
+`commercial_mode` belongs in this workspace — three server-derived values.
+
+**The split is on `commercial_mode`, not `archetype`.** `Engagement.archetype` is an unconstrained
+string with no published vocabulary; `commercial_mode` is a published enum and is the field the
+server itself branches on. Two server values being compared, not a lifecycle inferred from a category
+or a profession.
+
+**Two honest states this list has and the enquiry inbox does not.** A bucket nothing can fill —
+crew-needed — keeps its heading and states why, carried in the data as
+`EngagementBucket.derivable: false` rather than special-cased in the view. And an engagement whose
+status this build cannot name is rendered under "Not recognised" rather than dropped: a filter
+silently removing a live commitment is the exact failure `VISITS_BOOKED` produced on the Customer's
+`My requests` list on 13 August, and this list was written knowing it.
+
+### `M2-FE-602` — the immutable agreement
+
+"Agreed then / changed since / owed now" are read straight from `total_paise`,
+`amendment_delta_paise` and `staged_total_paise`. The relationship between them is a **database
+constraint**, so the client renders all three and adds nothing — a second implementation of arithmetic
+the server has already checked can only ever disagree with it. `total_paise` never moves, which is
+what lets a vendor tell whether a change order landed.
+
+Three things the task asks for and nothing publishes: **deliverable text** (on the proposal, not
+copied to the engagement; `terms_snapshot` is not serialised), **retention** (no field anywhere, and
+the percentage is owner-blocked) and **warranty terms** (proposal only). All three are stated as
+absences — "no retention is recorded on this agreement" — rather than filled with a zero that would
+read as a decision. Logged.
+
+### `M2-FE-603` — evidence
+
+Presign → PUT → finalize, one mutation rather than three, on the KYC uploader's precedent: an upload
+presigned and never finalized is an orphan Django has to clean up. `XMLHttpRequest` for the transfer,
+because no shipping browser reports progress for a `fetch` request body and an 80 MB video on a
+site's mobile connection is exactly where a progress bar decides whether somebody waits or re-taps.
+
+- **`NOTE` is not an upload kind.** It is in `StageEvidenceKindEnum` and not in the server's
+  media-type table, so presigning one is refused. The note reaches the record as the **required**
+  `note` on `submit/`, stored as its own append-only `NOTE` row — which is why the declaration sits
+  above the submit button and not beside the file picker. The vendor never picks a kind at all: it is
+  derived from the file's own media type, which is what the server checks anyway.
+- **`object_key` is never published**, so there is no preview and no thumbnail. A row shows kind,
+  size, media type and scan status. Rendering a preview from the local blob would show the vendor
+  their own file rather than the stored object, which is the one thing a verification screen must not
+  do. The missing download endpoint is logged.
+- **`processing_status` is a state, not a spinner.** `PENDING` means the checksum matched and the
+  safety question has not been answered; the badge says "being checked" and anything unrecognised
+  falls there, closed.
+- **Three failure recoveries, because they are three different problems.** Storage down is retryable
+  and nothing was lost; an expired grant needs a fresh one, which choosing the file again does; a
+  rejection is not retryable with the same bytes, because Django fetched the stored object back and
+  compared it.
+
+### `M2-FE-604` — one composer, two pricing rules, and it says which
+
+- **A3 (`LEAD_ONLY`) collects days and no money.** There is no amount field — not a disabled one, and
+  not one whose value is discarded — because a vendor who could name the money could re-price a job
+  the customer already committed to. The screen says the server prices it at the rate frozen when the
+  booking was confirmed.
+- **A5 (`MANAGED_PAYMENT_REQUIRED`) prices each line**, signed, negative removing scope. The running
+  figure is labelled as *the vendor's own arithmetic*; no total is sent, and the server sums the lines
+  itself.
+
+**A reduction that would empty a stage is refused before it is sent.** `validateAmendmentDraft`
+mirrors `_assert_reduction_is_possible` and will not compose one: removing a stage entirely is a
+cancellation, vendor abandonment is `M2-BE-545` in Wave C5 and does not exist, and submitting it to
+find out would teach a vendor that a cancellation is a change request that happened to fail.
+
+**A proposal cannot read as approved scope.** Every live change request carries the sentence "not
+agreed scope — nothing changes until the customer decides", and `CUSTOMER_APPROVED` is badged
+"Accepted, not applied" rather than "Approved", because on a positive delta the money has not moved
+and the scope has not changed until the provider callback lands. The vendor accepts nothing here: the
+decision routes are the Customer's.
+
+### `M2-FE-607` — money, without a promise
+
+The panel is written around one sentence: **a vendor with no bank details has still earned the
+money.** Approving a stage writes a `PENDING` ledger entry; release needs the hold window to close
+*and* the payout account to be verified, and those two failures are said separately because they have
+different fixes and only one of them is the vendor's. `GET /partner/payout-account/` is read beside
+it, and its `404` is treated as an answer rather than a fault — the copy never implies the earning is
+at risk, because it is not.
+
+`LEAD_ONLY` gets its own panel saying Vsolve holds and releases none of it. Earned / held / released
+are the engagement's own running totals, differenced once, and labelled as such.
+
+### Two defects found in this column's own wiring, and fixed
+
+- **The stage cache key needed an id the stage routes do not carry.** `m2QueryKeys.engagements.stage()`
+  takes `(engagementId, stageId)`; `GET /engagement-stages/{id}/` carries only the stage. The first
+  cut passed `""` for the engagement, which produced a key under `detail("")` that no invalidation
+  could ever reach. `usePartnerStage` was **deleted** rather than patched — the engagement read
+  already embeds its ordered `stages[]` and nothing here opens a bare stage id, so a second read of
+  the same rows would only have been a second copy able to disagree with the first.
+- **The amendment idempotency key was an attempt counter, and that is a trap.**
+  `execute_idempotent` rejects a key reused with *different arguments*, so a vendor whose first
+  proposal is refused, who edits a line and sends again, would have earned a fingerprint conflict
+  instead of a fresh proposal. The key is now derived from the draft's own content: an identical
+  resend replays, an edited one is a new command, and the second-proposal case the counter was
+  guarding is already refused server-side by the one-live-amendment rule.
+
+### Routes
+
+| Route | What renders |
+|---|---|
+| `/workforce/shifts` | **Replaced.** The workforce engagement list — five buckets, crew-needed rendered as unfillable |
+| `/workforce/shifts/[engagementId]` | **New.** One booking: shift-days, evidence, agreement, change requests, money, and the C4 tails as named not-built-yet blocks |
+| `/projects/stages` | **Replaced.** The project engagement list — six buckets |
+| `/projects/stages/[engagementId]` | **New.** One project: the same spine in the project vocabulary, with the C5 tails named |
+
+All four `ƒ` in the build output and `robots: noindex`, behind `WorkspaceRoute` with the actions the
+registry already gates those tabs on — `attendance.confirm` for Shifts, `stage.submit_evidence` for
+Stages. **No new action was invented**, because inventing one would be this client authorising itself.
+
+### Both Wave I frozen-file grants are consumed
+
+`features/visit/queries.ts` now keys the slot grid on `m2QueryKeys.visits.slots(invitationId)` — the
+local `invitations.detail(id) + "visit-slots"` composition is gone — moved to
+`M2_FRESHNESS.visitSlots`, the tier written for a read that hands back a credential, and routes all
+four visit commands through `invalidateForM2Command`. Where a call site still invalidates explicitly
+it now invalidates *more* than the command's rows, and says why: confirming a slot takes a capacity
+hold, which changes which other enquiries this vendor can accept. `errors.ts`'s new classifications
+are consumed by `amendment-panel.tsx`, where `m2_policy_unavailable` renders as an owner-blocked
+refusal with no retry offered.
+
+### Smoke script — the exact clicks
+
+**Read a project and start a stage.** Sign in as a Partner approved for `A5_CUSTOM_PROJECT` →
+`/projects` → **Stages**. Expect six group headings, populated ones only, with the money and the
+stage count on each row. Open one → expect the stage list first, then **What you agreed to** with
+*Agreed then / Changed since / Owed now*, then **Ask to change the work**, then **Your money**, then
+the history. On an unfunded stage expect the sentence *"The customer has not paid for this stage yet.
+Do not start it."* and **no** start button. On a funded one, tap **Start this stage**.
+
+**Attach evidence and send it.** On the started stage: **Attach a file** → choose a photo → watch the
+bar move through *Checking the file · Asking Vsolve for a slot · Uploading · Confirming it arrived* →
+the row lands with a **Being checked** badge, not a thumbnail. Try an 80 MB PDF: expect refusal in the
+picker with the real ceiling in the message, before any bytes move. Write **What was done**, tap
+**Send for review**. Expect the badge to become *With the customer*. Leave the note blank first —
+expect the field error, not a request.
+
+**See a correction read as a correction.** Have the Customer send the stage back. Expect an amber
+block titled *What the customer asked for*, with their note, and immediately under it *"This is a
+correction, not a change to what you agreed."* Expect the button to read **Back to work on this**,
+the amount beside the stage to be unchanged, and the project to sit under **Your move** — not under
+**Disputed**.
+
+**Compose a change order and hit the two refusals.** **Propose a change** → fill the reason → add a
+line with a positive amount → expect *"Your lines come to +₹X … this is a preview of your own
+arithmetic."* Send it. In an unseeded environment expect **"Vsolve cannot take change requests yet"**
+— that is `m2_policy_unavailable` and it is correct, not a bug. Then the client-side refusal: pick a
+stage, enter a negative amount **equal to or larger than that stage's own amount**, and expect
+*"Removing a stage entirely is a cancellation, not a change request"* under the amount field, with
+nothing sent.
+
+**Read the money without a promise.** Have the Customer approve a stage. On **Your money** expect
+*Earned / Still held / Released*, and against that stage either *"Earned and held until ⟨date⟩"* or —
+with no hold window configured, which is the current state — *"Earned. No release date is set for
+this."* With no bank account on file, expect the block saying the earnings are recorded and are yours
+and cannot be paid out yet. **Never a date where none is configured.**
+
+**Run the workforce side.** Sign in as a Partner approved for `A3_TIME_BLOCK` → `/workforce` →
+**Shifts**. Expect the same spine in shift-day words, **Crew still to be named** rendered as a dashed
+card explaining that crew assignment is not published, and under the shift-days three not-built-yet
+blocks naming attendance, arrival and safety reporting. Open a booking → **Your money** should say
+the customer pays you directly and Vsolve holds none of it.
+
+### Static gates — 2026-08-13
+
+- `npx eslint apps/partner apps/admin packages/query --max-warnings 0` — **clean**.
+- `turbo run typecheck --filter=partner --filter=admin --filter=@vsolve/query` — **3 of 3**.
+- `turbo run build --filter=partner` — **succeeds**; all four engagement routes `ƒ`.
+- **No test was run and none was written** — build-first amendment.
+
+### What Wave III must pick up
+
+`M2-FE-502..508` on Wave C4 and `M2-FE-605`/`606` on Wave C5. Each has a `NotBuiltYet` block on the
+screen where it belongs, naming the capability, saying what to do meanwhile and citing its task id.
+Replacing one is replacing a block, not restructuring a screen.
 
 ---
 
@@ -612,7 +823,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-12 — 1399/1399 frontend tests, lint clean, 9/9 typecheck, partner build green. `GET /partner/workspaces/` wired and all 7 registry routes mounted. `FE-105` not started; the registration views are still route-less, so nothing exceeds `[~]`. |
 | B2r3 | `FE-314..315` | `[~]` 2 of 2 | `[ ]` | 2026-08-13 — the A5 visit response and the on-site estimate, against contract 1.24.0. `apps/partner` was red at head from the regeneration and is green. Lint clean on owned paths, typecheck 3/3, partner build green with the new `/estimate` route dynamic. **Tests deferred per the build-first amendment.** 12 §7 rows appended, 6 of them closures. |
 | B2 | `FE-301..313` | `[~]` 13 of 13 | `[ ]` | 2026-08-12 — built and wired against contract 1.21.0 on 4 routes. Lint clean, 9/9 typecheck, partner build green, all 4 routes dynamic. **12 unit/component test files and 1 Playwright spec written and not run** — see the owner verification queue in `task.md`. 23 gaps logged in plan §7, of which 3 are backend defects (declared list shape vs. the page envelope Django sends, the inert wage-floor guard, the unreconciled A3 total) and 1 is structural (a Partner cannot read their own quote back). |
-| B3 | `FE-501..508`, `FE-601..607` | `[ ]` | `[ ]` | |
+| B3 | `FE-501..508`, `FE-601..607` | `[~]` 6 of 15 | `[ ]` | 2026-08-13 — the **shared spine half only**, against contract 1.25.0: `FE-501`, `FE-601`, `FE-602`, `FE-603`, `FE-604`, `FE-607` on 4 routes (2 replaced, 2 new), all `ƒ`. The nine archetype tails are Wave III and each renders a named not-built-yet block rather than a half-built control. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment.** 13 §7 rows appended, of which 1 closes both Wave I frozen-file grants and 2 are schema corrections (an undeclared `role` parameter, two enums published as bare strings). Two defects found in this column's own wiring and fixed before the gate. |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |
 | B5 | quality share | `[ ]` | `[ ]` | |
 

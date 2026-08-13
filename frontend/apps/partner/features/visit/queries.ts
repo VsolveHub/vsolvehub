@@ -7,7 +7,7 @@ import {
   request,
   type Schemas,
 } from "@vsolve/api-client";
-import { M2_FRESHNESS, m2QueryKeys } from "@vsolve/query";
+import { M2_FRESHNESS, invalidateForM2Command, m2QueryKeys } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -19,22 +19,21 @@ import type { EnquiryDetail } from "@/features/enquiry/queries";
  *
  * `M2-FE-314` and the guard half of `M2-FE-315`.
  *
- * ## Why the keys are derived rather than added to the factory
+ * ## The keys are the published ones, as of the Wave I gate
  *
- * `packages/query/src/m2-keys.ts` is frozen and carries no `visits` namespace.
- * Rather than edit it mid-wave, the slot grid hangs off the key that already
- * exists for the record it belongs to — `invitations.detail(id)` — with a
- * `visit-slots` tail. That is not a workaround: a slot grid *is* a projection of
- * one invitation, and being inside that prefix means every existing invalidation
- * of the invitation already clears it. The factory addition is requested in
- * `frontend-execution-plan.md` §7.
+ * `m2-keys.ts` now carries a `visits` namespace and the seven visit commands, so
+ * the local composition this file used to carry — `invitations.detail(id)` with a
+ * `visit-slots` tail — is gone and `m2QueryKeys.visits.slots(invitationId)` is
+ * used instead. Worth keeping the factory's own reasoning in view: **the grid is
+ * keyed by invitation and deliberately not nested under the plan**, because it is
+ * one vendor's diary and two vendors on the same plan see different grids.
  *
- * `invalidateForM2Command` is likewise not used here: its `M2Command` union
- * predates revision 3 and names no `confirm_visit_slot`,
- * `confirm_visit_arrival` or `complete_site_visit`. Calling it with a string it
- * does not know would not compile, and inventing a near-miss command name would
- * put the wrong rows in the invalidation table. The invalidations below are
- * written out and the union's extension is requested in the same §7 row.
+ * `invalidateForM2Command` is likewise live for all four commands below, so the
+ * cache effects of a visit command are in the one reviewable table rather than
+ * written out at four call sites. Where a call site still invalidates explicitly
+ * it is because it invalidates *more* than the command's own rows — confirming a
+ * slot changes which other enquiries this vendor can take — and that is a fact
+ * about the invitation inbox, not about the visit.
  *
  * ## Every read is EXPIRING_STATE, and the slot grid especially
  *
@@ -51,9 +50,15 @@ export type VisitSlotGrid = Schemas["VisitSlotGrid"];
 export type VisitSlotConfirmation = Schemas["VisitSlotConfirmation"];
 export type SiteVisit = Schemas["SiteVisit"];
 
-/** The grid for one invitation, inside that invitation's own key prefix. */
+/**
+ * The grid for one invitation.
+ *
+ * Re-exported as a named function rather than inlined at four call sites, which
+ * is the rule `keys.ts` exists to enforce: a key built inline is how invalidation
+ * silently stops working.
+ */
 export function visitSlotsKey(invitationId: string) {
-  return [...m2QueryKeys.invitations.detail(invitationId), "visit-slots"] as const;
+  return m2QueryKeys.visits.slots(invitationId);
 }
 
 /**
@@ -73,7 +78,10 @@ export function usePartnerVisitSlots(invitationId: string, enabled = true) {
         }),
       ),
     enabled: enabled && invitationId !== "",
-    ...M2_FRESHNESS.invitationDetail,
+    // The strictest tier in the table, and the one this read needs: every slot
+    // `id` is a signed token with a TTL, so a cached grid does not merely look
+    // wrong — it offers times the server will refuse to book.
+    ...M2_FRESHNESS.visitSlots,
     retry: (failureCount, error) =>
       error instanceof ApiRequestError && [400, 401, 403, 404, 409].includes(error.status)
         ? false
@@ -117,10 +125,11 @@ export function useConfirmVisitSlot(invitationId: string) {
     onSuccess: async (confirmation) => {
       applyVisitToEnquiry(queryClient, invitationId, confirmation.visit);
       clearIdempotencyKey(`m2-visit-slot-confirm:${invitationId}`);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: m2QueryKeys.invitations.all }),
-        queryClient.invalidateQueries({ queryKey: visitSlotsKey(invitationId) }),
-      ]);
+      await invalidateForM2Command(queryClient, "confirm_visit_slot", { invitationId });
+      // Wider than the command's own rows on purpose: taking this slot takes a
+      // capacity hold, which changes which *other* enquiries and A1 offers this
+      // vendor can still accept.
+      await queryClient.invalidateQueries({ queryKey: m2QueryKeys.invitations.all });
     },
     onError: () => {
       // The grid is what was wrong, whatever the refusal was. Re-reading it is
@@ -187,9 +196,12 @@ export function useConfirmVisitArrival(invitationId: string) {
           },
         }),
       ),
-    onSuccess: (visit, input) => {
+    onSuccess: async (visit, input) => {
       applyVisitToEnquiry(queryClient, invitationId, visit);
       clearIdempotencyKey(`m2-visit-arrival:${input.siteVisitId}`);
+      await invalidateForM2Command(queryClient, "confirm_visit_arrival", {
+        siteVisitId: input.siteVisitId,
+      });
     },
     onError: () => {
       void queryClient.invalidateQueries({
@@ -226,9 +238,12 @@ export function useCompleteVisit(invitationId: string) {
           body: { outcome_notes: input.outcomeNotes ?? "" },
         }),
       ),
-    onSuccess: (visit, input) => {
+    onSuccess: async (visit, input) => {
       applyVisitToEnquiry(queryClient, invitationId, visit);
       clearIdempotencyKey(`m2-visit-complete:${input.siteVisitId}`);
+      await invalidateForM2Command(queryClient, "complete_site_visit", {
+        siteVisitId: input.siteVisitId,
+      });
     },
     onError: () => {
       void queryClient.invalidateQueries({
@@ -270,9 +285,12 @@ export function useReportCustomerNoShow(invitationId: string) {
           body: { party: "CUSTOMER", reason_code: "" },
         }),
       ),
-    onSuccess: (visit, input) => {
+    onSuccess: async (visit, input) => {
       applyVisitToEnquiry(queryClient, invitationId, visit);
       clearIdempotencyKey(`m2-visit-no-show:${input.siteVisitId}`);
+      await invalidateForM2Command(queryClient, "report_visit_no_show", {
+        siteVisitId: input.siteVisitId,
+      });
     },
     retry: false,
   });

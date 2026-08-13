@@ -615,8 +615,11 @@ engagement state and commercial protections.
 
 ### Partner workforce workspace
 
-- [ ] `M2-FE-501` Add workforce engagement lists grouped by crew-needed, upcoming, in-progress,
-  exception and completed states.
+- [~] `M2-FE-501` built — static gates green, owner manual verification pending. Five buckets on
+  `GET /engagements/`, split by `commercial_mode`. **The crew-needed bucket renders and cannot be
+  filled**: nothing on the wire says which shift-days still need names (Wave C4), so the group keeps
+  its heading and says so rather than being dropped or guessed at. An engagement whose status this
+  build cannot place is shown under "Not recognised" rather than hidden.
 - [ ] `M2-FE-502` Build **per-stage** crew assignment with eligibility, conflict and worker-count
   feedback from the backend, supporting legitimate day-to-day rotation. `GAP-024`
 - [ ] `M2-FE-503` Build replacement request/notification flows with Customer approval where required.
@@ -633,14 +636,26 @@ engagement state and commercial protections.
 
 ### Customer booking
 
-- [ ] `M2-FE-509` Add `My bookings` with schedule, agreed crew composition, permitted identity summary,
-  contact rules, direct-payment reminder and next action.
+- [~] `M2-FE-509` built — static gates green, owner manual verification pending. `/bookings/workforce`, filtered from
+  `GET /engagements/` on `commercial_mode` — one endpoint, two lists, two sets of words. The
+  direct-payment reminder sits **above** the list, not in a row, and there is deliberately no
+  Funded column on A3. **The engagement projection carries no crew composition and no vendor
+  identity**, so both are read back off the accepted quote (`CONSUMED` unlocks stay readable) and
+  degrade to a link rather than an error when that read is refused. No phone number exists on the
+  wire; the panel states the contact rule and never implies one is here (plan §7).
 - [ ] `M2-FE-510` Let the Customer confirm or dispute the day's attendance in **one tap**, and capture
   per-worker detail only inside the dispute flow. `SIM-02`
-- [ ] `M2-FE-511` Let the Customer acknowledge crew changes, approve/reject time extensions and confirm
-  completion or open an issue during the documented window.
-- [ ] `M2-FE-512` Show partial service, replacement, refund, dispute and closure outcomes in one
-  chronological timeline.
+- [~] `M2-FE-511` built — static gates green, owner manual verification pending. The amendment and completion halves.
+  A3 time extensions run through the same panel as A5 change orders, because they are the same
+  object; completion is `POST /engagements/{id}/completion/`, offered only in `COMPLETING` because
+  it answers `409` before that. **Crew-change acknowledgement is not built** — it needs C4's
+  attendance model — and "open an issue" is routed to the per-stage dispute, which is the only
+  issue command that exists.
+- [~] `M2-FE-512` built — static gates green, owner manual verification pending. One feed, `GET /engagements/{id}/events/`,
+  and **nothing on it is synthesised**. `actor_is_system` is rendered as the difference between a
+  person deciding and a clock deciding; actor identity is never published and none is guessed. Titles
+  come from the server's own `reason`, with a de-slugged `reason_code` as fallback rather than a
+  client-authored copy table over an unpublished vocabulary (plan §7).
 
 **FE5A gate:** Customer and Partner can run a multi-worker, multi-day engagement from mobile devices,
 including partial attendance and no-show recovery, without a per-worker device dependency.
@@ -649,34 +664,65 @@ including partial attendance and no-show recovery, without a per-worker device d
 
 ### Partner project workspace
 
-- [ ] `M2-FE-601` Add project lists grouped by funding-needed, active stage, Customer review, disputed,
-  warranty and completed states.
-- [ ] `M2-FE-602` Show immutable agreement deliverables, stages, funded amounts, dates, retention and
-  payout state. `GAP-031`
-- [ ] `M2-FE-603` Build stage evidence submission with upload progress, retry, declaration and history.
-- [ ] `M2-FE-604` Build the scope-amendment (change-order) proposal with scope, schedule and
-  server-calculated money difference, using the shared amendment UI rather than a project-only one.
-  `SIM-01`
+- [~] `M2-FE-601` built — static gates green, owner manual verification pending. Six buckets, same
+  component as `M2-FE-501` with the project vocabulary. `CORRECTION_REQUESTED` is filed under "Your
+  move", never under "Disputed" — a correction is not a dispute and the row says it was sent back.
+- [~] `M2-FE-602` built — static gates green, owner manual verification pending. "Agreed then /
+  changed since / owed now" are read straight from `total_paise`, `amendment_delta_paise` and
+  `staged_total_paise` — a database constraint ties them, so nothing is summed client-side.
+  **Deliverable text, retention and warranty terms are not published on the engagement** and none is
+  invented: the panel says where the fuller wording lives and that no retention is recorded (plan
+  §7).
+- [~] `M2-FE-603` built — static gates green, owner manual verification pending. Presign → PUT →
+  finalize with `XMLHttpRequest` progress, per-kind size and media-type pre-checks, and three
+  distinct failure recoveries. **`NOTE` is not an upload kind** — the note is the required `note` on
+  `submit/`, stored as its own append-only evidence row — and **`object_key` is never published**, so
+  the history renders kind, size and scan status with no preview.
+- [~] `M2-FE-604` built — static gates green, owner manual verification pending. One composer, two
+  pricing rules, and it says which applies: A3 collects **days only** and the server prices them from
+  the frozen rate; A5 prices each line with a signed amount and the server sums them. **A reduction
+  that would empty a stage is refused before it is sent** — that is a cancellation, and `M2-BE-545` is
+  Wave C5. `m2_policy_unavailable` renders as the honest owner-blocked refusal.
 - [ ] `M2-FE-605` Build the Customer-caused delay claim with evidence and a schedule-extension request.
   `GAP-030`
 - [ ] `M2-FE-606` Build digital deliverable handover for Event and Media, with Customer acceptance.
   `GAP-032`
-- [ ] `M2-FE-607` Show payout holds, retention and dispute actions without promising an unverified
-  release date.
+- [~] `M2-FE-607` built — static gates green, owner manual verification pending. A null
+  `payout_release_due_at` renders **"no release date is set"**, never a date. A vendor with no bank
+  details is told the money is earned and recorded and cannot be paid yet — read from `GET
+  /partner/payout-account/`, whose `404` is an answer rather than a fault. `LEAD_ONLY` says plainly
+  that Vsolve holds none of it.
 
 ### Customer project workspace
 
-- [ ] `M2-FE-608` Add `My projects` with overall progress, active stage, funded amount, next action and
-  issue status.
-- [ ] `M2-FE-609` Build stage review with evidence viewer, approve, request clarification and dispute
-  choices.
-- [ ] `M2-FE-610` Build amendment comparison against the current agreement and require explicit
-  acceptance plus additional payment/refund handling.
+- [~] `M2-FE-608` built — static gates green, owner manual verification pending. `/projects`, plus the workspace header on
+  `/engagements/{id}`. Progress is counted in **stages, not rupees** — a money ratio reads 0% for a
+  finished `LEAD_ONLY` job — and every money figure is a published running total. The 1.24.0
+  `fundedTotalPaise` summing helper is deleted, not deprecated. Exactly one next action per row.
+- [~] `M2-FE-609` built — static gates green, owner manual verification pending. `/engagements/{id}/stages/{stageId}`, its
+  own route because it is reached from a notification and because approval releases money. What each
+  of the three controls does to money is stated **before** it is pressed and again in the
+  confirmation, and the sentence is derived from `commercial_mode`: the same approve command releases
+  a held earning on A5 and moves nothing on A3. A null `review_due_at` renders **"no deadline is
+  set"**, never time in hand. Disputing is presented as the action that stops the clock, because it
+  is. **Evidence cannot be opened**: `object_key` is unpublished and no download route exists, so the
+  viewer says so rather than offering a control that 404s (plan §7).
+- [~] `M2-FE-610` built — static gates green, owner manual verification pending. A proposed amendment is drawn in its own
+  block with a **"Requested — not agreed"** badge, is absent from the agreement totals and absent
+  from the version history until the server stamps `applied_at`. The comparison is explicit — agreed
+  now / this change / **if you accept** — with the third labelled as a projection, because nothing
+  publishes a would-be total. A managed positive delta renders as **waiting with nothing to press**
+  until the provider callback lands; an unrecognised status offers no action at all.
 - [ ] `M2-FE-611` Build deliverable acceptance, project completion and warranty issue reporting with
   clear deadlines and the retention release date. `GAP-031`, `GAP-032`
 - [ ] `M2-FE-612` Show the vendor-replacement path if a project is abandoned, including what is funded,
   what transfers and what the price difference is. `GAP-029`
-- [ ] `M2-FE-613` Preserve original and amended agreement versions in a readable history.
+- [~] `M2-FE-613` built — static gates green, owner manual verification pending. Version 0 is `total_paise`, which never
+  moves; each applied amendment is a version, and the walked running total reconciles to the
+  published `staged_total_paise` by database constraint. **The scope of each version is not
+  published** — `Engagement` carries the proposal as a bare id with no snapshot — so each version
+  carries its money and its change lines and the panel links to the quote rather than paraphrasing
+  terms it was never given (plan §7).
 
 **FE5B gate:** Neither party can mistake clarification, evidence upload or a proposed amendment for
 approved scope, payment or stage completion, and an abandoned project shows a route to completion.
