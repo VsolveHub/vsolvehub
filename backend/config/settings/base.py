@@ -351,6 +351,15 @@ SPECTACULAR_SETTINGS = {
         # unrelated `reason` field appears. Naming it keeps the published name and gives both
         # fields one component.
         "RejectionReasonEnum": "apps.requirements.models.Proposal.RejectionReason",
+        # And the one that had to be pinned to stop C2 *renaming* a published component. At 1.23.0
+        # `DispatchCommandAudit.Reason` was the only `reason` choice set in the schema, so it
+        # published as the bare `ReasonEnum` — which is what
+        # `apps/admin/features/dispatch-recovery/model/commands.ts` imports. Adding two more
+        # `reason` fields in Wave C2 made the generator disambiguate *all three*, silently renaming
+        # it to `DispatchCommandRequestReasonEnum` and breaking an app that had not changed. Caught
+        # by `pnpm typecheck` on regeneration; fixed here rather than in the client, because the
+        # rename was the defect.
+        "ReasonEnum": "apps.assignments.models.DispatchCommandAudit.Reason",
         # The six new status sets. They resolve to these names today because no other model shares
         # the class name, which is exactly the property that stops being true later — the C1 note
         # above is about this and it applies unchanged.

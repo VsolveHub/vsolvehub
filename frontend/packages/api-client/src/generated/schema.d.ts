@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.23.0)
- * Checksum: 30cdd09a1425706a
+ * Source:   contracts/openapi/v1.yaml (version 1.24.0)
+ * Checksum: 32764f5d53d6baf9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -744,6 +744,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["checkouts_search_advance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/funding/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Fund one A5 stage, **at face value and in order**. There is no stage credit: the visit-plan money was spent on the visits themselves and settles per share, so discounting a stage by it would pay for those visits twice out of the vendor's work. Projects collect one stage at a time and never the full project value because a proposal was accepted. */
+        post: operations["m2_stage_funding_checkout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The agreement frozen at reconfirmation, with its ordered stages. **Read `commercial_mode` before promising anything**: `LEAD_ONLY` (A3) means the Customer pays the vendor directly and Vsolve's protection is matching and replacement, not a protected booking. `MANAGED_PAYMENT_REQUIRED` (A5) funds one stage at a time, at face value — the visit-plan money settles per share and never discounts a stage. */
+        get: operations["m2_engagement_read"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2277,6 +2311,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/enquiries/{invitation_id}/visit-slots/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The visit times this vendor may confirm, drawn from the **same `carts.availability` grid the A1 technician flow reads** and narrowed to this one invited vendor. Same payload shape as `POST /api/v1/booking/windows/` minus `capacity`, which on a single-vendor grid would be a readout of that vendor's own diary depth.
+         *
+         *     Each `id` is a **signed token** bound to this invitation and this start; it is the only thing the confirm command accepts, so a vendor cannot book a time the grid never offered or a slot drawn for a competitor. Tokens expire, so a picker left open must re-read rather than post a stale one.
+         *
+         *     An ineligible vendor receives a grid in which every slot reads `NO_CAPACITY` rather than an error — that is the truth and it is renderable, where a refusal would leave the screen with nothing to say.
+         */
+        get: operations["m2_visit_slot_list"];
+        put?: never;
+        /**
+         * @description Commit to being on site at a specific time. **This is A5 acceptance** — it takes the quote slot and the soft capacity hold, and then a hard slot on the shared availability grid, so a visit and an A1 booking cannot double-book the same vendor.
+         *
+         *     The **first** confirmation on an unpaid plan holds its slot and opens the Customer's checkout (`opens_plan_checkout: true`); the visit reads `REQUESTED` until that payment is verified, and the hold lapses harmlessly if it never is. Later slots on a paid plan are confirmed outright.
+         */
+        post: operations["m2_visit_slot_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/gates/": {
         parameters: {
             query?: never;
@@ -2723,7 +2785,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** @description Every quote this vendor has submitted, newest first. **This closes the largest hole in the Partner surface**: until 1.24.0 a vendor could submit a quote and read it back only by remembering its id, so withdraw, the six proposal states and the whole supersession trace ended when the tab closed. */
+        get: operations["m2_proposal_list"];
         put?: never;
         /** @description Submit a quote, or a revision that supersedes this vendor's previous one. Proposals are append-only: a revision never overwrites what the Customer was originally offered. The archetype decides which fields are required and the server enforces it. */
         post: operations["m2_proposal_submit"];
@@ -2880,6 +2943,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/quotes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every quote (A3) or on-site estimate (A5) in full: scope, line items, stages, taxes, validity and the vendor's identity. **Entitlement is enforced here, not hidden in the UI** — an A3 request needs an active unlock and an A5 request needs a charged visit plan, and without one this refuses rather than returning a shortened payload. Contact details are not in this response at any status; they are released by the engagement, not by the fee. */
+        get: operations["m2_quote_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Refuse a quote. `NOT_CHOSEN` is bookkeeping — the Customer preferred somebody else and nothing further happens. `NON_RESPONSIVE` is the control against slot squatting: it releases the vendor's slot and buys a replacement **at no extra charge** — a new quote slot on A3, a free replacement visit on A5 — up to a configured cap. */
+        post: operations["m2_quote_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/quotes/{proposal_id}/revalidate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Ask this vendor to put a fresh price on a quote whose validity has passed. **This charges nothing and reuses the unlock or visit plan already paid for** — expiry must not be a dead end that forces a second purchase. The vendor answers by superseding the quote; the expired revision stays readable and stays unselectable, because only a vendor can state a price. */
+        post: operations["m2_quote_revalidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/quotes/teasers/": {
         parameters: {
             query?: never;
@@ -2891,6 +3005,24 @@ export interface paths {
         get: operations["m2_quote_teaser_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/selection/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The live selection for this request, or `null`. `reconfirm_by` is the vendor's deadline; `engagement_id` fills in once they reconfirm. */
+        get: operations["m2_selection_read"];
+        put?: never;
+        /** @description Choose one vendor. **Selection is not a booking**: it starts the vendor's reconfirmation clock, and the engagement opens only when they commit — A3 on their reconfirmation, A5 when the first stage is funded. If they decline or the clock runs out, the unlock or visit-plan entitlement survives untouched and the next quote costs nothing more. Multiple simultaneous selections are not supported. */
+        post: operations["m2_selection_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2923,6 +3055,59 @@ export interface paths {
         get: operations["m2_requirement_timeline"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/unlock/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The unlock state for one A3 request. `unlock` is `null` until a checkout has been started, and reaching `ACTIVE` requires a **verified provider callback** — a client redirect saying the payment succeeded never grants access. `price_paise` is `null` when Operations has loaded no effective price, which is a real state while the tier prices are an open owner decision: the screen says we cannot offer this yet rather than showing a number nobody approved. */
+        get: operations["m2_unlock_read"];
+        put?: never;
+        /** @description Start the charge that unlocks delivered quotes. **A3 only**, and refused unless at least one usable quote is live at this instant — that is what makes 'paid but nothing happened' unreachable rather than merely unlikely. Repeating the call while a previous attempt is still pending returns that attempt rather than starting a second charge. */
+        post: operations["m2_unlock_checkout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/visit-plan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The visit plan for one A5 request. Before a plan is chosen this carries `available_tiers` — the priced options for the review screen's chooser, and an **empty list is the honest answer** while the owner has priced no tier. After a plan exists it carries the plan, its per-slot shares and the confirmed visits with their scheduled times. Choosing a plan charges nothing; the whole plan is charged once, at the first confirmed visit slot. */
+        get: operations["m2_visit_plan_read"];
+        put?: never;
+        /** @description Choose how many verified professionals will visit and estimate on site: one, two or three. **This charges nothing** — it bounds the invitation wave and snapshots the price the Customer was shown, so a price loaded between choosing and the first vendor confirming cannot silently become what they pay. Re-choosing is allowed while no vendor has committed to a slot. A5 only; an A3 request has no visit plan. */
+        post: operations["m2_visit_plan_choose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirement_id}/visit-plan/checkout/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Pay for the whole visit plan, once, against a slot a vendor has actually committed to. The first vendor's slot is held while this completes and **lapses harmlessly if the Customer never pays** — nothing was charged and the vendor's time returns to the availability grid. The held slot hardens to `SCHEDULED` only on the verified provider callback. Later vendors book without any further payment. */
+        post: operations["m2_visit_plan_checkout_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3008,6 +3193,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/selections/{selection_id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Decline after being chosen. The quote is marked `LAPSED` rather than `REJECTED` — a rejection is the Customer's refusal, and a vendor reading it against their own decision would be told the wrong story about their own standing. The Customer's unlock or visit plan survives and the next quote costs nothing more. */
+        post: operations["m2_selection_decline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/selections/{selection_id}/reconfirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Confirm price, date and capacity after being chosen. **Everything is re-checked here** rather than trusted from quoting time: the capability against this request's own area and start date, the vendor's diary on the shared availability grid, and the quote's validity. A vendor whose approval lapsed in between must not end up holding authorised money against unauthorised work. */
+        post: operations["m2_selection_reconfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/service-areas/": {
         parameters: {
             query?: never;
@@ -3073,6 +3292,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/site-visits/{site_visit_id}/arrival/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Record that the vendor is on site. Either party may confirm it. M2 uses the **non-OTP fallback** as the default path rather than as a degraded one — the start OTP is M3 activation — and `arrival_method` is stored so every historical arrival still says truthfully how it was proved once the OTP path is switched on. */
+        post: operations["m2_site_visit_arrival_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/site-visits/{site_visit_id}/complete/": {
         parameters: {
             query?: never;
@@ -3090,6 +3326,27 @@ export interface paths {
          *     clarification timeline and, from Wave C6, a case — not a competing completion.
          */
         post: operations["m2_site_visit_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/site-visits/{site_visit_id}/no-show/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Report that the other party did not turn up. **You report the other side's absence, never your own** — a Customer reports `VENDOR`, a vendor reports `CUSTOMER` — because the report is a statement by the party who was there.
+         *
+         *     The two settle differently. A vendor no-show costs the Customer nothing: the slot goes back to owing a **free replacement visit**. A customer no-show still pays the vendor their visit payout — they travelled — and only the platform's share is in question, which is an owner decision read fail-closed.
+         */
+        post: operations["m2_site_visit_no_show_report"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3138,6 +3395,28 @@ export interface components {
             readonly label: string;
             readonly unit_price: components["schemas"]["Money"];
             readonly marginal_duration_minutes: number;
+        };
+        /**
+         * @description What a client needs to hand a charge to the payment provider, and nothing more.
+         *
+         *     No provider payload, no key, no signature — `M2-BE-415` asks for payment status without
+         *     leaking provider internals, and the order id plus the amount is the whole of what a checkout
+         *     sheet needs. **The status here is never the grant.** `PROVIDER_PENDING` and `CAPTURED` describe
+         *     the *attempt*; whether the Customer actually has an unlock or a charged plan is the `unlock` or
+         *     `visit_plan` object beside it, and only a verified callback moves that.
+         */
+        AccessCheckout: {
+            /** Format: uuid */
+            readonly payment_attempt_id: string;
+            readonly amount_paise: number;
+            readonly currency: string;
+            readonly provider: string;
+            readonly provider_order_id: string;
+            readonly status: string;
+            /** Format: date-time */
+            readonly expires_at: string | null;
+            /** Format: date-time */
+            readonly server_now: string;
         };
         /**
          * @description * `KEEP_CUSTOMER` - KEEP_CUSTOMER
@@ -3873,6 +4152,48 @@ export interface components {
         CustomerContactAttemptRequestRequest: {
             outcome: string;
         };
+        /**
+         * @description A full quote or estimate, for a Customer who has paid to read it.
+         *
+         *     The entitlement is checked in the view before this serializer is ever constructed. Vendor
+         *     identity is present because it is exactly what the unlock or the visit plan bought; contact
+         *     details are not, because they are released by the engagement and not by the fee.
+         */
+        CustomerProposal: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["ProposalStatusEnum"];
+            readonly usability: components["schemas"]["ProposalUsabilityEnum"];
+            readonly rejection_reason: components["schemas"]["RejectionReasonEnum"];
+            readonly revision: number;
+            /** Format: date-time */
+            readonly revalidation_requested_at: string | null;
+            readonly vendor: {
+                [key: string]: unknown;
+            };
+            readonly site_visit: components["schemas"]["SiteVisit"] | null;
+            readonly rate_paise_per_worker_day: number | null;
+            readonly minimum_days: number | null;
+            readonly worker_count: number | null;
+            readonly total_paise: number;
+            readonly tax_paise: number;
+            readonly tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
+            readonly commission_treatment: string;
+            readonly inclusions: unknown;
+            readonly exclusions: unknown;
+            readonly stages: components["schemas"]["ProposalStage"][];
+            readonly warranty_terms: string;
+            /** Format: date-time */
+            readonly valid_until: string | null;
+            /** Format: date-time */
+            readonly submitted_at: string;
+        };
+        CustomerQuoteList: {
+            readonly quotes: components["schemas"]["CustomerProposal"][];
+            readonly non_responsive_rejections_remaining: number | null;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
         DemandPreview: {
             readonly summaries: components["schemas"]["DemandSummary"][];
             readonly matched_service_count: number;
@@ -3981,8 +4302,90 @@ export interface components {
             target: string;
             reason: string;
         };
+        /**
+         * @description The agreement, frozen at reconfirmation.
+         *
+         *     `commercial_mode` is the field the UI must read before it promises anything. `LEAD_ONLY` means
+         *     the Customer pays the vendor directly and Vsolve's protection is matching and replacement;
+         *     calling that a protected booking is the promise this platform cannot keep.
+         */
+        Engagement: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly requirement: string;
+            /** Format: uuid */
+            readonly proposal: string;
+            /** Format: uuid */
+            readonly partner: string;
+            readonly archetype: string;
+            readonly commercial_mode: components["schemas"]["EngagementCommercialModeEnum"];
+            readonly status: components["schemas"]["EngagementStatusEnum"];
+            readonly total_paise: number;
+            readonly tax_paise: number;
+            readonly tax_basis: string;
+            readonly commission_paise: number;
+            readonly commission_treatment: string;
+            /** Format: date-time */
+            readonly contact_released_at: string | null;
+            /** Format: date-time */
+            readonly work_may_start_at: string | null;
+            readonly stages: components["schemas"]["EngagementStage"][];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `LEAD_ONLY` - Customer pays the vendor directly
+         *     * `MANAGED_PAYMENT_REQUIRED` - Paid through Vsolve
+         * @enum {string}
+         */
+        EngagementCommercialModeEnum: "LEAD_ONLY" | "MANAGED_PAYMENT_REQUIRED";
+        EngagementStage: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly position: number;
+            readonly label: string;
+            readonly amount_paise: number;
+            /** Format: date */
+            readonly scheduled_on: string | null;
+            readonly status: components["schemas"]["EngagementStageStatusEnum"];
+            readonly funding_state: components["schemas"]["EngagementStageFundingStateEnum"];
+            /** Format: date-time */
+            readonly funded_at: string | null;
+        };
+        /**
+         * @description * `NOT_REQUIRED` - Not required
+         *     * `REQUIRED` - Funding required
+         *     * `PENDING` - Awaiting the provider
+         *     * `FUNDED` - Funded
+         * @enum {string}
+         */
+        EngagementStageFundingStateEnum: "NOT_REQUIRED" | "REQUIRED" | "PENDING" | "FUNDED";
+        /**
+         * @description * `PENDING` - Pending
+         *     * `IN_PROGRESS` - In progress
+         *     * `AWAITING_REVIEW` - Awaiting review
+         *     * `APPROVED` - Approved
+         *     * `CORRECTION_REQUESTED` - Correction requested
+         *     * `DISPUTED` - Disputed
+         *     * `RELEASED` - Released
+         * @enum {string}
+         */
+        EngagementStageStatusEnum: "PENDING" | "IN_PROGRESS" | "AWAITING_REVIEW" | "APPROVED" | "CORRECTION_REQUESTED" | "DISPUTED" | "RELEASED";
+        /**
+         * @description * `PENDING_START` - Pending start
+         *     * `ACTIVE` - Active
+         *     * `COMPLETING` - Completing
+         *     * `COMPLETED` - Completed
+         *     * `WARRANTY` - In warranty
+         *     * `CLOSED` - Closed
+         *     * `DISPUTED` - Disputed
+         *     * `CANCELLED` - Cancelled
+         * @enum {string}
+         */
+        EngagementStatusEnum: "PENDING_START" | "ACTIVE" | "COMPLETING" | "COMPLETED" | "WARRANTY" | "CLOSED" | "DISPUTED" | "CANCELLED";
         EnquiryDeclineRequest: {
-            reason_code: string;
+            reason_code: components["schemas"]["InvitationDeclineReasonEnum"];
         };
         /**
          * @description An enquiry list row.
@@ -4009,13 +4412,19 @@ export interface components {
             readonly responds_by: string;
             /** Format: date-time */
             readonly created_at: string;
+            readonly service_name: string;
             readonly answers: unknown;
             readonly additional_details: string;
             readonly budget_min_paise: number | null;
             readonly budget_max_paise: number | null;
+            readonly required_tax_basis: string;
             readonly decline_reason_code: string;
+            readonly proposals: {
+                [key: string]: unknown;
+            }[];
             readonly questions: components["schemas"]["RequirementQuestion"][];
             readonly site_visits: components["schemas"]["SiteVisit"][];
+            readonly server_now: string;
         };
         /**
          * @description An enquiry list row.
@@ -4317,6 +4726,16 @@ export interface components {
          * @enum {string}
          */
         IntendedRoleEnum: "partner";
+        /**
+         * @description * `TOO_FAR` - Too far to travel
+         *     * `NO_CAPACITY` - No capacity on those dates
+         *     * `OUT_OF_SCOPE` - Not work we do
+         *     * `BUDGET_TOO_LOW` - Budget is below what this costs
+         *     * `UNCLEAR_SCOPE` - Cannot tell what is being asked for
+         *     * `OTHER` - Another reason
+         * @enum {string}
+         */
+        InvitationDeclineReasonEnum: "TOO_FAR" | "NO_CAPACITY" | "OUT_OF_SCOPE" | "BUDGET_TOO_LOW" | "UNCLEAR_SCOPE" | "OTHER";
         /**
          * @description A switch, with both signatures and both timestamps.
          *
@@ -5749,11 +6168,7 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
-        /**
-         * @description A vendor's own quote, read back to that vendor.
-         *
-         *     Not the Customer-facing quote view — that requires an active unlock and arrives with BE4.
-         */
+        /** @description A vendor's own quote, read back to that vendor. */
         Proposal: {
             /** Format: uuid */
             readonly id: string;
@@ -5765,6 +6180,11 @@ export interface components {
             readonly revision: number;
             readonly status: components["schemas"]["ProposalStatusEnum"];
             readonly usability: components["schemas"]["ProposalUsabilityEnum"];
+            readonly rejection_reason: components["schemas"]["RejectionReasonEnum"];
+            /** Format: uuid */
+            readonly site_visit: string | null;
+            /** Format: date-time */
+            readonly revalidation_requested_at: string | null;
             readonly rate_paise_per_worker_day: number | null;
             readonly minimum_days: number | null;
             readonly worker_count: number | null;
@@ -5774,7 +6194,7 @@ export interface components {
             readonly commission_treatment: string;
             readonly inclusions: unknown;
             readonly exclusions: unknown;
-            readonly stages: unknown;
+            readonly stages: components["schemas"]["ProposalStage"][];
             readonly warranty_terms: string;
             /** Format: date-time */
             readonly valid_until: string | null;
@@ -5801,13 +6221,100 @@ export interface components {
             rate_paise_per_worker_day?: number | null;
             minimum_days?: number | null;
             worker_count?: number | null;
-            stages?: unknown[];
+            stages?: components["schemas"]["ProposalStageRequest"][];
             inclusions?: string[];
             exclusions?: string[];
             warranty_terms?: string;
             /** Format: date-time */
             valid_until?: string | null;
             commission_treatment?: string;
+            /** Format: uuid */
+            site_visit_id?: string | null;
+        };
+        ProposalPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["Proposal"][];
+        };
+        ProposalRejectRequest: {
+            reason: components["schemas"]["RejectionReasonEnum"];
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description Selection is not a booking, and this shape says so.
+         *
+         *     `reconfirm_by` is the whole point: the Customer has chosen and the vendor has not yet agreed.
+         *     Null when the area carries no operating windows and no business-hours deadline could be
+         *     computed — which is an unset clock, not an unlimited one.
+         */
+        ProposalSelection: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly requirement: string;
+            /** Format: uuid */
+            readonly proposal: string;
+            /** Format: uuid */
+            readonly partner: string;
+            readonly status: components["schemas"]["ProposalSelectionStatusEnum"];
+            /** Format: date-time */
+            readonly reconfirm_by: string | null;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            readonly decline_reason_code: string;
+            readonly engagement_id: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `PENDING_RECONFIRMATION` - Awaiting the vendor
+         *     * `CONFIRMED` - Vendor reconfirmed
+         *     * `DECLINED` - Vendor declined
+         *     * `EXPIRED` - Vendor did not answer in time
+         *     * `WITHDRAWN` - Customer withdrew the selection
+         * @enum {string}
+         */
+        ProposalSelectionStatusEnum: "PENDING_RECONFIRMATION" | "CONFIRMED" | "DECLINED" | "EXPIRED" | "WITHDRAWN";
+        /**
+         * @description One A5 milestone, published so two vendors cannot send two incomparable structures.
+         *
+         *     Until 1.24.0 `stages` was an untyped list and the domain read exactly one key, `amount_paise`.
+         *     Everything a Customer needs to *read* a stage — what it delivers, when it ends — was
+         *     client-authored, so the comparison view had nothing stable to render (`M2-FE-309`).
+         *
+         *     `title` is required and the rest are not: a stage with a name and an amount is a comparable
+         *     stage, and refusing one because a vendor did not fill in an end date would push them back to
+         *     a single-line quote.
+         */
+        ProposalStage: {
+            title: string;
+            /** @default  */
+            deliverable: string;
+            amount_paise: number;
+            /** Format: date */
+            ends_on?: string | null;
+        };
+        /**
+         * @description One A5 milestone, published so two vendors cannot send two incomparable structures.
+         *
+         *     Until 1.24.0 `stages` was an untyped list and the domain read exactly one key, `amount_paise`.
+         *     Everything a Customer needs to *read* a stage — what it delivers, when it ends — was
+         *     client-authored, so the comparison view had nothing stable to render (`M2-FE-309`).
+         *
+         *     `title` is required and the rest are not: a stage with a name and an amount is a comparable
+         *     stage, and refusing one because a vendor did not fill in an end date would push them back to
+         *     a single-line quote.
+         */
+        ProposalStageRequest: {
+            title: string;
+            /** @default  */
+            deliverable: string;
+            amount_paise: number;
+            /** Format: date */
+            ends_on?: string | null;
         };
         /**
          * @description * `SUBMITTED` - Submitted
@@ -5816,9 +6323,11 @@ export interface components {
          *     * `EXPIRED` - Expired
          *     * `SELECTED` - Selected
          *     * `REJECTED` - Rejected
+         *     * `ACCEPTED` - Accepted by the vendor
+         *     * `LAPSED` - Lapsed after selection
          * @enum {string}
          */
-        ProposalStatusEnum: "SUBMITTED" | "SUPERSEDED" | "WITHDRAWN" | "EXPIRED" | "SELECTED" | "REJECTED";
+        ProposalStatusEnum: "SUBMITTED" | "SUPERSEDED" | "WITHDRAWN" | "EXPIRED" | "SELECTED" | "REJECTED" | "ACCEPTED" | "LAPSED";
         /**
          * @description * `INCLUSIVE` - Tax included in the total
          *     * `EXCLUSIVE` - Tax added to the total
@@ -5854,9 +6363,14 @@ export interface components {
         /**
          * @description * `BOOKING_GROUP` - Booking group
          *     * `SCOPE_AMENDMENT_REVISION` - Scope amendment revision
+         *     * `M2_QUOTE_UNLOCK` - M2 quote unlock
+         *     * `M2_VISIT_PLAN` - M2 visit plan
+         *     * `M2_SITE_VISIT_FEE` - M2 site visit fee
+         *     * `M2_STAGE_FUNDING` - M2 stage funding
+         *     * `M2_MATERIAL_ADVANCE` - M2 material advance
          * @enum {string}
          */
-        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION";
+        PurposeEnum: "BOOKING_GROUP" | "SCOPE_AMENDMENT_REVISION" | "M2_QUOTE_UNLOCK" | "M2_VISIT_PLAN" | "M2_SITE_VISIT_FEE" | "M2_STAGE_FUNDING" | "M2_MATERIAL_ADVANCE";
         QuestionAnswerRequest: {
             answer: string;
         };
@@ -5935,6 +6449,31 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /** @description The A3 purchase. `ACTIVE` is only ever reached from a verified provider callback. */
+        QuoteUnlock: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["QuoteUnlockStatusEnum"];
+            readonly price_paise: number;
+            readonly non_responsive_rejection_count: number;
+            readonly receipt_series: string;
+            readonly receipt_sequence: number | null;
+            /** Format: date-time */
+            readonly activated_at: string | null;
+            /** Format: date-time */
+            readonly consumed_at: string | null;
+            /** Format: date-time */
+            readonly refunded_at: string | null;
+        };
+        /**
+         * @description * `PENDING` - Awaiting the provider
+         *     * `ACTIVE` - Active
+         *     * `CONSUMED` - Consumed by an engagement
+         *     * `REFUNDED` - Refunded
+         *     * `FAILED` - Failed
+         * @enum {string}
+         */
+        QuoteUnlockStatusEnum: "PENDING" | "ACTIVE" | "CONSUMED" | "REFUNDED" | "FAILED";
         RankedCandidate: {
             /** Format: uuid */
             partner_id: string;
@@ -6037,6 +6576,12 @@ export interface components {
          * @enum {string}
          */
         RefundStatusEnum: "REQUESTED" | "SUBMITTED" | "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNDER_REVIEW";
+        /**
+         * @description * `NON_RESPONSIVE` - Ignored the stated scope
+         *     * `NOT_CHOSEN` - Customer chose another vendor
+         * @enum {string}
+         */
+        RejectionReasonEnum: "NON_RESPONSIVE" | "NOT_CHOSEN";
         ReleaseKillSwitchRequestRequest: {
             scope: components["schemas"]["KillSwitchScopeEnum"];
             /** @default  */
@@ -6079,6 +6624,7 @@ export interface components {
             readonly id: string;
             readonly status: components["schemas"]["RequirementStatusEnum"];
             readonly category_slug: string;
+            readonly service_name: string;
             readonly inferred_lifecycle: string;
             readonly lifecycle_explanation: string | null;
             readonly answers: unknown;
@@ -6091,6 +6637,19 @@ export interface components {
             readonly is_date_flexible: boolean;
             /** Format: date */
             readonly service_by: string | null;
+            /** Format: date-time */
+            readonly quote_delivery_deadline_at: string;
+            readonly teaser_count: number;
+            readonly closure_reason: string | null;
+            /**
+             * @description Always `True`, and read from the server on purpose.
+             *
+             *     Submitting a requirement is free in both archetypes — the A3 unlock and the A5 visit plan
+             *     are separate purchases made later, against a delivered quote or a confirmed visit. A screen
+             *     that hardcodes the promise keeps making it after the policy changes; this is the field that
+             *     would go `false` first.
+             */
+            readonly is_free: boolean;
             readonly budget_min_paise: number | null;
             readonly budget_max_paise: number | null;
             readonly language: string;
@@ -6113,6 +6672,7 @@ export interface components {
         /**
          * @description * `DRAFT` - Draft
          *     * `MATCHING` - Matching
+         *     * `VISITS_BOOKED` - Visits booked
          *     * `QUOTES_READY` - Quotes ready
          *     * `UNLOCKED` - Unlocked
          *     * `SELECTED` - Selected
@@ -6125,7 +6685,7 @@ export interface components {
          *     * `CLOSED_CANCELLED` - Closed: cancelled
          * @enum {string}
          */
-        RequirementStatusEnum: "DRAFT" | "MATCHING" | "QUOTES_READY" | "UNLOCKED" | "SELECTED" | "ENGAGED" | "CLOSED_NO_SUPPLY" | "CLOSED_SLA_BREACH" | "CLOSED_EXPIRED" | "CLOSED_ABANDONED" | "CLOSED_COMPLETE" | "CLOSED_CANCELLED";
+        RequirementStatusEnum: "DRAFT" | "MATCHING" | "VISITS_BOOKED" | "QUOTES_READY" | "UNLOCKED" | "SELECTED" | "ENGAGED" | "CLOSED_NO_SUPPLY" | "CLOSED_SLA_BREACH" | "CLOSED_EXPIRED" | "CLOSED_ABANDONED" | "CLOSED_COMPLETE" | "CLOSED_CANCELLED";
         RequirementSubmitRequest: {
             /** @default false */
             allow_duplicate: boolean;
@@ -6148,6 +6708,7 @@ export interface components {
             readonly id: string;
             readonly status: components["schemas"]["RequirementStatusEnum"];
             readonly category_slug: string;
+            readonly service_name: string;
             readonly lifecycle_explanation: string | null;
             /** Format: date */
             readonly service_by: string | null;
@@ -6316,6 +6877,13 @@ export interface components {
          * @enum {string}
          */
         ScopeAmendmentStatusEnum: "PROPOSED" | "CUSTOMER_APPROVED" | "CUSTOMER_DECLINED" | "PAYMENT_PENDING" | "AUTHORIZED" | "EXPIRED";
+        SelectionCreateRequest: {
+            /** Format: uuid */
+            proposal_id: string;
+        };
+        SelectionDeclineRequest: {
+            reason_code: string;
+        };
         ServiceArea: {
             /** Format: uuid */
             readonly id: string;
@@ -6444,16 +7012,33 @@ export interface components {
             /** Format: date-time */
             readonly session_expires_at: string | null;
         };
+        /**
+         * @description One visit, in both its shapes.
+         *
+         *     `is_plan_visit` is the field that decides how the whole record reads. A plan visit is paid for
+         *     out of the A5 visit plan, occupies a share of it and opens an estimate window when it completes;
+         *     an ad-hoc visit is a vendor-priced journey with none of that behind it. Publishing the flag
+         *     rather than letting a client infer it from `fee_paise` keeps the two from being rendered as one
+         *     thing with a different price.
+         */
         SiteVisit: {
             /** Format: uuid */
             readonly id: string;
             readonly status: components["schemas"]["SiteVisitStatusEnum"];
+            readonly is_plan_visit: boolean;
             readonly fee_paise: number;
             readonly adjusts_against_final_price: boolean;
             /** Format: date-time */
             readonly scheduled_for: string | null;
+            readonly duration_minutes: number | null;
+            /** Format: date-time */
+            readonly arrival_confirmed_at: string | null;
+            readonly arrival_method: components["schemas"]["VisitArrivalMethodEnum"];
             /** Format: date-time */
             readonly completed_at: string | null;
+            /** Format: date-time */
+            readonly estimate_due_at: string | null;
+            readonly cancellation_reason_code: string;
         };
         SiteVisitCompleteRequest: {
             outcome_notes?: string;
@@ -6470,12 +7055,14 @@ export interface components {
         /**
          * @description * `REQUESTED` - Requested
          *     * `SCHEDULED` - Scheduled
+         *     * `IN_PROGRESS` - Vendor has arrived
          *     * `COMPLETED` - Completed
          *     * `CANCELLED` - Cancelled
-         *     * `NO_SHOW` - No show
+         *     * `VENDOR_NO_SHOW` - Vendor did not arrive
+         *     * `CUSTOMER_NO_SHOW` - Nobody was on site
          * @enum {string}
          */
-        SiteVisitStatusEnum: "REQUESTED" | "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+        SiteVisitStatusEnum: "REQUESTED" | "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "VENDOR_NO_SHOW" | "CUSTOMER_NO_SHOW";
         /**
          * @description * `MANUAL` - Manual
          *     * `REVERSE_GEOCODED` - Reverse geocoded
@@ -6617,6 +7204,16 @@ export interface components {
             /** Format: date-time */
             new_requested_start: string;
         };
+        /** @description The A3 paywall as one read: what it costs, whether it can be bought, and whether it was. */
+        UnlockState: {
+            readonly unlock: components["schemas"]["QuoteUnlock"] | null;
+            readonly is_available: boolean;
+            readonly price_paise: number | null;
+            readonly usable_quote_count: number;
+            readonly can_read_full_quotes: boolean;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
         /**
          * @description Partners owed money with no payable account. Reported, never silently skipped —
          *     a Partner left out of a run without explanation is a support ticket waiting to happen.
@@ -6702,6 +7299,158 @@ export interface components {
          */
         VersionedCommandRequest: {
             expected_version: number;
+        };
+        /**
+         * @description * `NON_OTP_FALLBACK` - Confirmed without an OTP
+         *     * `START_OTP` - Confirmed with a start OTP
+         * @enum {string}
+         */
+        VisitArrivalMethodEnum: "NON_OTP_FALLBACK" | "START_OTP";
+        /**
+         * @description * `VENDOR` - Vendor
+         *     * `CUSTOMER` - Customer
+         * @enum {string}
+         */
+        VisitNoShowPartyEnum: "VENDOR" | "CUSTOMER";
+        VisitNoShowRequest: {
+            party: components["schemas"]["VisitNoShowPartyEnum"];
+            /** @default  */
+            reason_code: string;
+        };
+        VisitPlan: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["VisitPlanStatusEnum"];
+            readonly plan_size: number;
+            readonly price_paise: number;
+            readonly credit_paise: number;
+            /** @description What the Customer still owes: the tier price less any carried-over unlock credit. */
+            readonly chargeable_paise: number;
+            readonly shares: components["schemas"]["VisitPlanShare"][];
+            readonly receipt_series: string;
+            readonly receipt_sequence: number | null;
+            /** Format: date-time */
+            readonly fill_due_at: string | null;
+            /** Format: date-time */
+            readonly chosen_at: string;
+            /** Format: date-time */
+            readonly charged_at: string | null;
+            /** Format: date-time */
+            readonly settled_at: string | null;
+        };
+        VisitPlanChooseRequest: {
+            plan_size: number;
+        };
+        /**
+         * @description One slot of the plan and the money that follows it.
+         *
+         *     The split is published because the Customer is entitled to know what their money bought: a
+         *     vendor visit payout and a Vsolve platform share, in paise, per slot. `REFUNDED` returns both.
+         */
+        VisitPlanShare: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly position: number;
+            readonly status: components["schemas"]["VisitPlanShareStatusEnum"];
+            readonly amount_paise: number;
+            readonly vendor_payout_paise: number;
+            readonly platform_share_paise: number;
+            readonly settlement_reason_code: string;
+            /** Format: date-time */
+            readonly committed_at: string | null;
+            /** Format: date-time */
+            readonly earned_at: string | null;
+            /** Format: date-time */
+            readonly refunded_at: string | null;
+        };
+        /**
+         * @description * `OPEN` - Open
+         *     * `COMMITTED` - A vendor confirmed a visit
+         *     * `EARNED` - Visit completed and estimate delivered
+         *     * `REFUNDED` - Refunded to the Customer
+         *     * `REPLACED` - Awaiting a free replacement visit
+         * @enum {string}
+         */
+        VisitPlanShareStatusEnum: "OPEN" | "COMMITTED" | "EARNED" | "REFUNDED" | "REPLACED";
+        /**
+         * @description The A5 front door as one read: the chooser before, the tracker after.
+         *
+         *     Deliberately one endpoint for both. Before a plan exists it carries the priced tiers the review
+         *     screen offers; after one exists it carries the plan, its shares and the confirmed visits with
+         *     their times. Two endpoints would have meant the tracker and the chooser could disagree about
+         *     which plan the Customer has.
+         */
+        VisitPlanState: {
+            readonly plan: components["schemas"]["VisitPlan"] | null;
+            readonly available_tiers: components["schemas"]["VisitPlanTier"][];
+            readonly visits: components["schemas"]["SiteVisit"][];
+            readonly checkout_available: boolean;
+            readonly can_read_full_estimates: boolean;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description * `CHOSEN` - Chosen, nothing charged
+         *     * `PENDING` - Awaiting the provider
+         *     * `ACTIVE` - Charged
+         *     * `FAILED` - Payment failed
+         *     * `VOID` - Closed before any visit was confirmed
+         *     * `SETTLED` - Every share earned or refunded
+         * @enum {string}
+         */
+        VisitPlanStatusEnum: "CHOSEN" | "PENDING" | "ACTIVE" | "FAILED" | "VOID" | "SETTLED";
+        /** @description One row of the review screen's chooser. An empty list is the honest unpriced state. */
+        VisitPlanTier: {
+            readonly plan_size: number;
+            readonly price_paise: number;
+        };
+        /**
+         * @description One candidate start, in `booking/windows/` field order and with one field removed.
+         *
+         *     `capacity` is deliberately absent. The A1 grid publishes it to a Customer choosing between
+         *     Partners; this grid is scoped to the **one invited vendor**, so a capacity number here would be
+         *     a live readout of that vendor's own diary depth and nothing a slot picker needs.
+         */
+        VisitSlot: {
+            readonly id: string;
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+            readonly is_available: boolean;
+            readonly unavailable_reason: (components["schemas"]["UnavailableReasonEnum"] | components["schemas"]["NullEnum"]) | null;
+        };
+        VisitSlotConfirmRequest: {
+            slot_id: string;
+        };
+        VisitSlotConfirmation: {
+            readonly visit: components["schemas"]["SiteVisit"];
+            readonly share: components["schemas"]["VisitPlanShare"];
+            readonly opens_plan_checkout: boolean;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        VisitSlotDay: {
+            /** Format: date */
+            readonly date: string;
+            readonly is_today: boolean;
+            readonly slots: components["schemas"]["VisitSlot"][];
+        };
+        /**
+         * @description Candidate visit starts for one invited vendor.
+         *
+         *     The Partner-side twin of `POST /api/v1/booking/windows/`, drawn from the same
+         *     `carts.availability` snapshot and the same window loop. **The browser never computes
+         *     availability** — it renders these slots and posts back an `id`, which is a signed token bound
+         *     to this invitation and this start.
+         */
+        VisitSlotGrid: {
+            /** Format: date-time */
+            readonly server_now: string;
+            readonly visit_duration_minutes: number;
+            readonly availability_is_preliminary: boolean;
+            readonly timezone: string;
+            readonly days: components["schemas"]["VisitSlotDay"][];
         };
         WebhookAccepted: {
             readonly accepted: boolean;
@@ -8556,6 +9305,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Offer"];
+                };
+            };
+        };
+    };
+    m2_stage_funding_checkout_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCheckout"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_not_funded` when the stage is already funded, when an earlier stage is not, or when the engagement is `LEAD_ONLY` and paid directly to the vendor. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_engagement_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -12873,6 +13692,116 @@ export interface operations {
             };
         };
     };
+    m2_visit_slot_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitSlotGrid"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_policy_unavailable` when the owner has not set how long a visit takes for this service — the grid cannot be drawn at an invented width; `m2_visit_slot_unavailable` when the request has no serviceable area. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_visit_slot_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitSlotConfirmRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VisitSlotConfirmRequest"];
+                "multipart/form-data": components["schemas"]["VisitSlotConfirmRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitSlotConfirmation"];
+                };
+            };
+            /** @description `m2_lifecycle_not_supported` — only project requests book visit slots. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_visit_slot_unavailable` when the slot has gone, the token is stale or the start has passed — the availability grid's exclusion constraint is the final authority and this is what losing that race reads as; `m2_visit_plan_required` when no plan is live; `m2_capacity_unavailable` and `m2_invitation_slots_exhausted` from the acceptance underneath. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_partner_gate_list: {
         parameters: {
             query?: never;
@@ -13737,6 +14666,45 @@ export interface operations {
             };
         };
     };
+    m2_proposal_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                /** @description Narrow to one request. The result set is scoped to the caller's own proposals first, so this filters a set they already own and cannot be used to discover a request they were never invited to. */
+                requirement?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_proposal_submit: {
         parameters: {
             query?: never;
@@ -14268,6 +15236,151 @@ export interface operations {
             };
         };
     };
+    m2_quote_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerQuoteList"];
+                };
+            };
+            /** @description `m2_unlock_required` — the A3 quotes are still behind the unlock. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_visit_plan_required` — no A5 visit plan has been charged, so no estimate has been bought yet. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_reject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalRejectRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalRejectRequest"];
+                "multipart/form-data": components["schemas"]["ProposalRejectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProposal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_rejection_cap_reached` when every free replacement has been used; `m2_proposal_not_selectable` when the quote is no longer live; `m2_policy_unavailable` when the owner has not set the cap — the free replacement is refused rather than promised on a rule that does not exist. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_quote_revalidate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                proposal_id: string;
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerProposal"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_proposal_not_selectable` when the quote has not expired, when the request already has a chosen vendor, or when the caller has not unlocked these quotes at all. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_quote_teaser_list: {
         parameters: {
             query?: never;
@@ -14288,6 +15401,91 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_selection_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalSelection"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_selection_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SelectionCreateRequest"];
+                "multipart/form-data": components["schemas"]["SelectionCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalSelection"];
+                };
+            };
+            /** @description `m2_unlock_required` — an A3 quote cannot be selected unread. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_selection_conflict` when another session selected first (retryable, and the answer changes on its own); `m2_proposal_not_selectable` for a superseded, withdrawn or expired quote, or an A5 estimate with no completed visit behind it; `m2_visit_plan_required` when the A5 plan is unpaid. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14372,6 +15570,219 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_unlock_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnlockState"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_unlock_checkout_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCheckout"];
+                };
+            };
+            /** @description `m2_lifecycle_not_supported` on an A5 request, which uses a visit plan and has no unlock. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_unlock_not_available` when no usable quote exists yet or the request is already unlocked; `m2_access_price_unavailable` when Operations has loaded no effective price — this **fails closed** rather than charging a guess. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_visit_plan_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitPlanState"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_visit_plan_choose: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitPlanChooseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VisitPlanChooseRequest"];
+                "multipart/form-data": components["schemas"]["VisitPlanChooseRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitPlan"];
+                };
+            };
+            /** @description `m2_lifecycle_not_supported` on an A3 request. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_access_price_unavailable` when this tier has no effective price; `m2_requirement_transition_not_allowed` once a vendor has committed to a visit, because resizing a plan somebody is already travelling for is not a choice. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_visit_plan_checkout_create: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCheckout"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_visit_plan_not_chargeable` when no vendor holds a slot yet, when the plan is already paid for, or when a reclassification credit already covers it; `m2_visit_plan_required` when no plan has been chosen. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14567,6 +15978,102 @@ export interface operations {
             };
         };
     };
+    m2_selection_decline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                selection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionDeclineRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SelectionDeclineRequest"];
+                "multipart/form-data": components["schemas"]["SelectionDeclineRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalSelection"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_selection_reconfirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                selection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            /** @description `m2_capability_not_approved` or `m2_capability_suspended` when the lifecycle capability is no longer live. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_reconfirmation_expired` when the deadline passed — the selection is expired in the same call, so the Customer is not left waiting; `m2_capacity_unavailable` when the vendor's diary filled; `m2_proposal_not_selectable` when the quote's own validity elapsed; `m2_policy_unavailable` when the A5 commission terms are unset. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     service_areas_list: {
         parameters: {
             query?: never;
@@ -14685,6 +16192,47 @@ export interface operations {
             };
         };
     };
+    m2_site_visit_arrival_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                site_visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVisit"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when the visit is not scheduled — a visit whose plan payment has not been verified is still held, not scheduled, and nobody has arrived at it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_site_visit_complete: {
         parameters: {
             query?: never;
@@ -14730,6 +16278,62 @@ export interface operations {
                 };
             };
             /** @description `m2_requirement_transition_not_allowed` when the visit was never scheduled. A visit with no agreed time cannot have happened. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_site_visit_no_show_report: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                site_visit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitNoShowRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["VisitNoShowRequest"];
+                "multipart/form-data": components["schemas"]["VisitNoShowRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteVisit"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when a party reports its own no-show. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when the visit was never scheduled; `m2_policy_unavailable` when the owner has not decided how a customer no-show settles the platform share. */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -208,6 +208,23 @@ set (`ProposalRejectRequest.reason`), and the generator resolved the collision p
 `Reason9ecEnum`. The override keeps the name published at 1.22.0 and gives both fields one
 component.
 
+**`ReasonEnum` is pinned for a sharper reason: without it, 1.24.0 silently renamed a published
+component and broke an app that had not changed.** At 1.23.0 `assignments.DispatchCommandAudit.Reason`
+was the only `reason` choice set in the schema, so it published as the bare `ReasonEnum` — which
+`apps/admin/features/dispatch-recovery/model/commands.ts` imports by that name. Adding two more
+`reason` fields made the generator disambiguate all three and rename it to
+`DispatchCommandRequestReasonEnum`. It is now pinned to its original name. **Caught by
+`pnpm typecheck` on regeneration**, which is the check that exists for exactly this.
+
+### Two fields to know about when you regenerate
+
+`RequirementSummary.service_name` and the four new `RequirementDraft` tracking fields are **required,
+not optional**, so any hand-written fixture typed as those shapes needs them. Three existing fixtures
+were corrected in the same change (`packages/query/src/m2-requirement.test.ts`,
+`apps/customer/features/requirement/adapters/{draft,tracking}.test.ts`). `apps/partner` needs the same
+treatment plus copy for the two new proposal states, `ACCEPTED` and `LAPSED` — that is Session B's
+re-point, logged in `frontend-execution-plan.md` §7.
+
 ### Error codes reachable for the first time
 
 `m2_unlock_not_available`, `m2_unlock_required`, `m2_visit_plan_required`,

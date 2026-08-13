@@ -26,6 +26,8 @@ function draft(overrides: Partial<RequirementDraft> = {}): RequirementDraft {
     id: "req-1",
     status: "DRAFT",
     category_slug: "housekeeping-staff",
+    // Required since contract 1.24.0 — the name a row is titled by, where the slug was standing in.
+    service_name: "Housekeeping staff",
     inferred_lifecycle: "A3_TIME_BLOCK",
     lifecycle_explanation: "You are hiring people for a period of time.",
     answers: { worker_count: 4 },
@@ -35,6 +37,13 @@ function draft(overrides: Partial<RequirementDraft> = {}): RequirementDraft {
     flexibility_days: 3,
     is_date_flexible: true,
     service_by: "2026-08-24",
+    // The four tracking fields the detail projection gained at contract 1.24.0. Until then
+    // `/requests/{id}` rendered a state with no countdown and no quote count, and the
+    // free-to-submit promise existed only on the submit response.
+    quote_delivery_deadline_at: "2026-08-12T18:00:00Z",
+    teaser_count: 0,
+    closure_reason: null,
+    is_free: true,
     budget_min_paise: null,
     budget_max_paise: null,
     language: "en-IN",

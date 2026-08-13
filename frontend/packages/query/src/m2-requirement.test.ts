@@ -25,6 +25,9 @@ const row = (id: string): RequirementSummary => ({
   id,
   status: "MATCHING",
   category_slug: "deep-cleaning",
+  // Required since contract 1.24.0. `category_slug` is a slug and `My requests` was formatting one
+  // into a row title; the server now sends the name it should have been reading.
+  service_name: "Deep cleaning",
   lifecycle_explanation: null,
   service_by: null,
   quote_delivery_deadline_at: "2026-08-20T09:00:00Z",

@@ -11477,22 +11477,6 @@ components:
       - partner_id
       - rank
       - ranked
-    DispatchCommandRequestReasonEnum:
-      enum:
-      - PARTNER_UNREACHABLE
-      - CUSTOMER_REQUEST
-      - SAFETY_CONCERN
-      - DUPLICATE_DISPATCH
-      - STUCK_DISPATCH
-      - OPERATIONS_ERROR
-      type: string
-      description: |-
-        * `PARTNER_UNREACHABLE` - Partner unreachable
-        * `CUSTOMER_REQUEST` - Customer request
-        * `SAFETY_CONCERN` - Safety concern
-        * `DUPLICATE_DISPATCH` - Duplicate dispatch
-        * `STUCK_DISPATCH` - Stuck dispatch
-        * `OPERATIONS_ERROR` - Operations error
     DispatchCommandRequestRequest:
       type: object
       properties:
@@ -11500,7 +11484,7 @@ components:
           type: integer
           minimum: 1
         reason:
-          $ref: '#/components/schemas/DispatchCommandRequestReasonEnum'
+          $ref: '#/components/schemas/ReasonEnum'
         note:
           type: string
           default: ''
@@ -17152,6 +17136,22 @@ components:
       - factors
       - partner_id
       - rank
+    ReasonEnum:
+      enum:
+      - PARTNER_UNREACHABLE
+      - CUSTOMER_REQUEST
+      - SAFETY_CONCERN
+      - DUPLICATE_DISPATCH
+      - STUCK_DISPATCH
+      - OPERATIONS_ERROR
+      type: string
+      description: |-
+        * `PARTNER_UNREACHABLE` - Partner unreachable
+        * `CUSTOMER_REQUEST` - Customer request
+        * `SAFETY_CONCERN` - Safety concern
+        * `DUPLICATE_DISPATCH` - Duplicate dispatch
+        * `STUCK_DISPATCH` - Stuck dispatch
+        * `OPERATIONS_ERROR` - Operations error
     ReasonedCommandRequest:
       type: object
       description: |-
