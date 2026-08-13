@@ -123,8 +123,40 @@ class Booking(models.Model):
 
 class PaymentAttempt(models.Model):
     class Purpose(models.TextChoices):
+        """Why money is being collected. One enum, one payment path.
+
+        Every M2 purpose below is a *post-cart* charge with no `CheckoutSession`, exactly as
+        `SCOPE_AMENDMENT_REVISION` already was. They are added here rather than modelled as a
+        second payment aggregate so reconciliation, webhooks, refunds and the financial-exception
+        machinery keep working on one table (`M2-BE-414`).
+        """
+
         BOOKING_GROUP = "BOOKING_GROUP", "Booking group"
         SCOPE_AMENDMENT_REVISION = "SCOPE_AMENDMENT_REVISION", "Scope amendment revision"
+        #: A3: the INR 149 that unlocks delivered quotes, charged only once a usable quote exists.
+        M2_QUOTE_UNLOCK = "M2_QUOTE_UNLOCK", "M2 quote unlock"
+        #: A5: the whole tiered visit plan, charged once at the first confirmed visit slot.
+        M2_VISIT_PLAN = "M2_VISIT_PLAN", "M2 visit plan"
+        #: An ad-hoc paid site visit, priced by the vendor. Distinct from the plan fee: it is the
+        #: vendor's fee for one journey, not the Customer's access product.
+        M2_SITE_VISIT_FEE = "M2_SITE_VISIT_FEE", "M2 site visit fee"
+        #: A5: one engagement stage, funded at face value. Visit money never discounts a stage.
+        M2_STAGE_FUNDING = "M2_STAGE_FUNDING", "M2 stage funding"
+        #: A5: material money, which is spent rather than earned, so it cannot be recovered like
+        #: an unearned work stage. A distinct purpose is what keeps that rule expressible.
+        M2_MATERIAL_ADVANCE = "M2_MATERIAL_ADVANCE", "M2 material advance"
+
+    #: Purposes that are charged outside a cart and therefore carry no `CheckoutSession`. The
+    #: check constraint below is generated from this tuple so adding a purpose without deciding
+    #: which side of the rule it sits on is not possible.
+    CHECKOUT_FREE_PURPOSES = (
+        "SCOPE_AMENDMENT_REVISION",
+        "M2_QUOTE_UNLOCK",
+        "M2_VISIT_PLAN",
+        "M2_SITE_VISIT_FEE",
+        "M2_STAGE_FUNDING",
+        "M2_MATERIAL_ADVANCE",
+    )
 
     class Status(models.TextChoices):
         PROVIDER_PENDING = "PROVIDER_PENDING", "Provider pending"
@@ -142,8 +174,9 @@ class PaymentAttempt(models.Model):
         NEEDS_ATTENTION = "NEEDS_ATTENTION", "Needs attention"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # Nullable only for `Purpose.SCOPE_AMENDMENT_REVISION` — a post-booking charge for
-    # additional catalog work has no `CheckoutSession`; every other purpose still requires one.
+    # Nullable for every purpose in `CHECKOUT_FREE_PURPOSES` — a post-booking charge for
+    # additional catalog work, and every M2 access or stage charge, has no `CheckoutSession`.
+    # `BOOKING_GROUP` still requires one, and the check constraint below enforces both halves.
     checkout = models.ForeignKey(
         CheckoutSession,
         null=True,
@@ -217,7 +250,17 @@ class PaymentAttempt(models.Model):
             models.CheckConstraint(
                 condition=(
                     models.Q(purpose="BOOKING_GROUP", checkout__isnull=False)
-                    | models.Q(purpose="SCOPE_AMENDMENT_REVISION", checkout__isnull=True)
+                    | models.Q(
+                        purpose__in=(
+                            "SCOPE_AMENDMENT_REVISION",
+                            "M2_QUOTE_UNLOCK",
+                            "M2_VISIT_PLAN",
+                            "M2_SITE_VISIT_FEE",
+                            "M2_STAGE_FUNDING",
+                            "M2_MATERIAL_ADVANCE",
+                        ),
+                        checkout__isnull=True,
+                    )
                 ),
                 name="commerce_payment_attempt_checkout_matches_purpose",
             ),

@@ -90,6 +90,23 @@ class Reservation(models.Model):
         on_delete=models.PROTECT,
         related_name="reservations",
     )
+    # The third reservation scope, added for M2 revision 3 (`M2-BE-421`). An A5 plan visit books
+    # a real slot on this grid rather than inventing a second availability notion, which is what
+    # makes "a visit and an A1 booking cannot double-book the same Partner" true *by construction*
+    # — `assignments_active_reservation_no_overlap` below already forbids the overlap, and it does
+    # not care which scope a reservation came from.
+    #
+    # A lazy `"requirements.SiteVisit"` reference on purpose: `apps.requirements` imports
+    # `apps.carts.availability`, which imports this module, so a real import here would close a
+    # cycle. The string form keeps the dependency one-directional at import time and lets the
+    # migration graph carry it instead.
+    site_visit = models.ForeignKey(
+        "requirements.SiteVisit",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="reservations",
+    )
     partner = models.ForeignKey(
         PartnerProfile, on_delete=models.PROTECT, related_name="reservations"
     )
@@ -111,8 +128,17 @@ class Reservation(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    Q(checkout__isnull=False, fulfilment_unit__isnull=True)
-                    | Q(checkout__isnull=True, fulfilment_unit__isnull=False)
+                    Q(checkout__isnull=False, fulfilment_unit__isnull=True, site_visit__isnull=True)
+                    | Q(
+                        checkout__isnull=True,
+                        fulfilment_unit__isnull=False,
+                        site_visit__isnull=True,
+                    )
+                    | Q(
+                        checkout__isnull=True,
+                        fulfilment_unit__isnull=True,
+                        site_visit__isnull=False,
+                    )
                 ),
                 name="assignments_reservation_exactly_one_scope",
             ),
@@ -120,6 +146,13 @@ class Reservation(models.Model):
                 fields=("fulfilment_unit",),
                 condition=Q(status__in=("TENTATIVE", "CONFIRMED")),
                 name="assignments_one_active_reservation_per_unit",
+            ),
+            # The site-visit twin of the rule above. A visit that is rescheduled releases its old
+            # hold and takes a new one; two live holds for one visit would occupy a Partner twice.
+            models.UniqueConstraint(
+                fields=("site_visit",),
+                condition=Q(status__in=("TENTATIVE", "CONFIRMED"), site_visit__isnull=False),
+                name="assignments_one_active_reservation_per_site_visit",
             ),
         ]
 

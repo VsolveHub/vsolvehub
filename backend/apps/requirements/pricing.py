@@ -1,0 +1,280 @@
+"""Every owner-blocked M2 money and policy value, read in one place and failing closed.
+
+`07-state-machines-and-permissions.md` §9 lists nine values the owner has not decided and requires
+that implementations "read them from configuration and fail closed when unset — no default is baked
+into code". This module is the only place that reads them, so there is exactly one answer to "what
+happens when the owner has not decided yet", and it is a refusal rather than a guess.
+
+The distinction the two refusals draw:
+
+* `m2_access_price_unavailable` — no effective `M2AccessPrice` row. Nothing can be sold.
+* `m2_policy_unavailable` — a clock, a cap or a disposition rule was never set. A specific action
+  is blocked and the message says which.
+
+A price is resolved by **effective date**, exactly like `partners.MinimumWageFloor`: the newest row
+whose `effective_from` has arrived wins, so raising a price is loading a row rather than editing
+one, and a purchase made yesterday still reconciles against the price it was made at.
+"""
+
+from dataclasses import dataclass
+from datetime import date, datetime
+
+from django.utils import timezone
+
+from apps.catalog.models import M2VariantConfiguration
+from apps.locations.models import ServiceArea
+from apps.requirements.exceptions import (
+    AccessPriceUnavailableError,
+    PolicyUnavailableError,
+)
+from apps.requirements.models import CustomerRequirement, M2AccessPrice
+from apps.requirements.sla import ServiceAreaNeverOpenError, add_business_hours
+
+#: The tiers revision 3 defines. A request for any other size is refused before it reaches the
+#: price table, because "how many professionals visit" is a product decision with three answers.
+VISIT_PLAN_SIZES = (1, 2, 3)
+
+
+@dataclass(frozen=True, slots=True)
+class AccessPrice:
+    """One resolved, effective price and the split that goes with it."""
+
+    row: M2AccessPrice
+    amount_paise: int
+    #: `None` for the unlock, which pays no vendor.
+    vendor_payout_basis_points: int | None
+
+
+def _effective_price(*, kind: str, plan_size: int, on_day: date) -> AccessPrice:
+    row = (
+        M2AccessPrice.objects.filter(
+            kind=kind,
+            plan_size=plan_size,
+            effective_from__lte=on_day,
+        )
+        .order_by("-effective_from", "-created_at")
+        .first()
+    )
+    if row is None:
+        raise AccessPriceUnavailableError()
+    return AccessPrice(
+        row=row,
+        amount_paise=row.amount_paise,
+        vendor_payout_basis_points=row.vendor_payout_basis_points,
+    )
+
+
+def unlock_price(*, on_day: date | None = None) -> AccessPrice:
+    """The A3 quote-unlock price. Blocking owner decision 1."""
+    return _effective_price(
+        kind=M2AccessPrice.Kind.A3_QUOTE_UNLOCK,
+        plan_size=0,
+        on_day=on_day or timezone.localdate(),
+    )
+
+
+def visit_plan_price(*, plan_size: int, on_day: date | None = None) -> AccessPrice:
+    """One A5 visit tier, with its vendor-payout split. Blocking owner decision 1."""
+    if plan_size not in VISIT_PLAN_SIZES:
+        raise AccessPriceUnavailableError()
+    return _effective_price(
+        kind=M2AccessPrice.Kind.A5_VISIT_PLAN,
+        plan_size=plan_size,
+        on_day=on_day or timezone.localdate(),
+    )
+
+
+def available_visit_plan_tiers(*, on_day: date | None = None) -> list[AccessPrice]:
+    """Every tier that currently has a price, for the review screen's chooser.
+
+    An empty list is the honest answer while owner decision 1 is open, and the review screen
+    renders "we cannot offer visits here yet" from it rather than three hardcoded prices. It does
+    **not** raise: a read that lists nothing is not a failure, and refusing the whole review screen
+    because a price is missing would hide a requirement the Customer can still submit for A3.
+    """
+    day = on_day or timezone.localdate()
+    tiers: list[AccessPrice] = []
+    for size in VISIT_PLAN_SIZES:
+        row = (
+            M2AccessPrice.objects.filter(
+                kind=M2AccessPrice.Kind.A5_VISIT_PLAN,
+                plan_size=size,
+                effective_from__lte=day,
+            )
+            .order_by("-effective_from", "-created_at")
+            .first()
+        )
+        if row is not None:
+            tiers.append(
+                AccessPrice(
+                    row=row,
+                    amount_paise=row.amount_paise,
+                    vendor_payout_basis_points=row.vendor_payout_basis_points,
+                )
+            )
+    return tiers
+
+
+def share_amounts(*, price_paise: int, plan_size: int) -> list[int]:
+    """`price / size` in integer paise, remainder on the **first** share.
+
+    Fixed by `07-state-machines-and-permissions.md` §4a. Which share carries the remainder matters:
+    it is one paise, and it is also the difference between "the parts add up" and a reconciliation
+    report that is off by a rupee a thousand plans later.
+    """
+    if plan_size <= 0:
+        raise AccessPriceUnavailableError()
+    base = price_paise // plan_size
+    remainder = price_paise - base * plan_size
+    return [base + remainder] + [base] * (plan_size - 1)
+
+
+def split_share(*, amount_paise: int, vendor_payout_basis_points: int) -> tuple[int, int]:
+    """One share as `(vendor visit payout, Vsolve platform share)`, in integer paise.
+
+    The platform share is the **remainder**, not a second multiplication: two independent
+    roundings of the same number do not have to add back to it, and this one always does.
+    """
+    vendor = amount_paise * vendor_payout_basis_points // 10000
+    return vendor, amount_paise - vendor
+
+
+# ---------------------------------------------------------------------------
+# Policy clocks and rules. Owner decisions 2, 3 and 4.
+# ---------------------------------------------------------------------------
+
+
+def _configuration(requirement: CustomerRequirement) -> M2VariantConfiguration:
+    configuration = requirement.configuration
+    if configuration is None:
+        raise PolicyUnavailableError(
+            "This service has no active configuration, so we cannot apply its rules yet.",
+        )
+    return configuration
+
+
+def _business_hours_deadline(
+    *, area: ServiceArea | None, start: datetime, hours: int
+) -> datetime | None:
+    """Advance a clock through the area's open hours, or answer `None` when it cannot run.
+
+    Reuses `requirements.sla`, which reuses `locations.ServiceAreaOperatingWindow`. A second
+    calendar is the thing `02-backend-tasks.md` §"Reuse before building" names explicitly.
+    """
+    if area is None:
+        return None
+    windows = list(area.operating_windows.all())
+    exceptions = list(area.operating_exceptions.all())
+    if not windows and not exceptions:
+        return None
+    try:
+        return add_business_hours(start=start, hours=hours, windows=windows, exceptions=exceptions)
+    except ServiceAreaNeverOpenError:
+        return None
+
+
+def first_visit_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime | None:
+    """When a first confirmed visit slot is due. `None` when the owner promised no SLA."""
+    hours = _configuration(requirement).first_visit_sla_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=at or requirement.submitted_at or timezone.now(),
+        hours=hours,
+    )
+
+
+def visit_plan_fill_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime | None:
+    """When every plan slot should be filled. Unfilled shares auto-refund after it."""
+    hours = _configuration(requirement).visit_plan_fill_sla_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=at or requirement.submitted_at or timezone.now(),
+        hours=hours,
+    )
+
+
+def estimate_window_deadline(
+    requirement: CustomerRequirement, *, completed_at: datetime
+) -> datetime | None:
+    """When a completed visit stops being allowed to produce an estimate.
+
+    `None` means the owner has set no window, and a visit that produced nothing then never
+    auto-refunds. That is the honest consequence of an unset policy — the alternative is inventing
+    a deadline and refunding a vendor's earned visit against it.
+    """
+    hours = _configuration(requirement).post_visit_estimate_window_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=completed_at,
+        hours=hours,
+    )
+
+
+def customer_no_show_refunds_platform_share(requirement: CustomerRequirement) -> bool:
+    """Owner decision 3. The vendor payout is always paid; this decides the platform share only."""
+    value = _configuration(requirement).customer_no_show_refunds_platform_share
+    if value is None:
+        raise PolicyUnavailableError(
+            "We have not decided how a missed visit is settled yet. Support can help.",
+        )
+    return value
+
+
+def non_responsive_rejection_cap(requirement: CustomerRequirement) -> int:
+    """How many free replacements a Customer gets. Unset blocks the mechanism, not the rejection.
+
+    A cap of zero is a legitimate configuration — "no free replacements" — which is why the unset
+    case has to be `None` and not `0`.
+    """
+    cap = _configuration(requirement).non_responsive_rejection_cap
+    if cap is None:
+        raise PolicyUnavailableError(
+            "We have not set how many free replacements this service offers. Support can help.",
+        )
+    return cap
+
+
+def a5_commission(requirement: CustomerRequirement, *, total_paise: int) -> tuple[int, str]:
+    """Vsolve's commission on an A5 engagement, in paise, and how it is displayed.
+
+    Owner decision 4, in both halves: the rate and whether it sits inside the vendor's quoted price
+    or is added on top. Both are Operations-owned rather than vendor-declared — a vendor who could
+    name the commission treatment could make every comparison view dishonest — and both fail closed.
+    """
+    configuration = _configuration(requirement)
+    basis_points = configuration.commission_basis_points
+    treatment = configuration.commission_treatment
+    if basis_points is None or not treatment:
+        raise PolicyUnavailableError(
+            "We have not set the commission terms for this service yet. Support can help.",
+        )
+    return total_paise * basis_points // 10000, treatment
+
+
+def reconfirmation_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime | None:
+    """How long a selected vendor has to reconfirm.
+
+    Reuses `first_quote_sla_hours` deliberately: reconfirmation is the same promise as a first
+    response, made by a vendor who has already engaged, and owner decision 2 lists the two together.
+    A separate unset knob would have blocked selection on a value nobody has been asked for.
+    """
+    hours = _configuration(requirement).first_quote_sla_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=at or timezone.now(),
+        hours=hours,
+    )

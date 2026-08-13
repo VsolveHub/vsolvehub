@@ -472,6 +472,17 @@ REQUIREMENT_ATTACHMENT_ACCESS_URL_TTL_SECONDS = env.int(
     "REQUIREMENT_ATTACHMENT_ACCESS_URL_TTL_SECONDS",
     default=300,
 )
+# How long a signed A5 visit-slot token stays redeemable. Fifteen minutes, matching the A1 arrival
+# window token: a slot picker that is left open for an hour is showing a diary that has moved, and
+# the token expiring is what forces a refresh rather than a booking against a stale grid. This is
+# a token lifetime, not a business policy — no owner decision is blocked on it.
+M2_VISIT_SLOT_TOKEN_TTL_SECONDS = env.int("M2_VISIT_SLOT_TOKEN_TTL_SECONDS", default=900)
+# How long the *first* vendor's visit slot is held while the Customer completes the plan checkout.
+# The hold is a `TENTATIVE` reservation, so when it lapses the slot simply returns to the grid and
+# nothing was charged — which is the whole point of charging at the first confirmed slot rather
+# than at request time. Same duration as the M1 payment window, for the same reason: it is how
+# long a person reasonably takes to finish paying.
+M2_VISIT_PLAN_HOLD_SECONDS = env.int("M2_VISIT_PLAN_HOLD_SECONDS", default=1800)
 PARTNER_PRESENCE_TTL_SECONDS = env.int("PARTNER_PRESENCE_TTL_SECONDS", default=90)
 PARTNER_PRESENCE_DB_TOUCH_SECONDS = env.int(
     "PARTNER_PRESENCE_DB_TOUCH_SECONDS",

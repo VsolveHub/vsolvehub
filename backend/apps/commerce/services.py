@@ -217,6 +217,49 @@ def initiate_payment_attempt(
     return attempt
 
 
+def initiate_standalone_payment_attempt(
+    *,
+    purpose: str,
+    amount_paise: int,
+    idempotency_key: str,
+    currency: str = "INR",
+    expires_at: object = None,
+) -> PaymentAttempt:
+    """Start a charge that has no `CheckoutSession` behind it.
+
+    The generalisation of what `fulfilment.amendments.approve_scope_amendment` was already doing
+    by hand: a post-cart charge still needs a `PaymentAttempt`, a provider order and the same
+    reconciliation machinery, and the only thing it lacks is a cart. Extracted here when M2's
+    unlock, visit plan and stage funding became the third, fourth and fifth caller — five copies
+    of "create the attempt and enqueue its order" is five places for the outbox key to drift.
+
+    The caller owns idempotency. Every M2 caller runs inside `execute_idempotent` or holds a row
+    lock on the aggregate it is charging for, so a second attempt for one unlock or one plan is
+    refused before it reaches here.
+    """
+    if purpose not in PaymentAttempt.CHECKOUT_FREE_PURPOSES:
+        raise ValueError("This purpose requires a Checkout.")
+    if amount_paise <= 0:
+        raise ValueError("A payment attempt needs a positive amount.")
+    attempt = PaymentAttempt.objects.create(
+        checkout=None,
+        purpose=purpose,
+        idempotency_key=idempotency_key,
+        provider=settings.PAYMENT_PROVIDER,
+        amount_paise=amount_paise,
+        currency=currency,
+        expires_at=expires_at,
+    )
+    enqueue_outbox_event(
+        aggregate_type="payment_attempt",
+        aggregate_id=attempt.id,
+        event_type="payment_attempt.order_requested",
+        idempotency_key=f"payment-order:{attempt.id}",
+        payload={"payment_attempt_id": str(attempt.id)},
+    )
+    return attempt
+
+
 def create_provider_order(*, attempt_id: UUID) -> PaymentAttempt:
     attempt = PaymentAttempt.objects.get(id=attempt_id)
     if attempt.status != PaymentAttempt.Status.PROVIDER_PENDING:
@@ -525,6 +568,39 @@ def _materialize_captured_group(*, attempt: PaymentAttempt) -> Order | None:
     return order
 
 
+#: M2 access and stage charges, and the domain command that finishes each one. The dispatch is a
+#: table rather than a chain of `if`s so that adding a purpose without wiring its completion is a
+#: `KeyError` at the moment of capture rather than money taken against nothing.
+M2_CAPTURE_PURPOSES = (
+    PaymentAttempt.Purpose.M2_QUOTE_UNLOCK,
+    PaymentAttempt.Purpose.M2_VISIT_PLAN,
+    PaymentAttempt.Purpose.M2_STAGE_FUNDING,
+)
+
+
+def _apply_m2_capture(*, attempt: PaymentAttempt) -> None:
+    """Hand a captured M2 charge to the domain that sold it.
+
+    Called **inside** `apply_provider_payment`'s transaction, deliberately. Granting the unlock
+    from an outbox event instead would put a commit boundary between "the Customer's money moved"
+    and "the Customer got what they paid for", and every lost event in that gap is a support
+    ticket about a payment that bought nothing.
+
+    Imported inside the function because `apps.requirements` imports this module: the dependency
+    runs requirements → commerce at import time, and this is the one call that goes the other way.
+    """
+    from apps.requirements import access  # noqa: PLC0415 - avoids a module import cycle
+
+    if attempt.purpose == PaymentAttempt.Purpose.M2_QUOTE_UNLOCK:
+        access.complete_unlock(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.M2_VISIT_PLAN:
+        access.complete_visit_plan(payment_attempt_id=attempt.id)
+    elif attempt.purpose == PaymentAttempt.Purpose.M2_STAGE_FUNDING:
+        from apps.requirements import engagements  # noqa: PLC0415 - same cycle
+
+        engagements.complete_stage_funding(payment_attempt_id=attempt.id)
+
+
 def _validate_payment_amount(*, attempt: PaymentAttempt, payment: ProviderPayment) -> bool:
     if (
         payment.provider_order_id != attempt.provider_order_id
@@ -582,7 +658,10 @@ def apply_provider_payment(
                     "updated_at",
                 )
             )
-        return _materialize_captured_group(attempt=attempt)
+        if attempt.purpose == PaymentAttempt.Purpose.BOOKING_GROUP:
+            return _materialize_captured_group(attempt=attempt)
+        _apply_m2_capture(attempt=attempt)
+        return None
     if payment.status == "authorized" and attempt.status in (
         PaymentAttempt.Status.PROVIDER_PENDING,
         PaymentAttempt.Status.CREATED,
@@ -879,6 +958,81 @@ def request_unit_refund(
     return refund
 
 
+@transaction.atomic
+def request_standalone_refund(
+    *,
+    payment_attempt_id: UUID,
+    amount_paise: int,
+    reason_code: str,
+    idempotency_key: str,
+    requested_by_id: UUID | None = None,
+) -> Refund:
+    """Refund part or all of a charge that has no Order or Fulfilment Units behind it.
+
+    The counterpart to `request_unit_refund` for the standalone purposes. It cannot reuse that
+    function for a structural reason rather than a stylistic one: unit refunds allocate against
+    `PaymentAllocation` rows, and an M2 access charge has none — an allocation points at a
+    `FulfilmentUnitLine`, which an unlock or a visit share does not have.
+
+    Idempotent on `(payment_attempt, idempotency_key)`, which is the constraint
+    `commerce_unique_payment_refund_key` already enforces, so an overlapping settlement sweep
+    returns the refund it already asked for instead of asking twice. The remaining balance is
+    checked against every refund that is not `FAILED`, so two shares of one plan can each refund
+    their own amount and neither can overdraw the plan.
+    """
+    attempt = PaymentAttempt.objects.select_for_update().get(id=payment_attempt_id)
+    existing = attempt.refunds.filter(idempotency_key=idempotency_key).first()
+    if existing is not None:
+        return existing
+    if attempt.status not in PAYMENT_FINAL_STATES:
+        raise ValueError("Only a captured payment can be refunded.")
+    committed = (
+        attempt.refunds.exclude(status=Refund.Status.FAILED).aggregate(total=Sum("amount_paise"))[
+            "total"
+        ]
+        or 0
+    )
+    if amount_paise <= 0 or committed + amount_paise > attempt.amount_paise:
+        raise ValueError("The refund exceeds the remaining refundable balance.")
+    refund = Refund.objects.create(
+        payment_attempt=attempt,
+        amount_paise=amount_paise,
+        currency=attempt.currency,
+        reason_code=reason_code,
+        idempotency_key=idempotency_key,
+        requested_by_id=requested_by_id,
+    )
+    enqueue_outbox_event(
+        aggregate_type="refund",
+        aggregate_id=refund.id,
+        event_type="refund.submission_requested",
+        idempotency_key=f"refund-submit:{refund.id}",
+        payload={"refund_id": str(refund.id)},
+    )
+    return refund
+
+
+def allocate_document_number(*, kind: str, issued_on: date | None = None) -> tuple[str, int]:
+    """Take the next number in one document series, for a record that is not a `TaxDocument`.
+
+    M2 access fees need a durable, gapless receipt reference (`M2-BE-415`) and have no `Order`, so
+    they cannot be `TaxDocument` rows — that model's `order` is not nullable, and making it
+    nullable would weaken the invariant every M1 invoice depends on. Reusing `DocumentSequence`
+    keeps one numbering authority instead of a second counter that could collide with it.
+    """
+    financial_year = _financial_year(issued_on or timezone.localdate())
+    series = f"M2A-{financial_year}"
+    sequence, _created = DocumentSequence.objects.select_for_update().get_or_create(
+        legal_entity_code=settings.PAYMENT_LEGAL_ENTITY_CODE,
+        financial_year=financial_year,
+        kind=kind,
+        series=series,
+    )
+    sequence.last_sequence += 1
+    sequence.save(update_fields=("last_sequence",))
+    return series, sequence.last_sequence
+
+
 def submit_refund(*, refund_id: UUID) -> Refund:
     refund = Refund.objects.select_related("payment_attempt").get(id=refund_id)
     if refund.status != Refund.Status.REQUESTED:
@@ -989,8 +1143,27 @@ def _apply_refund_provider_result(
             attempt = refund.payment_attempt
             if attempt is None:
                 raise ValueError("The provider refund has no payment attempt.")
+            # A cart payment owns `PaymentAllocation` rows and its refunded total is their sum.
+            # A standalone charge — a scope-amendment revision, an M2 unlock, a visit plan, a
+            # stage — has none, because an allocation points at a `FulfilmentUnitLine` that does
+            # not exist for it. `aggregate` answers `None` (not `0`) when there are no rows, which
+            # is exactly the signal that distinguishes the two, so the fallback sums the succeeded
+            # refunds themselves. Without it a fully refunded unlock would settle as
+            # `PARTIALLY_REFUNDED` and sit in the reconciliation report forever.
+            allocated_refunds = attempt.allocations.aggregate(total=Sum("refunded_paise"))["total"]
             refunded_total = (
-                attempt.allocations.aggregate(total=Sum("refunded_paise"))["total"] or 0
+                allocated_refunds
+                if allocated_refunds is not None
+                else refund.amount_paise
+                + (
+                    Refund.objects.filter(
+                        payment_attempt=attempt,
+                        status=Refund.Status.SUCCEEDED,
+                    )
+                    .exclude(id=refund.id)
+                    .aggregate(total=Sum("amount_paise"))["total"]
+                    or 0
+                )
             )
             attempt.status = (
                 PaymentAttempt.Status.REFUNDED

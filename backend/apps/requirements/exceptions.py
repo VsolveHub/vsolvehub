@@ -164,3 +164,168 @@ class AttachmentRejectedError(RequirementDomainError):
             status_code=503 if retryable else 400,
             retryable=retryable,
         )
+
+
+# ---------------------------------------------------------------------------
+# P4 / revision 3: access, visits, selection and engagement.
+#
+# Two of these codes are not in `07-state-machines-and-permissions.md` §8 and are new here:
+# `m2_access_price_unavailable` and `m2_policy_unavailable`. §9 of that document requires every
+# owner-blocked value to be read from configuration and to **fail closed when unset**, and gives
+# no code to fail closed with; these are it. They are deliberately two codes rather than one,
+# because the recoveries differ — the first says Operations has not loaded a price, the second
+# says a policy clock or rule was never decided — and because keeping money separate from process
+# is what lets an alert on the first mean "we cannot sell anything".
+# ---------------------------------------------------------------------------
+
+
+class AccessPriceUnavailableError(RequirementDomainError):
+    """No effective price is loaded for this access product.
+
+    Fails closed rather than guessing. The A3 unlock price and the A5 tier prices, together with
+    the per-slot split, are blocking owner decision 1; a code default would be a price nobody
+    approved, charged to a real Customer, and indistinguishable afterwards from an approved one.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_access_price_unavailable",
+            message="We cannot price this yet. Support can help.",
+            status_code=409,
+        )
+
+
+class PolicyUnavailableError(RequirementDomainError):
+    """An owner-blocked policy value this action depends on has not been configured."""
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_policy_unavailable",
+            message=message or "We cannot complete this yet because a policy is not set.",
+            status_code=409,
+        )
+
+
+class UnlockNotAvailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_unlock_not_available",
+            message=message or "There is no quote to unlock yet.",
+            status_code=409,
+        )
+
+
+class UnlockRequiredError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_unlock_required",
+            message="Unlock the quotes to read and compare them.",
+            status_code=403,
+        )
+
+
+class UnlockPaymentPendingError(RequirementDomainError):
+    """The provider has not confirmed yet.
+
+    A `409`, not the `202` the plan's first draft carried: proposal 0012's review settled that a
+    refusal is always `>=400` and `202` is reserved for genuine acceptance carrying a projection.
+    Retryable, because the answer really does change on its own.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_unlock_payment_pending",
+            message="We are waiting for your bank to confirm. This page updates itself.",
+            status_code=409,
+            retryable=True,
+        )
+
+
+class VisitPlanRequiredError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_visit_plan_required",
+            message="Choose how many professionals should visit before sending this request.",
+            status_code=409,
+        )
+
+
+class VisitPlanNotChargeableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_visit_plan_not_chargeable",
+            message=message
+            or "No vendor has confirmed a visit slot yet, so there is nothing to pay for.",
+            status_code=409,
+        )
+
+
+class VisitPlanPaymentPendingError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_visit_plan_payment_pending",
+            message="We are waiting for your bank to confirm your visit plan.",
+            status_code=409,
+            retryable=True,
+        )
+
+
+class VisitSlotUnavailableError(RequirementDomainError):
+    """The grid slot is gone.
+
+    Raised from the same availability grid the A1 checkout reads, which is what makes a visit and
+    an A1 booking mutually exclusive rather than merely unlikely.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_visit_slot_unavailable",
+            message=message or "That time is no longer free. Pick another.",
+            status_code=409,
+        )
+
+
+class VisitNotCompletedError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_visit_not_completed",
+            message=message or "Complete the site visit before submitting an estimate.",
+            status_code=409,
+        )
+
+
+class RejectionCapReachedError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_rejection_cap_reached",
+            message="You have used every free replacement for this request. Support can help.",
+            status_code=409,
+        )
+
+
+class SelectionConflictError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_selection_conflict",
+            message=message or "This request already has a chosen vendor.",
+            status_code=409,
+            retryable=True,
+        )
+
+
+class ReconfirmationExpiredError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_reconfirmation_expired",
+            message="The time to reconfirm this job has passed.",
+            status_code=409,
+        )
+
+
+class StageNotFundedError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_stage_not_funded",
+            message=message or "This stage has to be funded before work can start.",
+            status_code=409,
+        )

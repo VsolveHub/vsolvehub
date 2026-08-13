@@ -26,6 +26,7 @@ from apps.partners.exceptions import WageFloorUnsetError
 from apps.requirements.exceptions import (
     ProposalShapeError,
     RequirementTransitionError,
+    VisitNotCompletedError,
 )
 from apps.requirements.models import (
     CustomerRequirement,
@@ -78,6 +79,43 @@ def _assert_a5_shape(payload: dict[str, Any]) -> None:
         raise ProposalShapeError(
             "The stage amounts must add up to the quoted total.",
         )
+
+
+def _assert_completed_visit(
+    *,
+    invitation: VendorInvitation,
+    site_visit_id: uuid.UUID | None,
+) -> SiteVisit:
+    """An A5 estimate must be priced on a visit this vendor actually completed (`M2-BE-424`).
+
+    This is the guard the whole visit-first model rests on. The Customer paid a visit plan to buy
+    somebody standing in the room; an estimate produced from a desk is exactly the guess revision 3
+    exists to remove, so the estimate is refused rather than accepted with a caveat.
+
+    Three separate refusals, deliberately not collapsed into one:
+
+    - **No visit named at all.** The vendor reached the composer without one, which in practice
+      means the client let them.
+    - **A visit belonging to someone else.** Scoped to this invitation rather than to the
+      requirement, because two vendors visit the same site under one plan and neither may price on
+      the other's visit — the lookup is the authorization, so a foreign id reads as "not yours"
+      rather than confirming a visit exists.
+    - **A visit that is not `COMPLETED`.** `REQUESTED`, `SCHEDULED` and `IN_PROGRESS` all mean the
+      visit has not happened yet, and `CANCELLED` means it never will.
+
+    The last two both raise `VisitNotCompletedError`, because from the vendor's side the recovery is
+    identical — complete the visit — and telling them which of the two it was would disclose whether
+    another vendor's visit id exists.
+    """
+    if site_visit_id is None:
+        raise VisitNotCompletedError(
+            "Name the visit this estimate is based on before submitting it.",
+        )
+
+    visit = SiteVisit.objects.filter(pk=site_visit_id, invitation=invitation).first()
+    if visit is None or visit.status != SiteVisit.Status.COMPLETED:
+        raise VisitNotCompletedError()
+    return visit
 
 
 def classify_usability(*, requirement: CustomerRequirement, total_paise: int) -> str:
@@ -164,6 +202,7 @@ def submit_proposal(
     warranty_terms: str = "",
     valid_until: Any = None,
     commission_treatment: str = "",
+    site_visit_id: uuid.UUID | None = None,
     captured_by: User | None = None,
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
@@ -199,10 +238,12 @@ def submit_proposal(
         "stages": stages or [],
         "total_paise": total_paise,
     }
+    site_visit: SiteVisit | None = None
     if requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
         _assert_a3_shape(payload)
     else:
         _assert_a5_shape(payload)
+        site_visit = _assert_completed_visit(invitation=invitation, site_visit_id=site_visit_id)
 
     required_basis = _required_tax_basis(requirement)
     if required_basis and tax_basis != required_basis:
@@ -235,6 +276,7 @@ def submit_proposal(
         invitation=invitation,
         partner=invitation.partner,
         snapshot=invitation.snapshot,
+        site_visit=site_visit,
         supersedes=previous,
         revision=(previous.revision + 1) if previous is not None else 1,
         status=Proposal.Status.SUBMITTED,

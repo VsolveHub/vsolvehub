@@ -254,6 +254,34 @@ class M2VariantConfiguration(models.Model):
     max_quotes = models.PositiveSmallIntegerField(default=3)
     #: How many non-responsive rejections a Customer may make before the slot stops reopening.
     non_responsive_rejection_cap = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # --- Revision 3 (ADR-0008): the A5 visit clocks and the A5 commission terms. -------------
+    # All nullable/blank for the same reason `first_quote_sla_hours` is: they are owner decisions
+    # 2, 3 and 4, and a default here would bake a policy nobody approved into the schema. Every
+    # reader in `apps.requirements.pricing` refuses with `m2_policy_unavailable` while one is
+    # unset rather than guessing.
+    #: How long an A5 plan visit occupies the vendor on the shared availability grid. Null blocks
+    #: `confirm_visit_slot`: there is no defensible default for "how long does a site visit take",
+    #: and guessing it would either double-book a vendor or hide half their day.
+    visit_duration_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Business hours from submission to the first *confirmed visit slot* (A5's answer to
+    #: `first_quote_sla_hours`). Owner decision 2.
+    first_visit_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Business hours from submission by which every plan slot should be filled. An unfilled share
+    #: auto-refunds once this passes. Owner decision 2.
+    visit_plan_fill_sla_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Business hours after a `COMPLETED` visit within which a usable estimate must land. A visit
+    #: that produces nothing refunds or replaces its share. Owner decision 2.
+    post_visit_estimate_window_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: On a Customer no-show the vendor visit payout is always paid — they travelled. This decides
+    #: only what happens to the platform share. Owner decision 3.
+    customer_no_show_refunds_platform_share = models.BooleanField(null=True, blank=True)
+    #: Vsolve's share of an A5 engagement, in basis points. Owner decision 4's arithmetic half.
+    commission_basis_points = models.PositiveIntegerField(null=True, blank=True)
+    #: Whether that commission sits inside the vendor's quoted price or is added on top. A
+    #: displayed, immutable term on every A5 proposal, so it is Operations-owned rather than
+    #: vendor-declared. Owner decision 4's disclosure half.
+    commission_treatment = models.CharField(max_length=24, blank=True)
     evidence_policy = models.JSONField(default=dict)
     contact_policy = models.JSONField(default=dict)
     created_by = models.ForeignKey(
@@ -286,6 +314,17 @@ class M2VariantConfiguration(models.Model):
                 | models.Q(first_quote_sla_hours__isnull=True)
                 | models.Q(quote_delivery_sla_hours__gte=models.F("first_quote_sla_hours")),
                 name="catalog_m2_configuration_sla_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(visit_plan_fill_sla_hours__isnull=True)
+                | models.Q(first_visit_sla_hours__isnull=True)
+                | models.Q(visit_plan_fill_sla_hours__gte=models.F("first_visit_sla_hours")),
+                name="catalog_m2_configuration_visit_sla_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(commission_basis_points__isnull=True)
+                | models.Q(commission_basis_points__lte=10000),
+                name="catalog_m2_configuration_commission_within_range",
             ),
         ]
 
