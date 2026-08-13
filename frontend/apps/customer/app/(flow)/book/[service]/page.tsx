@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getServiceConfiguration } from "@/features/catalog/queries";
 import { BookingWorkspaceBoot } from "@/features/booking/view/workspace-boot";
@@ -32,6 +32,16 @@ export default async function BookingPage({ params, searchParams }: PageProps) {
 
   const service = await getServiceConfiguration(serviceSlug);
   if (!service) notFound();
+
+  // Workforce and project services reach this route through an old link, a
+  // bookmark or a typed URL — never through the catalog, whose action branches
+  // on the same field. They have no bookable variant and no price, so the
+  // booking workspace has nothing to show; but a 404 would be a dead end for a
+  // customer who *can* be served, just through the other door. Redirect rather
+  // than refuse, and keep the 404 below for the genuine catalog problem.
+  if (service.variants.length === 0 && service.request_archetypes.length > 0) {
+    redirect(`/requests/new/${serviceSlug}`);
+  }
 
   // A service with no configured variant cannot be booked. That is a catalog
   // problem, and 404 is more honest than an empty form the customer cannot

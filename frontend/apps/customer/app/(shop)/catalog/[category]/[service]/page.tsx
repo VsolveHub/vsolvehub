@@ -96,14 +96,32 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         )}
       </header>
 
-      {/* The one primary action on the page (plan 03). It leads into the booking
-          workspace, which owns scope, duration, slot and the real quote.
-          A link rather than a button, so middle-click and "open in new tab"
-          behave the way the browser promises. */}
+      {/*
+        The one primary action on the page (plan 03), and **the archetype chooses it**.
+
+        A priced service leads into the booking workspace, which owns scope, duration, slot and
+        the real quote. A service you describe leads into the four-screen requirement flow, where
+        vendors quote instead. `README.md` §"Customer, Partner and Operations surfaces" names both
+        actions in exactly these words.
+
+        This branch was missing until contract 1.27.0 published `request_archetypes`: there was no
+        field to branch on, so every service — including workforce and project work that has no
+        price and no bookable variant — offered "Check price and availability" and led to a
+        booking workspace with nothing in it.
+
+        A link rather than a button, so middle-click and "open in new tab" behave the way the
+        browser promises.
+      */}
       <div className="pb-8">
-        <Link href={`/book/${service.slug}`} className={buttonStyles({ size: "lg" })}>
-          Check price and availability
-        </Link>
+        {service.request_archetypes.length > 0 ? (
+          <Link href={`/requests/new/${service.slug}`} className={buttonStyles({ size: "lg" })}>
+            Tell us what you need
+          </Link>
+        ) : (
+          <Link href={`/book/${service.slug}`} className={buttonStyles({ size: "lg" })}>
+            Check price and availability
+          </Link>
+        )}
       </div>
 
       {service.description ? (
