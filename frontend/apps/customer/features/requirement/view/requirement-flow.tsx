@@ -1,6 +1,8 @@
 "use client";
 
 import { describeError, isLifecycleUnsupported } from "@vsolve/query";
+
+import { BROWSE_HREF, requestHref } from "@/lib/routes";
 import { ErrorState } from "@vsolve/ui";
 import { useEffect, useState } from "react";
 
@@ -76,9 +78,6 @@ export interface RequirementFlowProps {
   service: RequirementService;
   /** The A3/A5 variant chosen by the route. Carries screen 1's questions. */
   variant: RequirementVariant;
-  /** Where a submitted request is followed. Injected — this feature owns no route. */
-  requestHrefFor: (requirementId: string) => string;
-  browseHref: string;
 }
 
 export function RequirementFlow(props: RequirementFlowProps) {
@@ -114,13 +113,7 @@ function startOfLocalDay(isoDate: string): string {
   return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 0, 0, 0, 0).toISOString();
 }
 
-function FlowBody({
-  service,
-  variant,
-  requestHrefFor,
-  browseHref,
-  onDuplicatesChange,
-}: FlowBodyProps) {
+function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
   const { state, dispatch, today, advance, canContinue } = useRequirement();
 
   const createRequirement = useCreateRequirement();
@@ -207,8 +200,8 @@ function FlowBody({
         requirementId={submitted.id}
         isFree={submitted.is_free}
         quoteDeadlineAt={submitted.quote_delivery_deadline_at}
-        requestHref={requestHrefFor(submitted.id)}
-        browseHref={browseHref}
+        requestHref={requestHref(submitted.id)}
+        browseHref={BROWSE_HREF}
       />
     );
   }
@@ -317,7 +310,7 @@ function FlowBody({
               }),
             ),
           )}
-          duplicateHrefFor={requestHrefFor}
+          duplicateHrefFor={requestHref}
         />
       }
     >

@@ -94,12 +94,10 @@ export default async function NewRequestForServicePage({
 
   return (
     <main>
-      <RequirementFlow
-        service={service}
-        variant={variant}
-        requestHrefFor={(requirementId) => `/requests/${requirementId}`}
-        browseHref="/catalog"
-      />
+      {/* No route props. They were functions, and a Server Component cannot hand
+          a function to a Client Component — see `@/lib/routes`, which both sides
+          import instead. */}
+      <RequirementFlow service={service} variant={variant} />
     </main>
   );
 }

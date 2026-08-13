@@ -1,6 +1,13 @@
 "use client";
 
 import { describeError, isStageNotFundable } from "@vsolve/query";
+
+import {
+  REQUESTS_HREF,
+  engagementListHref,
+  requestHref,
+  stageHref,
+} from "@/lib/routes";
 import { Badge, Button, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
@@ -71,29 +78,9 @@ import { NotBuiltYet } from "./not-built-yet";
 
 export interface EngagementScreenProps {
   engagementId: string;
-  /**
-   * Where the request this came from lives. This feature owns no route.
-   *
-   * A function rather than a string, because the requirement id is on the
-   * **record** and not in the path — the engagement route is keyed by the
-   * engagement alone so it survives a notification opened months later.
-   */
-  requestHrefFor: (requirementId: string) => string;
-  /** Where the Customer's own list of requests lives, for a failed read. */
-  requestsHref: string;
-  /** One stage's own review route. */
-  stageHrefFor: (engagementId: string, stageId: string) => string;
-  /** The list this engagement belongs to, per archetype. */
-  listHrefFor: (mode: "lead_only" | "managed") => string;
 }
 
-export function EngagementScreen({
-  engagementId,
-  requestHrefFor,
-  requestsHref,
-  stageHrefFor,
-  listHrefFor,
-}: EngagementScreenProps) {
+export function EngagementScreen({ engagementId }: EngagementScreenProps) {
   const engagementQuery = useEngagement(engagementId);
   const amendmentsQuery = useEngagementAmendments(engagementId);
   const fund = useFundStage();
@@ -102,7 +89,7 @@ export function EngagementScreen({
   const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
   // Only known once the record has loaded. A failed read falls back to the
   // list, which is a real page, rather than to a requirement id we do not have.
-  const requestHref = view === null ? requestsHref : requestHrefFor(view.requirementId);
+  const requestLink = view === null ? REQUESTS_HREF : requestHref(view.requirementId);
   const nouns = nounsFor(view?.mode ?? "unknown");
 
   if (engagementQuery.isPending) {
@@ -128,7 +115,7 @@ export function EngagementScreen({
           onAction={() => void engagementQuery.refetch()}
           reference={presentation.reference}
         />
-        <BackLink href={requestHref} label="Back to this request" />
+        <BackLink href={requestLink} label="Back to this request" />
       </Wrapper>
     );
   }
@@ -165,7 +152,7 @@ export function EngagementScreen({
       <AgreedWorkPanel
         engagement={view}
         nouns={nouns}
-        quotesHref={`${requestHref}/quotes`}
+        quotesHref={`${requestLink}/quotes`}
       />
 
       <section aria-labelledby="totals-heading" className="mt-6">
@@ -204,7 +191,6 @@ export function EngagementScreen({
       <StageList
         view={view}
         nouns={nouns}
-        stageHrefFor={stageHrefFor}
         onFund={(stageId) => fund.mutate({ engagementId, stageId })}
         isFunding={fund.isPending}
       />
@@ -271,11 +257,11 @@ export function EngagementScreen({
           you. A receipt or invoice is not available from here yet.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={requestHref} className={buttonStyles({ variant: "outline" })}>
+          <Link href={requestLink} className={buttonStyles({ variant: "outline" })}>
             Open the full history
           </Link>
           {view.mode !== "unknown" ? (
-            <Link href={listHrefFor(view.mode)} className={buttonStyles({ variant: "ghost" })}>
+            <Link href={engagementListHref(view.mode)} className={buttonStyles({ variant: "ghost" })}>
               All your {nouns.engagement}s
             </Link>
           ) : null}
@@ -420,13 +406,11 @@ function ProgressPanel({ view, nouns }: { view: EngagementView; nouns: ModeNouns
 function StageList({
   view,
   nouns,
-  stageHrefFor,
   onFund,
   isFunding,
 }: {
   view: EngagementView;
   nouns: ModeNouns;
-  stageHrefFor: (engagementId: string, stageId: string) => string;
   onFund: (stageId: string) => void;
   isFunding: boolean;
 }) {
@@ -444,7 +428,7 @@ function StageList({
             stage={stage}
             mode={view.mode}
             nouns={nouns}
-            reviewHref={stageHrefFor(view.engagementId, stage.stageId)}
+            reviewHref={stageHref(view.engagementId, stage.stageId)}
             onFund={onFund}
             isFunding={isFunding}
           />

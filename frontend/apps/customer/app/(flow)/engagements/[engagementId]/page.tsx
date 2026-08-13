@@ -31,22 +31,13 @@ export default async function EngagementPage({
   const { engagementId } = await params;
   return (
     <main>
-      {/* The requirement id is on the record, not in this path, so the route is
-          supplied as a function and the screen applies it once the engagement
-          has loaded. `requestsHref` is what a failed read falls back to — a real
-          page, rather than a link built from an id we never received. */}
-      <EngagementScreen
-        engagementId={engagementId}
-        requestHrefFor={(requirementId) => `/requests/${requirementId}`}
-        requestsHref="/requests"
-        stageHrefFor={(id, stageId) => `/engagements/${id}/stages/${stageId}`}
-        // The list an engagement belongs to depends on how it is paid for, and
-        // that is only known once the record has loaded — so the route supplies
-        // both and the screen picks. A single href here would send an A3
-        // Customer to `Your projects`, which is the wrong promise as well as the
-        // wrong page.
-        listHrefFor={(mode) => (mode === "lead_only" ? "/bookings/workforce" : "/projects")}
-      />
+      {/* Route builders live in `@/lib/routes` and the screen imports them. They
+          were four function props until the RSC boundary refused to serialize
+          them — the requirement id is on the record rather than in this path, and
+          the list an engagement belongs to depends on how it is paid for, so both
+          are still resolved *after* the record loads. That reasoning moved into
+          the module; only the delivery mechanism changed. */}
+      <EngagementScreen engagementId={engagementId} />
     </main>
   );
 }
