@@ -305,18 +305,29 @@ upload can never read as approved scope or completed stage.
 ## Wave A4 — Operations: cases, refunds and leakage review
 
 **Depends on:** A3 and Gate 3. **Folder:** `frontend/apps/admin/features/m2-cases/**` — yours alone.
-Route files under `app/operations/**` belong to Session B; hand them your route needs at Gate 4.
+~~Route files under `app/operations/**` belong to Session B; hand them your route needs at Gate 4.~~
+**Superseded by the orchestrator's ruling of 2026-08-15**, logged in plan §7: both columns ran
+concurrently, so a literal handoff would have left this wave unmounted and unbuildable at its own
+gate. The subtree is split instead — Session A owns `app/operations/cases/**` and nothing else under
+`app/operations/`; Session B owns every other path there. Disjoint, so the conflict the rule prevents
+cannot happen.
 
-- [ ] `M2-FE-706` Case intake and review: cancellation conflict, no-show, attendance, safety incident,
+- [x] `M2-FE-706` Case intake and review: cancellation conflict, no-show, attendance, safety incident,
   stage, quality, payment, off-platform claims.
-- [ ] `M2-FE-707` Reason, evidence and confirmation before high-impact actions; show the server's
-  calculated remedy before authorized confirmation.
-- [ ] `M2-FE-708` Refund and payout states from ledger-backed APIs: pending, failed, reversed, reconciled.
-- [ ] `M2-FE-709` Dual-confirmation cancellation after contact disclosure; disagreement routes to review.
-- [ ] `M2-FE-710` Leakage, slot-squatting and price-band indicators as **review signals with evidence
-  and history** — never an automatic guilt label.
-- [ ] `M2-FE-711` Surface the Operations-touches-per-request measure so the design can be checked
+- [x] `M2-FE-707` Reason, evidence and confirmation before high-impact actions; show the server's
+  calculated remedy before authorized confirmation. *(The remedy is the one half Operations cannot
+  read — §7.)*
+- [x] `M2-FE-708` Refund and payout states from ledger-backed APIs: pending, failed, reversed, reconciled.
+- [x] `M2-FE-709` Dual-confirmation cancellation after contact disclosure; disagreement routes to review.
+  *(Operations half. The confirm-or-dispute itself is the parties' surface.)*
+- [x] `M2-FE-710` Leakage, slot-squatting and price-band indicators as **review signals with evidence
+  and history** — never an automatic guilt label. *(Two of the four have no published read; named as
+  absences.)*
+- [x] `M2-FE-711` Surface the Operations-touches-per-request measure so the design can be checked
   against the approved unit economics.
+
+All six **built — static gates green, owner manual verification pending.** See the Wave A4 section in
+the tracker below.
 
 ---
 
@@ -1802,3 +1813,244 @@ one**, which is a C6 proposal rather than a frontend workaround.
 | 2026-08-14 | `FE-612` cancellation reason | `cancellation_reason_code` is a bare string with no enum, and it is not on `EngagementStage` at all — so the engagement workspace words a cancelled row from `kind` alone. Fail-soft. | Yes — two rows |
 | 2026-08-14 | project cache keys | `m2-keys.ts` has no `projects` namespace, no project freshness tier and no row for `accept_handover` / `decide_project_transfer`. Composed from the factory and invalidated by hand at exactly the prefixes `stageScope` returns, so the two cannot drift. | Yes — frozen-file request |
 | 2026-08-14 | Customer's delay claim | **Plan gap, not a contract gap.** `m2_project_delay_claim_decide` is the Customer's command and `ProjectPlan.delay_claims` is published for them, but no Customer task row owns it — `M2-FE-605` is the vendor's raise. A `SUBMITTED` claim shifts every later milestone on acceptance and **expires on silence**, with no Customer surface in any wave. Out of scope here and **not** half-built. | Yes — needs a plan row |
+
+### Wave A4 progress — 2026-08-15 · Operations cases and money, at 1.32.0
+
+**Built — static gates green, owner manual verification pending.** `M2-FE-706` through `M2-FE-711`,
+in the **admin** app (product label Operations), against contract 1.32.0. This is Session A's only
+wave outside `apps/customer/**`; the ownership swap is the brief's, and the route half of it is the
+orchestrator's ruling recorded in the wave stub above and in plan §7.
+
+New: `apps/admin/features/m2-cases/` — `queries.ts`, `model/{cases,money}.ts`, five view files and
+`SMOKE.md`. New routes: `app/operations/cases/{money,signals,touches}/page.tsx`. Changed: one file,
+`app/operations/cases/page.tsx`, re-mounted. Nothing else in `apps/admin/**` was opened for writing,
+and nothing in `apps/customer/**`, `apps/partner/**` or `packages/**` was touched at all.
+
+#### The first decision: this is not a second case system
+
+`08-frontend-information-architecture.md` §3 lists `/operations/cases` as an **existing route** and
+says in as many words that "M2 case kinds join it rather than forking a second case system". Wave C6
+agrees from the other side: it added no `/operations/m2-cases/` path. It widened
+`OperationsCaseKindEnum` from nine values to fourteen, widened the subject from three nullable ids to
+five, widened `OperationsCaseEventKindEnum` from eight to fourteen, and hung three commands off the
+case paths that already existed.
+
+So the mount changed and the endpoints did not. `features/m2-cases/queries.ts` **imports** the queue,
+detail, claim, escalate, resolve and note hooks from `features/cases/queries.ts` and adds only what
+1.32.0 published. Two query modules over one endpoint would have been two caches of one case, and the
+second one invalidated would have been the one on screen. It also means the M1 console's two rules —
+`allowed_resolutions` is the server's, and a note never moves a case — are inherited rather than
+re-argued, which is the right way round.
+
+`features/cases/**` is not this session's to delete and is left exactly as it was. `CaseConsole` is
+now unreferenced by any route; `features/dashboard/dashboard-view.tsx` still imports its *queries*,
+which is why the queries file is the one that had to stay shared. Retiring the old view is an
+orchestrator call at the gate, not a mid-wave edit to another column's file.
+
+#### Four screens behind one nav entry
+
+The sidebar lives in `features/session/operations-shell.tsx`, which is Session B's file. Rather than
+ask for three more rows in a nav that is already thirteen long, the four A4 screens hang off the
+single existing **Cases** entry as in-page tabs: the queue, **Refunds and holds**, **Review signals**
+and **Touches**. They belong together anyway — all four are one job seen from four angles: somebody
+looking at a claim, the money behind it, the signals around it, and what it cost to work. Logged in §7
+as a decision rather than left as an omission somebody helpfully "fixes" later.
+
+The selected case is a **query parameter**, not component state. A case id is a thing operators paste
+to each other in chat, and `?case=<id>` survives a reload and a handover. That is also why the money
+screen's chargeback result and every signal row link to `/operations/cases?case=<id>` rather than
+telling somebody to go and find it.
+
+#### The four traps 1.32.0 named, and where each one is answered
+
+The C6 changelog was written as this wave's briefing and calls out four. Each is answered in a
+specific place, so a reviewer can check them one at a time.
+
+**1 — kinds and subjects widened.** Every map in `model/cases.ts` is `Record<GeneratedEnum, …>`:
+`CASE_KIND_COPY`, `CASE_STATUS_LABEL`, `SEVERITY_TONE`, `TEAM_LABEL`, `EVENT_COPY`,
+`EVIDENCE_PARTY_LABEL`, `BOOKING_FEE_READING`, `TIMELINE_TONE`. The next widening is a `tsc` failure
+in one file rather than a blank badge in production. The queue's kind filter and its status filter are
+**derived from those maps' keys** rather than hand-listed, so a new value cannot be visible in the
+queue and unreachable from the filter meant to find it.
+
+The subject is `caseSubjects()`, which enumerates **all five** nullable ids and returns every one that
+is set. The reader that would have shipped without thinking — check `booking_id`, then `order_id`,
+then `partner_id`, give up — renders every cancellation conflict, attendance dispute and disputed
+milestone as a case about nothing, because those are exactly the kinds whose subject is the
+requirement or the engagement. Zero subjects gets its own sentence rather than an empty row.
+
+**2 — six new event kinds.** `EVENT_COPY` covers all fourteen and `eventCopy()` falls back to the raw
+code for a fifteenth. The six C6 added carry their meaning in `context` rather than `body`, which is
+precisely why a trail keyed on `body` alone showed six kinds of blank line — so `eventContextPairs()`
+renders the context object as labelled pairs. It reads `unknown` defensively and never asserts a
+payload shape it was not told.
+
+**3 — `WAIVED` is not a charge.** `BOOKING_FEE_READING` gives every one of the eight statuses a
+sentence and a `collected` flag, and the money card prints an amount as money only when `collected` is
+true. `WAIVED` — the free re-dispatch after a vendor no-show — renders as "Replacement crew — no
+charge" with **"Published amount ₹X — not collected."** So do `OFFER_ACCEPTED`, `PENDING` and
+`FAILED`, which have the same shape of problem and were not on the changelog's list.
+
+**4 — `within_budget: null` is not `false`.** `BudgetVerdict` has three branches for three states,
+and the null one says the owner has not set a budget, that the touch count is the measurement, and in
+so many words that "This is not a pass and it is not a breach." Rendering it green would report a
+design as inside an economics envelope nobody has drawn; rendering it red would page somebody about
+every request on the platform. The smoke script has a shell one-liner to force the state, because it
+is the assertion most likely to rot.
+
+#### The Gate 3 predicate, checked deliberately
+
+The brief names it: a predicate that decides membership **by exclusion** absorbs a new enum value and
+no exhaustive map catches it. Three places in this wave could have taken that shape and none does.
+
+- `isCaseClosed` lists `RESOLVED` and `CANCELLED` rather than testing "not open".
+- Payout holding is read from the server's own `holds_payout` and never re-derived from the kind,
+  even though nine kinds hold and the list is knowable. The server owns which; this renders it.
+- `MONEY_EVENT_TYPES` is an **inclusive** whitelist of four timeline event types. This one has no
+  enum to key on — `TimelineEvent.type` is a bare string (§7) — so it is kept safe in the only
+  direction available: everything unrecognised is **counted and reported** as "N other events on this
+  request are not money", never absorbed into the money list. A new money type arrives
+  under-reported, which is visible, rather than mis-labelled, which is not.
+
+#### `M2-FE-707`: what the consequence sentence actually says
+
+The task row asks for "the server's calculated remedy before authorized confirmation". Operations
+cannot read that remedy — see the gap below — so the consequence copy is built from documented server
+behaviour instead, which is the part that can be stated truthfully:
+
+- **Resolve** says what is recorded, that the payout hold is released, and that an overturned appeal
+  brings the hold back but not the money that moved in the meantime.
+- **Overturn an appeal** says the case reopens to in-progress and its resolution is *cleared* — it
+  does not get a new outcome from this — and that the hold returns "because the reason the money was
+  released, this case being finished, has just stopped being true".
+- **Move the response deadline** says who gets until when, and that it cannot be moved back. The
+  field pre-checks against `server_now` and the existing deadline, and the server refuses a backwards
+  move rather than clamping it.
+- **Override** requires the word `override` typed to unlock, says it is permanent and under your name,
+  and says that money already moved does not move back on its own.
+- **Record a chargeback** says a case opens, that it freezes the vendor earnings funded from that
+  payment, and that the fee row is deliberately left where it is.
+
+`ConfirmAction` from `packages/ui` requires `consequence`, which is why every one of these has a real
+sentence rather than "Are you sure?".
+
+#### `M2-FE-708`: three reads, three questions, not merged
+
+`GET /operations/reconciliation/` answers *what is outstanding across the business*. The case queue
+summary answers *how much is frozen behind an open claim*. The request timeline answers *what happened
+to the money on this one request*. They are rendered as three panels because they are three questions;
+one merged "money" figure would have no owner and no statement behind it.
+
+Nothing on the screen is arithmetic. Every number is a server integer formatted once by `formatMoney`
+or a server count printed as it arrived. The forfeit split prints its two shares underneath the fee
+and does not add them. The one conversion in the feature is rupees→paise on the operator's own
+chargeback input, which is a unit conversion on typed input rather than a derived figure.
+
+**There is still no staff read of an individual refund** and 1.32.0 did not add one —
+`GET /refunds/{id}/` filters on `order__customer=user`. 1.32.0 added the aggregate. The screen says so
+and links to `/finance`, rather than showing an empty panel labelled "Refunds", which reads as "there
+are none" — a claim about money made from no data at all. That is the M1 refund console's own
+argument, reused.
+
+#### `M2-FE-709`: the honest half and the missing half
+
+The dual confirmation happens between the parties, in their own apps: one side cancels, the other
+confirms or disputes, disputing settles nothing, and silence settles nothing either — a lapsed window
+arrives in Operations through the same machinery a dispute uses, carrying `confirmation_lapsed`. What
+lands here is the `CANCELLATION_CONFLICT` case, which is a payout-holding kind, so **opening the case
+is the hold**. Its three outcomes are `CANCELLATION_UPHELD`, `CANCELLATION_REVERSED` and `SETTLED` — a
+documented finding either way, never "reviewed".
+
+What is missing is not small. `contact_disclosed` is the field that makes a cancellation
+dual-confirmation in the first place, and Operations cannot read it: every published read of a
+cancellation goes through a party check, and the request timeline's `CANCELLATION` detail publishes
+only the id, status, actor role, reason code and remedy code. So does `work_reported_started`, so does
+`confirmation_due_at`, and so does the per-product `remedy` breakdown — on the screen where somebody
+decides who keeps the money. The panel **says that on screen** rather than inferring it from the case
+summary, and §7 carries the fix: widen the timeline's `CANCELLATION` detail, which needs no new path
+and no new permission surface.
+
+#### `M2-FE-710`: two signals, and two absences that are the point
+
+`GAP-009` and `GAP-010` both end with the same instruction — "not automatic punishment — a review
+signal, consistent with the plan's own stance" — so the screen opens by saying what a signal is here
+and never delivers a verdict. Off-platform claims and chargebacks are live queues over the case list
+filtered by kind; every row ends at a case, and a case ends by naming what happened, including when
+what happened is that the account was not borne out. Even `SUBSTANTIATED` records only that the
+evidence bore the account out; what follows is a separate decision against a threshold nobody has set.
+
+Slot squatting and price-band clustering have **no published read whatsoever**, and the two panels say
+so, with the reason. The temptation was to approximate one — count `NON_RESPONSIVE` rejections, or
+compare teaser bands — and both are the fabricated-signal failure the plan forbids. A made-up number
+on a screen somebody judges a vendor from is worse than a gap, because it looks like evidence.
+
+#### Static gates
+
+| Gate | Result |
+|---|---|
+| `npx eslint apps/admin/features/m2-cases apps/admin/app/operations/cases --max-warnings 0` | **clean** |
+| `npx turbo run typecheck --filter=admin --force` | **1 of 1**, real run, cache bypassed |
+| `npx turbo run build --filter=admin` | **1 of 1** — and the route table names all four: `/operations/cases`, `/operations/cases/money`, `/operations/cases/signals`, `/operations/cases/touches`, every one `ƒ` (dynamic) |
+
+Worth recording because it is the kind of thing that reads as a failure to whoever runs it next: for
+most of this wave the project-wide gate was **red on a file this wave never opened** —
+`features/m2-requests/view/assisted-capture.tsx:346`, Session B's, mid-edit, `tax_paise` missing from
+an assisted-proposal body union. `tsc` reports every error in the project, so a concurrent column's
+in-flight file makes the shared gate unusable as evidence about either half. This wave's half was
+therefore proved in isolation first, with a scratch `tsconfig` restricted to `features/m2-cases/**`
+and `app/operations/cases/**` — clean, and **not committed**. Session B's fix landed before the gate
+and both runs above are the real, green, whole-app ones.
+
+Session B's `/operations/requests/[requirementId]` is in that same route table, which matters here:
+the cancellation-conflict panel, the money screen and the case subject row all link to it. Those links
+are live rather than aspirational.
+
+#### The two-class audit (`RULES.md` §3)
+
+**(a) The drifting duplicate.** The frontend form of this is a hand-copied enum that the compiler
+cannot see. Audited every list in the feature. Eight maps are keyed on generated enums and cannot
+drift. Two lists were hand-written and both were fixed during the wave: the status filter is now
+`Object.keys(CASE_STATUS_LABEL)` and the kind filter is `Object.keys(CASE_KIND_COPY)`. Three maps are
+deliberately `Record<string, …>` **with a fallback** rather than exhaustive — resolution meanings,
+financial-exception kinds, and the timeline's money types — because none of those has a published
+enum; each falls back to the raw code and none can render blank. One genuine hand-copy remains and is
+logged: `MONEY_EVENT_TYPES`, discussed above, safe by inclusion.
+
+**(b) The column with no writer.** Traced every configuration value this wave reads back to a writer
+in `seed_m2_demo`. All five C6 values have one: `case_response_window_hours`,
+`case_appeal_window_hours`, `chargeback_alarm_basis_points`, `chargeback_alarm_min_charges` and
+`operations_touch_budget_per_request`, written onto **both** variant configurations from one
+`_C6_RECOVERY_POLICY` mapping so the two cannot drift. No reader in this wave is unfed. Two related
+findings worth recording rather than fixing: the seeded demo case deliberately passes
+`response_due_at=None` (a partner-subject case has no requirement to read a window from), and
+`_hold_m2_payouts` returns early for a case with no requirement and no engagement — so the seeded case
+is correctly `holds_payout: true` with an empty held list. Both are rendered as what they are; the
+copy for zero held entries was rewritten mid-wave once this was traced, because "0 entries frozen"
+under a **Holding payout** badge reads as a bug and is not one.
+
+#### Smoke script
+
+**`apps/admin/features/m2-cases/SMOKE.md`** — eight sections with their seeded preconditions, and a
+table at the top of what the seed deliberately does **not** create, because two of the six screens are
+supposed to be empty on a fresh database and an empty screen that is meant to be empty is otherwise
+indistinguishable from a broken one. The two sections to run first are §3's `WAIVED` check and §6's
+budget-clearing one-liner: they are the two traps whose wrong answer is silent.
+
+**Nine rows added to plan §7** — one frozen-file request (`m2-keys.ts`: an `operations` namespace for
+the four 1.32.0 reads, with the freshness tier each was given and why), six contract gaps, and two
+cross-session records (the route-split ruling, and the `useRequestTimeline` fold request). The one to
+read first is the cancellation gap: it is the only one where the screen has to tell an operator that
+it cannot see something they need.
+
+### Blocked / handed off — Wave A4
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-15 | `FE-709` cancellation facts | Operations has no read of a cancellation record — every published one is party-scoped, and the timeline's `CANCELLATION` detail omits `contact_disclosed`, `work_reported_started`, `confirmation_due_at` and the `remedy` breakdown. Built fail-closed: the panel names the gap on screen. | Yes — widen the timeline detail |
+| 2026-08-15 | `FE-707` server remedy | Same root cause. The task row asks for the calculated remedy before confirmation; it is on the cancellation record. Consequence copy is built from documented server behaviour instead, which is truthful and is not the same thing. | Yes — same row |
+| 2026-08-15 | `FE-710` slot squatting | No Operations read exists for `NON_RESPONSIVE` rejections or any per-vendor count of them (`GAP-009`). Rendered as a named absence, deliberately with no number. | Yes |
+| 2026-08-15 | `FE-710` price band | No reference band per variant and no clustering read (`GAP-010`); the band is a Customer-facing teaser field. Rendered as a named absence. | Yes |
+| 2026-08-15 | `FE-708` one refund | `GET /refunds/{id}/` is still Customer-scoped at 1.32.0. The aggregate is rendered; the record links to `/finance`. Not blocking. | Yes |
+| 2026-08-15 | `FE-708` money event types | `TimelineEvent.type` is a bare string with no enum, so the money whitelist is hand-copied from `operations.py`. Safe by inclusion — unrecognised types are counted and reported, never absorbed. | Yes |
+| 2026-08-15 | Operations query keys | `m2-keys.ts` publishes no Operations namespace and `keys.ts` belongs to no session. Defined locally under `queryKeys.operations.all` so broad invalidation still reaches them; the M1 case cache is shared rather than forked. | Yes — frozen-file request |
+| 2026-08-15 | admin project gate | **Cleared.** `turbo typecheck` and `turbo build --filter=admin` were red for most of the wave on `features/m2-requests/view/assisted-capture.tsx` (Session B, in flight). B's fix landed before the gate; both now run green whole-app, 1 of 1, with all four A4 routes in the table. | Not a §7 row — a sync note |

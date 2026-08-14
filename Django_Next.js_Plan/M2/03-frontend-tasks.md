@@ -1018,18 +1018,35 @@ approved scope, payment or stage completion, and an abandoned project shows a ro
 
 ### Cases, refunds and leakage review
 
-- [ ] `M2-FE-706` Build case intake and review for cancellation conflict, no-show, attendance, safety
-  incident, stage, quality, payment and off-platform claims.
-- [ ] `M2-FE-707` Require reason, evidence and confirmation before high-impact actions; show the
-  server's calculated remedy before authorized confirmation.
-- [ ] `M2-FE-708` Show refund and payout states from ledger-backed APIs, including pending, failed,
-  reversed and reconciled.
-- [ ] `M2-FE-709` Build dual-confirmation cancellation after contact disclosure and route disagreement
-  to review.
-- [ ] `M2-FE-710` Present leakage, slot-squatting and price-band indicators as review signals with
-  evidence and history, never as an automatic guilt label. `GAP-009`, `GAP-010`
-- [ ] `M2-FE-711` Surface the Operations-touches-per-request measure in the workspace so the design can
-  be checked against the approved unit economics. `GAP-033`
+- [~] `M2-FE-706` **built — static gates green, owner manual verification pending.** Build case intake
+  and review for cancellation conflict, no-show, attendance, safety incident, stage, quality, payment
+  and off-platform claims. `/operations/cases` re-mounted onto the M2 workspace (IA §3: the kinds join
+  the existing route rather than forking a second case system); all fourteen kinds and all fourteen
+  event kinds carry copy, keyed on the generated enums so the next widening is a `tsc` failure rather
+  than a blank row; the subject is read from all five nullable fields. Evidence renders as a reference
+  to an already-scanned rail — there is no uploader and no minted link.
+- [~] `M2-FE-707` **built — static gates green, owner manual verification pending.** Every high-impact
+  action states its consequence before it happens, through `ConfirmAction`: resolving names what the
+  payout hold does, overturning an appeal says the case reopens and the hold returns, an override is
+  typed-phrase confirmed and permanent. The *server's calculated remedy* is the one half that cannot
+  be shown — Operations has no read of it (§7).
+- [~] `M2-FE-708` **built — static gates green, owner manual verification pending.** Show refund and
+  payout states from ledger-backed APIs. Read, never computed: the reconciliation aggregate, the
+  payout-hold count from the case summary, and the money on one request from the timeline — where
+  `WAIVED` renders as "replacement crew, no charge" and never as an amount paid. Recording a
+  chargeback is the one money write 1.32.0 publishes.
+- [~] `M2-FE-709` **built (Operations half) — static gates green, owner manual verification pending.**
+  Dual-confirmation cancellation and its routing to review. The confirm-or-dispute itself is the
+  parties' surface; what lands in Operations is the `CANCELLATION_CONFLICT` case, which freezes the
+  vendor's unpaid earnings and settles nothing on silence. The cancellation record is unreadable by
+  Operations at 1.32.0, so the panel names that gap rather than inferring it (§7).
+- [~] `M2-FE-710` **built — static gates green, owner manual verification pending.** Off-platform
+  claims and chargebacks as review signals with their evidence and history, ending in a documented
+  finding and never an accusation. Slot squatting (`GAP-009`) and price-band clustering (`GAP-010`)
+  have no published read at all and are rendered as named absences rather than approximated (§7).
+- [~] `M2-FE-711` **built — static gates green, owner manual verification pending.** The
+  touches-per-request measure, platform-wide and per request. `within_budget: null` renders as "no
+  budget set" — neither a pass nor a breach — which is the whole point of the screen. `GAP-033`
 
 ### Rate cards (revision 4)
 
