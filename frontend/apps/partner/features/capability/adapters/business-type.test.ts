@@ -23,6 +23,7 @@ function profile(overrides: Partial<BusinessProfileInput> = {}): BusinessProfile
     gst_registered: false,
     gstin: "",
     years_in_operation: 0,
+    upi_vpa: "",
     ...overrides,
   };
 }

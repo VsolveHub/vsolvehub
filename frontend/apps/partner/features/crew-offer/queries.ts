@@ -49,7 +49,8 @@ import { isOfferAnswerable } from "./model/offer-state";
 
 export type CrewOffer = Schemas["CrewOffer"];
 export type CrewOfferList = Schemas["CrewOfferList"];
-export type RateCardBooking = Schemas["RateCardBooking"];
+/** What accepting answers with since 1.30.0 — see `model/offer-state.ts`. */
+export type CrewOfferAccepted = Schemas["CrewOfferAccepted"];
 
 /**
  * The crew-offer bucket of the invitation inbox.
@@ -146,7 +147,7 @@ function useRereadOnAmbiguity() {
  */
 export interface CrewOfferAnswerHandlers {
   /** The booking that accepting produced. Held or confirmed — the server decides which. */
-  readonly onAccepted?: (booking: RateCardBooking) => void;
+  readonly onAccepted?: (booking: CrewOfferAccepted) => void;
   /**
    * The offer in its `DECLINED` state, beside the input that produced it.
    *

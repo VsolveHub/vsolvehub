@@ -166,5 +166,9 @@ export function normalizeForType(input: BusinessProfileInput): BusinessProfileIn
     // Held to the same rule as the constraint: no flag, no number.
     gstin: input.gst_registered ? input.gstin : "",
     years_in_operation: input.years_in_operation,
+    // Carried through every type, because it belongs to none of them. Clearing
+    // it here would mean a Partner who changed their mind about being an agency
+    // silently lost the UPI address their wages are settled to.
+    upi_vpa: input.upi_vpa,
   };
 }

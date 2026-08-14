@@ -63,10 +63,12 @@ import { CrewOfferDeclineDialog } from "./crew-offer-decline-dialog";
  * ## The customer's number is not on this screen, at any status
  *
  * `CrewOffer` publishes no `total_customer_paise` and no `booking_fee_paise`, and
- * the `RateCardBooking` that comes back from accept carries both — neither is
- * rendered. ADR-0009 is explicit: a lead shown the customer's all-inclusive rate
- * would reasonably expect to receive it, and a published rate that starts an
- * argument on site is worse than no published rate.
+ * since contract 1.30.0 neither does `CrewOfferAccepted` — the accept response
+ * that used to carry both was narrowed to the lead's own figures. ADR-0009 is
+ * explicit about why: a lead shown the customer's all-inclusive rate would
+ * reasonably expect to receive it, and a published rate that starts an argument
+ * on site is worse than no published rate. The rule is now the payload's shape
+ * rather than this screen's restraint.
  *
  * ## The accept button is never disabled on this screen's own reading
  *

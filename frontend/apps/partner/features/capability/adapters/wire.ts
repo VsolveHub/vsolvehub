@@ -65,6 +65,22 @@ export interface BusinessProfileInput {
   readonly gst_registered: boolean;
   readonly gstin: string;
   readonly years_in_operation: number;
+  /**
+   * The UPI address the day-settlement deep link is built from (contract 1.30.0).
+   *
+   * **Carried, not asked for.** No control on this form collects it and none
+   * should here: the field belongs to the wave that builds the evening
+   * "Day settled?" tap (`M2-FE-513`), and adding a mandatory VPA to registration
+   * would put a payment question in front of a Partner who has not yet been
+   * offered any work.
+   *
+   * It is on the draft because a `PUT` that omitted it would **erase one that
+   * already exists**. The write serializer defaults `upi_vpa` to `''`, so a
+   * vendor whose VPA was set elsewhere would silently lose it by saving an
+   * unrelated change to their legal name. Reading it and sending it back
+   * unchanged is what makes this form safe to submit.
+   */
+  readonly upi_vpa: string;
 }
 
 export function toBusinessProfileWrite(input: BusinessProfileInput): BusinessProfileWrite {
@@ -75,6 +91,8 @@ export function toBusinessProfileWrite(input: BusinessProfileInput): BusinessPro
     gst_registered: input.gst_registered,
     gstin: input.gstin,
     years_in_operation: input.years_in_operation,
+    // Round-tripped verbatim. See `BusinessProfileInput.upi_vpa`.
+    upi_vpa: input.upi_vpa,
   };
 }
 
@@ -95,6 +113,7 @@ export function toBusinessProfileInput(profile: BusinessProfile | null): Busines
     gst_registered: profile?.gst_registered ?? false,
     gstin: profile?.gstin ?? "",
     years_in_operation: profile?.years_in_operation ?? 0,
+    upi_vpa: profile?.upi_vpa ?? "",
   };
 }
 

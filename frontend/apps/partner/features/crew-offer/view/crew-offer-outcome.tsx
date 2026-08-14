@@ -34,9 +34,11 @@ import {
  *
  * ## The Customer's numbers are not rendered, at any status
  *
- * `RateCardBooking` carries `total_customer_paise` and `booking_fee_paise`. Only
- * `lead_receipt_paise` is drawn. A lead shown the all-inclusive figure would
- * reasonably expect to receive it, and the difference is this platform's fee.
+ * `lead_receipt_paise` is the only money drawn here, and since contract 1.30.0 it
+ * is the only money the accept response carries: `CrewOfferAccepted` replaced
+ * `RateCardBooking`, dropping `total_customer_paise`, `booking_fee_paise` and
+ * `day_rate_paise`. A lead shown the all-inclusive figure would reasonably expect
+ * to receive it, and the difference is this platform's fee.
  */
 
 export interface CrewOfferOutcomeProps {

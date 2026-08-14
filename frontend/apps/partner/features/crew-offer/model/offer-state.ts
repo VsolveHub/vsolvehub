@@ -14,10 +14,11 @@ import type { Schemas } from "@vsolve/api-client";
  * 1. **The number on screen is the lead's own, and it is read, never derived.**
  *    `CrewOffer` publishes `lead_day_receipt_paise` and `lead_total_receipt_paise`
  *    and deliberately publishes **no** customer total and **no** booking fee at
- *    any status. Nothing in this column reconstructs the lead's take from a rate
- *    card's components: that would be the platform telling a contractor what he
- *    earns from arithmetic he cannot check, and it would drift from the server's
- *    own figure the first time rounding changed.
+ *    any status — and since 1.30.0 neither does `CrewOfferAccepted`, so the whole
+ *    path is now free of them. Nothing in this column reconstructs the lead's take
+ *    from a rate card's components: that would be the platform telling a
+ *    contractor what he earns from arithmetic he cannot check, and it would drift
+ *    from the server's own figure the first time rounding changed.
  * 2. **Accepting the job is accepting the published rate for that job.** There is
  *    nothing to compose — no quote, no line items, no negotiation — and a Partner
  *    may never charge above the card or demand a cash extra (§7). Said before the
@@ -33,7 +34,21 @@ import type { Schemas } from "@vsolve/api-client";
  */
 
 export type CrewOffer = Schemas["CrewOffer"];
-export type RateCardBooking = Schemas["RateCardBooking"];
+
+/**
+ * What accepting answers with, since contract **1.30.0**.
+ *
+ * Was `RateCardBooking` at 1.29.0 — the Customer's whole booking, including
+ * `total_customer_paise`, `booking_fee_paise` and `day_rate_paise`. This column
+ * refused to render those three and logged the disclosure in
+ * `frontend-execution-plan.md` §7; 1.30.0 narrowed the response instead, so the
+ * lead's own number is now the **only** money on this path and the rule is
+ * enforced by the wire rather than by this client's restraint.
+ *
+ * `RateCardBooking` itself is untouched and still answers `m2_rate_card_read` on
+ * the Customer's side. It is simply no longer this screen's shape.
+ */
+export type CrewOfferAccepted = Schemas["CrewOfferAccepted"];
 export type RateCardBookingStatus = Schemas["RateCardBookingStatusEnum"];
 
 /**
@@ -49,7 +64,7 @@ export type RateCardBookingStatus = Schemas["RateCardBookingStatusEnum"];
  * honestly show back what it sent. Recorded in `frontend-execution-plan.md` §7.
  */
 export type CrewOfferAnswer =
-  | { readonly kind: "accepted"; readonly offer: CrewOffer; readonly booking: RateCardBooking }
+  | { readonly kind: "accepted"; readonly offer: CrewOffer; readonly booking: CrewOfferAccepted }
   | {
       readonly kind: "declined";
       readonly offer: CrewOffer;
@@ -183,7 +198,7 @@ export interface AcceptOutcome {
 /**
  * How a successful accept reads.
  *
- * `RateCardBooking.status` is the whole distinction, and it is the server's
+ * `CrewOfferAccepted.status` is the whole distinction, and it is the server's
  * answer rather than an inference from anything on this screen:
  *
  * - `OFFER_HELD` — the ordinary outcome. The lead won the cascade and the
@@ -196,12 +211,14 @@ export interface AcceptOutcome {
  * - Anything else is a booking that moved under the accept. Said plainly rather
  *   than dressed as a win.
  *
- * The `RateCardBooking` returned by accept also carries `total_customer_paise`
- * and `booking_fee_paise` — the *Customer's* numbers. Nothing here renders them.
- * ADR-0009 fixes this screen as the lead's own number, and a lead shown the
- * all-inclusive figure would reasonably expect to receive it.
+ * At 1.29.0 the accept response was the whole `RateCardBooking`, carrying
+ * `total_customer_paise` and `booking_fee_paise` — the *Customer's* numbers —
+ * and this column rendered neither on purpose. **1.30.0 removed them from the
+ * response**, so the discipline no longer depends on anyone remembering it:
+ * `CrewOfferAccepted` publishes `lead_receipt_paise` and nothing a lead does not
+ * receive. ADR-0009's rule is now the shape of the payload.
  */
-export function describeAccept(booking: RateCardBooking): AcceptOutcome {
+export function describeAccept(booking: CrewOfferAccepted): AcceptOutcome {
   const status = booking.status;
 
   if (status === "OFFER_HELD") {
@@ -241,7 +258,7 @@ export function describeAccept(booking: RateCardBooking): AcceptOutcome {
  * inventing one. A countdown drawn from a guessed default would be the client
  * promising a deadline nobody set.
  */
-export function describeHoldWindow(booking: RateCardBooking): string {
+export function describeHoldWindow(booking: CrewOfferAccepted): string {
   if (booking.hold_expires_at === null) {
     return "Vsolve is waiting on the customer's payment. There is nothing for you to do until we confirm it.";
   }
