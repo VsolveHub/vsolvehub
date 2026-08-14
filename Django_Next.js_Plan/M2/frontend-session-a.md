@@ -2054,3 +2054,110 @@ it cannot see something they need.
 | 2026-08-15 | `FE-708` money event types | `TimelineEvent.type` is a bare string with no enum, so the money whitelist is hand-copied from `operations.py`. Safe by inclusion — unrecognised types are counted and reported, never absorbed. | Yes |
 | 2026-08-15 | Operations query keys | `m2-keys.ts` publishes no Operations namespace and `keys.ts` belongs to no session. Defined locally under `queryKeys.operations.all` so broad invalidation still reaches them; the M1 case cache is shared rather than forked. | Yes — frozen-file request |
 | 2026-08-15 | admin project gate | **Cleared.** `turbo typecheck` and `turbo build --filter=admin` were red for most of the wave on `features/m2-requests/view/assisted-capture.tsx` (Session B, in flight). B's fix landed before the gate; both now run green whole-app, 1 of 1, with all four A4 routes in the table. | Not a §7 row — a sync note |
+
+### Wave A4 secondary — 2026-08-15 · the Customer's delay-claim decision (`M2-FE-614`)
+
+**Built — static gates green, owner manual verification pending.** The one plan gap this column
+logged at Wave A5P and nobody owned, closed after A4 was gated. It is a **new task row**, not an
+existing one: `03-frontend-tasks.md` now carries `M2-FE-614` under FE5B beside the other three
+project rows (613 was already taken by the amendment-version panel).
+
+New: `apps/customer/features/project/view/delay-claim-panel.tsx`. Changed: the project section at
+the foot of `packages/query/src/m2-engagement-customer.ts` (this column's file), this column's block
+in the shared barrel, `features/project/{queries.ts, adapters/index.ts, view/project-panels.tsx,
+SMOKE.md}`. Nothing frozen was touched and no new contract need was found.
+
+#### Why this was the gap worth closing rather than deferring
+
+`m2_project_delay_claim_decide` is published as the **Customer's** command and
+`ProjectPlan.delay_claims` is published for them to read. The screen was simply missing. What makes
+that more than an omission is the direction the claim fails in: `sweep_delay_claims` **expires** an
+unanswered claim and the agreed dates stand. That is the right default and it is deliberate —
+treating silence as consent would let a professional move somebody's schedule by filing on a Friday
+afternoon — but it is a protection *for the Customer* only if the Customer was asked. With no
+screen it is a deadline running against somebody who was never shown it, and the honest claims lapse
+beside the opportunistic ones. The vendor loses their extension and the Customer never learns their
+dates were in question.
+
+#### What the panel says, and the four sentences that carry it
+
+**"Answering costs nothing either way."** First, above everything, because it is the first question
+anybody reads a request-for-days with. There is no amount on the request, none on the record and
+none in the adapter — a delay that costs money is extra work, extra work is an amendment the
+Customer accepts and pays for, and one record that could do both would let "the site was locked"
+arrive as a bill. `DelayClaimView` has no money field and none may be added.
+
+**"This milestone and every milestone after it move by N days."** Stated before the tap and repeated
+in the confirmation, because `_shift_schedule_from` moves the whole tail: a project is a sequence and
+a week lost on the first fix is a week lost on everything after it. A milestone with no date is said
+to stay without one, and the originally agreed dates are said to stay on record, because
+`original_terms` is untouched and the difference between agreed and due is the extension somebody
+accepted.
+
+**"Turning it down cancels nothing and penalises nobody."** A Customer who reads "no" as a complaint
+will choose "yes" to avoid making one, and a schedule moved out of politeness is worse for both
+parties than a refusal.
+
+**"If you do not answer, the request lapses and the dates you agreed stand."** The expiry is stated
+as what it is rather than left as a silent default, and the professional's ability to ask again is
+stated with it — that constraint (one live claim per *milestone*) is what stops the re-ask becoming
+a queue.
+
+#### Where it sits, and why every claim renders
+
+Above the transfer and the handover in `ProjectDecisions`. Of the three answers a Customer can owe on
+a project, this is the only one they **lose** by not scrolling: a transfer left unanswered keeps the
+current vendor, an unaccepted handover keeps the project open, and an unanswered delay claim expires
+in the Customer's favour but without them knowing they were asked.
+
+Every claim renders, live and settled. One live claim per milestone is a database constraint, so a
+three-milestone project can genuinely have three at once; answering two of three while the screen
+implied the project was settled would be the screen lying about a clock that is still running. The
+settled ones read from `applied_days` rather than `extension_days` — what the schedule actually moved
+by is the number a dispute about lateness turns on, and it is published rather than assumed equal to
+what was asked.
+
+#### The fail-closed rules this reused rather than re-argued
+
+- `isKnownDelayClaimStatus` is a named list of five, and an unknown sixth renders **no controls** —
+  `isKnownTransferStatus`'s rule, for a sharper reason here: the optimistic fallback is "a live
+  request you can accept" and accepting moves every remaining date on the project.
+- `settledDelayClaims` names the four settled states rather than spelling itself as "not
+  `SUBMITTED`". An exclusion would make a sixth status arrive as *history* on the surface where a
+  new state most likely means somebody still has to answer.
+- Expiry is **not** checked against the device clock. `expires_at` is presentation; the sweep and
+  the command decide server-side, and a claim hidden early by a fast clock is a claim the Customer
+  never got to accept. `isAmendmentDecidable` and `isTransferDecidable` both already work this way.
+- The idempotency key carries the answer, not the note. A dropped connection replays the same
+  decision; a changed mind is a genuinely different command; a corrected typo in the note is not.
+- Evidence is joined off the engagement read and worded in the **handover panel's** words for the
+  same scan states. Two screens describing one scan status differently is the failure that wording
+  exists to prevent. An id with no record on this engagement is counted and reported, never dropped.
+
+#### Static gates
+
+| Gate | Result |
+|---|---|
+| `npx eslint apps/customer/features/project packages/query/src/m2-engagement-customer.ts packages/query/src/index.ts --max-warnings 0` | **clean** |
+| `npx turbo run typecheck --filter=customer --force` | **1 of 1** |
+| `npx turbo run build --filter=customer` | **1 of 1** |
+| `npx turbo run typecheck --filter=@vsolve/query --filter=admin --filter=partner --force` | **3 of 3** — run because the helpers landed in a shared package |
+
+One caveat, and it is not this column's: `npx turbo run typecheck` across **all** packages fails at
+`@vsolve/api-client:generate:check` — *"Generated types are stale. The published OpenAPI contract has
+changed since schema.d.ts was generated."* `contracts/openapi/v1.yaml` has uncommitted modifications
+from the concurrent backend wave, timestamped after the client was last generated. `generated/**` is
+frozen and RULES §7 puts `pnpm contract:generate` with the orchestrator at the gate, so it was left
+alone. Everything built in this session compiles against the **committed** client.
+
+#### Smoke script
+
+`apps/customer/features/project/SMOKE.md` §7, with the shell snippet that raises a claim as the
+vendor and eight forced states — expiry, answering an expired one, an unknown status, two live claims
+at once, evidence in each scan state, an evidence id with no record, and a claim with no description.
+
+**Two rows appended to plan §7**: one closing the gap, one recording two shapes worth knowing —
+`reason_code` is an open slug and is carried verbatim rather than mapped (a display map falls through
+on exactly the interesting cases), and the claim's evidence inherits `M2-FE-611`'s open gap, so a
+Customer deciding a delay can be told a photograph is checked and held and still not be able to look
+at it.

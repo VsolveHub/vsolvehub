@@ -324,3 +324,64 @@ Fund the first milestone. Work restarts.
 | Approving a milestone between the proposal and the acceptance | `m2_amendment_not_actionable` — *"the work left on this project changed after it was priced"*. The prices were for a list of work that no longer exists. |
 | A `ProjectTransfer.status` this build has never seen | *"We cannot describe this"*, with **no controls**. The optimistic fallback here would be "a live proposal you can accept", and accepting moves a whole project. |
 | Accepting a handover while a milestone is disputed | The acceptance is **rolled back with the completion** — the server runs both in one transaction. The screen says a problem you raised is still open, not "we could not save your acceptance". |
+
+
+## 7. The request for more time — `M2-FE-614`
+
+Added after Wave A4, because the gap Wave A5P logged in plan §7 turned out to be the one worth
+closing: the command and the record were both published to the Customer, no wave owned the screen,
+and **an unanswered claim expires**. Silence is a refusal by design — otherwise a professional could
+move somebody's schedule by filing on a Friday afternoon — but that is only a protection if the
+Customer was asked.
+
+Precondition: a live A5 project with at least two milestones, both `PENDING` or later, and a vendor
+who can act. Raise a claim as the vendor:
+
+```
+# python manage.py shell
+from apps.requirements.models import Engagement, EngagementStage
+from apps.requirements import projects
+e = Engagement.objects.filter(commercial_mode="managed").latest("created_at")
+first = EngagementStage.objects.filter(engagement=e).order_by("position").first()
+projects.raise_delay_claim(
+    stage_id=first.id,
+    actor=e.partner.user,
+    reason_code="site-not-ready",
+    description="The site was still occupied on both days we were booked in.",
+    extension_days=5,
+)
+```
+
+Open `/engagements/{id}` as the Customer.
+
+1. The panel is **above** the transfer and the handover. That placement is deliberate: it is the only
+   one of the three the Customer loses by not scrolling.
+2. Read the heading — *"The professional has asked for more time"* — and the badge, which says
+   **Asked for — not agreed**. Never "extended" and never "agreed".
+3. The first sentence under it says answering **costs nothing either way**, and that if the delay
+   means extra work that comes separately as a change to agree and pay for. **There must be no
+   amount anywhere on this panel.** The record has no amount column, deliberately: one record that
+   could carry both would let "the site was locked" arrive as a bill.
+4. **What each answer does** lists three things, and the first is the one to check:
+   *this milestone and **every milestone after it** move by 5 days.* If it says only this milestone,
+   the copy has drifted from `_shift_schedule_from`.
+5. The clock line says who is waiting and what happens on silence: the request lapses and the agreed
+   dates stand, and the professional can ask again.
+6. Press **Give them 5 days**. Read the dialog before confirming — it names the milestone, says every
+   later one moves, says nothing is charged, says the originally agreed dates stay on record, and
+   says it cannot be undone. There is an optional note box.
+7. Confirm. The claim moves into the history below as *"You gave 5 days, and the stages from … onwards
+   moved by that much."* Check the milestone dates on the engagement actually moved.
+
+### The three things that must be true, and the way to force each
+
+| Force it by | Expect |
+|---|---|
+| Pressing **Keep the dates we agreed** on a fresh claim | The dialog says nothing changes, that it cancels nothing, penalises nobody and moves no money. That wording is load-bearing: a Customer who reads "no" as a complaint will pick "yes" to avoid making one. |
+| Letting a claim expire (`ProjectDelayClaim.objects.filter(...).update(expires_at=<past>)`, then run `sweep_delay_claims`) | It renders in the history as *"Nobody answered in time, so the dates you agreed stood. Nothing moved."* — never as granted. |
+| Answering a claim that expired while the page was open | *"This request has already been settled"* with **Refresh**, and the explicit sentence that nothing moved. Never a retry of the same command. |
+| A `ProjectDelayClaim.status` this build has never seen | The live card renders *"We cannot describe this request"* with **no controls**, and a settled one says the app does not recognise how it ended. The optimistic fallback would be "a live request you can accept", and accepting moves every remaining date. |
+| Raising two claims on two different milestones | **Both** appear, each with its own answer. One live claim per *milestone* is a database constraint, so a project with three milestones can genuinely have three — and answering two of three while the screen implies the project is settled would be lying about a clock that is still running. |
+| Attaching evidence to the claim (`claim.evidence.set(...)` with stage evidence ids) | Each row reads with the **same wording the handover panel uses** for the same scan states. A file that is checked says it is held by Vsolve and that opening it from this screen is not available yet — the evidence rail still has no download route (§7). |
+| Putting an evidence id on the claim that is not on this engagement | *"One file was attached that we cannot find a record of on this project."* Counted and reported, never silently dropped. |
+| A claim raised with no description | *"The professional gave no explanation with this request. It is reasonable to ask for one before you answer."* Not a blank card. |

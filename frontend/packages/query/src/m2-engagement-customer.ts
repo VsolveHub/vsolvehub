@@ -1422,3 +1422,139 @@ export function hasOutstandingMaterialAdvance(transfer: ProjectTransfer): boolea
 export function isNotAProject(error: unknown): boolean {
   return hasCode(error, "m2_stage_transition_not_allowed");
 }
+
+
+/* -- The delay claim (`M2-BE-544`) ----------------------------------------- */
+
+/**
+ * A vendor's claim that the Customer held a milestone up, and the Customer's
+ * answer to it.
+ *
+ * ## Why this needed its own block rather than riding on the amendment engine
+ *
+ * A delay claim and an amendment look alike from a distance — both are a vendor
+ * asking the Customer for something, both expire, both are decided once. They
+ * are not the same thing and the difference is the whole design: **a delay claim
+ * has no amount and cannot be given one.** A delay that costs money is extra
+ * work, extra work is a scope amendment, and one record that could carry both
+ * would let "the site was locked" arrive as a bill nobody agreed to. So nothing
+ * in this block reads, formats or infers a figure.
+ *
+ * ## Silence is a refusal here, and that is the reason the surface exists
+ *
+ * `sweep_delay_claims` expires an unanswered claim and the agreed dates stand.
+ * That direction is deliberate — treating silence as consent would let a vendor
+ * move somebody's schedule by filing on a Friday afternoon — but it only works
+ * as a protection if the Customer was actually asked. A published command with
+ * no screen behind it is a deadline nobody can answer, which is the same
+ * mechanism read from the other end.
+ */
+
+/**
+ * Whether this build recognises the claim's state at all.
+ *
+ * Fail-closed for `isKnownTransferStatus`'s reason: the optimistic fallback is
+ * "a live request you can accept", and on a decided or expired claim that is a
+ * button that moves somebody's schedule.
+ */
+const KNOWN_DELAY_CLAIM_STATUSES: readonly string[] = [
+  "SUBMITTED",
+  "ACCEPTED",
+  "REJECTED",
+  "EXPIRED",
+  "WITHDRAWN",
+];
+
+export function isKnownDelayClaimStatus(claim: ProjectDelayClaim): boolean {
+  return KNOWN_DELAY_CLAIM_STATUSES.includes(claim.status);
+}
+
+/**
+ * Still the Customer's to answer.
+ *
+ * Expiry is **not** checked against a local clock, on `isAmendmentDecidable`'s
+ * and `isTransferDecidable`'s precedent: `expires_at` is presentation, the sweep
+ * and the command both decide server-side, and a claim hidden early by a fast
+ * device clock is a claim the Customer never got to accept. The refusal is
+ * `m2_amendment_not_actionable` and it is the same one either way.
+ */
+export function isDelayClaimDecidable(claim: ProjectDelayClaim): boolean {
+  return claim.status === "SUBMITTED" && claim.decided_at === null;
+}
+
+/** Accepted, and the schedule has moved by `applied_days`. */
+export function isDelayClaimApplied(claim: ProjectDelayClaim): boolean {
+  return claim.status === "ACCEPTED";
+}
+
+/**
+ * Every claim on this project, newest first.
+ *
+ * The server already orders by `-created_at`; re-sorting here rather than
+ * trusting it is the same defence `amendmentsNewestFirst` makes — a list whose
+ * order is load-bearing should not depend on a serializer's `order_by` staying
+ * where it is, and a claim history read in the wrong order reads as a different
+ * sequence of events.
+ */
+export function delayClaimsNewestFirst(plan: ProjectPlan): readonly ProjectDelayClaim[] {
+  return [...plan.delay_claims].sort(
+    (left, right) => Date.parse(right.created_at) - Date.parse(left.created_at),
+  );
+}
+
+/**
+ * The one claim waiting for an answer, or null.
+ *
+ * At most one **per milestone** is a database constraint
+ * (`requirements_one_live_delay_claim_per_stage`), so a project with three
+ * milestones can genuinely have three. This returns the newest decidable one for
+ * the single-question surface; `decidableDelayClaims` returns them all, and the
+ * panel renders every one, because answering two of three and being told the
+ * project is settled would be the screen lying about a deadline that is still
+ * running.
+ */
+export function liveDelayClaim(plan: ProjectPlan): ProjectDelayClaim | null {
+  return delayClaimsNewestFirst(plan).find(isDelayClaimDecidable) ?? null;
+}
+
+export function decidableDelayClaims(plan: ProjectPlan): readonly ProjectDelayClaim[] {
+  return delayClaimsNewestFirst(plan).filter(isDelayClaimDecidable);
+}
+
+/**
+ * The claims that are over, newest first — the history beside the live one.
+ *
+ * Membership by **naming the decided states**, not by excluding `SUBMITTED`.
+ * `isDelayClaimDecidable` already tests one state and one timestamp; spelling
+ * this as its negation would make a sixth status arrive as *history*, quietly,
+ * on the surface where a new state is most likely to mean "somebody still has to
+ * answer this".
+ */
+const SETTLED_DELAY_CLAIM_STATUSES: readonly string[] = [
+  "ACCEPTED",
+  "REJECTED",
+  "EXPIRED",
+  "WITHDRAWN",
+];
+
+export function settledDelayClaims(plan: ProjectPlan): readonly ProjectDelayClaim[] {
+  return delayClaimsNewestFirst(plan).filter((claim) =>
+    SETTLED_DELAY_CLAIM_STATUSES.includes(claim.status),
+  );
+}
+
+/**
+ * `409 m2_amendment_not_actionable` on a delay-claim decision.
+ *
+ * It means one of three things and the screen must not pick between them: the
+ * claim was already decided, it expired before it was answered, or a sweep
+ * expired it while the page was open. All three are answered by re-reading, and
+ * none of them is a retry.
+ *
+ * Named rather than reusing `isAmendmentNotActionable` at the call site so the
+ * refusal reads as being about the object it arrived on — the same reason
+ * `isNotAProject` and `isNotAShiftDay` are two names for one code.
+ */
+export function isDelayClaimNotActionable(error: unknown): boolean {
+  return hasCode(error, "m2_amendment_not_actionable");
+}

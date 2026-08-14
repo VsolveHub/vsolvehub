@@ -318,6 +318,20 @@ export {
   transferStagePrices,
   hasOutstandingMaterialAdvance,
   isNotAProject,
+  // The Customer's delay-claim decision, contract 1.31.0 (`M2-FE-614`). Appended
+  // rather than interleaved so the diff stays one block, on the precedent above.
+  // It is the plan gap Wave A5P logged in §7 rather than a new task row: the
+  // command and the read were both published to the Customer and no wave owned
+  // the surface, so a `SUBMITTED` claim shifted every later milestone on
+  // acceptance and expired on silence with nothing on screen to answer it.
+  isKnownDelayClaimStatus,
+  isDelayClaimDecidable,
+  isDelayClaimApplied,
+  delayClaimsNewestFirst,
+  liveDelayClaim,
+  decidableDelayClaims,
+  settledDelayClaims,
+  isDelayClaimNotActionable,
 } from "./m2-engagement-customer";
 export type {
   AmendmentDirection,

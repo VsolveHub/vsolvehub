@@ -4,6 +4,7 @@ import { isNotAProject } from "@vsolve/query";
 import { Skeleton } from "@vsolve/ui";
 
 import type { ProjectView } from "../adapters";
+import { DelayClaimPanel } from "./delay-claim-panel";
 import { HandoverPanel } from "./handover-panel";
 import { VendorTransferPanel } from "./vendor-transfer-panel";
 import { WarrantyPanel } from "./warranty-panel";
@@ -107,6 +108,19 @@ export function ProjectDecisions({
 
   return (
     <>
+      {/* Above the transfer and the handover, because it is the one on a clock
+          the Customer loses by ignoring. An unanswered delay claim lapses and
+          the agreed dates stand — a good outcome to arrive at deliberately and
+          a poor one to arrive at by not scrolling. */}
+      <DelayClaimPanel
+        engagementId={engagementId}
+        claims={project.delayClaims}
+        engagementNoun={engagementNoun}
+        stageNoun={stageNoun}
+        stagesNoun={stagesNoun}
+        onDone={onDone}
+      />
+
       {project.transfer !== null ? (
         <VendorTransferPanel
           engagementId={engagementId}

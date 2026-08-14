@@ -240,3 +240,88 @@ export function useDecideTransfer() {
     retry: false,
   });
 }
+
+/* --------------------------------------------------------------------------
+   Answering a delay claim — the Customer's half of `M2-BE-544`
+   -------------------------------------------------------------------------- */
+
+export interface DelayClaimDecisionInput {
+  /** Only so the engagement and its project read can be refetched. */
+  engagementId: string;
+  delayClaimId: string;
+  accept: boolean;
+  /** The Customer's own words. Optional on the wire; the panel asks for them on a refusal. */
+  note: string;
+}
+
+/**
+ * The Customer answers a vendor's delay claim.
+ *
+ * This surface exists because Wave A5P found the hole and logged it in §7: the
+ * command is published as the **Customer's** and `ProjectPlan.delay_claims` is
+ * published for them to read, and no wave owned the screen. That is not a
+ * cosmetic gap. `sweep_delay_claims` expires an unanswered claim and the agreed
+ * dates stand — silence is a refusal, deliberately, so that a vendor cannot move
+ * somebody's schedule by filing on a Friday afternoon. A refusal-by-silence is
+ * only a protection if the Customer was asked; without a screen it is a deadline
+ * running against somebody who was never shown it, and the vendor's legitimate
+ * claims expire alongside the opportunistic ones.
+ *
+ * ## Accepting moves more than the milestone it is about
+ *
+ * `_shift_schedule_from` moves **this milestone and every one after it** by
+ * `extension_days`, because a project is a sequence: a week lost on the first fix
+ * is a week lost on everything that follows. The panel says so before the tap
+ * rather than after, which is the whole of `M2-FE-707`'s rule applied on the
+ * Customer's side of the same product.
+ *
+ * A milestone with no date is left without one rather than given one. `original_terms`
+ * is untouched either way, so the date agreed and the date now due are both
+ * readable and their difference is the extension somebody accepted.
+ *
+ * ## No money, on either answer
+ *
+ * There is no amount on the request, none on the record, and none in this hook.
+ * A delay that costs money is extra work, and extra work goes through the
+ * amendment engine where the Customer accepts a price. One command that could do
+ * both would let "the site was locked" arrive as a bill.
+ *
+ * ## The key carries the decision
+ *
+ * `execute_idempotent` fingerprints the payload, so one key across a changed mind
+ * would be refused as key reuse with a different body. Scoping the stored key by
+ * the answer means a dropped connection replays the *same* decision, while a
+ * Customer who rejects and then accepts sends a genuinely new command and gets
+ * the server's own state machine as the reply — `useDecideTransfer`'s reasoning,
+ * and the reason `useAcceptAmendment` and `useDeclineAmendment` are two hooks.
+ *
+ * The note is deliberately **not** in the key. It is the Customer's wording of an
+ * answer they have already chosen, and a corrected typo is not a different
+ * command.
+ *
+ * No auto-retry. `409 m2_amendment_not_actionable` means decided, expired, or
+ * swept while the page was open; all three are answered by re-reading, which
+ * `onSettled` does.
+ */
+export function useDecideDelayClaim() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: DelayClaimDecisionInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/project-delay-claims/{delay_claim_id}/decision/", {
+          params: {
+            path: { delay_claim_id: input.delayClaimId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `m2-delay-claim:${input.delayClaimId}:${input.accept ? "accept" : "reject"}`,
+              ),
+            },
+          },
+          body: { accept: input.accept, note: input.note },
+        }),
+      ),
+    onSettled: (_data, _error, input) => invalidateProject(queryClient, input.engagementId),
+    retry: false,
+  });
+}

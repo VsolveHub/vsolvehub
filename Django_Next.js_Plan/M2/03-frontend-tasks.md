@@ -994,6 +994,22 @@ including partial attendance and no-show recovery, without a per-worker device d
   published** — `Engagement` carries the proposal as a bare id with no snapshot — so each version
   carries its money and its change lines and the panel links to the quote rather than paraphrasing
   terms it was never given (plan §7).
+- [~] `M2-FE-614` **built — static gates green, owner manual verification pending.** *(New row. This
+  task did not exist: Wave A5P logged it in plan §7 as a plan gap rather than a contract gap —
+  `m2_project_delay_claim_decide` is published as the **Customer's** command and
+  `ProjectPlan.delay_claims` is published for them to read, and no wave owned the surface.)* Answer a
+  professional's request for more time on a milestone. **Silence is a refusal by design** —
+  `sweep_delay_claims` expires an unanswered claim and the agreed dates stand, so a vendor cannot
+  move somebody's schedule by filing on a Friday afternoon — which only works as a protection if the
+  Customer was actually asked. **Accepting moves this milestone and every one after it**, and the
+  panel says so before the tap rather than after; a milestone with no date is left without one, and
+  `original_terms` is untouched either way so the agreed date and the due date stay both readable.
+  **No money on either answer, and none may be added:** the record has no amount by design, because a
+  delay that costs money is extra work and extra work is an amendment the Customer accepts and pays
+  for. Turning it down is stated as a real answer that cancels nothing and penalises nobody, because
+  a Customer who reads "no" as a complaint will pick "yes" to avoid making one. Evidence is joined
+  off the stage rail and worded exactly as the handover panel words it; an id with no record on this
+  engagement is reported, never dropped.
 
 **FE5B gate:** Neither party can mistake clarification, evidence upload or a proposed amendment for
 approved scope, payment or stage completion, and an abandoned project shows a route to completion.

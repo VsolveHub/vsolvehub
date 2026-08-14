@@ -1,9 +1,13 @@
 import {
   canAcceptHandover,
+  delayClaimsNewestFirst,
   deliverableLink,
   handoverBlocksCompletion,
   handoverPhase,
   hasOutstandingMaterialAdvance,
+  isDelayClaimApplied,
+  isDelayClaimDecidable,
+  isKnownDelayClaimStatus,
   isKnownTransferStatus,
   isMaterialAdvanceLeftWithVendor,
   isMilestoneCancelled,
@@ -17,6 +21,8 @@ import {
   transferStagePrices,
   type EngagementStatus,
   type HandoverPhase,
+  type ProjectDelayClaim,
+  type ProjectDelayClaimStatus,
   type ProjectDeliverableKind,
   type ProjectPlan,
   type ProjectTransferStatus,
@@ -269,6 +275,94 @@ function toTransferLines(
 }
 
 /* --------------------------------------------------------------------------
+   The delay claim
+   -------------------------------------------------------------------------- */
+
+/**
+ * A vendor's request for days back, as the Customer reads it.
+ *
+ * **No money field on this view, and none may be added.** The wire shape has no
+ * amount by design — a delay that costs money is a scope amendment the Customer
+ * accepts and pays for — and an adapter that helpfully surfaced "what this is
+ * worth" would reintroduce, in the browser, exactly the confusion the schema was
+ * shaped to prevent.
+ *
+ * `reasonCode` is carried verbatim. It is an open slug on the server, not an
+ * enum, precisely because a fixed list of the ways a Customer can hold a site up
+ * guarantees the one that happened is not on it — so a display map here would
+ * fall through on the interesting cases and print nothing on the ones that
+ * matter most.
+ */
+export interface DelayClaimView {
+  claimId: string;
+  /** The milestone this is about, when the stage id resolves to one we hold. */
+  milestoneLabel: string | null;
+  /** The vendor's own reason code. Never mapped — see the note above. */
+  reasonCode: string | null;
+  description: string;
+  /** What the vendor asked for. */
+  extensionDays: number;
+  /** What the schedule actually moved by. Zero on everything except an accepted claim. */
+  appliedDays: number;
+  status: ProjectDelayClaimStatus;
+  isKnownStatus: boolean;
+  isDecidable: boolean;
+  isApplied: boolean;
+  expiresAt: string | null;
+  /** Raw, for `useServerCountdown` — a formatted date is the device's reading. */
+  expiresAtIso: string;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string | null;
+  /**
+   * The stage evidence the vendor pointed at, joined off the engagement read.
+   *
+   * Same rail and same join as a `FILE` deliverable, and the same limitation: the
+   * bytes cannot be opened, because no download route exists for the evidence
+   * rail (§7). What can be reported is what the record knows — checked, scanning,
+   * rejected — which is the difference between "there is a photograph" and "there
+   * is a photograph we have looked at".
+   */
+  evidence: readonly EvidenceView[];
+  /** Ids on the claim that are not on this engagement's stages. Never silently dropped. */
+  missingEvidenceCount: number;
+}
+
+function toDelayClaimView(
+  claim: ProjectDelayClaim,
+  labelByStageId: ReadonlyMap<string, string>,
+  evidenceById: ReadonlyMap<string, EvidenceView>,
+): DelayClaimView {
+  const evidence: EvidenceView[] = [];
+  let missing = 0;
+  for (const evidenceId of claim.evidence) {
+    const row = evidenceById.get(evidenceId);
+    if (row === undefined) missing += 1;
+    else evidence.push(row);
+  }
+
+  return {
+    claimId: claim.id,
+    milestoneLabel: labelByStageId.get(claim.stage) ?? null,
+    reasonCode: claim.reason_code.trim() === "" ? null : claim.reason_code,
+    description: claim.description,
+    extensionDays: claim.extension_days,
+    appliedDays: claim.applied_days,
+    status: claim.status,
+    isKnownStatus: isKnownDelayClaimStatus(claim),
+    isDecidable: isDelayClaimDecidable(claim),
+    isApplied: isDelayClaimApplied(claim),
+    expiresAt: formatInstant(claim.expires_at),
+    expiresAtIso: claim.expires_at,
+    decidedAt: formatInstant(claim.decided_at),
+    decisionNote: claim.decision_note.trim() === "" ? null : claim.decision_note,
+    createdAt: formatInstant(claim.created_at),
+    evidence,
+    missingEvidenceCount: missing,
+  };
+}
+
+/* --------------------------------------------------------------------------
    The project
    -------------------------------------------------------------------------- */
 
@@ -281,6 +375,16 @@ export interface ProjectView {
   retention: RetentionView;
   handover: HandoverView;
   transfer: TransferView | null;
+  /**
+   * Every delay claim, newest first.
+   *
+   * All of them rather than only the live ones, because the panel shows the
+   * history beside the question: a third claim on the same milestone reads
+   * differently when the first two are on screen, and a Customer deciding one
+   * extension at a time with no record of the last two is being asked a
+   * different question than the one they think.
+   */
+  delayClaims: readonly DelayClaimView[];
 }
 
 /**
@@ -334,6 +438,9 @@ export function toProjectView(
       blocksCompletion: handoverBlocksCompletion(plan),
     },
     transfer: plan.transfer === null ? null : toTransferView(plan.transfer, milestones),
+    delayClaims: delayClaimsNewestFirst(plan).map((claim) =>
+      toDelayClaimView(claim, labelByStageId, evidenceById),
+    ),
   };
 }
 
