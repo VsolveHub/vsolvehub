@@ -89,6 +89,17 @@ export type ShortfallChoice = Schemas["ShortfallChoiceEnum"];
 export type DisputedWorker = Schemas["DisputedWorkerRequest"];
 export type CashDemandReport = Schemas["CashDemandReport"];
 
+/* The A5 project, contract 1.31.0 — see the section at the foot of this file. */
+export type ProjectPlan = Schemas["ProjectPlan"];
+export type ProjectMilestone = Schemas["ProjectMilestone"];
+export type ProjectHandover = Schemas["ProjectHandover"];
+export type ProjectDeliverable = Schemas["ProjectDeliverable"];
+export type ProjectDeliverableKind = Schemas["ProjectDeliverableKindEnum"];
+export type ProjectTransfer = Schemas["ProjectTransfer"];
+export type ProjectTransferStatus = Schemas["ProjectTransferStatusEnum"];
+export type ProjectDelayClaim = Schemas["ProjectDelayClaim"];
+export type ProjectDelayClaimStatus = Schemas["ProjectDelayClaimStatusEnum"];
+
 /* --------------------------------------------------------------------------
    Commercial mode
    -------------------------------------------------------------------------- */
@@ -164,10 +175,14 @@ export type StageKind = "work" | "material_advance" | "unknown";
  * unrecognised kind renders as "we cannot describe what this money is for"
  * rather than as the nearest-looking thing.
  */
-export function stageKind(stage: EngagementStage): StageKind {
-  if (stage.kind === "WORK") return "work";
-  if (stage.kind === "MATERIAL_ADVANCE") return "material_advance";
+function kindFromWire(kind: string): StageKind {
+  if (kind === "WORK") return "work";
+  if (kind === "MATERIAL_ADVANCE") return "material_advance";
   return "unknown";
+}
+
+export function stageKind(stage: EngagementStage): StageKind {
+  return kindFromWire(stage.kind);
 }
 
 /** Money for goods the vendor buys, not for work somebody performs. */
@@ -1009,5 +1024,401 @@ export function canReportCashDemand(engagement: Engagement): boolean {
  * call site can render nothing instead of a refusal.
  */
 export function isNotAShiftDay(error: unknown): boolean {
+  return hasCode(error, "m2_stage_transition_not_allowed");
+}
+
+/* --------------------------------------------------------------------------
+   The A5 project — `M2-FE-611`, `612`, contract 1.31.0
+   -------------------------------------------------------------------------- */
+
+/**
+ * One A5 project, as the Customer is entitled to see it.
+ *
+ * ## Why this is one read and not four
+ *
+ * `GET /engagements/{id}/project/` answers the milestones, the money, the
+ * warranty retention, the handover and whatever recovery is in flight together.
+ * The server's own reasoning is the reason there is one query key at the call
+ * site rather than four: they are one project at five moments, and a client
+ * assembling them from separate reads renders four of them against a state the
+ * fifth has already left. A transfer proposal beside a milestone list it was not
+ * priced against is precisely the disagreement that matters here — the server
+ * refuses that acceptance, and the screen would have collected it.
+ *
+ * ## Three things this section refuses to compute
+ *
+ * **The retention.** `retention_paise` is where the hold-back is going and
+ * `retention_withheld_paise` is what has actually been held so far; both are
+ * published, and the second climbs as milestones are approved rather than
+ * appearing whole at the end. Nothing here multiplies a percentage by anything.
+ *
+ * **The transfer delta.** `delta_paise` is held equal to
+ * `replacement_remaining_paise - previous_remaining_paise` by a database
+ * constraint, so a client may render it without checking the arithmetic — and
+ * must not re-derive it, because a client that computes a money difference is a
+ * client that can show a Customer a number their statement disagrees with.
+ *
+ * **What a transfer will refund.** `refunded_paise` is what *actually* went back
+ * and it is zero on a proposal, because nothing has moved yet. The unearned
+ * funding a transfer would return is `funded - refunded - released` per
+ * transferable milestone, and that subtraction is deliberately absent from this
+ * file: a predicted refund rendered as a number is a promise, and this one is
+ * conditional on a state the Customer has not accepted yet. The rule is stated
+ * in words on the screen instead.
+ *
+ * ## And one it refuses to describe
+ *
+ * `material_advance_outstanding_paise` is money the Customer already paid the
+ * abandoning vendor for goods. A transfer does **not** recover it and does not
+ * hand it to the replacement; **no command in this system will ever refund it.**
+ * It renders as an open question for support and never as a pending refund.
+ */
+
+/**
+ * The one cancellation reason a screen must read rather than infer.
+ *
+ * A cancelled milestone carrying this code is a **funded material advance left
+ * with the outgoing vendor** — that money bought goods and nothing is coming
+ * back. Every other cancellation on a project is a work milestone taken out of
+ * the agreement by an early termination, whose unearned funding *is* returned.
+ *
+ * One sentence cannot be true of both, which is why this is a published string
+ * rather than something derived from `kind`: a *cancelled but unfunded*
+ * material advance is not left with anybody, and calling that one unrefundable
+ * would be inventing a loss.
+ */
+export const MATERIAL_ADVANCE_LEFT_WITH_VENDOR = "material_advance_left_with_vendor";
+
+/** The milestones in the order the project lays them out. Never wire order. */
+export function milestonesInOrder(plan: ProjectPlan): readonly ProjectMilestone[] {
+  return [...plan.milestones].sort((left, right) => left.position - right.position);
+}
+
+/**
+ * What a milestone's money is for, on the project read's own shape.
+ *
+ * The same fail-closed three-way answer `stageKind` gives on the engagement
+ * read, against the same published enum. Separate because the two wires are
+ * separate shapes — `ProjectMilestone` is not a `ModelSerializer` over
+ * `EngagementStage` — and a structural helper over `{kind}` would silently
+ * accept any object that happened to carry the field.
+ */
+export function milestoneKind(milestone: ProjectMilestone): StageKind {
+  return kindFromWire(milestone.kind);
+}
+
+/** Nobody owes work on this milestone any more. See `isStageCancelled`. */
+export function isMilestoneCancelled(milestone: ProjectMilestone): boolean {
+  return milestone.status === "CANCELLED";
+}
+
+/**
+ * Money that is gone: a funded material advance the transfer left behind.
+ *
+ * **Both halves are required.** The `kind` alone is not enough — an *unfunded*
+ * material advance cancelled by an early termination cost the Customer nothing —
+ * and the reason code alone is checked as well so that a code this build has
+ * never seen cannot fall into the "not coming back" branch by accident.
+ */
+export function isMaterialAdvanceLeftWithVendor(milestone: ProjectMilestone): boolean {
+  return (
+    isMilestoneCancelled(milestone) &&
+    milestone.cancellation_reason_code === MATERIAL_ADVANCE_LEFT_WITH_VENDOR
+  );
+}
+
+/**
+ * Whether this milestone carries a usable "as agreed" reading (`M2-BE-549`).
+ *
+ * `original_terms` is a snapshot written by all three paths that lay a stage
+ * out, and it is **empty on a row created before it existed**. The serializer
+ * unpacks an empty snapshot as `""`, `0` and `null` rather than omitting the
+ * fields — so an unguarded screen renders "originally ₹0", which is not a
+ * missing value but a false one, and it appears in exactly the argument the two
+ * readings exist for.
+ */
+export function hasOriginalTerms(milestone: ProjectMilestone): boolean {
+  return (
+    milestone.original_milestone_label !== "" ||
+    milestone.original_deliverable !== "" ||
+    milestone.original_amount_paise > 0 ||
+    milestone.original_scheduled_on !== null
+  );
+}
+
+/** The price moved since it was agreed — a transfer reprices, an amendment can too. */
+export function milestoneRepriced(milestone: ProjectMilestone): boolean {
+  return hasOriginalTerms(milestone) && milestone.amount_paise !== milestone.original_amount_paise;
+}
+
+/**
+ * How many days this milestone has moved, or null when the question has no answer.
+ *
+ * Published rather than subtracted here, and that is not tidiness: a date
+ * difference computed in a browser is a date difference in whatever timezone the
+ * browser is in, and this number is read in disputes about lateness.
+ * `schedule_shift_days` is null when either date is missing, and zero is a real
+ * answer meaning "on the day we agreed".
+ */
+export function milestoneScheduleShiftDays(milestone: ProjectMilestone): number | null {
+  return milestone.schedule_shift_days;
+}
+
+/* -- Completion, and the three things that block it ------------------------ */
+
+/**
+ * Whether the vendor still owes work on this stage.
+ *
+ * **An exhaustive map, not an exclusion.** The tempting spelling is "anything
+ * that is not `APPROVED` or `RELEASED`", and 1.31.0 is the wave that proves why
+ * it is wrong: `CANCELLED` arrived and would have been absorbed as *still open*
+ * by every exclusion in this file, silently, with nothing to fail. Written as a
+ * `Record` over the published union, a ninth status is a `tsc` error here rather
+ * than a screen that quietly changes meaning — and the runtime fallback is
+ * `true`, so a value that reaches an older bundle blocks completion instead of
+ * being swept past it.
+ *
+ * The membership is the server's own `EngagementStage.OPEN_STATUSES`, which
+ * `accept_engagement_completion` checks before it closes anything (`M2-BE-548`).
+ */
+const STAGE_OWES_WORK: Record<EngagementStageStatus, boolean> = {
+  PENDING: true,
+  IN_PROGRESS: true,
+  AWAITING_REVIEW: true,
+  CORRECTION_REQUESTED: true,
+  DISPUTED: true,
+  APPROVED: false,
+  RELEASED: false,
+  CANCELLED: false,
+};
+
+export function stageOwesWork(stage: EngagementStage): boolean {
+  return STAGE_OWES_WORK[stage.status] ?? true;
+}
+
+/** Every stage somebody still owes work on, in agreement order. */
+export function openStages(engagement: Engagement): readonly EngagementStage[] {
+  return orderedStages(engagement).filter(stageOwesWork);
+}
+
+/**
+ * Why the Customer's final acceptance would be refused, or null.
+ *
+ * `m2_engagement_completion_accept` has three refusals and **none of them
+ * approves anything on the way past** (`M2-BE-548`). Two are readable from the
+ * engagement itself and are ordered exactly as the server checks them — a
+ * disputed stage answers `m2_stage_disputed`, any other open stage answers
+ * `m2_stage_transition_not_allowed`. The third, an unaccepted handover, lives on
+ * the project read and is `handoverBlocksCompletion` below.
+ *
+ * This exists so the screen can **explain** rather than offer a button that
+ * refuses, and it must never be read the other way round: nothing here approves,
+ * skips or sweeps a stage. An accepted amendment can append work *after*
+ * `COMPLETING`, and that stage keeps its own review.
+ */
+export type CompletionBlocker = "open_stage" | "disputed_stage" | null;
+
+export function completionBlocker(engagement: Engagement): CompletionBlocker {
+  const open = openStages(engagement);
+  if (open.length === 0) return null;
+  return open.some((stage) => stage.status === "DISPUTED") ? "disputed_stage" : "open_stage";
+}
+
+/* -- Warranty retention (`M2-BE-546`) -------------------------------------- */
+
+/**
+ * Where the warranty hold-back has got to.
+ *
+ * **Retention is payout-side money.** The Customer funds every milestone at
+ * **face value**; what retention changes is how much of an approved milestone
+ * the vendor may draw before the warranty is over. A screen that describes it as
+ * money withheld from the Customer's payments has described the wrong side of
+ * the transaction and will be contradicted by the funding controls two sections
+ * up.
+ *
+ * **It is allocated cumulatively, and never "from the final milestone".** The
+ * obvious reading — subtract it when approving the last stage — stops being
+ * computable the moment an amendment appends one, and a retention already
+ * released out of what turned out not to be the last milestone cannot be
+ * un-released. So `retention_withheld_paise` climbs against the cumulative
+ * approved total and reaches `retention_paise` exactly when the last milestone
+ * is approved, whichever milestone that turns out to be. No screen may name a
+ * milestone as the one it comes out of.
+ *
+ * Four phases, switched on the published status rather than inferred from the
+ * numbers:
+ *
+ * - **`none`** — nothing is held. This is the ordinary case and it is **not** a
+ *   statement that the work carries no guarantee: warranty terms live on the
+ *   estimate the Customer accepted, and a variant with no configured retention
+ *   simply funds none of it through Vsolve.
+ * - **`accruing`** — a retention is configured and is building up as milestones
+ *   are approved. `warranty_ends_at` is still null and no date may be shown.
+ * - **`held`** — `WARRANTY`. The work is finished, the hold-back is complete and
+ *   `warranty_ends_at` says when it releases.
+ * - **`released`** — `CLOSED`, which is reachable only through `WARRANTY` and
+ *   means the warranty period is over.
+ */
+export type RetentionPhase = "none" | "accruing" | "held" | "released";
+
+export function retentionPhase(plan: ProjectPlan): RetentionPhase {
+  if (plan.retention_paise <= 0 && plan.retention_withheld_paise <= 0) return "none";
+  if (plan.status === "CLOSED") return "released";
+  if (plan.status === "WARRANTY") return "held";
+  return "accruing";
+}
+
+/**
+ * The warranty window is running now.
+ *
+ * Read from `status`, not from `warranty_ends_at`: an engagement with no
+ * warranty is terminal at `COMPLETED` and never reaches `CLOSED`, so "has an end
+ * date" and "is in its warranty" are different questions with different answers
+ * either side of the sweep that closes it.
+ */
+export function isWarrantyRunning(plan: ProjectPlan): boolean {
+  return plan.status === "WARRANTY";
+}
+
+/* -- The handover (`M2-BE-547`) -------------------------------------------- */
+
+/**
+ * Where the digital handover has got to — two published timestamps, three states.
+ *
+ * `submitted_at` set with `accepted_at` null is the state in which
+ * `m2_engagement_completion_accept` **refuses**, and that refusal is the entire
+ * mechanism keeping Event and Media delivery on the platform: a vendor who hands
+ * over privately has an engagement that will not close and a retention that will
+ * not release. The screen renders it as the Customer's move, because it is.
+ */
+export type HandoverPhase = "none" | "submitted" | "accepted";
+
+export function handoverPhase(plan: ProjectPlan): HandoverPhase {
+  if (plan.handover.accepted_at !== null) return "accepted";
+  return plan.handover.submitted_at === null ? "none" : "submitted";
+}
+
+/** Something has been handed over and the Customer has not answered it. */
+export function canAcceptHandover(plan: ProjectPlan): boolean {
+  return handoverPhase(plan) === "submitted";
+}
+
+/** The third refusal on `accept_engagement_completion`, which lives on this read. */
+export function handoverBlocksCompletion(plan: ProjectPlan): boolean {
+  return canAcceptHandover(plan);
+}
+
+/**
+ * The location a `LINK` deliverable points at, or null.
+ *
+ * `https` only, checked here as well as on the server, and **not coerced**. A
+ * handover link the Customer opens is a link this platform showed them; quietly
+ * upgrading or downgrading a scheme on their behalf is not a decision to take in
+ * a render function. A `FILE` always answers null — it is a row on the stage
+ * evidence rail, and no download route for that rail is published.
+ */
+export function deliverableLink(deliverable: ProjectDeliverable): string | null {
+  if (deliverable.kind !== "LINK") return null;
+  const url = deliverable.external_url.trim();
+  return url.toLowerCase().startsWith("https://") ? url : null;
+}
+
+/* -- The vendor transfer (`M2-BE-545`) ------------------------------------- */
+
+/**
+ * Whether this build recognises the transfer's state at all.
+ *
+ * Fail-closed on the rule this module applies to every other status union: the
+ * optimistic fallback here is "a live proposal you can accept", which on a
+ * decided or expired transfer is a button that moves somebody's project.
+ */
+const KNOWN_TRANSFER_STATUSES: readonly string[] = ["PROPOSED", "ACCEPTED", "DECLINED", "EXPIRED"];
+
+export function isKnownTransferStatus(transfer: ProjectTransfer): boolean {
+  return KNOWN_TRANSFER_STATUSES.includes(transfer.status);
+}
+
+/**
+ * Still the Customer's to decide.
+ *
+ * **Operations proposes and the Customer decides**, and that split is the point:
+ * their remaining cost changes, and 07 §7 does not let Operations change
+ * somebody's agreement for them. There is no Customer-side initiation to build.
+ *
+ * Expiry is not checked locally, on `isAmendmentDecidable`'s precedent:
+ * `expires_at` is presentation and the server decides, saying so with
+ * `m2_amendment_not_actionable`.
+ */
+export function isTransferDecidable(transfer: ProjectTransfer): boolean {
+  return transfer.status === "PROPOSED" && transfer.decided_at === null;
+}
+
+/** Accepted and applied — the milestones have been refunded and repriced. */
+export function isTransferApplied(transfer: ProjectTransfer): boolean {
+  return transfer.status === "ACCEPTED" && transfer.applied_at !== null;
+}
+
+/**
+ * Which way the remaining cost moves if this is accepted.
+ *
+ * From the published `delta_paise` and nothing else. `previous_remaining_paise`,
+ * `replacement_remaining_paise` and `delta_paise` are held consistent by a
+ * database constraint, so subtracting the first two here would be a second
+ * implementation of an equation that cannot disagree with itself on the server
+ * and can here.
+ */
+export type TransferDirection = "costs_more" | "costs_less" | "same";
+
+export function transferDirection(transfer: ProjectTransfer): TransferDirection {
+  if (transfer.delta_paise > 0) return "costs_more";
+  if (transfer.delta_paise < 0) return "costs_less";
+  return "same";
+}
+
+/**
+ * The replacement's price per milestone, or null when it cannot be trusted.
+ *
+ * `stage_prices` is a `JSONField` and is published as `unknown`, so this is the
+ * one place in the Customer's M2 surface that narrows an untyped payload. It
+ * matters because **the transfer is priced per milestone and never as a lump**:
+ * a replacement who names one number for "the rest of it" has not said which of
+ * the agreed milestones they are doing, and a Customer accepting a total against
+ * a scope nobody restated is the failure `M2-BE-545` is shaped to prevent. The
+ * keys are also the authoritative list of what transfers — better than
+ * re-deriving the server's own status filter in a browser.
+ *
+ * **Fails closed to null on anything unexpected**, including one bad entry,
+ * rather than dropping the entry: a per-milestone table missing a row is a
+ * shorter list of work than the one being priced, which is exactly the lie the
+ * server refuses to let a vendor tell. The call site falls back to the two
+ * published totals, which are always safe to render.
+ */
+export function transferStagePrices(transfer: ProjectTransfer): ReadonlyMap<string, number> | null {
+  const raw: unknown = transfer.stage_prices;
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const prices = new Map<string, number>();
+  for (const [stageId, amount] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0) return null;
+    prices.set(stageId, amount);
+  }
+  return prices.size === 0 ? null : prices;
+}
+
+/** Money already spent on goods that this transfer leaves exactly where it is. */
+export function hasOutstandingMaterialAdvance(transfer: ProjectTransfer): boolean {
+  return transfer.material_advance_outstanding_paise > 0;
+}
+
+/**
+ * `409 m2_stage_transition_not_allowed` on the project read.
+ *
+ * The read raises it on an **A3 engagement** — a workforce booking has
+ * shift-days, not milestones — which is a screen that should not have mounted
+ * rather than an error to show a Customer. The exact mirror of `isNotAShiftDay`
+ * on the other archetype, and named separately so a call site cannot suppress
+ * the wrong one: the code is shared and only the surface it arrived on says
+ * which object the refusal was about.
+ */
+export function isNotAProject(error: unknown): boolean {
   return hasCode(error, "m2_stage_transition_not_allowed");
 }

@@ -344,7 +344,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
 | A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. **Revision 4 (ADR-0009) demotes the A3 teasers/unlock half to the thin-supply fallback — kept as built.** Wave J (2026-08-14) closes `FE-418`'s receipt from `Engagement.access_receipt` and moves `FE-421`'s slot times onto `SiteVisit.timezone`. `FE-419` and `FE-409` are now publishable and unstarted. |
 | A2R | `FE-425..429` (revision 4: rate-card front door) | `[~]` 5 of 5 | `[ ]` | The preset, the published rate before booking, the cascade holding state and its fallback handoff, the booking-fee checkout and the forfeit/refund surfaces. **Wired and reachable** — 2 new routes, 1 new feature, the rate-card half of `m2-quotes.ts`. Built against 1.29.0. Owner verification pending; see the 2026-08-14 A2R section and `apps/customer/features/crew/SMOKE.md`. The Wave A2 unlock surface is untouched and is now the thin-supply fallback the `FELL_BACK` handoff routes to. |
-| A3 + A3F | `FE-509..512`, `FE-514..515`, `FE-608..613` | `[~]` 10 of 12 | `[ ]` | **Wave J (2026-08-14) consumed `EngagementStage.kind`** across the list, the workspace and the stage review, and re-pointed the event and amendment reads onto the factory's own keys and tiers — see the Wave J section. The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. **Wave A3F (2026-08-14) closes `FE-510` and adds revision 4's `FE-514`/`FE-515`** — the Customer's side of the A3 shift-day at 1.30.0: one-tap attendance with the three shortfall choices, the evening dual tap with the server's own UPI deep link and the per-worker-day figure, and the one-tap cash-demand report. `FE-510`'s not-built-yet block is gone, and the generic stage controls now stand down while the attendance answer is open, because `approve_stage` would close the day with no settlement. See the Wave A3F section and `apps/customer/features/shift-day/SMOKE.md`. |
+| A3 + A3F + A5P | `FE-509..512`, `FE-514..515`, `FE-608..613` | `[~]` 12 of 12 | `[ ]` | **Wave J (2026-08-14) consumed `EngagementStage.kind`** across the list, the workspace and the stage review, and re-pointed the event and amendment reads onto the factory's own keys and tiers — see the Wave J section. The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. **Wave A3F (2026-08-14) closes `FE-510` and adds revision 4's `FE-514`/`FE-515`** — the Customer's side of the A3 shift-day at 1.30.0: one-tap attendance with the three shortfall choices, the evening dual tap with the server's own UPI deep link and the per-worker-day figure, and the one-tap cash-demand report. `FE-510`'s not-built-yet block is gone, and the generic stage controls now stand down while the attendance answer is open, because `approve_stage` would close the day with no settlement. See the Wave A3F section and `apps/customer/features/shift-day/SMOKE.md`. **Wave A5P (2026-08-14) closes `FE-611` and `FE-612`** — the Customer's side of the A5 project at 1.31.0: deliverable acceptance with the refusal that keeps delivery on the platform, completion that names its three blockers instead of offering a control that refuses, warranty retention stated as payout-side money accruing cumulatively (never "held from the last stage"), and the vendor-replacement decision — Operations proposes, the Customer accepts, priced per milestone, **no checkout**. `not-built-yet.tsx` is deleted from this app with no reference surviving. See the Wave A5P section and `apps/customer/features/project/SMOKE.md`. |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
 
@@ -1603,3 +1603,202 @@ difference between the deep link existing and not.
 | 2026-08-14 | `FE-510` shortfall choice | `DaySettlement.shortfall_choice` is published as the bare enum but rests at `""`; the request shape gets this right and the response shape does not. Membership-tested rather than compared, failing closed. | yes |
 | 2026-08-14 | `FE-510` dispute cap | `MAXIMUM_DISPUTED_WORKERS` is enforced and unpublished, so the 40 is hand-copied as a guard rail. The server stays the authority and both drift directions are visible rather than silent. | yes |
 | 2026-08-14 | barrel collision | `settlementAmountPaise` / `settlementPaymentLink` written by both sessions in one wave. Dropped from Session A's block; the fold is the orchestrator's at the gate. | yes |
+
+---
+
+### Wave A5P progress — 2026-08-14 · the Customer's side of the A5 project, at 1.31.0
+
+**Built — static gates green, owner manual verification pending.** `M2-FE-611` and `M2-FE-612`, the
+two rows Wave A3 was told to leave alone until C5 landed. They are the last of the three placeholder
+blocks, and **`features/engagement/view/not-built-yet.tsx` is deleted** with them — no reference
+survives anywhere in `apps/customer/**`. (The Partner app keeps its own copy; Session B owns it and
+still needs it for `M2-FE-605`/`606`.)
+
+New: `apps/customer/features/project/` — `queries.ts`, `adapters/index.ts`, four view files and
+`SMOKE.md`. Changed: the project section at the foot of `packages/query/src/m2-engagement-customer.ts`,
+this column's barrel block, `features/engagement/{adapters/index.ts, view/completion-panel.tsx,
+view/engagement-screen.tsx, SMOKE.md}`.
+
+#### One read, two slots, and why it is not one block
+
+`GET /engagements/{id}/project/` answers the milestones, the money, the retention, the handover and
+whatever recovery is in flight **together**, on the server's own reasoning: they are one project at
+five moments, and a client assembling them from separate reads renders four of them against a state
+the fifth has left. So the read is issued **once**, in `EngagementScreen`, and handed to three
+consumers — `ProjectDecisions`, `ProjectWarranty` and the completion panel, whose third refusal lives
+on it. Two hooks would have shared one cache entry and cost nothing extra, but they would also have
+produced two loading states and two error messages for one failed request.
+
+The two slots sit at different heights because they are different kinds of thing. `ProjectDecisions`
+goes **above** the final acceptance, beside the amendment panel: a proposed replacement carries a
+deadline and reprices every unfinished stage, and an unaccepted handover is the thing stopping the
+project closing — both are answers owed now, and a Customer who reads prices below a proposal that is
+about to change them has read the wrong numbers. `ProjectWarranty` goes **below** it, because the
+hold-back is the story after the work is done.
+
+It is gated on `commercial_mode === "managed"`, the same shape `useShiftDay` takes on the other
+archetype: the read refuses on an A3 engagement with `m2_stage_transition_not_allowed`, and mounting
+it there would put a refusal behind every workforce booking. `isNotAProject` renders that as **nothing
+at all** — a screen that should not have mounted is not an error to show anybody.
+
+#### `M2-FE-611` — three things it had to get right and one it had to refuse
+
+**Retention is payout-side money, and the panel says so.** The Customer funds every milestone at
+**face value** — nothing in this app subtracts anything from a stage, and the funding controls further
+up the same screen would have contradicted any other wording on the same render. What retention
+changes is how much of an approved milestone the *vendor* may draw before the warranty ends.
+
+**It is allocated cumulatively and no milestone is named.** The brief was explicit and the backend's
+own docstring gives the reason: "held back from the final milestone" stops being computable the moment
+an amendment appends one, and a retention released out of what turned out not to be the last milestone
+cannot be un-released. So the copy is that it **builds up as each stage is approved and is complete
+when the last one is**, and `retention_paise` / `retention_withheld_paise` are rendered as two
+published numbers side by side rather than a percentage applied to anything.
+
+**No retention is not "no cover".** `phase: "none"` renders as *"Vsolve is not holding any money back"*
+and goes on to say that this is not the same as saying there is no guarantee — the terms are the
+estimate's, and this app was never given them. The optimistic error here costs the Customer, and so
+does the pessimistic one; the honest sentence is narrower than both.
+
+**A null `warranty_ends_at` renders "we do not have an end date on file", never a date.** The window is
+read from the variant's configuration at completion, and an engagement whose configuration was retired
+keeps its retention held and waits for Operations. A date invented by this client is a promise the
+platform has not made, and a Customer who reads a wrong warranty date reports a fault a week too late.
+
+**Completion names its blocker instead of offering a control that refuses.** Wave A3 offered the button
+on `COMPLETING` alone, which meant a project with a newly appended stage showed a control that answers
+`409`. `completionBlocker` reads the engagement's own stages in the order the server checks them, and
+the handover blocker comes off the project read. The panel is an explanation in all three cases, and
+**it approves nothing on the way past** — an accepted amendment can append work after `COMPLETING`, and
+that stage keeps its own review. The status is read **from the response**, so `WARRANTY` is worded as
+"finished, warranty running" and never as closed.
+
+**The handover is accepted explicitly, and the uncomfortable part is stated.** A `FILE` deliverable
+**cannot be opened** — no download route exists for the evidence rail — and that is worse here than on
+the evidence viewer, because here the Customer is being asked to *accept* it. The row is joined to the
+engagement's own evidence (the project read carries only the file's id) so the panel can report what
+the record knows: checked, still scanning, rejected, or **not found at all**, which is its own state
+and tells you not to accept on the strength of a filename. A `LINK` says out loud that it is recorded
+rather than hosted and that clicking it leaves the platform.
+
+**Warranty issue reporting is a contract gap and is built as the route that exists.** There is no
+endpoint at 1.31.0: `m2_stage_dispute` takes only `AWAITING_REVIEW`, and by the time a warranty runs
+every stage is settled; `POST /operations/cases/` is staff-only. So the panel names what Vsolve is
+still holding, when it releases, that the report goes through support, and that it must be done before
+the date because the money is released after it. Deliberately **not** dressed as a missing feature —
+the platform has no warranty-claim workflow at all (Wave C6's case machinery), and a "coming soon"
+block would imply the money is unreachable meanwhile. It is not. Logged in plan §7.
+
+#### `M2-FE-612` — read C5's code, not the summary, and it changed three decisions
+
+**It is not a checkout, and a screen that presented one would be inventing a charge.** Accepting
+refunds what was funded and unearned, drops each unfinished milestone back to unfunded and reprices it,
+with `amendment_delta_paise` moving by exactly the difference. The money asked for afterwards is **the
+ordinary stage funding that was always coming**. The panel says that in as many words, and there is no
+Pay control anywhere on it.
+
+**Operations proposes; the Customer accepts.** Confirmed against the contract and 07 §7 before
+building. There is no Customer-side initiation in this app — the only commands are accept and decline
+on `POST /project-transfers/{id}/decision/`. On a stalled project with no proposal, the explainer
+offers **no control**: a button that only wrote a support ticket would be dressed up as one.
+
+**Nothing predicts a refund.** `refunded_paise` is what *actually* went back and is **zero on a
+proposal**. The unearned funding a transfer would return is knowable — `funded − refunded − released`
+per transferable milestone — and it is deliberately absent from the client: a conditional number
+rendered as a figure is a promise, and this one is conditional on a decision not yet taken. The rule is
+stated in words instead.
+
+**The per-milestone table is the point of the screen.** Priced per milestone and never as a lump,
+because a replacement who names one number for "the rest of it" has not said which milestones they are
+doing. `stage_prices` is an untyped `JSONField` (`unknown` in the client), so `transferStagePrices`
+narrows it strictly — plain object, every value a positive safe integer — and **fails closed to null on
+one bad entry rather than dropping the entry**, because a table that silently drops a row restates less
+work than the two totals are sums over. The fallback renders the two published totals and says the
+breakdown is unavailable.
+
+**A cancelled material advance is not refunded; a cancelled work stage's unearned funding is.** One
+sentence cannot be true of both, so `isMaterialAdvanceLeftWithVendor` checks **both** the cancellation
+and the published reason code — a cancelled *unfunded* material advance cost the Customer nothing, and
+calling that a loss would invent one. `material_advance_outstanding_paise` renders as an open question
+for support, never as a pending refund and never under a refunded heading.
+
+#### The exclusion trap, caught where the brief said to look
+
+`EngagementStageStatusEnum` gained `CANCELLED` at 1.31.0, and the completion work needed a "does this
+stage still owe work?" predicate — precisely the shape that absorbs a new status silently. Written as
+**`STAGE_OWES_WORK`, a `Record` over the generated union**, so a ninth value is a `tsc` error here
+rather than a change of meaning nobody sees, with a runtime fallback of `true` so an unrecognised value
+**blocks** completion instead of being swept past. That is the fail-closed direction: the server is the
+authority either way, and the cost of being wrong towards "still open" is one refusal the panel already
+explains.
+
+#### RULES §3 audit — both classes, and what was found
+
+**(a) The drifting duplicate.** Three hand-copies, all found and all logged in plan §7:
+
+- `STAGE_OWES_WORK` mirrors the server's `EngagementStage.OPEN_STATUSES`, which is **enforced and
+  published nowhere**. The `Record` shape catches a *new* status; what it cannot catch is the server
+  **reclassifying an existing one**. Requested as a published field.
+- `MATERIAL_ADVANCE_LEFT_WITH_VENDOR` mirrors `projects.CANCELLED_MATERIAL_OUTSTANDING`;
+  `cancellation_reason_code` is a bare `string` with no enum. **Fail-soft rather than fail-dangerous**:
+  if it drifts the per-milestone block stops rendering and the transfer's own outstanding figure still
+  carries the number and the warning, so the money statement survives. Requested as an enum.
+- `KNOWN_TRANSFER_STATUSES` is a deliberate runtime list on the existing `KNOWN_AMENDMENT_STATUSES`
+  precedent — detecting unknowns at runtime is its whole job, and it fails closed to "we cannot
+  describe this" with no controls.
+
+**(b) The column with no writer.** Swept every field this wave reads, and **found none** — checked
+rather than assumed, because the 1.30.0 `upi_payment_link` defect was a reader with no writer that four
+waves walked past:
+
+- `retention_paise` is written at engagement creation (`engagements.py`), from the frozen warranty terms
+  and **only when the estimate advertised a warranty**;
+- `retention_withheld_paise` accumulates in `_hold_stage_payout`; `warranty_ends_at` is stamped by
+  `_open_warranty_window`;
+- **the seed writes both owner-blocked config values** — `warranty_retention_basis_points` and
+  `warranty_window_days`, 5% for 90 days, marked dev-only — so the walkthrough runs;
+- `stage_prices` / `refunded_paise` are written in `propose_project_transfer` / `decide_project_transfer`;
+- `ProjectDeliverable` rows are written by `submit_project_handover`.
+
+One **product-level** near-miss worth recording: the retention path is only reachable end to end because
+the Partner's A5 composer actually sends `warranty_terms` (`proposal-draft.ts`, `onsite-draft.ts`) —
+verified rather than assumed. The seed does **not** create an estimate carrying warranty terms, so a
+seeded walkthrough alone lands on the honest "nothing held" panel and never exercises the other three
+phases. The smoke script says so in §0 rather than leaving the owner to discover it.
+
+#### Static gates
+
+```
+npx eslint apps/customer/features/project apps/customer/features/engagement
+           packages/query/src/m2-engagement-customer.ts packages/query/src/index.ts --max-warnings 0
+npx turbo run typecheck --filter=customer --force     # 1 successful, 1 total
+npx turbo run build --filter=customer                 # 1 successful, 1 total
+```
+
+All three green. **No tests were written and none were run**, per the build-first amendment.
+
+#### Smoke script
+
+**`apps/customer/features/project/SMOKE.md`** — six sections with their seeded preconditions: the
+retention panel before completion and its no-warranty variant, the handover and the refusal that keeps
+delivery on the platform, the three completion blockers, `WARRANTY` then release, the full transfer
+(propose from the shell as Operations, decline, accept, materials left behind), and eight exception
+states worth forcing. `features/engagement/SMOKE.md` §10 is rewritten: it listed these as three
+not-built blocks and now **inverts the check** — a dashed block appearing anywhere on a Customer
+engagement screen means something was reverted.
+
+**Seven rows added to plan §7** — one frozen-file request (`m2-keys.ts`: a `projects` namespace, a
+freshness tier, and the two command rows) and six contract gaps. The one to read first is the warranty
+claim: `M2-FE-611`'s task row asks for issue reporting and **no endpoint in this contract can carry
+one**, which is a C6 proposal rather than a frontend workaround.
+
+### Blocked / handed off — Wave A5P
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-14 | `FE-611` warranty claim | No endpoint at 1.31.0 can take a fault reported after completion — `m2_stage_dispute` accepts only `AWAITING_REVIEW`, `/operations/cases/` is staff-only. Built as the support route plus what is still held; no control that would 404. | Yes — needs a C6 proposal |
+| 2026-08-14 | `FE-611` completion blocker | `EngagementStage.OPEN_STATUSES` is enforced server-side and published nowhere, so it is hand-copied as a `Record` over the generated union. A *new* status is a `tsc` error; a **reclassified** one is not. | Yes — additive field request |
+| 2026-08-14 | `FE-612` per-milestone prices | `ProjectTransfer.stage_prices` is an untyped `JSONField`, and it is the authoritative list of what transfers. Narrowed strictly at the call site, failing closed to the two published totals. Not blocking. | Yes — shape request |
+| 2026-08-14 | `FE-612` cancellation reason | `cancellation_reason_code` is a bare string with no enum, and it is not on `EngagementStage` at all — so the engagement workspace words a cancelled row from `kind` alone. Fail-soft. | Yes — two rows |
+| 2026-08-14 | project cache keys | `m2-keys.ts` has no `projects` namespace, no project freshness tier and no row for `accept_handover` / `decide_project_transfer`. Composed from the factory and invalidated by hand at exactly the prefixes `stageScope` returns, so the two cannot drift. | Yes — frozen-file request |
+| 2026-08-14 | Customer's delay claim | **Plan gap, not a contract gap.** `m2_project_delay_claim_decide` is the Customer's command and `ProjectPlan.delay_claims` is published for them, but no Customer task row owns it — `M2-FE-605` is the vendor's raise. A `SUBMITTED` claim shifts every later milestone on acceptance and **expires on silence**, with no Customer surface in any wave. Out of scope here and **not** half-built. | Yes — needs a plan row |

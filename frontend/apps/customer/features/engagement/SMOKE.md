@@ -204,19 +204,23 @@ screens resolve outcome only from the engagement and amendment reads.
 
 ---
 
-## 10. The three things that are deliberately not built
+## 10. The three not-built blocks are gone — all three tasks have landed
 
-Each renders a dashed, clearly-labelled block that offers **nothing to press**.
-Confirm all three are present and that none of them has a control:
+This section used to list three dashed, clearly-labelled blocks that offered
+nothing to press. **All three are now built and the `NotBuiltYet` component is
+deleted from this app**, so the check has inverted: if you ever see a dashed
+"not available yet" block on a Customer engagement screen, something has been
+reverted.
 
-| Where | What it says is missing | Task |
-|---|---|---|
-| A3 stage review | Confirming who turned up today | `M2-FE-510` |
-| Completion panel | Warranty, deliverable acceptance, retention release date | `M2-FE-611` |
-| A cancelled or disputed engagement | Moving the job to somebody else | `M2-FE-612` |
+| Where | What stands there now | Task | Script |
+|---|---|---|---|
+| A3 stage review | One-tap attendance confirm/dispute, the evening settlement | `M2-FE-510`, `514` | `features/shift-day/SMOKE.md` |
+| Completion panel | Deliverable acceptance, the named completion blockers, warranty retention and the fault route | `M2-FE-611` | `features/project/SMOKE.md` §1–§4 |
+| A cancelled or disputed A5 project | The vendor-replacement decision, or the explainer when none is proposed | `M2-FE-612` | `features/project/SMOKE.md` §5 |
 
-If any of them ever grows a button before C4/C5 land, that is the failure this
-wave was explicitly told to avoid.
+Two things from the old check still hold and are worth re-reading there: the
+warranty panel must never invent a release date, and the replacement panel must
+never grow a Pay button.
 
 ---
 

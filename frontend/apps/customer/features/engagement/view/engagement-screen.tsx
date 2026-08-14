@@ -12,6 +12,9 @@ import { Badge, Button, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { evidenceIndex, toProjectView } from "@/features/project/adapters";
+import { useProject } from "@/features/project/queries";
+import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/project-panels";
 import { CashDemandReport } from "@/features/shift-day/view/cash-demand-report";
 import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
 import { useEngagement, useEngagementAmendments, useFundStage } from "../queries";
@@ -29,7 +32,6 @@ import {
   stageKindCopy,
   type ModeNouns,
 } from "./engagement-status";
-import { NotBuiltYet } from "./not-built-yet";
 
 /**
  * The engagement workspace — `M2-FE-415`..`418` (Wave A2) and `M2-FE-509`,
@@ -81,11 +83,21 @@ import { NotBuiltYet } from "./not-built-yet";
  * asking somebody to pay for something this app cannot name is worse than
  * making them wait for a newer build.
  *
- * ## What is deliberately absent
+ * ## The A5 project read, added at 1.31.0
  *
- * `M2-FE-612`, the vendor-replacement path, needs C5 and is marked rather than
- * mocked. The receipt is no longer absent: `Engagement.access_receipt` landed
- * at 1.26.0 and is a **reference, not a document** — see "The record" below.
+ * `M2-FE-611` and `M2-FE-612` land here as two slots rather than one block:
+ * `ProjectDecisions` above the final acceptance, because a proposed replacement
+ * and an unaccepted handover are both answers the Customer owes now, and
+ * `ProjectWarranty` below it, because the hold-back is the story after the work
+ * is done. The read is issued **once** here and handed to both — and to the
+ * completion panel, whose third refusal (an unaccepted handover) lives on it.
+ *
+ * It is gated on `commercial_mode` being `managed`: `GET /engagements/{id}/project/`
+ * refuses on an A3 engagement with `m2_stage_transition_not_allowed`, and
+ * mounting it there would put a refusal behind every workforce booking.
+ *
+ * A failed project read never blanks this screen — the stages, the money and the
+ * funding controls are all on the engagement's own read.
  */
 
 export interface EngagementScreenProps {
@@ -99,6 +111,22 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
 
   const view = engagementQuery.data === undefined ? null : toEngagementView(engagementQuery.data);
   const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
+
+  // A5 only. The read refuses on a workforce booking, and the verdict comes from
+  // the engagement's own published `commercial_mode` rather than from anything
+  // derived here — the same gate `useShiftDay` takes on the other archetype.
+  // Called unconditionally, above every early return, because it is a hook.
+  const isProject = view?.mode === "managed";
+  const projectQuery = useProject(engagementId, isProject);
+  const project =
+    projectQuery.data === undefined || view === null
+      ? null
+      : // The evidence rows live on the engagement, not on the project read —
+        // a deliverable carries only the id of the file it is. Joined here so
+        // the handover panel can say what the record knows about a file the
+        // Customer is being asked to accept and cannot open.
+        toProjectView(projectQuery.data, evidenceIndex(view.stages));
+
   // Only known once the record has loaded. A failed read falls back to the
   // list, which is a real page, rather than to a requirement id we do not have.
   const requestLink = view === null ? REQUESTS_HREF : requestHref(view.requirementId);
@@ -135,6 +163,7 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
   const refetchAll = () => {
     void engagementQuery.refetch();
     void amendmentsQuery.refetch();
+    if (isProject) void projectQuery.refetch();
   };
 
   return (
@@ -224,7 +253,39 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
 
       <AmendmentPanel engagement={view} nouns={nouns} />
 
-      <CompletionPanel engagement={view} nouns={nouns} onDone={refetchAll} />
+      {/* `M2-FE-612` and the handover half of `M2-FE-611`, contract 1.31.0.
+          Above the acceptance because both are decisions the Customer owes now:
+          a proposed replacement carries a deadline and reprices every unfinished
+          stage, and an unaccepted delivery is the thing stopping this closing. */}
+      {isProject ? (
+        <ProjectDecisions
+          engagementId={engagementId}
+          project={project}
+          isPending={projectQuery.isPending}
+          error={projectQuery.error}
+          engagementNoun={nouns.engagement}
+          stageNoun={nouns.stage}
+          stagesNoun={nouns.stages}
+          onDone={refetchAll}
+          // Only where it is a live question. A permanent "what if they walk
+          // away" block on a job that is going fine is noise, and noise here is
+          // what stops the real notice being read.
+          showRecoveryRoute={view.status === "CANCELLED" || view.isDisputed}
+        />
+      ) : null}
+
+      <CompletionPanel engagement={view} project={project} nouns={nouns} onDone={refetchAll} />
+
+      {/* The warranty half of `M2-FE-611`, below the acceptance because the
+          hold-back is the story after the work is finished. Every number on it
+          is the server's; nothing here computes a retention or a release date. */}
+      {isProject ? (
+        <ProjectWarranty
+          project={project}
+          isPending={projectQuery.isPending}
+          engagementNoun={nouns.engagement}
+        />
+      ) : null}
 
       {/* `M2-FE-515` — reachable from the booking as a whole and not only from
           one day. A report that needed a live shift-day to attach to would be
@@ -236,19 +297,6 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
           stageId={null}
           amendmentHref="#amendments-heading"
           className="mt-8 border-t border-line pt-6"
-        />
-      ) : null}
-
-      {/* `M2-FE-612` — what happens if the professional walks away. Needs C5;
-          nothing publishes what transfers or what the price difference would be,
-          and inventing either would be the client authoring a remedy. Shown only
-          where it is a live question. */}
-      {view.status === "CANCELLED" || view.isDisputed ? (
-        <NotBuiltYet
-          className="mt-8"
-          title="If the professional cannot finish"
-          body="Moving the job to somebody else — what stays funded, what carries over and what the price difference would be — is not built yet. Nothing you have funded is lost. Contact support and we will work it out with you before anything moves."
-          taskId="M2-FE-612"
         />
       ) : null}
 

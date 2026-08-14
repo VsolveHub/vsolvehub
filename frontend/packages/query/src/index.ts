@@ -289,6 +289,35 @@ export {
   // `@vsolve/query` and needed no change.
   settlementAmountPaise,
   settlementPaymentLink,
+  // The A5 project, contract 1.31.0 (`M2-FE-611`, `612`). Appended rather than
+  // interleaved so the diff stays one block, on the revision-4 precedent above.
+  // `isNotAProject` sits beside `isNotAShiftDay` deliberately: both read
+  // `m2_stage_transition_not_allowed` and they mean opposite things about which
+  // screen should not have mounted.
+  MATERIAL_ADVANCE_LEFT_WITH_VENDOR,
+  milestonesInOrder,
+  milestoneKind,
+  isMilestoneCancelled,
+  isMaterialAdvanceLeftWithVendor,
+  hasOriginalTerms,
+  milestoneRepriced,
+  milestoneScheduleShiftDays,
+  stageOwesWork,
+  openStages,
+  completionBlocker,
+  retentionPhase,
+  isWarrantyRunning,
+  handoverPhase,
+  canAcceptHandover,
+  handoverBlocksCompletion,
+  deliverableLink,
+  isKnownTransferStatus,
+  isTransferDecidable,
+  isTransferApplied,
+  transferDirection,
+  transferStagePrices,
+  hasOutstandingMaterialAdvance,
+  isNotAProject,
 } from "./m2-engagement-customer";
 export type {
   AmendmentDirection,
@@ -328,6 +357,20 @@ export type {
   ShiftCrewMember,
   ShiftDay,
   ShortfallChoice,
+  // The A5 project — see the value block above.
+  CompletionBlocker,
+  HandoverPhase,
+  ProjectDelayClaim,
+  ProjectDelayClaimStatus,
+  ProjectDeliverable,
+  ProjectDeliverableKind,
+  ProjectHandover,
+  ProjectMilestone,
+  ProjectPlan,
+  ProjectTransfer,
+  ProjectTransferStatus,
+  RetentionPhase,
+  TransferDirection,
 } from "./m2-engagement-customer";
 
 // --- M2 partner + operations surface (session B) ---

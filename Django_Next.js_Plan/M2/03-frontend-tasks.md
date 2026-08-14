@@ -951,10 +951,43 @@ including partial attendance and no-show recovery, without a per-worker device d
   with a deadline and a money delta may not be served from a session-long cache, which is how a
   Customer approves a delta that expired an hour ago. `agreement` keeps `SESSION_STATE` for the
   immutable terms and nothing in this app reads amendments off it.
-- [ ] `M2-FE-611` Build deliverable acceptance, project completion and warranty issue reporting with
-  clear deadlines and the retention release date. `GAP-031`, `GAP-032`
-- [ ] `M2-FE-612` Show the vendor-replacement path if a project is abandoned, including what is funded,
-  what transfers and what the price difference is. `GAP-029`
+- [~] `M2-FE-611` built — static gates green, owner manual verification pending. Deliverable
+  acceptance is its own act on `/engagements/{id}`, because "the files are fine" and "the project is
+  finished" are two facts on two days — and the panel says out loud that the project **cannot close**
+  while a delivery is unanswered, since that refusal is the whole mechanism keeping Event and Media
+  delivery on the platform. A `FILE` deliverable **cannot be opened** (no download route for the
+  evidence rail, plan §7) and the row is joined to the engagement's evidence to report what the
+  record knows — checked, still scanning, rejected, or not found — because the Customer is being
+  asked to *accept* it; a `LINK` says out loud that it is recorded rather than hosted. Completion
+  now **names its blocker instead of offering a control that refuses**: an open stage, a disputed
+  stage and an unaccepted handover are the server's three refusals and none of them is skippable
+  from here — an accepted amendment can append work after `COMPLETING` and that stage keeps its own
+  review. The status is **read from the response**, so `WARRANTY` is worded as "finished, warranty
+  running" and never as closed. Retention is stated as **payout-side money** — every stage is funded
+  at face value and what is held is how much of it the professional may draw — and as **building up
+  cumulatively as stages are approved**, never "held back from the last one", because an amendment
+  can append one. No retention renders as "Vsolve is holding nothing back", explicitly **not** as
+  "you have no cover": the terms are the estimate's and this app was never given them. A null
+  `warranty_ends_at` renders **"we do not have an end date on file"**, never a date. **Warranty
+  issue reporting has no endpoint at 1.31.0** — `m2_stage_dispute` takes only `AWAITING_REVIEW` and
+  by then every stage is settled — so the panel names the support route and what is still held,
+  rather than a control that 404s (plan §7). `GAP-031`, `GAP-032`
+- [~] `M2-FE-612` built — static gates green, owner manual verification pending. **Operations
+  proposes and the Customer accepts** — there is no Customer-side initiation, because 07 §7 does not
+  let either party change the other's agreement, so the built surface is the accept/decline of a
+  proposed transfer and a plain explainer (no control) on a stalled project. **It is not a checkout
+  and the screen says so**: accepting refunds what was funded and unearned, drops each unfinished
+  milestone back to unfunded and reprices it, and the money asked for afterwards is the ordinary
+  stage funding that was always coming — a screen that presented a transfer payment would be
+  inventing a charge. Priced **per milestone, never as a lump**: the per-milestone table is joined
+  from `stage_prices`, whose keys are the authoritative list of what transfers, and it **fails closed
+  to the two published totals** rather than showing a shorter list of work. `delta_paise` is
+  rendered, never subtracted — it is held equal by database constraint. A **cancelled material
+  advance is not refunded and a cancelled work stage's unearned funding is**; the panel reads the
+  kind and the published `cancellation_reason_code` and says the right one, rendering
+  `material_advance_outstanding_paise` as an open question for support and **never as a pending
+  refund**. Acceptance returning the engagement to `PENDING_START` with `work_may_start_at` cleared
+  is stated as what it is: work restarts when the first milestone is funded again. `GAP-029`
 - [~] `M2-FE-613` built — static gates green, owner manual verification pending. Version 0 is `total_paise`, which never
   moves; each applied amendment is a version, and the walked running total reconciles to the
   published `staged_total_paise` by database constraint. **The scope of each version is not

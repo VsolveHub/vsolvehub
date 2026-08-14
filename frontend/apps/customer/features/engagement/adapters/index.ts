@@ -8,6 +8,7 @@ import {
   canDisputeStage,
   canReportCashDemand,
   canRequestCorrection,
+  completionBlocker,
   disputedStages,
   eventsOldestFirst,
   isAmendmentApplied,
@@ -27,6 +28,7 @@ import {
   reviewClock,
   stageProgress,
   type AmendmentDirection,
+  type CompletionBlocker,
   type CustomerNextAction,
   type Engagement,
   type EngagementAmendment,
@@ -367,6 +369,19 @@ export interface EngagementView {
   nextAction: CustomerNextAction;
   canAcceptCompletion: boolean;
   /**
+   * Why the final acceptance would be refused, or null — contract 1.31.0.
+   *
+   * Two of `m2_engagement_completion_accept`'s three refusals, in the order the
+   * server checks them. The third — an unaccepted handover — lives on the
+   * project read and reaches the panel separately.
+   *
+   * It exists so the screen can **explain** rather than offer a control that
+   * answers `409`, and it is never read the other way: nothing here approves,
+   * skips or sweeps a stage. An accepted amendment can append work after
+   * `COMPLETING`, and that stage keeps its own review.
+   */
+  completionBlocker: CompletionBlocker;
+  /**
    * Whether to offer the "they asked for extra in cash" report — `M2-FE-515`.
    *
    * `LEAD_ONLY` only, because the report's whole consequence is a standing event
@@ -438,6 +453,7 @@ export function toEngagementView(engagement: Engagement): EngagementView {
     isDisputed: isEngagementDisputed(engagement),
     nextAction: nextCustomerAction(engagement),
     canAcceptCompletion: canAcceptCompletion(engagement),
+    completionBlocker: completionBlocker(engagement),
     canReportCashDemand: canReportCashDemand(engagement),
 
     accessReceipt: toAccessReceiptView(engagement),
