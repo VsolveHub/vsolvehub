@@ -303,6 +303,19 @@ export const m2QueryKeys = {
      */
     safetyIncidents: (engagementId: string) =>
       [...m2QueryKeys.engagements.detail(engagementId), "safety-incidents"] as const,
+    /**
+     * The A5 project plan — milestones, retention, delay claims, the transfer.
+     *
+     * Promoted at Gate 4 on Session A's request, keyed by **engagement** and
+     * nested under its detail, on the `rateCard` and `shiftDays` precedents.
+     *
+     * The nesting is load-bearing rather than tidy: accepting a transfer moves
+     * the **engagement itself** back to `PENDING_START`, so a project cache the
+     * engagement's own invalidations could not reach would survive the very
+     * event that invalidates it.
+     */
+    project: (engagementId: string) =>
+      [...m2QueryKeys.engagements.detail(engagementId), "project"] as const,
   },
 
   /**
@@ -384,6 +397,14 @@ export const M2_FRESHNESS = {
   amendments: EXPIRING_STATE,
   /** Transitions land whenever the other party or a sweep acts. */
   engagementEvents: VOLATILE_STATE,
+  /**
+   * The A5 project plan. `EXPIRING_STATE` for `amendments`' reason, not by
+   * borrowing its name: a live transfer proposal and a `SUBMITTED` delay claim
+   * both carry a server deadline the Customer acts on, and a delay claim
+   * **expires on silence** — serving one from a session-long cache is how
+   * somebody watches a window close that closed an hour ago.
+   */
+  project: EXPIRING_STATE,
 } as const satisfies Record<string, FreshnessTier>;
 
 /* ---------------------------------------------------------------------------
@@ -487,6 +508,9 @@ export type M2Command =
   | "start_stage"
   | "confirm_shift_arrival"
   | "report_crew_no_show"
+  // A5 projects, Wave C5 — the two commands the Customer can issue.
+  | "accept_handover"
+  | "decide_project_transfer"
   | "request_cancellation";
 
 const K = m2QueryKeys;
@@ -758,17 +782,17 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
   // `start_stage` is the plain stage scope — the same prefix its hand-written
   // invalidation already used, so the two could not have drifted meanwhile.
   //
-  // `confirm_shift_arrival` looks like a stage command and is not only one:
-  // arrival **starts the stage** and, on day one, **earns the booking fee**. The
-  // stage scope reaches the engagement and the lists; the requirement scope is
-  // what carries the fee, and the Customer app keys the rate-card state under
-  // `requirements.detail` — so on the one screen where money hardens, both
-  // sides refetch rather than the vendor's alone.
+  // `confirm_shift_arrival` shipped at Gate 3 with `rateCard.state` bolted on,
+  // reasoning that arrival earns the booking fee so "both sides should refetch".
+  // **Reverted at Gate 4: that half could never fire.** Arrival is a vendor-only
+  // command, the Partner app mounts no `rateCard` read, and the rule this file
+  // already states on `ask_question` is the general case — one client cannot
+  // reach the other's cache, and each side learns through its own read. Session
+  // B declined to supply the requirement id for exactly that reason and was
+  // right to. A prefix that clears nothing reads as intent and misleads the next
+  // person, which is worse than the omission it was trying to fix.
   start_stage: (c) => stageScope(c),
-  confirm_shift_arrival: (c) => [
-    ...stageScope(c),
-    ...(c.requirementId ? [K.rateCard.state(c.requirementId)] : []),
-  ],
+  confirm_shift_arrival: (c) => stageScope(c),
 
   // The A3 twin of `report_visit_no_show`, and it settles the booking fee the
   // same way that one settles a visit share — forfeited and split, or refunded
@@ -777,10 +801,23 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
   // design. The Partner app holds no requirement-scoped cache and reaches only
   // `engagements.all`; both prefixes are listed because each app can supply a
   // different half of the context.
+  // Note for anyone swapping a hand-written call for this row: `requirementScope`
+  // contains **no engagements prefix**, so with a requirement id alone this
+  // returns nothing the Partner app mounts. Session B caught that at Gate 3 and
+  // threaded both ids through rather than dropping the vendor's booking list.
   report_crew_no_show: (c) => [
     ...(c.requirementId ? requirementScope(c.requirementId) : []),
     ...(c.engagementId ? [K.engagements.all] : []),
   ],
+
+  // A5 projects. Both are the Customer's, and both move the engagement itself —
+  // accepting a handover advances it toward `COMPLETED`, and accepting a
+  // transfer sends it back to `PENDING_START` with every transferable milestone
+  // refunded, dropped to `REQUIRED` and repriced. `stageScope` reaches the
+  // engagement detail (and so `engagements.project`, nested under it) plus the
+  // lists, which is the whole of what either one moves.
+  accept_handover: (c) => stageScope(c),
+  decide_project_transfer: (c) => stageScope(c),
 
   request_cancellation: (c) => (c.engagementId ? [K.engagements.all] : []),
 };

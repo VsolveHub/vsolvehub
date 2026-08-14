@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.31.0)
- * Checksum: 207bb71d8069304e
+ * Source:   contracts/openapi/v1.yaml (version 1.32.0)
+ * Checksum: cb61d6195764e082
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -500,6 +500,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cancellations/{cancellation_id}/decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Confirm the other side's cancellation, or dispute it.
+         *
+         *     Confirming runs the remedy on the terms it was evaluated at. Disputing runs nothing: it opens a `CANCELLATION_CONFLICT` case, which **holds the vendor's unpaid earnings**, and Operations decides. `M2-AC-703` requires exactly that — a Customer who says work and cash payment happened while the Partner claims cancellation must not have the payout or the refund auto-resolve around them.
+         */
+        post: operations["m2_cancellation_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cart/": {
         parameters: {
             query?: never;
@@ -648,6 +669,50 @@ export interface paths {
          *     else a professional could do is a worse product for no privacy gain.
          */
         post: operations["cart_suggestions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/appeal/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Ask for a case to be looked at again. One appeal per case.
+         *
+         *     An **open** case may be appealed at any time — nothing has been decided yet. A **resolved** one may be appealed only inside the variant's configured appeal window, and while that window is unset the appeal is refused with `m2_policy_unavailable` rather than allowed indefinitely: an appeal window with no bound is an open-ended claim to reverse a decision that already moved money.
+         */
+        post: operations["m2_case_appeal_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/evidence/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Attach a statement, a requirement attachment or a stage-evidence record to a case you are a party to.
+         *
+         *     **There is no file upload here.** Evidence points at bytes that already came through one of the two verified rails — the requirement-attachment presign or the stage-evidence presign — so there is exactly one scan pipeline and one place a malware verdict can be forgotten. A file you have not uploaded yet is uploaded there first.
+         *
+         *     Submitting evidence never moves the case. A case that advanced because somebody uploaded a photograph would be a case that could be closed by uploading photographs.
+         */
+        post: operations["m2_case_evidence_submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1210,6 +1275,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagements/{engagement_id}/cases/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The party view of every case opened on this request — a disputed stage, a disputed head count, a no-show, a safety report, an off-platform claim, a warranty claim or a chargeback.
+         *
+         *     Deliberately narrower than the Operations projection: it carries what the case is, when this party has to answer, whether money is held and what was decided. It carries no internal notes, no owning team and no statement made by the other side.
+         */
+        get: operations["m2_engagement_cases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagements/{engagement_id}/cash-demand/": {
         parameters: {
             query?: never;
@@ -1420,6 +1506,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagements/{engagement_id}/warranty-claim/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Raise a warranty claim inside the warranty window.
+         *
+         *     **This is the surface `M2-BE-546` was missing.** Retention is held back out of the vendor's payout against a warranty promise, and until 1.32.0 there was no published way to call on it: the stage-dispute command accepts only a stage in `AWAITING_REVIEW`, and by warranty time every stage is settled, so it refused by construction. Money was held for a promise the product could not accept a call against.
+         *
+         *     Raising a claim opens a `QUALITY` case — which holds payout — and **stops the warranty sweep releasing the retention** while it is open. The window is the engagement's own `warranty_ends_at`; an engagement that advertised no warranty refuses, because there is nothing held to claim against.
+         */
+        post: operations["m2_warranty_claim_raise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/finance/refunds/": {
         parameters: {
             query?: never;
@@ -1560,6 +1669,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/assisted-proposals/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Capture a quote a Partner gave over the phone, attributed to that Partner.
+         *
+         *     Revision 4 makes this a **primary path** rather than a convenience: on the A3 fallback the vendors who answer fastest are often the ones who will not fill in a form. It is still not a way for staff to publish a price — the proposal is written with `vendor_confirmed_at` null, every Customer-facing read already filters on that, and the vendor's own confirmation is what makes it visible (`M2-AC-218`).
+         *
+         *     Consent is recorded through the `Idempotency-Key`-scoped command and refused when absent, exactly as assisted clarification is. The wage floor is derived and enforced here identically to a vendor's own submission.
+         */
+        post: operations["m2_operations_assisted_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/bookings/{booking_id}/": {
         parameters: {
             query?: never;
@@ -1663,6 +1795,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/cases/{case_id}/appeal-decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Decide an appeal a party raised through `POST /cases/{case_id}/appeal/`.
+         *
+         *     `UPHELD` keeps the original resolution. `OVERTURNED` **reopens** the case rather than re-deciding it: the second decision is a real decision with its own required terminal result, taken by somebody looking at the case again. A command that could both overturn and re-resolve in one step would be a command that closed a case without anybody working it.
+         *
+         *     Reopening also puts the payout hold back, because the reason the money was released — the case being finished — has just stopped being true.
+         */
+        post: operations["operations_case_decide_appeal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/cases/{case_id}/claim/": {
         parameters: {
             query?: never;
@@ -1714,6 +1869,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/cases/{case_id}/override/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description `M2-BE-704`'s audited manual override, and the audit is the whole of it.
+         *
+         *     The new resolution is still checked against the case kind's `allowed_resolutions` — an override is permission to reach a *different* documented outcome, never permission to reach an undocumented one — and the previous result is kept in the event context, so the trail reads "we said X, then we said Y, and here is who and why" rather than only ever showing Y.
+         */
+        post: operations["operations_case_override_outcome"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/cases/{case_id}/resolve/": {
         parameters: {
             query?: never;
@@ -1731,6 +1907,27 @@ export interface paths {
          *     a rule that differs per kind.
          */
         post: operations["operations_case_resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/cases/{case_id}/response-deadline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Move the deadline the **parties** are measured on — distinct from `due_at`, which is the deadline Operations is measured on.
+         *
+         *     **Forward only.** Moving it backwards would retroactively time somebody out of a window they were still inside, which is the one thing a deadline extension must not be able to do, and it is why this is a command with a reason rather than a writable field.
+         */
+        post: operations["operations_case_set_response_deadline"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1856,6 +2053,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/crew-memberships/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Active crew memberships whose documents have never been verified, oldest first.
+         *
+         *     This queue is why the A3 cascade can find anybody: `documents_verified_at` is what `verified_roster_size` counts when it sizes a lead's roster against the requested headcount, and a vendor with no verified crew is excluded from every crew offer.
+         */
+        get: operations["m2_operations_crew_verification_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/crew-memberships/{membership_id}/verification/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Verify — or un-verify — one worker's documents on one vendor's roster.
+         *
+         *     **This column had four readers and no writer.** `verified_roster_size` counts only verified memberships when sizing a lead's roster against the requested headcount, `assign_crew` refuses an unverified worker outright, and both apps publish a badge from it; with nothing setting it, every vendor's verified roster was zero in every environment and every crew offer excluded every lead. The dev seed has stamped it since Wave C5 so the demo walks; this is the production writer.
+         *
+         *     Verifying needs no reason — the documents were seen. **Removing** verification does, because it takes a named person off jobs they may already be assigned to. Verifying an already-verified membership is a no-op rather than a re-stamp, so the date keeps meaning when the documents were actually checked.
+         */
+        post: operations["m2_operations_crew_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/enquiries/{invitation_id}/assisted-clarification/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Capture a question and its answer on behalf of the two named parties.
+         *
+         *     **Consent is a refusal, not a checkbox.** Without `consent_recorded` the capture does not happen: `M2-AC-802` requires assisted capture to record consent and the named actor, and a flag that could be false while the row was still written would record the absence of consent next to the thing it was absent for.
+         *
+         *     Attribution goes to the parties, not the operator: the question is the Partner's and the answer is the Customer's, with the operator recorded beside them.
+         */
+        post: operations["m2_operations_assisted_clarification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/fulfilment-units/{unit_id}/dispatch-explanation/": {
         parameters: {
             query?: never;
@@ -1947,6 +2211,23 @@ export interface paths {
         put?: never;
         /** @description Correct the ledger by adding to it. Step-up, because an adjustment moves what is owed. */
         post: operations["operations_ledger_adjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/metrics/touches/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Operations touches across every request in the last thirty days, by action, with the mean per touched request. `M2-AC-810` measures against this. */
+        get: operations["m2_operations_touch_rollup"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2129,6 +2410,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/payments/{payment_attempt_id}/chargeback/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Record that the Customer's bank pulled back a platform fee, and open the standard dispute path.
+         *
+         *     Opening the `CHARGEBACK` case **holds payout**: a visit share or a travel compensation funded by the charge being reversed stops being payable immediately, which is `M2-AC-711`'s "freezes unsafe settlement". Money that has already left is not reversed — it is reported as an open financial exception, because a status flip that made the ledger disagree with the bank is the one failure reconciliation cannot repair.
+         *
+         *     The fee row itself does **not** move. A chargeback is a claim in progress, not a settlement, and marking an earned fee refunded here would tell both parties a decision had been taken that has not been.
+         *
+         *     The rate alarm fires from here when the variant's threshold is configured; while it is unset **no alarm fires** and every chargeback is still recorded.
+         */
+        post: operations["m2_operations_record_chargeback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/payout-batches/": {
         parameters: {
             query?: never;
@@ -2226,6 +2532,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/queues/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Eight stuck-state queues with their depth, their oldest member and the recovery action that clears them: unmatched, under-quoted, SLA-breached, unconfirmed, inactive, unreconciled, plus a cancellation nobody answered and a case past its parties' response deadline.
+         *
+         *     **No queue here invents a threshold.** Each is defined by a deadline that already exists on the record, so an unset owner value cannot silently change what counts as stuck; a queue whose deadline is null is simply empty, which is the honest reading of "we promised no clock here".
+         */
+        get: operations["m2_operations_queues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/rate-cards/": {
         parameters: {
             query?: never;
@@ -2242,6 +2569,151 @@ export interface paths {
          *     Two refusals are the point of this endpoint. The wage component is checked against the statutory floor with the same fail-closed guard vendor quotes pass — a platform that refuses a vendor's rate for being below the floor and publishes its own below it has no rule at all. And a card cannot be **backdated under a live booking**, because that would retroactively change the number a live booking was priced at.
          */
         post: operations["m2_rate_card_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/reconciliation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Open financial exceptions by kind, plus the two refund states a Customer must never see presented as complete: refunds the provider has not settled, and refunds it explicitly refused (`M2-AC-709`).
+         *
+         *     The sweep that produces these runs on the beat schedule and **never corrects what it finds**. A reconciliation job that could fix a mismatch would quietly rewrite history when its own arithmetic was wrong, and the first sign of trouble would be a ledger that always balanced.
+         */
+        get: operations["m2_operations_reconciliation_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/requests/{requirement_id}/deadline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Move a request's needed-by date forward by a number of hours.
+         *
+         *     **Forward only.** A deadline extension that could pull a date in would be a way to close somebody's live request by moving its clock, which is the opposite of a recovery action.
+         */
+        post: operations["m2_operations_extend_deadline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/requests/{requirement_id}/reclassification/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reclassify a request between the workforce and project lifecycles. Every paid value is preserved — unfilled visit shares refund or convert, a charged unlock survives — and matching restarts with **no second charge** (`M2-AC-104`, `M2-AC-334`). */
+        post: operations["m2_operations_reclassify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/requests/{requirement_id}/refund-review/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Record that a refund was reviewed, and what was decided.
+         *
+         *     **It records rather than moves money, and that is the design.** Each product refunds through the module that owns it — the booking fee, the unlock, the visit share — idempotently and on the M1 rail. An Operations endpoint that could move an arbitrary amount to an arbitrary payer would be a second refund path with none of the first's reconciliation, and `M2-AC-712` requires each product to reconcile independently.
+         */
+        post: operations["m2_operations_refund_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/requests/{requirement_id}/rematch/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Rematch one request. A rate-card A3 booking advances its **cascade**; everything else runs another **invitation wave**. Neither charges anything, and the Customer does not have to know which engine answered their question.
+         *
+         *     The reason is required and lands on the timeline as an Operations touch.
+         */
+        post: operations["m2_operations_rematch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/requests/{requirement_id}/timeline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Everything that happened to one request, in order: transitions, snapshots, invitations and cascade offers **with the vendor named**, questions, proposals, site visits, the booking fee, the unlock, the visit plan and its shares, the engagement and its stages, every case, every cancellation and every Operations touch.
+         *
+         *     Assembled from the aggregates rather than from a projection table, deliberately: a materialised timeline drifts the first time a command forgets to append to it, and the failure mode is the worst available — a timeline that looks complete and is not. This is the read a support agent makes a money decision from.
+         */
+        get: operations["m2_operations_request_timeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/requests/{requirement_id}/touch-metric/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Operations touches on one request, the configured budget, and the platform revenue the touches have to fit inside. For A3 that revenue is the booking fee's **platform share** — decision 10 as restated by ADR-0009 — because the booking fee is the platform's entire A3 revenue.
+         *
+         *     `within_budget` is `null` while the owner has not set a budget. Not `false`, which would read as a breach, and not `true`, which would read as a pass: the count is real and the judgement is not available.
+         *
+         *     Only **settled** money counts as revenue. An `ACTIVE` booking fee is money held against a crew that has not arrived, and counting it would make the unit economics look healthiest exactly when the most is at risk.
+         */
+        get: operations["m2_operations_touch_metric"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3794,6 +4266,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/{requirement_id}/cancellation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The cancellation currently open on this request, or `null`. Both parties see the same record and the same numbers — a remedy one side could read differently from the other is how a support call becomes an argument. */
+        get: operations["m2_cancellation_read"];
+        put?: never;
+        /**
+         * @description Evaluate and start a cancellation. **Nothing is charged or refunded by this call on its own.**
+         *
+         *     The response says which of two things happened. If contact has not been disclosed and nobody has reported work starting, the remedy executes immediately and the record comes back `EXECUTED`. If either is true, it comes back `AWAITING_CONFIRMATION` with a deadline: past that point one party may no longer end an agreement on their own account of it, and the other side confirms or disputes (`M2-BE-702`).
+         *
+         *     The remedy is calculated **before** anything moves, because the lifecycle state it rests on stops being readable the moment it does. Wages are never part of it: an A3 service payment is peer-to-peer and this platform has never held it.
+         */
+        post: operations["m2_cancellation_request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{requirement_id}/crew/arrival/": {
         parameters: {
             query?: never;
@@ -4531,6 +5027,12 @@ export interface components {
             consent_purpose: string;
             consent_version: string;
         };
+        /** @description Write down a clarification that happened on the phone. Consent is a refusal, not a flag. */
+        AssistedClarificationRequest: {
+            question: string;
+            answer: string;
+            consent_recorded: boolean;
+        };
         /**
          * @description The floor every state-changing fulfilment command sits on.
          *
@@ -4643,9 +5145,10 @@ export interface components {
          *     * `FORFEIT_SPLIT` - Forfeited and split with the lead
          *     * `REFUNDED` - Refunded in full
          *     * `FAILED` - Payment failed
+         *     * `WAIVED` - Confirmed at no charge under a free re-dispatch
          * @enum {string}
          */
-        BookingFeeStatusEnum: "OFFER_ACCEPTED" | "PENDING" | "ACTIVE" | "EARNED" | "FORFEIT_SPLIT" | "REFUNDED" | "FAILED";
+        BookingFeeStatusEnum: "OFFER_ACCEPTED" | "PENDING" | "ACTIVE" | "EARNED" | "FORFEIT_SPLIT" | "REFUNDED" | "FAILED" | "WAIVED";
         BookingGroup: {
             /** Format: uuid */
             readonly id: string;
@@ -4759,6 +5262,12 @@ export interface components {
             readonly condition_text: string;
             readonly fee: components["schemas"]["Money"];
         };
+        /** @description The counterparty confirms or disputes (`M2-BE-702`). */
+        CancellationDecisionRequest: {
+            confirm: boolean;
+            /** @default  */
+            reason: string;
+        };
         CancellationPolicy: {
             readonly code: string;
             readonly version: number;
@@ -4778,6 +5287,15 @@ export interface components {
             fee_waiver: string;
             refund_paise: number;
             currency: string;
+        };
+        /** @description Ask what calling this job off would mean, and start it. */
+        CancellationRequestRequest: {
+            reason_code: string;
+            /** @default  */
+            reason: string;
+            evidence?: {
+                [key: string]: unknown;
+            }[];
         };
         CapabilityOption: {
             /** Format: uuid */
@@ -4933,10 +5451,63 @@ export interface components {
             cart_version: number;
             suggestions: components["schemas"]["ServiceCard"][];
         };
+        /**
+         * @description * `UPHELD` - Upheld
+         *     * `OVERTURNED` - Overturned
+         * @enum {string}
+         */
+        CaseAppealDecisionRequestOutcomeEnum: "UPHELD" | "OVERTURNED";
+        /** @description `UPHELD` keeps the resolution; `OVERTURNED` reopens the case for a second decision. */
+        CaseAppealDecisionRequestRequest: {
+            expected_version: number;
+            outcome: components["schemas"]["CaseAppealDecisionRequestOutcomeEnum"];
+            note: string;
+        };
+        CaseAppealRequestRequest: {
+            reason: string;
+        };
+        CaseEvidenceRecord: {
+            /** Format: uuid */
+            id: string;
+            party: string;
+            statement: string;
+            /** Format: uuid */
+            requirement_attachment_id: string | null;
+            /** Format: uuid */
+            stage_evidence_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description Point at something already uploaded, and say what it proves.
+         *
+         *     There is no file field here and there is not going to be one: `M2-BE-704`'s evidence reuses the
+         *     two verified rails M2 already has — the requirement-attachment presign and the stage-evidence
+         *     presign — rather than adding a third place a malware verdict could be forgotten.
+         */
+        CaseEvidenceRequest: {
+            /** @default  */
+            statement: string;
+            /** Format: uuid */
+            requirement_attachment_id?: string | null;
+            /** Format: uuid */
+            stage_evidence_id?: string | null;
+        };
         CaseNoteRequestRequest: {
             body: string;
             /** @default false */
             is_communication: boolean;
+        };
+        /**
+         * @description An audited manual override of a resolved case's terminal result.
+         *
+         *     Still checked against the case kind's `allowed_resolutions`: an override is permission to
+         *     reach a *different* documented outcome, never permission to reach an undocumented one.
+         */
+        CaseOverrideRequestRequest: {
+            expected_version: number;
+            resolution: string;
+            note: string;
         };
         /**
          * @description The Operations home screen, counted over the whole queue rather than one page.
@@ -4955,6 +5526,13 @@ export interface components {
             mine_due_soon: number;
             holding_payout: number;
             teams: components["schemas"]["TeamQueue"][];
+        };
+        /** @description `M2-BE-712`'s deadline extension, applied to a case's party window. Forward only. */
+        CaseResponseDeadlineRequestRequest: {
+            expected_version: number;
+            /** Format: date-time */
+            response_due_at: string;
+            reason: string;
         };
         /**
          * @description A Customer's one-tap account of a cash extra demanded on site (`M2-BE-539`).
@@ -4997,6 +5575,15 @@ export interface components {
          * @enum {string}
          */
         ChannelEnum: "SMS" | "EMAIL";
+        /**
+         * @description `M2-BE-708`. The provider reference is required: a chargeback with no bank reference cannot
+         *     be represented or reconciled, and recording one would be recording a rumour.
+         */
+        ChargebackRequest: {
+            amount_paise: number;
+            provider_reference: string;
+            reason_code: string;
+        };
         Checkout: {
             /** Format: uuid */
             readonly id: string;
@@ -5214,6 +5801,19 @@ export interface components {
             /** @default false */
             is_supervisor: boolean;
         };
+        CrewMembershipVerificationRow: {
+            /** Format: uuid */
+            membership_id: string;
+            /** Format: uuid */
+            partner_id: string;
+            partner_name: string;
+            crew_member_name: string;
+            is_supervisor: boolean;
+            /** Format: date-time */
+            added_at: string;
+            /** Format: date-time */
+            documents_verified_at: string | null;
+        };
         /**
          * @description * `customer_no_show` - Nobody was at the site
          *     * `gate_locked` - The site was locked
@@ -5312,6 +5912,23 @@ export interface components {
             readonly offers: components["schemas"]["CrewOffer"][];
             /** Format: date-time */
             readonly server_now: string;
+        };
+        CrewVerificationQueue: {
+            memberships: components["schemas"]["CrewMembershipVerificationRow"][];
+            /** Format: date-time */
+            server_now: string;
+        };
+        /**
+         * @description Verify, or un-verify, one worker's documents.
+         *
+         *     `reason` is optional on the way in and required by the command on the way down when `verified`
+         *     is false — the refusal lives in the domain rather than here, so a second caller cannot reach a
+         *     different rule.
+         */
+        CrewVerificationRequest: {
+            verified: boolean;
+            /** @default  */
+            reason: string;
         };
         CsrfToken: {
             readonly csrf_token: string;
@@ -5950,6 +6567,10 @@ export interface components {
             content_type: string;
             size_bytes: number;
         };
+        ExceptionCount: {
+            kind: string;
+            count: number;
+        };
         ExcludedCandidate: {
             /** Format: uuid */
             partner_id: string;
@@ -6349,6 +6970,10 @@ export interface components {
             order_id?: string | null;
             /** Format: uuid */
             partner_id?: string | null;
+            /** Format: uuid */
+            requirement_id?: string | null;
+            /** Format: uuid */
+            engagement_id?: string | null;
         };
         OperationsApplicationQueueItem: {
             /** Format: uuid */
@@ -6437,10 +7062,16 @@ export interface components {
             readonly order_id: string | null;
             /** Format: uuid */
             readonly partner_id: string | null;
+            /** Format: uuid */
+            readonly requirement_id: string | null;
+            /** Format: uuid */
+            readonly engagement_id: string | null;
             readonly summary: string;
             readonly detail: string;
             /** Format: date-time */
             readonly due_at: string;
+            /** Format: date-time */
+            readonly response_due_at: string | null;
             readonly is_overdue: boolean;
             readonly version: number;
             readonly resolution: string;
@@ -6448,8 +7079,20 @@ export interface components {
             /** Format: date-time */
             readonly resolved_at: string | null;
             readonly holds_payout: boolean;
+            readonly held_ledger_entry_ids: unknown;
+            /** Format: date-time */
+            readonly appeal_requested_at: string | null;
+            /** Format: uuid */
+            readonly appeal_requested_by_id: string | null;
+            readonly appeal_reason: string;
+            /** Format: date-time */
+            readonly appeal_decided_at: string | null;
+            /** Format: uuid */
+            readonly appeal_decided_by_id: string | null;
+            readonly appeal_outcome: string;
             readonly allowed_resolutions: string[];
             readonly events: components["schemas"]["OperationsCaseEvent"][];
+            readonly evidence: components["schemas"]["OperationsCaseEvidence"][];
             /** Format: date-time */
             readonly server_now: string;
             /** Format: date-time */
@@ -6475,9 +7118,44 @@ export interface components {
          *     * `COMMUNICATION` - Communication sent
          *     * `RESOLVED` - Resolved
          *     * `CANCELLED` - Cancelled
+         *     * `EVIDENCE` - Evidence submitted
+         *     * `DEADLINE_SET` - Response deadline set
+         *     * `APPEAL_REQUESTED` - Appeal requested
+         *     * `APPEAL_DECIDED` - Appeal decided
+         *     * `OVERRIDE` - Manual override
+         *     * `PAYOUT_HOLD_CHANGED` - Payout hold changed
          * @enum {string}
          */
-        OperationsCaseEventKindEnum: "OPENED" | "CLAIMED" | "STATUS_CHANGED" | "SEVERITY_CHANGED" | "NOTE" | "COMMUNICATION" | "RESOLVED" | "CANCELLED";
+        OperationsCaseEventKindEnum: "OPENED" | "CLAIMED" | "STATUS_CHANGED" | "SEVERITY_CHANGED" | "NOTE" | "COMMUNICATION" | "RESOLVED" | "CANCELLED" | "EVIDENCE" | "DEADLINE_SET" | "APPEAL_REQUESTED" | "APPEAL_DECIDED" | "OVERRIDE" | "PAYOUT_HOLD_CHANGED";
+        /**
+         * @description What a party put in front of the decision (`M2-BE-704`).
+         *
+         *     Publishes the **reference**, never a URL. Reading the bytes goes through the rail that owns
+         *     them — the requirement-attachment or stage-evidence read — which is where the scan verdict and
+         *     the object-level check already live. A signed link minted here would be a second door into
+         *     somebody's file with none of the first door's guards.
+         */
+        OperationsCaseEvidence: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly party: components["schemas"]["OperationsCaseEvidencePartyEnum"];
+            /** Format: uuid */
+            readonly submitted_by_id: string;
+            readonly statement: string;
+            /** Format: uuid */
+            readonly requirement_attachment_id: string | null;
+            /** Format: uuid */
+            readonly stage_evidence_id: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `CUSTOMER` - Customer
+         *     * `PARTNER` - Partner
+         *     * `OPERATIONS` - Operations
+         * @enum {string}
+         */
+        OperationsCaseEvidencePartyEnum: "CUSTOMER" | "PARTNER" | "OPERATIONS";
         /**
          * @description * `ASSIGNMENT` - Assignment or recovery
          *     * `LATE_NO_SHOW` - Late or no-show
@@ -6488,9 +7166,14 @@ export interface components {
          *     * `PAYMENT` - Payment ambiguity
          *     * `REFUND` - Refund ambiguity
          *     * `PAYOUT` - Payout ambiguity
+         *     * `CANCELLATION_CONFLICT` - Conflicting cancellation claims
+         *     * `ATTENDANCE` - Disputed attendance
+         *     * `STAGE` - Disputed stage or milestone
+         *     * `OFF_PLATFORM` - Off-platform payment claim
+         *     * `CHARGEBACK` - Chargeback on a platform fee
          * @enum {string}
          */
-        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT";
+        OperationsCaseKindEnum: "ASSIGNMENT" | "LATE_NO_SHOW" | "CUSTOMER_UNAVAILABLE" | "PARTIAL_WORK" | "QUALITY" | "SAFETY" | "PAYMENT" | "REFUND" | "PAYOUT" | "CANCELLATION_CONFLICT" | "ATTENDANCE" | "STAGE" | "OFF_PLATFORM" | "CHARGEBACK";
         /**
          * @description The queue row. No events and no detail — a list of two hundred cases should not carry
          *     two hundred audit trails, and the body of a safety report is not queue-scanning material.
@@ -6558,6 +7241,11 @@ export interface components {
          * @enum {string}
          */
         OperationsCaseTeamEnum: "DISPATCH" | "BOOKING_SUPPORT" | "QUALITY_SUPPORT" | "SAFETY" | "FINANCE";
+        /** @description Every safe Operations action takes a reason. `M2-AC-804` requires it. */
+        OperationsDeadlineExtensionRequest: {
+            reason: string;
+            extra_hours: number;
+        };
         /**
          * @description * `APPROVED` - APPROVED
          *     * `REJECTED` - REJECTED
@@ -6646,6 +7334,34 @@ export interface components {
             exceptions: components["schemas"]["PartnerAvailabilityExceptionInputRequest"][];
             consent_purpose: string;
             consent_document_version: string;
+        };
+        /** @description Every safe Operations action takes a reason. `M2-AC-804` requires it. */
+        OperationsReasonRequest: {
+            reason: string;
+        };
+        /** @description Every safe Operations action takes a reason. `M2-AC-804` requires it. */
+        OperationsReclassificationRequest: {
+            reason: string;
+            to_archetype: components["schemas"]["ToArchetypeEnum"];
+        };
+        /**
+         * @description * `APPROVED` - Approved
+         *     * `DECLINED` - Declined
+         * @enum {string}
+         */
+        OperationsRefundReviewDecisionEnum: "APPROVED" | "DECLINED";
+        /** @description Every safe Operations action takes a reason. `M2-AC-804` requires it. */
+        OperationsRefundReviewRequest: {
+            reason: string;
+            decision: components["schemas"]["OperationsRefundReviewDecisionEnum"];
+        };
+        OperationsTouch: {
+            /** Format: uuid */
+            id: string;
+            action: string;
+            reason: string;
+            /** Format: date-time */
+            occurred_at: string;
         };
         OperationsTransitionRequest: {
             expected_version: number;
@@ -7254,6 +7970,39 @@ export interface components {
             readonly code: string;
             readonly name: string;
             readonly description: string;
+        };
+        /**
+         * @description A case as one of its two parties may read it.
+         *
+         *     Deliberately **not** `OperationsCaseSerializer`. That projection carries the owning team, the
+         *     internal notes and the full event trail, and its own docstring says it has one audience — a
+         *     case can quote a Customer's complaint verbatim and name a Partner in a safety report. What a
+         *     party gets is their own view: what it is, when they must answer, and what was decided.
+         */
+        PartyCase: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            status: string;
+            summary: string;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            response_due_at: string | null;
+            resolution: string;
+            /** Format: date-time */
+            resolved_at: string | null;
+            /** Format: date-time */
+            appeal_requested_at: string | null;
+            appeal_outcome: string;
+            holds_payout: boolean;
+            /** Format: date-time */
+            server_now: string;
+        };
+        PartyCaseList: {
+            cases: components["schemas"]["PartyCase"][];
+            /** Format: date-time */
+            server_now: string;
         };
         PatchedAddressRequest: {
             label?: string;
@@ -8391,6 +9140,14 @@ export interface components {
          * @enum {string}
          */
         ReconciliationStateEnum: "PENDING" | "IN_SYNC" | "NEEDS_ATTENTION";
+        /** @description What Finance is carrying right now (`M2-BE-710`). */
+        ReconciliationSummary: {
+            /** Format: date-time */
+            server_now: string;
+            open_by_kind: components["schemas"]["ExceptionCount"][];
+            refunds_awaiting_provider: number;
+            failed_refunds: number;
+        };
         /**
          * @description The floor every state-changing fulfilment command sits on.
          *
@@ -8468,6 +9225,16 @@ export interface components {
             /** @default  */
             target: string;
         };
+        /** @description `M2-BE-711`: everything that happened to one request, in order. */
+        RequestTimeline: {
+            /** Format: uuid */
+            requirement_id: string;
+            archetype: string;
+            status: string;
+            events: components["schemas"]["TimelineEvent"][];
+            /** Format: date-time */
+            server_now: string;
+        };
         RequirementAttachment: {
             /** Format: uuid */
             readonly id: string;
@@ -8486,6 +9253,36 @@ export interface components {
          * @enum {string}
          */
         RequirementAttachmentKindEnum: "IMAGE" | "VIDEO" | "AUDIO" | "VOICE_NOTE" | "DOCUMENT";
+        /** @description One cancellation, as either party may read it. Both sides see the same numbers. */
+        RequirementCancellation: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            actor_role: string;
+            reason_code: string;
+            reason: string;
+            remedy_code: string;
+            remedy: {
+                [key: string]: unknown;
+            };
+            contact_disclosed: boolean;
+            work_reported_started: boolean;
+            requires_counterparty_confirmation: boolean;
+            /** Format: date-time */
+            confirmation_due_at: string | null;
+            /** Format: date-time */
+            confirmed_at: string | null;
+            /** Format: date-time */
+            disputed_at: string | null;
+            /** Format: date-time */
+            executed_at: string | null;
+            /** Format: uuid */
+            operations_case_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            server_now: string;
+        };
         RequirementCreateRequest: {
             /** Format: uuid */
             variant_id: string;
@@ -9358,6 +10155,19 @@ export interface components {
          * @enum {string}
          */
         StructureEnum: "SINGLE_PARTNER_SEQUENTIAL" | "COORDINATED_PARALLEL" | "INDEPENDENT_VISITS" | "MIXED";
+        StuckQueue: {
+            code: string;
+            queue_label: string;
+            depth: number;
+            /** Format: date-time */
+            oldest_at: string | null;
+            recovery_action: string;
+        };
+        StuckQueueList: {
+            queues: components["schemas"]["StuckQueue"][];
+            /** Format: date-time */
+            server_now: string;
+        };
         Subcategory: {
             /** Format: uuid */
             readonly id: string;
@@ -9423,6 +10233,51 @@ export interface components {
             owner_team: components["schemas"]["OperationsCaseTeamEnum"];
             open: number;
             unclaimed: number;
+        };
+        TimelineEvent: {
+            /** Format: date-time */
+            at: string;
+            type: string;
+            detail: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @description * `A3_TIME_BLOCK` - Workforce
+         *     * `A5_CUSTOM_PROJECT` - Project
+         * @enum {string}
+         */
+        ToArchetypeEnum: "A3_TIME_BLOCK" | "A5_CUSTOM_PROJECT";
+        TouchActionCount: {
+            action: string;
+            count: number;
+        };
+        /**
+         * @description `M2-BE-715`. `within_budget` is nullable, and null is the honest answer while the owner has
+         *     not set a budget — `false` would read as a breach and `true` as a pass, and neither is known.
+         */
+        TouchMetric: {
+            /** Format: uuid */
+            requirement_id: string;
+            archetype: string;
+            touches: number;
+            budget: number | null;
+            within_budget: boolean | null;
+            platform_revenue_paise: number;
+            touches_detail: components["schemas"]["OperationsTouch"][];
+            /** Format: date-time */
+            server_now: string;
+        };
+        TouchRollup: {
+            /** Format: date-time */
+            since: string;
+            requests_touched: number;
+            total_touches: number;
+            /** Format: double */
+            mean_touches_per_touched_request: number;
+            by_action: components["schemas"]["TouchActionCount"][];
+            /** Format: date-time */
+            server_now: string;
         };
         /** @description The replacement's price for one unfinished milestone. */
         TransferQuoteRequest: {
@@ -9751,6 +10606,12 @@ export interface components {
             readonly availability_is_preliminary: boolean;
             readonly timezone: string;
             readonly days: components["schemas"]["VisitSlotDay"][];
+        };
+        /** @description The Customer calls on a warranty the retention was held against. */
+        WarrantyClaimRequest: {
+            summary: string;
+            /** @default  */
+            detail: string;
         };
         WebhookAccepted: {
             readonly accepted: boolean;
@@ -11185,6 +12046,52 @@ export interface operations {
             };
         };
     };
+    m2_cancellation_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                cancellation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancellationDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CancellationDecisionRequest"];
+                "multipart/form-data": components["schemas"]["CancellationDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementCancellation"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     cart_retrieve: {
         parameters: {
             query?: never;
@@ -11474,6 +12381,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CartSuggestions"];
+                };
+            };
+        };
+    };
+    m2_case_appeal_request: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseAppealRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaseAppealRequestRequest"];
+                "multipart/form-data": components["schemas"]["CaseAppealRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyCase"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_case_evidence_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CaseEvidenceRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaseEvidenceRequest"];
+                "multipart/form-data": components["schemas"]["CaseEvidenceRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseEvidenceRecord"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Also returned when the artifact belongs to a different request — the object-level rule applied to the join, not only to the route. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -12709,6 +13717,35 @@ export interface operations {
             };
         };
     };
+    m2_engagement_cases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyCaseList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_cash_demand_report: {
         parameters: {
             query?: never;
@@ -13169,6 +14206,61 @@ export interface operations {
             };
         };
     };
+    m2_warranty_claim_raise: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WarrantyClaimRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["WarrantyClaimRequest"];
+                "multipart/form-data": components["schemas"]["WarrantyClaimRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when the job carries no warranty, the warranty period has ended, or the work is not finished yet. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     finance_refunds_create: {
         parameters: {
             query?: never;
@@ -13410,6 +14502,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Checkout"];
+                };
+            };
+        };
+    };
+    m2_operations_assisted_proposal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProposalCreateRequest"];
+                "multipart/form-data": components["schemas"]["ProposalCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Proposal"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
@@ -13712,6 +14864,68 @@ export interface operations {
             };
         };
     };
+    operations_case_decide_appeal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseAppealDecisionRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaseAppealDecisionRequestRequest"];
+                "multipart/form-data": components["schemas"]["CaseAppealDecisionRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_case_claim: {
         parameters: {
             query?: never;
@@ -13895,6 +15109,68 @@ export interface operations {
             };
         };
     };
+    operations_case_override_outcome: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseOverrideRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaseOverrideRequestRequest"];
+                "multipart/form-data": components["schemas"]["CaseOverrideRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_case_resolve: {
         parameters: {
             query?: never;
@@ -13912,6 +15188,68 @@ export interface operations {
                 "application/json": components["schemas"]["ResolveCaseRequestRequest"];
                 "application/x-www-form-urlencoded": components["schemas"]["ResolveCaseRequestRequest"];
                 "multipart/form-data": components["schemas"]["ResolveCaseRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    operations_case_set_response_deadline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseResponseDeadlineRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CaseResponseDeadlineRequestRequest"];
+                "multipart/form-data": components["schemas"]["CaseResponseDeadlineRequestRequest"];
             };
         };
         responses: {
@@ -14310,6 +15648,145 @@ export interface operations {
             };
         };
     };
+    m2_operations_crew_verification_queue: {
+        parameters: {
+            query?: {
+                /** @description Narrow to one vendor's roster. */
+                partner?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewVerificationQueue"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_crew_verify: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewVerificationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewVerificationRequest"];
+                "multipart/form-data": components["schemas"]["CrewVerificationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrewMembershipVerificationRow"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when the membership is archived, or when verification is being removed with no reason given. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_assisted_clarification: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistedClarificationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssistedClarificationRequest"];
+                "multipart/form-data": components["schemas"]["AssistedClarificationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementQuestion"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_fulfilment_unit_dispatch_explanation: {
         parameters: {
             query?: never;
@@ -14604,6 +16081,33 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_touch_rollup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TouchRollup"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15101,6 +16605,69 @@ export interface operations {
             };
         };
     };
+    m2_operations_record_chargeback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                payment_attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargebackRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChargebackRequest"];
+                "multipart/form-data": components["schemas"]["ChargebackRequest"];
+            };
+        };
+        responses: {
+            /** @description The case that now owns it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyCase"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_payout_batches_list: {
         parameters: {
             query?: {
@@ -15432,6 +16999,33 @@ export interface operations {
             };
         };
     };
+    m2_operations_queues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StuckQueueList"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_rate_card_list: {
         parameters: {
             query?: {
@@ -15515,6 +17109,339 @@ export interface operations {
             };
             /** @description `m2_wage_floor_unavailable` when no floor is loaded for the area's state and this skill, or when the area carries no state code — the check fails closed rather than being skipped. `m2_requirement_transition_not_allowed` when the effective date would land on or before a live booking made at the current rate. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_reconciliation_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationSummary"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_extend_deadline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsDeadlineExtensionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsDeadlineExtensionRequest"];
+                "multipart/form-data": components["schemas"]["OperationsDeadlineExtensionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestTimeline"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_reclassify: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsReclassificationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsReclassificationRequest"];
+                "multipart/form-data": components["schemas"]["OperationsReclassificationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestTimeline"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_refund_review: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsRefundReviewRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsRefundReviewRequest"];
+                "multipart/form-data": components["schemas"]["OperationsRefundReviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsTouch"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_rematch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsReasonRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["OperationsReasonRequest"];
+                "multipart/form-data": components["schemas"]["OperationsReasonRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestTimeline"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_request_timeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestTimeline"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_touch_metric: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TouchMetric"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19537,6 +21464,90 @@ export interface operations {
                 };
             };
             /** @description `m2_booking_fee_not_chargeable` when no lead is holding the job, when the hold has expired, or when the fee is already settled; `m2_lifecycle_not_supported` on a request that is on the quote flow. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_cancellation_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementCancellation"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_cancellation_request: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                requirement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancellationRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CancellationRequestRequest"];
+                "multipart/form-data": components["schemas"]["CancellationRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementCancellation"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_requirement_transition_not_allowed` when the request is already closed or already has a cancellation waiting on a decision. `m2_policy_unavailable` when the free-cancel window T is unset and a paid A3 booking would have to be settled against it — the fail-closed direction, because choosing between a refund and a forfeit by guessing is choosing whose money it is. */
             409: {
                 headers: {
                     [name: string]: unknown;
