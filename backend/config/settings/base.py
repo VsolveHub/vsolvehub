@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.30.0",
+    "VERSION": "1.31.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -445,6 +445,19 @@ SPECTACULAR_SETTINGS = {
         "AttendanceResponseEnum": "apps.requirements.serializers.ATTENDANCE_RESPONSES",
         "ShortfallChoiceEnum": "apps.requirements.serializers.SHORTFALL_CHOICES",
         "ShiftExtraKindEnum": "apps.requirements.serializers.SHIFT_EXTRA_KINDS",
+        # M2 Wave C5 — the A5 project.
+        #
+        # Two more `status` sets and one more `kind`, which are the two most contested field names
+        # in the schema, so all three are named on arrival rather than after a positional rename
+        # breaks a client — the standing rule since the 1.24.0 `ReasonEnum` incident.
+        #
+        # Nothing is needed for the A5 milestone read even though it publishes `status`, `kind`
+        # and `funding_state`: those are `ChoiceField`s over `EngagementStage`'s own choice sets,
+        # which are already pinned above, so the generator resolves all three to the components
+        # published since 1.24.0 and the project surface reuses them rather than splitting them.
+        "ProjectDelayClaimStatusEnum": "apps.requirements.models.ProjectDelayClaim.Status",
+        "ProjectTransferStatusEnum": "apps.requirements.models.ProjectTransfer.Status",
+        "ProjectDeliverableKindEnum": "apps.requirements.models.ProjectDeliverable.Kind",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -812,6 +825,30 @@ CELERY_BEAT_SCHEDULE = {
         # quietly — and the notification is keyed per card per day, so a frequent tick pages once
         # and then stops rather than repeating itself.
         "schedule": 60.0 * 15,
+    },
+    # M2 Wave C5 — the A5 project's own clocks. Two of these expire an **unanswered request**
+    # rather than granting it, which is why neither is urgent: nothing is held hostage while they
+    # wait, because the agreement in force is the one that stands until somebody says otherwise.
+    "sweep-delay-claims": {
+        "task": "apps.requirements.tasks.sweep_delay_claims",
+        # 15 minutes, matching `sweep-stage-reviews`. Both turn a Customer's silence into an
+        # outcome near the deadline it was promised against — but this one turns it into a
+        # refusal, so the cost of a late tick is a vendor waiting rather than a schedule moving.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-project-transfers": {
+        "task": "apps.requirements.tasks.sweep_project_transfers",
+        # 15 minutes. A lapsed proposal hands a replacement vendor's diary back, which is the same
+        # kind of debt `sweep-expired-offer-holds` settles, at the pace a project moves rather
+        # than the pace a crew offer does.
+        "schedule": 60.0 * 15,
+    },
+    "sweep-warranty-windows": {
+        "task": "apps.requirements.tasks.sweep_warranty_windows",
+        # Hourly, matching every other payout-hold sweep and `reconcile-payouts`. The retention is
+        # already earned and merely held; a warranty period is measured in months, so the tick
+        # rate decides nothing except how long after midnight the vendor sees it.
+        "schedule": 60.0 * 60,
     },
 }
 

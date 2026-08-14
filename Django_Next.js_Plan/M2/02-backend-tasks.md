@@ -1099,10 +1099,22 @@ Customer remedy and financial settlement, with no per-worker device dependency.
 
 ## BE5B - Project stages (`A5_CUSTOM_PROJECT`)
 
-- [ ] `M2-BE-541` Configure A5 stages as milestones from a selected proposal with deliverables,
-  exclusions, dates, warranty and stage amounts.
-- [ ] `M2-BE-542` Implement stage funding, start, evidence submission, Customer review, approval,
-  rejection and timeout through the shared spine commands.
+- [~] `M2-BE-541` built - static gates green, owner manual verification pending. A5 milestones now
+  carry the **deliverable** the Customer was shown on the estimate (`EngagementStage.deliverable`,
+  copied at engagement creation rather than read back through the append-only proposal, which the
+  vendor may supersede afterwards) and a frozen `original_terms` snapshot beside it. The archetype
+  stayed a field on the record: there is no second table, no second lifecycle and no second money
+  path - `apps/requirements/projects.py` adds four commands and reuses the C3 spine for
+  everything else. Original row: configure A5 stages as milestones from a selected proposal with
+  deliverables, exclusions, dates, warranty and stage amounts.
+- [~] `M2-BE-542` built - static gates green, owner manual verification pending. **Built in Wave C3
+  and unchanged**: funding, start, evidence, review, approval, correction, dispute and the review
+  timeout are the shared spine commands, and A5 differs from A3 in exactly two places, both money
+  rather than lifecycle (funding is required, and an approved stage writes a held ledger entry).
+  What C5 added is the surface that makes it usable as a *project*: one whole-plan read at
+  `GET /engagements/{id}/project/`, and the completion guards under `M2-BE-548`. Original row:
+  implement stage funding, start, evidence submission, Customer review, approval, rejection and
+  timeout through the shared spine commands.
 - [~] `M2-BE-543` Model **material advance** as a distinct money purpose with its own recovery rule,
   because material money is spent rather than earned. `GAP-028`
   **Half built in Wave C3.5 (1.26.0), and the half that is built is the half the rest depends on.**
@@ -1114,23 +1126,85 @@ Customer remedy and financial settlement, with no per-worker device dependency.
   because the vendor has already bought the goods. **Still open:** the abandonment and
   early-termination recovery rules themselves, which belong with `M2-BE-545` in Wave C5 — this wave
   built the discriminator they will read, not the rules.
-- [ ] `M2-BE-544` Implement a Customer-caused delay claim with evidence and a schedule-extension
-  request. `GAP-030`
-- [ ] `M2-BE-545` Implement vendor-abandonment recovery that transfers remaining stages to a replacement
-  vendor at the replacement's price, funding or refunding the difference. `GAP-029`
-- [ ] `M2-BE-546` Implement warranty **retention hold-back** from the final stage, released at warranty
-  close; a variant either funds retention or does not advertise warranty. `GAP-031`
-- [ ] `M2-BE-547` Implement digital deliverable handover with Customer acceptance, so Event and Media
+  **Closed in Wave C5 (1.31.0): both rules are written and both are refusals.** On a vendor
+  **transfer**, a funded material advance is neither transferred nor refunded — handing it to the
+  replacement would buy the same cement twice — so the stage is cancelled with
+  `material_advance_left_with_vendor` and the amount is reported on the transfer as outstanding.
+  On an **early termination**, a funded work milestone is refunded and a funded material advance is
+  not. Both live in `apps/requirements/projects.py` and both read the `kind` discriminator C3.5
+  built.
+- [~] `M2-BE-544` built - static gates green, owner manual verification pending. `ProjectDelayClaim`
+  carries a reason, a description, evidence from the stage's own rail and a number of days — and
+  **no amount field anywhere on it**, because a delay that costs money is extra work and extra work
+  is a scope amendment the Customer accepts and pays for. The M1 amendment engine cannot express a
+  pure schedule change: `requirements_engagement_amendment_moves_money` refuses a zero delta at the
+  database, deliberately. Accepting shifts the named milestone **and every later one**, because a
+  project is a sequence; silence expires the claim rather than granting it. The evidence rail now
+  accepts uploads on a `PENDING` stage, because a customer-caused delay is a claim about work that
+  never started. Original row: implement a Customer-caused delay claim with evidence and a
+  schedule-extension request. `GAP-030`
+- [~] `M2-BE-545` built - static gates green, owner manual verification pending. Operations proposes
+  a replacement and a price **per remaining milestone**; the **Customer** accepts, because their
+  remaining cost changes and 07 §7 does not let Operations change somebody's agreement for them.
+  The delta is settled **structurally rather than as a number in a report**: every transferable
+  milestone refunds what was funded and unearned through the M1 refund rail, drops back to
+  `REQUIRED`, and is repriced to the replacement's number, with `amendment_delta_paise` moving by
+  exactly the difference so the `M2-BE-504` reconciliation still holds by constraint. **There is no
+  transfer checkout and no new payment purpose** — the money asked for afterwards is the ordinary
+  stage funding that was always going to be asked for, at a price the Customer accepted before any
+  of it moved. That is what stops anybody paying twice. A disputed milestone blocks the whole
+  transfer, at proposal and again at acceptance. Original row: implement vendor-abandonment
+  recovery that transfers remaining stages to a replacement vendor at the replacement's price,
+  funding or refunding the difference. `GAP-029`
+- [~] `M2-BE-546` built - static gates green, owner manual verification pending. Retention is
+  **payout-side money**: the Customer still funds every milestone at face value, and what is held
+  back is how much of an approved milestone the vendor may draw before the warranty ends. Allocated
+  against the **cumulative** approved total the way commission has been since 1.25.0, because "hold
+  it back from the final milestone" stops being computable the moment an amendment appends one.
+  `COMPLETED → WARRANTY → CLOSED`, with one ledger entry at the end carrying commission zero — that
+  commission was booked when the milestones it came out of were approved. The variant rule is
+  enforced at the composer: an estimate carrying warranty terms is refused with
+  `m2_policy_unavailable` while either owner-blocked value is unset. Original row: implement
+  warranty retention hold-back from the final stage, released at warranty close; a variant either
+  funds retention or does not advertise warranty. `GAP-031`
+- [~] `M2-BE-547` built - static gates green, owner manual verification pending. `ProjectDeliverable`
+  is a `FILE` on the **existing stage evidence rail** — same presign, same checksum, same scan
+  status, no second uploader — or a `LINK`, recorded rather than hosted and saying so out loud. The
+  mechanism that keeps delivery on the platform is not the endpoint but the refusal beside it:
+  **`COMPLETING → COMPLETED` refuses while a submitted handover is unaccepted**, so a vendor who
+  delivers privately has an engagement that will not close and a retention that will not release.
+  Original row: implement digital deliverable handover with Customer acceptance, so Event and Media
   delivery does not happen off-platform. `GAP-032`
-- [ ] `M2-BE-548` Implement final completion and warranty-window transitions without auto-approving an
-  actively disputed stage.
-- [ ] `M2-BE-549` Preserve the original and amended schedule, deliverables and money allocation for
+- [~] `M2-BE-548` built - static gates green, owner manual verification pending. Three guards on
+  `accept_engagement_completion`, and **none of them approves anything on the way past**: an open
+  stage refuses by position (an accepted amendment can append work after `COMPLETING`, and that
+  stage keeps its own review), a disputed stage refuses with `m2_stage_disputed`, and an unaccepted
+  handover refuses. Then the warranty transition — so an A5 engagement that withheld retention
+  answers `WARRANTY` rather than `COMPLETED`, and a client must read the status rather than assume
+  the transition it asked for. Original row: implement final completion and warranty-window
+  transitions without auto-approving an actively disputed stage.
+- [~] `M2-BE-549` built - static gates green, owner manual verification pending.
+  `EngagementStage.original_terms` freezes the label, deliverable, amount and date a stage was
+  created with, written by **all three** paths that lay a stage out — the quote-flow engagement, the
+  rate-card engagement and an amendment's appended stage — and never written again. The project read
+  publishes both readings side by side plus `schedule_shift_days`, computed server-side because a
+  date difference computed in a browser is a date difference in that browser's timezone. A delay
+  claim moves `scheduled_on` and a transfer moves `amount_paise`; neither touches the original.
+  Original row: preserve the original and amended schedule, deliverables and money allocation for
   Operations and dispute review.
 
 ### Verification
 
-- [ ] `M2-BE-550` Test abandoned project transfer, material-advance recovery, retention release,
-  deliverable handover, reduced-scope refund and final payout reconciliation.
+- [ ] `M2-BE-550` **Tests deferred per the build-first amendment** (`task.md` section "Build-first
+  amendment (2026-08-13)"). Neither written nor run in this wave, and left unchecked deliberately.
+  The smoke script that replaces it for the sprint is
+  [`docs/runbooks/m2-project-stage-smoke.md`](../../docs/runbooks/m2-project-stage-smoke.md), which
+  walks every scenario named here: an abandoned project transferred with the delta settled,
+  material-advance recovery on **both** the transfer and the termination path, retention released at
+  warranty close, deliverable handover with Customer acceptance, a reduced-scope refund, and the
+  final payout reconciliation including the visit split. Original row: test abandoned project
+  transfer, material-advance recovery, retention release, deliverable handover, reduced-scope refund
+  and final payout reconciliation.
 
 **BE5B gate:** Every scope and money change is explicit, accepted, funded and auditable; an abandoned
 project has a path to being finished; clarification cannot alter the agreement.

@@ -403,26 +403,41 @@ def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
     position order, and a project whose first collection is a materials advance is the
     prepay-then-vanish shape staged funding exists to prevent. Work is funded first.
     """
-    stages: list[dict[str, Any]] = []
+    stage_rows: list[dict[str, Any]] = []
     for index, stage in enumerate(proposal.stages or [], start=1):
-        stages.append(
+        stage_rows.append(
             {
                 "label": str(stage.get("title") or stage.get("label") or f"Stage {index}"),
+                # `M2-BE-541`: a milestone is what it *delivers*, not only what it costs. The
+                # estimate already carried this (`ProposalStageSerializer.deliverable`, published
+                # at 1.24.0) and the engagement threw it away, so the agreement a dispute reads
+                # said "Stage 2, 80,000 paise" where the Customer had been shown "second coat and
+                # snagging". Copied rather than read back through the proposal, because a proposal
+                # is append-only and the vendor may supersede it after reconfirmation.
+                "deliverable": str(stage.get("deliverable") or ""),
                 "amount_paise": int(stage.get("amount_paise", 0)),
                 "scheduled_on": stage.get("ends_on"),
                 "kind": EngagementStage.Kind.WORK,
             }
         )
     for index, line in enumerate(proposal.material_lines or [], start=1):
-        stages.append(
+        quantity = line.get("quantity")
+        unit = str(line.get("unit") or "").strip()
+        stage_rows.append(
             {
                 "label": str(line.get("title") or f"Materials {index}"),
+                # A material line's "deliverable" is the goods themselves, in the vendor's own
+                # units. "40 bags" beside the amount is what makes an advance auditable at the
+                # point somebody has to decide whether the cement exists (`M2-BE-543`).
+                "deliverable": (
+                    f"{quantity} {unit}".strip() if quantity and unit else str(unit or "")
+                ),
                 "amount_paise": int(line.get("amount_paise", 0)),
                 "scheduled_on": None,
                 "kind": EngagementStage.Kind.MATERIAL_ADVANCE,
             }
         )
-    return stages
+    return stage_rows
 
 
 def _open_engagement(
@@ -436,10 +451,24 @@ def _open_engagement(
     is_lead_only = requirement.archetype == A3
     commission_paise = 0
     commission_treatment = ""
+    retention_paise = 0
     if not is_lead_only:
         commission_paise, commission_treatment = pricing.a5_commission(
             requirement, total_paise=proposal.total_paise
         )
+        # `M2-BE-546`. Frozen here, from the configuration that was live when the agreement was
+        # made, so a percentage Operations changes next month does not move a hold-back on a
+        # project already under way. Zero when the estimate advertised no warranty — retention
+        # secures a promise, and there is nothing to secure when none was made.
+        #
+        # `warranty_terms_or_none` rather than `warranty_terms`: `submit_proposal` already refused
+        # an estimate that promises warranty a variant cannot fund, so reaching a missing
+        # configuration here means Operations retired it in between — and stranding a Customer who
+        # has paid for site visits, at the moment their chosen vendor commits, is the wrong place
+        # to fail closed. The absence is recorded in the terms snapshot below.
+        terms = pricing.warranty_terms_or_none(requirement)
+        if terms is not None and proposal.warranty_terms.strip():
+            retention_paise = terms.retention_paise(total_paise=proposal.total_paise)
 
     rows = _a3_stages(proposal, requirement=requirement) if is_lead_only else _a5_stages(proposal)
     staged_total = sum(int(row["amount_paise"]) for row in rows)
@@ -471,6 +500,7 @@ def _open_engagement(
         tax_basis=proposal.tax_basis,
         commission_paise=commission_paise,
         commission_treatment=commission_treatment,
+        retention_paise=retention_paise,
         # The reconciliation column `M2-BE-504` checks against. Equal to `total_paise` at
         # creation, because no amendment has moved anything yet.
         staged_total_paise=staged_total,
@@ -489,9 +519,11 @@ def _open_engagement(
                 engagement=engagement,
                 position=position,
                 label=row["label"][:200],
+                deliverable=str(row.get("deliverable") or ""),
                 amount_paise=int(row["amount_paise"]),
                 kind=str(row.get("kind") or EngagementStage.Kind.WORK),
                 scheduled_on=row.get("scheduled_on") or None,
+                original_terms=stages.original_terms_of(row),
                 funding_state=(
                     EngagementStage.FundingState.NOT_REQUIRED
                     if is_lead_only
@@ -632,6 +664,17 @@ def open_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
                 amount_paise=per_day,
                 kind=EngagementStage.Kind.WORK,
                 scheduled_on=scheduled[day - 1],
+                # A3 shift-days get an original too, even though nothing on this path amends a
+                # schedule today. `M2-BE-549` asks for the original beside the amended, and a
+                # column written on one archetype and not the other is a column whose reader has
+                # to know which archetype it is looking at before it can trust it.
+                original_terms=stages.original_terms_of(
+                    {
+                        "label": f"Day {day}",
+                        "amount_paise": per_day,
+                        "scheduled_on": scheduled[day - 1],
+                    }
+                ),
                 funding_state=EngagementStage.FundingState.NOT_REQUIRED,
             )
             for day in range(1, booking.days + 1)

@@ -89,6 +89,7 @@ from apps.partners.models import (
     PartnerSkill,
     Skill,
 )
+from apps.payouts.models import PartnerPayoutAccount
 from apps.requirements.models import M2AccessPrice, RateCard
 from apps.requirements.rate_cards import publish_rate_card
 
@@ -338,6 +339,37 @@ VENDOR_STANDING_WINDOW_DAYS = 90
 #: address the Customer's own UPI app sends money to, and a real-looking one in a development
 #: fixture is a real-looking one somebody eventually pays.
 DEMO_UPI_VPA_DOMAIN = "vsolvedemo.test"
+
+# ---------------------------------------------------------------------------
+# Wave C5 / A5 projects: the warranty pair, and the payout account without which the whole A5
+# money story stops one step short of visible.
+# ---------------------------------------------------------------------------
+
+#: Pre-phase decision list ("retention percentage, warranty window"). Five per cent held back for
+#: ninety days is an ordinary shape for fit-out work and is **not** an approval — like everything
+#: else in this file it stands in for a decision nobody has made. Unset, both of them refuse an
+#: estimate that advertises a warranty (`M2-BE-546`), which is a variant that cannot back its own
+#: promise rather than a bug.
+WARRANTY_RETENTION_BASIS_POINTS = 500
+WARRANTY_WINDOW_DAYS = 90
+
+#: A **verified payout account** per demo vendor, and it is the difference between an A5
+#: walkthrough that ends at "earned" and one that ends at "payable".
+#:
+#: `payouts.payable_account` gates every M2 payout release there is — the visit share
+#: (`access.release_visit_payout_hold`), the approved stage (`stages.release_stage_payout`) and
+#: now the warranty retention (`stages.close_warranty_window`). It has always had three readers in
+#: M2 and **no writer in this seed**, so in every development environment every M2 earning sat
+#: `PENDING` for ever and the last step of the money story — the vendor's share of a consumed
+#: visit actually becoming payable — could not be seen at all. Blank is a legitimate *production*
+#: state, because a vendor who has not added bank details has genuinely earned money they cannot
+#: yet be paid; it is not a legitimate demo state.
+#:
+#: No account number is invented, because none is stored: `PartnerPayoutAccount` keeps four digits
+#: and a provider token, and the number itself lives with the payout provider. `effective_from` is
+#: backdated past the cooling period so the walkthrough does not wait on it.
+PAYOUT_ACCOUNT_LAST4 = "0000"
+PAYOUT_ACCOUNT_IFSC = "HDFC0000001"
 
 
 class Command(BaseCommand):
@@ -643,6 +675,13 @@ class Command(BaseCommand):
                 ),
                 "commission_basis_points": COMMISSION_BASIS_POINTS,
                 "commission_treatment": COMMISSION_TREATMENT,
+                # Wave C5. Two columns whose reader is `requirements.pricing.warranty_terms`, and
+                # without a writer here every A5 estimate that promises a warranty is refused at
+                # the composer with `m2_policy_unavailable` — which is the correct fail-closed
+                # behaviour and an undemonstrable one. Every configuration column M2 adds gets a
+                # writer in this command; that rule is what the C2R post-mortem cost.
+                "warranty_retention_basis_points": WARRANTY_RETENTION_BASIS_POINTS,
+                "warranty_window_days": WARRANTY_WINDOW_DAYS,
             },
         )
 
@@ -923,8 +962,41 @@ class Command(BaseCommand):
                 self._approve_capability(partner=partner, variant=variant)
 
             self._record_recent_presence(partner=partner, area=area)
+            self._seed_payout_account(partner=partner)
             self._seed_crew(partner=partner, index=index)
         return phones
+
+    @staticmethod
+    def _seed_payout_account(*, partner: PartnerProfile) -> None:
+        """A verified payout account, so an earned M2 payout can actually become payable.
+
+        `payouts.payable_account` is the progressive gate every M2 payout release consults — the
+        visit share, the approved stage and the warranty retention — and until this existed no
+        seed wrote one, so every demo earning stopped at `PENDING`. The walkthrough could show a
+        vendor *earning* their share of a consumed visit and never show it becoming payable, which
+        is the half of `07-state-machines-and-permissions.md` §4a that the split percentage is
+        for.
+
+        Idempotent on the partner, and it never disturbs an account somebody added by hand: a
+        Partner with any account already is left completely alone, because replacing one is the
+        exact event an account-takeover investigation starts from and a seed has no business
+        simulating it.
+        """
+        if PartnerPayoutAccount.objects.filter(partner=partner).exists():
+            return
+        PartnerPayoutAccount.objects.create(
+            partner=partner,
+            status=PartnerPayoutAccount.Status.VERIFIED,
+            account_last4=PAYOUT_ACCOUNT_LAST4,
+            ifsc=PAYOUT_ACCOUNT_IFSC,
+            holder_name=partner.display_name,
+            verified_at=timezone.now(),
+            # Backdated past the cooling period on purpose. The cooling delay is a real control
+            # and is not being weakened — it is simply already over for an account created a week
+            # ago, and a walkthrough that had to wait it out would test the developer's patience
+            # rather than the platform.
+            effective_from=timezone.now() - timedelta(days=7),
+        )
 
     @staticmethod
     def _approve_capability(*, partner: PartnerProfile, variant: ServiceVariant) -> None:
@@ -1007,15 +1079,38 @@ class Command(BaseCommand):
         number, which is what stops one person being double-booked through two agencies. Reusing it
         means these rows are indistinguishable from ones a Partner added, including the phone
         suffix that makes two people called Ramesh tellable apart.
+
+        **`documents_verified_at` is stamped here, and it is a raw field write on purpose.**
+
+        That column has four readers and, before this, no writer anywhere in the codebase:
+        `crew_dispatch` counts only verified memberships when it sizes a lead's roster against the
+        headcount, `workforce.assign_crew` refuses an unverified worker outright, and the crew rows
+        on both apps publish a verification badge from it. With nothing setting it, **every
+        vendor's verified roster was zero in every environment** — so the cascade excluded every
+        lead, `accept_crew_offer` answered `m2_roster_insufficient`, `assign_crew` refused every
+        membership, and the A3 rate-card walkthrough this whole revision exists for could not
+        reach its third step.
+
+        The honest writer is an Operations "verify crew documents" command with an actor, an audit
+        trail and a permission behind it. That is a real reviewed surface and it belongs in Wave
+        C6 with the rest of the Operations APIs; it is logged in `frontend-execution-plan.md` §7
+        and is deliberately **not** built here. What is legitimate in the meantime is this: a
+        dev-only seed, already behind three guards, writing a dev-only fixture and saying so. The
+        alternative was a walkthrough with a shell workaround in its first paragraph.
         """
+        verified_at = timezone.now()
         for worker in range(1, 7):
             phone = f"+9170302{index:02d}{worker:03d}"
-            add_crew_to_roster(
+            change = add_crew_to_roster(
                 partner=partner,
                 display_name=f"Worker {index}-{worker}",
                 phone_e164=phone,
                 is_supervisor=worker == 1,
             )
+            membership = change.membership
+            if membership.documents_verified_at is None:
+                membership.documents_verified_at = verified_at
+                membership.save(update_fields=("documents_verified_at",))
 
     @staticmethod
     def _accept_current_consents(partner: PartnerProfile) -> None:

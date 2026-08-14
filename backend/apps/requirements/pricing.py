@@ -329,6 +329,56 @@ def amendment_response_deadline(
     return deadline
 
 
+@dataclass(frozen=True, slots=True)
+class WarrantyTerms:
+    """What a variant holds back, and for how long (`M2-BE-546`)."""
+
+    #: Basis points of the agreed total held out of the vendor's payout until the window closes.
+    #: **Zero is a real answer** — "we advertise a warranty and hold nothing back" — which is why
+    #: the unset case is a refusal rather than a zero.
+    retention_basis_points: int
+    window_days: int
+
+    def retention_paise(self, *, total_paise: int) -> int:
+        return total_paise * self.retention_basis_points // 10000
+
+
+def warranty_terms(requirement: CustomerRequirement) -> WarrantyTerms:
+    """The retention percentage and warranty window for this variant, or a refusal.
+
+    `M2-BE-546`: **a variant either funds retention or does not advertise warranty.** Both halves
+    are pre-phase owner decisions, so an unset value refuses rather than defaulting — and the
+    refusal lands at `proposals.submit_proposal`, where a vendor writing warranty terms into an
+    estimate is told the variant cannot back them yet. Defaulting to zero here would be worse than
+    unhelpful: it would let a Customer select an estimate promising a year's warranty against
+    which nothing at all is held, and neither party would find out until the end of the project.
+    """
+    configuration = _configuration(requirement)
+    basis_points = configuration.warranty_retention_basis_points
+    window_days = configuration.warranty_window_days
+    if basis_points is None or window_days is None:
+        raise PolicyUnavailableError(
+            "We have not set the warranty terms for this service yet, so an estimate cannot "
+            "promise one. Support can help.",
+        )
+    return WarrantyTerms(retention_basis_points=basis_points, window_days=window_days)
+
+
+def warranty_terms_or_none(requirement: CustomerRequirement) -> WarrantyTerms | None:
+    """The same values, for a caller that must not refuse.
+
+    `engagements._open_engagement` uses this: by the time an engagement opens, the estimate has
+    already passed the guard above, and an engagement that could not be created because Operations
+    retired a configuration in between would strand a Customer who has paid for visits. An
+    estimate with no warranty terms answers `None` here and retains nothing, which is the correct
+    reading of "this vendor promised no warranty".
+    """
+    try:
+        return warranty_terms(requirement)
+    except PolicyUnavailableError:
+        return None
+
+
 def reconfirmation_deadline(
     requirement: CustomerRequirement, *, at: datetime | None = None
 ) -> datetime | None:

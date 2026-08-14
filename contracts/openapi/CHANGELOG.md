@@ -4,6 +4,210 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.31.0 - The project: what was agreed, what changed, and who finishes it
+
+**Wave C5 ([ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md), with the two
+amendments in its status block).** Eight new paths on the A5 half of the engagement spine — the
+mirror of 1.30.0's shift-day block, for the other archetype. Additive: no path, operation or
+schema component published before is removed, renamed or reshaped, verified by diffing every
+component name, path and `operationId` against the committed contract before publishing. Exactly
+**two** existing components changed at all: `EngagementStageStatusEnum` gained a value, which is
+the trap below, and `DaySettlement.shortfall_choice` widened to admit the value it has always
+actually carried, which is under "three shift-day defects" at the end.
+
+### Why
+
+1.25.0 built one stage spine for both archetypes and 1.30.0 spent it on A3's shift-days. This is
+the A5 half: a stage is a **milestone** rather than a day, so it has a deliverable, a date that can
+legitimately move, and a vendor who might walk away from it halfway through.
+
+Three things a project has that a shift-day does not, and each is a new record because the spine
+genuinely has no room for it:
+
+- a **schedule can move with no money moving**. The M1 amendment engine cannot express that —
+  `requirements_engagement_amendment_moves_money` refuses a zero delta at the database, on purpose
+  — so a Customer-caused delay is its own record with **no amount field anywhere on it**;
+- a **vendor can change**, which is the one term an engagement freezes that no amendment was
+  designed to move;
+- a **deliverable can be a file**, because Event and Media work is finished by handing something
+  over rather than by standing somewhere.
+
+### The trap
+
+**`EngagementStageStatusEnum` gains `CANCELLED`.** A cancelled milestone is one a recovery took out of the live agreement — a
+vendor transfer or an early termination — and it **keeps its `amount_paise` and its whole funding
+history**, because the agreement was that big and the money was collected. Two consequences for a
+client:
+
+- a `switch` over stage status that was exhaustive at 1.30.0 is not exhaustive now, on **both**
+  archetypes: the enum is shared, even though only A5 can currently produce the value;
+- a cancelled milestone carrying `cancellation_reason_code: material_advance_left_with_vendor` is
+  **not going to be refunded**, ever, by any command. Render it as an open question for support.
+  Showing it as a pending refund promises something nothing in this system will do.
+
+### The second trap, which is a field name
+
+**`milestone_label`, not `label`.** `label` is DRF's own `Serializer` attribute and a field of that
+name shadows it — mypy refuses the assignment and DRF resolves it at random. Wave C4 hit exactly
+this with `ShiftDay.day_label` and it is recorded again because `label` is the obvious guess. Its
+frozen twin is `original_milestone_label`, so the pairing stays mechanical: every "as agreed"
+reading is `original_` plus the current field's own name.
+
+### New paths
+
+| Path | operationId |
+|---|---|
+| `GET /engagements/{engagement_id}/project/` | `m2_project_read` |
+| `POST /engagement-stages/{stage_id}/delay-claim/` | `m2_project_delay_claim_raise` |
+| `POST /project-delay-claims/{delay_claim_id}/decision/` | `m2_project_delay_claim_decide` |
+| `POST /engagements/{engagement_id}/handover/` | `m2_project_handover_submit` |
+| `POST /engagements/{engagement_id}/handover/acceptance/` | `m2_project_handover_accept` |
+| `POST /engagements/{engagement_id}/transfer/` | `m2_project_transfer_propose` |
+| `POST /project-transfers/{project_transfer_id}/decision/` | `m2_project_transfer_decide` |
+| `POST /engagements/{engagement_id}/termination/` | `m2_project_terminate` |
+
+### One read, not five
+
+`m2_project_read` returns the milestone list, the money, the warranty retention, the handover and
+whatever recovery is in flight, together — the same reasoning `m2_shift_day_read` gives on the
+other archetype. They are one screen at five moments of one project, and a client assembling them
+from five endpoints renders four of them against a state the fifth has already left.
+
+It refuses with `m2_stage_transition_not_allowed` on an A3 engagement, exactly as the shift-day
+read refuses on an A5 one. The archetype is the guard, server-side, in both directions.
+
+**Every milestone carries two readings** (`M2-BE-549`). The `original_*` fields are what was agreed
+when the estimate was selected; the plain fields are what stands now; `schedule_shift_days` is the
+difference in days, computed server-side because a date difference computed in a browser is a date
+difference in whatever timezone that browser is in. A project screen that can only say what is due
+now is useless in the argument it exists for.
+
+`ProjectMilestone.status`, `.kind` and `.funding_state` are `ChoiceField`s over the components
+published since 1.24.0, not bare strings — the same gap 1.30.0 closed on `CrewOffer.status`. They
+reuse `EngagementStageStatusEnum`, `EngagementStageKindEnum` and `EngagementStageFundingStateEnum`
+rather than splitting new ones.
+
+### The delay claim carries no money, and cannot
+
+`DelayClaimCreateRequest` has a `reason_code`, a `description`, `extension_days` and evidence ids.
+There is no amount on it, and none on `ProjectDelayClaim` either. A delay that costs money is extra
+work, and extra work is a scope amendment at `POST /engagements/{id}/amendments/` which the
+Customer accepts and pays for. One record that could do both would let "the site was locked on
+Tuesday" arrive as a bill.
+
+Evidence is the stage's **own** `StageEvidence` rows, uploaded through the rail that already exists
+(`POST /engagement-stages/{id}/evidence/uploads/`, then the finalize call). That endpoint now
+accepts uploads on a `PENDING` stage as well — a customer-caused delay is a claim about work that
+never started, and refusing evidence until it starts would make the one claim that most needs a
+photograph the one claim that cannot carry one.
+
+Accepting shifts **this milestone and every one after it**, because a project is a sequence. A
+milestone with no date is left without one rather than given one. **Silence expires the claim
+rather than granting it** — `sweep_delay_claims`, every 15 minutes.
+
+### The transfer settles its delta structurally, and has no checkout
+
+`m2_project_transfer_propose` is Operations; `m2_project_transfer_decide` is the **Customer**, and
+that split is the point — their remaining cost changes, and
+[07 §7](../../Django_Next.js_Plan/M2/07-state-machines-and-permissions.md) does not let Operations
+change somebody's agreement for them.
+
+The replacement prices **every unfinished milestone individually**. A vendor who names one number
+for "the rest of it" has not said which of the agreed milestones they are doing. Read the list to
+price from `m2_project_read`: every milestone whose status is `PENDING`, `IN_PROGRESS`,
+`AWAITING_REVIEW` or `CORRECTION_REQUESTED`, **excluding** a `MATERIAL_ADVANCE` that has been
+funded.
+
+On acceptance, in one transaction: every transferable milestone refunds what the Customer funded
+and the abandoning vendor never earned, drops back to `REQUIRED`, and is repriced to the
+replacement's number; `amendment_delta_paise` moves by exactly the difference so
+`staged_total = total + amendment_delta` still holds by constraint. **So there is no transfer
+checkout and no new payment purpose.** The money asked for afterwards is the ordinary stage funding
+that was always going to be asked for, at a price the Customer accepted before any of it moved.
+That is what stops anybody paying twice.
+
+Two things a client must handle:
+
+- **the engagement returns to `PENDING_START` and `work_may_start_at` is cleared.** The replacement
+  has nothing funded and no clearance. Fund the first milestone at
+  `POST /engagement-stages/{id}/funding/` exactly as at the start of the project;
+- **a disputed milestone blocks the whole transfer** with `m2_stage_disputed`, at proposal **and**
+  again at acceptance. Decide it at `POST /engagement-stages/{id}/dispute/decision/` first.
+  Transferring around a dispute would close the objection by moving it out of the agreement.
+
+### Warranty retention, and why `COMPLETED` is not always what you get back
+
+`m2_engagement_completion_accept` is unchanged in shape and has three new refusals — an open stage,
+a disputed stage, and a **submitted handover the Customer has not accepted**. That last refusal is
+the entire mechanism keeping Event and Media delivery on the platform: a vendor who hands over
+privately has an engagement that will not close and a retention that will not release.
+
+**Read `status` from the response rather than assuming the transition you asked for.** An A5
+engagement that withheld retention moves straight to `WARRANTY`, not `COMPLETED`, and
+`warranty_ends_at` on the project read says when the hold-back releases and the engagement becomes
+`CLOSED`. An engagement with no warranty is terminal at `COMPLETED` and never reaches `CLOSED` —
+that status means "the warranty period is over", and a status meaning two different things
+depending on the variant would be worse than one fewer status.
+
+Retention is **payout-side money**. The Customer still funds every milestone at face value; what it
+changes is how much of an approved milestone the vendor may draw before the warranty is over. It
+is allocated against the cumulative approved total, the way commission has been since 1.25.0,
+because "hold it back from the final milestone" stops being computable the moment an amendment
+appends one.
+
+### Two owner-blocked values, both failing closed
+
+`warranty_retention_basis_points` and `warranty_window_days`, per variant. Unset, **an A5 estimate
+that carries `warranty_terms` is refused at submission** with `m2_policy_unavailable` — this is a
+new refusal on the existing `m2_proposal_create`, and it is `M2-BE-546`'s rule stated where it can
+still be acted on: a variant either funds retention or does not advertise warranty. An estimate
+with no warranty terms is unaffected and always has been; this refuses a claim, not a quote.
+
+`manage.py seed_m2_demo` writes both (5% held for 90 days, invented, marked as dev-only), so the
+walkthrough runs.
+
+### Also in this release
+
+`m2_project_terminate` ends a project with milestones outstanding and no replacement. It carries
+**no remedy** — no penalty, no forfeit, no compensation — because who owes whom what when a project
+ends early is the cancellation policy engine in Wave C6. What it does is return money nobody
+earned, which is the absence of a remedy rather than one. A funded material advance is not returned
+and not clawed back: the vendor spent it on goods.
+
+### Three shift-day defects closed with it, reported by the frontend columns against 1.30.0
+
+All three are on A3's surface rather than this wave's, and all three are one file deep. Leaving
+them would have made the workarounds permanent.
+
+**`DaySettlement.upi_payment_link` had no writer on the read path — and this is the fourth
+reader-with-no-writer in four waves.** `DaySettlement` has no such column; the value is computed by
+`workforce.upi_payment_link`, and the only thing that ever populated it was a manual injection into
+the settlement *command's* response body. So the deep link was **absent before the tap and gone
+after a reload**, never appearing on `m2_shift_day_read` — the screen a Customer actually opens in
+the evening — even though that response declared the field. DRF made it invisible rather than loud,
+answering `null` for the missing attribute instead of raising, so nothing failed and the one
+convenience `M2-BE-536` exists to offer simply was not there. It is now a `SerializerMethodField`
+on the serializer itself, so both surfaces get it and there is no second place to forget.
+**The wire shape is unchanged** — `string`, `nullable`, `readOnly`, exactly as at 1.30.0. The shape
+was always right; only the value was missing. No client change is needed, and a client that
+special-cased the absence can stop.
+
+**`DaySettlement.shortfall_choice` excluded its own resting value.** The column is `blank=True` and
+rests at `""` — no shortfall, nothing chosen — but the response rendered it from
+`ShortfallChoice.choices`, which does not contain the empty string. Every settlement that never had
+a shortfall therefore carried a value the schema called impossible. It is now
+`oneOf: [ShortfallChoiceEnum, BlankEnum]`, which is a **widening of an existing property** and the
+third thing on this page a client should look at: a field typed as the bare enum now types as a
+union, and `BlankEnum` is already in the schema so no component is added. The **request** shape has
+had `allow_blank=True` since 1.30.0; only the response was wrong.
+
+**`MAXIMUM_DISPUTED_WORKERS` was enforced and published nowhere.** `worker_details` on
+`ShiftAttendanceResponseRequest` is capped at 40 server-side and the bound existed only as a `400`
+a client discovered by hitting it. It is now published — as a `description` rather than `maxItems`,
+because `max_length` on a DRF `ListSerializer` is enforced at runtime and drf-spectacular emits no
+`maxItems` for it. The number is imported from the domain rather than retyped, so the published
+bound and the enforced one cannot drift.
+
 ## 1.30.0 - The shift-day: who came, what it is worth, and who says it was paid
 
 **Wave C4 ([ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md)).** Ten new

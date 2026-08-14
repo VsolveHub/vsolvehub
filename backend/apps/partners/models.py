@@ -1218,6 +1218,12 @@ class PartnerStandingEvent(models.Model):
         CREW_SHORTFALL = "CREW_SHORTFALL", "Fewer workers arrived than were booked"
         CASH_DEMAND_REPORTED = "CASH_DEMAND_REPORTED", "A Customer reported a cash extra demanded"
         VENDOR_NO_SHOW = "VENDOR_NO_SHOW", "The crew did not arrive at all"
+        #: Wave C5 (`M2-BE-545`). A project the vendor stopped working on, recorded when
+        #: Operations transfers the remaining milestones to somebody else or ends the project
+        #: early. Written by `apps.requirements.projects` and, like every other kind here, it is a
+        #: record rather than a verdict: no threshold acts on it yet, because the owner has not
+        #: said how many abandoned projects make a pattern.
+        PROJECT_ABANDONED = "PROJECT_ABANDONED", "The vendor stopped working on a project"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     partner = models.ForeignKey(

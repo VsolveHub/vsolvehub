@@ -656,11 +656,17 @@ def _append_stage(*, link: EngagementAmendment, engagement: Engagement) -> Engag
     )
     is_managed = engagement.commercial_mode == Engagement.CommercialMode.MANAGED_PAYMENT_REQUIRED
     now = timezone.now()
+    label = link.amendment.reason[:200]
     stage = EngagementStage.objects.create(
         engagement=engagement,
         position=last_position + 1,
-        label=link.amendment.reason[:200],
+        label=label,
         amount_paise=link.delta_paise,
+        # `M2-BE-549`. An amendment stage's "original" is the amendment itself: it was created at
+        # this amount, on this day, for this reason. Written here as well as on the two engagement
+        # paths, because a stage with no original is a stage a later transfer or delay claim can
+        # move without leaving a reading of what it used to be.
+        original_terms=stages.original_terms_of({"label": label, "amount_paise": link.delta_paise}),
         source_amendment=link,
         status=EngagementStage.Status.IN_PROGRESS if is_managed else EngagementStage.Status.PENDING,
         funding_state=(

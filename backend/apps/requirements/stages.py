@@ -38,8 +38,8 @@ to the M1 engine. `EngagementStage.save` refuses an amount change from anywhere 
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Final
+from datetime import date, datetime, timedelta
+from typing import Any, Final
 
 from django.db import transaction
 from django.db.models import F, Sum
@@ -138,6 +138,29 @@ def record_event(
         reason_code=reason_code,
         reason=reason,
     )
+
+
+def original_terms_of(row: dict[str, Any]) -> dict[str, Any]:
+    """The frozen "as agreed" copy of one stage, written at creation and never again.
+
+    **This is the writer for `EngagementStage.original_terms`** (`M2-BE-549`). It lives here
+    rather than beside any one of its callers because there are four places that lay out a stage —
+    the quote-flow engagement, the rate-card engagement, an amendment's appended stage and a
+    transfer's reprice — and both `engagements` and `amendments` already import this module, so
+    putting it in either of them would have closed an import cycle to save a line.
+
+    A stage created without this is a stage whose schedule extension or reprice has nothing to be
+    measured against, which is the whole of what `M2-BE-549` asks for.
+
+    `scheduled_on` is serialized to a string because the column is JSON and a `date` is not.
+    """
+    scheduled = row.get("scheduled_on") or None
+    return {
+        "label": str(row.get("label") or "")[:200],
+        "deliverable": str(row.get("deliverable") or ""),
+        "amount_paise": int(row.get("amount_paise") or 0),
+        "scheduled_on": (scheduled.isoformat() if isinstance(scheduled, date) else scheduled),
+    }
 
 
 def add_engagement_money(engagement_id: uuid.UUID, **deltas: int) -> None:
@@ -247,8 +270,16 @@ def _assert_evidence_may_be_added(stage: EngagementStage) -> None:
 
     `DISPUTED` is deliberately included: a vendor answering a dispute needs to be able to add the
     photograph that answers it, and a dispute process where only one side may file is not one.
+
+    `PENDING` was added in Wave C5 for `M2-BE-544`. A customer-caused delay claim is evidence
+    about work that has **not** started — a locked gate, an occupied site, materials the Customer
+    was supplying that never arrived — so refusing evidence until the stage starts would make the
+    one claim that most needs a photograph the one claim that cannot carry one. The bound on
+    volume (`MAXIMUM_EVIDENCE_PER_STAGE`) is unchanged and is what stops this being an open
+    upload endpoint.
     """
     if stage.status not in (
+        EngagementStage.Status.PENDING,
         EngagementStage.Status.IN_PROGRESS,
         EngagementStage.Status.AWAITING_REVIEW,
         EngagementStage.Status.CORRECTION_REQUESTED,
@@ -513,6 +544,36 @@ def _stage_commission_paise(*, engagement: Engagement, stage: EngagementStage) -
     return max(min(target, engagement.commission_paise) - already, 0)
 
 
+def _stage_retention_paise(*, engagement: Engagement, stage: EngagementStage) -> int:
+    """How much of this stage's payout is held back for the warranty window (`M2-BE-546`).
+
+    `M2-BE-546` says the retention is held back **from the final stage**, and the obvious reading
+    — "when approving the last stage, subtract the retention" — does not survive contact with the
+    amendment engine: an additive amendment appends a stage, so which stage is last stops being
+    knowable the moment somebody accepts one, and a retention already released out of what turned
+    out not to be the final milestone cannot be un-released.
+
+    So the retention is allocated against the **cumulative** approved total, exactly as
+    `_stage_commission_paise` allocates commission and for exactly the same reason. The amount
+    that should be held once `approved` of `staged` has been approved is
+
+        max(0, retention - (staged - approved))
+
+    which is zero for every early stage — there is plenty of work left to hold it out of — and
+    reaches the full retention precisely when the last stage is approved, whichever stage that
+    turns out to be. A retention larger than the final milestone simply starts biting a milestone
+    earlier, which is the correct behaviour and needs no special case.
+    """
+    retention = engagement.retention_paise
+    if retention <= 0 or engagement.staged_total_paise <= 0:
+        return 0
+    approved_before = engagement.approved_total_paise
+    approved_after = approved_before + stage.amount_paise
+    held_before = max(0, retention - (engagement.staged_total_paise - approved_before))
+    held_after = max(0, retention - (engagement.staged_total_paise - approved_after))
+    return max(min(held_after, retention) - held_before, 0)
+
+
 def _hold_stage_payout(*, stage: EngagementStage, engagement: Engagement) -> PartnerLedgerEntry:
     """Write the vendor's earning for an approved stage, **held** (`M2-BE-507`).
 
@@ -531,14 +592,19 @@ def _hold_stage_payout(*, stage: EngagementStage, engagement: Engagement) -> Par
     if existing is not None:
         return existing
     commission = _stage_commission_paise(engagement=engagement, stage=stage)
-    return PartnerLedgerEntry.objects.create(
+    # `M2-BE-546`. Retention comes out of the **gross**, not the net: it is the Customer's money
+    # still, held against a warranty promise, and reducing the commission with it would hand back
+    # part of Vsolve's fee every time a vendor's last milestone was retained.
+    retained = _stage_retention_paise(engagement=engagement, stage=stage)
+    gross = stage.amount_paise - retained
+    entry = PartnerLedgerEntry.objects.create(
         partner=engagement.partner,
         booking=None,
         kind=PartnerLedgerEntry.Kind.EARNING,
         status=PartnerLedgerEntry.Status.PENDING,
-        gross_paise=stage.amount_paise,
+        gross_paise=gross,
         commission_paise=commission,
-        net_paise=stage.amount_paise - commission,
+        net_paise=gross - commission,
         calculation_snapshot={
             "source": "m2_engagement_stage",
             "engagement_id": str(engagement.id),
@@ -549,10 +615,17 @@ def _hold_stage_payout(*, stage: EngagementStage, engagement: Engagement) -> Par
             "commission_treatment": engagement.commission_treatment,
             "engagement_commission_paise": engagement.commission_paise,
             "staged_total_paise": engagement.staged_total_paise,
+            # What was held out of this stage and against which promise. A vendor reading a
+            # statement has to be able to see why one milestone paid less than it was worth.
+            "warranty_retention_withheld_paise": retained,
+            "engagement_retention_paise": engagement.retention_paise,
         },
         reason=f"m2 stage {stage.position}",
         idempotency_key=f"m2-stage:{stage.id}",
     )
+    if retained:
+        add_engagement_money(engagement.id, retention_withheld_paise=retained)
+    return entry
 
 
 def _approve(*, stage: EngagementStage, actor: User | None, reason_code: str) -> EngagementStage:
@@ -933,19 +1006,45 @@ def _complete_engagement_if_finished(engagement: Engagement) -> None:
 
 @transaction.atomic
 def accept_engagement_completion(*, engagement_id: uuid.UUID, actor: User) -> Engagement:
-    """The Customer accepts the finished work. `COMPLETING → COMPLETED`.
+    """The Customer accepts the finished work. `COMPLETING → COMPLETED`, then the warranty.
 
     Also closes the requirement, which is the last transition in
-    `07-state-machines-and-permissions.md` §1 and had nothing to drive it before this wave. The
-    warranty period that follows for a configured A5 variant is `M2-BE-546` in Wave C5.
+    `07-state-machines-and-permissions.md` §1.
+
+    **`M2-BE-548`: three guards, and none of them approves anything on the way past.** Completion
+    is the Customer saying the *whole* agreement is done, and the failure it must not have is
+    sweeping an open stage into a settled one on the strength of that:
+
+    * an **open stage** refuses outright. `_complete_engagement_if_finished` only reaches
+      `COMPLETING` when nothing is open, but an accepted amendment appends a stage afterwards —
+      so by the time the Customer taps, there can legitimately be work outstanding again. The
+      stage keeps its own review, and this command declines rather than deciding for it.
+    * a **disputed stage** refuses with `m2_stage_disputed`, which is the same rule the review
+      timeout obeys, stated at the other end of the engagement.
+    * an **unaccepted handover** refuses (`M2-BE-547`). That refusal is the entire mechanism that
+      keeps Event and Media delivery on the platform: a vendor who hands over privately has an
+      engagement that will not close and a retention that will not release.
+
+    Then the warranty. An engagement that withheld retention or carries a configured warranty
+    window moves `COMPLETED → WARRANTY` with an end date; one that does not is finished at
+    `COMPLETED`. `CLOSED` therefore means "the warranty period is over" and is reachable only
+    through `WARRANTY`, which is why an engagement with no warranty never reaches it — a status
+    that meant two different things depending on the variant would be worse than one fewer status.
     """
     engagement = (
-        Engagement.objects.select_for_update().select_related("requirement").get(pk=engagement_id)
+        Engagement.objects.select_for_update()
+        .select_related("requirement__configuration")
+        .get(pk=engagement_id)
     )
-    if engagement.status == Engagement.Status.COMPLETED:
+    if engagement.status in (Engagement.Status.COMPLETED, Engagement.Status.WARRANTY):
         return engagement
     if engagement.status != Engagement.Status.COMPLETING:
         raise StageTransitionError("This engagement is not finished yet.")
+    _assert_no_stage_is_still_open(engagement)
+    if engagement.handover_submitted_at is not None and engagement.handover_accepted_at is None:
+        raise StageTransitionError(
+            "Accept the handover before closing this project, or ask the vendor to correct it.",
+        )
 
     now = timezone.now()
     Engagement.objects.filter(pk=engagement.id).update(
@@ -967,7 +1066,171 @@ def accept_engagement_completion(*, engagement_id: uuid.UUID, actor: User) -> En
         reason_code="engagement_completed",
         actor=actor,
     )
+    _open_warranty_window(engagement=engagement, at=now)
     engagement.refresh_from_db()
+    return engagement
+
+
+def _assert_no_stage_is_still_open(engagement: Engagement) -> None:
+    """Nothing is auto-approved by completing an engagement (`M2-BE-548`)."""
+    open_stages = list(
+        EngagementStage.objects.filter(
+            engagement=engagement,
+            status__in=EngagementStage.OPEN_STATUSES,
+        ).values_list("position", "status")
+    )
+    if not open_stages:
+        return
+    if any(status == EngagementStage.Status.DISPUTED for _position, status in open_stages):
+        raise StageDisputedError(
+            "A stage on this project is disputed. It has to be decided before the project closes.",
+        )
+    positions = ", ".join(str(position) for position, _status in sorted(open_stages))
+    raise StageTransitionError(
+        f"Stage {positions} is still open. Approve or send it back before closing the project.",
+    )
+
+
+def _open_warranty_window(*, engagement: Engagement, at: datetime) -> None:
+    """`COMPLETED → WARRANTY`, when there is a warranty to run (`M2-BE-546`, `M2-BE-548`).
+
+    The window comes from the variant's configuration read at completion rather than from a value
+    frozen at engagement creation, and the asymmetry is deliberate: the **percentage** is frozen
+    because it decides how much of somebody's money is held, while the **duration** only decides
+    when a hold that already exists lifts. An engagement whose configuration was retired keeps its
+    retention held and waits for Operations, which is the fail-closed direction — releasing a
+    warranty hold early on a window nobody can read is the one failure retention exists to
+    prevent.
+    """
+    if engagement.retention_withheld_paise <= 0:
+        return
+    terms = pricing.warranty_terms_or_none(engagement.requirement)
+    if terms is None:
+        return
+    ends_at = at + timedelta(days=terms.window_days)
+    Engagement.objects.filter(pk=engagement.id).update(
+        status=Engagement.Status.WARRANTY,
+        warranty_ends_at=ends_at,
+        updated_at=timezone.now(),
+    )
+    record_event(
+        engagement=engagement,
+        stage=None,
+        from_status=Engagement.Status.COMPLETED,
+        to_status=Engagement.Status.WARRANTY,
+        actor=None,
+        reason_code="warranty_window_opened",
+        reason=f"{engagement.retention_withheld_paise} paise held until {ends_at.isoformat()}",
+    )
+
+
+@transaction.atomic
+def close_warranty_window(*, engagement_id: uuid.UUID) -> Engagement:
+    """`WARRANTY → CLOSED`, releasing the retention (`M2-BE-546`). System command.
+
+    One ledger entry for the whole withheld amount rather than a correction against each stage's
+    entry: `PartnerLedgerEntry` is immutable by `save()` and a `REVERSAL` would say the earlier
+    entries were wrong, which they were not — they were correct and partly held. Commission is
+    zero on it because the commission on this money was already booked when the stages it came out
+    of were approved; charging it again would take Vsolve's share twice on the same rupee.
+
+    The entry is written `PENDING` and released by the same gate every other M2 payout obeys: a
+    vendor with no verified payout account has earned it and cannot yet be paid it. Idempotent on
+    the engagement, so an overlapping sweep writes one entry.
+    """
+    engagement = (
+        Engagement.objects.select_for_update()
+        .select_related("partner", "requirement")
+        .get(pk=engagement_id)
+    )
+    if engagement.status == Engagement.Status.CLOSED:
+        return engagement
+    if engagement.status != Engagement.Status.WARRANTY:
+        raise StageTransitionError("This engagement is not in its warranty period.")
+    if engagement.warranty_ends_at is None or engagement.warranty_ends_at > timezone.now():
+        return engagement
+
+    now = timezone.now()
+    entry = engagement.retention_ledger_entry
+    if entry is None and engagement.retention_withheld_paise > 0:
+        entry = PartnerLedgerEntry.objects.filter(
+            idempotency_key=f"m2-retention:{engagement.id}"
+        ).first() or PartnerLedgerEntry.objects.create(
+            partner=engagement.partner,
+            booking=None,
+            kind=PartnerLedgerEntry.Kind.EARNING,
+            status=PartnerLedgerEntry.Status.PENDING,
+            gross_paise=engagement.retention_withheld_paise,
+            commission_paise=0,
+            net_paise=engagement.retention_withheld_paise,
+            calculation_snapshot={
+                "source": "m2_warranty_retention",
+                "engagement_id": str(engagement.id),
+                "retention_paise": engagement.retention_paise,
+                "withheld_paise": engagement.retention_withheld_paise,
+                "warranty_ended_at": engagement.warranty_ends_at.isoformat(),
+            },
+            reason="m2 warranty retention release",
+            idempotency_key=f"m2-retention:{engagement.id}",
+        )
+    Engagement.objects.filter(pk=engagement.id).update(
+        status=Engagement.Status.CLOSED,
+        retention_ledger_entry=entry,
+        updated_at=now,
+    )
+    record_event(
+        engagement=engagement,
+        stage=None,
+        from_status=Engagement.Status.WARRANTY,
+        to_status=Engagement.Status.CLOSED,
+        actor=None,
+        reason_code="warranty_window_closed",
+        reason=f"{engagement.retention_withheld_paise} paise released",
+    )
+    if entry is not None and payable_account(engagement.partner) is not None:
+        entry.status = PartnerLedgerEntry.Status.AVAILABLE
+        entry.save(update_fields=("status", "updated_at"))
+    engagement.refresh_from_db()
+    return engagement
+
+
+def warranty_close_due_ids(*, at: datetime | None = None) -> list[uuid.UUID]:
+    """Engagements whose warranty period has run out, and released retentions still unpaid.
+
+    Two halves in one selector because one command handles both, exactly as
+    `stage_payout_release_due_ids` does: the engagement closes when its window passes, and the
+    retention entry becomes `AVAILABLE` when the vendor's payout account lands — which may be
+    months later and is nobody's fault.
+    """
+    moment = at or timezone.now()
+    due = Engagement.objects.filter(
+        status=Engagement.Status.WARRANTY,
+        warranty_ends_at__isnull=False,
+        warranty_ends_at__lt=moment,
+    ).values_list("id", flat=True)
+    held = Engagement.objects.filter(
+        status=Engagement.Status.CLOSED,
+        retention_ledger_entry__isnull=False,
+        retention_ledger_entry__status=PartnerLedgerEntry.Status.PENDING,
+    ).values_list("id", flat=True)
+    return list(dict.fromkeys([*due, *held]))
+
+
+@transaction.atomic
+def release_retention_hold(*, engagement_id: uuid.UUID) -> Engagement:
+    """Move an already-written retention entry to `AVAILABLE` once the account is verified."""
+    engagement = (
+        Engagement.objects.select_for_update()
+        .select_related("partner", "retention_ledger_entry")
+        .get(pk=engagement_id)
+    )
+    entry = engagement.retention_ledger_entry
+    if entry is None or entry.status != PartnerLedgerEntry.Status.PENDING:
+        return engagement
+    if payable_account(engagement.partner) is None:
+        return engagement
+    entry.status = PartnerLedgerEntry.Status.AVAILABLE
+    entry.save(update_fields=("status", "updated_at"))
     return engagement
 
 

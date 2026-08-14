@@ -200,18 +200,24 @@ class A1VariantConfiguration(models.Model):
         return f"{self.variant_id}:v{self.version}:{self.status}"
 
 
-#: The Wave C4 policy columns that are meaningless at zero, and the short name each one's check
-#: constraint is built from. **The constraints below are generated from this tuple** rather than
-#: typed out beside it: Wave C2R lost real time to a hand-copied purpose list whose comment claimed
-#: it was generated from the tuple it had drifted from, and `makemigrations --check` cannot see that
-#: kind of divergence because model state and migration state agree with each other while both
-#: disagree with the code. The short names exist only because PostgreSQL identifiers stop at 63
+#: The Wave C4 and C5 policy columns that are meaningless at zero, and the short name each one's
+#: check constraint is built from. **The constraints below are generated from this tuple** rather
+#: than typed out beside it: Wave C2R lost real time to a hand-copied purpose list whose comment
+#: claimed it was generated from the tuple it had drifted from, and `makemigrations --check` cannot
+#: see that kind of divergence because model state and migration state agree with each other while
+#: both disagree with the code. The short names exist only because PostgreSQL identifiers stop at 63
 #: characters and `catalog_m2_configuration_overtime_retroactive_window_minutes_positive` does not.
+#:
+#: `warranty_retention_basis_points` is deliberately **absent**: zero retention is a decision
+#: Operations may legitimately take ("we advertise a warranty and hold nothing back"), so a
+#: `> 0` constraint on it would forbid a real configuration. The window is not like that — a
+#: warranty period of zero days is not a warranty.
 M2_POSITIVE_WHEN_SET_POLICY_FIELDS: Final[tuple[tuple[str, str], ...]] = (
     ("overtime_retroactive_window_minutes", "overtime_window"),
     ("crew_shortfall_standing_threshold", "shortfall_threshold"),
     ("cash_demand_removal_threshold", "cash_demand_threshold"),
     ("vendor_standing_window_days", "standing_window"),
+    ("warranty_window_days", "warranty_window"),
 )
 
 
@@ -395,6 +401,24 @@ class M2VariantConfiguration(models.Model):
     #: evaluated at all, because "three reports" without "three reports since when" is not a rule.
     vendor_standing_window_days = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # --- Wave C5 / A5 projects: warranty retention (`M2-BE-546`). -----------------------------
+    #
+    # `07-state-machines-and-permissions.md` §9 lists "retention percentage, warranty window" on
+    # the pre-phase decision list, so both are nullable and neither has a default in code. What
+    # they gate is stated on `M2-BE-546` itself: **a variant either funds retention or does not
+    # advertise warranty.** `proposals._assert_a5_shape` refuses an estimate carrying warranty
+    # terms while either is unset, which is that sentence enforced at the composer rather than
+    # discovered at the end of a project when there is nothing held back to honour it with.
+
+    #: How much of an A5 engagement's agreed total is held back from the vendor's payout until the
+    #: warranty window closes, in basis points. **Zero is a legitimate decision** — "we advertise a
+    #: warranty and hold nothing back" — which is exactly why the unset case has to be `None`.
+    warranty_retention_basis_points = models.PositiveIntegerField(null=True, blank=True)
+    #: How long the warranty period runs after the Customer accepts completion, in days. Null
+    #: blocks an estimate that advertises warranty; a warranty of zero days is not a warranty,
+    #: which is why this one is in `M2_POSITIVE_WHEN_SET_POLICY_FIELDS` and the percentage is not.
+    warranty_window_days = models.PositiveSmallIntegerField(null=True, blank=True)
+
     evidence_policy = models.JSONField(default=dict)
     contact_policy = models.JSONField(default=dict)
     created_by = models.ForeignKey(
@@ -448,6 +472,11 @@ class M2VariantConfiguration(models.Model):
                 condition=models.Q(crew_decline_alarm_basis_points__isnull=True)
                 | models.Q(crew_decline_alarm_basis_points__lte=10000),
                 name="catalog_m2_configuration_decline_alarm_within_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(warranty_retention_basis_points__isnull=True)
+                | models.Q(warranty_retention_basis_points__lte=10000),
+                name="catalog_m2_configuration_retention_within_range",
             ),
             *[
                 models.CheckConstraint(

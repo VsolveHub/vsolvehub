@@ -1364,15 +1364,304 @@ that `scheduled_on` is a real date on every stage.
 | `m2_booking_fee_payment_pending` | Unchanged from 1.29.0 — declared, raised by no path | Recorded again in the 1.30.0 changelog rather than quietly removed |
 | `M2-BE-534`, `M2-BE-535` | Build-first amendment | Left unchecked and marked deferred; the smoke script replaces them for the sprint |
 
-## Wave C5 — Project stages, A5 (`BE5B`)
+## Wave C5 — Project stages, A5 (`BE5B`) — **`[~]` shipped 14 August 2026**
 
-`M2-BE-541..550`. May run in parallel with C4 once C3 is stable.
+`M2-BE-541..550`. Contract **1.31.0**, eight new paths. Full account in §"C5 outcome" below.
 
-- [ ] Milestone stages, funding, evidence, review, approval (`541`, `542`).
-- [ ] Material advance as a distinct money purpose with its own recovery rule (`543`).
-- [ ] Vendor-abandonment recovery transferring remaining stages with the delta settled (`545`).
-- [ ] Warranty retention held back from the final stage, released at warranty close (`546`).
-- [ ] Digital deliverable handover with Customer acceptance, for Event and Media (`547`).
+- [~] Milestone stages carrying deliverables and a frozen original, funding, evidence, review,
+  approval (`541`, `542`).
+- [~] Material advance as a distinct money purpose with its own recovery rule — **both halves now
+  written**, on the transfer path and the early-termination path (`543`).
+- [~] Vendor-abandonment recovery transferring remaining stages with the delta settled (`545`).
+- [~] Warranty retention held back from the final stage, released at warranty close (`546`).
+- [~] Digital deliverable handover with Customer acceptance, for Event and Media (`547`).
+- [~] Customer-caused delay claim with evidence and a schedule extension (`544`).
+- [~] Completion and warranty-window transitions that approve nothing on the way past (`548`).
+- [~] The original **and** amended schedule, deliverables and money allocation, both readable
+  (`549`).
+
+---
+
+### C5 outcome — 14 August 2026
+
+**Built.** Contract **1.31.0**: eight new paths, eight new operations, seventeen new components
+(91 → 99 M2 operations). One new module (`apps/requirements/projects.py`), three new aggregates,
+migrations `catalog.0012`, `partners.0011`, `requirements.0010`, and three new
+`CELERY_BEAT_SCHEDULE` entries. **No test was written or run**, per the build-first amendment;
+`M2-BE-550` is left unchecked deliberately and the smoke script that replaces it for the sprint is
+[`docs/runbooks/m2-project-stage-smoke.md`](../../docs/runbooks/m2-project-stage-smoke.md).
+
+#### The shape of the wave, and what it deliberately did not add
+
+A5 is the same spine as A3. The temptation in a wave called "project stages" is to build a project
+subsystem, and the whole of `M2-BE-541` is the instruction not to: the archetype is a field on the
+record. So a milestone is an `EngagementStage`, funding and evidence and approval and release are
+the Wave C3 commands unchanged, and `projects.py` adds only the four facts a project has that a
+shift-day does not.
+
+Each of the three new tables exists because the spine genuinely has no room for it, and in one case
+because an existing engine **refuses** to have room for it:
+
+1. **A schedule can move with no money moving.** The first instinct was to route a delay claim
+   through the M1 amendment engine, since "every scope change goes through the amendment engine".
+   It cannot: `requirements_engagement_amendment_moves_money` refuses a zero delta at the database,
+   deliberately, because an amendment a Customer must decide on that changes no money is a decision
+   about nothing. A date is not scope. `ProjectDelayClaim` therefore has **no amount column and
+   none may be added** — a delay that costs money is extra work, and extra work is an amendment the
+   Customer pays for. One record that could do both would let "the site was locked on Tuesday"
+   arrive as a bill.
+2. **A vendor can change.** The one term an engagement freezes that no amendment was designed to
+   move.
+3. **A deliverable can be a file.** Event and Media work is finished by handing something over.
+
+#### The transfer, and why it has no checkout
+
+`M2-BE-545`'s brief is blunt about the risk: *a transfer that silently absorbs a price difference is
+how somebody ends up paying twice.* The first design collected the delta as a payment. That is
+wrong twice over — it charges the Customer for work they had already funded with the abandoning
+vendor, and it needs a second engagement-opening money path nobody reviewed.
+
+The settlement is **structural instead**, in one transaction:
+
+1. every transferable milestone refunds what the Customer funded and the abandoning vendor never
+   earned, through the M1 refund rail, and drops back to `REQUIRED`;
+2. every transferable milestone is repriced to the replacement's own number, and
+   `amendment_delta_paise` moves by exactly the difference, so
+   `staged_total = total + amendment_delta` still holds by the `M2-BE-504` constraint;
+3. the Customer funds the replacement's milestones as they reach them, at the price they accepted.
+
+So **there is no transfer checkout and no new `PaymentAttempt.Purpose`**. The money asked for
+afterwards is the ordinary stage funding that was always going to be asked for. Three details are
+load-bearing:
+
+- **Refund before reprice.** `requirements_stage_exposure_within_amount` is checked on every
+  statement, so repricing a funded milestone downwards first would be the one instant in which the
+  platform holds more of the Customer's money than the milestone is worth, and the database would
+  refuse it.
+- **The engagement returns to `PENDING_START` and `work_may_start_at` is cleared.** The replacement
+  has nothing funded and no clearance; leaving the clearance standing would say otherwise.
+- **A disputed milestone blocks the whole transfer**, and is re-checked at acceptance as well as at
+  proposal — a Customer can dispute in the window between the two, which is exactly the moment a
+  transfer would move an objection out of the agreement.
+
+**Operations proposes; the Customer accepts.** Their remaining cost changes, and 07 §7 does not let
+Operations change somebody's agreement for them. That is why the decision route is not under
+`operations/`.
+
+#### Retention, and the "final stage" that stops being knowable
+
+`M2-BE-546` says the retention is held back **from the final stage**. The obvious reading — when
+approving the last milestone, subtract it — does not survive contact with the amendment engine: an
+additive amendment appends a stage, so which stage is last stops being knowable the moment somebody
+accepts one, and a retention already released out of what turned out not to be the final milestone
+cannot be un-released.
+
+So it is allocated against the **cumulative** approved total, exactly as commission has been since
+1.25.0 and for the same reason. The amount that should be held once `approved` of `staged` has been
+approved is `max(0, retention - (staged - approved))`: zero for every early milestone, and the full
+retention precisely when the last one is approved, whichever that turns out to be. A retention
+larger than the final milestone simply starts biting one milestone earlier, which is correct and
+needs no special case.
+
+Retention comes out of the **gross**, not the net, so the commission on it is still booked; the
+release entry at warranty close therefore carries commission zero, because charging it again would
+take Vsolve's share twice on the same rupee.
+
+Two smaller decisions beside it. The **percentage** is frozen at engagement creation and the
+**window** is read at completion: the first decides how much of somebody's money is held and must
+not move under a live project, the second only decides when a hold that already exists lifts. And
+an engagement whose configuration was retired keeps its retention held and never appears in the
+sweep, which is the fail-closed direction — releasing a warranty hold early against a window nobody
+can read is the one failure retention exists to prevent.
+
+#### Completion approves nothing on the way past
+
+`M2-BE-548` names the failure precisely, and it is not hypothetical: `_complete_engagement_if_
+finished` reaches `COMPLETING` only when nothing is open, but **an accepted amendment appends a
+stage afterwards**, so by the time the Customer taps "this is done" there can legitimately be work
+outstanding again. `accept_engagement_completion` now refuses an open stage by position, refuses a
+disputed one with `m2_stage_disputed`, and refuses while a submitted handover is unaccepted.
+
+That third refusal is the entire mechanism behind `M2-BE-547`. No configuration flag forces a
+vendor to upload anything; what does the work is that a vendor who delivers privately has an
+engagement that will not close and a retention that will not release.
+
+#### The RULES §3 audit, stated
+
+**(a) The drifting duplicate — swept mechanically, and this wave's own two were fixed.** A
+throwaway script walked every model, collected every class attribute that is a tuple of strings and
+compared it against every `__in` value set inside every constraint condition. Twelve pairs, of which
+eight are exact matches that agree today (`PaymentAttempt.CHECKOUT_FREE_PURPOSES`,
+`PartnerCapability.ACTIVE_STATUSES` and `REVIEW_STATUSES_NEEDING_NOTES`,
+`CustomerRequirement.CLOSED_STATUSES`, `QuoteUnlock.READABLE_STATUSES`,
+`VisitPlan.CHARGED_STATUSES`, `SiteVisit.SHARE_HOLDING_STATUSES`,
+`ProposalSelection.LIVE_STATUSES`) and two are the pre-existing deliberate near-misses C4
+documented in place.
+
+**Two of the twelve were mine, and both were hand-copied lists.**
+`requirements_decided_delay_claim_has_a_timestamp` and
+`requirements_decided_transfer_has_a_timestamp` each enumerated two statuses inline. Neither was a
+duplicate of an existing tuple — which is exactly how this class of defect gets waved through, since
+there was nothing to compare them against yet. They are now derived from module-scope tuples
+(`DELAY_CLAIM_UNDECIDED_STATUSES`, `PROJECT_TRANSFER_UNDECIDED_STATUSES`) bound onto the models as
+`UNDECIDED_STATUSES`, following `commerce.CHECKOUT_FREE_PURPOSES`: module scope because a nested
+`Meta` body cannot see its enclosing class's namespace, which is the whole reason a constraint ever
+hand-copies a list. Deliberately **not** reusing `LIVE_STATUSES` — "still waiting on somebody" and
+"has no decision timestamp" are different questions that happen to overlap, and an expired claim
+answers `False` to the first and `True` to the second.
+
+The three pre-existing constraints C4 could not derive are unchanged and still blocked on the same
+thing: deriving them needs a published `TextChoices` moved to module scope, which risks renaming an
+OpenAPI component (RULES §7).
+
+**(b) The reader with no writer — three found, three closed, and two of them made a documented
+surface unreachable in every environment.**
+
+Mechanically: every column and status C5's new code reads was listed, and for each one the writer
+was opened and read rather than assumed.
+
+| Column / status | Reader | Writer |
+|---|---|---|
+| `M2VariantConfiguration.warranty_retention_basis_points`, `warranty_window_days` | `pricing.warranty_terms` | `seed_m2_demo._seed_a5_configuration` ✔ |
+| `Engagement.retention_paise` | `stages._stage_retention_paise`, project read | `engagements._open_engagement` ✔ |
+| `Engagement.retention_withheld_paise` | `_open_warranty_window`, `close_warranty_window` | `stages._hold_stage_payout` ✔ |
+| `Engagement.retention_ledger_entry` | `release_retention_hold`, `warranty_close_due_ids` | `close_warranty_window` ✔ |
+| `Engagement.warranty_ends_at` | `close_warranty_window`, `warranty_close_due_ids` | `_open_warranty_window` ✔ |
+| `Engagement.handover_submitted_at` / `_accepted_at` / `_note` | `accept_engagement_completion` guard | `submit_project_handover`, `accept_project_handover` ✔ |
+| `EngagementStage.deliverable` | `milestone_rows` | `engagements._a5_stages` ✔ |
+| `EngagementStage.original_terms` | `milestone_rows` | **all three** stage-laying paths ✔ |
+| `EngagementStage.cancelled_at` / `cancellation_reason_code` | `milestone_rows`, constraint | `projects._cancel_stage` ✔ |
+| `EngagementStage.Status.CANCELLED` | `OPEN_STATUSES` / `TRANSFERABLE_STATUSES` exclusions | `projects._cancel_stage` ✔ |
+| `PartnerStandingEvent.Kind.PROJECT_ABANDONED` | **nothing yet** | transfer + termination |
+
+The last row is a **writer with no reader**, which is the safe direction and matches C4's precedent:
+no threshold acts on abandonment because the owner has not said how many abandoned projects make a
+pattern. The events accumulate, so turning the rule on later is loading a value rather than
+backfilling a history.
+
+`EngagementStage.original_terms` is the one worth naming, because `_a5_stages` alone would have been
+the obvious place to write it and would have been wrong: there are **three** paths that lay out a
+stage, and the amendment path is the one that matters most — an appended stage with no original is a
+stage a later transfer can reprice with nothing to be measured against. All three write it, through
+one shared `stages.original_terms_of`.
+
+**Three genuine defects were found by this sweep and all three are C4's or older:**
+
+1. **`PartnerCrewMembership.documents_verified_at` had four readers and no writer anywhere in the
+   codebase.** `crew_dispatch` counts only verified memberships when it sizes a lead's roster
+   against the headcount, `workforce.assign_crew` refuses an unverified worker outright, and both
+   apps publish a verification badge from it. With nothing setting it, **every vendor's verified
+   roster was zero in every environment** — so the A3 cascade excluded every lead,
+   `accept_crew_offer` answered `m2_roster_insufficient`, and the rate-card walkthrough this whole
+   revision exists for could not reach its third step. This is the same class as C4's
+   `scheduled_on`, one layer further out. The honest writer is an Operations "verify crew documents"
+   command with an actor and an audit trail, which is Wave C6 and is logged in §7; the dev seed now
+   stamps it, marked as the dev-only fixture it is.
+2. **`DaySettlement.upi_payment_link` had no writer on the read path.** `DaySettlement` has no such
+   column — the value is computed by `workforce.upi_payment_link` — and the only thing that ever
+   populated it was a manual injection into the settlement *command's* own response body. The deep
+   link was therefore **absent before the tap and gone after a reload**, never appearing on
+   `m2_shift_day_read`, which is the screen a Customer opens in the evening. DRF made it invisible
+   rather than loud, answering `null` for the missing attribute instead of raising, so nothing
+   failed and the one convenience `M2-BE-536` exists to offer simply was not there. Now a
+   `SerializerMethodField` on the serializer itself, so both surfaces get it and the injection in
+   the view is gone. **The wire shape is unchanged.**
+3. **No seed wrote a `PartnerPayoutAccount`.** `payouts.payable_account` gates every M2 payout
+   release there is — the visit share, the approved stage, and now the warranty retention — so every
+   demo earning stopped at `PENDING` and the last step of the A5 money story could not be seen at
+   all. Blank is a legitimate *production* state; it is not a legitimate demo state.
+
+**None of the three would have been caught by any static gate**, which is now the fourth wave
+running that this has been true of. The check is not a gate: it is asking, of every column the new
+code reads, *who writes this?* — and then opening that file.
+
+#### Two more contract gaps closed, reported by the frontend columns against 1.30.0
+
+Both are A3's surface rather than this wave's, both one file deep, and leaving them would have made
+the workarounds permanent.
+
+- **`DaySettlement.shortfall_choice` excluded its own resting value.** The column is `blank=True`
+  and rests at `""`, but the response rendered it from `ShortfallChoice.choices`, which does not
+  contain the empty string — so every settlement that never had a shortfall carried a value the
+  schema called impossible. Now `oneOf: [ShortfallChoiceEnum, BlankEnum]`. The **request** shape had
+  this right since 1.30.0; only the response was wrong.
+- **`MAXIMUM_DISPUTED_WORKERS` was enforced and published nowhere.** The bound existed only as a
+  `400` a client discovered by hitting it. Now published as a description — `max_length` on a DRF
+  `ListSerializer` is enforced at runtime but drf-spectacular emits no `maxItems` for it — with the
+  number imported from the domain rather than retyped, so published and enforced cannot drift.
+
+#### Fail-closed, and in which direction
+
+Two owner-blocked values were added, both on `M2VariantConfiguration`, and they fail together:
+
+| Config | Unset means |
+|---|---|
+| `warranty_retention_basis_points` | An A5 estimate carrying `warranty_terms` is refused at submission (`m2_policy_unavailable`). An estimate with no warranty terms is unaffected. |
+| `warranty_window_days` | The same refusal. A warranty of zero days is not a warranty, so this one is in `M2_POSITIVE_WHEN_SET_POLICY_FIELDS`; the percentage is not, because **zero retention is a real decision**. |
+
+That is `M2-BE-546`'s own sentence — a variant either funds retention or does not advertise warranty
+— enforced at the composer rather than discovered at handover, which is the point at which nobody
+can do anything about it. `seed_m2_demo` writes both (5% for 90 days, invented and marked).
+
+No new clock was invented for the delay claim or the transfer proposal: both reuse
+`pricing.amendment_response_deadline`, because it is the same promise the amendment engine already
+makes — how long the Customer has to answer the vendor about the agreed work — and a second unset
+value would block a second command on a decision nobody has been asked for.
+
+#### Not done, and why
+
+- **`M2-BE-550`** is this wave's test debt, left unchecked. The smoke script replaces it.
+- **The frontend client is not regenerated.** `generated/**` is frozen; **1.31.0 needs
+  regeneration** before either frontend column can consume any of this.
+- **The Operations "verify crew documents" command** is not built. It is a real reviewed surface
+  with an actor, an audit trail and a permission behind it, and it belongs with the rest of the
+  Operations APIs in C6. The seed stamps the column meanwhile.
+- **`terminate_project_early` decides no remedy.** No penalty, no forfeit, no compensation — that is
+  the cancellation policy engine (`M2-BE-701`, `706`). Returning money nobody earned is the absence
+  of a remedy rather than one, which is why it is safe to ship without the owner's cancellation
+  decisions.
+- **The free re-dispatch after a vendor no-show is still C6's**, exactly as C4 left it. It did not
+  fall out of this wave and was not expanded into it.
+- **A transfer moves the milestones as they are.** A replacement who wants a *different* milestone
+  structure is a scope change, and that goes through the amendment engine after the transfer. The
+  transfer prices the work that was agreed; it does not renegotiate it.
+
+#### Static gates
+
+`.\scripts\quality-static.cmd` and `manage.py check`, both from `backend` with
+`backend\.venv\Scripts\python.exe`, both green — ruff format and check clean, strict MyPy clean
+across **222 source files**, `makemigrations --check` no changes, `spectacular --validate` zero
+warnings after three new named enums, contract-drift check clean, `manage.py check` no issues.
+
+Three enums named on arrival rather than after a positional rename breaks a client:
+`ProjectDelayClaimStatusEnum`, `ProjectTransferStatusEnum`, `ProjectDeliverableKindEnum`. The A5
+milestone read needs none even though it publishes `status`, `kind` and `funding_state`: those are
+`ChoiceField`s over `EngagementStage`'s own already-pinned sets, so the project surface reuses the
+components published since 1.24.0 rather than splitting them.
+
+Additivity was **verified rather than assumed**: every component name, path and `operationId` was
+diffed against the committed contract before publishing. Removed: none. Exactly two existing
+components changed — `EngagementStageStatusEnum` gained `CANCELLED`, and
+`DaySettlement.shortfall_choice` widened to admit the value it always carried.
+
+#### The one field name a client will guess wrong
+
+`ProjectMilestone.milestone_label`, not `label`. `label` is DRF's own `Serializer` attribute and a
+field of that name shadows it — mypy refuses the assignment and DRF resolves it at random. This is
+the **second** wave to hit it (`ShiftDay.day_label` was C4's), which is why the frozen twin is
+`original_milestone_label` rather than `original_label`: every "as agreed" reading is `original_`
+plus the current field's own name, so the pairing stays mechanical.
+
+#### Blocked, and left blocked
+
+| What | Blocked on | Behaviour meanwhile |
+|---|---|---|
+| Retention percentage and warranty window | Owner (pre-phase decision list) | An estimate promising warranty is refused; one without is unaffected. The dev seed makes the demo walkable |
+| Operations crew-document verification | Wave C6 Operations APIs | The dev seed stamps `documents_verified_at`; production has no writer, logged in §7 |
+| Cancellation remedies on an early termination | Owner decisions + Wave C6 (`M2-BE-701`, `706`) | Unearned funding is returned; no penalty is decided |
+| A case behind a stage dispute | Wave C6 | `m2_stage_dispute_resolve` is drivable; the case machinery is not built |
+| Deriving three pre-existing constraints from their tuples | Unchanged from C4 — needs a published `TextChoices` at module scope (RULES §7) | Verified to agree today |
+| `M2-BE-550` | Build-first amendment | Left unchecked; the smoke script replaces it |
 
 ---
 

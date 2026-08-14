@@ -126,6 +126,25 @@ def _assert_a5_shape(payload: dict[str, Any]) -> None:
         )
 
 
+def _assert_warranty_is_funded(*, requirement: CustomerRequirement, warranty_terms: str) -> None:
+    """`M2-BE-546`: a variant either funds retention or does not advertise warranty.
+
+    An estimate that promises a warranty is a promise the platform has to be able to stand behind
+    at the end of the project, and the thing it stands behind it with is money held back out of
+    the vendor's final payout. If Operations has not decided the retention percentage and the
+    warranty window for this variant, there is nothing to hold and no window to hold it for — so
+    the promise is refused at the composer rather than accepted and discovered to be empty at
+    handover, which is the point at which nobody can do anything about it.
+
+    An estimate with no warranty terms is unaffected and always has been. This refuses a claim,
+    not a quote.
+    """
+    if not warranty_terms.strip():
+        return
+    # Raises `m2_policy_unavailable`, naming the missing decision.
+    pricing.warranty_terms(requirement)
+
+
 def _assert_completed_visit(
     *,
     invitation: VendorInvitation,
@@ -292,6 +311,7 @@ def submit_proposal(
         _assert_a3_shape(payload)
     else:
         _assert_a5_shape(payload)
+        _assert_warranty_is_funded(requirement=requirement, warranty_terms=warranty_terms)
         site_visit = _assert_completed_visit(invitation=invitation, site_visit_id=site_visit_id)
 
     required_basis = required_tax_basis(requirement)

@@ -37,6 +37,7 @@ from apps.requirements import (
     crew_dispatch,
     engagements,
     matching,
+    projects,
     proposals,
     services,
     stages,
@@ -715,3 +716,103 @@ def sweep_unproven_day_settlements() -> int:
         )
         raised += 1
     return raised
+
+
+# ---------------------------------------------------------------------------
+# Wave C5 — the A5 project's own clocks (`M2-BE-544`, `545`, `546`)
+#
+# Three sweeps, and two of them expire an **unanswered request** rather than granting it. That
+# direction is the whole point: a delay claim and a vendor transfer both ask the Customer for
+# something, and treating silence as consent would let a vendor move somebody's schedule, or an
+# operator move somebody's vendor, by filing on a Friday afternoon.
+#
+# The third releases money that is already earned and simply held, which is why it runs hourly
+# like every other payout sweep rather than on a promise-shaped cadence.
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def expire_one_delay_claim(_self: object, delay_claim_id: str) -> None:
+    projects.expire_delay_claim(delay_claim_id=UUID(delay_claim_id))
+
+
+@shared_task
+def sweep_delay_claims() -> int:
+    """Expire delay claims the Customer never answered (`M2-BE-544`).
+
+    **Expiry is a refusal, not a grant.** An unanswered claim leaves the agreed dates standing,
+    because the alternative — silence moves the schedule — would make the claim a notification
+    rather than a request. A vendor whose claim expired can raise another one; the constraint that
+    permits only one live claim per milestone is what stops that becoming a queue.
+    """
+    swept = 0
+    for claim_id in projects.expired_delay_claim_ids()[:SWEEP_BATCH_SIZE]:
+        expire_one_delay_claim.delay(str(claim_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def expire_one_project_transfer(_self: object, project_transfer_id: str) -> None:
+    projects.expire_project_transfer(project_transfer_id=UUID(project_transfer_id))
+
+
+@shared_task
+def sweep_project_transfers() -> int:
+    """Expire transfer proposals the Customer never answered (`M2-BE-545`).
+
+    The vendor, the prices and the agreement all stay exactly as they were. A transfer changes who
+    is doing somebody's project and what the rest of it costs, so an unanswered one has to lapse
+    rather than apply — and the replacement vendor's diary stops being held open by a proposal
+    nobody responded to.
+    """
+    swept = 0
+    for transfer_id in projects.expired_project_transfer_ids()[:SWEEP_BATCH_SIZE]:
+        expire_one_project_transfer.delay(str(transfer_id))
+        swept += 1
+    return swept
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 8},
+)
+def close_one_warranty_window(_self: object, engagement_id: str) -> None:
+    stages.close_warranty_window(engagement_id=UUID(engagement_id))
+    stages.release_retention_hold(engagement_id=UUID(engagement_id))
+
+
+@shared_task
+def sweep_warranty_windows() -> int:
+    """Close warranty periods that have run out and release the retention (`M2-BE-546`).
+
+    One sweep for both halves because one pair of commands handles both, exactly as
+    `sweep_stage_payout_holds` does: the engagement moves `WARRANTY → CLOSED` when its window
+    passes, and the retention entry moves to `AVAILABLE` when the vendor's payout account is
+    verified — which may be months later and is nobody's fault.
+
+    An engagement whose variant configuration was retired keeps its retention held and never
+    appears here, because `_open_warranty_window` never stamped `warranty_ends_at`. That is the
+    fail-closed direction: releasing a warranty hold early against a window nobody can read is the
+    one failure retention exists to prevent, and an operator can see the held entry.
+    """
+    swept = 0
+    for engagement_id in stages.warranty_close_due_ids()[:SWEEP_BATCH_SIZE]:
+        close_one_warranty_window.delay(str(engagement_id))
+        swept += 1
+    return swept

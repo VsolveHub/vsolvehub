@@ -16,6 +16,10 @@ from apps.requirements.views import (
     EngagementCompletionView,
     EngagementDetailView,
     EngagementEventListView,
+    EngagementHandoverAcceptanceView,
+    EngagementHandoverView,
+    EngagementProjectTransferView,
+    EngagementProjectView,
     EngagementSafetyIncidentView,
     EngagementStageApprovalView,
     EngagementStageArrivalView,
@@ -23,6 +27,7 @@ from apps.requirements.views import (
     EngagementStageAttendanceView,
     EngagementStageCorrectionView,
     EngagementStageCrewView,
+    EngagementStageDelayClaimView,
     EngagementStageDetailView,
     EngagementStageDisputeDecisionView,
     EngagementStageDisputeView,
@@ -34,6 +39,7 @@ from apps.requirements.views import (
     EngagementStageShiftView,
     EngagementStageStartView,
     EngagementStageSubmitView,
+    EngagementTerminationView,
     OperationsRateCardView,
     OperationsSafetyIncidentDecisionView,
     PartnerCrewOfferAcceptView,
@@ -53,6 +59,8 @@ from apps.requirements.views import (
     PartnerProposalWithdrawView,
     PartnerQuestionAnswerView,
     PartnerWorkspaceListView,
+    ProjectDelayClaimDecisionView,
+    ProjectTransferDecisionView,
     RequirementAttachmentCollectionView,
     RequirementAttachmentDetailView,
     RequirementAttachmentFinalizeView,
@@ -494,5 +502,60 @@ urlpatterns = [
         "operations/rate-cards/",
         OperationsRateCardView.as_view(),
         name="m2-operations-rate-cards",
+    ),
+    # Wave C5 - the A5 project (`M2-BE-541..549`). The mirror of the shift-day block above, and
+    # the split is the same: the plan hangs off the **engagement**, because a project is one
+    # agreement with a schedule, while a delay claim hangs off the **stage** it is about.
+    #
+    # Nothing here has a checkout. A transfer settles its delta by refunding what the abandoning
+    # vendor never earned and repricing the milestones that are left, so the only money the
+    # Customer is asked for afterwards is the ordinary stage funding they were always going to be
+    # asked for. Adding a payment route to this block would be adding a second way to charge for
+    # the same work.
+    path(
+        "engagements/<uuid:engagement_id>/project/",
+        EngagementProjectView.as_view(),
+        name="m2-engagement-project",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/delay-claim/",
+        EngagementStageDelayClaimView.as_view(),
+        name="m2-engagement-stage-delay-claim",
+    ),
+    path(
+        "project-delay-claims/<uuid:delay_claim_id>/decision/",
+        ProjectDelayClaimDecisionView.as_view(),
+        name="m2-project-delay-claim-decision",
+    ),
+    # Two routes rather than one with a role branch: the vendor submits and the Customer accepts,
+    # and an endpoint whose meaning depended on who called it would be one both apps had to guess
+    # about.
+    path(
+        "engagements/<uuid:engagement_id>/handover/",
+        EngagementHandoverView.as_view(),
+        name="m2-engagement-handover",
+    ),
+    path(
+        "engagements/<uuid:engagement_id>/handover/acceptance/",
+        EngagementHandoverAcceptanceView.as_view(),
+        name="m2-engagement-handover-acceptance",
+    ),
+    # Operations proposes, the **Customer** decides. Their remaining cost changes, and
+    # `07-state-machines-and-permissions.md` §7 does not let Operations change somebody's
+    # agreement for them - which is why the decision route is not under `operations/`.
+    path(
+        "engagements/<uuid:engagement_id>/transfer/",
+        EngagementProjectTransferView.as_view(),
+        name="m2-engagement-project-transfer",
+    ),
+    path(
+        "project-transfers/<uuid:project_transfer_id>/decision/",
+        ProjectTransferDecisionView.as_view(),
+        name="m2-project-transfer-decision",
+    ),
+    path(
+        "engagements/<uuid:engagement_id>/termination/",
+        EngagementTerminationView.as_view(),
+        name="m2-engagement-termination",
     ),
 ]
