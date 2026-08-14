@@ -106,6 +106,27 @@ export const m2QueryKeys = {
   },
 
   /**
+   * A3 crew offers (revision 4, ADR-0009) — a **bucket of the invitation inbox**,
+   * not a namespace of its own.
+   *
+   * Landed at Gate 1 on Session B's §7 request, and deliberately promoted as an
+   * alias rather than as a new root. 07 §2 defines a crew offer as an invitation,
+   * and Session B built it that way on purpose: because the key stays under
+   * `invitations.all`, every existing rule that clears the inbox clears crew
+   * offers by prefix — which is what keeps an A5 capacity hold correctly dropping
+   * the A3 offers that vendor can no longer serve. A separate `["m2",
+   * "crew-offers"]` root would silently break that, and the breakage would look
+   * like a vendor being offered work they are already booked against.
+   *
+   * The point of promoting it is the name, not the shape: a key composed at a
+   * call site is a key nobody can check the invalidation of.
+   */
+  crewOffers: {
+    inbox: () => m2QueryKeys.invitations.list("crew-offers"),
+    detail: (invitationId: string) => m2QueryKeys.invitations.detail(invitationId),
+  },
+
+  /**
    * Proposals, from both sides.
    *
    * `mine(requirementId)` is the Partner's own submission history for one
@@ -146,6 +167,30 @@ export const m2QueryKeys = {
     all: ["m2", "unlock"] as const,
     forRequirement: (requirementId: string) =>
       [...m2QueryKeys.unlock.all, "requirement", requirementId] as const,
+  },
+
+  /**
+   * The A3 rate-card booking and its booking fee (revision 4, ADR-0009).
+   *
+   * Landed at Gate 1 on Session A's §7 request, nested under
+   * `requirements.detail` exactly as it was composed at the call site — the
+   * promotion buys the name, not a new shape.
+   *
+   * **Keyed by requirement**, for the reason `unlock` and `visits.plan` give:
+   * a Customer coming back from a lost UPI redirect holds a requirement id and
+   * nothing else, and keying a purchase by an id the recovery path cannot
+   * produce is how somebody who has paid ends up unable to find what they
+   * bought.
+   *
+   * It is nested rather than rooted — unlike those two — because the rate-card
+   * state is a *projection of the requirement* (the published rate, the cascade's
+   * progress, the fee's phase) rather than a grant sold against it. Nesting means
+   * `requirementScope` already clears it, so the cascade cannot go on showing
+   * "still looking for a crew" after the requirement itself has moved on.
+   */
+  rateCard: {
+    state: (requirementId: string) =>
+      [...m2QueryKeys.requirements.detail(requirementId), "rate-card"] as const,
   },
 
   /**
@@ -237,6 +282,28 @@ export const m2QueryKeys = {
      */
     events: (engagementId: string) =>
       [...m2QueryKeys.engagements.detail(engagementId), "events"] as const,
+  },
+
+  /**
+   * One A3 shift-day — crew, attendance and settlement in a single read.
+   *
+   * Landed at Gate 1 on the backend column's §7 request, once 1.30.0 published
+   * ten shift-day paths that all hang off a **stage id**.
+   *
+   * One key per stage, not one per concern, because the server answers all three
+   * in one call: splitting the key would mean three cache entries that can
+   * disagree about the same day, and "4 of 4 present" rendering beside an unpaid
+   * settlement is precisely the disagreement that matters.
+   *
+   * Nested under `engagements.stage`, so every engagement-level *and* stage-level
+   * invalidation already reaches it. Note this is the one namespace where the
+   * nesting is load-bearing in both directions: yesterday's settled count must
+   * not be reachable by today's `n of m`, which is why it hangs off the stage and
+   * not off the engagement.
+   */
+  shiftDays: {
+    forStage: (engagementId: string, stageId: string) =>
+      [...m2QueryKeys.engagements.stage(engagementId, stageId), "shift-day"] as const,
   },
 } as const;
 
@@ -358,6 +425,21 @@ export type M2Command =
   | "confirm_visit_arrival"
   | "complete_site_visit"
   | "report_visit_no_show"
+  // The A3 rate card, revision 4. `complete_booking_fee` is absent for the same
+  // reason `complete_visit_plan` is: it is the verified provider callback, and
+  // 07 §4c is explicit that the engagement opens on that callback and on nothing
+  // a client sends. Session A asked for it; the customer screen resolves the
+  // outcome from the aggregate's own state read instead, which is what makes the
+  // row unnecessary rather than merely unused. `forfeit_booking_fee` and
+  // `refund_booking_fee` ARE here, unlike their visit-plan cousins: Operations
+  // issues both by hand from the admin app (Wave C6/B4), so they are client
+  // commands with a real caller.
+  | "book_at_published_rate"
+  | "create_booking_fee_checkout"
+  | "forfeit_booking_fee"
+  | "refund_booking_fee"
+  | "accept_crew_offer"
+  | "decline_crew_offer"
   | "request_revalidation"
   | "reject_proposal"
   | "select_proposal"
@@ -373,6 +455,10 @@ export type M2Command =
   | "propose_amendment"
   | "accept_amendment"
   | "report_safety_incident"
+  // A3 workforce fulfilment, Wave C4. `report_safety_incident` above already
+  // existed and now has a shift-day scope rather than an engagement one.
+  | "confirm_day_settled"
+  | "report_cash_demand"
   | "request_cancellation";
 
 const K = m2QueryKeys;
@@ -396,11 +482,30 @@ const K = m2QueryKeys;
  * nothing — which is exactly what the four rows below did until this existed.
  */
 function stageScope(ctx: M2CommandContext): KeyPrefix[] {
-  if (ctx.engagementId && ctx.stageId) {
-    return [K.engagements.stage(ctx.engagementId, ctx.stageId)];
-  }
   if (ctx.engagementId) {
-    return [K.engagements.detail(ctx.engagementId)];
+    // Both ids used to return `engagements.stage(e, s)` alone, and that cleared
+    // **nothing any screen reads**. React Query matches by prefix, and the stage
+    // key is *deeper* than the detail key — so a command that moved a stage left
+    // the engagement detail, its embedded `stages[]` (which is how every stage
+    // screen in both apps actually reads a stage) and the list buckets all
+    // serving pre-command data. Session B reported it on 2026-08-13 and the
+    // backend column hit the same thing building C4's shift-days; only the
+    // no-id branch below had been fixed.
+    //
+    // `detail` covers the stage, attendance and shift-day keys nested under it.
+    // `all` covers the sibling list buckets, which move when a stage moves — an
+    // engagement leaves "needs you" the moment its last stage is approved.
+    // `all` is a prefix of `detail` and so subsumes it today; both are listed
+    // because they are here for different reasons, and narrowing one must not
+    // silently drop the other.
+    //
+    // This is deliberately broader than the `attendance` key's doc comment
+    // ("today's n of m must not invalidate yesterday's settled count") would
+    // suggest. That preference still holds for a *targeted* refetch; it loses to
+    // correctness for a command, because the cost of the broad prefix is one
+    // refetch and the cost of the narrow one was a settled day that never
+    // appeared.
+    return [K.engagements.detail(ctx.engagementId), K.engagements.all];
   }
   // No engagement id at all: the stage screens reach the record by stage id
   // alone, so the only prefix guaranteed to contain it is the domain root.
@@ -472,6 +577,44 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
   // The checkout is created but nothing is granted yet. Only the unlock record
   // moves; the teasers stay teasers until a verified callback says otherwise.
   create_unlock_checkout: (c) => (c.requirementId ? [K.unlock.forRequirement(c.requirementId)] : []),
+
+  // The A3 rate card, revision 4. `rateCard.state` is nested under
+  // `requirements.detail`, so `requirementScope` reaches it without naming it.
+  //
+  // Booking at the published rate moves the requirement itself — it leaves
+  // capture and enters the cascade — and it is the moment the quote flow stops
+  // being the A3 front door for this request, so the teaser and unlock reads in
+  // `requirementScope` have to move with it or the fallback surface goes on
+  // offering itself underneath a booking that already happened.
+  book_at_published_rate: (c) => (c.requirementId ? requirementScope(c.requirementId) : []),
+
+  // Only the fee record moves, on `create_unlock_checkout`'s precedent above:
+  // starting a checkout grants nothing, and the engagement opens on the verified
+  // callback rather than on this.
+  create_booking_fee_checkout: (c) => (c.requirementId ? [K.rateCard.state(c.requirementId)] : []),
+
+  // Both are terminal money outcomes issued by Operations, and both can land on a
+  // booking whose engagement never opened (a customer no-show forfeits before any
+  // crew arrives), so neither may assume an engagement id. `engagements.all` is
+  // added when there is one: a refund re-dispatches, which moves the vendor's
+  // list as well as this customer's booking.
+  forfeit_booking_fee: (c) => [
+    ...(c.requirementId ? requirementScope(c.requirementId) : []),
+    ...(c.engagementId ? [K.engagements.all] : []),
+  ],
+  refund_booking_fee: (c) => [
+    ...(c.requirementId ? requirementScope(c.requirementId) : []),
+    ...(c.engagementId ? [K.engagements.all] : []),
+  ],
+
+  // A crew offer IS an invitation (07 §2), so these specialise
+  // `accept_invitation` / `decline_invitation` and clear the whole inbox for the
+  // same reason: first accept wins, so every other offer this lead is holding may
+  // have moved too. Note the consequence Session B had to design around — the
+  // server filters the inbox to INVITED, so accepting removes the card that
+  // issued the command. The answer has to be held above the list, not inside it.
+  accept_crew_offer: () => [K.invitations.all],
+  decline_crew_offer: () => [K.invitations.all],
 
   // Choosing charges nothing and bounds the invitation wave, so the plan moves
   // and the requirement's own read moves with it — `submit_requirement` refuses
@@ -560,7 +703,28 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
   // A safety incident is never a cancellation and never changes scope or money.
   // It is a timeline record, and invalidating the engagement here would imply
   // the work itself moved.
-  report_safety_incident: (c) => (c.engagementId ? [K.engagements.detail(c.engagementId)] : []),
+  // Re-scoped at Gate 1 on the backend column's request. A safety incident is
+  // reported against a shift-day, not against the engagement as a whole, and
+  // `stageScope` now reaches the engagement anyway — so this keeps the stage
+  // context when the caller has it and loses nothing when it does not. It stays
+  // a first-class record and never a cancellation reason: nothing here touches
+  // `request_cancellation`'s scope.
+  report_safety_incident: (c) => stageScope(c),
+
+  // A3 workforce fulfilment, Wave C4. Both are shift-day facts.
+  //
+  // `confirm_day_settled` is the evening tap. It moves no money — the platform
+  // never holds wages — but it does move what the other side sees, and both
+  // sides read the day through the engagement's stages, so the stage scope is
+  // the whole of it.
+  //
+  // `report_cash_demand` invalidates the same scope and deliberately nothing on
+  // the vendor's standing: a Customer's client cannot read a vendor's standing
+  // record, and inventing a prefix for it here would describe an invalidation
+  // that fires into an empty cache.
+  confirm_day_settled: (c) => stageScope(c),
+  report_cash_demand: (c) => stageScope(c),
+
   request_cancellation: (c) => (c.engagementId ? [K.engagements.all] : []),
 };
 

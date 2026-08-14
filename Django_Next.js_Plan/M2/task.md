@@ -1,8 +1,8 @@
 # M2 Master Task Board
 
 **Scope:** Workforce and project services (`A3_TIME_BLOCK` and `A5_CUSTOM_PROJECT`)
-**Status:** P1–P4 built. **Contract 1.30.0 is published; the typed client is regenerated at 1.29.0
-and needs regenerating at 1.30.0 by the orchestrator.** Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
+**Status:** P1–P4 built. **Contract 1.30.0 is published and the typed client is regenerated and in
+sync at 1.30.0** (Gate 2, 2026-08-14). Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
 thin-supply fallback since revision 4 — the A5 visit plan with per-slot split payouts, selection and
 reconfirmation), Wave C3 (the engagement + stage spine) and Wave C3.5 (defect closure plus the
 dev-only seed `manage.py seed_m2_demo`). Background sweeps are on Celery beat.
@@ -23,9 +23,34 @@ supervisor-level "n of m present", the Customer's confirm-or-dispute, settlement
 present** with a UPI deep link the platform sits outside, overtime and add-ons priced only from the
 frozen card through the M1 amendment engine, `SafetyIncident` as a first-class record, and
 `report_cash_demand` with vendor standing behind it. Ten new paths, additive.
-**Remaining work:** backend **C5–C7**; frontend **B2R** (the Partner rate-card half), the workforce
-fulfilment UI against 1.30.0, and **A4/B4** (the M2 Operations surfaces; note the admin app is a
+**Wave B2R is built (2026-08-14)**: the Partner one-screen crew offer at `/workforce/offers` — the
+lead's own number read from the server projection and never computed, accept/decline against the
+published `CrewOfferDeclineReasonCodeEnum`, `m2_roster_insufficient` routed to the crew roster, a
+minutes-level countdown off the server clock, and the "do not travel yet" hold that survives the
+accept. `M2-FE-316` `[~]`, re-pointed to 1.30.0's `CrewOfferAccepted` in the same gate.
+**Remaining work:** backend **C5–C7**; the workforce and project fulfilment UI against 1.30.0
+(`FE-502..515`, `FE-611/612`), and **A4/B4** (the M2 Operations surfaces; note the admin app is a
 working M1 Operations app already — only its M2 screens are missing).
+
+> **Gate 2 (2026-08-14) — the whole tree is green at 1.30.0**: typecheck 9/9, build 3/3 (customer,
+> partner, admin), both `--force`. Contract verified additive by name-diff — schema components
+> 427→453, paths 215→225, operationIds 243→254, **zero removals or renames**.
+>
+> **Three tooling lessons, all the same family as the defect classes above: green output that
+> proves less than it looks like.**
+> 1. **`turbo --filter=@vsolve/<app>` matches no package and exits 0 having run nothing.** The apps
+>    are named `customer`, `partner`, `admin`; only `packages/*` carry the `@vsolve/` scope. A wave
+>    was reported against that filter before this was noticed. `typecheck` also serves a **cache
+>    hit** over brand-new files. **Every gate from here uses the bare app name and `--force`, and
+>    reads the task count rather than the exit code.**
+> 2. **A §7 frozen-file request was filed for two error codes that were already there** — caught
+>    only because adding them twice failed `tsc` on duplicate keys. Read the file before requesting
+>    a change to it.
+> 3. **`openapi-typescript` emits a field carrying `default:` as *required* in TypeScript** even
+>    when the YAML's `required:` list omits it. The YAML is the server's contract; the generated
+>    type is what the client is actually held to, and on optionality they disagree. Reading the YAML
+>    alone gave the wrong answer for `upi_vpa` and would have shipped a silent erasure: a `PUT`
+>    omitting it sends `''` and wipes a VPA set elsewhere.
 
 > **C4 found the third instance of the same defect class, and it was the whole wave again.**
 > `EngagementStage.scheduled_on` had a reader — `workforce.shift_date_of`, which refuses to assign

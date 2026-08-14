@@ -184,6 +184,41 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   m2_selection_conflict: "choose_again",
   m2_reconfirmation_expired: "choose_again",
 
+  // A3 rate card, crew offers and the booking fee (revision 4, ADR-0009)
+  //
+  // Landed at the Gate 1 integration on three separate session requests. Two are
+  // worth reading before changing:
+  //
+  // `m2_booking_fee_not_chargeable` is `await_confirmation`, and Session A asked
+  // for `choose_again` ("but see why"). Its twin two blocks down settles it:
+  // `m2_visit_plan_not_chargeable` is `await_confirmation` because the plan
+  // becomes chargeable when a *vendor* confirms a slot. The booking fee is the
+  // same shape one rail over — it becomes chargeable when a *lead accepts* — and
+  // Session A's own call site already renders it as "nobody is holding this job
+  // any more" with **no retry**, because the only true next step is to wait.
+  // `choose_again` would offer a re-selection the Customer cannot make: nothing
+  // on that screen picks the crew. Two codes describing one situation on two
+  // rails should not classify differently.
+  //
+  // `m2_roster_insufficient` is `fix_input` and does not focus a field, because
+  // the roster is not on the refusing screen. It is `fix_input` rather than
+  // `contact_support` for the reason that matters to a lead: this is the one A3
+  // refusal they can clear themselves, by adding a verified worker. Telling
+  // somebody who is one action away from the job to go and wait would be the
+  // wrong answer. It matches `m2_crew_roster_required` in the capability block
+  // above, which is the same fact at the other end of the lifecycle.
+  //
+  // `m2_rate_card_unavailable`, by contrast, genuinely is a support case —
+  // nothing the Customer presses publishes a rate for their city and skill.
+  //
+  // The backend column also requested `m2_crew_conflict` and
+  // `m2_crew_roster_required` here for 1.30.0; both were already classified in
+  // the capability block above, with exactly the intended recoveries. Left where
+  // they are rather than moved, and the §7 row is answered accordingly.
+  m2_rate_card_unavailable: "contact_support",
+  m2_roster_insufficient: "fix_input",
+  m2_booking_fee_not_chargeable: "await_confirmation",
+
   // A5 visit plan and site visits (revision 3, ADR-0008)
   //
   // `m2_visit_plan_not_chargeable` is `await_confirmation` rather than an error

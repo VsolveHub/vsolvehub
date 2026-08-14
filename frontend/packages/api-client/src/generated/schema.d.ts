@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.29.0)
- * Checksum: 344d5a76b18ddc85
+ * Source:   contracts/openapi/v1.yaml (version 1.30.0)
+ * Checksum: bf70fc4e788536f9
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -826,6 +826,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagement-stages/{stage_id}/arrival/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Confirm the crew arrived for this shift-day. **Non-OTP, and that is the default path in M2** rather than a degraded one — the start OTP is M3. Either party may record it: both were at the site.
+         *
+         *     Three things happen in one transaction, because a half-started day is a support ticket: the arrival is stamped, the stage starts on the shared spine, and **on day one the booking fee is earned**. Crew must be named first — confirming that people arrived before saying who they are records nothing anybody can act on.
+         */
+        post: operations["m2_shift_arrival_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/attendance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Record **n of m present** for this shift-day. One tap, from the supervisor.
+         *
+         *     There is deliberately **no per-worker check-in or check-out**: the workers mostly do not carry smartphones, the supervisor does, and a per-worker attendance product would be a device dependency this market cannot meet wearing the clothes of rigour. Per-worker detail is captured in exactly one place — a Customer dispute.
+         *
+         *     The count *is* the evidence, so this hands the stage to the Customer through the ordinary spine and starts the same review clock every other stage runs on.
+         *
+         *     `shift_ended_at` is optional and its absence is the point: a **missing check-out** settles at the agreed shift length and is flagged for review, not disputed. A supervisor whose crew left at six and who closed the day at nine has done nothing wrong, and the amount never depended on the end time — only overtime does, and that needs the Customer's approval either way.
+         */
+        post: operations["m2_shift_attendance_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/attendance/response/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Confirm the supervisor's count or dispute it.
+         *
+         *     **Confirm** approves the shift-day on the shared spine, which for a workforce engagement also releases it — there is no payout to hold because Vsolve collected nothing. On a shortfall `shortfall_choice` is **required**: continue short, ask for an extra day, or cancel the missing workers free. The day settles at the present workers' published rate whichever you choose — that is `M2-BE-537`, settlement per worker-day present and never per job — and the choice decides what happens to the missing worker-days rather than to the money for the ones who came.
+         *
+         *     `ADD_DAY` records a request, and only that. The extra day is the lead's to offer through the amendment engine; appending a shift-day to somebody's week without their agreement would be the platform committing a vendor's labour.
+         *
+         *     **Dispute** is the only place per-worker detail is ever captured. It stops the review clock and opens the Operations path; the settlement stays unconfirmed, because a count nobody agrees on is not an amount either. Nothing derives a third number from `worker_details` — it is the Customer's objection, and a case decides between them.
+         */
+        post: operations["m2_shift_attendance_respond"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagement-stages/{stage_id}/correction/": {
         parameters: {
             query?: never;
@@ -837,6 +908,29 @@ export interface paths {
         put?: never;
         /** @description Send a stage back to be done properly. `AWAITING_REVIEW` → `CORRECTION_REQUESTED`, and the review clock stops. **A correction is not an amendment**: it asks for the agreed work, it does not change what the agreed work is, and it moves no money. A Customer who wants something different is asking for a change order, which needs the vendor's agreement. */
         post: operations["m2_stage_request_correction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/crew/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Assign crew to **one shift-day**, not to the engagement. Multi-day work rotates faces legitimately, and a roster hung off the engagement would either forbid that or record a lie about who was there.
+         *
+         *     Send the **whole** intended crew every time. The server reconciles the day to it: names that are gone are released with `reason_code`, new names are assigned. A substitution is therefore one call rather than a delete-then-add a client can half perform, and re-sending the same set is a no-op.
+         *
+         *     Four refusals, each a different failure: `m2_crew_roster_required` (the progressive gate, at the first assignment rather than at registration), `m2_crew_conflict` for an unverified worker, for a worker who is not on your roster or is marked unavailable, and — the cross-agency one — for the same **person** already promised on that date through any agency. The last is held by a database constraint as well as by this check, so two supervisors tapping at the same instant cannot both win.
+         */
+        post: operations["m2_shift_crew_assign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -911,6 +1005,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagement-stages/{stage_id}/extras/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Ask the Customer to approve overtime or an add-on **at the card's published rate**. This is a caller into the one amendment engine this codebase has, not a second one: the status machine, the expiry and the acceptance are the M1 engine's, and what this adds is the *price*, read from the card frozen on the engagement at booking.
+         *
+         *     **There is no amount field.** The vendor names what and how much of it; the server names the money. A vendor who could type a number could re-price a job the Customer booked at a published rate, which is exactly the on-site renegotiation the rate card exists to leave nowhere to live.
+         *
+         *     **Unapproved overtime is unpaid.** Overtime proposed while the shift is still running needs no window. Overtime for a shift that has already ended must be approved inside the configured retroactive window, and the amendment's deadline is shortened to it — past the window the request is refused outright, and while the owner has not set the window a retroactive request is refused with `m2_policy_unavailable` rather than granted on a guess.
+         *
+         *     An add-on code that is not on the frozen card has no published price and is refused.
+         */
+        post: operations["m2_shift_extra_propose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagement-stages/{stage_id}/funding/": {
         parameters: {
             query?: never;
@@ -922,6 +1041,52 @@ export interface paths {
         put?: never;
         /** @description Fund one A5 stage, **at face value and in order**. There is no stage credit: the visit-plan money was spent on the visits themselves and settles per share, so discounting a stage by it would pay for those visits twice out of the vendor's work. Projects collect one stage at a time and never the full project value because a proposal was accepted. */
         post: operations["m2_stage_funding_checkout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/settlement/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Record that this day was settled. Either party taps; the server records **who**, and nothing else.
+         *
+         *     **No money moves here and none can.** A3 wages are direct, daily and peer-to-peer at day end — the platform never holds them. `amount_paise` is the exact published figure for the day (present workers at the day rate, plus any extras both sides accepted through the amendment engine) and `upi_payment_link` is a deep link into the Customer's own UPI app at that amount. A convenience, not a rail; `null` when the lead has published no VPA, which is an ordinary state.
+         *
+         *     **A one-sided claim is left standing as `SUPERVISOR_CLAIMED` or `CUSTOMER_CLAIMED`.** That is what Operations reads as *unproven* — one person says they settled and the other has not answered, which is a different sentence from either "they were paid" or "they were not". Only both taps make `SETTLED`, and the amount freezes there.
+         */
+        post: operations["m2_shift_day_settled_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagement-stages/{stage_id}/shift/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description One A3 shift-day, whole. Returns the day's crew at the disclosure the caller is entitled to, the supervisor's attendance record and the evening settlement.
+         *
+         *     **The Customer never receives `crew_member_id`.** Crew identity is global — one person is one row however many agencies carry them — so `membership_id` is published to the Partner only and the global id to nobody. What a Customer gets is a name, four digits of phone and whether this platform has verified the person's documents.
+         *
+         *     `attendance` and `settlement` are `null` until a command touches the day. That is a real state and not a missing one: nothing is created by reading.
+         */
+        get: operations["m2_shift_day_read"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1020,6 +1185,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagements/{engagement_id}/cash-demand/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Report that a cash extra was demanded on site. The Customer's tap, and one tap is all it takes — `amount_claimed_paise` is optional because a required amount turns "they demanded extra" into a form, and the form is what stops it being reported.
+         *
+         *     **It is never proof on its own.** The report is recorded immutably and a standing event is written against the lead — a fact with a date, not a penalty and not a score. If the owner has configured a removal threshold and a window and this vendor has crossed it, their A3 capability is suspended through the same command Operations uses, which routes their live engagements exactly as a human suspension does.
+         *
+         *     While the threshold is unset nothing at all happens to the vendor and the reports still accumulate. That asymmetry is deliberate: refusing a Customer's report because a policy is unconfigured would punish them for an Operations gap, and ending somebody's trade on an invented number is not a decision code may take.
+         */
+        post: operations["m2_cash_demand_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagements/{engagement_id}/completion/": {
         parameters: {
             query?: never;
@@ -1048,6 +1236,30 @@ export interface paths {
         get: operations["m2_engagement_event_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/safety-incidents/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every safety report on this engagement, readable by both parties. Empty is the ordinary answer and is a `200`. */
+        get: operations["m2_safety_incident_list"];
+        put?: never;
+        /**
+         * @description File a safety incident. Reportable by **both parties**: the Customer who saw it and the lead whose worker it was. `reporter_role` is derived from the caller and cannot be sent.
+         *
+         *     **This is never a cancellation reason.** Nothing here cancels, suspends or refunds anything and the engagement carries on exactly as it was. A job that has to end because a site is unsafe ends through cancellation *with* a report beside it, so both facts exist separately and either can be read without the other — filing "a worker fell" as "job cancelled, site unsafe" is how a platform ends up unable to say, two years later, what was reported and what was done about it.
+         *
+         *     The report body is **frozen** once filed. Operations may add a status and a resolution; nobody may rewrite what was reported.
+         */
+        post: operations["m2_safety_incident_report"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1898,6 +2110,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/operations/safety-incidents/{safety_incident_id}/decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Move a safety report to `UNDER_REVIEW` or close it as `RESOLVED`. Closing requires an account of what was done.
+         *
+         *     The report body is frozen by the model, so this can only ever add a status and a resolution — an operator cannot revise what somebody said happened, which is the property that makes the record worth keeping.
+         */
+        post: operations["m2_safety_incident_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/unpayable-partners/": {
         parameters: {
             query?: never;
@@ -2488,7 +2721,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Take a worker off this roster. **Does not yet refuse when the worker holds a future assignment**: crew assignment is per stage and the stage model arrives with `M2-BE-522`, so there is nothing to read. A guard against a table that does not exist would be a check that always passes. */
+        /** @description Take a worker off this roster. **Refuses with `m2_crew_conflict` when the worker is booked on a future shift-day**, naming the dates (proposal 0013, acceptance criterion 9). Until Wave C4 built the per-stage assignment table there was nothing to read here, and archiving a name that a Customer was expecting on Thursday left the roster and the shift-day disagreeing silently. Replace them on those shifts first. */
         post: operations["m2_partner_crew_archive"];
         delete?: never;
         options?: never;
@@ -4141,6 +4374,12 @@ export interface components {
             /** @default  */
             language: string;
         };
+        /**
+         * @description * `CONFIRM` - The count is right
+         *     * `DISPUTE` - That is not who was here
+         * @enum {string}
+         */
+        AttendanceResponseEnum: "CONFIRM" | "DISPUTE";
         AuthenticatedSession: {
             readonly user: components["schemas"]["User"];
             readonly active_role: string;
@@ -4515,6 +4754,32 @@ export interface components {
             holding_payout: number;
             teams: components["schemas"]["TeamQueue"][];
         };
+        /**
+         * @description A Customer's one-tap account of a cash extra demanded on site (`M2-BE-539`).
+         *
+         *     There is no verdict field, no vendor response and no money on this shape, because a report is
+         *     never proof on its own. It is recorded immutably and counted towards a pattern against a
+         *     threshold the owner sets; one report changes nothing at all.
+         */
+        CashDemandReport: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly engagement: string;
+            /** Format: uuid */
+            readonly stage: string | null;
+            readonly amount_claimed_paise: number | null;
+            readonly note: string;
+            /** Format: date-time */
+            readonly reported_at: string;
+        };
+        CashDemandRequest: {
+            amount_claimed_paise?: number | null;
+            /** @default  */
+            note: string;
+            /** Format: uuid */
+            stage_id?: string | null;
+        };
         Category: {
             /** Format: uuid */
             readonly id: string;
@@ -4685,6 +4950,18 @@ export interface components {
          * @enum {string}
          */
         ContentTypeEnum: "image/jpeg" | "image/png" | "application/pdf";
+        /**
+         * @description The **whole** crew for this shift-day, every time (`M2-BE-522`, `528`).
+         *
+         *     A set, not a delta. The supervisor sends who is coming and the server reconciles the day to it:
+         *     names that dropped off are released with a reason, new names are assigned. That makes a
+         *     substitution one call a client cannot half-perform, and makes a retried tap a no-op.
+         */
+        CrewAssignRequest: {
+            membership_ids: string[];
+            /** @default  */
+            reason_code: string;
+        };
         CrewAvailability: {
             /** Format: uuid */
             readonly id: string;
@@ -4760,7 +5037,8 @@ export interface components {
             readonly invitation_id: string;
             /** Format: uuid */
             readonly requirement_id: string;
-            readonly status: string;
+            readonly status: components["schemas"]["VendorInvitationStatusEnum"];
+            readonly decline_reason_code: string;
             readonly headcount: number;
             readonly days: number;
             readonly lead_day_receipt_paise: number;
@@ -4774,6 +5052,43 @@ export interface components {
             /** Format: date-time */
             readonly requested_start: string | null;
             readonly area_label: string;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description The job a lead just took, at **their** disclosure — not the Customer's booking row.
+         *
+         *     This replaces `RateCardBooking` on the accept response, and the replacement is the point.
+         *     `RateCardBooking` carries `total_customer_paise`, `booking_fee_paise` and `day_rate_paise` —
+         *     the Customer's all-inclusive numbers, which include this platform's fee — and the crew-offer
+         *     *list* is scrupulous about withholding all three. Returning them one call later, at the moment
+         *     the lead commits, left the discipline resting on the client choosing not to render them.
+         *     ADR-0009 fixes the offer screen as "what they receive per day for the requested crew"; a lead
+         *     shown the Customer's total would reasonably expect to receive it, and that expectation is an
+         *     argument on a site.
+         *
+         *     Everything a lead needs to work the job is here. Nothing that describes what Vsolve charges is.
+         */
+        CrewOfferAccepted: {
+            /** Format: uuid */
+            readonly booking_id: string;
+            /** Format: uuid */
+            readonly requirement_id: string;
+            readonly status: components["schemas"]["RateCardBookingStatusEnum"];
+            readonly headcount: number;
+            readonly days: number;
+            readonly lead_day_receipt_paise: number;
+            readonly lead_receipt_paise: number;
+            readonly standard_day_hours: number;
+            readonly overtime_hourly_paise: number;
+            readonly add_on_rates: {
+                [key: string]: number;
+            };
+            readonly inclusions: string[];
+            /** Format: date-time */
+            readonly hold_expires_at: string | null;
+            /** Format: date-time */
+            readonly requested_start: string | null;
             /** Format: date-time */
             readonly server_now: string;
         };
@@ -4881,6 +5196,46 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /**
+         * @description The evening dual tap, and the exact published amount behind it (`M2-BE-536`, `537`).
+         *
+         *     **This is a record of a payment Vsolve never touches.** There is no checkout here, no
+         *     `payment_attempt_id`, no refund and no payout — the wage money is peer-to-peer, daily, at day
+         *     end, and the platform's whole part in it is to state the number both sides already agreed and
+         *     remember who said they were paid.
+         *
+         *     `upi_payment_link` is null whenever the lead has published no VPA, which is an ordinary state
+         *     and not an error: the amount is still shown and the crew is still paid the way they were paid
+         *     before this app existed.
+         */
+        DaySettlement: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["DaySettlementStatusEnum"];
+            readonly per_worker_paise: number;
+            readonly workers_present: number;
+            readonly workers_expected: number;
+            readonly extras_paise: number;
+            readonly amount_paise: number;
+            readonly shortfall_choice: components["schemas"]["ShortfallChoiceEnum"];
+            /** Format: date-time */
+            readonly make_good_requested_at: string | null;
+            /** Format: date-time */
+            readonly supervisor_confirmed_at: string | null;
+            /** Format: date-time */
+            readonly customer_confirmed_at: string | null;
+            /** Format: date-time */
+            readonly settled_at: string | null;
+            readonly upi_payment_link: string | null;
+        };
+        /**
+         * @description * `AWAITING_BOTH` - Neither side has confirmed
+         *     * `SUPERVISOR_CLAIMED` - Only the supervisor has confirmed
+         *     * `CUSTOMER_CLAIMED` - Only the Customer has confirmed
+         *     * `SETTLED` - Both sides confirmed
+         * @enum {string}
+         */
+        DaySettlementStatusEnum: "AWAITING_BOTH" | "SUPERVISOR_CLAIMED" | "CUSTOMER_CLAIMED" | "SETTLED";
         DemandPreview: {
             readonly summaries: components["schemas"]["DemandSummary"][];
             readonly matched_service_count: number;
@@ -4982,6 +5337,15 @@ export interface components {
             expected_version: number;
             dispute_reason: string;
             disputed_outcome_ids?: string[];
+        };
+        /** @description One line of a Customer's dispute. Their account, in their words. */
+        DisputedWorkerRequest: {
+            /** @default  */
+            name: string;
+            /** @default false */
+            was_present: boolean;
+            /** @default  */
+            note: string;
         };
         EngageKillSwitchRequestRequest: {
             scope: components["schemas"]["KillSwitchScopeEnum"];
@@ -6274,6 +6638,7 @@ export interface components {
             readonly gst_registered: boolean;
             readonly gstin: string;
             readonly years_in_operation: number;
+            readonly upi_vpa: string;
             /** Format: date-time */
             readonly updated_at: string;
         };
@@ -6292,6 +6657,8 @@ export interface components {
             gst_registered: boolean;
             gstin?: string;
             years_in_operation?: number;
+            /** @default  */
+            upi_vpa: string;
         };
         /**
          * @description * `INDIVIDUAL` - Individual
@@ -7884,6 +8251,83 @@ export interface components {
             role: string;
         };
         /**
+         * @description A first-class safety record (`M2-BE-530`). **Never a cancellation reason.**
+         *
+         *     A job that has to end because a site is unsafe ends through cancellation *with* a safety report
+         *     beside it, so both facts exist separately and either can be read without the other. Filing "a
+         *     worker fell" as "job cancelled, site unsafe" is how a platform ends up unable to say, two years
+         *     later, what was reported and what was done about it.
+         */
+        SafetyIncident: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly engagement: string;
+            /** Format: uuid */
+            readonly stage: string | null;
+            readonly reporter_role: components["schemas"]["SafetyIncidentReporterRoleEnum"];
+            readonly severity: components["schemas"]["SafetyIncidentSeverityEnum"];
+            readonly category_code: string;
+            readonly description: string;
+            /** Format: date-time */
+            readonly occurred_at: string;
+            readonly status: components["schemas"]["SafetyIncidentStatusEnum"];
+            readonly resolution_note: string;
+            /** Format: date-time */
+            readonly resolved_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `UNDER_REVIEW` - Operations is reviewing it
+         *     * `RESOLVED` - Closed by Operations
+         * @enum {string}
+         */
+        SafetyIncidentDecisionEnum: "UNDER_REVIEW" | "RESOLVED";
+        /** @description Operations moves a report to review or to a close. It can never rewrite the report. */
+        SafetyIncidentDecisionRequest: {
+            decision: components["schemas"]["SafetyIncidentDecisionEnum"];
+            /** @default  */
+            resolution_note: string;
+        };
+        SafetyIncidentList: {
+            readonly incidents: components["schemas"]["SafetyIncident"][];
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /** @description File a report. `reporter_role` is derived from the caller and is deliberately not here. */
+        SafetyIncidentReportRequest: {
+            severity: components["schemas"]["SafetyIncidentSeverityEnum"];
+            category_code: string;
+            description: string;
+            /** Format: date-time */
+            occurred_at?: string | null;
+            /** Format: uuid */
+            stage_id?: string | null;
+        };
+        /**
+         * @description * `CUSTOMER` - The Customer
+         *     * `PARTNER` - The vendor or their supervisor
+         *     * `OPERATIONS` - Operations
+         * @enum {string}
+         */
+        SafetyIncidentReporterRoleEnum: "CUSTOMER" | "PARTNER" | "OPERATIONS";
+        /**
+         * @description * `NEAR_MISS` - A near miss
+         *     * `MINOR` - Minor injury or damage
+         *     * `SERIOUS` - Serious injury or damage
+         *     * `CRITICAL` - Critical: life-threatening or fatal
+         * @enum {string}
+         */
+        SafetyIncidentSeverityEnum: "NEAR_MISS" | "MINOR" | "SERIOUS" | "CRITICAL";
+        /**
+         * @description * `REPORTED` - Reported
+         *     * `UNDER_REVIEW` - Operations is reviewing it
+         *     * `RESOLVED` - Closed by Operations
+         * @enum {string}
+         */
+        SafetyIncidentStatusEnum: "REPORTED" | "UNDER_REVIEW" | "RESOLVED";
+        /**
          * @description * `PENDING` - Pending scan
          *     * `CLEAN` - Clean
          *     * `REJECTED` - Rejected
@@ -8100,6 +8544,133 @@ export interface components {
             readonly session_expires_at: string | null;
         };
         /**
+         * @description What the supervisor said, and what the Customer answered (`M2-BE-524` to `527`).
+         *
+         *     `present_count` is null until somebody records the day, and that is a real state rather than a
+         *     zero: "nobody has said" and "nobody came" are different facts and a settlement depends on
+         *     which.
+         *
+         *     `disputed_worker_details` is populated **only** by a Customer dispute (`M2-BE-526`). It is the
+         *     Customer's account of who they say was not there — evidence in a case, never an attendance
+         *     record of its own, and nothing derives a count from it.
+         */
+        ShiftAttendance: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["ShiftAttendanceStatusEnum"];
+            readonly expected_count: number;
+            readonly present_count: number | null;
+            readonly shortfall_count: number;
+            /** Format: date-time */
+            readonly arrival_confirmed_at: string | null;
+            readonly standard_day_hours: number | null;
+            /** Format: date-time */
+            readonly shift_ended_at: string | null;
+            readonly checkout_missing: boolean;
+            readonly flagged_for_review: boolean;
+            readonly flag_reason_code: string;
+            /** Format: date-time */
+            readonly confirmed_at: string | null;
+            /** Format: date-time */
+            readonly responded_at: string | null;
+            readonly dispute_note: string;
+            readonly disputed_worker_details: unknown;
+        };
+        /**
+         * @description The supervisor's one action for the day (`M2-BE-525`).
+         *
+         *     One count, and deliberately **no per-worker roll call**. `SIM-02` refuses per-worker check-in
+         *     and check-out with offline sync outright: the workers mostly do not carry smartphones, the
+         *     supervisor does, and a per-worker product would be a device dependency the market cannot meet
+         *     wearing the clothes of rigour.
+         */
+        ShiftAttendanceRecordRequest: {
+            present_count: number;
+            /** Format: date-time */
+            shift_ended_at?: string | null;
+        };
+        /** @description Confirm the day or dispute it (`M2-BE-525`, `526`, `537`). */
+        ShiftAttendanceResponseRequest: {
+            response: components["schemas"]["AttendanceResponseEnum"];
+            /** @default  */
+            shortfall_choice: components["schemas"]["ShortfallChoiceEnum"] | components["schemas"]["BlankEnum"];
+            worker_details?: components["schemas"]["DisputedWorkerRequest"][];
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description * `PENDING` - Nothing recorded yet
+         *     * `SUPERVISOR_CONFIRMED` - The supervisor recorded the day
+         *     * `CUSTOMER_CONFIRMED` - The Customer agreed
+         *     * `DISPUTED` - The Customer disputed the count
+         * @enum {string}
+         */
+        ShiftAttendanceStatusEnum: "PENDING" | "SUPERVISOR_CONFIRMED" | "CUSTOMER_CONFIRMED" | "DISPUTED";
+        /**
+         * @description One shift-day, whole: the day, the crew on it, the attendance and the settlement.
+         *
+         *     One read rather than four, for the reason `RateCardStateSerializer` gives: the crew screen, the
+         *     attendance screen and the settlement screen are the same screen at three moments of one
+         *     evening, and four endpoints would let them disagree about which day the user is looking at.
+         *
+         *     `attendance` and `settlement` are null until somebody touches the day — created lazily, because
+         *     the engagement is opened inside a payment callback and four more inserts in that transaction
+         *     are four more ways for a Customer's money to fail to confirm.
+         */
+        ShiftDay: {
+            /** Format: uuid */
+            readonly stage_id: string;
+            /** Format: uuid */
+            readonly engagement_id: string;
+            readonly position: number;
+            readonly day_label: string;
+            /** Format: date */
+            readonly scheduled_on: string | null;
+            readonly stage_status: string;
+            readonly crew: components["schemas"]["StageCrewMember"][];
+            readonly attendance: components["schemas"]["ShiftAttendance"] | null;
+            readonly settlement: components["schemas"]["DaySettlement"] | null;
+            readonly per_worker_paise: number;
+            readonly standard_day_hours: number | null;
+            readonly overtime_hourly_paise: number | null;
+            readonly add_on_rates: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description * `OVERTIME` - Hours past the published shift
+         *     * `ADD_ON` - A published add-on from the rate card
+         * @enum {string}
+         */
+        ShiftExtraKindEnum: "OVERTIME" | "ADD_ON";
+        /**
+         * @description Ask the Customer to approve overtime or an add-on (`M2-BE-531`, `538`).
+         *
+         *     **There is no amount field, and there never will be.** The vendor names what and how much of
+         *     it; the server names the money, from the rate card frozen on the engagement at booking. A
+         *     vendor who could type a number here could re-price a job the Customer booked at a published
+         *     rate, which is precisely the on-site renegotiation ADR-0009 exists to leave nowhere to live.
+         */
+        ShiftExtraRequest: {
+            kind: components["schemas"]["ShiftExtraKindEnum"];
+            /** @default 0 */
+            hours: number;
+            /** @default  */
+            add_on_code: string;
+            /** @default 0 */
+            worker_days: number;
+            reason: string;
+        };
+        /**
+         * @description * `CONTINUE_SHORT` - Carry on with the crew that came
+         *     * `ADD_DAY` - Ask the lead for an extra day to make it up
+         *     * `CANCEL_SHORTFALL` - Cancel the missing workers, free
+         * @enum {string}
+         */
+        ShortfallChoiceEnum: "CONTINUE_SHORT" | "ADD_DAY" | "CANCEL_SHORTFALL";
+        /**
          * @description One visit, in both its shapes.
          *
          *     `is_plan_visit` is the field that decides how the whole record reads. A plan visit is paid for
@@ -8167,6 +8738,34 @@ export interface components {
         SourceEnum: "MANUAL" | "REVERSE_GEOCODED";
         StageCorrectionRequest: {
             note: string;
+        };
+        StageCrewList: {
+            readonly crew: components["schemas"]["StageCrewMember"][];
+            readonly expected_count: number;
+            /** Format: date */
+            readonly shift_date: string | null;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description One named worker on one shift-day, at the disclosure the reader is entitled to.
+         *
+         *     `membership_id` is present for the Partner — it is their own roster row and the id their
+         *     assignment screen sends back — and **null for the Customer**. The global `crew_member_id`
+         *     appears for nobody.
+         */
+        StageCrewMember: {
+            /** Format: uuid */
+            readonly membership_id: string | null;
+            readonly display_name: string;
+            readonly phone_masked: string;
+            readonly is_supervisor: boolean;
+            readonly is_verified: boolean;
+            /** Format: date-time */
+            readonly verified_at: string | null;
+            readonly status: string;
+            /** Format: date-time */
+            readonly assigned_at: string;
         };
         StageDisputeDecisionRequest: {
             outcome: components["schemas"]["StageDisputeOutcomeEnum"];
@@ -10678,6 +11277,157 @@ export interface operations {
             };
         };
     };
+    m2_shift_arrival_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftAttendance"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` when no crew is assigned yet, the engagement is closed, or the stage is an A5 milestone. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_shift_attendance_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftAttendanceRecordRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ShiftAttendanceRecordRequest"];
+                "multipart/form-data": components["schemas"]["ShiftAttendanceRecordRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftAttendance"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` before arrival is confirmed, after the Customer has already answered, or for a count above the booked crew — an extra worker is a scope amendment at the published rate, not a bigger number in an attendance box. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_shift_attendance_respond: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftAttendanceResponseRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ShiftAttendanceResponseRequest"];
+                "multipart/form-data": components["schemas"]["ShiftAttendanceResponseRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftAttendance"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` before the supervisor has recorded the day, or when a shortfall was left without a choice. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_stage_request_correction: {
         parameters: {
             query?: never;
@@ -10714,6 +11464,70 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_shift_crew_assign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrewAssignRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CrewAssignRequest"];
+                "multipart/form-data": components["schemas"]["CrewAssignRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StageCrewList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_crew_roster_required` — add a verified worker to your roster before assigning anybody to a shift. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_crew_conflict`, or `m2_stage_transition_not_allowed` when the shift-day has no date on it, is already settled, or is an A5 milestone. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10937,6 +11751,61 @@ export interface operations {
             };
         };
     };
+    m2_shift_extra_propose: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftExtraRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ShiftExtraRequest"];
+                "multipart/form-data": components["schemas"]["ShiftExtraRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementAmendment"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_amendment_required` when this booking publishes no overtime or add-on rate, or the retroactive window has closed; `m2_policy_unavailable` when the owner has set no window; `m2_stage_transition_not_allowed` otherwise. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_stage_funding_checkout_create: {
         parameters: {
             query?: never;
@@ -10968,6 +11837,85 @@ export interface operations {
                 };
             };
             /** @description `m2_stage_not_funded` when the stage is already funded, when an earlier stage is not, or when the engagement is `LEAD_ONLY` and paid directly to the vendor. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_shift_day_settled_confirm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaySettlement"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` before the day has been recorded — there is no amount to settle until somebody says who was there. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_shift_day_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftDay"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` on an A5 milestone: a project stage has no crew, no attendance and no daily settlement. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11223,6 +12171,60 @@ export interface operations {
             };
         };
     };
+    m2_cash_demand_report: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CashDemandRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CashDemandRequest"];
+                "multipart/form-data": components["schemas"]["CashDemandRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashDemandReport"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_engagement_completion_accept: {
         parameters: {
             query?: never;
@@ -11284,6 +12286,89 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_safety_incident_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafetyIncidentList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_safety_incident_report: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyIncidentReportRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SafetyIncidentReportRequest"];
+                "multipart/form-data": components["schemas"]["SafetyIncidentReportRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafetyIncident"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13710,6 +14795,60 @@ export interface operations {
             };
         };
     };
+    m2_safety_incident_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                safety_incident_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyIncidentDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["SafetyIncidentDecisionRequest"];
+                "multipart/form-data": components["schemas"]["SafetyIncidentDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SafetyIncident"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     operations_unpayable_partners: {
         parameters: {
             query: {
@@ -15214,7 +16353,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RateCardBooking"];
+                    "application/json": components["schemas"]["CrewOfferAccepted"];
                 };
             };
             403: {
