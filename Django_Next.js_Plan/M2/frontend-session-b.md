@@ -1645,21 +1645,305 @@ cache behaviour is checked by watching a *second* surface refresh itself.
 
 ---
 
-## Wave B4 — Operations: queues, timeline and privileged actions
+## Wave B4 — Operations: queues, the request timeline, privileged actions and the rate card
 
-**Depends on:** B3 and Gate 3. **Folder:** `frontend/apps/admin/features/m2-requests/**` plus the
-`app/operations/**` route files — you own the routes; Session A composes
-`features/m2-cases/**` into them at Gate 4.
+**Built 2026-08-15** against **contract 1.32.0** (Wave C6) and 1.29.0's rate cards.
+`M2-FE-701..705`, `712`, `713` — four routes in `frontend/apps/admin`, two new feature folders,
+one new module in the shared query package, and two nav entries.
 
-- [ ] `M2-FE-701` Searchable queues: unmatched, under-quoted, SLA-breached, vendor-unconfirmed,
-  fulfilment-exception, safety-incident, disputed, refund-pending, payout-held.
-- [ ] `M2-FE-702` Unified request detail timeline spanning requirement, snapshots, matching, questions,
-  proposals, unlock, engagement, stages, cases and money.
-- [ ] `M2-FE-703` Actor, source, timestamp and reason for every privileged or commercial transition.
-- [ ] `M2-FE-704` Permission-gated actions: clarification, rematch, **reclassification**, deadline
-  extension, contact review, payout hold, escalation.
-- [ ] `M2-FE-705` Assisted quote capture as a **primary A3 path** with a call script, visibly
-  attributing the quote to the Partner and recording consent. Operations must not become the vendor.
+**Static gates green, owner manual verification pending.** No test was written and none was run.
+
+### What was built, and where
+
+| Route | Task | What it is |
+|---|---|---|
+| `/operations/requests` | `701` | The eight stuck-state queues, searchable, plus the way into one request |
+| `/operations/requests/[requirementId]` | `702`, `703`, `704` | One request's whole history, then the four recovery commands |
+| `/operations/requests/[requirementId]/assisted-quote` | `705` | Call script, quote capture, clarification capture |
+| `/operations/rate-cards` | `712`, `713` | Publish and revise the A3 day rate; the decline-rate alarm |
+
+- `packages/query/src/m2-ops.ts` — **new**, and pure: keys, freshness, the timeline descriptor
+  table, the money-safety helpers, the rate-card readers and the composer arithmetic. No React and
+  no fetching, because exactly one app reads this surface and a hook in a shared package would say
+  otherwise. Exported from the session-B block of the barrel.
+- `apps/admin/features/m2-requests/**` — `queries.ts` plus four views.
+- `apps/admin/features/m2-rate-cards/**` — `queries.ts` plus two views.
+- `apps/admin/features/session/operations-shell.tsx` — **the shared nav**, two entries added.
+
+### The shared shell, and what Session A can assume
+
+The brief made the shell mine and asked what I assumed. Three things, all deliberate:
+
+1. **There is no `app/operations/layout.tsx`, and there must not be one.** This app's convention is
+   that every page wraps *itself* in `<OperationsShell>` — thirteen existing pages do it, including
+   `app/operations/cases/page.tsx`. A layout that also wrapped would double-mount the auth guard and
+   the sidebar under every one of A's `cases/**` routes. My four routes follow the existing
+   convention exactly; A's need no change.
+2. **Cases keeps one nav entry and gains nothing.** `SidebarNav` matches with
+   `pathname === href || pathname.startsWith(href + "/")`, so `/operations/cases/money`,
+   `/signals` and `/touches` already highlight **Cases** — which is what A's own §7 row asked for,
+   arrived at independently on both sides. 1.32.0 widened case kinds rather than forking a second
+   case system, and the nav should say the same.
+3. **Two entries added, not four**: **Requests** and **Rate cards**. The request detail and assisted
+   capture hang off Requests and are reached from a queue, a case or a link — a sidebar already
+   thirteen rows long does not get two more for screens nobody navigates to cold.
+
+### Six decisions worth keeping
+
+**1. The three rate-card components are never summed, and the form previews no total.**
+`RateCard` publishes the three components *and* `customer_day_rate_paise` / `lead_day_receipt_paise`,
+which are computed server-side (`publish_rate_card` writes the first; the second is a model
+`@property`) and frozen onto every booking. So the board renders three rows and, separately, the two
+published totals under the sentence *shown, not added up from the three components above*. The
+publish form goes further and previews **nothing**: a total computed in the form would be a second
+answer shown at the exact moment of the decision, and the first time it disagreed with the server it
+would be the one somebody trusted. This is the screen that prices every A3 booking; there is no
+version of "just a preview" that is worth that.
+
+**2. The floor refusal names the component, the rule, and what will not fix it.**
+`describeError` would have said *check your details*, which is true of a typo and useless here.
+`publishRefusalFor(code, status)` maps the three real refusals to their own copy: below the floor
+(*raising the supervision margin or the booking fee will not fix it — the floor applies to the wage
+component alone, which is the whole point of publishing the three separately*), no floor loaded
+(*the check fails closed rather than being skipped*), and backdated under a live booking. The
+server's own sentence is kept beside ours on the fall-through: ours names the rule, theirs names the
+instance.
+
+**3. The decline alarm refuses to show a green state, and that is the build.**
+Nothing publishes the reading or the threshold. The threshold is owner-blocked, and while it is
+unset `breached_decline_rates` *skips* the card — so no alarm fires and "no page arrived" has two
+causes this console cannot tell apart. `DeclineAlarmStatement.armed` is typed **`false`**, not
+`boolean`, so a later edit cannot add a passing branch without changing the type first. What the
+panel *can* do honestly is the backstop the task also names: rank published cards by how many days
+each price has stood, from `effective_from` against the list's own `server_now` — and even the empty
+case says *that is a statement about revision dates, not about decline rates*.
+
+**4. Only two of fifteen timeline events publish an actor, so the other thirteen say so.**
+`operations.request_timeline` writes `actor_id` on `REQUIREMENT_TRANSITION` and `OPERATIONS_TOUCH`
+and nowhere else. Every accountable row shows the masked id **or** the words *actor not published
+for this record*, in the same place and the same weight — omitting the line would read as "nobody" to
+somebody scanning a column. Nothing is inferred from an event's shape: printing *Operations* beside a
+booking-fee row because booking fees are usually Operations' doing would be a guess next to money on
+the screen a refund is decided from.
+
+**5. The recovery commands write the cache; they do not invalidate it.**
+`rematch`, `deadline` and `reclassification` each answer with the refreshed `RequestTimeline`, so the
+response goes straight into the same entry the screen is rendering. Not a saved round trip: rematch
+advances a cascade, and a refetch afterwards can race the write and show the state from *before* the
+wave it just started — at the one moment somebody is deciding whether to press it again.
+`refund-review` answers an `OperationsTouch` instead, and is the one command here that invalidates.
+
+**6. Assisted capture cannot become Operations authoring a price, and the screen shows why.**
+`vendor_confirmed_at: null` is published, every Customer-facing read filters on it, and the captured
+quote renders as *captured — awaiting the vendor's own confirmation* with the sentence *nothing on
+this console can confirm it for them*. The vendor picker is built from the timeline's own
+`VENDOR_INVITED` events and is **not** filtered by status — which invitations may still carry a quote
+is `submit_proposal`'s rule, and a copy here would offer or withhold the wrong vendor the first time
+the two drifted. An archetype outside `ToArchetypeEnum` renders no composer at all rather than
+defaulting to the workforce shape.
+
+### The one place this code does arithmetic on money, and why it is allowed
+
+`_assert_a3_shape` refuses any workforce quote whose `total_paise` is not exactly
+`rate x workers x days`, and `_assert_a5_shape` refuses any project quote whose stages and materials
+do not add up to it. `total_paise` is therefore a **required request field**, not a figure the screen
+invented, and it has to be composed client-side or the endpoint cannot be called. It is composed in
+`composeWorkforceTotalPaise` / `composeProjectTotalPaise` (both return `null` on any non-positive or
+unsafe input, so an incomplete form cannot submit a total at all) and labelled on screen as
+*this composes to … — read it back to the vendor. The server re-checks the arithmetic and refuses a
+total that does not match.* Never as a price anyone has agreed to. Every other money value on every
+screen in this wave is server-sent paise passed to `formatMoney`.
+
+### RULES §3 audit — both classes, and one real hit each
+
+**(a) The drifting duplicate — one unavoidable hit, and two that were removed.**
+
+- **The hit.** `TIMELINE_DESCRIPTORS` enumerates fifteen event-type strings hand-copied from
+  `operations.py`. `TimelineEvent.type` is published as a bare `string` with no enum, so `tsc`
+  cannot check it and there is no shape that would. Built to fail **loudly** instead: an
+  unrecognised type renders with a warning tone, its raw type, the *actor not published* line
+  (unknown kinds are marked accountable by default) and its whole `detail` pretty-printed. A
+  sixteenth kind is visible to the first operator who meets it. Logged in §7 with the fix — publish
+  the fifteen as an enum, as case event kinds already are.
+- **Removed, and it caught a real error.** `bookingFeeStatement` started as a `switch` over statuses
+  I had written from memory: `PENDING`, `ACTIVE`, `SETTLED`, `FORFEITED`, `REFUNDED`, `WAIVED`,
+  `EXPIRED`. Rewriting it as `Record<Schemas["BookingFeeStatusEnum"], …>` failed to compile and gave
+  the real list: `OFFER_ACCEPTED`, `PENDING`, `ACTIVE`, `EARNED`, `FORFEIT_SPLIT`, `REFUNDED`,
+  `FAILED`, `WAIVED`. **Three of my seven did not exist and four real statuses would have fallen to
+  the default branch** — including `OFFER_ACCEPTED` (a lead accepted; nothing collected) and
+  `FAILED`, both of which the `switch` would have shown as money the Customer paid. This is the
+  whole argument for deriving the table from the generated union, demonstrated on the first try.
+- **Removed.** `composerFor` was two string comparisons; it is now `Record<ToArchetypeEnum, true>`,
+  so a third archetype is a compile error rather than a quote composed in the wrong shape.
+- **Left as a fail-soft label map**, deliberately: `RECOVERY_LABELS` in the queue board. An
+  unrecognised `recovery_action` renders its raw code, which is legible and correct; making it
+  exhaustive would need an enum the contract does not publish for a value that is free text.
+
+**(b) The column with no writer — audited, nothing found, and verified rather than assumed.**
+Every configuration value these screens read has a writer in `seed_m2_demo`:
+`_seed_rate_card` publishes a real card **through `publish_rate_card`** rather than writing the
+table (so the seed is held to the same wage-floor guard Operations is, and an illegal seeded card
+raises instead of leaving the guard looking green); `_seed_wage_floor` and `_seed_wage_floor_skill`
+load the floor that guard needs; and the variant configuration writes
+`crew_decline_alarm_basis_points` / `crew_decline_alarm_min_offers`. The alarm's *threshold* is
+therefore written; what is missing is any endpoint that publishes it — a reader gap, not a writer
+gap, and it is §7's headline row.
+
+### Contract gaps found (all in plan §7)
+
+Nine rows, of which four change what could be built:
+
+1. **`M2-FE-713` has no read endpoint at all.** The alarm exists, runs and pages; nothing publishes
+   the rate, the threshold, the window or the per-card reasons. The whole shape of the screen
+   follows from this.
+2. **No published read maps a skill name to the uuid `skill_id` requires.** `PartnerSkillOption`
+   omits `id`. So the publish form takes a pasted skill uuid and a published card cannot name its
+   own skill. One field closes it.
+3. **`GET /operations/queues/` publishes depth and no members**, and no route enumerates requests
+   for Operations at all — hence the pasted requirement id.
+4. **The timeline publishes an actor on 2 of 15 event types**, as a bare uuid, with no role or
+   source.
+5. `consent_recorded` is documented as a refusal on both assisted commands and exists on only one —
+   the assisted proposal's view passes `True` unconditionally.
+6. `TimelineEvent.type` has no published enum (the §3(a) hit above).
+7. **`m2_project_transfer_propose` has no owning task row on any wave** — the flag I raised myself,
+   now placed: it is Operations' command, Session A built only the Customer's accept/decline, and it
+   is deliberately not half-built here.
+8. **`m2_operations_crew_verify` has no frontend task either** — C6 built the writer that four
+   readers had been missing, and no wave owns the screen. Small, and the last thing between the A3
+   cascade and a real deployment.
+9. **A key collision with Wave A4**, answered with exact shapes and marked *fold at Gate 4*.
+
+### Static gates — green
+
+```
+npx eslint packages/query/src/m2-ops.ts packages/query/src/index.ts \
+  apps/admin/features/m2-requests apps/admin/features/m2-rate-cards \
+  apps/admin/features/session/operations-shell.tsx \
+  apps/admin/app/operations/requests apps/admin/app/operations/rate-cards --max-warnings 0
+npx turbo run typecheck --filter=@vsolve/query --force   # 1 successful
+npx turbo run typecheck --filter=admin --force           # 1 successful
+npx turbo run build --filter=admin                       # 1 successful
+```
+
+All clean. The build's route table carries the four new routes, all `ƒ`:
+`/operations/rate-cards`, `/operations/requests`, `/operations/requests/[requirementId]`,
+`/operations/requests/[requirementId]/assisted-quote` — beside Session A's `cases/money`,
+`cases/signals` and `cases/touches`, which is the proof both route trees compose in one shell.
+`@vsolve/query` is typechecked **because the barrel is shared with Session A**, so this column's
+block is proved against their concurrent one rather than only against itself.
+
+**No test was written and none was run**, per the build-first amendment.
+
+### Smoke script — the exact clicks
+
+**Preconditions.** Backend and the three apps running (the owner starts them). Seed:
+
+```
+cd backend
+.\.venv\Scripts\python.exe manage.py seed_m2_demo --i-understand-this-is-dev-only
+```
+
+Sign in to Operations at `http://localhost:3002` with **+918019013032** (the OTP prints on screen)
+and take the *Switch to Operations* button if it appears.
+
+1. **Queues (`M2-FE-701`).** Sidebar → **Requests**. Eight rows, each with a depth badge, its code,
+   the published label and either a named recovery or the words *A person decides this one* — the
+   latter on `inactive` and `case_response_overdue`, which publish `recovery_action: ""`.
+   Type `rematch` in **Search queues**: only *Matching with nobody invited* and *Past the first-quote
+   promise* remain. Clear it.
+   *Expect:* no queue offers a button its `recovery_action` did not name.
+
+2. **Get a requirement id.** In the customer app, submit a request against the seeded A3 service
+   (`/{A3 service slug}`) and copy the id out of `/requests/{requirementId}`. Paste it into
+   **Open one request** on the queue board. Paste something that is not a uuid first: the field says
+   *That is not the shape of a requirement id* and **Open** stays disabled.
+
+3. **Timeline (`M2-FE-702`, `703`).** The request opens with its archetype and status as badges and
+   the server's clock beside them. Filter chips appear only for the sources actually present.
+   *Expect:* `REQUIREMENT_TRANSITION` and any `OPERATIONS_TOUCH` row shows `Actor …xxxxxxxxxxxx`;
+   every other accountable row shows **Actor not published for this record**. No row shows a guessed
+   actor.
+
+4. **Recovery, and the reason gate (`M2-FE-704`).** All four cards refuse to enable their button
+   until a reason is typed. **Extend the needed-by date**: type `800` — *Between 1 and 720 whole
+   hours*, button disabled. Type `24` and a reason, press it.
+   *Expect:* the timeline above gains an **Operations acted** row with your reason and your masked
+   actor id, **without a page reload** — that is the command's own response being written into the
+   cache. The touch card on the right increments.
+
+5. **The null that is not false.** On the touch card, with no budget configured for the variant:
+   *Expect:* **No budget set — the count is real, the judgement is not.** Never a green "within
+   budget" and never a red breach.
+
+6. **Rematch, then reclassify.** Press **Rematch this request** with a reason: the timeline gains
+   `VENDOR_INVITED` rows naming the seeded vendors (this is the one projection that names a vendor
+   before the Customer has paid; the Customer's own timeline shows a count and no identities).
+   Then **Reclassify…** → *Project (A5)* + a reason → the dialog states the consequence in full →
+   **Reclassify**. *Expect:* the archetype badge at the top changes, and the reclassification lands
+   on the timeline.
+
+7. **Refund review records and moves nothing.** Choose *Approved*, type a reason, press **Record
+   this review**. *Expect:* a new Operations touch. **Expect no amount field anywhere on the card**,
+   and the copy saying each product refunds through the module that owns it.
+
+8. **Assisted capture (`M2-FE-705`).** From the recovery panel, **Open assisted capture**. The call
+   script is on the right. Pick a vendor — the list is every invited vendor with its published
+   status, including declined ones, because the server decides.
+   - Leave the consent box unticked: **Record this quote** stays disabled and the line under it says
+     consent is a refusal, not a flag.
+   - Fill rate `500`, workers `2`, days `3`, tax `0`, tick consent. *Expect:* the strip reads
+     **This composes to ₹3,000 — read it back to the vendor.**
+   - Press it. *Expect:* **Captured — awaiting the vendor's own confirmation**, with the sentence
+     that the customer cannot see it yet and nothing on this console can confirm it for them.
+   - Now capture a clarification against the same vendor. *Expect:* **Recorded as an
+     Operations-assisted question** — read from the published `asked_by_role`, not inferred.
+   - To see the wage-floor guard from this side, capture a quote at rate `1` and tick consent:
+     `m2_proposal_below_wage_floor`, the same refusal the vendor gets.
+
+9. **Rate card, reading it (`M2-FE-712`).** Sidebar → **Rate cards**. One group for the seeded
+   Hyderabad city + skill.
+   *Expect:* three separate component rows — worker day wage, lead supervision margin, platform
+   booking fee — then a panel with **Customer pays per day** and **Lead receives per day** under the
+   sentence *both figures are published by the server … shown, not added up*. The card is badged
+   **Pricing bookings now** with its effective date and age. The city is named; the skill reads
+   *Skill …xxxxxxxxxxxx — the contract publishes no name for a skill id.*
+
+10. **Rate card, the floor refusal.** In **Publish a card**: pick the same city, paste the same skill
+    id (copy it from the card above — this is the gap in §7), set the wage to **1**, margin `100`,
+    fee `50`, day `8` hours, overtime `100`, one inclusion line, and an effective date **tomorrow**.
+    Press **Publish this card**.
+    *Expect:* **The worker day wage is below the statutory floor** — and the body naming that raising
+    the margin or the fee will not fix it. Nothing is published.
+
+11. **Rate card, the backdate refusal.** Only reachable with a live rate-card booking on this
+    city+skill (walk the A3 front door in the customer app until a booking is `MATCHING`,
+    `OFFER_HELD` or `CONFIRMED`). Publish with an effective date of **today or earlier**.
+    *Expect:* **That effective date would land under a live booking.**
+
+12. **Rate card, a real publish.** Same form, wage above the seeded floor, effective date tomorrow.
+    *Expect:* **Published**, and the new card appears **Scheduled** above the live one, with
+    *Show all N revisions* on the group. The old card is untouched — a card is never edited.
+
+13. **The alarm (`M2-FE-713`).** At the top of the same screen.
+    *Expect:* a warning-toned panel headed **This console cannot tell you whether the decline alarm
+    is armed**, the explanation that an unset threshold means no alarm fires at all, and the
+    backstop list of prices standing 30 days or more. **There is no green state and no tick.** With
+    a freshly seeded card the list is empty and says so in a sentence that explicitly refuses to be
+    read as good news.
+
+### What was deliberately not built
+
+- **The 30-day touch rollup.** `/operations/cases/touches` is Session A's; two hooks on one endpoint
+  is the duplicate money component Gate 4 names. The **per-request** metric stays, because the touch
+  list is where `M2-FE-703`'s actor, reason and timestamp actually live.
+- **The crew-verification screen** and **the project-transfer proposal** — both outside
+  `701..705`/`712`/`713`, both logged in §7 as needing a plan row rather than absorbed into a
+  neighbouring screen at the end of a wave.
+- **Material lines on the A5 assisted composer.** Stages are captured; material lines are a
+  different row type with a different recovery rule, and the screen says plainly that a project
+  quote including materials must come through the vendor's own composer or the total will not
+  reconcile.
 
 ---
 
@@ -1692,7 +1976,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | B-C3.5 | 1.26.0 consumption pass — `FE-301`, `FE-305`, `FE-314`, `FE-315` | `[~]` 4 of 4 | `[ ]` | 2026-08-14 — five workarounds removed against contract 1.28.0: `service_name` on the inbox row (and `category_slug` unprojected), `ProposalMaterialLine` as first-class rows with the stage-shaped workaround and its on-screen caveat deleted, `EngagementStage.kind` badged on the vendor's stage panel, two-way clarification with the Partner's answer route, cursor paging on the inbox, and `SiteVisit.timezone` on the visit panel. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment**; one stale assertion recorded. 6 §7 rows appended — 5 closures and 1 frozen-file request (`M2_INVALIDATION.answer_question` targets a key this app does not mount). |
 | B3W | `FE-502..508`, `FE-513` (B3's workforce half) | `[~]` 8 of 8 | `[ ]` | 2026-08-14 — the A3 shift-day on one new route, `/workforce/shifts/[engagementId]/days/[stageId]`, against contract 1.30.0. One read (`shiftDays.forStage`) drives crew, arrival, the one-tap count, the settled tap, extras and the on-site report router. The three Gate-1 frozen grants are consumed and the hand-written `engagements.all` on `submit_stage_evidence` is deleted; `useStartStage` keeps one, now for the different reason that no `start_stage` row exists. Lint clean on changed paths, typecheck **1/1 forced** for partner and **2/2** for `@vsolve/query` + admin (the barrel is shared with Session A, so every prefixed export and the private wire aliases are proved against their concurrent block), partner build green with the route `ƒ`. **Tests deferred per the build-first amendment.** 10 §7 rows appended — 4 frozen-file requests, 6 contract gaps. **RULES §3(b) hit, and it blocks the walkthrough:** `PartnerCrewMembership.documents_verified_at` has four readers and no writer anywhere including the seed, so no seeded worker is assignable and no seeded vendor has a verified roster. The smoke script carries the one-line shell workaround and says why it should not have to. |
 | B3W-C | Gate 3 cleanup — no task numbers | n/a | n/a | 2026-08-14 — all four Gate 3 grants consumed against contract 1.31.0 and every hand-written invalidation in this column deleted. **`report_crew_no_show`'s row was *not* a superset as the hook called it** — `requirementScope` carries no engagements prefix and the `engagements.all` half is gated on an engagement id the hook did not hold — so it took a two-field `CrewNoShowScope`, which is the only thing in this wave that needed more than a swap. `safetyIncidentsKey()` deleted for the promoted factory key. 1.31.0's seed writer removed the shell workaround from the B3W smoke script; the `upi_payment_link` fix needed **no** client change, verified rather than assumed. `not-built-yet.tsx` **stays** — two references (`FE-605`, `FE-606`) that no built screen covers — with its stale "waiting on Wave C5" reasons corrected, since C5 published both endpoints. Lint clean, typecheck 1/1 partner + 2/2 query/admin forced, partner build 1/1 with the route table unchanged. 4 §7 rows appended. |
-| B4 | `FE-701..705` | `[ ]` | `[ ]` | |
+| B4 | `FE-701..705`, `FE-712`, `FE-713` | `[~]` 7 of 7 | `[ ]` | 2026-08-15 — the Operations M2 surface on four new routes in `apps/admin`, against contract 1.32.0. `packages/query/src/m2-ops.ts` is new and pure (keys composed **from** `queryKeys.operations.all`, the fifteen-kind timeline descriptor table, the money-safety helpers); the hooks live in the app, because one app reads this surface. **The two revision-4 screens got the care:** the rate card renders its three components separately and never sums them — the publish form previews no total at all, because a figure computed at the moment of the decision is the one somebody would trust over the server's — and the three publish refusals get named copy rather than *check your details*. The decline alarm is the honest build rather than the asked-for one: **1.32.0 publishes no read of it**, the threshold is owner-blocked and while unset no alarm can fire, so the panel says it cannot tell you whether the alarm is armed and `DeclineAlarmStatement.armed` is typed `false` so no later edit can render a pass; the monthly-review backstop is derived from published effective dates against the response's own `server_now`. **RULES §3(a) caught a live error**: rewriting `bookingFeeStatement` from a hand-written `switch` into a `Record` over `BookingFeeStatusEnum` proved three of seven statuses did not exist and four real ones — `OFFER_ACCEPTED`, `EARNED`, `FORFEIT_SPLIT`, `FAILED` — would have fallen to the default, two of them rendering as money the Customer paid. §3(b) clean: `seed_m2_demo` writes the rate card (through `publish_rate_card`, so the wage-floor guard applies to the seed too), the floor and both decline-alarm columns. Lint clean on changed paths, typecheck **2/2 forced** (`@vsolve/query` + admin — the barrel is shared with Session A), admin build green with all four routes `ƒ` **beside A's three `cases/**` routes**, which is the Gate-4 composition proof. **Tests deferred per the build-first amendment.** 10 §7 rows appended — 1 frozen-file request, 9 contract/plan gaps, of which the headline is that the decline-rate alarm has no endpoint and two are unowned surfaces (`m2_project_transfer_propose`, `m2_operations_crew_verify`). |
 | B5 | quality share | `[ ]` | `[ ]` | |
 
 ### Blocked / handed off

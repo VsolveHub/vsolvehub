@@ -8,8 +8,8 @@ reconfirmation), Wave C3 (the engagement + stage spine) and Wave C3.5 (defect cl
 dev-only seed `manage.py seed_m2_demo`). Background sweeps are on Celery beat.
 Frontend: FE0 foundation built; **Customer Waves A1, A2 and A3 are built and mounted**, as is
 **Wave I** (the cross-cutting customer pass); **Partner Waves B1 and B2 are built and mounted, and
-B3 is landed — its project half first, its workforce half at Gate 2**. Operations/admin: **nothing
-started**.
+B3 is landed — its project half first, its workforce half at Gate 2**. Operations/admin: **Wave B4
+is built (2026-08-15)** — see below; Session A's Wave A4 case surface runs alongside it.
 **Wave C2R is built and published at contract 1.29.0** (Gate 1, 2026-08-14): the `RateCard`
 aggregate and `publish_rate_card`, the A3 preset and `book_at_published_rate`, the crew-offer
 cascade caller, `BookingFee` with its forfeit split and refunds, and `fall_back_to_quote_flow` —
@@ -52,9 +52,27 @@ remaining milestones with the delta settled **structurally and with no checkout*
 material-advance recovery rules on both the transfer and the early-termination path, warranty
 retention held back cumulatively and released at warranty close, and digital deliverable handover
 whose acceptance is what lets a project close. Eight new paths, additive.
-**Remaining work:** backend **C6–C7**; the remaining workforce and project fulfilment UI against
-1.31.0 (`FE-509..512`, `FE-611/612`), and **A4/B4** (the M2 Operations surfaces; note
-the admin app is a working M1 Operations app already — only its M2 screens are missing).
+**Wave B4 is built (2026-08-15)** against contract 1.32.0: the Operations M2 surface on four new
+routes in `apps/admin`. The eight published stuck-state queues rendered and never re-derived
+(`/operations/requests`); one request end to end with all fifteen timeline event kinds, a `WAIVED`
+booking fee shown as *replacement crew, no charge* rather than as money paid, and **the words
+“actor not published for this record” wherever the server publishes none** — which is thirteen of
+the fifteen kinds; the four recovery commands, each with a required reason and each writing the
+refreshed timeline back into the cache rather than racing a refetch; and assisted capture with a
+call script, a vendor picker built from the request's own invitations, and *captured — awaiting the
+vendor's own confirmation* read from the published `vendor_confirmed_at`. **The two revision-4
+screens** at `/operations/rate-cards`: the three rate-card components published, rendered separately
+and **never summed** — the publish form previews no total at all — with effective dating, an
+empty-by-default date field and named copy for each of the three publish refusals; and the
+decline-rate alarm, which **says it cannot tell you whether it is armed** rather than showing a green
+state, because 1.32.0 publishes no read of the alarm and an unset owner threshold means no alarm can
+fire. `M2-FE-701..705`, `712`, `713` all `[~]`.
+
+**Remaining work:** backend **C7**; the remaining workforce and project fulfilment UI against
+1.31.0 (`FE-509..512`, `FE-611/612`); the two unowned Operations surfaces Wave B4 logged in plan §7
+(`m2_project_transfer_propose` and the crew-verification writer `m2_operations_crew_verify`, neither
+of which has a task row on any wave); and **a read endpoint for the decline-rate alarm**, without
+which `M2-FE-713` cannot show a reading at all.
 
 > **Gate 2 (2026-08-14) — the whole tree is green at 1.30.0**: typecheck 9/9, build 3/3 (customer,
 > partner, admin), both `--force`. Contract verified additive by name-diff — schema components

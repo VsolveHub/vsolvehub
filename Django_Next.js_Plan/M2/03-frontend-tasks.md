@@ -1002,16 +1002,16 @@ approved scope, payment or stage completion, and an abandoned project shows a ro
 
 ### Unified Operations workspace
 
-- [ ] `M2-FE-701` Add searchable queues for unmatched, under-quoted, under-visited (plan slots
+- [~] `M2-FE-701` **built — static gates green, owner manual verification pending.** `/operations/requests` renders C6’s eight published queues — depth, oldest member and the published `recovery_action`, with the empty string rendered as *a person decides this one* rather than a missing button — filtered by a free-text search over label, code and action, ordered deepest-then-oldest. **No queue is re-derived and no threshold is invented.** The contract enumerates no queue members, so the way into one request is a pasted requirement id, as on the manual-offer and assisted-checkout screens; logged in plan §7. Add searchable queues for unmatched, under-quoted, under-visited (plan slots
   unfilled, visit no-shows, estimates overdue), SLA-breached, vendor-unconfirmed,
   fulfilment-exception, safety-incident, disputed, refund-pending and payout-held requests.
-- [ ] `M2-FE-702` Build a unified request detail timeline spanning the requirement, snapshots, matching,
+- [~] `M2-FE-702` **built — static gates green, owner manual verification pending.** `/operations/requests/[requirementId]` renders all fifteen published event kinds from `m2_operations_request_timeline` in one feed, filterable by source. A **`WAIVED` booking fee renders as “replacement crew, no charge” with no amount beside it** (1.32.0 trap 3), and an unrecognised event kind renders loudly — raw type, warning tone, whole `detail` — rather than as a blank row. Build a unified request detail timeline spanning the requirement, snapshots, matching,
   questions, proposals, unlock, engagement, stages, cases and money.
-- [ ] `M2-FE-703` Display actor, source, timestamp and reason for every privileged or commercial state
+- [~] `M2-FE-703` **built — static gates green, owner manual verification pending.** Only `REQUIREMENT_TRANSITION` and `OPERATIONS_TOUCH` publish an actor, and as a bare uuid. Every accountable row therefore shows the masked id **or the words “actor not published for this record” in the same place** — never an actor inferred from the event’s shape. “Source” is the aggregate the event came from. The per-request touch metric renders `within_budget: null` as **“no budget set”**, never as a pass or a breach (trap 4). Display actor, source, timestamp and reason for every privileged or commercial state
   transition.
-- [ ] `M2-FE-704` Build permission-gated actions for clarification, rematch, **reclassification**,
+- [~] `M2-FE-704` **built — static gates green, owner manual verification pending.** Rematch, deadline extension (**forward only**, 1–720 hours), reclassification (behind a consequence dialog) and refund review — each with a required reason, each writing the refreshed timeline back into the cache rather than racing a refetch, and each refusal rendered as a refusal. **Refund review has no amount field and will not get one.** Gated on the server’s published session projection via `OperationsShell` plus per-command server checks; no per-button permission map is invented, because the contract publishes a per-action grant list for Partners and none for Operations. Contact review, payout hold and escalation are Session A’s case surface. Build permission-gated actions for clarification, rematch, **reclassification**,
   deadline extension, contact review, payout hold and escalation. `GAP-006`
-- [ ] `M2-FE-705` Build assisted quote capture as a **primary A3 path** with a call script, visibly
+- [~] `M2-FE-705` **built — static gates green, owner manual verification pending.** `/operations/requests/[requirementId]/assisted-quote`: a six-step call script, a vendor picker built from the timeline’s own `VENDOR_INVITED` events (**not** filtered by status — that is `submit_proposal`’s rule), both composers (A3 rate×workers×days, A5 milestones against a completed site visit), and clarification capture. A captured quote renders as **“captured — awaiting the vendor’s own confirmation”** from the published `vendor_confirmed_at: null`, and a captured question as Operations-assisted from the published `asked_by_role: OPERATIONS` — never as an ordinary vendor question. Consent gates both buttons. Build assisted quote capture as a **primary A3 path** with a call script, visibly
   attributing the quote to the Partner and recording consent; Operations must not become the vendor.
   `SIM-10` **Revision 4:** primary for the quote-flow **fallback** only — on the rate-card path
   there is nothing to compose; the platform published the price.
@@ -1050,11 +1050,11 @@ approved scope, payment or stage completion, and an abandoned project shows a ro
 
 ### Rate cards (revision 4)
 
-- [ ] `M2-FE-712` **Revision 4.** Build rate-card publish and revise per city and skill: the three
+- [~] `M2-FE-712` **Revision 4.** **built — static gates green, owner manual verification pending.** `/operations/rate-cards`: the three components published and rendered **separately and never summed**, beside the two server-computed totals labelled as shown-not-added; effective-dated with an **empty-by-default** date field; grouped per city+skill with the live card named against the response’s own `server_now`. The floor refusal **names why** — which component, against which rule, and that raising the other two will not help — with `m2_wage_floor_unavailable` and the backdated-under-a-live-booking 409 given their own copy. The city is named from `/service-areas/`; **the skill cannot be, because no published read maps a skill to its uuid** (plan §7). **Revision 4.** Build rate-card publish and revise per city and skill: the three
   components (worker day-wage — never below the statutory floor, checked at publish; the lead's
   supervision margin; the platform booking fee), the printed inclusion list and the published add-on
   and overtime rates — effective-dated like `M2AccessPrice`, never backdated under a live booking.
-- [ ] `M2-FE-713` **Revision 4.** Build the decline-rate **alarm** view: a sustained decline rate
+- [~] `M2-FE-713` **Revision 4.** **built — static gates green, owner manual verification pending** — and it is the honest build rather than the asked-for one, because 1.32.0 publishes no read of the alarm at all** — no rate, no threshold, no window, no per-card reasons (plan §7). The panel states in those words that this console cannot tell you whether the alarm is armed, and `DeclineAlarmStatement.armed` is typed `false` so no later edit can render a green state over an unset owner threshold that means **no alarm can fire**. The backstop the task also names — the monthly review calendar — is real: cards ranked by how many days each price has stood, from published effective dates against the server’s clock. **Revision 4.** Build the decline-rate **alarm** view: a sustained decline rate
   above the configured threshold at a rate **pages Operations** to raise it — an alarm, not a report
   — with the per-card decline reasons behind it and the monthly review calendar as the backstop.
 

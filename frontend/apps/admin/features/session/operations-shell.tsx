@@ -55,6 +55,8 @@ import {
   Home,
   ClipboardCheck,
   Briefcase,
+  Inbox,
+  IndianRupee,
   Wallet,
   RotateCcw,
   Truck,
@@ -86,6 +88,13 @@ const WORKSPACES: { href: string; label: string; icon: LucideIcon }[] = [
   // a reviewer arrives at it from the person they are reviewing.
   { href: "/operations/partners", label: "Partners", icon: Users },
   { href: "/reviews", label: "Partner reviews", icon: ClipboardCheck },
+  // M2. "Requests" is the queue board and the way into one request's whole history; the request
+  // detail and assisted capture hang off it and are reached from a queue or a case, not from a
+  // third and fourth nav entry. `Cases` below already covers every M2 case kind — 1.32.0 widened
+  // the kinds rather than forking a second case system, so it needs no new entry either, and the
+  // `startsWith` match in `SidebarNav` keeps it highlighted on any route beneath it.
+  { href: "/operations/requests", label: "Requests", icon: Inbox },
+  { href: "/operations/rate-cards", label: "Rate cards", icon: IndianRupee },
   { href: "/operations/cases", label: "Cases", icon: Briefcase },
   { href: "/operations/payouts", label: "Payouts", icon: Wallet },
   { href: "/finance", label: "Refunds", icon: RotateCcw },
