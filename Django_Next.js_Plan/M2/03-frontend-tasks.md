@@ -743,23 +743,76 @@ Customer and Partner see the same immutable proposal, engagement state and comme
   filled**: nothing on the wire says which shift-days still need names (Wave C4), so the group keeps
   its heading and says so rather than being dropped or guessed at. An engagement whose status this
   build cannot place is shown under "Not recognised" rather than hidden.
-- [ ] `M2-FE-502` Build **per-stage** crew assignment with eligibility, conflict and worker-count
-  feedback from the backend, supporting legitimate day-to-day rotation. `GAP-024`
-- [ ] `M2-FE-503` Build replacement request/notification flows with Customer approval where required.
-- [ ] `M2-FE-504` Build arrival confirmation using the non-OTP fallback path, retry-safe, never claiming
-  success until acknowledged by the backend.
-- [ ] `M2-FE-505` Build **supervisor daily attendance**: "n of m present today" in one action. Do not
-  build per-worker check-in/check-out. `SIM-02`
-- [ ] `M2-FE-506` Build overtime request as a scope amendment with the additional amount, approval state
-  and the plain statement that unapproved overtime is unpaid. `GAP-026`
-- [ ] `M2-FE-507` Build no-show, partial crew, late arrival, unsafe site and Customer-unavailable
-  reporting with evidence and support escalation.
-- [ ] `M2-FE-508` Build the **safety incident** report flow with severity, evidence and immediate
-  escalation, separate from cancellation. `GAP-022`
-- [ ] `M2-FE-513` **Revision 4.** Build the supervisor's evening **"Day settled?"** one-tap with a
-  UPI QR/deep-link at the exact published amount — a convenience only; the wage money is P2P at day
-  end and the platform never holds it. Settlement is per worker-day present, beside the `M2-FE-505`
-  attendance count. Lands with C4's attendance/settlement model.
+- [~] `M2-FE-502` built — static gates green, owner manual verification pending. Per-stage
+  assignment at `/workforce/shifts/[engagementId]/days/[stageId]`, sending the **whole intended
+  crew** every time because the server reconciles the day to it. Eligibility is split rather than
+  filtered — unverified and archived people are shown disabled with the real reason, because
+  `assign_crew` refuses an unverified membership as `m2_crew_conflict` with the worker's name, which
+  on a screen about double bookings reads as a double booking. The **cross-agency conflict is not
+  previewed**: it is a fact about every other agency's bookings, held as a database index, and a
+  picker that guessed would tell a supervisor somebody is free when they are not — the refusal
+  renders the server's own sentence, which names the person and the date. **The booked headcount is
+  not on `ShiftDay`** (it lives on `attendance`, which is null until a command touches the day), so
+  the ceiling is stated only once the server has stated it (plan §7). **Blocked for manual
+  verification:** `documents_verified_at` has no writer anywhere, including the seed, so no seeded
+  worker can be assigned in any environment (plan §7). `GAP-024`
+- [~] `M2-FE-503` built — static gates green, owner manual verification pending. A substitution is
+  the same one call: untick, tick, send, with a release reason recorded against the person coming
+  off. There is **no Customer approval gate in the contract** for a like-for-like swap and none is
+  invented — the customer reads the day's crew on their own shift-day read, and the screen says so.
+  What *does* need their approval is more workers than were booked, and that is routed to the
+  published-rate change request rather than allowed as a longer list.
+- [~] `M2-FE-504` built — static gates green, owner manual verification pending. **Non-OTP is
+  rendered as the default path, not a fallback**, per the contract's own correction of the task
+  wording — no banner apologises for it and nothing calls it unverified. Retry-safe on a
+  stage-scoped key (the command carries no payload, so a retry cannot become a different request),
+  and it claims nothing until the server answers: arrival stamps the time, starts the stage and, on
+  day one, earns the booking fee, and an optimistic tick would assert all three. With nobody named
+  the panel states the order instead of drawing a button that can only be refused.
+- [~] `M2-FE-505` built — static gates green, owner manual verification pending. One number, one
+  action. **No per-worker check-in/check-out anywhere**, and the module comment says why it must not
+  be added later. The count is bounded by the booked crew where the server has published it —
+  "an extra worker is a scope amendment at the published rate, not a bigger number in an attendance
+  box" — and by nothing where it has not. A **missing check-out is rendered as the neutral flag it
+  is**: settled at the agreed shift length, marked for review, not a dispute and nothing held back,
+  because a supervisor who reads the flag as an accusation starts inventing end times. `SIM-02`
+- [~] `M2-FE-506` built — static gates green, owner manual verification pending. **There is no
+  amount field**: the vendor names what and how much of it, the server names the money from the
+  frozen card, and no total is multiplied out on the client either. The published overtime rate,
+  shift length and add-on table are shown, and `null` on any of them is stated rather than filled in
+  — an assumed shift length decides when overtime *starts*. Approval state is read off the ordinary
+  amendment list, filtered to this stage, because this is a caller into the one amendment engine
+  rather than a second one. `m2_policy_unavailable` (the owner has not set the retroactive window)
+  and `m2_amendment_required` (no published rate, or the window closed) get different sentences, and
+  neither is retried. "Overtime the customer has not approved is not paid" is on the screen.
+  `GAP-026`
+- [~] `M2-FE-507` built — static gates green, owner manual verification pending. A **router, not a
+  form**: five situations sent to the command that actually records each. Partial crew and nobody-came
+  are the attendance count; customer-unavailable and gate-locked on day one are
+  `POST /requirements/{id}/crew/no-show/` behind a confirmation that states what it costs the
+  customer; unsafe site is the safety report. **Late arrival has no endpoint and none is invented**
+  (plan §7) — the stamped arrival time is the record and the paid consequence is an overtime
+  request. Evidence routes to the one stage-evidence composer on the booking rather than growing a
+  second upload path. `m2_policy_unavailable` on the no-show is rendered as Vsolve's own unset
+  policy, with support, not as a retry.
+- [~] `M2-FE-508` built — static gates green, owner manual verification pending. Severity from the
+  published enum, **worst first** so the first tap is not the mildest; category from this app's own
+  vocabulary because the field is an unconstrained slug (plan §7); `occurred_at` left blank by
+  default rather than pre-filled with a time this app would be inventing. **It is never offered as a
+  cancellation** — the dialog states what filing does and the two things it does not do — and the
+  frozen-once-filed rule is said on the form, because it changes how carefully the description is
+  written. Both parties' reports are listed with Operations' status and resolution.
+- [~] `M2-FE-513` built — static gates green, owner manual verification pending. The supervisor's
+  half of the dual tap. The figure is **`amount_paise`, read and never computed** — the breakdown
+  beside it is four separate server-sent numbers, because multiplying rate by headcount gives the
+  same answer until an approved overtime amendment lands and then is quietly short. Settlement is
+  **per worker-day present**: a three-of-four day settles at three workers' rate and the panel says
+  so beside the `M2-FE-505` count. `SUPERVISOR_CLAIMED` is worded as **unproven**, which is neither
+  paid nor unpaid. `WAGES_ARE_DIRECT` sits with the number, because this is the only large figure a
+  lead sees at day end and a number on a platform screen reads as one the platform is holding. The
+  UPI convenience ships as a **deep link with a copy control, not a QR** (no rendering dependency is
+  added mid-wave, plan §7), and it is offered as something to send to the customer rather than a
+  button to press — the vendor is the payee.
 
 ### Customer booking
 
@@ -773,8 +826,15 @@ Customer and Partner see the same immutable proposal, engagement state and comme
   **Revision 4:** a rate-card engagement has no accepted quote — its crew composition and terms read
   off the **booking record** (the published rate and its inclusion list) instead; the `CONSUMED`
   unlock read remains the fallback engagement's path.
-- [ ] `M2-FE-510` Let the Customer confirm or dispute the day's attendance in **one tap**, and capture
-  per-worker detail only inside the dispute flow. `SIM-02`
+- [~] `M2-FE-510` built — static gates green, owner manual verification pending. On the stage review,
+  because on a workforce booking **the stage is the day**. A full day is **one control and no dialog**;
+  a shortfall becomes three one-tap choices because the server *requires* one, and the sentence above
+  them says the day settles at the present workers' rate whichever is chosen. Per-worker detail is
+  behind the dispute disclosure and nowhere else — C4 has no per-worker check-in or check-out, so a
+  routine form asking who was there would be inventing a record. **The generic Approve / Correct /
+  Dispute controls stand down while the attendance answer is open**: `approve_stage` and
+  `respond_attendance` are not two ways to do one thing, and only the second creates the settlement
+  and takes the shortfall choice.
 - [~] `M2-FE-511` built — static gates green, owner manual verification pending. The amendment and completion halves.
   A3 time extensions run through the same panel as A5 change orders, because they are the same
   object; completion is `POST /engagements/{id}/completion/`, offered only in `COMPLETING` because
@@ -791,13 +851,27 @@ Customer and Partner see the same immutable proposal, engagement state and comme
   on the factory's own `m2QueryKeys.engagements.events(id)` and `M2_FRESHNESS.engagementEvents`; the
   locally-composed key is gone. Still nested under `engagements.detail`, so the existing engagement
   invalidations clear it by prefix — checked rather than assumed.
-- [ ] `M2-FE-514` **Revision 4.** Build the Customer's evening **"Day settled?"** one-tap with the
-  UPI link at the exact published amount, and the per-worker-day settlement view: a 3-of-4 day
-  settles at 3 workers' published rate, with the shortfall choices — continue short, add a day, or
-  cancel the shortfall free. Lands with C4's settlement model.
-- [ ] `M2-FE-515` **Revision 4.** Build the one-tap **"extra demanded in cash"** report — a standing
-  hit, removal on a pattern; genuine extras route through the amendment panel at the card's
-  published add-on rates.
+- [~] `M2-FE-514` built — static gates green, owner manual verification pending. The Customer's half
+  of the dual tap; Session B builds the supervisor's (`M2-FE-513`). **Every figure is a published
+  field, formatted** — `amount_paise` beside `per_worker_paise`, `workers_present` and
+  `extras_paise`, read out and never multiplied, because the three reconcile by a database check
+  constraint and a client that redoes that arithmetic keeps paying the old formula through a change
+  to the real one. A one-sided tap renders as *claimed and unanswered*, never as settled. **The
+  screen says in as many words that Vsolve is not holding this money**, and no settlement row means
+  no amount rather than ₹0. **The UPI deep link is read, never assembled** — and
+  `GET .../shift/` currently answers `null` for it on every request (plan §7: a serializer field
+  over a model attribute that does not exist), so the panel prefers the command response's own link
+  and the absent case never claims the professional has no UPI address.
+- [~] `M2-FE-515` built — static gates green, owner manual verification pending. One button, one
+  confirmation, and **the send works with everything blank** — a required amount turns "they
+  demanded extra" into a form, and the form is what stops it being reported. Offered in two places
+  (the shift-day, and the booking as a whole with no day attached) because a report needing a live
+  shift-day is one nobody could file the next morning. It promises **only what the server commits
+  to**: recorded, counted towards a pattern, and while the owner's threshold is unset nothing
+  happens to the vendor at all — so no removal, warning or contact is implied. The idempotency key
+  is scoped to engagement + day, so a double tap cannot count one complaint twice towards a
+  threshold that can end somebody's trade. Genuine extras are signposted to the amendment panel by
+  name.
 
 **FE5A gate:** Customer and Partner can run a multi-worker, multi-day engagement from mobile devices,
 including partial attendance and no-show recovery, without a per-worker device dependency.

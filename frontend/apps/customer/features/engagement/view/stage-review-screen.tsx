@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  canRespondToAttendance,
   describeError,
   isStageDisputed,
   isStageTransitionNotAllowed,
@@ -22,6 +23,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { useShiftDay } from "@/features/shift-day/queries";
+import { ShiftDayPanel } from "@/features/shift-day/view/shift-day-panel";
 import { toEngagementView, toStandaloneStageView, type StageView } from "../adapters";
 import {
   DISPUTE_REASONS,
@@ -45,7 +48,6 @@ import {
   stageRowNoun,
   type ModeNouns,
 } from "./engagement-status";
-import { NotBuiltYet } from "./not-built-yet";
 
 /**
  * The stage review — `M2-FE-609`. The most consequential screen in the wave.
@@ -100,6 +102,19 @@ import { NotBuiltYet } from "./not-built-yet";
  * **No control is removed for a materials row.** The server runs one spine and
  * permits all three commands on it, and hiding the dispute would take away the
  * Customer's only objection to a delivery that never arrived.
+ *
+ * ## On a workforce booking this screen is an evening, not a review
+ *
+ * A3 maps a stage to a **shift-day**, so `ShiftDayPanel` (`M2-FE-510`, `514`,
+ * `515`) hangs below: who came, is that right, what today comes to, and the
+ * report for a professional who asked for cash on site. Giving the day its own
+ * route would give a Customer two addresses for one evening.
+ *
+ * The one place that changes this screen's own behaviour is `deferToShiftDay`.
+ * While the attendance answer is open, the three generic controls stand down in
+ * favour of the one-tap confirm — because `approve_stage` and
+ * `respond_attendance` are **not** two ways to do the same thing, and only the
+ * second leaves the day with an amount. See the prop's own note.
  */
 
 export interface StageReviewScreenProps {
@@ -120,6 +135,22 @@ export function StageReviewScreen({
     engagementQuery.data === undefined ? null : toEngagementView(engagementQuery.data);
   const stage = stageQuery.data === undefined ? null : toStandaloneStageView(stageQuery.data);
   const nouns = nounsFor(engagement?.mode ?? "unknown");
+
+  /**
+   * Whether this stage is a workforce shift-day, and whether its own decision is
+   * open — `M2-FE-510`.
+   *
+   * Read here as well as inside `ShiftDayPanel`, which sounds like a duplicate
+   * request and is not: both calls hit `m2QueryKeys.shiftDays.forStage(...)`,
+   * so React Query serves one cache entry and issues one fetch. The screen needs
+   * the answer *before* it decides what to offer, and the panel needs it to
+   * render — passing it down as a prop would mean threading the whole loading
+   * and refusal story through this component for no gain.
+   */
+  const isShiftDay = engagement?.mode === "lead_only";
+  const shiftDayQuery = useShiftDay(engagementId, stageId, isShiftDay);
+  const attendanceDecisionOpen =
+    shiftDayQuery.data !== undefined && canRespondToAttendance(shiftDayQuery.data);
 
   if (stageQuery.isPending) {
     return (
@@ -208,24 +239,23 @@ export function StageReviewScreen({
         mode={engagement?.mode ?? "unknown"}
         commercialMode={engagement?.commercialMode ?? null}
         nouns={nouns}
+        deferToShiftDay={attendanceDecisionOpen}
         onDone={() => {
           void stageQuery.refetch();
           void engagementQuery.refetch();
         }}
       />
 
-      {/* `M2-FE-510` — one-tap attendance. Out of scope in this wave; C4 owns the
-          attendance model and nothing publishes it. Said out loud rather than
-          left as a silent absence on the one screen an A3 Customer would look
-          for it. */}
-      {engagement?.mode === "lead_only" ? (
-        <NotBuiltYet
-          className="mt-6"
-          title="Confirming who turned up today"
-          body="The professional's supervisor records how many of the agreed workers were on site, and you confirm or dispute that in one tap. That is not built yet. If somebody did not turn up, raise a problem on this day and say so — it stops this day's money while we look."
-          taskId="M2-FE-510"
-        />
-      ) : null}
+      {/* `M2-FE-510`, `514`, `515` — the Customer's evening. On a workforce
+          booking the stage **is** the day, so this is the same screen rather
+          than a second address for one evening. It renders nothing on a
+          project milestone. */}
+      <ShiftDayPanel
+        engagementId={engagementId}
+        stageId={stageId}
+        enabled={isShiftDay}
+        amendmentHref={`${engagementHref}#amendments-heading`}
+      />
     </Wrapper>
   );
 }
@@ -448,6 +478,7 @@ function StageActions({
   mode,
   commercialMode,
   nouns,
+  deferToShiftDay,
   onDone,
 }: {
   engagementId: string;
@@ -455,6 +486,25 @@ function StageActions({
   mode: "lead_only" | "managed" | "unknown";
   commercialMode: EngagementCommercialMode | null;
   nouns: ModeNouns;
+  /**
+   * The shift-day below is waiting on the Customer's attendance answer, so the
+   * generic three controls stand down — `M2-FE-510`.
+   *
+   * **Not tidiness. The two paths are not equivalent.** A workforce shift-day
+   * awaiting review has two routes to `APPROVED`: `respond_attendance` with
+   * `CONFIRM`, and the plain `approve_stage` these buttons send. Only the first
+   * records the Customer's answer to the count, creates the `DaySettlement` and
+   * — on a shortfall — takes the choice the server *requires*. Approving
+   * generically would leave the day approved with the attendance still reading
+   * `SUPERVISOR_CONFIRMED` and **no amount to settle**, which is exactly the
+   * evening `M2-FE-514` exists to close.
+   *
+   * So this is the client agreeing with the server about which command answers
+   * a shift-day, not a screen hiding a control it does not like. It stands down
+   * only while the attendance decision is genuinely open; every other state
+   * keeps all three.
+   */
+  deferToShiftDay: boolean;
   onDone: () => void;
 }) {
   const approve = useApproveStage();
@@ -472,6 +522,18 @@ function StageActions({
   const kindCopy = stageKindCopy(stage.kind, nouns);
   const isMaterial = stage.kind === "material_advance";
   const rowNoun = stageRowNoun(stage.kind, nouns);
+
+  if (deferToShiftDay) {
+    return (
+      <div className="mt-6">
+        <p className="rounded-card border border-line bg-surface-sunken p-4 text-sm leading-6 text-text-secondary">
+          You decide this {rowNoun} by confirming or disputing who turned up —
+          that is the one action, and it is below. Approving it any other way
+          would leave today with no agreed amount.
+        </p>
+      </div>
+    );
+  }
 
   if (!stage.canApprove && !stage.canRequestCorrection && !stage.canDispute) {
     return (

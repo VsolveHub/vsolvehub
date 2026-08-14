@@ -264,6 +264,28 @@ export {
   isAmendmentNotActionable,
   isAmendmentRequired,
   isEngagementNotFound,
+  // The A3 shift-day, contract 1.30.0 (`M2-FE-510`, `514`, `515`). Appended
+  // rather than interleaved so the diff stays one block.
+  SHORTFALL_CHOICES,
+  MAXIMUM_DISPUTED_WORKERS,
+  attendancePhase,
+  canRespondToAttendance,
+  attendanceShortfall,
+  requiresShortfallChoice,
+  canSubmitAttendanceDispute,
+  settlementPhase,
+  canConfirmDaySettled,
+  hasCustomerConfirmedSettlement,
+  isSettlementUnproven,
+  canReportCashDemand,
+  isNotAShiftDay,
+  // `settlementAmountPaise` and `settlementPaymentLink` live in
+  // `m2-engagement-customer.ts` and are deliberately **not** exported here:
+  // Session B published byte-equivalent twins in `m2-engagement-partner.ts` in
+  // the same wave, and two exports of one name is a `tsc` failure rather than a
+  // style question. Not resolved by either session mid-wave — the fold is the
+  // orchestrator's at the gate, and this file's own rule ("One name, one home",
+  // below) says which way it goes. Logged in `frontend-execution-plan.md` §7.
 } from "./m2-engagement-customer";
 export type {
   AmendmentDirection,
@@ -290,6 +312,19 @@ export type {
   StageEvidence,
   StageEvidenceKind,
   StageEvidenceScanStatus,
+  // The A3 shift-day — see the value block above.
+  AttendancePhase,
+  AttendanceResponse,
+  CashDemandReport,
+  DaySettlement,
+  DaySettlementStatus,
+  DisputedWorker,
+  SettlementPhase,
+  ShiftAttendance,
+  ShiftAttendanceStatus,
+  ShiftCrewMember,
+  ShiftDay,
+  ShortfallChoice,
 } from "./m2-engagement-customer";
 
 // --- M2 partner + operations surface (session B) ---

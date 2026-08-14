@@ -258,20 +258,27 @@ state names and permitted actions — do not name a state from what your screen 
 
 - [~] `M2-FE-509` `My bookings`: schedule, agreed crew composition, permitted identity summary,
   contact rules, direct-payment reminder, next action. **Built** — `/bookings/workforce`.
-- [ ] `M2-FE-510` Confirm or dispute the day's attendance in **one tap**. Per-worker detail captured
-  only inside the dispute flow. **Wave III — needs C4's attendance model.** An honest
-  not-built-yet block sits where it goes.
+- [~] `M2-FE-510` Confirm or dispute the day's attendance in **one tap**. Per-worker detail captured
+  only inside the dispute flow. **Built at Wave A3F** — on the stage review, because the stage *is*
+  the day. One control and no dialog on a full day; three one-tap choices on a shortfall because the
+  server requires one. The not-built-yet block is gone. The generic Approve/Correct/Dispute controls
+  now stand down while the attendance answer is open — see the wave section for why that is a
+  correctness fix and not tidiness.
 - [~] `M2-FE-511` Acknowledge crew changes, approve/reject time extensions, confirm completion or open
   an issue inside the documented window. **Built, minus crew-change acknowledgement (C4).**
 - [~] `M2-FE-512` Partial service, replacement, refund, dispute and closure in one chronological timeline.
   **Built** — one feed, `GET /engagements/{id}/events/`, nothing synthesised.
-- [ ] `M2-FE-514` **Revision 4 — with C4's settlement model.** The Customer's evening "Day settled?"
-  one-tap with the UPI link at the exact published amount, and the per-worker-day settlement view: a
-  3-of-4 day settles at 3 workers' published rate, with the shortfall choices — continue short, add
-  a day, or cancel the shortfall free.
-- [ ] `M2-FE-515` **Revision 4.** The one-tap "extra demanded in cash" report — a standing hit,
-  removal on a pattern; genuine extras route to the amendment panel at the card's published add-on
-  rates.
+- [~] `M2-FE-514` **Revision 4 — with C4's settlement model. Built at Wave A3F.** The Customer's half
+  of the dual tap; Session B builds the supervisor's. Every figure is a published field formatted and
+  never multiplied; a one-sided tap renders as *claimed and unanswered*, never as settled; no
+  settlement row means no amount rather than ₹0. **The UPI link is read, never assembled — and the
+  shift-day read currently answers `null` for it on every request** (plan §7), so the panel prefers
+  the command response's link and the absent case never claims the professional has no UPI address.
+- [~] `M2-FE-515` **Revision 4. Built at Wave A3F.** One button, one confirmation, and the send works
+  with everything blank. Offered on the shift-day *and* on the booking as a whole, because a report
+  needing a live shift-day is one nobody could file the next morning. It promises only what the
+  server commits to — recorded, counted towards a pattern, and nothing at all happens to the vendor
+  while the owner's threshold is unset.
 
 ### Project workspace (A5)
 
@@ -337,7 +344,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
 | A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. **Revision 4 (ADR-0009) demotes the A3 teasers/unlock half to the thin-supply fallback — kept as built.** Wave J (2026-08-14) closes `FE-418`'s receipt from `Engagement.access_receipt` and moves `FE-421`'s slot times onto `SiteVisit.timezone`. `FE-419` and `FE-409` are now publishable and unstarted. |
 | A2R | `FE-425..429` (revision 4: rate-card front door) | `[~]` 5 of 5 | `[ ]` | The preset, the published rate before booking, the cascade holding state and its fallback handoff, the booking-fee checkout and the forfeit/refund surfaces. **Wired and reachable** — 2 new routes, 1 new feature, the rate-card half of `m2-quotes.ts`. Built against 1.29.0. Owner verification pending; see the 2026-08-14 A2R section and `apps/customer/features/crew/SMOKE.md`. The Wave A2 unlock surface is untouched and is now the thin-supply fallback the `FELL_BACK` handoff routes to. |
-| A3 | `FE-509..512`, `FE-608..613` | `[~]` 7 of 10 | `[ ]` | **Wave J (2026-08-14) consumed `EngagementStage.kind`** across the list, the workspace and the stage review, and re-pointed the event and amendment reads onto the factory's own keys and tiers — see the Wave J section. The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `FE-510`/`611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. Revision 4 adds `FE-514`/`FE-515` (Day-settled tap, settlement view, cash-demand report) — not started, with C4. |
+| A3 + A3F | `FE-509..512`, `FE-514..515`, `FE-608..613` | `[~]` 10 of 12 | `[ ]` | **Wave J (2026-08-14) consumed `EngagementStage.kind`** across the list, the workspace and the stage review, and re-pointed the event and amendment reads onto the factory's own keys and tiers — see the Wave J section. The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. **Wave A3F (2026-08-14) closes `FE-510` and adds revision 4's `FE-514`/`FE-515`** — the Customer's side of the A3 shift-day at 1.30.0: one-tap attendance with the three shortfall choices, the evening dual tap with the server's own UPI deep link and the per-worker-day figure, and the one-tap cash-demand report. `FE-510`'s not-built-yet block is gone, and the generic stage controls now stand down while the attendance answer is open, because `approve_stage` would close the day with no settlement. See the Wave A3F section and `apps/customer/features/shift-day/SMOKE.md`. |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
 
@@ -1382,3 +1389,217 @@ assumption unless it is warned.
 | 2026-08-14 | `FE-428` engagement link | `RateCardState` publishes no engagement id. The confirmed panel routes to `/bookings/workforce`. | yes |
 | 2026-08-14 | `FE-429` cancel before payment | No published way to call off a booking that is out to the cascade — `booking-fee/cancel/` needs a fee row and no requirement-level cancel exists for `MATCHING`. Nothing is charged in that window. | yes |
 | 2026-08-14 | `FE-428` demonstrating any charge | Unchanged from Wave A2: no M2 payment attempt is readable or capturable by its own Customer, so the smoke script captures from the Django shell. | already logged |
+
+---
+
+### Wave A3F progress — 2026-08-14 · the Customer's side of the A3 shift-day, at 1.30.0
+
+`M2-FE-510`, `M2-FE-514`, `M2-FE-515`. Built against contract **1.30.0**, whose ten shift-day paths
+all hang off a **stage id**, and against the frozen-file grants that landed at Gate 1 (`4e25b40`):
+`m2QueryKeys.shiftDays.forStage`, the `stageScope` fix, and the `confirm_day_settled` /
+`report_cash_demand` command rows.
+
+Session B built the **vendor's** half of the same evening concurrently (`FE-513`). One file was
+contested and is dealt with below.
+
+#### Where it lives, and why there is no new route
+
+On a workforce booking **the stage is the day** — one shift-day per stage is the mapping 07 §5 sets
+— so the whole of this wave hangs below the existing stage review at
+`/engagements/{engagementId}/stages/{stageId}`. A separate `/shift-days/{id}` route would have given
+a Customer two addresses for one evening and two places to look for one button. Nothing was added to
+`app/`.
+
+```
+features/shift-day/
+  queries.ts                       one read, three commands
+  adapters/index.ts                the wire -> ShiftDayView; the one rupee input in the feature
+  view/shift-day-panel.tsx         the evening, in order; the crew list; the waiting states
+  view/attendance-decision.tsx     FE-510 — confirm, the three shortfall taps, the dispute
+  view/day-settlement.tsx          FE-514 — the amount, the UPI link, the dual tap
+  view/cash-demand-report.tsx      FE-515 — one tap
+  SMOKE.md                         the owner's script
+```
+
+The durable half is the shift-day section appended to `packages/query/src/m2-engagement-customer.ts`
+— phases, permissions and refusals, no React — on the same split every other M2 feature in this app
+uses.
+
+#### The defect this wave was one merge away from shipping
+
+**`approve_stage` and `respond_attendance` are not two ways to do the same thing, and the stage
+review offered both.** A workforce shift-day sitting in `AWAITING_REVIEW` has two server routes to
+`APPROVED`: the generic **Approve** button this column shipped in Wave A3, and the attendance
+confirm this wave adds. Only the second records the Customer's answer to the count, creates the
+`DaySettlement`, and — on a shortfall — takes the choice the server *requires*. Pressing the generic
+Approve would have left the day approved, the attendance still reading `SUPERVISOR_CONFIRMED`, and
+**no amount to settle at all** — closing the stage against the exact evening `M2-FE-514` exists to
+open.
+
+So `StageActions` now takes `deferToShiftDay` and stands its three controls down while the
+attendance answer is open, replacing them with one sentence pointing down the page. It stands down
+**only** in that window; every other state keeps all three, and A5 is untouched. This is the client
+agreeing with the server about which command answers a shift-day — not a screen hiding a control it
+dislikes — and the reasoning is written on the prop rather than in this file alone.
+
+#### `M2-FE-510` — one tap, and the tap count is the requirement
+
+- A full day is **one primary button and no confirmation dialog**. A dialog there would be a
+  flow-weight regression against `SIM-02`, which asks for one action.
+- A shortfall becomes **three one-tap choices**, because `respond_attendance` refuses a bare confirm
+  when workers are missing. The sentence above them is the load-bearing one: the day settles at the
+  present workers' rate **whichever is chosen** — the choice decides what happens to the missing
+  worker-days, not to the money for the ones who came. `ADD_DAY` says plainly that it records a
+  **request** and that the extra day is the professional's to offer, because promising it would be
+  the platform committing a vendor's labour.
+- **Per-worker detail is behind the dispute disclosure and nowhere else.** C4 has no per-worker
+  check-in and no per-worker check-out, deliberately, so a routine Customer form asking who was
+  there would be inventing a record the server does not hold. Inside a dispute the same question is
+  legitimate: what is captured is the Customer's *account*, evidence in a case, and nothing derives
+  a count from it.
+- The dispute requires content — a note or a named worker — because the server's own fallback
+  sentence ("the customer disputed the attendance count") tells Operations nothing the status did
+  not already say.
+- The idempotency key is scoped **by the response**, not just the stage: `execute_idempotent`
+  fingerprints `{stage_id, response}`, so a stored key reused across a changed mind would be refused
+  as key reuse with a different payload. A dropped connection replays the same decision; an
+  abandoned dispute followed by a confirm is a genuinely new command.
+
+#### `M2-FE-514` — the money, and the two sentences that matter more than the money
+
+Every figure is a **published field, formatted**. `amount_paise` is displayed beside
+`per_worker_paise`, `workers_present`, `workers_expected` and `extras_paise` — read out, never
+multiplied. The three reconcile by a database check constraint
+(`requirements_day_settlement_reconciles`), which is exactly why reproducing that arithmetic here
+would buy nothing and cost the only thing that matters: a client that computes "3 of 4" keeps paying
+the old formula straight through a change to the real one.
+
+Two sentences carry the wave:
+
+1. **Vsolve is not holding this money and never has.** A3 wages are direct, daily and peer-to-peer;
+   no endpoint in this contract can move one. The tap is a record that both sides agree, not a
+   payment rail, and the panel says so above the button and again inside the dispute confirmation.
+2. **A one-sided tap is not a settled day.** `CUSTOMER_CLAIMED` renders as *you said it was settled
+   and they have not answered*, explicitly **not** as "it was not paid". The reverse state nudges
+   the other way and is the one worth reading twice: *if you did not pay them, do not confirm it.*
+
+Where no settlement row exists there is **no amount**, said in words, rather than a Rs 0 that would
+read as a day worth nothing — and the disputed branch says outright that a count nobody agrees on is
+not an amount either.
+
+The Customer's tap is only offered once an amount exists. The server permits it a step earlier (it
+creates the settlement itself), but offering a "confirm you settled" button at an amount the screen
+cannot show is the same defect as computing one.
+
+#### `M2-FE-515` — a tap, not a form
+
+One button, one confirmation, and **the send works with everything blank**. The amount and note sit
+inside the confirmation, marked optional, and the confirm button is never gated on them — because a
+required amount turns "they demanded extra" into a form, and the form is what stops it being
+reported.
+
+It promises **only what the server commits to**: recorded immutably, counted towards a pattern, and
+while the owner's removal threshold is unset **nothing at all happens to the vendor**. So no
+removal, warning, fine or contact is implied anywhere in the copy — this client cannot know whether
+that threshold is set. Genuine extras are signposted to the amendment panel by name, priced by the
+server at the card's published add-on rates.
+
+Offered in **two** places: on the shift-day (with the day attached) and on the engagement as a whole
+(with none), because the endpoint takes the stage as optional precisely so a report does not need a
+live shift-day to attach to — somebody asked for cash on Friday reports it on Saturday. The
+idempotency key is scoped to engagement + day, so a double tap replays rather than counting one
+complaint twice towards a threshold that can end somebody's trade.
+
+#### The RULES §3 audit — both classes, and what each found
+
+**(a) The drifting duplicate — one found, reported, kept deliberately.**
+`MAXIMUM_DISPUTED_WORKERS = 40` is hand-copied from `workforce.MAXIMUM_DISPUTED_WORKERS` because the
+cap is enforced and **not published on any read**. It is a guard rail only: the screen stops offering
+*Add somebody* past it and the server stays the authority, so a copy that drifts high surfaces as a
+visible refusal on submit and one that drifts low merely offers fewer lines. Neither silently
+corrupts a dispute — which is the distinction from the wave-C2R defect, where model and migration
+agreed with each other and both disagreed with the code. Logged in §7 with the one-field fix.
+
+The two other candidates are **not** instances, checked rather than assumed: `SHORTFALL_CHOICES` is
+typed `readonly ShortfallChoice[]` off the generated enum and is consumed through two
+`Record<ShortfallChoice, ...>` copy tables, so a fourth server value is a `tsc` failure at both call
+sites rather than a blank cell; and `SHORTFALL_CHOICES.includes(...)` narrows the wire value without
+a cast and fails **closed**.
+
+**(b) The column with no writer — one found, and it is this wave's headline gap.**
+**`DaySettlement.upi_payment_link` is `null` on every shift-day read.** Verified rather than
+inferred: `DaySettlementSerializer` declares it as `CharField(read_only=True, allow_null=True)`, the
+`DaySettlement` model has no such field and no `@property`, and DRF's `Field.get_attribute` returns
+`None` for a missing attribute whenever `allow_null` is set — so the read never raises and never
+carries a link. The **only** writer is `EngagementStageSettlementView.post`, which injects it into
+the response body by hand. A field with a reader, a schema entry, a wire type, and no writer on the
+read path: exactly shape (b).
+
+The seed writes a VPA on every demo vendor, so this is visible in dev rather than latent. The
+consequence for `M2-FE-514` is that the deep link is unavailable *before* the tap — which is when
+somebody would use it to pay — and gone again after a reload. Handled honestly at the call site
+rather than worked around: the panel prefers the command response's own link, and the absent case
+says *we do not have a UPI link for this one* and never *this professional has no UPI address*,
+because `null` has two causes this build cannot tell apart. **Nothing anywhere assembles a
+`upi://pay` string** — verified by grep, which finds the scheme only in comments. Session B's
+`M2-FE-513` reads the same serializer and inherits the same gap.
+
+#### The one contested file, and how it was left
+
+`packages/query/src/index.ts` is the append-only shared barrel. Both sessions independently wrote
+`settlementAmountPaise` and `settlementPaymentLink` this wave — Session A in
+`m2-engagement-customer.ts`, Session B in `m2-engagement-partner.ts` — with behaviourally identical
+bodies, and two exports of one name is a `tsc` failure rather than a style question. It surfaced as
+four `TS2300 Duplicate identifier` errors on the first typecheck.
+
+Neither session may edit the other's marker block, so **Session A dropped both from its own block**
+and its adapter reads `settlement.upi_payment_link` directly; the two functions stay in
+`m2-engagement-customer.ts`, documented and dormant, with the reason written above them. The barrel's
+own rule decides the fold — *"everything both parties read the same way ... is exported above from
+`m2-engagement-customer` and is deliberately not re-exported here. One name, one home"* — so the gate
+should delete the partner twins and restore Session A's two export lines; **Session B's call sites
+need no change**, because the barrel name resolves to whichever home survives. Logged in §7.
+
+Session B's file was not touched, read-only, at any point.
+
+#### Two judgement calls worth recording
+
+- **The orchestrator's `m2_booking_fee_not_chargeable` classification is right and this column does
+  not contest it.** `await_confirmation` over the `choose_again` asked for in Wave A2R: nothing on
+  that screen picks the crew, so there is no other option to choose, and the call site already
+  renders it with no retry because waiting is the only true next step.
+- **No poll anywhere in this feature.** Every transition on a shift-day is a person acting — a
+  supervisor recording the day, the other party tapping settled — on the scale of an evening, and a
+  timer on it would be a timer on somebody else's hands. Contrast `features/crew/queries.ts`, which
+  does poll because a booking fee settles on a verified provider callback in minutes. **No money is
+  in flight here at all**, so there is nothing a clock could be waiting for. `M2_FRESHNESS.attendance`
+  (`EXPIRING_STATE`) gives the refetch that matters — the one when the Customer comes back to look.
+
+#### Static gates
+
+From `C:\dev\vsolve\frontend`, on real runs rather than cache hits:
+
+| Gate | Result |
+|---|---|
+| `npx eslint <changed paths> --max-warnings 0` | clean |
+| `npx turbo run typecheck --filter=customer --force` | **1 successful, 1 total** — cache bypass, `tsc --noEmit` |
+| `npx turbo run build --filter=customer` | **1 successful, 1 total** — cache miss, 34 routes, no new route added |
+
+**No test was written and none was run.** The smoke script is
+`apps/customer/features/shift-day/SMOKE.md` — it starts where `features/crew/SMOKE.md` finishes (a
+confirmed booking whose engagement was opened by the verified callback, which is also what creates
+one `EngagementStage` per booked day), counts the taps on the happy path, checks the 3-of-4
+settlement against the server's own `amount_paise`, and reaches five refusals on purpose.
+
+**Four rows added to the execution plan section 7** — one barrel collision, three contract gaps. The
+one to read first is `upi_payment_link`: it is a one-line backend fix and it is currently the
+difference between the deep link existing and not.
+
+### Blocked / handed off — Wave A3F
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-14 | `FE-514` UPI deep link | `GET .../shift/` answers `null` for `upi_payment_link` on every request — a serializer field over a model attribute that does not exist. The panel prefers the command response's link and states the absence honestly meanwhile. One-line backend fix. | yes |
+| 2026-08-14 | `FE-510` shortfall choice | `DaySettlement.shortfall_choice` is published as the bare enum but rests at `""`; the request shape gets this right and the response shape does not. Membership-tested rather than compared, failing closed. | yes |
+| 2026-08-14 | `FE-510` dispute cap | `MAXIMUM_DISPUTED_WORKERS` is enforced and unpublished, so the 40 is hand-copied as a guard rail. The server stays the authority and both drift directions are visible rather than silent. | yes |
+| 2026-08-14 | barrel collision | `settlementAmountPaise` / `settlementPaymentLink` written by both sessions in one wave. Dropped from Session A's block; the fold is the orchestrator's at the gate. | yes |

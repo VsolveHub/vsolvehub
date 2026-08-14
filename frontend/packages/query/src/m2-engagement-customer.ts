@@ -77,6 +77,18 @@ export type AmendmentStatus = Schemas["ScopeAmendmentStatusEnum"];
 export type EngagementEvent = Schemas["EngagementEvent"];
 export type EngagementEventList = Schemas["EngagementEventList"];
 
+/* The A3 shift-day, contract 1.30.0 — see the section at the foot of this file. */
+export type ShiftDay = Schemas["ShiftDay"];
+export type ShiftAttendance = Schemas["ShiftAttendance"];
+export type ShiftAttendanceStatus = Schemas["ShiftAttendanceStatusEnum"];
+export type ShiftCrewMember = Schemas["StageCrewMember"];
+export type DaySettlement = Schemas["DaySettlement"];
+export type DaySettlementStatus = Schemas["DaySettlementStatusEnum"];
+export type AttendanceResponse = Schemas["AttendanceResponseEnum"];
+export type ShortfallChoice = Schemas["ShortfallChoiceEnum"];
+export type DisputedWorker = Schemas["DisputedWorkerRequest"];
+export type CashDemandReport = Schemas["CashDemandReport"];
+
 /* --------------------------------------------------------------------------
    Commercial mode
    -------------------------------------------------------------------------- */
@@ -657,4 +669,297 @@ export function isAmendmentRequired(error: unknown): boolean {
  */
 export function isEngagementNotFound(error: unknown): boolean {
   return error instanceof ApiRequestError && error.status === 404;
+}
+
+/* --------------------------------------------------------------------------
+   The A3 shift-day — `M2-FE-510`, `514`, `515`, contract 1.30.0
+   -------------------------------------------------------------------------- */
+
+/**
+ * One shift-day, as the Customer is entitled to see it.
+ *
+ * ## Why this is one read and not three
+ *
+ * `GET /engagement-stages/{id}/shift/` answers the crew, the supervisor's
+ * attendance and the evening settlement together, on the server's own reasoning:
+ * they are the same screen at three moments of one evening, and separate reads
+ * would let them disagree about which day the Customer is looking at. "4 of 4
+ * present" beside an unpaid settlement is precisely the disagreement that
+ * matters here.
+ *
+ * ## Nothing below computes money, and one function exists to say so
+ *
+ * `settlementAmountPaise` returns the server's `amount_paise` and never
+ * `per_worker_paise × workers_present`. The two agree today by a **database
+ * check constraint** (`requirements_day_settlement_reconciles`), which is
+ * exactly why re-deriving it here would be worthless: a client that computes
+ * "3 of 4" is a client that can hand a worker the wrong wage the day the
+ * constraint gains an extras term this build has never heard of. Same rule for
+ * the UPI deep link — it is read, never assembled.
+ *
+ * ## The platform never holds this money
+ *
+ * A3 wages are direct, daily and peer-to-peer. There is no checkout on
+ * `DaySettlement`, no payment attempt, no refund and no payout, and no endpoint
+ * in this contract can move a wage. The tap is a **record that both sides
+ * agree**, not a payment rail, and every screen built on these helpers has to
+ * say so.
+ */
+
+/* -- Attendance ----------------------------------------------------------- */
+
+/**
+ * Whose move it is on today's count.
+ *
+ * Six states, because collapsing any two of them puts a button in front of
+ * somebody the server will refuse:
+ *
+ * - **`not_started`** — nothing has touched the day. `attendance` is `null` on
+ *   the wire and that is a real state: reading a shift-day creates nothing.
+ * - **`awaiting_arrival`** — a crew is named but nobody has confirmed they
+ *   turned up, so there is no count to answer.
+ * - **`awaiting_supervisor`** — arrival is stamped and the supervisor has not
+ *   recorded `n of m` yet. `respond_attendance` answers `409` here.
+ * - **`awaiting_you`** — the one state in which the Customer decides.
+ * - **`you_confirmed`** / **`you_disputed`** — answered. The server returns the
+ *   existing record rather than answering twice.
+ *
+ * An unrecognised status falls to `undescribable` rather than to `awaiting_you`:
+ * the optimistic reading is the one that offers a money decision on a state this
+ * build has never seen.
+ */
+export type AttendancePhase =
+  | "not_started"
+  | "awaiting_arrival"
+  | "awaiting_supervisor"
+  | "awaiting_you"
+  | "you_confirmed"
+  | "you_disputed"
+  | "undescribable";
+
+export function attendancePhase(day: ShiftDay): AttendancePhase {
+  const attendance = day.attendance;
+  if (attendance === null) return "not_started";
+  switch (attendance.status) {
+    case "PENDING":
+      return attendance.arrival_confirmed_at === null
+        ? "awaiting_arrival"
+        : "awaiting_supervisor";
+    case "SUPERVISOR_CONFIRMED":
+      return "awaiting_you";
+    case "CUSTOMER_CONFIRMED":
+      return "you_confirmed";
+    case "DISPUTED":
+      return "you_disputed";
+    default:
+      return "undescribable";
+  }
+}
+
+/** The one state in which the Customer may confirm or dispute the day. */
+export function canRespondToAttendance(day: ShiftDay): boolean {
+  return attendancePhase(day) === "awaiting_you";
+}
+
+/**
+ * How many of the booked workers did not come, from the server's own field.
+ *
+ * `shortfall_count` is published; `expected_count - present_count` is not
+ * subtracted here. Zero is the ordinary answer and is not the same fact as
+ * `present_count === null`, which is "nobody has said yet" — that is what
+ * `attendancePhase` is for.
+ */
+export function attendanceShortfall(day: ShiftDay): number {
+  return day.attendance?.shortfall_count ?? 0;
+}
+
+/**
+ * Whether answering this day requires the Customer to choose what happens to
+ * the missing worker-days.
+ *
+ * `respond_attendance` refuses a `CONFIRM` on a shortfall with no
+ * `shortfall_choice` (`409 m2_stage_transition_not_allowed`), so a screen that
+ * offered a bare confirm here would be offering a refusal. The choice decides
+ * what happens to the **missing** worker-days and never to the money for the
+ * ones who came — the day settles at the present workers' published rate
+ * whichever is chosen.
+ */
+export function requiresShortfallChoice(day: ShiftDay): boolean {
+  return canRespondToAttendance(day) && attendanceShortfall(day) > 0;
+}
+
+/** The three choices C4 implements, in the order the screen offers them. */
+export const SHORTFALL_CHOICES: readonly ShortfallChoice[] = [
+  "CONTINUE_SHORT",
+  "ADD_DAY",
+  "CANCEL_SHORTFALL",
+];
+
+/**
+ * The server's cap on a dispute's per-worker lines (`MAXIMUM_DISPUTED_WORKERS`).
+ *
+ * Duplicated from the domain constant deliberately and kept as a *guard rail
+ * only*: the screen never adds a line past it, and the server still refuses one
+ * that arrives. It is not a business rule this client owns.
+ */
+export const MAXIMUM_DISPUTED_WORKERS = 40;
+
+/**
+ * Whether a dispute says anything a case could act on.
+ *
+ * The server accepts a blank dispute and substitutes its own sentence, which is
+ * correct of a *server* and wrong of a *screen*: "the customer disputed the
+ * attendance count" tells Operations nothing they did not already know from the
+ * status. So one of the two has to carry content — a named worker or a note.
+ *
+ * This is the **only** place per-worker detail is ever collected. C4 has no
+ * per-worker check-in and no per-worker check-out on purpose, and a routine
+ * Customer form asking who was there would be inventing data the server does not
+ * hold.
+ */
+export function canSubmitAttendanceDispute(
+  workers: readonly DisputedWorker[],
+  note: string,
+): boolean {
+  if (workers.length > MAXIMUM_DISPUTED_WORKERS) return false;
+  return note.trim() !== "" || workers.some((worker) => worker.name.trim() !== "");
+}
+
+/* -- The evening settlement ----------------------------------------------- */
+
+/**
+ * Where the dual "Day settled?" tap has got to.
+ *
+ * The middle two states are the point of the whole mechanism. A one-sided claim
+ * is left standing rather than treated as the fact, because "one person says
+ * they settled and the other has not answered" is a different sentence from
+ * either "they were paid" or "they were not" — and it is the sentence Operations
+ * reads as **unproven**. Only both taps make `SETTLED`, and the amount freezes
+ * there.
+ */
+export type SettlementPhase =
+  | "not_ready"
+  | "nobody_yet"
+  | "you_said_settled"
+  | "they_said_settled"
+  | "both_agreed"
+  | "undescribable";
+
+export function settlementPhase(day: ShiftDay): SettlementPhase {
+  const settlement = day.settlement;
+  // Null is not "unsettled": it is "no amount exists yet", because the row is
+  // created by the first command that touches the day rather than by a read.
+  if (settlement === null) return "not_ready";
+  switch (settlement.status) {
+    case "AWAITING_BOTH":
+      return "nobody_yet";
+    case "CUSTOMER_CLAIMED":
+      return "you_said_settled";
+    case "SUPERVISOR_CLAIMED":
+      return "they_said_settled";
+    case "SETTLED":
+      return "both_agreed";
+    default:
+      return "undescribable";
+  }
+}
+
+/**
+ * Whether the Customer's half of the dual tap is still to come.
+ *
+ * Gated on the **count**, not on the settlement row: `confirm_day_settled`
+ * refuses with `409 m2_stage_transition_not_allowed` until somebody has said who
+ * was there, and it creates the settlement itself when it runs. So a day with a
+ * recorded count and no settlement row is tappable, and a day with no count is
+ * not — whatever the row says.
+ */
+export function canConfirmDaySettled(day: ShiftDay): boolean {
+  if (day.attendance === null || day.attendance.present_count === null) return false;
+  if (settlementPhase(day) === "undescribable") return false;
+  return day.settlement === null || day.settlement.customer_confirmed_at === null;
+}
+
+/** This Customer has already tapped. The record says so; nothing is inferred. */
+export function hasCustomerConfirmedSettlement(day: ShiftDay): boolean {
+  return day.settlement !== null && day.settlement.customer_confirmed_at !== null;
+}
+
+/** A one-sided claim, which is what Operations reads as unproven. */
+export function isSettlementUnproven(day: ShiftDay): boolean {
+  const phase = settlementPhase(day);
+  return phase === "you_said_settled" || phase === "they_said_settled";
+}
+
+/**
+ * The exact published amount for this day, in integer paise, or null.
+ *
+ * **Not exported from the barrel this wave.** Session B wrote a byte-equivalent
+ * twin of this function and of `settlementPaymentLink` in
+ * `m2-engagement-partner.ts` concurrently, and two exports of one name is a
+ * `tsc` failure rather than a style question. Neither session may edit the
+ * other's marker block, so both stay here, dormant, and the orchestrator folds
+ * them at the gate — the barrel's own rule ("everything both parties read the
+ * same way is exported from `m2-engagement-customer` and deliberately not
+ * re-exported" in the partner block) says which way. Logged in §7.
+ *
+ * **Read, never computed.** `amount_paise` is `per_worker_paise × workers_present
+ * + extras_paise` by a database check constraint, and re-deriving it here would
+ * buy nothing and cost the one thing that matters: a client that does its own
+ * arithmetic keeps paying the old formula through a change to the real one.
+ *
+ * Null means no count has been recorded, so there is no amount — not zero. Zero
+ * is a day nobody came to, which is a different fact and a different screen.
+ */
+export function settlementAmountPaise(day: ShiftDay): number | null {
+  return day.settlement?.amount_paise ?? null;
+}
+
+/**
+ * The UPI deep link at that amount, or null — a **convenience, not a rail**.
+ *
+ * Returned verbatim. Nothing in this client assembles a `upi://pay` string: the
+ * payee, the amount and the note are the server's, because a link a client built
+ * is a link a client can build wrong, and the failure mode is money reaching the
+ * wrong VPA.
+ *
+ * Null is an ordinary state with two causes this build cannot tell apart — the
+ * lead has published no VPA, or the read simply does not carry it (see the §7
+ * row: `DaySettlementSerializer` declares `upi_payment_link` as an `allow_null`
+ * field over a model attribute that does not exist, so only the *command*
+ * response ever populates it). Either way the honest screen shows the amount and
+ * does not claim the professional has no UPI address.
+ */
+export function settlementPaymentLink(day: ShiftDay): string | null {
+  return day.settlement?.upi_payment_link ?? null;
+}
+
+/* -- Cash demands --------------------------------------------------------- */
+
+/**
+ * Whether to offer the "they asked for extra in cash" report.
+ *
+ * `LEAD_ONLY` only, and that is not squeamishness about A5: the report's whole
+ * consequence is a standing event against the lead and, past an owner-set
+ * threshold, suspension of their **A3 capability**. On a managed project the
+ * same complaint is a scope argument the amendment engine and the dispute path
+ * already answer.
+ *
+ * Deliberately **not** gated on the engagement being live. A Customer who was
+ * asked for cash on Friday reports it on Saturday, and a control that needed an
+ * open shift-day to attach to would be one nobody could reach the next morning.
+ */
+export function canReportCashDemand(engagement: Engagement): boolean {
+  return isLeadOnly(engagement);
+}
+
+/**
+ * `409 m2_stage_transition_not_allowed` on a shift-day read.
+ *
+ * The read raises it on an **A5 milestone** — a project stage has no crew, no
+ * attendance and no daily settlement — which is a screen that should not have
+ * mounted rather than an error to show a Customer. Distinguished here so the
+ * call site can render nothing instead of a refusal.
+ */
+export function isNotAShiftDay(error: unknown): boolean {
+  return hasCode(error, "m2_stage_transition_not_allowed");
 }

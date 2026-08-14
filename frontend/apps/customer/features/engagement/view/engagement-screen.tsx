@@ -12,6 +12,7 @@ import { Badge, Button, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { CashDemandReport } from "@/features/shift-day/view/cash-demand-report";
 import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
 import { useEngagement, useEngagementAmendments, useFundStage } from "../queries";
 import { AgreedWorkPanel } from "./agreed-work-panel";
@@ -224,6 +225,19 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
       <AmendmentPanel engagement={view} nouns={nouns} />
 
       <CompletionPanel engagement={view} nouns={nouns} onDone={refetchAll} />
+
+      {/* `M2-FE-515` — reachable from the booking as a whole and not only from
+          one day. A report that needed a live shift-day to attach to would be
+          one nobody could file the next morning, which is why the endpoint takes
+          the stage as optional and why this call site sends none. */}
+      {view.canReportCashDemand ? (
+        <CashDemandReport
+          engagementId={engagementId}
+          stageId={null}
+          amendmentHref="#amendments-heading"
+          className="mt-8 border-t border-line pt-6"
+        />
+      ) : null}
 
       {/* `M2-FE-612` — what happens if the professional walks away. Needs C5;
           nothing publishes what transfers or what the price difference would be,

@@ -6,6 +6,7 @@ import {
   canAcceptCompletion,
   canApproveStage,
   canDisputeStage,
+  canReportCashDemand,
   canRequestCorrection,
   disputedStages,
   eventsOldestFirst,
@@ -365,6 +366,15 @@ export interface EngagementView {
   isDisputed: boolean;
   nextAction: CustomerNextAction;
   canAcceptCompletion: boolean;
+  /**
+   * Whether to offer the "they asked for extra in cash" report — `M2-FE-515`.
+   *
+   * `LEAD_ONLY` only, because the report's whole consequence is a standing event
+   * against the lead and, past an owner-set threshold, suspension of their **A3
+   * capability**. Deliberately not gated on the booking being live: somebody
+   * asked for cash on Friday reports it on Saturday.
+   */
+  canReportCashDemand: boolean;
 
   /**
    * The access fee's receipt reference, or null — `M2-FE-418`.
@@ -428,6 +438,7 @@ export function toEngagementView(engagement: Engagement): EngagementView {
     isDisputed: isEngagementDisputed(engagement),
     nextAction: nextCustomerAction(engagement),
     canAcceptCompletion: canAcceptCompletion(engagement),
+    canReportCashDemand: canReportCashDemand(engagement),
 
     accessReceipt: toAccessReceiptView(engagement),
 
