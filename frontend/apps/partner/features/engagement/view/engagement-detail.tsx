@@ -34,13 +34,20 @@ import { StagePanel } from "./stage-panel";
  * action on it. The agreement is second because it is what the action is measured
  * against. The money is last because it is a consequence, not a decision.
  *
- * ## The Wave III tails are named, not omitted and not faked
+ * ## The A3 day is a link, not a section
  *
- * Crew assignment, arrival, daily attendance, overtime, no-show reporting and
- * safety incidents (`M2-FE-502..508`) are C4; the delay claim and the digital
- * handover (`M2-FE-605`, `M2-FE-606`) are C5. Each renders a `NotBuiltYet` block
- * where its section would sit. A supervisor looking for today's headcount is told
- * it is not written yet rather than concluding they are on the wrong screen.
+ * Crew assignment, arrival, daily attendance, overtime, on-site reporting and
+ * safety incidents (`M2-FE-502..508`, `M2-FE-513`) landed with contract 1.30.0
+ * and none of them are on this payload — they live on the per-stage shift-day
+ * read. So each workforce stage links to its own day screen rather than growing
+ * a section here that would need one extra request per day of the booking.
+ *
+ * ## The Wave III tails that remain are named, not omitted and not faked
+ *
+ * The delay claim and the digital handover (`M2-FE-605`, `M2-FE-606`) are C5 and
+ * render a `NotBuiltYet` block where their section would sit. A vendor looking
+ * for them is told they are not written yet rather than concluding they are on
+ * the wrong screen.
  */
 
 const TONE = {
@@ -156,46 +163,25 @@ export function EngagementDetail({
             engagement={engagement}
             stage={stage}
             wording={wording}
+            // A3 only. The crew, the headcount, the arrival and the evening
+            // settlement live on the shift-day read and on nothing the
+            // engagement payload carries, so the day has its own screen and
+            // this is the way in. An A5 milestone's whole surface is already on
+            // the card above it.
+            dayHref={
+              workspace === "workforce" ? `${basePath}/${engagement.id}/days/${stage.id}` : null
+            }
           />
         ))}
       </section>
 
-      {workspace === "workforce" ? <WorkforceTails /> : <ProjectTails />}
+      {workspace === "workforce" ? null : <ProjectTails />}
 
       <AgreementPanel engagement={engagement} wording={wording} />
       <AmendmentPanel engagement={engagement} wording={wording} />
       <PayoutPanel engagement={engagement} wording={wording} />
       <EngagementHistory engagement={engagement} wording={wording} />
     </div>
-  );
-}
-
-/** `M2-FE-502..508` — every one of them needs Wave C4. */
-function WorkforceTails() {
-  return (
-    <section aria-labelledby="workforce-tails" className="flex flex-col gap-2">
-      <h2
-        id="workforce-tails"
-        className="text-xs font-semibold uppercase tracking-wide text-text-muted"
-      >
-        Crew and the day
-      </h2>
-      <NotBuiltYet
-        what="Naming your crew for a shift-day"
-        meanwhile="Vsolve does not publish crew assignment yet, so this screen cannot show or change who is on a day. The booking below is unaffected — send whoever you agreed to send, and tell the customer directly if that changes."
-        reference="M2-FE-502, M2-FE-503 — waiting on the crew endpoints (Wave C4)."
-      />
-      <NotBuiltYet
-        what="Confirming arrival and today's attendance"
-        meanwhile="There is nowhere yet to record that your crew arrived or how many of them did. Attach what happened as evidence on the shift-day above instead — that is on the record and the customer reads it."
-        reference="M2-FE-504, M2-FE-505 — waiting on the attendance endpoints (Wave C4)."
-      />
-      <NotBuiltYet
-        what="Overtime, no-shows and safety incidents"
-        meanwhile="Overtime is a change request and the form for it is below, but it has no overtime shape yet. A no-show, a partial crew or an unsafe site has no report form at all — call support, and record what happened as evidence on the shift-day so there is a contemporaneous account."
-        reference="M2-FE-506, M2-FE-507, M2-FE-508 — waiting on Wave C4."
-      />
-    </section>
   );
 }
 

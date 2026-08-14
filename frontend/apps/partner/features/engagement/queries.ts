@@ -268,13 +268,15 @@ export function useStartStage(engagementId: string) {
     onSuccess: async (stage, input) => {
       applyStage(stage);
       clearIdempotencyKey(`m2-stage-start:${input.stageId}`);
-      // `engagements.all`, not the stage key. The frozen invalidation table's
-      // stage rows target `engagements.stage(engagementId, stageId)`, which is
-      // *more specific* than anything this app mounts — every screen reads a
-      // stage through the engagement's embedded `stages[]`, and a prefix
-      // invalidation of a deeper key clears nothing. Requested in
-      // `frontend-execution-plan.md` §7. Meanwhile the list is cleared here,
-      // because starting a shift-day moves its booking out of "coming up".
+      // Still a hand-written invalidation, and for a different reason than it
+      // used to be. `stageScope` was fixed at the Wave B3 gate — the stage rows
+      // now clear `engagements.detail` and `engagements.all` rather than a key
+      // deeper than anything either app mounts — but there is no `start_stage`
+      // row in `M2Command` at all, so there is nothing here to call. Requested
+      // in `frontend-execution-plan.md` §7. The prefix is the same one
+      // `stageScope` returns, so the two cannot drift while it is outstanding;
+      // the list is what has to move, because starting a shift-day takes its
+      // booking out of "coming up".
       await queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.all });
     },
     onError: reread,
@@ -323,10 +325,17 @@ export function useSubmitStageEvidence(engagementId: string) {
     onSuccess: async (stage, input) => {
       applyStage(stage);
       clearIdempotencyKey(`m2-stage-submit:${input.stageId}:${input.submissionOrdinal}`);
-      // Same reason as `useStartStage`: submitting moves the engagement from
-      // "your move" to "with the customer", which is a list-level change the
-      // detail patch above cannot express.
-      await queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.all });
+      // The hand-written `engagements.all` that used to live here is gone.
+      // `submit_stage_evidence` is a real `M2Command` row and `stageScope` was
+      // fixed at the Wave B3 gate to return `[engagements.detail, engagements.all]`,
+      // so the command now clears both the detail this screen reads through and
+      // the sibling list buckets — submitting moves the engagement from "your
+      // move" to "with the customer", which is a list-level change the detail
+      // patch above cannot express.
+      await invalidateForM2Command(queryClient, "submit_stage_evidence", {
+        engagementId,
+        stageId: input.stageId,
+      });
     },
     onError: reread,
     retry: false,

@@ -1164,6 +1164,303 @@ site's. Never a bare relative phrase.
 
 ---
 
+## Wave B3W — the A3 shift-day, vendor side (`FE-502..508`, `FE-513`) — 2026-08-14
+
+**Contract 1.30.0.** B3's project half landed on 13 August against 1.25.0 and left nine archetype
+tails rendering named not-built-yet blocks. Wave C4 published the ten shift-day paths those tails
+were waiting for; this is the vendor's half of them. Session A built the Customer's half
+(`FE-510`, `FE-514`, `FE-515`) concurrently and we share no file.
+
+### The shape of the thing
+
+**One read, one route, one screen.** `GET /engagement-stages/{id}/shift/` answers the crew, the
+attendance and the settlement together, and `ShiftDaySerializer` says why: *"the crew screen, the
+attendance screen and the settlement screen are the same screen at three moments of one evening, and
+four endpoints would let them disagree about which day the user is looking at."* So there is one
+hook, `useShiftDay`, on `m2QueryKeys.shiftDays.forStage(engagementId, stageId)`, and every command
+settles into that same cache entry.
+
+It is its own route — `/workforce/shifts/[engagementId]/days/[stageId]` — rather than a section of
+the booking, for two reasons. The mechanical one: the read is per stage and a booking can be a week
+long, so mounting it on the booking screen would be seven requests to render six days nobody is
+standing on. The real one: a supervisor at six in the evening is dealing with **today**, and the
+booking is where they go to read the agreement. Each workforce stage on the booking screen now links
+to its day (`StagePanel` gained an optional `dayHref`, `null` on A5 because a milestone's whole
+surface is already on its card); the three `NotBuiltYet` blocks under "Crew and the day" are gone.
+
+Panels are in the order the day happens — who is going, they arrived, this is how many came, here is
+what it comes to — and the two exception surfaces last. A supervisor scrolling at the end of a shift
+reaches the settlement figure without passing a form.
+
+### Where the rules live
+
+`packages/query/src/m2-engagement-partner.ts` gained the shift-day block: `shiftDayPhase`,
+`supervisorShiftCommands`, `assignableCrew`, `crewSelectionProblem`, `bookedHeadcount`,
+`attendanceCeiling`, `shiftOvertime`, `shiftAddOns`, `overtimeIsRetroactive`,
+`shiftSettlementClaim`, `settlementAmountPaise`, `settlementPaymentLink`, `isCrewConflict`,
+`isCrewRosterRequired`, and the two vocabularies. The app-side wiring is
+`apps/partner/features/shift/**`.
+
+**Every exported name is prefixed, and that is not style.** Session A was writing the Customer's
+half of the same shift-day into `m2-engagement-customer.ts` while this was being written, and both
+halves land in one barrel. A bare `ShiftDay` or `SafetySeverity` exported from both files is a
+duplicate-export `tsc` failure at the gate — and the worse version is the one where two files quietly
+alias different `Schemas` entries. So **the wire types are private local aliases in each module**; an
+app that needs a shape reads it off `Schemas` directly, exactly as `features/engagement/queries.ts`
+already does for `Engagement`. Nothing shared was re-exported: `isPolicyUnavailable`,
+`isAmendmentRequired` and `isStageTransitionNotAllowed` are imported from where they already live.
+
+### Six decisions worth keeping
+
+**1. Money is read, never computed — and the settlement is where that stops being pedantry.**
+`DaySettlement.amount_paise` is present workers at the day rate **plus every extra both sides
+accepted through the amendment engine**. `per_worker_paise × workers_present` gives the identical
+number right up until an approved overtime amendment lands, at which point a client-computed total is
+quietly short by the overtime — on the one screen where a lead is deciding whether they were paid
+enough. The breakdown beside the figure is four separate server-sent numbers rendered side by side;
+nothing multiplies. The same rule killed a tempting preview in the extras composer: the vendor sees
+the published overtime rate and no total, because the total is Django's to name.
+
+**2. The cross-agency conflict is not previewed, and the verification gate is.** `m2_crew_conflict`
+covers three different failures — an unverified membership, a worker not on your roster or marked
+unavailable, and the same **person** promised on that date through any agency. The last is held by a
+database index so two supervisors tapping at once cannot both win, and this client cannot see another
+agency's bookings; a picker that greyed somebody out on a hunch would tell a supervisor a worker is
+free when they are not. So the refusal renders **the server's own sentence**, which names the person
+and the date. What the picker *can* see is verification, and it must: an unverified membership is
+refused as `m2_crew_conflict` with the worker's name, which on a screen about double bookings reads
+as a double booking. Unverified and archived people are therefore shown **disabled with the real
+reason** rather than filtered away — a supervisor whose people silently vanish concludes the app lost
+them.
+
+**3. Non-OTP arrival is the path, not the fallback.** `M2-FE-504` is worded "using the non-OTP
+fallback path" and the contract corrects it: *"Non-OTP, and that is the default path in M2 rather
+than a degraded one."* Nothing on the screen apologises, warns, or calls it unverified. A banner
+explaining that a better mechanism exists elsewhere teaches a supervisor to distrust the one they
+have. The panel also claims nothing until the server answers — arrival stamps the time, starts the
+stage *and*, on day one, earns the booking fee, so an optimistic tick would assert three things that
+had not happened.
+
+**4. One number, and no roll call — ever.** `SIM-02` refuses per-worker check-in/check-out outright:
+the workers mostly do not carry smartphones, the supervisor does, and a per-worker product would be a
+device dependency this market cannot meet wearing the clothes of rigour. The module comment says so
+where somebody would add one. The **missing check-out** is rendered as the neutral flag it is —
+settled at the agreed shift length, marked for review, not a dispute, nothing held back — because a
+supervisor who reads the flag as an accusation starts inventing end times, which is the one outcome
+that would make the flag worthless.
+
+**5. `M2-FE-507` is a router, not a form.** Five situations; three already have a command, one has a
+different command, one has nothing. Partial crew and nobody-came *are* the attendance count — a
+second "report a partial crew" form would be a second number for one fact. Customer-unavailable and
+gate-locked on day one are `POST /requirements/{id}/crew/no-show/`, behind a confirmation that states
+what it costs the customer, because it moves money. Unsafe site is the safety report. **Late arrival
+has no endpoint and none is invented**: the stamped arrival time is the record, and the paid
+consequence is an overtime request. Evidence routes to the one stage-evidence composer on the booking
+rather than growing a second upload path.
+
+The no-show panel sends `party: "CUSTOMER"` and only the two reasons that belong to it —
+`PARTNER_REPORTS_CREW_PARTY`, the mirror of Session A's `CUSTOMER_REPORTS_CREW_PARTY`. The API
+permits either participant to send either party; **a vendor declaring their own no-show through a
+self-serve button is a money command issued against themselves**, and it is routed to support
+instead, which is where a decision with that shape belongs until `request_cancellation` has a screen.
+
+**6. The settled tap is not a payment rail and no line implies it is.** The command records *who
+tapped* and nothing else. `SUPERVISOR_CLAIMED` is worded as **unproven** — one person says they
+settled and the other has not answered, which is a different sentence from either "they were paid" or
+"they were not", and treating the first tap as the fact would make the trail worthless in the one
+argument it exists for. `WAGES_ARE_DIRECT` sits **with** the figure rather than in a footnote,
+because this is the only large number a lead sees at day end and a number on a platform screen reads
+as one the platform is holding unless it says otherwise. The UPI convenience ships as a deep link
+with a copy control: it is built against the **lead's** VPA for the **Customer's** app to open, so on
+this screen it is something to send, not a button to press — a "pay now" control in the payee's own
+app does the wrong thing. `null` (no VPA published) is stated as the ordinary state it is.
+
+### The three Gate-1 frozen grants, consumed
+
+- **`m2QueryKeys.crewOffers`** — `features/crew-offer/queries.ts` now calls
+  `m2QueryKeys.crewOffers.inbox()` and the two mutations route through the real
+  `accept_crew_offer` / `decline_crew_offer` rows instead of borrowing
+  `accept_invitation` / `decline_invitation`. Same key, same prefix relationship under
+  `invitations.all` — which is what keeps an A5 capacity hold correctly dropping A3 offers this
+  vendor can no longer serve.
+- **`m2QueryKeys.shiftDays.forStage`** — the shift-day read is on it.
+- **The `stageScope` fix** — `useSubmitStageEvidence`'s hand-written `engagements.all` is **deleted**
+  and the command routes through `invalidateForM2Command("submit_stage_evidence")`. `useStartStage`
+  keeps a hand-written invalidation and its comment now says why that is a *different* reason:
+  there is no `start_stage` row in `M2Command` at all (plan §7). It invalidates the identical prefix
+  `stageScope` returns, so the two cannot drift while the row is outstanding.
+
+### One name, one home — settled with Session A rather than left to the gate
+
+Two predicates were written independently on both sides of the same endpoint, which is what happens
+when two columns consume one contract in the same wave. Both are resolved in this commit rather than
+handed to the orchestrator:
+
+- **`settlementAmountPaise` / `settlementPaymentLink`** — Session A wrote byte-equivalent twins and
+  deliberately did **not** export theirs from the barrel, leaving mine as the published pair. Nothing
+  to do here; their note is in plan §7.
+- **`isNotAShiftDay`** — written in `features/shift/queries.ts` first, then published from
+  `m2-engagement-customer.ts` by Session A's commit. **Mine is deleted and the screen imports the
+  shared one**, with a comment where it used to be saying why. Both columns read the same 409 off the
+  same read, so it is one rule; the refusals that genuinely belong to this column
+  (`isCrewConflict`, `isCrewRosterRequired`) stay in `m2-engagement-partner.ts` beside the rules they
+  guard, because the Customer never assigns crew and never sees either.
+
+Also worth recording for anybody reading the history: **Session A's commit `0bff3ad` swept in this
+wave's edits to the three shared documents** (`03-frontend-tasks.md`, `frontend-execution-plan.md`
+§7, `task.md`) because we share one working copy and one index. Nothing was lost and nothing was
+overwritten — the checkboxes, the ten §7 rows and the board prose are all in that commit — but it is
+the reason this commit carries only `frontend-session-b.md` on the paperwork side. The barrel
+(`packages/query/src/index.ts`) went the other way: their commit took only their own block, so mine
+is here.
+
+### RULES §3 audit — both classes, and one real hit
+
+**(a) The drifting duplicate — checked, nothing found in this column.** The two client-authored
+string tables (`CREW_RELEASE_REASONS`, `SHIFT_SAFETY_CATEGORIES`) are *not* duplicates of a server
+enum: both back fields the server publishes as unconstrained strings, which is a different problem and
+is logged as a contract gap rather than hidden. Where a published enum exists it is used directly and
+typed against it — `SHIFT_SAFETY_SEVERITIES` carries a `satisfies readonly
+Schemas["SafetyIncidentSeverityEnum"][]`, and `PARTNER_CREW_NO_SHOW_REASONS` a
+`satisfies readonly Schemas["CrewNoShowReasonCodeEnum"][]`, so a hand-written string fails the type
+check here rather than reaching a serializer's `400`. That is the B2R lesson (a hand-copied order
+array beside a generated enum) applied before it could bite.
+
+**(b) The column with no writer — found, and it blocks the whole A3 walkthrough.**
+`PartnerCrewMembership.documents_verified_at` has **four readers and no writer anywhere**:
+`workforce.assign_crew` refuses any membership where it is null, `crew_dispatch.verified_roster_size`
+counts only non-null rows, `selectors.stage_crew_rows` publishes `is_verified` from it, and the
+serializer exposes it read-only. Nothing sets it — no Operations command, no view, no data migration,
+and `seed_m2_demo._seed_crew` calls `add_crew_to_roster`, which does not touch it. Consequences, in
+order: every seeded vendor has a verified roster of **zero**, so the cascade excludes them and
+`accept_crew_offer` refuses `m2_roster_insufficient`; and `assign_crew` refuses **every** membership
+with `m2_crew_conflict` and the message *"X is not verified yet"*. Found by grepping the writers of
+every column the new code reads, which is the discipline RULES §3 asks for and not something any gate
+would have shown. Logged in plan §7 as a backend blocker; the client renders the refusal honestly
+meanwhile, so nothing is worked around.
+
+### Contract gaps found (all in plan §7)
+
+- **`ShiftDay` publishes no booked headcount.** `expected_count` is on `ShiftAttendance`, which is
+  `null` until a command touches the day — so on a fresh day the assignment screen cannot say how
+  many workers were booked and learns the number only from the 409 that names it. `bookedHeadcount()`
+  returns `null` and every dependent control degrades; deliberately **not** guessed from the crew
+  already named, because the one place an invented number would appear is the sentence telling a
+  supervisor how many people to send.
+- `SafetyIncident.category_code` and `CrewAssignRequest.reason_code` are unconstrained strings with
+  no published vocabulary. Both client lists are declared as this app's own words, and the safety one
+  matters more: Session A will author a second list for the Customer's half of the same report, and
+  two clients writing different slugs into one column is a report set Operations cannot group.
+- No late-arrival report or field (see decision 5).
+- No `start_stage`, `confirm_shift_arrival` or `report_crew_no_show` row in `M2Command`; no promoted
+  `engagements.safetyIncidents` key.
+- The `M2-FE-513` UPI **QR** needs a rendering dependency the partner app does not carry, and one is
+  not added mid-wave. The deep link ships; the QR is a `packages/ui` promotion plus a dependency
+  review.
+
+### Static gates — green
+
+Run from `C:\dev\vsolve\frontend`, bare app name, `--force`, task count read rather than exit code:
+
+- `npx eslint apps/partner/features/shift apps/partner/features/engagement apps/partner/features/crew-offer "apps/partner/app/workforce/shifts/[engagementId]/days/[stageId]/page.tsx" packages/query/src/m2-engagement-partner.ts packages/query/src/index.ts --max-warnings 0` — **clean**.
+- `npx turbo run typecheck --filter=partner --force` — **1 of 1 successful**.
+- `npx turbo run typecheck --filter=@vsolve/query --filter=admin --force` — **2 of 2 successful**
+  (the barrel is shared; admin proves the append broke nobody).
+- `npx turbo run build --filter=partner --force` — **1 of 1 successful, 0 cached**;
+  `/workforce/shifts/[engagementId]/days/[stageId]` present and `ƒ`. Run with `--force` on purpose:
+  the un-forced run answered `>>> FULL TURBO` off a cache entry, which is Gate 2's tooling lesson 1
+  arriving on the build task rather than the typecheck one.
+
+**No test was run and none was written** — build-first amendment.
+
+### Smoke script — the exact taps
+
+**Preconditions.** Owner runs the servers. Backend on :8000, partner app on :3001.
+
+```
+cd backend
+.\.venv\Scripts\python.exe manage.py seed_m2_demo --i-understand-this-is-dev-only
+```
+
+Then, **because of the `documents_verified_at` blocker above, one manual step is unavoidable until
+the backend wave lands** — nothing in the product can do it:
+
+```
+cd backend
+.\.venv\Scripts\python.exe manage.py shell -c "from django.utils import timezone; from apps.partners.models import PartnerCrewMembership; PartnerCrewMembership.objects.update(documents_verified_at=timezone.now())"
+```
+
+Without it step 3 refuses every worker with *"… is not verified yet"* and the cascade never invites
+anybody, which is the blocker doing exactly what it says.
+
+Reaching a shift-day needs an open A3 engagement: book at the published rate as the Customer
+(`/requests/book/construction-helpers`), accept the crew offer as the lead
+(`/workforce/offers`, phone `+9170300000xx`, dev OTP on screen), and let the Customer pay the booking
+fee — the engagement opens on the verified callback.
+
+1. **Find the day.** Partner → **Workforce → Shifts** → open the booking. Each shift-day card now
+   carries **"Crew, attendance and settlement"**. Tap it on day 1.
+   *Expect:* the header badge reads **"Nobody named yet"**.
+2. **Nothing else works first.** Arrival says *"Name your crew above first."* Attendance says
+   *"Record the arrival above first."* Settlement says *"No amount yet."* No button is drawn for any
+   of them.
+3. **Name the crew** (`FE-502`). The roster picker lists the six seeded workers. Tick as many as the
+   booking was made for and press **"Send this crew"**.
+   *Expect:* the day's crew list fills, badges show **Verified**, the button greys to
+   *"This is already who is on the day."*
+   *Also try:* tick one more than were booked → the form refuses **before** sending with
+   *"This day was booked for N workers…"*; untick everything → *"Tick at least one person."*
+4. **Substitute somebody** (`FE-503`). Untick one, tick a different worker. A **"Why are they coming
+   off this day?"** select appears. Choose a reason, press **"Update this day's crew"**.
+   *Expect:* one call, the list reconciles, no delete-then-add.
+   *Cross-agency conflict:* assign the same worker to a second engagement on the same date from
+   another vendor account → `m2_crew_conflict`, rendered with the **server's** sentence naming the
+   person and the date.
+5. **Arrival** (`FE-504`). Press **"My crew has arrived"**.
+   *Expect:* *"Recorded as arrived Today, HH:MM"*; the badge moves to **On site**; on day 1 the note
+   about the booking fee is shown **before** the tap and the Customer's fee reads `EARNED` afterwards.
+   *Retry-safe:* press again after a reload — the server answers the same record, no second stamp.
+6. **The count** (`FE-505`). Enter a number **below** the booked headcount using the − / + steppers.
+   Leave the end time **blank**. Press **"Record N of M present"**.
+   *Expect:* the recorded line appears with *"No end time was recorded, so this day settles at the
+   agreed shift length and is marked for review. That is a note on the record, not a dispute."* The
+   badge moves to **Sent to the customer**. **There is no per-worker checklist anywhere on the
+   screen** — that is the acceptance criterion, not an omission.
+   *Also try:* a number above the ceiling → the + button is disabled and the field refuses.
+7. **The settlement** (`FE-513`). Scroll to **"Was today settled?"**.
+   *Expect:* the amount is the server's figure; beneath it *"N of M present · ₹X per worker for the
+   day"*; and the sentence *"The day is settled for the people who were here, not for the job."*
+   Confirm the total is **N × the per-worker rate** and not M × it. `WAGES_ARE_DIRECT` is on screen.
+   Press **"Copy the payment link"** → toast, and the `upi://pay?…` link is visible in full.
+   Press **"Yes — we were paid for today"**.
+   *Expect:* badge **"Waiting on the customer"**, and the copy says Vsolve records this as
+   **unproven** — not as paid. The **You** row of the trail fills; **The customer** stays
+   *"Not confirmed"* until Session A's `FE-514` tap.
+8. **Overtime** (`FE-506`). Open **"Overtime and extras"**. The published shift length, overtime rate
+   and add-on count are shown from the frozen card.
+   *Expect:* **there is no amount box.** Ask for 2 hours with a reason → the request appears in the
+   list above as **"Waiting on the customer"** with the server's own `delta_paise`.
+   *The fail-closed case:* if the shift has already ended, the amber note about the retroactive
+   window appears **before** you send; with the window unset the server answers `m2_policy_unavailable`
+   and the screen reads *"Vsolve cannot approve this after the shift yet"* with **no retry button**.
+9. **Safety** (`FE-508`). **"If the day goes wrong"** → **"File a safety report"**.
+   *Expect:* severity listed **worst first**; the dialog states the report does **not** stop the job,
+   suspend anybody or move money; `occurred_at` is **blank**, not pre-filled. File it.
+   *Expect:* it appears under **"Safety reports on this booking"** as **Reported**, and the booking
+   is **unchanged** — still `ACTIVE`, nothing cancelled. **There is nowhere in this app that offers a
+   safety report as a cancellation reason.**
+10. **On-site reports** (`FE-507`). Same panel, five rows. On a day-1 booking where arrival is *not*
+    confirmed, **"Report the customer was not there"** is offered; the confirmation states the
+    customer's fee is kept and split before you can press it. Everything else routes: partial crew →
+    the count, late arrival → the arrival stamp plus an overtime request, nobody-came on day 1 →
+    support.
+11. **Authorization.** Have Operations suspend the A3 capability mid-session, then focus the tab.
+    *Expect:* the capability banner appears **above** the panels, every command control is withdrawn,
+    and **the records stay readable** — who is on the day, the count and the amount are all still
+    there.
+
+---
+
 ## Wave B4 — Operations: queues, timeline and privileged actions
 
 **Depends on:** B3 and Gate 3. **Folder:** `frontend/apps/admin/features/m2-requests/**` plus the
@@ -1209,6 +1506,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | B2R | `FE-316` (revision 4: crew offer screen) | `[~]` 1 of 1 | `[ ]` | 2026-08-14 — the A3 crew offer on one route, `/workforce/offers`, against contract 1.29.0. Picked up from a stopped predecessor's seven-file tree: the model layer and the published-enum decline vocabulary were **kept**, two things were **rewritten** and three **deleted**. The rewrite that matters is a defect no static gate can see — the server filters the inbox to `INVITED`, so an accepted offer left the list and took the *"do not travel yet"* panel with it, replacing a won job with "No jobs waiting on you right now"; the answer is now handed up before the invalidation and held above the list. The other is RULES §3(a) in TypeScript: a hand-copied order array beside an exhaustive `Record` over the generated enum, now a ranking derived from the `Record`'s own keys. Lint clean on changed paths, typecheck 1/1 **forced** (the cached run was a replay), partner build green with the route `ƒ`. **Tests deferred per the build-first amendment.** 7 §7 rows appended — 2 frozen-file requests, 5 contract gaps, of which one is a disclosure finding (`accept` returns the Customer's numbers to the lead). |
 | B3 | `FE-501..508`, `FE-601..607` (+ `FE-513`, revision 4 — Day-settled tap, with C4) | `[~]` 6 of 15 | `[ ]` | 2026-08-13 — the **shared spine half only**, against contract 1.25.0: `FE-501`, `FE-601`, `FE-602`, `FE-603`, `FE-604`, `FE-607` on 4 routes (2 replaced, 2 new), all `ƒ`. The nine archetype tails are Wave III and each renders a named not-built-yet block rather than a half-built control. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment.** 13 §7 rows appended, of which 1 closes both Wave I frozen-file grants and 2 are schema corrections (an undeclared `role` parameter, two enums published as bare strings). Two defects found in this column's own wiring and fixed before the gate. |
 | B-C3.5 | 1.26.0 consumption pass — `FE-301`, `FE-305`, `FE-314`, `FE-315` | `[~]` 4 of 4 | `[ ]` | 2026-08-14 — five workarounds removed against contract 1.28.0: `service_name` on the inbox row (and `category_slug` unprojected), `ProposalMaterialLine` as first-class rows with the stage-shaped workaround and its on-screen caveat deleted, `EngagementStage.kind` badged on the vendor's stage panel, two-way clarification with the Partner's answer route, cursor paging on the inbox, and `SiteVisit.timezone` on the visit panel. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment**; one stale assertion recorded. 6 §7 rows appended — 5 closures and 1 frozen-file request (`M2_INVALIDATION.answer_question` targets a key this app does not mount). |
+| B3W | `FE-502..508`, `FE-513` (B3's workforce half) | `[~]` 8 of 8 | `[ ]` | 2026-08-14 — the A3 shift-day on one new route, `/workforce/shifts/[engagementId]/days/[stageId]`, against contract 1.30.0. One read (`shiftDays.forStage`) drives crew, arrival, the one-tap count, the settled tap, extras and the on-site report router. The three Gate-1 frozen grants are consumed and the hand-written `engagements.all` on `submit_stage_evidence` is deleted; `useStartStage` keeps one, now for the different reason that no `start_stage` row exists. Lint clean on changed paths, typecheck **1/1 forced** for partner and **2/2** for `@vsolve/query` + admin (the barrel is shared with Session A, so every prefixed export and the private wire aliases are proved against their concurrent block), partner build green with the route `ƒ`. **Tests deferred per the build-first amendment.** 10 §7 rows appended — 4 frozen-file requests, 6 contract gaps. **RULES §3(b) hit, and it blocks the walkthrough:** `PartnerCrewMembership.documents_verified_at` has four readers and no writer anywhere including the seed, so no seeded worker is assignable and no seeded vendor has a verified roster. The smoke script carries the one-line shell workaround and says why it should not have to. |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |
 | B5 | quality share | `[ ]` | `[ ]` | |
 

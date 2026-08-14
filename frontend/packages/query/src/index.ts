@@ -373,6 +373,36 @@ export {
   isEvidenceRejected,
   isEvidenceStorageUnavailable,
   isPayoutDetailsRequired,
+  // The A3 shift-day, contract 1.30.0 (Wave B3's workforce half). Appended
+  // rather than interleaved so the diff stays one block, on the revision-4
+  // precedent above. Every name is prefixed on purpose: Session A is building
+  // the Customer's half of the same shift-day into `m2-engagement-customer.ts`
+  // and both land in this barrel — a bare `ShiftDay` exported twice is a
+  // duplicate-export failure, and the wire types are deliberately kept private
+  // to each module for that reason.
+  shiftDayPhase,
+  isShiftDayClosed,
+  supervisorShiftCommands,
+  bookedHeadcount,
+  assignableCrew,
+  crewSelectionProblem,
+  assignedMembershipIds,
+  crewIsUnchanged,
+  CREW_RELEASE_REASONS,
+  attendanceCeiling,
+  checkoutIsMissing,
+  attendanceIsDisputed,
+  shiftOvertime,
+  shiftAddOns,
+  overtimeIsRetroactive,
+  SUPERVISOR_SETTLEMENT_PARTY,
+  shiftSettlementClaim,
+  settlementAmountPaise,
+  settlementPaymentLink,
+  SHIFT_SAFETY_SEVERITIES,
+  SHIFT_SAFETY_CATEGORIES,
+  isCrewConflict,
+  isCrewRosterRequired,
 } from "./m2-engagement-partner";
 export type {
   AgreedTotals,
@@ -392,4 +422,17 @@ export type {
   StagePayoutState,
   VendorStageCommand,
   WorkforceBucketKey,
+  // The A3 shift-day — see the value block above for why every name is
+  // prefixed and why no wire type is republished here.
+  AssignableCrew,
+  CrewIneligibility,
+  CrewReleaseReason,
+  CrewSelectionProblem,
+  ShiftAddOn,
+  ShiftDayPhase,
+  ShiftOvertimeTerms,
+  ShiftSafetyCategory,
+  ShiftSafetySeverity,
+  ShiftSettlementClaim,
+  SupervisorShiftCommand,
 } from "./m2-engagement-partner";

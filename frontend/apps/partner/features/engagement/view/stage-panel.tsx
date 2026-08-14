@@ -13,7 +13,8 @@ import {
   type Engagement,
   type EngagementStage,
 } from "@vsolve/query";
-import { Play } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
+import Link from "next/link";
 
 import { shortDate, timeAgo } from "@/lib/format";
 
@@ -75,9 +76,19 @@ export interface StagePanelProps {
   readonly engagement: Engagement;
   readonly stage: EngagementStage;
   readonly wording: StageWording;
+  /**
+   * Where this stage's own screen lives, when it has one.
+   *
+   * `null` on A5: a milestone's whole surface — evidence, submission, the review
+   * clock — is already on this card, and a link to a screen that repeated it
+   * would be two places to do one thing. An A3 shift-day is different: it has a
+   * crew list, a headcount, an arrival and an evening settlement that only exist
+   * on the shift-day read, and none of them are on the engagement payload.
+   */
+  readonly dayHref?: string | null;
 }
 
-export function StagePanel({ engagement, stage, wording }: StagePanelProps) {
+export function StagePanel({ engagement, stage, wording, dayHref = null }: StagePanelProps) {
   const status = describeStageStatus(stage, wording);
   const commands = vendorStageCommands(engagement, stage);
   const correction = correctionRequested(stage);
@@ -154,6 +165,16 @@ export function StagePanel({ engagement, stage, wording }: StagePanelProps) {
           error={start.isError ? start.error : null}
           onStart={() => start.mutate({ stageId: stage.id })}
         />
+
+        {dayHref === null ? null : (
+          <Link
+            href={dayHref}
+            className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+          >
+            Crew, attendance and settlement
+            <ArrowRight size={16} aria-hidden />
+          </Link>
+        )}
       </Card>
 
       {commands.includes("attach_evidence") || stage.evidence.length > 0 ? (

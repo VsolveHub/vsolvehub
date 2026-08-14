@@ -17,23 +17,27 @@ import { isOfferAnswerable } from "./model/offer-state";
  * enquiry inbox beside it (`features/enquiry/**`) is the thin-supply fallback and
  * stays exactly as built — nothing here replaces it.
  *
- * ## The key is composed locally, under an existing prefix
+ * ## The key is a bucket of the invitation inbox, and now says so in the factory
  *
- * `m2-keys.ts` is frozen for this wave and carries no `crewOffers` namespace and
- * no `accept_crew_offer` / `decline_crew_offer` command. Rather than edit it, the
- * list is keyed `m2QueryKeys.invitations.list("crew-offers")` — a **bucket** of
- * the invitation inbox, which is what a crew offer is: `07-state-machines.md` §2
- * says plainly that "the invitation is a crew offer" on the A3 rate-card path,
- * and the server projects it from the same `VendorInvitation` row.
+ * Landed at the Wave B3 gate exactly as it was argued: `m2QueryKeys.crewOffers`
+ * is an **alias over `invitations.list("crew-offers")`**, not a new root. A crew
+ * offer *is* an invitation — `07-state-machines.md` §2 says plainly that "the
+ * invitation is a crew offer" on the A3 rate-card path, and the server projects
+ * it from the same `VendorInvitation` row.
  *
- * That choice is what keeps invalidation honest. Every existing rule that clears
+ * The alias is what keeps invalidation honest. Every existing rule that clears
  * `invitations.all` — including `accept_invitation` and `decline_invitation`,
- * which are the §6 rows these two commands specialise — clears this list by
+ * which are the §6 rows the two commands below specialise — clears this list by
  * prefix. Confirming a visit slot on the A5 side takes a capacity hold and
  * already invalidates `invitations.all`, so it correctly drops a crew offer this
- * vendor can no longer serve, without either module knowing about the other.
+ * vendor can no longer serve, without either module knowing about the other. A
+ * separate `["m2", "crew-offers"]` root would have broken that silently, and the
+ * breakage would have looked like a vendor being offered work they are already
+ * booked against.
  *
- * The two named commands are requested in `frontend-execution-plan.md` §7.
+ * `accept_crew_offer` and `decline_crew_offer` landed with it as real
+ * `M2Command` rows, so the two mutations below no longer borrow their more
+ * general cousins' names.
  *
  * ## Neither command takes an idempotency key, and that is the contract
  *
@@ -55,12 +59,13 @@ export type CrewOfferAccepted = Schemas["CrewOfferAccepted"];
 /**
  * The crew-offer bucket of the invitation inbox.
  *
- * A named function rather than an inline literal at three call sites, which is
- * the rule `keys.ts` exists to enforce: a key built inline is how invalidation
- * silently stops working.
+ * Now the factory's own `m2QueryKeys.crewOffers.inbox()` rather than a locally
+ * composed literal — same key, same prefix relationship, but a name somebody can
+ * grep the invalidation of. Kept as a thin re-export because this app's screens
+ * already import it by this name.
  */
 export function crewOffersKey() {
-  return m2QueryKeys.invitations.list("crew-offers");
+  return m2QueryKeys.crewOffers.inbox();
 }
 
 /**
@@ -169,9 +174,6 @@ export interface CrewOfferAnswerHandlers {
  * same reason `accept_invitation` has always done it: acceptance takes a
  * roster-sized capacity hold over the requested dates, which changes which
  * *other* offers, enquiries and A1 jobs this vendor can still take.
- *
- * `accept_invitation` is the §6 row this specialises, and it is what
- * `invalidateForM2Command` is given until the named command lands (plan §7).
  */
 export function useAcceptCrewOffer(
   invitationId: string,
@@ -190,7 +192,7 @@ export function useAcceptCrewOffer(
     onSuccess: async (booking) => {
       // Before the invalidation, never after. See `CrewOfferAnswerHandlers`.
       handlers.onAccepted?.(booking);
-      await invalidateForM2Command(queryClient, "accept_invitation", { invitationId });
+      await invalidateForM2Command(queryClient, "accept_crew_offer", { invitationId });
     },
     onError: reread,
     retry: false,
@@ -236,7 +238,7 @@ export function useDeclineCrewOffer(
     onSuccess: async (declined, input) => {
       // Before the invalidation, never after. See `CrewOfferAnswerHandlers`.
       handlers.onDeclined?.(declined, input);
-      await invalidateForM2Command(queryClient, "decline_invitation", { invitationId });
+      await invalidateForM2Command(queryClient, "decline_crew_offer", { invitationId });
     },
     onError: reread,
     retry: false,

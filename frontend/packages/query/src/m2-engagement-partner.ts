@@ -905,3 +905,549 @@ export function isEvidenceStorageUnavailable(error: unknown): boolean {
 export function isPayoutDetailsRequired(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "m2_payout_details_required";
 }
+
+/* --------------------------------------------------------------------------
+   The A3 shift-day — `M2-FE-502`..`M2-FE-508` and `M2-FE-513` (contract 1.30.0)
+   -------------------------------------------------------------------------- */
+
+/**
+ * One evening, one read, and the rules a supervisor's screen is allowed to
+ * apply to it.
+ *
+ * `GET /engagement-stages/{id}/shift/` answers the crew, the attendance and the
+ * settlement in a single payload, and the serializer says why: "the crew screen,
+ * the attendance screen and the settlement screen are the same screen at three
+ * moments of one evening". Everything below reads that one record.
+ *
+ * ## Every name here is prefixed, and that is not style
+ *
+ * Session A is building the Customer's half of the same shift-day into
+ * `m2-engagement-customer.ts` while this is written, and both halves land in one
+ * barrel. A bare `ShiftDay` or `SafetySeverity` exported from both files is a
+ * duplicate-export `tsc` failure at the gate — and the version of that failure
+ * that is worse is the one where the two files quietly alias different `Schemas`
+ * entries. So the wire types below are **private local aliases**: an app that
+ * needs the shape reads it off `Schemas` directly, exactly as
+ * `features/engagement/queries.ts` already does for `Engagement`.
+ *
+ * ## Three facts that decide what may be rendered
+ *
+ * 1. **Money is server-sent and never computed.** `DaySettlement.amount_paise`
+ *    is the published figure — present workers at the day rate plus the extras
+ *    both sides accepted through the amendment engine — and nothing here
+ *    multiplies `per_worker_paise` by anything. `workersPresent x rate` looks
+ *    identical until an accepted overtime amendment lands, at which point a
+ *    client-computed number is quietly short by the overtime.
+ * 2. **The platform never holds wages.** Nothing below is a payment command.
+ *    `confirm_day_settled` records who tapped, and a one-sided tap stays
+ *    one-sided: `SUPERVISOR_CLAIMED` is neither "paid" nor "not paid", it is
+ *    *unproven*, and it is the state Operations reads.
+ * 3. **`attendance` and `settlement` are `null` until a command touches the
+ *    day.** That is a real state, not missing data, and it is why every helper
+ *    here takes the whole day rather than the sub-record.
+ */
+
+type ShiftDay = Schemas["ShiftDay"];
+type ShiftAttendance = Schemas["ShiftAttendance"];
+type DaySettlement = Schemas["DaySettlement"];
+type StageCrewMember = Schemas["StageCrewMember"];
+type RosterCrewMember = Schemas["CrewMember"];
+
+/**
+ * Where in the evening this day has got to.
+ *
+ * Resolved in reverse-terminal order, because several of these are true at once:
+ * a settled day still has a confirmed arrival and a named crew. The phase is the
+ * *furthest* point reached, which is the only one worth putting in a heading.
+ */
+export type ShiftDayPhase =
+  /** Nobody is named yet. Nothing else on the day can happen until they are. */
+  | "needs_crew"
+  /** Crew named, nobody has said they arrived. */
+  | "crew_named"
+  /** Arrival stamped, the day is running, no count recorded. */
+  | "on_site"
+  /** The supervisor recorded `n of m`. With the customer now. */
+  | "recorded"
+  /** The customer confirmed or disputed the count. */
+  | "answered"
+  /** Both sides tapped "day settled". The amount is frozen. */
+  | "settled";
+
+export function shiftDayPhase(day: ShiftDay): ShiftDayPhase {
+  if (day.settlement?.status === "SETTLED") return "settled";
+  const status = day.attendance?.status;
+  if (status === "CUSTOMER_CONFIRMED" || status === "DISPUTED") return "answered";
+  if (status === "SUPERVISOR_CONFIRMED") return "recorded";
+  if (day.attendance?.arrival_confirmed_at != null) return "on_site";
+  return day.crew.length > 0 ? "crew_named" : "needs_crew";
+}
+
+/**
+ * A stage whose crew and count can no longer move.
+ *
+ * `assign_crew` refuses on `APPROVED` and `RELEASED` in those words — "this
+ * shift-day is settled; its crew can no longer change" — so the screen says it
+ * rather than drawing a control that earns the 409.
+ */
+export function isShiftDayClosed(day: ShiftDay): boolean {
+  return day.stage_status === "APPROVED" || day.stage_status === "RELEASED";
+}
+
+/**
+ * What the supervisor may attempt on this day, right now.
+ *
+ * Every entry mirrors a guard that exists in `workforce.py`, and the ones that
+ * are deliberately absent matter as much as the ones present:
+ *
+ * - There is **no per-worker check-in or check-out** and there will not be one.
+ *   `SIM-02` refuses it outright: the workers mostly do not carry smartphones,
+ *   the supervisor does, and a per-worker roll call would be a device dependency
+ *   this market cannot meet wearing the clothes of rigour. Per-worker detail is
+ *   captured in exactly one place — a Customer's dispute.
+ * - There is **no wage payment command**, because there is no wage rail. A3
+ *   wages are direct, daily and peer-to-peer at day end.
+ * - A safety report is **not** here. It is reportable at any point in the
+ *   engagement's life, including after the day closes, and gating it on a phase
+ *   would be this client deciding when an injury may be recorded.
+ */
+export type SupervisorShiftCommand =
+  | "assign_crew"
+  | "confirm_arrival"
+  | "record_attendance"
+  | "propose_extra"
+  | "confirm_settled";
+
+export function supervisorShiftCommands(day: ShiftDay): readonly SupervisorShiftCommand[] {
+  if (isShiftDayClosed(day)) return [];
+
+  const commands: SupervisorShiftCommand[] = [];
+  const attendance = day.attendance;
+  const answered =
+    attendance?.status === "CUSTOMER_CONFIRMED" || attendance?.status === "DISPUTED";
+
+  // `scheduled_on === null` is one of the three `m2_stage_transition_not_allowed`
+  // cases on the crew route, and it is the one a client can see coming.
+  if (day.scheduled_on !== null) commands.push("assign_crew");
+
+  // "Crew must be named first — confirming that people arrived before saying who
+  // they are records nothing anybody can act on."
+  if (day.crew.length > 0 && attendance?.arrival_confirmed_at == null) {
+    commands.push("confirm_arrival");
+  }
+
+  if (attendance?.arrival_confirmed_at != null && !answered) commands.push("record_attendance");
+
+  // Extras run through the amendment engine and are not bound to the day's own
+  // phase — overtime is proposed while the shift is running or, inside the
+  // configured retroactive window, after it ended.
+  commands.push("propose_extra");
+
+  // "There is no amount to settle until somebody says who was there."
+  if (attendance?.present_count != null && day.settlement?.supervisor_confirmed_at == null) {
+    commands.push("confirm_settled");
+  }
+
+  return commands;
+}
+
+/* -- `M2-FE-502` / `M2-FE-503`: who is on the day ------------------------- */
+
+/**
+ * The booked headcount, or `null` because the server has not said yet.
+ *
+ * `expected_count` lives on `ShiftAttendance`, and `attendance` is `null` until
+ * a command touches the day — so on a day nobody has assigned crew to, **this
+ * client cannot know how many workers the Customer booked**. Published as `null`
+ * rather than guessed from the crew already named or from the engagement total:
+ * both would be a number this screen invented, and the one place it would appear
+ * is the sentence telling a supervisor how many people to send.
+ *
+ * The over-headcount refusal names the real figure ("This day was booked for N
+ * workers"), so the screen states the ceiling once the server has stated it and
+ * says nothing before. Requested as a top-level `ShiftDay` field in
+ * `frontend-execution-plan.md` §7.
+ */
+export function bookedHeadcount(day: ShiftDay): number | null {
+  return day.attendance?.expected_count ?? null;
+}
+
+/**
+ * Why one roster row cannot go on this shift-day.
+ *
+ * Mirrors `assign_crew`'s own order. `unverified` is first because it is the one
+ * this client can see: the server refuses an unverified membership with
+ * `m2_crew_conflict` and the *worker's name*, and a picker that offered them
+ * anyway would turn a roster problem into a conflict message about a double
+ * booking that never happened.
+ */
+export type CrewIneligibility = "archived" | "unverified";
+
+export interface AssignableCrew {
+  /** Rows that may be put on a shift today. */
+  readonly eligible: readonly RosterCrewMember[];
+  /** Rows that may not, each with the reason the screen has to explain. */
+  readonly blocked: readonly { readonly member: RosterCrewMember; readonly why: CrewIneligibility }[];
+}
+
+/**
+ * Splits a roster into who may be assigned and who may not.
+ *
+ * **Verified only.** `assign_crew` refuses any membership whose
+ * `documents_verified_at` is null, because an unverified membership is a name
+ * somebody typed — and ADR-0009's rule that named crew cannot be replaced by
+ * unverified workers is meaningless if the first assignment may be unverified.
+ *
+ * The blocked rows are returned rather than filtered away. A supervisor whose
+ * people silently vanish from a picker concludes the app lost them; a supervisor
+ * told "Ramesh is not verified yet" knows what to do about it.
+ */
+export function assignableCrew(members: readonly RosterCrewMember[]): AssignableCrew {
+  const eligible: RosterCrewMember[] = [];
+  const blocked: { member: RosterCrewMember; why: CrewIneligibility }[] = [];
+
+  for (const member of members) {
+    if (member.status !== "ACTIVE") {
+      blocked.push({ member, why: "archived" });
+      continue;
+    }
+    if (member.documents_verified_at === null) {
+      blocked.push({ member, why: "unverified" });
+      continue;
+    }
+    eligible.push(member);
+  }
+
+  return { eligible, blocked };
+}
+
+/** What is wrong with the set the supervisor has ticked, before it is sent. */
+export type CrewSelectionProblem =
+  /** Nothing ticked. `assign_crew` answers "name at least one worker". */
+  | "empty"
+  /** More people than the Customer booked. That is a change request, not a longer list. */
+  | "over_headcount"
+  /** The roster has nobody assignable at all — the progressive gate, client-side. */
+  | "no_eligible_crew";
+
+/**
+ * Pre-flight for the assignment form.
+ *
+ * Only the three refusals a client can be certain of. The global cross-agency
+ * conflict is deliberately **not** checked here and cannot be: it is a fact
+ * about every other agency's bookings, held as a database index precisely so two
+ * supervisors tapping at the same instant cannot both win. Guessing at it would
+ * mean telling a supervisor somebody is free when they are not.
+ */
+export function crewSelectionProblem(input: {
+  readonly selected: readonly string[];
+  readonly assignable: number;
+  readonly headcount: number | null;
+}): CrewSelectionProblem | null {
+  if (input.assignable === 0) return "no_eligible_crew";
+  if (input.selected.length === 0) return "empty";
+  if (input.headcount !== null && input.selected.length > input.headcount) return "over_headcount";
+  return null;
+}
+
+/**
+ * Membership ids currently on the day, in wire order.
+ *
+ * The assignment command takes **the whole intended crew every time** and
+ * reconciles the day to it, so this is the starting point of every edit: a
+ * substitution is one call that sends the new set, not a delete followed by an
+ * add a client can half perform.
+ *
+ * A `null` `membership_id` is dropped rather than coerced. It is null for a
+ * Customer reading the same payload, and a partner screen that ever saw one
+ * would be reading a projection it is not entitled to send back.
+ */
+export function assignedMembershipIds(day: ShiftDay): readonly string[] {
+  return day.crew
+    .map((member: StageCrewMember) => member.membership_id)
+    .filter((id): id is string => id !== null);
+}
+
+/** True once the ticked set is exactly what is already on the day — the command is a no-op. */
+export function crewIsUnchanged(day: ShiftDay, selected: readonly string[]): boolean {
+  const current = assignedMembershipIds(day);
+  if (current.length !== selected.length) return false;
+  const chosen = new Set(selected);
+  return current.every((id) => chosen.has(id));
+}
+
+/**
+ * Why somebody came off the day, as a code the server stores against the release.
+ *
+ * Client vocabulary over `CrewAssignRequest.reason_code`, which is a free string
+ * the serializer does not constrain — so these are this app's words, not a
+ * published enum, and the day the server publishes one this list is deleted
+ * rather than mapped. Requested in `frontend-execution-plan.md` §7.
+ *
+ * `substituted` is what the server itself falls back to when the field is blank,
+ * so it is the default here too rather than a fourth invented code.
+ */
+export const CREW_RELEASE_REASONS = [
+  "substituted",
+  "unwell",
+  "did_not_report",
+  "reassigned",
+] as const;
+export type CrewReleaseReason = (typeof CREW_RELEASE_REASONS)[number];
+
+/* -- `M2-FE-505`: the count ------------------------------------------------ */
+
+/**
+ * How many workers may be recorded present.
+ *
+ * Bounded by the booked headcount and never by how many are named: `confirm_attendance`
+ * refuses "a count above the booked crew — an extra worker is a scope amendment
+ * at the published rate, not a bigger number in an attendance box", and that
+ * sentence is the whole reason this is a bounded control rather than a text box.
+ *
+ * `null` when the headcount is unknown (see `bookedHeadcount`), which the form
+ * renders as a plain number entry rather than as a stepper against a ceiling it
+ * would have had to invent.
+ */
+export function attendanceCeiling(day: ShiftDay): number | null {
+  return bookedHeadcount(day);
+}
+
+/**
+ * A day recorded with no end time.
+ *
+ * **Not a dispute and never rendered as one.** The server settles it at the
+ * agreed shift length and flags it for review: a supervisor whose crew left at
+ * six and who closed the day at nine has done nothing wrong, and the amount
+ * never depended on the end time — only overtime does, and that needs the
+ * Customer's approval either way.
+ */
+export function checkoutIsMissing(attendance: ShiftAttendance | null): boolean {
+  return attendance !== null && attendance.checkout_missing;
+}
+
+/** The customer disputed the count. Per-worker detail exists only inside this. */
+export function attendanceIsDisputed(day: ShiftDay): boolean {
+  return day.attendance?.status === "DISPUTED";
+}
+
+/* -- `M2-FE-506`: overtime and add-ons, priced by the server ---------------- */
+
+/**
+ * Whether this booking can carry overtime at all, and at what published rate.
+ *
+ * `overtime_hourly_paise` is `null` on the quote-flow fallback — a vendor quoted
+ * a day rate and nobody published an overtime rate — and `propose_shift_extra`
+ * refuses there rather than inventing a multiplier. The screen says so instead
+ * of drawing a form that can only ever be refused.
+ *
+ * `standard_day_hours` is `null` in the same case, which is why a shift length
+ * is never assumed: an assumed day length decides when overtime *starts*, and
+ * inventing it here would be this app doing on a screen the thing the published
+ * rate card exists to stop somebody doing on site.
+ */
+export interface ShiftOvertimeTerms {
+  readonly hourlyPaise: number | null;
+  readonly standardDayHours: number | null;
+  readonly isPublished: boolean;
+}
+
+export function shiftOvertime(day: ShiftDay): ShiftOvertimeTerms {
+  return {
+    hourlyPaise: day.overtime_hourly_paise,
+    standardDayHours: day.standard_day_hours,
+    isPublished: day.overtime_hourly_paise !== null,
+  };
+}
+
+/** The add-on codes this booking's frozen card publishes, with their per-worker-day rate. */
+export interface ShiftAddOn {
+  readonly code: string;
+  readonly ratePaise: number;
+}
+
+/**
+ * The frozen card's add-on table, in code order.
+ *
+ * Empty on the quote-flow fallback and on any booking whose card published none,
+ * and an empty table means the add-on form is not offered — "that extra is not
+ * on the published rate card for this booking" is the refusal, and a picker with
+ * nothing in it is a clearer statement of the same fact than a text box that
+ * earns it.
+ */
+export function shiftAddOns(day: ShiftDay): readonly ShiftAddOn[] {
+  return Object.entries(day.add_on_rates)
+    .map(([code, ratePaise]) => ({ code, ratePaise }))
+    .sort((left, right) => left.code.localeCompare(right.code));
+}
+
+/**
+ * Whether overtime for this day is being asked for **after** the shift ended.
+ *
+ * The distinction the retroactive window turns on, computed from the server's
+ * own clock (`ShiftDay.server_now`) and never from the device's — a phone whose
+ * clock is an hour fast would otherwise tell a supervisor their request is late
+ * when it is not.
+ *
+ * `null` when it cannot be told: no arrival, or no published shift length to add
+ * to it. The screen states the rule and lets the server decide, which is the
+ * correct outcome anyway — the window is owner configuration and reading it
+ * wrong in either direction costs somebody a day's labour.
+ */
+export function overtimeIsRetroactive(day: ShiftDay): boolean | null {
+  const attendance = day.attendance;
+  if (attendance === null) return null;
+
+  const ended =
+    attendance.shift_ended_at ??
+    (attendance.arrival_confirmed_at !== null && day.standard_day_hours !== null
+      ? new Date(
+          Date.parse(attendance.arrival_confirmed_at) + day.standard_day_hours * 3_600_000,
+        ).toISOString()
+      : null);
+
+  if (ended === null) return null;
+  return Date.parse(day.server_now) > Date.parse(ended);
+}
+
+/* -- `M2-FE-513`: the evening tap ------------------------------------------ */
+
+/**
+ * The party this app taps as. Mirrors Session A's `CUSTOMER_REPORTS_CREW_PARTY`.
+ *
+ * `confirm_day_settled` takes no party at all — the server derives it from the
+ * caller — so this is not sent anywhere. It exists so the screen can say *whose*
+ * tap is missing without inferring it from which timestamp happens to be null.
+ */
+export const SUPERVISOR_SETTLEMENT_PARTY = "PARTNER" as const;
+
+/** Who has said the day was settled, and therefore what the record currently proves. */
+export type ShiftSettlementClaim =
+  /** No count yet, so there is no amount and nothing to tap. */
+  | "no_amount"
+  /** An amount exists and neither side has tapped. */
+  | "awaiting_both"
+  /** Only this vendor has tapped. Unproven, and Operations reads it as unproven. */
+  | "supervisor_only"
+  /** Only the customer has tapped. The vendor's tap is the one outstanding. */
+  | "customer_only"
+  /** Both tapped. The amount is frozen. */
+  | "settled";
+
+export function shiftSettlementClaim(day: ShiftDay): ShiftSettlementClaim {
+  const settlement = day.settlement;
+  if (settlement === null || day.attendance?.present_count == null) return "no_amount";
+  switch (settlement.status) {
+    case "SETTLED":
+      return "settled";
+    case "SUPERVISOR_CLAIMED":
+      return "supervisor_only";
+    case "CUSTOMER_CLAIMED":
+      return "customer_only";
+    default:
+      return "awaiting_both";
+  }
+}
+
+/**
+ * The published figure for the day, in paise, or `null` when there is not one yet.
+ *
+ * Read, never computed. `amount_paise` is present workers at the day rate plus
+ * every extra both sides accepted through the amendment engine, and the server
+ * freezes it at `SETTLED`. Multiplying `per_worker_paise` by `workers_present`
+ * on the client gives the identical number right up until an overtime amendment
+ * is applied, at which point the screen would be quietly short by the overtime —
+ * on the one screen where a lead is deciding whether they have been paid enough.
+ */
+export function settlementAmountPaise(day: ShiftDay): number | null {
+  return day.settlement?.amount_paise ?? null;
+}
+
+/**
+ * The UPI deep link at the exact published amount, or `null`.
+ *
+ * **A convenience, and never a rail.** It opens the *Customer's* own UPI app at
+ * the lead's VPA; no money passes through Vsolve at any point and no screen may
+ * imply it does. `null` whenever the lead has published no VPA, which is an
+ * ordinary state and not an error — the amount is still shown, and the crew is
+ * paid the way they were paid before this app existed.
+ *
+ * Returned only once the settlement is real. A link built against a stale
+ * amount is worse than no link, so an absent settlement answers `null` rather
+ * than reaching for a figure.
+ */
+export function settlementPaymentLink(day: ShiftDay): string | null {
+  const settlement: DaySettlement | null = day.settlement;
+  if (settlement === null) return null;
+  return settlement.upi_payment_link;
+}
+
+/* -- `M2-FE-508`: safety --------------------------------------------------- */
+
+/**
+ * Severities, worst first.
+ *
+ * The order is the render order and it is deliberate: a list that reads
+ * "near miss / minor / serious / critical" invites the first tap, and the first
+ * tap on a severity picker is the one that gets used. Values are the published
+ * `SafetyIncidentSeverityEnum`, so a hand-written string fails the type check
+ * here rather than reaching the serializer.
+ */
+export const SHIFT_SAFETY_SEVERITIES = [
+  "CRITICAL",
+  "SERIOUS",
+  "MINOR",
+  "NEAR_MISS",
+] as const satisfies readonly Schemas["SafetyIncidentSeverityEnum"][];
+export type ShiftSafetySeverity = (typeof SHIFT_SAFETY_SEVERITIES)[number];
+
+/**
+ * Report categories.
+ *
+ * `SafetyIncident.category_code` is a `SlugField` the serializer does not
+ * constrain, so — like `CREW_RELEASE_REASONS` — this is **this app's
+ * vocabulary over an unpublished field**, not a published enum. Said out loud
+ * because the alternative is a codebase where nobody can tell which of its
+ * string tables the server actually knows about. Requested in
+ * `frontend-execution-plan.md` §7; the day it is published this list goes.
+ */
+export const SHIFT_SAFETY_CATEGORIES = [
+  "injury",
+  "near-miss",
+  "unsafe-site",
+  "equipment-failure",
+  "electrical",
+  "fall-from-height",
+  "other",
+] as const;
+export type ShiftSafetyCategory = (typeof SHIFT_SAFETY_CATEGORIES)[number];
+
+/* -- Refusals the shift-day screens have to name --------------------------- */
+
+/**
+ * `409 m2_crew_conflict` — three different failures wearing one code.
+ *
+ * The same person promised on that date **through any agency**; a worker who is
+ * not on your roster or is marked unavailable; or a membership that is not
+ * verified. The server's message names the person and, for the cross-agency
+ * case, the date — so the screen renders the server's own sentence rather than
+ * composing one from a code that cannot tell the three apart.
+ *
+ * Classified `choose_again` in the frozen `errors.ts`, which is right: every one
+ * of the three is fixed by picking somebody else.
+ */
+export function isCrewConflict(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "m2_crew_conflict";
+}
+
+/**
+ * `403 m2_crew_roster_required` — the progressive gate, fired at the first
+ * assignment rather than at registration.
+ *
+ * Classified `fix_input`, and the fix is a route: add a verified worker to your
+ * roster. A generic refusal banner here strands a supervisor on a screen whose
+ * remedy is one tap away on another one.
+ */
+export function isCrewRosterRequired(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "m2_crew_roster_required";
+}
