@@ -949,7 +949,9 @@ export function isPayoutDetailsRequired(error: unknown): boolean {
 
 type ShiftDay = Schemas["ShiftDay"];
 type ShiftAttendance = Schemas["ShiftAttendance"];
-type DaySettlement = Schemas["DaySettlement"];
+// `DaySettlement` was a local alias here for the two settlement helpers that
+// moved to `m2-engagement-customer.ts` in the Gate 3 fold. The barrel exports
+// the type from there; nothing left in this module names it.
 type StageCrewMember = Schemas["StageCrewMember"];
 type RosterCrewMember = Schemas["CrewMember"];
 
@@ -1349,38 +1351,25 @@ export function shiftSettlementClaim(day: ShiftDay): ShiftSettlementClaim {
   }
 }
 
-/**
- * The published figure for the day, in paise, or `null` when there is not one yet.
+/*
+ * `settlementAmountPaise` and `settlementPaymentLink` used to live here.
  *
- * Read, never computed. `amount_paise` is present workers at the day rate plus
- * every extra both sides accepted through the amendment engine, and the server
- * freezes it at `SETTLED`. Multiplying `per_worker_paise` by `workers_present`
- * on the client gives the identical number right up until an overtime amendment
- * is applied, at which point the screen would be quietly short by the overtime —
- * on the one screen where a lead is deciding whether they have been paid enough.
+ * Folded into `m2-engagement-customer.ts` at the Gate 3 integration: both
+ * sessions wrote them in the same wave, byte-equivalent, and two exports of one
+ * name is a `tsc` failure. The barrel's rule decides the direction — both
+ * parties read a settlement the same way, so it is not uniquely the vendor's.
+ *
+ * The reasoning written here is worth keeping where it can still be found. On
+ * the amount: multiplying `per_worker_paise` by `workers_present` gives the
+ * identical number right up until an overtime amendment is applied, at which
+ * point the screen would be quietly short by the overtime — on the one screen
+ * where a lead is deciding whether they have been paid enough. On the link: it
+ * opens the *Customer's* own UPI app at the lead's VPA, no money passes through
+ * Vsolve at any point, and no screen may imply it does.
+ *
+ * Import both from `@vsolve/query`, as `features/shift/view/settlement-panel.tsx`
+ * already does.
  */
-export function settlementAmountPaise(day: ShiftDay): number | null {
-  return day.settlement?.amount_paise ?? null;
-}
-
-/**
- * The UPI deep link at the exact published amount, or `null`.
- *
- * **A convenience, and never a rail.** It opens the *Customer's* own UPI app at
- * the lead's VPA; no money passes through Vsolve at any point and no screen may
- * imply it does. `null` whenever the lead has published no VPA, which is an
- * ordinary state and not an error — the amount is still shown, and the crew is
- * paid the way they were paid before this app existed.
- *
- * Returned only once the settlement is real. A link built against a stale
- * amount is worse than no link, so an absent settlement answers `null` rather
- * than reaching for a figure.
- */
-export function settlementPaymentLink(day: ShiftDay): string | null {
-  const settlement: DaySettlement | null = day.settlement;
-  if (settlement === null) return null;
-  return settlement.upi_payment_link;
-}
 
 /* -- `M2-FE-508`: safety --------------------------------------------------- */
 

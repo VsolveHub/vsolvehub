@@ -279,13 +279,16 @@ export {
   isSettlementUnproven,
   canReportCashDemand,
   isNotAShiftDay,
-  // `settlementAmountPaise` and `settlementPaymentLink` live in
-  // `m2-engagement-customer.ts` and are deliberately **not** exported here:
-  // Session B published byte-equivalent twins in `m2-engagement-partner.ts` in
-  // the same wave, and two exports of one name is a `tsc` failure rather than a
-  // style question. Not resolved by either session mid-wave — the fold is the
-  // orchestrator's at the gate, and this file's own rule ("One name, one home",
-  // below) says which way it goes. Logged in `frontend-execution-plan.md` §7.
+  // Folded at the Gate 3 integration. Both sessions wrote these two in the same
+  // wave — Session A here, Session B as byte-equivalent twins in
+  // `m2-engagement-partner.ts` — and two exports of one name is a `tsc` failure
+  // rather than a style question. This file's own rule below decides the
+  // direction: both parties read a settlement the same way, so the home is
+  // `m2-engagement-customer` and the partner block does not re-export them. The
+  // partner twins are deleted; the vendor's settlement panel imports these from
+  // `@vsolve/query` and needed no change.
+  settlementAmountPaise,
+  settlementPaymentLink,
 } from "./m2-engagement-customer";
 export type {
   AmendmentDirection,
@@ -397,8 +400,8 @@ export {
   overtimeIsRetroactive,
   SUPERVISOR_SETTLEMENT_PARTY,
   shiftSettlementClaim,
-  settlementAmountPaise,
-  settlementPaymentLink,
+  // `settlementAmountPaise` / `settlementPaymentLink` deliberately absent — see
+  // the fold note in the session A block above, and "One name, one home".
   SHIFT_SAFETY_SEVERITIES,
   SHIFT_SAFETY_CATEGORIES,
   isCrewConflict,

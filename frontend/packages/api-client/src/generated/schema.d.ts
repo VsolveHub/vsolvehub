@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.30.0)
- * Checksum: bf70fc4e788536f9
+ * Source:   contracts/openapi/v1.yaml (version 1.31.0)
+ * Checksum: 207bb71d8069304e
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -937,6 +937,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/engagement-stages/{stage_id}/delay-claim/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Claim that the Customer held this milestone up, and ask for a schedule extension.
+         *
+         *     **No money moves and none can.** There is no amount on this request or on the record behind it. A delay that costs money is extra work, and extra work is a scope amendment the Customer accepts and pays for — `POST /engagements/{id}/amendments/`. One record that could do both would let "the site was locked" arrive as a bill.
+         *
+         *     `evidence_ids` are rows already uploaded through this stage's ordinary evidence rail (`POST /engagement-stages/{id}/evidence/uploads/`), which now accepts uploads on a `PENDING` stage precisely so a claim about work that never started can carry a photograph. Ids that are not on this stage are refused.
+         *
+         *     One live claim per milestone, held by a database constraint. The Customer has until `expires_at` to answer, and **silence expires the claim rather than granting it**.
+         */
+        post: operations["m2_project_delay_claim_raise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engagement-stages/{stage_id}/dispute/": {
         parameters: {
             query?: never;
@@ -1217,7 +1242,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its own, when every stage is released; this is the separate fact that the Customer agrees it is done. The warranty period a configured A5 variant then enters is Wave C5 and is not built. */
+        /**
+         * @description The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its own, when every stage is released; this is the separate fact that the Customer agrees it is done.
+         *
+         *     **Three refusals, and none of them approves anything on the way past** (`M2-BE-548`). An open stage refuses — an accepted amendment can append work after `COMPLETING`, and that stage keeps its own review rather than being swept into a settled one. A disputed stage refuses with `m2_stage_disputed`. A **submitted handover the Customer has not accepted** refuses, which is the mechanism that keeps Event and Media delivery on the platform: accept it at `POST /engagements/{id}/handover/acceptance/` first.
+         *
+         *     **An A5 engagement that withheld warranty retention then moves straight to `WARRANTY`, not `COMPLETED`.** Read `status` from the response rather than assuming the transition you asked for: `warranty_ends_at` on the project read says when the hold-back releases and the engagement becomes `CLOSED`.
+         */
         post: operations["m2_engagement_completion_accept"];
         delete?: never;
         options?: never;
@@ -1234,6 +1265,79 @@ export interface paths {
         };
         /** @description Every move on this engagement and its stages, oldest first. `actor_is_system` separates a decision somebody made from one a clock made — 'approved by you' and 'approved because the review window closed' are different sentences and a timeline that renders them identically is lying about who decided. Actor identity itself is never published: which of the two parties acted is derivable from `reason_code`, and the counterparty's user id is not their business. */
         get: operations["m2_engagement_event_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/handover/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Hand over the project's digital deliverables so Event and Media delivery does not happen off-platform.
+         *
+         *     **Files are not uploaded here.** Upload through the ordinary stage evidence rail first (`POST /engagement-stages/{id}/evidence/uploads/`, then the finalize call) and send the resulting evidence id as `evidence_id`. A second uploader for deliverables would be a second bucket, a second orphan sweep and a second set of media-type rules.
+         *
+         *     A `LINK` — `external_url`, https only — is **recorded rather than hosted**, which is said out loud because a Customer clicking it leaves this platform. What the row buys is that this Customer accepted that location at that moment.
+         *
+         *     Submitting again before acceptance **appends**; it does not replace. The mechanism that keeps delivery honest is not this endpoint but the next one: while a handover is submitted and unaccepted, `m2_engagement_completion_accept` refuses.
+         */
+        post: operations["m2_project_handover_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/handover/acceptance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accept the handover. Customer only.
+         *
+         *     Its own act rather than a side effect of closing the project, because the two can legitimately happen at different moments — a photographer delivers the gallery in week two of a four-week edit.
+         *
+         *     **When the project is already `COMPLETING`, accepting the handover finishes it**: the response is the completed (or `WARRANTY`) engagement, and no second call to `m2_engagement_completion_accept` is needed. Read `status` from the response.
+         */
+        post: operations["m2_project_handover_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/project/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description One A5 project, whole: its milestones, its money, its warranty retention, its handover and whatever recovery is in flight. Both parties read the same payload.
+         *
+         *     **Every milestone carries two readings** (`M2-BE-549`): the `original_*` fields are what was agreed when the estimate was selected, and the plain fields are what stands now. `schedule_shift_days` is the difference in days, computed server-side. A project screen that can only say what is due now is useless in the argument it exists for.
+         *
+         *     Read `kind` before rendering a milestone. A `MATERIAL_ADVANCE` is money spent on goods rather than a milestone somebody performs, and a cancelled one carrying `cancellation_reason_code: material_advance_left_with_vendor` is **not** going to be refunded — showing it as a pending refund would promise something no command will ever do.
+         *
+         *     `retention_withheld_paise` climbs as milestones are approved and reaches `retention_paise` at the last one; `warranty_ends_at` appears with it. Reads only — nothing here creates a row.
+         */
+        get: operations["m2_project_read"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1260,6 +1364,56 @@ export interface paths {
          *     The report body is **frozen** once filed. Operations may add a status and a resolution; nobody may rewrite what was reported.
          */
         post: operations["m2_safety_incident_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/termination/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description End an A5 project with milestones outstanding and no replacement. Operations only.
+         *
+         *     **The two recovery rules that make `EngagementStage.kind` worth having** (`M2-BE-543`): a funded, unearned **work** milestone is refunded, because the platform is holding the Customer's money for work that is not going to happen; a funded **material advance** is **not** refunded and not clawed back, because the vendor spent it on goods. The advance is cancelled with `cancellation_reason_code: material_advance_left_with_vendor` and reaches Operations as an outstanding balance somebody resolves against the physical world.
+         *
+         *     **This decides no remedy.** No penalty, no forfeit, no compensation. Who owes whom what when a project ends early is the cancellation policy engine in Wave C6 (`M2-BE-701`, `706`). Returning money nobody earned is the absence of a remedy rather than one.
+         *
+         *     The engagement becomes `CANCELLED` and the requirement closes as `CLOSED_CANCELLED`. Cancelled milestones keep their amounts and their funding history — the agreement was that big and the money was collected, and shrinking the totals to make a cancelled project look tidy would erase what a dispute reads.
+         */
+        post: operations["m2_project_terminate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/transfer/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Propose moving every unfinished milestone to a replacement vendor at the replacement's own prices. Operations only, and **nothing moves until the Customer accepts** — their remaining cost changes, and §7 does not let Operations change somebody's agreement for them.
+         *
+         *     **Priced per milestone, never as a lump.** Every unfinished milestone must appear in `quotes` exactly once and no others may, so the two numbers the Customer decides on are sums over the same list of work. Read the current list from `GET /engagements/{id}/project/`: it is every milestone whose `status` is `PENDING`, `IN_PROGRESS`, `AWAITING_REVIEW` or `CORRECTION_REQUESTED`, **excluding** a `MATERIAL_ADVANCE` that has been funded.
+         *
+         *     **A disputed milestone blocks the whole transfer** (`m2_stage_disputed`). Decide it at `POST /engagement-stages/{id}/dispute/decision/` first: transferring around a dispute would close the objection by moving it out of the agreement.
+         *
+         *     A funded material advance is neither transferred nor refunded. It is reported on the proposal as `material_advance_outstanding_paise` and left with the abandoning vendor — that money bought goods, and a background job is not the thing that decides where they went.
+         */
+        post: operations["m2_project_transfer_propose"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3385,6 +3539,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/project-delay-claims/{delay_claim_id}/decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accept or reject a delay claim. Customer only.
+         *
+         *     **Accepting moves this milestone and every one after it** by `extension_days`, because a project is a sequence: a week lost on the first fix is a week lost on everything that follows. A milestone with no date is left without one rather than given one.
+         *
+         *     Rejecting records the decision and changes nothing. Neither answer moves any money.
+         */
+        post: operations["m2_project_delay_claim_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/project-transfers/{project_transfer_id}/decision/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Accept or decline a proposed vendor transfer. Customer only.
+         *
+         *     **Accepting settles the delta structurally, and there is no checkout here.** Every unfinished milestone refunds what was funded and unearned through the ordinary M1 refund lifecycle, drops back to `REQUIRED`, and is then repriced to the replacement's number; the engagement's `amendment_delta_paise` moves by exactly the difference. The money asked for afterwards is the ordinary stage funding that was always going to be asked for, at the price just accepted. That is what stops anybody paying twice.
+         *
+         *     **The engagement returns to `PENDING_START` and `work_may_start_at` is cleared.** The replacement has nothing funded and no clearance; fund the first milestone at `POST /engagement-stages/{id}/funding/` exactly as at the start of the project.
+         *
+         *     `refunded_paise` on the response is what actually went back. `material_advance_outstanding_paise` is what did not and will not — render it as an open question for support, never as a pending refund.
+         */
+        post: operations["m2_project_transfer_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proposals/": {
         parameters: {
             query?: never;
@@ -5207,6 +5409,18 @@ export interface components {
          *     `upi_payment_link` is null whenever the lead has published no VPA, which is an ordinary state
          *     and not an error: the amount is still shown and the crew is still paid the way they were paid
          *     before this app existed.
+         *
+         *     **It is a `SerializerMethodField`, and Wave C5 made it one because it was a reader with no
+         *     writer** (RULES §3(b), the fourth instance in four waves). `DaySettlement` has no
+         *     `upi_payment_link` column — the value is computed by `workforce.upi_payment_link` — and the
+         *     only thing that ever populated it was a manual injection into the settlement *command's* own
+         *     response body. So the deep link was absent before the tap and gone after a reload: it existed
+         *     for exactly one HTTP response and never appeared on `m2_shift_day_read`, which is the screen a
+         *     Customer actually opens in the evening. DRF made that invisible rather than loud, answering
+         *     `null` for the missing attribute instead of raising, so nothing failed and the one convenience
+         *     `M2-BE-536` exists to offer was simply never there.
+         *
+         *     Computing it here fixes both surfaces at once and leaves no second place to forget.
          */
         DaySettlement: {
             /** Format: uuid */
@@ -5217,7 +5431,7 @@ export interface components {
             readonly workers_expected: number;
             readonly extras_paise: number;
             readonly amount_paise: number;
-            readonly shortfall_choice: components["schemas"]["ShortfallChoiceEnum"];
+            readonly shortfall_choice: components["schemas"]["ShortfallChoiceEnum"] | components["schemas"]["BlankEnum"];
             /** Format: date-time */
             readonly make_good_requested_at: string | null;
             /** Format: date-time */
@@ -5236,6 +5450,37 @@ export interface components {
          * @enum {string}
          */
         DaySettlementStatusEnum: "AWAITING_BOTH" | "SUPERVISOR_CLAIMED" | "CUSTOMER_CLAIMED" | "SETTLED";
+        /** @description Raise a delay claim. Deliberately carries no amount — see `ProjectDelayClaimSerializer`. */
+        DelayClaimCreateRequest: {
+            reason_code: string;
+            description: string;
+            extension_days: number;
+            evidence_ids?: string[];
+        };
+        DelayClaimDecisionRequest: {
+            accept: boolean;
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description One item in a handover. Exactly one of `evidence_id` and `external_url`.
+         *
+         *     Validated here as well as by `requirements_deliverable_has_exactly_one_body`, because a client
+         *     that sent both should be told which field is wrong rather than shown a 500 from a check
+         *     constraint.
+         */
+        DeliverableInputRequest: {
+            title: string;
+            /** Format: uuid */
+            stage_id?: string | null;
+            /** Format: uuid */
+            evidence_id?: string | null;
+            /**
+             * Format: uri
+             * @default
+             */
+            external_url: string;
+        };
         DemandPreview: {
             readonly summaries: components["schemas"]["DemandSummary"][];
             readonly matched_service_count: number;
@@ -5565,9 +5810,10 @@ export interface components {
          *     * `CORRECTION_REQUESTED` - Correction requested
          *     * `DISPUTED` - Disputed
          *     * `RELEASED` - Released
+         *     * `CANCELLED` - Cancelled by a recovery
          * @enum {string}
          */
-        EngagementStageStatusEnum: "PENDING" | "IN_PROGRESS" | "AWAITING_REVIEW" | "APPROVED" | "CORRECTION_REQUESTED" | "DISPUTED" | "RELEASED";
+        EngagementStageStatusEnum: "PENDING" | "IN_PROGRESS" | "AWAITING_REVIEW" | "APPROVED" | "CORRECTION_REQUESTED" | "DISPUTED" | "RELEASED" | "CANCELLED";
         /**
          * @description * `PENDING_START` - Pending start
          *     * `ACTIVE` - Active
@@ -5917,6 +6163,11 @@ export interface components {
             units: components["schemas"]["UnitRescheduleOutcome"][];
             /** Format: date-time */
             server_now: string;
+        };
+        HandoverSubmitRequest: {
+            /** @default  */
+            note: string;
+            items: components["schemas"]["DeliverableInputRequest"][];
         };
         /**
          * @description * `partner` - partner
@@ -7368,6 +7619,231 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /**
+         * @description A vendor's claim that the Customer held a milestone up (`M2-BE-544`).
+         *
+         *     **There is no amount on this shape and none may be added.** A delay that costs money is extra
+         *     work, and extra work is a scope amendment the Customer accepts and pays for. A single record
+         *     that could carry both would let "the site was locked" arrive as a bill.
+         *
+         *     `evidence` lists ids on the stage's own evidence rail. `applied_days` is what the schedule
+         *     actually moved by — equal to `extension_days` on an accepted claim and zero on every other,
+         *     which is what lets a screen show a history rather than a running total it has to reconstruct.
+         */
+        ProjectDelayClaim: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly stage: string;
+            readonly reason_code: string;
+            readonly description: string;
+            readonly evidence: string[];
+            readonly extension_days: number;
+            readonly applied_days: number;
+            readonly status: components["schemas"]["ProjectDelayClaimStatusEnum"];
+            /** Format: date-time */
+            readonly expires_at: string;
+            readonly decision_note: string;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `SUBMITTED` - Waiting for the Customer
+         *     * `ACCEPTED` - Accepted; the schedule moved
+         *     * `REJECTED` - Rejected; the schedule stands
+         *     * `EXPIRED` - Not answered in time
+         *     * `WITHDRAWN` - Withdrawn by the vendor
+         * @enum {string}
+         */
+        ProjectDelayClaimStatusEnum: "SUBMITTED" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "WITHDRAWN";
+        /**
+         * @description One handed-over item (`M2-BE-547`).
+         *
+         *     A `FILE` carries `evidence`, which is the id of a row on the ordinary stage evidence rail —
+         *     the same presign, checksum and scan status every other M2 attachment gets. A `LINK` carries
+         *     `external_url` and is **recorded rather than hosted**, said out loud because a Customer
+         *     clicking it is leaving this platform.
+         */
+        ProjectDeliverable: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly stage: string | null;
+            readonly kind: components["schemas"]["ProjectDeliverableKindEnum"];
+            readonly title: string;
+            /** Format: uuid */
+            readonly evidence: string | null;
+            /** Format: uri */
+            readonly external_url: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `FILE` - A file uploaded through the evidence rail
+         *     * `LINK` - A recorded external location
+         * @enum {string}
+         */
+        ProjectDeliverableKindEnum: "FILE" | "LINK";
+        /**
+         * @description The handover as a whole, and the two timestamps that decide whether a project can close.
+         *
+         *     `submitted_at` set with `accepted_at` null is the state in which
+         *     `m2_engagement_completion_accept` refuses — that refusal is the entire mechanism keeping Event
+         *     and Media delivery on the platform.
+         */
+        ProjectHandover: {
+            /** Format: date-time */
+            readonly submitted_at: string | null;
+            /** Format: date-time */
+            readonly accepted_at: string | null;
+            readonly note: string;
+            readonly deliverables: components["schemas"]["ProjectDeliverable"][];
+        };
+        /**
+         * @description One A5 milestone, as agreed and as it stands (`M2-BE-541`, `549`).
+         *
+         *     Not a `ModelSerializer` on `EngagementStage`: half of these fields are the frozen
+         *     `original_terms` snapshot unpacked, and `schedule_shift_days` is arithmetic the server does so
+         *     that a date difference is not computed in whatever timezone a browser happens to be in.
+         *
+         *     `kind` is the field to read before rendering anything: a `MATERIAL_ADVANCE` is money spent on
+         *     goods, not a milestone somebody performs, and it does not refund like unearned work.
+         */
+        ProjectMilestone: {
+            /** Format: uuid */
+            readonly stage_id: string;
+            readonly position: number;
+            readonly milestone_label: string;
+            readonly deliverable: string;
+            readonly kind: components["schemas"]["EngagementStageKindEnum"];
+            readonly amount_paise: number;
+            /** Format: date */
+            readonly scheduled_on: string | null;
+            readonly status: components["schemas"]["EngagementStageStatusEnum"];
+            readonly funding_state: components["schemas"]["EngagementStageFundingStateEnum"];
+            readonly funded_paise: number;
+            readonly refunded_amount_paise: number;
+            readonly cancellation_reason_code: string;
+            readonly original_milestone_label: string;
+            readonly original_deliverable: string;
+            readonly original_amount_paise: number;
+            /** Format: date */
+            readonly original_scheduled_on: string | null;
+            readonly schedule_shift_days: number | null;
+        };
+        /**
+         * @description The whole A5 project, in one read.
+         *
+         *     The money block is the same six columns `EngagementSerializer` publishes, repeated here so a
+         *     project screen needs one request rather than two, plus the two retention numbers. `M2-BE-504`
+         *     guarantees `staged_total_paise == total_paise + amendment_delta_paise` by constraint, so
+         *     "agreed, then changed by, now" needs no arithmetic in the client.
+         *
+         *     `retention_withheld_paise` is what has actually been held so far and climbs as milestones are
+         *     approved; `retention_paise` is where it is going. They are equal only once the last milestone
+         *     is approved, which is exactly when `warranty_ends_at` appears.
+         */
+        ProjectPlan: {
+            /** Format: uuid */
+            readonly engagement_id: string;
+            readonly status: components["schemas"]["EngagementStatusEnum"];
+            readonly commercial_mode: components["schemas"]["EngagementCommercialModeEnum"];
+            readonly total_paise: number;
+            readonly staged_total_paise: number;
+            readonly amendment_delta_paise: number;
+            readonly funded_total_paise: number;
+            readonly approved_total_paise: number;
+            readonly released_total_paise: number;
+            readonly refunded_total_paise: number;
+            readonly retention_paise: number;
+            readonly retention_withheld_paise: number;
+            /** Format: date-time */
+            readonly warranty_ends_at: string | null;
+            readonly milestones: components["schemas"]["ProjectMilestone"][];
+            readonly handover: components["schemas"]["ProjectHandover"];
+            readonly delay_claims: components["schemas"]["ProjectDelayClaim"][];
+            readonly transfer: components["schemas"]["ProjectTransfer"] | null;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
+        /**
+         * @description End a project early. Carries no remedy, because this command decides none.
+         *
+         *     Who owes whom what when a project ends early is the cancellation policy engine in Wave C6
+         *     (`M2-BE-701`, `706`). What this does is return money nobody earned, which is the absence of a
+         *     remedy rather than one.
+         */
+        ProjectTerminationRequest: {
+            reason_code: string;
+            /** @default  */
+            note: string;
+        };
+        /**
+         * @description A proposed or applied move of the remaining milestones to another vendor (`M2-BE-545`).
+         *
+         *     The two numbers a Customer decides on are `previous_remaining_paise` and
+         *     `replacement_remaining_paise`; `delta_paise` is their difference and is held equal by a
+         *     database constraint, so a client may render it without checking the arithmetic.
+         *
+         *     `material_advance_outstanding_paise` is the number nobody enjoys: money the Customer already
+         *     paid the abandoning vendor for materials, which this transfer deliberately does **not**
+         *     recover and does **not** hand to the replacement. Render it as an open question for support,
+         *     never as a pending refund.
+         *
+         *     `to_partner` is a bare id rather than a vendor card. Identity disclosure on this surface is the
+         *     same ladder every other M2 read obeys, and a transfer proposal is not the place to widen it.
+         */
+        ProjectTransfer: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly status: components["schemas"]["ProjectTransferStatusEnum"];
+            readonly reason_code: string;
+            readonly note: string;
+            /** Format: uuid */
+            readonly to_partner: string;
+            readonly previous_remaining_paise: number;
+            readonly replacement_remaining_paise: number;
+            readonly delta_paise: number;
+            readonly refunded_paise: number;
+            readonly material_advance_outstanding_paise: number;
+            readonly stage_prices: unknown;
+            /** Format: date-time */
+            readonly expires_at: string;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            /** Format: date-time */
+            readonly applied_at: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        ProjectTransferDecisionRequest: {
+            accept: boolean;
+        };
+        /**
+         * @description Operations names the replacement and their price for every unfinished milestone.
+         *
+         *     Priced **per milestone**, never as a lump: a replacement who names one number for "the rest of
+         *     it" has not said which of the agreed milestones they are doing, and the Customer would be
+         *     accepting a total against a scope nobody restated.
+         */
+        ProjectTransferProposeRequest: {
+            /** Format: uuid */
+            to_partner_id: string;
+            reason_code: string;
+            /** @default  */
+            note: string;
+            quotes: components["schemas"]["TransferQuoteRequest"][];
+        };
+        /**
+         * @description * `PROPOSED` - Waiting for the Customer
+         *     * `ACCEPTED` - Accepted and applied
+         *     * `DECLINED` - Declined by the Customer
+         *     * `EXPIRED` - Not answered in time
+         * @enum {string}
+         */
+        ProjectTransferStatusEnum: "PROPOSED" | "ACCEPTED" | "DECLINED" | "EXPIRED";
         /** @description A vendor's own quote, read back to that vendor. */
         Proposal: {
             /** Format: uuid */
@@ -8594,6 +9070,7 @@ export interface components {
             response: components["schemas"]["AttendanceResponseEnum"];
             /** @default  */
             shortfall_choice: components["schemas"]["ShortfallChoiceEnum"] | components["schemas"]["BlankEnum"];
+            /** @description At most 40 workers may be itemised in one dispute. A dispute naming more people than that is not a shift-day. */
             worker_details?: components["schemas"]["DisputedWorkerRequest"][];
             /** @default  */
             note: string;
@@ -8946,6 +9423,12 @@ export interface components {
             owner_team: components["schemas"]["OperationsCaseTeamEnum"];
             open: number;
             unclaimed: number;
+        };
+        /** @description The replacement's price for one unfinished milestone. */
+        TransferQuoteRequest: {
+            /** Format: uuid */
+            stage_id: string;
+            amount_paise: number;
         };
         /**
          * @description * `PAST` - PAST
@@ -11538,6 +12021,61 @@ export interface operations {
             };
         };
     };
+    m2_project_delay_claim_raise: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                stage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelayClaimCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DelayClaimCreateRequest"];
+                "multipart/form-data": components["schemas"]["DelayClaimCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDelayClaim"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` when the milestone is finished or the engagement is A3; `m2_amendment_not_actionable` when a claim is already waiting; `m2_policy_unavailable` when the owner has set no response window. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_stage_dispute: {
         parameters: {
             query?: never;
@@ -12255,7 +12793,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description `m2_stage_transition_not_allowed` when stages are still open. */
+            /** @description `m2_stage_transition_not_allowed` when stages are still open or a handover is unaccepted; `m2_stage_disputed` when a stage is disputed. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12286,6 +12824,140 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_handover_submit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoverSubmitRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["HandoverSubmitRequest"];
+                "multipart/form-data": components["schemas"]["HandoverSubmitRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` when the project is not active or completing, the Customer has already accepted, or a named file is not attached to this project. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_handover_accept: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` when nothing has been handed over yet, or when completion is blocked by an open stage. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPlan"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` on an A3 engagement: a workforce booking has shift-days, not milestones. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12368,6 +13040,125 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_terminate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTerminationRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectTerminationRequest"];
+                "multipart/form-data": components["schemas"]["ProjectTerminationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_transition_not_allowed` when the project is already closed or the engagement is A3. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_transfer_propose: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTransferProposeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectTransferProposeRequest"];
+                "multipart/form-data": components["schemas"]["ProjectTransferProposeRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTransfer"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_capability_not_approved` or `m2_capability_suspended` when the replacement cannot serve this variant and area. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_stage_disputed`, `m2_amendment_not_actionable` when a transfer is already waiting, or `m2_stage_transition_not_allowed` when the milestone list does not match. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17990,6 +18781,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GroupQuote"];
+                };
+            };
+        };
+    };
+    m2_project_delay_claim_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                delay_claim_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelayClaimDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["DelayClaimDecisionRequest"];
+                "multipart/form-data": components["schemas"]["DelayClaimDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDelayClaim"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_amendment_not_actionable` when the claim is already decided or has expired. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_transfer_decide: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                project_transfer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTransferDecisionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectTransferDecisionRequest"];
+                "multipart/form-data": components["schemas"]["ProjectTransferDecisionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTransfer"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `m2_amendment_not_actionable` when the transfer is decided, expired or the unfinished work changed after it was priced; `m2_stage_disputed` when a milestone was disputed in between. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

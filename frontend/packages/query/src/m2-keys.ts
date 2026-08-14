@@ -282,6 +282,27 @@ export const m2QueryKeys = {
      */
     events: (engagementId: string) =>
       [...m2QueryKeys.engagements.detail(engagementId), "events"] as const,
+    /**
+     * `GET /engagements/{id}/safety-incidents/` — read by **both** parties.
+     *
+     * Promoted at Gate 3 on Session B's request, for the reason that promoted
+     * `events` above: composed at the call site it was correct by construction
+     * and unreviewable, and a key nobody can find here is a key nobody can
+     * check the invalidation of.
+     *
+     * The request argued it was "one key two columns compose independently".
+     * That half is **not true today** and the correction is worth keeping:
+     * Session A grepped its whole app at the Gate 3 re-point and found no
+     * safety-incident read anywhere in it — `M2-FE-515` is a write-only cash
+     * demand that posts and reads nothing. Only the Partner reads this list.
+     * The key stays promoted on the naming argument alone, and is here for
+     * whoever builds the Customer's incident list later.
+     *
+     * Nested under the detail, so `report_safety_incident`'s `stageScope`
+     * already clears it by prefix. The promotion buys the name, not the shape.
+     */
+    safetyIncidents: (engagementId: string) =>
+      [...m2QueryKeys.engagements.detail(engagementId), "safety-incidents"] as const,
   },
 
   /**
@@ -459,6 +480,13 @@ export type M2Command =
   // existed and now has a shift-day scope rather than an engagement one.
   | "confirm_day_settled"
   | "report_cash_demand"
+  // Wave B3W's four §7 rows, landed at Gate 3. Each was being invalidated by
+  // hand at its call site, which is not a workaround for a broken row but the
+  // absence of one — and the point of this table is that every money-moving or
+  // state-moving command is reviewable in one place.
+  | "start_stage"
+  | "confirm_shift_arrival"
+  | "report_crew_no_show"
   | "request_cancellation";
 
 const K = m2QueryKeys;
@@ -724,6 +752,35 @@ export const M2_INVALIDATION: Record<M2Command, (ctx: M2CommandContext) => KeyPr
   // that fires into an empty cache.
   confirm_day_settled: (c) => stageScope(c),
   report_cash_demand: (c) => stageScope(c),
+
+  // Wave B3W's rows, landed at Gate 3.
+  //
+  // `start_stage` is the plain stage scope — the same prefix its hand-written
+  // invalidation already used, so the two could not have drifted meanwhile.
+  //
+  // `confirm_shift_arrival` looks like a stage command and is not only one:
+  // arrival **starts the stage** and, on day one, **earns the booking fee**. The
+  // stage scope reaches the engagement and the lists; the requirement scope is
+  // what carries the fee, and the Customer app keys the rate-card state under
+  // `requirements.detail` — so on the one screen where money hardens, both
+  // sides refetch rather than the vendor's alone.
+  start_stage: (c) => stageScope(c),
+  confirm_shift_arrival: (c) => [
+    ...stageScope(c),
+    ...(c.requirementId ? [K.rateCard.state(c.requirementId)] : []),
+  ],
+
+  // The A3 twin of `report_visit_no_show`, and it settles the booking fee the
+  // same way that one settles a visit share — forfeited and split, or refunded
+  // with a free re-dispatch. So it moves the requirement's own money read, not
+  // just the vendor's list. The asymmetry with the A5 row was bookkeeping, not
+  // design. The Partner app holds no requirement-scoped cache and reaches only
+  // `engagements.all`; both prefixes are listed because each app can supply a
+  // different half of the context.
+  report_crew_no_show: (c) => [
+    ...(c.requirementId ? requirementScope(c.requirementId) : []),
+    ...(c.engagementId ? [K.engagements.all] : []),
+  ],
 
   request_cancellation: (c) => (c.engagementId ? [K.engagements.all] : []),
 };

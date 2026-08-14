@@ -1,8 +1,8 @@
 # M2 Master Task Board
 
 **Scope:** Workforce and project services (`A3_TIME_BLOCK` and `A5_CUSTOM_PROJECT`)
-**Status:** P1–P4 built. **Contract 1.31.0 is published; the typed client is regenerated and in
-sync at 1.30.0 and needs regeneration for 1.31.0** (Gate 2, 2026-08-14). Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
+**Status:** P1–P4 built. **Contract 1.31.0 is published and the typed client is regenerated and in
+sync at 1.31.0** (Gate 3, 2026-08-14). Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
 thin-supply fallback since revision 4 — the A5 visit plan with per-slot split payouts, selection and
 reconfirmation), Wave C3 (the engagement + stage spine) and Wave C3.5 (defect closure plus the
 dev-only seed `manage.py seed_m2_demo`). Background sweeps are on Celery beat.
