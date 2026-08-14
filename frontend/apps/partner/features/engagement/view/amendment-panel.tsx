@@ -64,10 +64,12 @@ import { stageTitle, type StageWording } from "../model/engagement-copy";
  *
  * ## A reduction that empties a stage is refused here, not at the server
  *
- * `validateAmendmentDraft` refuses to compose one. It is a cancellation, vendor
- * abandonment is `M2-BE-545` in Wave C5 and does not exist, and submitting it to
- * find out would teach a vendor that a cancellation is a change request that
- * happened to fail.
+ * `validateAmendmentDraft` refuses to compose one. It is a cancellation, and
+ * submitting it to find out would teach a vendor that a cancellation is a change
+ * request that happened to fail. Wave C5 published the replacement path at
+ * 1.31.0 and it does **not** change this: `POST /engagements/{id}/transfer/` is
+ * **Operations-proposed and Customer-accepted**, so there is still no vendor
+ * self-serve abandonment and this app offers none.
  *
  * ## The owner-blocked refusal
  *

@@ -1382,16 +1382,12 @@ cd backend
 .\.venv\Scripts\python.exe manage.py seed_m2_demo --i-understand-this-is-dev-only
 ```
 
-Then, **because of the `documents_verified_at` blocker above, one manual step is unavoidable until
-the backend wave lands** — nothing in the product can do it:
-
-```
-cd backend
-.\.venv\Scripts\python.exe manage.py shell -c "from django.utils import timezone; from apps.partners.models import PartnerCrewMembership; PartnerCrewMembership.objects.update(documents_verified_at=timezone.now())"
-```
-
-Without it step 3 refuses every worker with *"… is not verified yet"* and the cascade never invites
-anybody, which is the blocker doing exactly what it says.
+**The `manage.py shell` workaround that used to be here is gone.** It stamped
+`documents_verified_at` by hand because nothing in the product or the seed wrote it, and without it
+step 3 refused every worker with *"… is not verified yet"* and the cascade never invited anybody.
+Contract 1.31.0's `seed_m2_demo` stamps it, so **the seed above is the whole precondition** and the
+crew step is exercisable as written. (The blocker's other half is still open and does not affect
+this script: there is no *production* verify command, so do not build a client against the seed.)
 
 Reaching a shift-day needs an open A3 engagement: book at the published rate as the Customer
 (`/requests/book/construction-helpers`), accept the crew offer as the lead
@@ -1432,6 +1428,9 @@ fee — the engagement opens on the verified callback.
    day"*; and the sentence *"The day is settled for the people who were here, not for the job."*
    Confirm the total is **N × the per-worker rate** and not M × it. `WAGES_ARE_DIRECT` is on screen.
    Press **"Copy the payment link"** → toast, and the `upi://pay?…` link is visible in full.
+   *Since 1.31.0:* the link is on the shift-day **read**, so it is there **before** the tap and
+   **after a reload**. If the panel says "you have not published a UPI ID" instead, that is now the
+   only thing it can mean — set `upi_vpa` on the business profile and reload.
    Press **"Yes — we were paid for today"**.
    *Expect:* badge **"Waiting on the customer"**, and the copy says Vsolve records this as
    **unproven** — not as paid. The **You** row of the trail fills; **The customer** stays
@@ -1458,6 +1457,191 @@ fee — the engagement opens on the verified callback.
     *Expect:* the capability banner appears **above** the panels, every command control is withdrawn,
     and **the records stay readable** — who is on the day, the count and the amount are all still
     there.
+
+---
+
+## Wave B3W-C — the Gate 3 cleanup pass (2026-08-14)
+
+A cleanup wave, not a feature wave. Nothing new is on the screen and nothing new is fetched. The
+whole of it is: consume what Gate 3 granted, delete what 1.31.0 made unnecessary, and correct the
+comments whose stated reason has expired — so that Wave B4, the last frontend wave in this column,
+inherits no hand-written workaround and no stale premise. Contract **1.31.0**; the backend column is
+concurrently publishing 1.32.0 and nothing here is built against it.
+
+### The four Gate 3 grants, consumed — and the one that was not a swap
+
+All four `M2Command` / key requests in plan §7 were this column's. Three were the straight
+substitution they looked like. One was not, and the difference is the reason the brief said to check
+rather than assume.
+
+**`start_stage`** — `features/engagement/queries.ts`. The hand-written
+`invalidateQueries({ queryKey: engagements.all })` is deleted and the mutation calls
+`invalidateForM2Command(queryClient, "start_stage", { engagementId, stageId })`. The row resolves to
+`stageScope`, which with both ids is `[engagements.detail, engagements.all]`. `engagements.all` is
+`["m2","engagements"]` and `detail` is `[...all, "detail", id]`, so React Query's prefix match makes
+`all` subsume `detail`: the row strictly contains the single key the hand-written call cleared, and
+the list still moves, which is what starting a shift-day needs (its booking leaves "coming up").
+
+**`confirm_shift_arrival`** — `features/shift/queries.ts`. Landed **wider** than requested, and this
+column's own reasoning is why: arrival starts the stage *and*, on day one, earns the booking fee, so
+the row is `stageScope` **plus** `rateCard.state(requirementId)` when the context carries a
+requirement id. Checked what the call site passes: `ShiftCommandScope` is `{ engagementId, stageId }`
+and carries no requirement id, so the row returns exactly the pair that was written by hand.
+
+**The scope type is deliberately not widened to supply one.** Grepped the whole partner app for
+`rateCard`: there is no read on that key anywhere in it — `rateCard.state` is a Customer read, keyed
+under `requirements.detail` in their app. Passing a requirement id from here would invalidate a cache
+entry that does not exist, which is not free in review cost even where it is free at runtime. The
+wider half of the row is correct and belongs to the Customer's call site, not to this one; the
+docblock says so, so nobody re-opens it as an oversight.
+
+**`engagements.safetyIncidents(engagementId)`** — the local `safetyIncidentsKey()` helper in
+`features/shift/queries.ts` is **deleted** and all three uses (the read, the `onSuccess`, the
+`onSettled`) take the factory. Byte-identical tuple; the promotion buys the name. The comment that
+replaces the helper also records the correction to the request that won it: this column argued the
+key was "one key two columns compose independently", and Session A grepped its whole app at the Gate
+3 re-point and found **no** safety-incident read there at all — `M2-FE-515` is a write-only cash
+demand. Only the Partner reads this list today. Kept in writing because the wrong half of an
+argument that won is exactly the kind of thing that gets repeated as settled.
+
+**`report_crew_no_show` — the one that needed more than a swap.** The row is:
+
+```ts
+report_crew_no_show: (c) => [
+  ...(c.requirementId ? requirementScope(c.requirementId) : []),
+  ...(c.engagementId ? [K.engagements.all] : []),
+],
+```
+
+`requirementScope` is `[requirements.detail, requirements.list, proposals.teasers,
+proposals.unlocked, visits.plan]` — **no engagements prefix in it at all**, and the two halves are
+independently gated on ids the context may or may not carry. `useReportCrewNoShow(requirementId)`
+held one id, and the key it was clearing by hand was `engagements.all`. So called as it stood, the
+grant would have returned five prefixes this app mounts nothing on and **silently dropped the only
+one that mattered** — the vendor's booking list, which is precisely what a settled or re-dispatched
+day-one no-show moves. It is not a superset until the context is complete.
+
+Consumed by giving the hook a two-field `CrewNoShowScope { requirementId, engagementId }` — the
+requirement is what the command is *addressed* to (the booking fee lives there, and a forfeit can
+land on a booking whose engagement never opened), the engagement is passed **for the cache and never
+for the request**. `SiteReportPanel` already had both as props, so the call site is one line. That is
+the whole of the widening in this wave, and it is reported rather than buried.
+
+### What 1.31.0 closed, and what it turned out this column was not doing
+
+- **`documents_verified_at` has a seed writer.** `seed_m2_demo` stamps it, so the A3 walkthrough's
+  precondition is real and the `manage.py shell -c "…update(documents_verified_at=timezone.now())"`
+  line is **out of the B3W smoke script above**. The blocker's other half stands and is left open:
+  there is still no *production* verify command, and no client is built against the seed.
+- **`DaySettlement.upi_payment_link` is on the read** — a `SerializerMethodField`, wire shape
+  unchanged — so the deep link survives a reload. **This column had nothing to delete**, and that was
+  checked rather than assumed: `settlement-panel.tsx` reads the figure and the link off `day` and
+  never off `mutation.data`, for the reason in the helper's own docblock — a link built against a
+  stale amount is worse than no link. The absent-case copy needed no correction either, because it
+  was always about the **VPA** and never about the transport. What *did* change is what the panel
+  could ever reach: at 1.30.0 the read answered `null` unconditionally, so "you have not published a
+  UPI ID" was the only branch it could take and it said that to leads who had. Recorded in the
+  panel's docblock, because the fix is invisible from the client's own diff.
+- **`settlementAmountPaise` / `settlementPaymentLink` moved to Session A's module** in the Gate 3
+  fold. `settlement-panel.tsx` imports both from `@vsolve/query` and needed no change — **confirmed
+  by `tsc`, not by reading the import**: `turbo run typecheck --filter=partner --force` resolves both
+  through the barrel from `m2-engagement-customer`.
+- **`shortfall_choice` and `MAXIMUM_DISPUTED_WORKERS`** are Session A's surface. Grepped both across
+  `apps/partner`, `apps/admin` and `m2-engagement-partner.ts`: **no reader and no hard-coded copy in
+  this column.** Nothing to do, said out loud so the next reader does not re-check.
+
+### The placeholder: `not-built-yet.tsx` is **not** gone, and the reason it stays
+
+`features/engagement/view/not-built-yet.tsx` still exists, with **two** references — down from eight
+at Wave B3 (the six A3 tails went with B3W's shift-day screen). Both remaining blocks are in
+`ProjectTails`: `M2-FE-605` (the Customer-caused delay claim) and `M2-FE-606` (the digital handover).
+Neither has a screen, both are `[ ]` in `03-frontend-tasks.md`, and building them is a feature wave
+this brief excludes. Deleting the component would silently remove the section a vendor goes looking
+for, which is the failure the component exists to prevent — so it stays, and it is named here rather
+than reported as done.
+
+**What was wrong about them, and is fixed:** both said they were *waiting on an endpoint (Wave C5)*,
+and Wave C5 published both endpoints at 1.31.0 — `POST /engagement-stages/{id}/delay-claim/` with its
+`ProjectDelayClaim` and Customer decision, and `POST /engagements/{id}/handover/` with its
+acceptance. What is missing is the screen. The references now say that, and the component's docblock
+says what is left, why, and not to delete it while either block is mounted. A stand-in whose stated
+reason has gone stale is worse than no stand-in, because the next reader believes it.
+
+Two route docblocks were stale in the same way and are corrected: `/workforce/shifts/[engagementId]`
+claimed "the C4 tails, which render an honest not-built-yet state" and now carries **no placeholder
+at all**, and `/projects/stages/[engagementId]` names its two by task id instead of by a wave that
+has landed.
+
+### Two more expired premises, found while sweeping for the first
+
+Both are about Wave C5 landing, both were load-bearing claims rather than decoration, and both would
+have misled a Wave B4 reader working on the Operations side of the same records:
+
+- **"Vendor abandonment is `M2-BE-545` in Wave C5 and does not exist"** — in `amendment-panel.tsx`
+  and in `validateAmendmentDraft`'s docblock, justifying why the composer refuses a reduction that
+  empties a stage. The replacement path **was** published at 1.31.0, and the conclusion survives
+  intact for a better reason than the one written down: `m2_project_transfer_propose` is
+  **Operations only** and moves nothing until the Customer accepts, so a vendor still has no route
+  out of an agreement and this app must not imply one. Both comments now say that.
+- **Checked and deliberately left alone:** the `crew_needed` bucket's "crew assignment is Wave C4 and
+  nothing on the wire says which shift-days still need names". C4 has landed, but the sentence is
+  still true of the payload it is about — `Engagement` publishes no roster, no assignment and no
+  worker count, and the shift-day read is per stage. `derivable: false` is still the honest answer.
+
+### RULES §3 audit — both classes
+
+**(a) The drifting duplicate — none introduced, and one re-checked.** This wave adds no table of
+values that also lives somewhere else; the two client-authored string tables from B3W
+(`SHIFT_SAFETY_CATEGORIES`, `CREW_RELEASE_REASONS`) were re-verified against the 1.31.0 client rather
+than assumed: `SafetyIncident.category_code` and `CrewAssignRequest.reason_code` are both still
+unconstrained strings, so those lists are still *this app's vocabulary over an unpublished field*
+rather than a hand-copy of a published enum. The §7 rows stay open. **The one duplicate this wave
+deleted was of exactly this shape**: `safetyIncidentsKey()` was a hand-composed copy of a tuple the
+frozen factory now owns, and a hand-composed key drifts from the invalidation that has to match it.
+
+**(b) The column with no writer — one closed, one still open.** `documents_verified_at`, this
+column's B3W finding, now has its dev writer (above) and still has no production one. No new config
+column is read by this wave.
+
+### Static gates — green
+
+Run from `C:\dev\vsolve\frontend`, bare app name, `--force`, task count read rather than exit code:
+
+- `npx eslint apps/partner/features/shift apps/partner/features/engagement "apps/partner/app/workforce/shifts/[engagementId]/page.tsx" "apps/partner/app/projects/stages/[engagementId]/page.tsx" packages/query/src/m2-engagement-partner.ts --max-warnings 0` — **clean, no output**.
+- `npx turbo run typecheck --filter=partner --force` — **1 of 1 successful** (this is also what proves
+  the settlement twins resolve from Session A's module).
+- `npx turbo run typecheck --filter=@vsolve/query --filter=admin --force` — **2 of 2 successful**.
+- `npx turbo run build --filter=partner --force` — **1 of 1 successful, 0 cached**; the route table is
+  unchanged, `/workforce/shifts/[engagementId]/days/[stageId]` still `ƒ`.
+
+**No test was run and none was written** — build-first amendment.
+
+### Smoke script — what to re-check, and nothing else
+
+This wave changes no screen. The B3W script above is the script; only the cache behaviour moved, and
+cache behaviour is checked by watching a *second* surface refresh itself.
+
+1. **Precondition.** `seed_m2_demo --i-understand-this-is-dev-only` and **nothing else** — the shell
+   line is gone. If step 3 of the B3W script still refuses every worker with *"… is not verified
+   yet"*, the seed did not run or is an older build.
+2. **`start_stage`.** Open a project stage at `/projects/stages/[engagementId]`, press the start
+   control, and watch the **list** at `/projects/stages` in a second tab. *Expect:* the row moves out
+   of its old bucket without a manual reload.
+3. **`confirm_shift_arrival`.** On a day-1 shift-day, press **"My crew has arrived"**. *Expect:* the
+   day updates, and the booking list at `/workforce/shifts` refreshes on focus. The Customer's
+   rate-card state is *their* app's refetch and is not this app's to observe.
+4. **`report_crew_no_show`** — the one worth actually doing. On a day-1 booking with no arrival, use
+   **"Report the customer was not there"**, confirm, then go back to `/workforce/shifts`. *Expect:*
+   the booking's state has moved **without a reload**. This is the key the grant would have dropped
+   if the engagement id had not been passed, so a stale list here is the regression to look for.
+5. **`engagements.safetyIncidents`.** File a safety report. *Expect:* it appears under "Safety reports
+   on this booking" immediately, exactly as before — same key, same prefix, no behaviour change.
+6. **The settlement link.** Set `upi_vpa` on the business profile, open a settled day, **reload**.
+   *Expect:* the `upi://pay?…` link is present *before* any tap and *after* the reload. Clear
+   `upi_vpa` and reload: the panel says you have not published a UPI ID, and that is now the only
+   thing that message can mean.
+7. **The placeholder.** `/projects/stages/[engagementId]` still shows **Delays and handover** with two
+   not-built-yet cards; `/workforce/shifts/[engagementId]` shows **none**.
 
 ---
 
@@ -1507,6 +1691,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | B3 | `FE-501..508`, `FE-601..607` (+ `FE-513`, revision 4 — Day-settled tap, with C4) | `[~]` 6 of 15 | `[ ]` | 2026-08-13 — the **shared spine half only**, against contract 1.25.0: `FE-501`, `FE-601`, `FE-602`, `FE-603`, `FE-604`, `FE-607` on 4 routes (2 replaced, 2 new), all `ƒ`. The nine archetype tails are Wave III and each renders a named not-built-yet block rather than a half-built control. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment.** 13 §7 rows appended, of which 1 closes both Wave I frozen-file grants and 2 are schema corrections (an undeclared `role` parameter, two enums published as bare strings). Two defects found in this column's own wiring and fixed before the gate. |
 | B-C3.5 | 1.26.0 consumption pass — `FE-301`, `FE-305`, `FE-314`, `FE-315` | `[~]` 4 of 4 | `[ ]` | 2026-08-14 — five workarounds removed against contract 1.28.0: `service_name` on the inbox row (and `category_slug` unprojected), `ProposalMaterialLine` as first-class rows with the stage-shaped workaround and its on-screen caveat deleted, `EngagementStage.kind` badged on the vendor's stage panel, two-way clarification with the Partner's answer route, cursor paging on the inbox, and `SiteVisit.timezone` on the visit panel. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment**; one stale assertion recorded. 6 §7 rows appended — 5 closures and 1 frozen-file request (`M2_INVALIDATION.answer_question` targets a key this app does not mount). |
 | B3W | `FE-502..508`, `FE-513` (B3's workforce half) | `[~]` 8 of 8 | `[ ]` | 2026-08-14 — the A3 shift-day on one new route, `/workforce/shifts/[engagementId]/days/[stageId]`, against contract 1.30.0. One read (`shiftDays.forStage`) drives crew, arrival, the one-tap count, the settled tap, extras and the on-site report router. The three Gate-1 frozen grants are consumed and the hand-written `engagements.all` on `submit_stage_evidence` is deleted; `useStartStage` keeps one, now for the different reason that no `start_stage` row exists. Lint clean on changed paths, typecheck **1/1 forced** for partner and **2/2** for `@vsolve/query` + admin (the barrel is shared with Session A, so every prefixed export and the private wire aliases are proved against their concurrent block), partner build green with the route `ƒ`. **Tests deferred per the build-first amendment.** 10 §7 rows appended — 4 frozen-file requests, 6 contract gaps. **RULES §3(b) hit, and it blocks the walkthrough:** `PartnerCrewMembership.documents_verified_at` has four readers and no writer anywhere including the seed, so no seeded worker is assignable and no seeded vendor has a verified roster. The smoke script carries the one-line shell workaround and says why it should not have to. |
+| B3W-C | Gate 3 cleanup — no task numbers | n/a | n/a | 2026-08-14 — all four Gate 3 grants consumed against contract 1.31.0 and every hand-written invalidation in this column deleted. **`report_crew_no_show`'s row was *not* a superset as the hook called it** — `requirementScope` carries no engagements prefix and the `engagements.all` half is gated on an engagement id the hook did not hold — so it took a two-field `CrewNoShowScope`, which is the only thing in this wave that needed more than a swap. `safetyIncidentsKey()` deleted for the promoted factory key. 1.31.0's seed writer removed the shell workaround from the B3W smoke script; the `upi_payment_link` fix needed **no** client change, verified rather than assumed. `not-built-yet.tsx` **stays** — two references (`FE-605`, `FE-606`) that no built screen covers — with its stale "waiting on Wave C5" reasons corrected, since C5 published both endpoints. Lint clean, typecheck 1/1 partner + 2/2 query/admin forced, partner build 1/1 with the route table unchanged. 4 §7 rows appended. |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |
 | B5 | quality share | `[ ]` | `[ ]` | |
 

@@ -719,10 +719,12 @@ export interface AmendmentProblem {
  *
  * The load-bearing entry is the last one. **A reduction cannot empty a stage** —
  * `_assert_reduction_is_possible` refuses `abs(delta) >= stage.amount_paise` with
- * "removing a stage entirely is a cancellation, not a change request", and vendor
- * abandonment is `M2-BE-545` in Wave C5, which does not exist. Submitting one to
- * find out would teach a vendor that a cancellation is a change request that
- * happened to fail, which is the opposite of true.
+ * "removing a stage entirely is a cancellation, not a change request". Submitting
+ * one to find out would teach a vendor that a cancellation is a change request
+ * that happened to fail, which is the opposite of true. Wave C5's vendor
+ * replacement at 1.31.0 does not change that: `m2_project_transfer_propose` is
+ * **Operations only** and moves nothing until the Customer accepts, so a vendor
+ * still has no route out of an agreement and the composer must not imply one.
  *
  * Everything here mirrors a server rule and none of it is a gate. The server
  * re-checks under a row lock; this only decides what the button does.

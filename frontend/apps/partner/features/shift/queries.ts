@@ -21,7 +21,7 @@ import { getApiClient } from "@/lib/api/browser";
 
 /**
  * The A3 shift-day: one read and the supervisor's six commands
- * (contract 1.30.0).
+ * (contract 1.31.0).
  *
  * `M2-FE-502`..`M2-FE-508` and `M2-FE-513`. The rules live in `@vsolve/query`'s
  * `m2-engagement-partner`; this file is the wiring, on the same split
@@ -108,20 +108,25 @@ export function useShiftDay(engagementId: string, stageId: string, enabled = tru
   });
 }
 
-/**
- * The key the safety-incident list is read on.
+/*
+ * The local `safetyIncidentsKey` helper is **gone**.
  *
- * Composed under `engagements.detail`, which is where the events feed sat before
- * it was promoted and for the same reason: the incidents belong to the
- * engagement, so every engagement-level and stage-level invalidation clears them
- * by prefix — including `report_safety_incident`, whose scope is
- * `[engagements.detail, engagements.all]` since the Wave B3 gate. Promotion into
- * the factory is requested in `frontend-execution-plan.md` §7; the point of the
- * request is the name, not the shape.
+ * It composed `[...engagements.detail(id), "safety-incidents"]` at the call site,
+ * and `m2QueryKeys.engagements.safetyIncidents(id)` — promoted into the frozen
+ * factory at the Gate 3 integration — is the identical tuple with a name. The
+ * shape was never the problem: nested under the detail, every engagement-level
+ * and stage-level invalidation already cleared it by prefix, including
+ * `report_safety_incident`, whose scope is `[engagements.detail,
+ * engagements.all]`. The promotion buys the name, so a reader can find the key
+ * and check its invalidation in one place instead of grepping for a string
+ * literal.
+ *
+ * The grant's docblock also corrects the request that asked for it: this column
+ * argued the key was composed independently by both apps, and Session A grepped
+ * its whole app at the Gate 3 re-point and found **no** safety-incident read
+ * there. `M2-FE-515` is a write-only cash demand. Only the Partner reads this
+ * list today.
  */
-export function safetyIncidentsKey(engagementId: string) {
-  return [...m2QueryKeys.engagements.detail(engagementId), "safety-incidents"] as const;
-}
 
 /**
  * Every safety report on this engagement, readable by both parties.
@@ -131,7 +136,7 @@ export function safetyIncidentsKey(engagementId: string) {
  */
 export function useSafetyIncidents(engagementId: string, enabled = true) {
   return useQuery({
-    queryKey: safetyIncidentsKey(engagementId),
+    queryKey: m2QueryKeys.engagements.safetyIncidents(engagementId),
     queryFn: () =>
       request(() =>
         getApiClient().GET("/api/v1/engagements/{engagement_id}/safety-incidents/", {
@@ -270,9 +275,16 @@ export function useAssignShiftCrew(scope: ShiftCommandScope) {
  * claim any of them before the answer lands: the arrival is stamped, the stage
  * starts on the shared spine, and **on day one the booking fee is earned**.
  *
- * There is no `confirm_shift_arrival` row in `M2Command`, so the invalidation is
- * hand-written to the prefix `stageScope` returns — requested in
- * `frontend-execution-plan.md` §7.
+ * That third fact is why the `M2Command` row landed **wider** than this column
+ * asked for: `confirm_shift_arrival` resolves to `stageScope` **plus**
+ * `rateCard.state(requirementId)` when the context carries a requirement id, so
+ * on the one screen where money hardens both sides refetch rather than the
+ * vendor's alone. `ShiftCommandScope` carries no requirement id and is
+ * deliberately not widened to carry one: `rateCard.state` is a Customer read and
+ * this app mounts no query on that key anywhere, so supplying it here would
+ * invalidate a cache entry that does not exist. With the two ids this scope does
+ * have, the row returns exactly `[engagements.detail, engagements.all]` — the
+ * same pair this used to invalidate by hand.
  */
 export function useConfirmShiftArrival(scope: ShiftCommandScope) {
   const queryClient = useQueryClient();
@@ -291,10 +303,7 @@ export function useConfirmShiftArrival(scope: ShiftCommandScope) {
       ),
     onSuccess: async () => {
       clearIdempotencyKey(operation);
-      await queryClient.invalidateQueries({
-        queryKey: m2QueryKeys.engagements.detail(scope.engagementId),
-      });
-      await queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.all });
+      await invalidateForM2Command(queryClient, "confirm_shift_arrival", scope);
     },
     onError: reread,
     retry: false,
@@ -579,13 +588,17 @@ export function useReportSafetyIncident(engagementId: string) {
         engagementId,
         ...(input.stageId === null ? {} : { stageId: input.stageId }),
       });
-      await queryClient.invalidateQueries({ queryKey: safetyIncidentsKey(engagementId) });
+      await queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.engagements.safetyIncidents(engagementId),
+      });
     },
     // The list is refetched either way: a failed request may still have written
     // the row, and an incident that exists but is not shown is the one failure
     // this screen cannot have.
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: safetyIncidentsKey(engagementId) });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.engagements.safetyIncidents(engagementId),
+      });
     },
     retry: false,
   });
@@ -626,25 +639,52 @@ export const PARTNER_CREW_NO_SHOW_REASONS = [
 export type PartnerCrewNoShowReason = (typeof PARTNER_CREW_NO_SHOW_REASONS)[number];
 
 /**
+ * Everything the day-one no-show needs to invalidate what it moved.
+ *
+ * The **requirement** is what the command is addressed to — the money it settles
+ * is the booking fee, and the fee lives on the requirement, so a forfeit can land
+ * on a booking whose engagement never opened at all. The **engagement** is here
+ * for the cache and not for the request: see `useReportCrewNoShow`.
+ */
+export interface CrewNoShowScope {
+  readonly requirementId: string;
+  readonly engagementId: string;
+}
+
+/**
  * Report that day one did not happen because the Customer was not there —
  * `M2-FE-507`'s no-show and Customer-unavailable halves.
  *
- * Keyed by the **requirement**, not the engagement, because the money it moves is
- * the booking fee and the fee lives on the requirement: a forfeit can land on a
- * booking whose engagement never opened at all.
+ * Addressed by the **requirement**, not the engagement, because the money it
+ * moves is the booking fee and the fee lives on the requirement.
  *
  * `m2_policy_unavailable` is the refusal that matters and it is not an error in
  * this app: while the owner has not configured the forfeit split, the fee stays
  * `ACTIVE` and visible rather than being divided on an invented ratio. The screen
  * says that rather than offering a retry.
  *
- * There is no `report_crew_no_show` row in `M2Command`, so the invalidation is
- * hand-written — `engagements.all`, because a vendor no-show re-dispatches and a
- * customer no-show closes the booking, and either way this vendor's list moved.
- * Requested in `frontend-execution-plan.md` §7.
+ * ## The `M2Command` row needed the engagement id, and this took two ids to
+ * consume rather than one
+ *
+ * `report_crew_no_show` landed at the Gate 3 integration as
+ * `requirementScope(requirementId)` when a requirement id is present **plus**
+ * `engagements.all` when an engagement id is. Checked against what this hook
+ * cleared by hand before deleting it, and the two halves do not overlap:
+ * `requirementScope` is `[requirements.detail, requirements.list,
+ * proposals.teasers, proposals.unlocked, visits.plan]` and contains **no
+ * engagements prefix at all**. So the row is a superset of the hand-written
+ * `engagements.all` only when the context carries **both** ids, and this hook
+ * held one. Hence `CrewNoShowScope`: the engagement id is passed for the cache,
+ * never for the request, and the screen that mounts this already has it.
+ *
+ * The requirement half is not dead weight to this app either way — it is the
+ * broader of the two prefix sets and the reason the row is worth having, since
+ * the same command in the Customer's app moves the rate-card and teaser reads
+ * this one does not mount.
  */
-export function useReportCrewNoShow(requirementId: string) {
+export function useReportCrewNoShow(scope: CrewNoShowScope) {
   const queryClient = useQueryClient();
+  const { requirementId } = scope;
 
   return useMutation({
     mutationFn: (input: { readonly reasonCode: PartnerCrewNoShowReason }) => {
@@ -663,7 +703,7 @@ export function useReportCrewNoShow(requirementId: string) {
       clearIdempotencyKey(
         `m2-crew-no-show:${requirementId}:${PARTNER_REPORTS_CREW_PARTY}:${input.reasonCode}`,
       );
-      await queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.all });
+      await invalidateForM2Command(queryClient, "report_crew_no_show", scope);
     },
     retry: false,
   });

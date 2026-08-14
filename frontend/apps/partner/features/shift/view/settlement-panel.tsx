@@ -61,6 +61,18 @@ import { SETTLEMENT_WORDING, WAGES_ARE_DIRECT } from "../model/shift-copy";
  * payee's app is a control that does the wrong thing. `null` — no VPA published —
  * is an ordinary state and not an error: the amount is still shown and the crew
  * is paid the way they were paid before this app existed.
+ *
+ * At 1.31.0 `null` means **exactly** that and nothing else. This panel was built
+ * against 1.30.0, where the link was injected only into the settlement
+ * *command's* response and `m2_shift_day_read` answered `null` unconditionally —
+ * so the absent-case copy below was the only branch this screen could ever reach,
+ * and it said "you have not published a UPI ID" to leads who had. It is now a
+ * `SerializerMethodField` on the shift-day read, wire shape unchanged, so the
+ * link is here before the tap and survives a reload. **Nothing was compensating
+ * for that here** and so nothing was deleted: the figure and the link are both
+ * read off `day`, never off `mutation.data`, because a link built against a stale
+ * amount is worse than no link. The copy needed no correction either — it was
+ * always about the VPA rather than about the transport.
  */
 
 const TONE = {

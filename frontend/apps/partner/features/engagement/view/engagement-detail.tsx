@@ -44,10 +44,11 @@ import { StagePanel } from "./stage-panel";
  *
  * ## The Wave III tails that remain are named, not omitted and not faked
  *
- * The delay claim and the digital handover (`M2-FE-605`, `M2-FE-606`) are C5 and
- * render a `NotBuiltYet` block where their section would sit. A vendor looking
- * for them is told they are not written yet rather than concluding they are on
- * the wrong screen.
+ * The delay claim and the digital handover (`M2-FE-605`, `M2-FE-606`) still
+ * render a `NotBuiltYet` block where their section would sit. Their endpoints
+ * landed with Wave C5 at contract 1.31.0 — so what is missing is the screen, not
+ * the contract, and both blocks now say that. A vendor looking for them is told
+ * they are not written yet rather than concluding they are on the wrong screen.
  */
 
 const TONE = {
@@ -185,7 +186,15 @@ export function EngagementDetail({
   );
 }
 
-/** `M2-FE-605` and `M2-FE-606` — both need Wave C5. */
+/**
+ * `M2-FE-605` and `M2-FE-606` — the two tails this column has not built.
+ *
+ * Wave C5 published both endpoints at contract 1.31.0, so the references below
+ * name the missing **screen** rather than a missing endpoint. The vendor-facing
+ * copy is unchanged, because what a vendor can do today is unchanged: nothing in
+ * this app posts a delay claim or a handover, and saying so is the whole job of
+ * this section.
+ */
 function ProjectTails() {
   return (
     <section aria-labelledby="project-tails" className="flex flex-col gap-2">
@@ -198,12 +207,12 @@ function ProjectTails() {
       <NotBuiltYet
         what="Claiming a delay the customer caused"
         meanwhile="There is no form yet for claiming time back when the site was not ready or access was refused. A change request below can ask for the schedule to move, but it will not be recorded as the customer's delay. Record what happened as evidence on the stage so there is a dated account of it."
-        reference="M2-FE-605 — waiting on the delay-claim endpoint (Wave C5)."
+        reference="M2-FE-605 — the delay-claim endpoint is published; this screen is not built."
       />
       <NotBuiltYet
         what="Handing over digital deliverables"
         meanwhile="Photographs, video and documents attached to a stage go to the customer with your submission, and they accept them by approving that stage. A separate handover with its own acceptance does not exist yet."
-        reference="M2-FE-606 — waiting on the handover endpoint (Wave C5)."
+        reference="M2-FE-606 — the handover endpoint is published; this screen is not built."
       />
     </section>
   );

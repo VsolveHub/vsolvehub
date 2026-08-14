@@ -268,16 +268,17 @@ export function useStartStage(engagementId: string) {
     onSuccess: async (stage, input) => {
       applyStage(stage);
       clearIdempotencyKey(`m2-stage-start:${input.stageId}`);
-      // Still a hand-written invalidation, and for a different reason than it
-      // used to be. `stageScope` was fixed at the Wave B3 gate — the stage rows
-      // now clear `engagements.detail` and `engagements.all` rather than a key
-      // deeper than anything either app mounts — but there is no `start_stage`
-      // row in `M2Command` at all, so there is nothing here to call. Requested
-      // in `frontend-execution-plan.md` §7. The prefix is the same one
-      // `stageScope` returns, so the two cannot drift while it is outstanding;
-      // the list is what has to move, because starting a shift-day takes its
-      // booking out of "coming up".
-      await queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.all });
+      // The hand-written `engagements.all` that used to live here is **gone**:
+      // `start_stage` landed in `M2Command` at the Gate 3 integration and
+      // resolves to `stageScope`, which is `[engagements.detail,
+      // engagements.all]`. `all` is a prefix of `detail`, so the row is a strict
+      // superset of the single key this used to clear — and the list is still
+      // what has to move, because starting a shift-day takes its booking out of
+      // "coming up".
+      await invalidateForM2Command(queryClient, "start_stage", {
+        engagementId,
+        stageId: input.stageId,
+      });
     },
     onError: reread,
     retry: false,

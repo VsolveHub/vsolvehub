@@ -106,7 +106,10 @@ export function SiteReportPanel({
   const [noShowOpen, setNoShowOpen] = useState(false);
   const [noShowReason, setNoShowReason] = useState<PartnerCrewNoShowReason>("customer_no_show");
 
-  const noShow = useReportCrewNoShow(requirementId);
+  // Both ids: the requirement is what the command is addressed to, the
+  // engagement is what its `M2Command` row needs to reach this app's booking
+  // list. See `useReportCrewNoShow`.
+  const noShow = useReportCrewNoShow({ requirementId, engagementId });
 
   const arrived = day.attendance?.arrival_confirmed_at != null;
   // The no-show route settles the booking fee, which is earned on the first

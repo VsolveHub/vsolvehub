@@ -753,9 +753,12 @@ Customer and Partner see the same immutable proposal, engagement state and comme
   picker that guessed would tell a supervisor somebody is free when they are not — the refusal
   renders the server's own sentence, which names the person and the date. **The booked headcount is
   not on `ShiftDay`** (it lives on `attendance`, which is null until a command touches the day), so
-  the ceiling is stated only once the server has stated it (plan §7). **Blocked for manual
-  verification:** `documents_verified_at` has no writer anywhere, including the seed, so no seeded
-  worker can be assigned in any environment (plan §7). `GAP-024`
+  the ceiling is stated only once the server has stated it (plan §7). **No longer blocked:**
+  `documents_verified_at` had no writer anywhere including the seed, so no seeded worker could be
+  assigned in any environment; contract 1.31.0's `seed_m2_demo` stamps it, so the precondition is
+  real and the shell workaround is out of the smoke script. The **production** writer is still
+  unbuilt on purpose — an Operations verify command belongs with the rest of the Operations APIs
+  (plan §7). `GAP-024`
 - [~] `M2-FE-503` built — static gates green, owner manual verification pending. A substitution is
   the same one call: untick, tick, send, with a release reason recorded against the person coming
   off. There is **no Customer approval gate in the contract** for a like-for-like swap and none is
@@ -812,7 +815,10 @@ Customer and Partner see the same immutable proposal, engagement state and comme
   lead sees at day end and a number on a platform screen reads as one the platform is holding. The
   UPI convenience ships as a **deep link with a copy control, not a QR** (no rendering dependency is
   added mid-wave, plan §7), and it is offered as something to send to the customer rather than a
-  button to press — the vendor is the payee.
+  button to press — the vendor is the payee. At contract 1.31.0 the link is a `SerializerMethodField`
+  on the shift-day read rather than an injection into the settlement command's response, so it is
+  there before the tap and **survives a reload**; the panel read it off the day all along and had
+  nothing to compensate for, and `null` now means exactly *no VPA published*.
 
 ### Customer booking
 
