@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.29.0",
+    "VERSION": "1.30.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -429,6 +429,22 @@ SPECTACULAR_SETTINGS = {
             "apps.requirements.serializers.CREW_OFFER_DECLINE_REASONS"
         ),
         "CrewNoShowReasonCodeEnum": "apps.requirements.serializers.CREW_NO_SHOW_REASONS",
+        # M2 Wave C4 — the A3 shift-day.
+        #
+        # Three more `status` sets, and `status` is still the most contested field name in the
+        # schema, so all three are named on arrival rather than after a positional rename breaks a
+        # client. The rest are named because their field names — `severity`, `decision`,
+        # `response`, `kind`, `shortfall_choice` — are exactly the short generic ones the 1.24.0
+        # `ReasonEnum` incident was about.
+        "ShiftAttendanceStatusEnum": "apps.requirements.models.ShiftAttendance.Status",
+        "DaySettlementStatusEnum": "apps.requirements.models.DaySettlement.Status",
+        "SafetyIncidentStatusEnum": "apps.requirements.models.SafetyIncident.Status",
+        "SafetyIncidentSeverityEnum": "apps.requirements.serializers.SAFETY_INCIDENT_SEVERITIES",
+        "SafetyIncidentReporterRoleEnum": ("apps.requirements.models.SafetyIncident.ReporterRole"),
+        "SafetyIncidentDecisionEnum": "apps.requirements.serializers.SAFETY_INCIDENT_DECISIONS",
+        "AttendanceResponseEnum": "apps.requirements.serializers.ATTENDANCE_RESPONSES",
+        "ShortfallChoiceEnum": "apps.requirements.serializers.SHORTFALL_CHOICES",
+        "ShiftExtraKindEnum": "apps.requirements.serializers.SHIFT_EXTRA_KINDS",
     },
 }
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED")
@@ -781,6 +797,13 @@ CELERY_BEAT_SCHEDULE = {
     "sweep-travel-compensation-holds": {
         "task": "apps.requirements.tasks.sweep_travel_compensation_holds",
         # Hourly, matching every other payout-hold sweep and `reconcile-payouts`.
+        "schedule": 60.0 * 60,
+    },
+    "sweep-unproven-day-settlements": {
+        "task": "apps.requirements.tasks.sweep_unproven_day_settlements",
+        # Hourly. The rows it raises are already a day old by definition, so the tick rate decides
+        # nothing except how long after that an operator hears — and the event is keyed per
+        # settlement, so a frequent tick raises each evening exactly once.
         "schedule": 60.0 * 60,
     },
     "sweep-rate-card-decline-alarm": {

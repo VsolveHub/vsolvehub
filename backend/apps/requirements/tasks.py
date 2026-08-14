@@ -26,6 +26,7 @@ from uuid import UUID
 from celery import shared_task
 from django.utils import timezone
 
+from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
@@ -39,6 +40,7 @@ from apps.requirements import (
     proposals,
     services,
     stages,
+    workforce,
 )
 from apps.requirements.exceptions import RequirementTransitionError
 from apps.requirements.models import (
@@ -52,6 +54,13 @@ from apps.requirements.storage import DocumentStorageError, get_attachment_stora
 #: How many records one tick hands off. Bounded so a backlog is drained over several ticks rather
 #: than filling the queue in one, which is how a watchdog turns into an outage.
 SWEEP_BATCH_SIZE = 200
+
+#: How long a one-sided "Day settled?" claim stands before Operations is told about it
+#: (`M2-BE-536`). A working day: the other party is asleep, on a site, or has no signal, and
+#: paging an operator the same evening would page them about every ordinary settlement where one
+#: person taps before the other. **Not an owner-blocked value** — nothing about a vendor or a
+#: Customer changes when it elapses, and no money moves. It is how long a queue waits.
+UNPROVEN_SETTLEMENT_HOURS = 24
 
 
 # ---------------------------------------------------------------------------
@@ -678,3 +687,31 @@ def sweep_rate_card_decline_alarm() -> int:
             )
             paged += 1
     return paged
+
+
+@shared_task
+def sweep_unproven_day_settlements() -> int:
+    """Put one-sided "Day settled?" claims in front of a person (`M2-BE-536`).
+
+    ADR-0009: a one-sided settlement claim without the tap trail "goes to Operations as unproven,
+    not as fact". This is that sentence, and the shape of it is the point — **there is no command
+    behind this sweep that could settle a day on one person's word.** It emits an outbox event per
+    settlement and stops. A cash dispute where both sides lie is unadjudicable, which the plan
+    accepted for `LEAD_ONLY`; the only thing that can move one of these rows is a human reading it.
+
+    Keyed on the settlement so a re-drive finds its own event rather than paging twice about the
+    same evening.
+    """
+    raised = 0
+    for settlement_id in workforce.unproven_settlement_ids(
+        older_than_hours=UNPROVEN_SETTLEMENT_HOURS
+    )[:SWEEP_BATCH_SIZE]:
+        enqueue_outbox_event(
+            aggregate_type="engagement",
+            aggregate_id=settlement_id,
+            event_type="m2.shift.settlement_unproven",
+            idempotency_key=f"settlement-unproven:{settlement_id}",
+            payload={"day_settlement_id": str(settlement_id)},
+        )
+        raised += 1
+    return raised

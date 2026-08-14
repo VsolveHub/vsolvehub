@@ -740,6 +740,7 @@ class PartnerBusinessProfileSerializer(serializers.ModelSerializer[PartnerBusine
             "gst_registered",
             "gstin",
             "years_in_operation",
+            "upi_vpa",
             "updated_at",
         )
         read_only_fields = fields
@@ -759,6 +760,14 @@ class PartnerBusinessProfileWriteSerializer(serializers.Serializer[dict[str, obj
     gst_registered = serializers.BooleanField(required=False, default=False)
     gstin = serializers.CharField(required=False, allow_blank=True, max_length=15)
     years_in_operation = serializers.IntegerField(required=False, min_value=0, max_value=200)
+    #: The lead's own UPI ID, for the evening "Day settled?" convenience link (`M2-BE-536`).
+    #:
+    #: **This is not a payout rail and must never become one.** A3 wages are peer-to-peer: the
+    #: Customer's own UPI app sends the money to this address and Vsolve never holds, routes,
+    #: books or reconciles it. It is deliberately here rather than on the payout account, because
+    #: that is where Vsolve pays somebody and this is where somebody else pays them. Blank is the
+    #: ordinary state — the deep link is simply not offered and the published amount still is.
+    upi_vpa = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
 
 
 class BusinessTypeOptionSerializer(serializers.Serializer[dict[str, object]]):

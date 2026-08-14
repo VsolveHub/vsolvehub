@@ -1008,29 +1008,361 @@ booking fee as the only online charge; the cascade degrades honestly to the quot
 threshold; no rate below the statutory floor can be published; and nothing shipped at 1.24.0 is
 removed or renamed.
 
-## Wave C4 — Workforce stages, A3 (`BE5A`)
+## Wave C4 — Workforce stages, A3 (`BE5A`) — **`[~]` shipped 14 August 2026**
 
 `M2-BE-521..539`. Thin tail on the C3 spine; revision 4 adds the daily-settlement rows (`536..539`),
 which read Wave C2R's published rates.
 
-- [ ] Per-**stage** crew assignment so multi-day work rotates legitimately (`522`).
-- [ ] **Supervisor-level daily attendance** — "n of m present today", one action. Do **not** build
+- [~] Per-**stage** crew assignment so multi-day work rotates legitimately (`522`).
+- [~] **Supervisor-level daily attendance** — "n of m present today", one action. Do **not** build
   per-worker check-in/check-out; per-worker detail is captured only when the Customer disputes
   (`525`, `526`).
-- [ ] Missing check-out settles at the agreed shift length, flagged, disputed only on Customer dispute (`527`).
-- [ ] Arrival confirmation on the non-OTP fallback as the default path (`524`).
-- [ ] Overtime as a scope amendment **at the card's published overtime rate**; unapproved overtime
+- [~] Missing check-out settles at the agreed shift length, flagged, disputed only on Customer dispute (`527`).
+- [~] Arrival confirmation on the non-OTP fallback as the default path (`524`).
+- [~] Overtime as a scope amendment **at the card's published overtime rate**; unapproved overtime
   is unpaid (`531`, revision 4 wording).
-- [ ] `SafetyIncident` as a first-class record with its own flow — not a cancellation reason (`530`).
-- [ ] The dual evening **"Day settled?"** taps — `confirm_day_settled`, supervisor and Customer, a
+- [~] `SafetyIncident` as a first-class record with its own flow — not a cancellation reason (`530`).
+- [~] The dual evening **"Day settled?"** taps — `confirm_day_settled`, supervisor and Customer, a
   UPI QR/deep-link to the lead's VPA at the exact published amount as a convenience; the money is
   P2P, the platform never holds wages, and a one-sided claim without the tap trail reaches
   Operations as unproven (`536`, revision 4).
-- [ ] Settlement **per worker-day present, never per job**: a 3-of-4 day settles at 3 workers'
+- [~] Settlement **per worker-day present, never per job**: a 3-of-4 day settles at 3 workers'
   published rate; the Customer continues short, adds a day, or cancels the shortfall free (`537`,
   revision 4).
-- [ ] Scope amendments at the card's **published add-on rates** (`538`) and `report_cash_demand` —
+- [~] Scope amendments at the card's **published add-on rates** (`538`) and `report_cash_demand` —
   one-tap report, standing hit, removal on pattern (`539`) (revision 4).
+
+---
+
+### C4 outcome — 14 August 2026
+
+**Built.** Contract **1.30.0**: ten new paths, entirely additive (81 → 91 M2 operations). Five new
+aggregates in `apps.requirements`, one in `apps.partners`, one new module on each side
+(`apps/requirements/workforce.py`, `apps/partners/standing.py`), migrations `catalog.0011`,
+`partners.0010`, `requirements.0009`, and one new beat entry. **No test was written or run**, per
+the build-first amendment; the smoke script that replaces `M2-BE-534`/`535` for the sprint is
+[`docs/runbooks/m2-workforce-shift-day-smoke.md`](../../docs/runbooks/m2-workforce-shift-day-smoke.md).
+
+#### What was inherited, and what happened to it
+
+A previous session was stopped mid-wave. It left five modified files and two new ones —
+`catalog/models.py` (+51), `partners/models.py` (+81), `requirements/amendments.py` (+131),
+`requirements/models.py` (+565), `requirements/rate_cards.py` (+23), plus `partners/standing.py`
+(152 lines) and `requirements/workforce.py` (1264 lines) — on which **no static gate had ever run**.
+
+It was good work and most of it survives. The five model aggregates, the `PartnerStandingEvent`
+shape, the `LineUnit` extension to the amendment engine and the whole of `workforce.py`'s command
+set are kept, because they read 07 correctly: the crew conflict is a database index rather than a
+service check, the attendance row is per shift-day and never per worker, the settlement carries no
+`PaymentAttempt`, and the safety report is frozen in `save()`. In particular the catalog constraint
+block was already **generated from a module-scope tuple** rather than hand-copied beside it, which
+is exactly what RULES §3(a) asks for and is the lesson of C2R applied without being told.
+
+Three things were wrong and are changed:
+
+1. **`ShiftAttendance.standard_day_hours` was non-null and the quote-flow branch defaulted it to
+   24 hours.** An invented shift length is not a cosmetic default: it is the number
+   `_assert_overtime_is_timely` derives a shift end from, so it decides when overtime becomes
+   retroactive and therefore whether work already done gets paid for. The column is now nullable,
+   the fallback records "not published", a second check constraint requires such a row to be
+   `flagged_for_review`, and the overtime timeliness check declines to derive an end time at all
+   without a published one.
+2. **`standing.record_event` deduplicated on a null `source_id`.**
+   `get_or_create(kind=..., source_id=None)` matches `source_id IS NULL` across every partner, so
+   the second sourceless event of a kind would have been handed the *first vendor's* row — a
+   command recording a fact about one vendor silently updating somebody else's. The partial unique
+   index is scoped to non-null sources, so the null case now takes a plain `create`.
+3. **Nothing had been done about the two commands the partner side needed.** The stopped session's
+   report said the crew-verification, archive-guard and A3-suspension commands were finished;
+   `apps/partners/capabilities.py` was untouched, so `workforce.py` imported
+   `suspend_partner_a3_capabilities`, which did not exist. Both are now written.
+
+Nothing was deleted.
+
+#### The defect that was the whole wave
+
+`EngagementStage.scheduled_on` had a reader and **no writer**.
+
+`workforce.shift_date_of` refuses to assign crew to a shift-day with no date, and it refuses
+honestly and for a good reason — the cross-agency conflict rule is "this person, on this date", and
+a server-chosen date would make the guard check a day nobody is working. But neither
+`engagements.open_rate_card_engagement` (the rate-card path) nor `engagements._a3_stages` (the
+fallback quote path) ever set the column. Every A3 engagement in every environment therefore opened
+with null dates, and the entire crew, arrival, attendance and settlement surface was unreachable
+behind a message that reads like a data problem at the Customer's end.
+
+`workforce.py`'s own docstring asserted the opposite — *"`engagements` stamps `scheduled_on` on
+every A3 shift-day it lays out"* — which is how this class of defect survives review: the module
+that reads a column states what writes it, and nobody opens the writer to check.
+
+`engagements.shift_dates` is the writer: consecutive days from `requirement.requested_start`, which
+`submit_requirement` already requires, on both A3 paths. `None` when there is no requested start,
+because a refusal is still the right answer there.
+
+**This is the third instance of the same class in three waves** (C2R found two). The check is not a
+gate. It is asking, of every column the new code reads, *who sends this?* — and then opening that
+file.
+
+#### The RULES §3 audit, stated
+
+**(a) The drifting duplicate — swept mechanically, no live drift found.** A throwaway script walked
+every model, collected every class attribute that is a tuple of strings, and compared it against
+every `__in` value set inside every constraint condition. Ten pairs matched. Eight agree exactly:
+`PaymentAttempt.CHECKOUT_FREE_PURPOSES` (C2R's fix, holding), `PartnerCapability.ACTIVE_STATUSES`,
+`PartnerCapability.REVIEW_STATUSES_NEEDING_NOTES`, `CustomerRequirement.CLOSED_STATUSES`,
+`QuoteUnlock.READABLE_STATUSES`, `VisitPlan.CHARGED_STATUSES`, `SiteVisit.SHARE_HOLDING_STATUSES`
+and `ProposalSelection.LIVE_STATUSES`. Two near-misses are deliberate and documented in place:
+`VendorInvitation.SLOT_HOLDING_STATUSES` includes `INVITED` where the constraint does not (its
+comment explains that covering `INVITED` would make one wave picking two siblings fail with
+`IntegrityError`), and `EngagementStage`'s approved-has-a-timestamp constraint covers
+`APPROVED | RELEASED` where `SETTLED_STATUSES` means only `RELEASED` — two different questions.
+
+Three of the eight *are* structurally the hand-copy RULES §3(a) warns about — the tuple exists and
+the constraint restates it — and they are **not** derived here. The only way to derive one is to
+move a published `TextChoices` to module scope so the nested `Meta` body can see it (a class body
+is not an enclosing scope), and all three are named in `ENUM_NAME_OVERRIDES` by their nested dotted
+path. Moving them risks renaming a published component, which RULES §7 forbids outright. Logged as
+its own change in `frontend-execution-plan.md` §7, with a client regeneration behind it.
+
+**Wave C4's own constraints duplicate nothing.** The catalog block is generated from
+`M2_POSITIVE_WHEN_SET_POLICY_FIELDS`; every other new constraint compares a single status literal,
+which is what Django requires inside `Meta` and what the surrounding file already does.
+
+**(b) The column with no writer — one found in the inherited work, one found in the new work, both
+closed.** The inherited one is `scheduled_on`, above. The new one was
+`PartnerBusinessProfile.upi_vpa`: it had a reader (`workforce.upi_payment_link`), a column and a
+migration, and its only writer was the dev seed — so in production the evening deep link could
+never be offered, because no lead had any way to publish a handle. It is now readable and writable
+on the existing `m2_partner_business_profile_read` / `_replace` pair.
+
+Mechanically: all 39 `M2VariantConfiguration` columns were listed and checked against
+`seed_m2_demo`. Every policy column has a writer there, including the four this wave added. The
+only unwritten ones are structural (`id`, `variant`, `version`, `created_by`, `created_at`) and
+`evidence_policy` / `contact_policy`, which have **neither a reader nor a writer** anywhere in M2 —
+inert rather than broken, recorded here rather than removed.
+
+#### The design decisions worth keeping visible
+
+**A shift-day is a stage, so everything hangs off a stage id.** Ten paths, nine of them under
+`engagement-stages/{id}/…`. A per-engagement route could not express "the gang on Thursday is not
+Monday's gang", which is the fact the whole wave exists to record.
+
+**The shift-day is one read, not four.** `GET .../shift/` returns the day, its crew, its attendance
+and its settlement together, for the reason `RateCardStateSerializer` gives: the crew screen, the
+attendance screen and the settlement screen are the same screen at three moments of one evening.
+`attendance` and `settlement` are `null` until a command touches the day — the read creates
+nothing, because a stage that acquires an attendance row because somebody opened a screen is a
+stage whose record is about the app rather than the site.
+
+**Every shift-day state change is a C3 spine command.** Arrival is `start_stage`; the supervisor's
+count is `submit_stage_evidence` (the count *is* the evidence); confirm is `approve_stage`, which
+for `LEAD_ONLY` also releases; dispute is `dispute_stage`. That is what keeps the review timeout,
+the audit trail, the Operations dispute decision and the "no auto-approval while `DISPUTED`" rule
+working on A3 without a line of new lifecycle code. Two things are genuinely new because the spine
+has no equivalent: naming people to a day, and recording money the platform never touches.
+
+**Nothing here moves wage money, and the absence is load-bearing.** No `PaymentAttempt`, no ledger
+entry, no refund, no payout in `workforce.py` or in any of the ten views.
+`DaySettlement.amount_paise` is a published figure with a check constraint behind it
+(`amount = per_worker × present + extras`) and `upi_payment_link` is a deep link into the
+Customer's own app. `M2-BE-533` is therefore **correct by absence** on this path rather than
+unbuilt: A3 is `LEAD_ONLY`, so `_approve` releases immediately and writes no ledger entry, and
+there is no payout to hold.
+
+**A one-sided settlement tap is left standing.** `SUPERVISOR_CLAIMED` / `CUSTOMER_CLAIMED` is what
+Operations reads as *unproven* — a different sentence from "they were paid" and from "they were
+not". `sweep_unproven_day_settlements` raises those rows hourly after a day and **stops**; there is
+deliberately no command behind it that could settle one, because a cash dispute where both sides
+lie is unadjudicable and this plan accepted that for `LEAD_ONLY`.
+
+**Extras are refused rather than priced when the card did not publish a rate.** Add-on codes and
+the overtime rate come from the snapshot frozen at booking, not from today's card, so a card
+superseded mid-job cannot reprice agreed work. A code that is not on that snapshot has no published
+price. That refusal *is* the mechanism: "third floor, no lift? Extra, bhaiya" with a number the
+vendor chose is the failure ADR-0009 exists to leave nowhere to live, and there is no amount field
+on `ShiftExtraRequest`.
+
+**The retroactive overtime window is applied to the acceptance, not the request.** The amendment's
+own `expires_at` is shortened to it, so a retroactive claim the Customer does not answer in time
+expires — and expired means unpaid. Applying it to the request instead would let a vendor file at
+the last second and leave the Customer holding an open claim.
+
+**Two things were deliberately not built, and both are refusals rather than omissions.** The
+Operations arrival override (`M2-BE-524`) would be a third party asserting that a crew arrived at a
+site nobody from this platform was at. Customer approval of a crew substitution (`M2-BE-528`)
+has no policy naming when it is required, and a guess would either block a legitimate morning swap
+or wave through one that should have been asked about. Late arrival and force majeure
+(`M2-BE-529`) change no amount and no state under revision 4; a reason-code enum nothing reads is
+the check that always passes.
+
+#### Fail-closed, and in which direction
+
+Four owner-blocked values were added, all on `M2VariantConfiguration`, and they do not fail the
+same way — which is the point:
+
+| Config | Unset means |
+|---|---|
+| `overtime_retroactive_window_minutes` | A **retroactive** overtime request is refused (`m2_policy_unavailable`). A request made while the shift is still running is unaffected. |
+| `crew_shortfall_standing_threshold` | No matching demotion ever fires. Short days are still recorded. |
+| `cash_demand_removal_threshold` | No removal ever fires. Reports are still recorded. |
+| `vendor_standing_window_days` | Neither pattern can be evaluated at all — "three reports" without "since when" is not a rule. |
+
+Only the first refuses a command, and only because it decides whether work already done gets paid
+for. The other three gate a background consequence, so refusing a Customer's report or a
+supervisor's tap because a policy is unconfigured would punish them for an Operations gap. The
+events accumulate either way, so turning the rule on later is loading a value rather than
+backfilling a history.
+
+`seed_m2_demo` writes all four (120 minutes, 3, 3, 90 days), marked as dev-only inventions, plus a
+`m2demoN@vsolvedemo.test` UPI handle on every demo vendor so the settlement link renders.
+
+#### Also closed
+
+- **`M2-BE-111`, proposal 0013 criterion 9.** `archive_crew_member` now refuses a worker booked on
+  a future shift-day, naming the dates. It could not before, because the table did not exist; the
+  import is late, since `apps.requirements` imports `apps.partners` and the reverse at module scope
+  would close a cycle.
+- **`report_crew_no_show`'s standing hit.** It said the vendor's standing takes the hit and then
+  did not take it. It now writes a `VENDOR_NO_SHOW` event, before the re-dispatch clears the
+  accepted invitation and takes the lead's identity with it.
+- **`PartnerBusinessProfile.upi_vpa`** is writable, validated only as "one `@` and two non-empty
+  halves" — this platform never sends money to it, so a stricter rule would be this system claiming
+  to know which handles a bank accepts.
+
+#### The orchestrator's `BookingFee` escalation — answered, and half corrected
+
+Mid-wave the orchestrator escalated a Session A finding: **`accept_crew_offer` writes no
+`BookingFee` row**, so `OFFER_ACCEPTED` is a published state nothing persists — and the conclusion
+drawn from it was that the booking fee "can never be paid", which would have made every C4 step
+unreachable by a walkthrough.
+
+**The first half is true and is fixed. The second half is not, and it was worth checking rather
+than accepting.** Read, not assumed:
+
+- `booking_fee_checkout_availability` keys on `booking.status == OFFER_HELD` and then returns
+  `fee is None or fee.status in (OFFER_ACCEPTED, PENDING)` — it **explicitly tolerates a missing
+  fee row** and answers `True`.
+- `create_booking_fee_checkout` builds the row itself: `fee = existing or BookingFee(...)`,
+  straight into `PENDING`.
+
+So accept → `checkout_available: true` → checkout → provider TEST callback →
+`complete_booking_fee` → engagement has always worked end to end, and the demo could always reach
+an engagement. Session A's rewrite of the pay button onto `checkout_available` was the **correct**
+gate rather than a workaround for a broken one.
+
+What the missing writer genuinely broke is a different command: **`cancel_booking`**. It has always
+had an `OFFER_ACCEPTED` branch — the Customer who changes their mind while a lead is holding the
+job and before any money has moved — and that branch was unreachable, because `_locked_fee` found
+nothing and refused with *"There is no booking fee on this request"* in exactly the window the
+command exists for. A reader with no writer, and the cost of it was a dead cancel button rather
+than a dead pay button.
+
+`booking_fees.hold_booking_fee` is the writer, called from `accept_crew_offer`. Two things about
+its shape are load-bearing:
+
+- **It reuses rather than inserts.** `requirements_one_live_booking_fee` permits one non-`FAILED`
+  fee per booking, and one booking row is reused across every cascade wave and every re-dispatch.
+  An existing `OFFER_ACCEPTED` row is repointed at whoever holds the job now; a row in any other
+  state is left completely alone and no row is written, so this can never touch money that already
+  moved.
+- **A lapsed hold releases it.** `release_expired_offer_hold` now calls
+  `release_held_booking_fee`, which only ever touches a row that is `OFFER_ACCEPTED` **and** has no
+  payment attempt behind it, marking it `FAILED` with `failure_code: "offer_hold_released"`.
+  `FAILED` is the status `live_booking_fee` excludes and the unique constraint permits a row beside,
+  which is exactly what "not a state the Customer is in" needs to mean here. Without it a lapsed
+  hold would leave a row the next lead's acceptance has to reuse and a screen rendering an amount
+  for a job nobody is holding.
+
+**One thing was found while doing it and deliberately not fixed here.** A free re-dispatch after a
+vendor no-show cannot charge or confirm the replacement crew: the fee is `REFUNDED`, the unique
+constraint permits no second live row, and `create_booking_fee_checkout` refuses with "This booking
+fee is already settled" — and since `complete_booking_fee` is what opens the engagement, the
+replacement crew can never be confirmed. ADR-0009 says re-dispatch is **free**, so the answer is
+probably to confirm without a second charge rather than to charge again — which is a money decision
+and a second engagement-opening path, i.e. C6's `M2-BE-705`/`719` territory. Guessing it inside a
+wave about shift-days would put an unreviewed money branch where nobody would look for one.
+Appended to `frontend-execution-plan.md` §7 as its own row.
+
+#### Four C2R contract gaps, closed in the same release
+
+Logged by the Partner column against the 1.29.0 surface. All are one file deep, and leaving them
+would have made the frontend's workarounds permanent.
+
+1. **`m2_crew_offer_accept` returned `RateCardBooking` to the lead**, and that component carries
+   `total_customer_paise`, `booking_fee_paise` and `day_rate_paise` — the three numbers the
+   crew-offer *list* is scrupulous about withholding. The only thing stopping a lead from reading
+   the Customer's total was the client choosing not to render it, which is not where a disclosure
+   rule belongs. The response is now `CrewOfferAccepted`: the same job at the lead's own
+   disclosure. **`RateCardBooking` is not removed or renamed** — `m2_rate_card_read` still returns
+   it to the Customer, whose booking it is — so no component disappears; one operation answers with
+   a different one, and that is the single response-shape change in 1.30.0.
+2. `CrewOffer.status` is published as `VendorInvitationStatusEnum` rather than a bare string. The
+   enum has been in the schema since 1.21.0; the field simply failed to name the vocabulary it was
+   already speaking.
+3. `CrewOffer.decline_reason_code` — new, so a decline confirmation can show what was **recorded**
+   rather than echo what the client sent.
+4. `crew_offer.view` / `.accept` / `.decline` join `WORKSPACE_ACTIONS` for A3. The partner screen was
+   mounted behind `enquiry.accept`, which is correct today and wrong the day Operations wants to
+   stop offering instant crew without also stopping quote enquiries.
+
+#### The seed, and why it was not turned into a fixture generator
+
+The orchestrator asked for the seed to be extended until the walkthrough reaches an engagement.
+`seed_m2_demo` is deliberately a **configuration** seed — its whole docstring is about writing rows
+into the tables the fail-closed readers already read, never about driving commands — and making it
+book a requirement, accept an offer and capture a payment would make it a second, untested
+implementation of the flow the runbook exists to exercise by hand.
+
+What was missing was not seed data but the **walk itself**: `m2-demo-seed.md`'s A3 section is the
+quote-first door and ends at a quote, so there was no written rate-card walk anywhere. It is now
+§0.1 of this wave's smoke script, self-contained from an empty requirement through preset,
+published rate, book, accept, the held fee, checkout, simulated capture and the engagement — and it
+asks the owner to check `booking_fee.status == OFFER_ACCEPTED` at the one step that proves the fix.
+
+#### Static gates
+
+`.\scripts\quality-static.cmd` and `manage.py check`, both from `backend` with
+`backend\.venv\Scripts\python.exe`, both green:
+
+- `ruff format --check` and `ruff check` clean across **353 files**;
+- strict MyPy clean across **233 source files**;
+- `makemigrations --check --dry-run` — no changes;
+- `spectacular --validate` — **zero warnings** after nine named enum overrides;
+- contract-drift check clean;
+- `manage.py check` — no issues (0 silenced).
+
+Nine enums were named on arrival rather than after a positional rename breaks a client, which is
+the standing rule since the 1.24.0 `ReasonEnum` incident: `ShiftAttendanceStatusEnum`,
+`DaySettlementStatusEnum`, `SafetyIncidentStatusEnum`, `SafetyIncidentSeverityEnum`,
+`SafetyIncidentReporterRoleEnum`, `SafetyIncidentDecisionEnum`, `AttendanceResponseEnum`,
+`ShortfallChoiceEnum`, `ShiftExtraKindEnum`.
+
+Additivity was **verified rather than assumed**: the generated schema's component names and paths
+were diffed against the committed contract before publishing. Removed components: none. Removed
+paths: none.
+
+#### The one field name a client will guess wrong
+
+`ShiftDay.day_label`, not `label`. `label` is DRF's own `Serializer` attribute and a field of that
+name shadows it — mypy refuses the assignment and DRF would resolve it at random. Recorded in the
+1.30.0 changelog and in `frontend-execution-plan.md` §7.
+
+#### Smoke script
+
+[`docs/runbooks/m2-workforce-shift-day-smoke.md`](../../docs/runbooks/m2-workforce-shift-day-smoke.md).
+Nine sections, each naming what to check and — more usefully — what must be **absent**. It starts
+from `seed_m2_demo` and the C2R rate-card walk, and the first thing it asks the owner to check is
+that `scheduled_on` is a real date on every stage.
+
+#### Blocked, and left blocked
+
+| What | Blocked on | Behaviour meanwhile |
+|---|---|---|
+| The four values above | Owner (pre-phase decision list; ADR-0009 names the overtime window and the standing pattern) | Fail closed as tabulated; the dev seed makes the demo walkable |
+| Deriving three pre-existing constraints from their tuples | Needs a published `TextChoices` moved to module scope, which risks renaming an OpenAPI component (RULES §7) | Verified to agree today; logged in §7 as its own change |
+| Photographic evidence on a `SafetyIncident` | Wave C6 | The report carries a description and a severity; the stage-evidence presign is the rail to reuse, not a second uploader |
+| `m2_booking_fee_payment_pending` | Unchanged from 1.29.0 — declared, raised by no path | Recorded again in the 1.30.0 changelog rather than quietly removed |
+| `M2-BE-534`, `M2-BE-535` | Build-first amendment | Left unchecked and marked deferred; the smoke script replaces them for the sprint |
 
 ## Wave C5 — Project stages, A5 (`BE5B`)
 
@@ -1079,7 +1411,7 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | C3 | `BE-501..509` | `[~]` built — static gates green | `[~]` **15 new paths / 16 new operations at contract 1.25.0 (78 M2 operations)** | Ruff format and check clean across 345 files, strict MyPy across 225 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 5 enum entries (one **pin** preventing a rename of the published `ProcessingStatusEnum`), drift check clean. Migrations `requirements.0006`, `catalog.0009`, `commerce.0008`, `fulfilment.0002`; three new beat entries. **One stage spine for both archetypes**; scope amendments run on the M1 engine with `booking` made nullable and two new line kinds. **`M2-BE-113` unblocked and built.** Three defects closed: `simulate_capture` refused every M2 charge, an A3 total was client-supplied, and a new enum would have renamed a published component. **Tests deferred per the build-first amendment** (`BE-509`); smoke script at `docs/runbooks/m2-engagement-spine-smoke.md`. **1.25.0 needs client regeneration by the orchestrator.** |
 | C3.5 | Dev seed + the Wave I §7 defects | `[~]` built — static gates green | `[~]` **3 new paths / 3 new operations at contract 1.26.0 (81 M2 operations)** | Ruff format and check clean across 347 files, strict MyPy across 228 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 3 enum entries, drift check clean. Migration `requirements.0007`. **`manage.py seed_m2_demo`** loads every owner-blocked value as dev-only data behind three guards; runbook `docs/runbooks/m2-demo-seed.md`. Vendor cards, two-way clarification, `ProposalMaterialLine` + `EngagementStage.kind`, real verification badge, distance band, `service_name`, visit `timezone`, engagement `access_receipt`, no-show vocabulary. **Two live defects closed: 24 `select_for_update`-over-a-nullable-join `500`s (two of them M1 regressions from C3), and a plan-visit reschedule that abandoned its grid reservation.** `VisitNoShowRequest.reason_code` is now required — breaking for an un-regenerated client. **Tests deferred per the build-first amendment.** **1.26.0 needs client regeneration by the orchestrator.** |
 | C2R | `BE-429..435` (revision 4: rate-card A3) | `[ ]` | `[ ]` | New build; the C2 unlock surface is the demoted fallback and stays untouched |
-| C4 | `BE-521..539` | `[ ]` | `[ ]` | |
+| C4 | `BE-521..533`, `536..539` | `[~]` built — static gates green | `[~]` **10 new paths / 11 new operations at contract 1.30.0 (91 M2 operations)** | Ruff format and check clean across 353 files, strict MyPy across 233 source files, `makemigrations --check` no changes, `spectacular --validate` zero warnings after 9 named enums, drift check clean, `manage.py check` clean. Migrations `catalog.0011`, `partners.0010`, `requirements.0009`; one new beat entry. **The A3 shift-day**: per-stage crew with a cross-agency identity conflict held by a partial unique index, non-OTP arrival, supervisor "n of m", settlement per worker-day present with a UPI deep link and **no rail behind it**, extras at published rates through the M1 amendment engine, `SafetyIncident` and `report_cash_demand` with `PartnerStandingEvent` behind them. **Three runtime defects closed by auditing rather than running**: `EngagementStage.scheduled_on` had a reader and no writer (the whole surface was unreachable), `standing.record_event` deduplicated across partners on a null source, and an unpublished shift length defaulted to 24 hours. **`BookingFee.OFFER_ACCEPTED` now has a writer** and four C2R contract gaps closed with it — `m2_crew_offer_accept` no longer returns the Customer's total to the lead. **Tests deferred per the build-first amendment** (`BE-534`/`535`); smoke script `docs/runbooks/m2-workforce-shift-day-smoke.md`. **1.30.0 needs client regeneration by the orchestrator.** |
 | C5 | `BE-541..550` | `[ ]` | `[ ]` | |
 | C6 | `BE-701..719` | `[ ]` | `[ ]` | |
 | C7 | `BE-801..` | `[ ]` | `[ ]` | |
@@ -1109,4 +1441,6 @@ runbooks, dashboards, feature flags that gate new purchases only.
 | 2026-08-12 | Per-variant `requires_insurance` (0013 criterion 12) | Owner decision 6 | `apps/partners/capability_options.py` |
 | 2026-08-13 | `M2-BE-432`/`M2-BE-433` booking-fee value, forfeit split %, free-cancel window T | Owner decision 12 (revision 4). C2R builds the machinery fail-closed | `07-state-machines-and-permissions.md` §9 |
 | 2026-08-13 | `M2-BE-429` seed rate values per launch city+skill, decline-alarm threshold, review-calendar owner | Owner decision 13 (revision 4). An unpublished card means `m2_rate_card_unavailable` — no instant A3 at all | `07-state-machines-and-permissions.md` §9 |
+| 2026-08-14 | A free re-dispatch after a vendor no-show cannot charge or confirm the replacement crew | Not a blocker on an owner decision but on **C6** (`M2-BE-705`/`719`): the refunded fee occupies the one live-fee slot per booking, so the next lead's checkout refuses and `complete_booking_fee` — the only path that opens an engagement — never runs. ADR-0009 says re-dispatch is free, so the fix is probably confirming without a second charge, which is a money decision and a second engagement-opening path | This file, C4 outcome; `frontend-execution-plan.md` §7 |
+| 2026-08-14 | Deriving three pre-existing constraints from the tuples they hand-copy | Needs a published `TextChoices` moved to module scope; all three are named in `ENUM_NAME_OVERRIDES` by their nested dotted path, so moving them risks renaming a published component (RULES §7). Verified to agree today | This file, C4 outcome; `frontend-execution-plan.md` §7 |
 | 2026-08-13 | Whether the A3 fallback keeps charging the unlock | Owner decision 14 (revision 4). Until decided, the fallback inherits the built C2 behaviour | ADR-0009 |

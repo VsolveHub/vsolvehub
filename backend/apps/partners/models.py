@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date
+from typing import Any
 
 from django.conf import settings
 from django.db import models
@@ -673,6 +674,16 @@ class PartnerBusinessProfile(models.Model):
     gst_registered = models.BooleanField(default=False)
     gstin = models.CharField(max_length=15, blank=True)
     years_in_operation = models.PositiveSmallIntegerField(default=0)
+    #: The lead's own UPI handle, for the evening "Day settled?" convenience link (`M2-BE-536`).
+    #:
+    #: **This is not a payout rail and must never become one.** A3 wages are peer-to-peer: the
+    #: Customer's own UPI app sends the money to this address and the platform never holds, routes,
+    #: books or reconciles it. It lives here rather than on `payouts.PartnerPayoutAccount` for
+    #: exactly that reason — that table is where Vsolve pays somebody, this is where somebody else
+    #: pays them, and putting a collection handle in the payout table is the first step to a
+    #: settlement job finding it. Blank is the ordinary state: the deep link is simply not offered,
+    #: the published amount still is, and the crew is paid the way they were paid before the app.
+    upi_vpa = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1174,3 +1185,73 @@ class MinimumWageFloor(models.Model):
 
     def __str__(self) -> str:
         return f"{self.state_code}:{self.skill_id}:{self.floor_paise_per_day}"
+
+
+class PartnerStandingEvent(models.Model):
+    """One recorded fact about how a vendor behaved, and nothing more (Wave C4).
+
+    ADR-0009 asks three separate things to "hit standing": a short crew day, a cash extra demanded
+    on site, and a vendor no-show. Until this table there was nowhere to put any of them, so all
+    three were sentences in docstrings — `booking_fees.report_crew_no_show` says the standing takes
+    the hit and then does not take it.
+
+    Three properties, each of which is the point:
+
+    * **It is an event, not a score.** No number is stored, decayed or displayed. A score invites
+      the question "what is mine?" from vendors and "why did it move?" from Operations, and neither
+      has an answer this platform can defend. A count of named events inside a named window does.
+    * **It is immutable, and one event per source row.** `source_id` is the row that caused it — a
+      settlement, a report, a booking — and the partial unique index makes a re-driven command find
+      its own event instead of writing a second one. Standing that can be edited, or double-counted
+      by a retry, is not evidence.
+    * **It carries no FK into `apps.requirements`.** That app imports this one; the reverse would
+      be a cycle. `source_kind` plus `source_id` is the honest shape for a reference across that
+      boundary, and it is deliberately not a `GenericForeignKey` — nothing here needs to *follow*
+      the reference, only to prove which row it came from.
+
+    A report is never proof on its own. `apps.partners.standing` reads these to answer "is there a
+    pattern", against thresholds the owner has not set yet; while they are unset nothing at all
+    happens to the vendor and the events simply accumulate, which is the fail-closed direction.
+    """
+
+    class Kind(models.TextChoices):
+        CREW_SHORTFALL = "CREW_SHORTFALL", "Fewer workers arrived than were booked"
+        CASH_DEMAND_REPORTED = "CASH_DEMAND_REPORTED", "A Customer reported a cash extra demanded"
+        VENDOR_NO_SHOW = "VENDOR_NO_SHOW", "The crew did not arrive at all"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        PartnerProfile,
+        on_delete=models.PROTECT,
+        related_name="standing_events",
+    )
+    kind = models.CharField(max_length=24, choices=Kind.choices)
+    #: Which table the causing row lives in, as a slug. Written by the command that records the
+    #: event so an Operations reader can find it without guessing.
+    source_kind = models.SlugField(max_length=40)
+    source_id = models.UUIDField(null=True, blank=True)
+    #: What happened, in one line, for the Operations queue. Never a judgement.
+    reason = models.CharField(max_length=240, blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-occurred_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("kind", "source_id"),
+                condition=models.Q(source_id__isnull=False),
+                name="partners_one_standing_event_per_source",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("partner", "kind", "occurred_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.partner_id}:{self.kind}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValueError("A standing event is immutable.")
+        super().save(*args, **kwargs)

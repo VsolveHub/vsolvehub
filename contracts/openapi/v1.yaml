@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.29.0
+  version: 1.30.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -2012,6 +2012,190 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_stage_disputed` while a dispute is open; `m2_stage_transition_not_allowed`
             when nothing has been submitted.'
+  /api/v1/engagement-stages/{stage_id}/arrival/:
+    post:
+      operationId: m2_shift_arrival_confirm
+      description: |-
+        Confirm the crew arrived for this shift-day. **Non-OTP, and that is the default path in M2** rather than a degraded one — the start OTP is M3. Either party may record it: both were at the site.
+
+        Three things happen in one transaction, because a half-started day is a support ticket: the arrival is stamped, the stage starts on the shared spine, and **on day one the booking fee is earned**. Crew must be named first — confirming that people arrived before saying who they are records nothing anybody can act on.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftAttendance'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` when no crew is assigned
+            yet, the engagement is closed, or the stage is an A5 milestone.'
+  /api/v1/engagement-stages/{stage_id}/attendance/:
+    post:
+      operationId: m2_shift_attendance_confirm
+      description: |-
+        Record **n of m present** for this shift-day. One tap, from the supervisor.
+
+        There is deliberately **no per-worker check-in or check-out**: the workers mostly do not carry smartphones, the supervisor does, and a per-worker attendance product would be a device dependency this market cannot meet wearing the clothes of rigour. Per-worker detail is captured in exactly one place — a Customer dispute.
+
+        The count *is* the evidence, so this hands the stage to the Customer through the ordinary spine and starts the same review clock every other stage runs on.
+
+        `shift_ended_at` is optional and its absence is the point: a **missing check-out** settles at the agreed shift length and is flagged for review, not disputed. A supervisor whose crew left at six and who closed the day at nine has done nothing wrong, and the amount never depended on the end time — only overtime does, and that needs the Customer's approval either way.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftAttendanceRecordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShiftAttendanceRecordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShiftAttendanceRecordRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftAttendance'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` before arrival is confirmed,
+            after the Customer has already answered, or for a count above the booked
+            crew — an extra worker is a scope amendment at the published rate, not
+            a bigger number in an attendance box.'
+  /api/v1/engagement-stages/{stage_id}/attendance/response/:
+    post:
+      operationId: m2_shift_attendance_respond
+      description: |-
+        Confirm the supervisor's count or dispute it.
+
+        **Confirm** approves the shift-day on the shared spine, which for a workforce engagement also releases it — there is no payout to hold because Vsolve collected nothing. On a shortfall `shortfall_choice` is **required**: continue short, ask for an extra day, or cancel the missing workers free. The day settles at the present workers' published rate whichever you choose — that is `M2-BE-537`, settlement per worker-day present and never per job — and the choice decides what happens to the missing worker-days rather than to the money for the ones who came.
+
+        `ADD_DAY` records a request, and only that. The extra day is the lead's to offer through the amendment engine; appending a shift-day to somebody's week without their agreement would be the platform committing a vendor's labour.
+
+        **Dispute** is the only place per-worker detail is ever captured. It stops the review clock and opens the Operations path; the settlement stays unconfirmed, because a count nobody agrees on is not an amount either. Nothing derives a third number from `worker_details` — it is the Customer's objection, and a case decides between them.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftAttendanceResponseRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShiftAttendanceResponseRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShiftAttendanceResponseRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftAttendance'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` before the supervisor has
+            recorded the day, or when a shortfall was left without a choice.'
   /api/v1/engagement-stages/{stage_id}/correction/:
     post:
       operationId: m2_stage_request_correction
@@ -2070,6 +2254,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/engagement-stages/{stage_id}/crew/:
+    post:
+      operationId: m2_shift_crew_assign
+      description: |-
+        Assign crew to **one shift-day**, not to the engagement. Multi-day work rotates faces legitimately, and a roster hung off the engagement would either forbid that or record a lie about who was there.
+
+        Send the **whole** intended crew every time. The server reconciles the day to it: names that are gone are released with `reason_code`, new names are assigned. A substitution is therefore one call rather than a delete-then-add a client can half perform, and re-sending the same set is a no-op.
+
+        Four refusals, each a different failure: `m2_crew_roster_required` (the progressive gate, at the first assignment rather than at registration), `m2_crew_conflict` for an unverified worker, for a worker who is not on your roster or is marked unavailable, and — the cross-agency one — for the same **person** already promised on that date through any agency. The last is held by a database constraint as well as by this check, so two supervisors tapping at the same instant cannot both win.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewAssignRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewAssignRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewAssignRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StageCrewList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_crew_roster_required` — add a verified worker to your
+            roster before assigning anybody to a shift.'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_crew_conflict`, or `m2_stage_transition_not_allowed` when
+            the shift-day has no date on it, is already settled, or is an A5 milestone.'
   /api/v1/engagement-stages/{stage_id}/dispute/:
     post:
       operationId: m2_stage_dispute
@@ -2313,6 +2570,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_attachment_unavailable` when storage is down. Retryable.'
+  /api/v1/engagement-stages/{stage_id}/extras/:
+    post:
+      operationId: m2_shift_extra_propose
+      description: |-
+        Ask the Customer to approve overtime or an add-on **at the card's published rate**. This is a caller into the one amendment engine this codebase has, not a second one: the status machine, the expiry and the acceptance are the M1 engine's, and what this adds is the *price*, read from the card frozen on the engagement at booking.
+
+        **There is no amount field.** The vendor names what and how much of it; the server names the money. A vendor who could type a number could re-price a job the Customer booked at a published rate, which is exactly the on-site renegotiation the rate card exists to leave nowhere to live.
+
+        **Unapproved overtime is unpaid.** Overtime proposed while the shift is still running needs no window. Overtime for a shift that has already ended must be approved inside the configured retroactive window, and the amendment's deadline is shortened to it — past the window the request is refused outright, and while the owner has not set the window a retroactive request is refused with `m2_policy_unavailable` rather than granted on a guess.
+
+        An add-on code that is not on the frozen card has no published price and is refused.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftExtraRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShiftExtraRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShiftExtraRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementAmendment'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_amendment_required` when this booking publishes no overtime
+            or add-on rate, or the retroactive window has closed; `m2_policy_unavailable`
+            when the owner has set no window; `m2_stage_transition_not_allowed` otherwise.'
   /api/v1/engagement-stages/{stage_id}/funding/:
     post:
       operationId: m2_stage_funding_checkout_create
@@ -2361,6 +2687,94 @@ paths:
           description: '`m2_stage_not_funded` when the stage is already funded, when
             an earlier stage is not, or when the engagement is `LEAD_ONLY` and paid
             directly to the vendor.'
+  /api/v1/engagement-stages/{stage_id}/settlement/:
+    post:
+      operationId: m2_shift_day_settled_confirm
+      description: |-
+        Record that this day was settled. Either party taps; the server records **who**, and nothing else.
+
+        **No money moves here and none can.** A3 wages are direct, daily and peer-to-peer at day end — the platform never holds them. `amount_paise` is the exact published figure for the day (present workers at the day rate, plus any extras both sides accepted through the amendment engine) and `upi_payment_link` is a deep link into the Customer's own UPI app at that amount. A convenience, not a rail; `null` when the lead has published no VPA, which is an ordinary state.
+
+        **A one-sided claim is left standing as `SUPERVISOR_CLAIMED` or `CUSTOMER_CLAIMED`.** That is what Operations reads as *unproven* — one person says they settled and the other has not answered, which is a different sentence from either "they were paid" or "they were not". Only both taps make `SETTLED`, and the amount freezes there.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaySettlement'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` before the day has been
+            recorded — there is no amount to settle until somebody says who was there.'
+  /api/v1/engagement-stages/{stage_id}/shift/:
+    get:
+      operationId: m2_shift_day_read
+      description: |-
+        One A3 shift-day, whole. Returns the day's crew at the disclosure the caller is entitled to, the supervisor's attendance record and the evening settlement.
+
+        **The Customer never receives `crew_member_id`.** Crew identity is global — one person is one row however many agencies carry them — so `membership_id` is published to the Partner only and the global id to nobody. What a Customer gets is a name, four digits of phone and whether this platform has verified the person's documents.
+
+        `attendance` and `settlement` are `null` until a command touches the day. That is a real state and not a missing one: nothing is created by reading.
+      parameters:
+      - in: path
+        name: stage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftDay'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_stage_transition_not_allowed` on an A5 milestone: a project
+            stage has no crew, no attendance and no daily settlement.'
   /api/v1/engagement-stages/{stage_id}/start/:
     post:
       operationId: m2_stage_start
@@ -2642,6 +3056,70 @@ paths:
             carries no agreed daily rate to price an extension from; `m2_policy_unavailable`
             when the response window is unset — an amendment with no deadline is an
             open-ended claim on somebody''s money, so it is refused rather than invented.'
+  /api/v1/engagements/{engagement_id}/cash-demand/:
+    post:
+      operationId: m2_cash_demand_report
+      description: |-
+        Report that a cash extra was demanded on site. The Customer's tap, and one tap is all it takes — `amount_claimed_paise` is optional because a required amount turns "they demanded extra" into a form, and the form is what stops it being reported.
+
+        **It is never proof on its own.** The report is recorded immutably and a standing event is written against the lead — a fact with a date, not a penalty and not a score. If the owner has configured a removal threshold and a window and this vendor has crossed it, their A3 capability is suspended through the same command Operations uses, which routes their live engagements exactly as a human suspension does.
+
+        While the threshold is unset nothing at all happens to the vendor and the reports still accumulate. That asymmetry is deliberate: refusing a Customer's report because a policy is unconfigured would punish them for an Operations gap, and ending somebody's trade on an invented number is not a decision code may take.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashDemandRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CashDemandRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CashDemandRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashDemandReport'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/engagements/{engagement_id}/completion/:
     post:
       operationId: m2_engagement_completion_accept
@@ -2716,6 +3194,99 @@ paths:
                 $ref: '#/components/schemas/EngagementEventList'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/engagements/{engagement_id}/safety-incidents/:
+    get:
+      operationId: m2_safety_incident_list
+      description: Every safety report on this engagement, readable by both parties.
+        Empty is the ordinary answer and is a `200`.
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SafetyIncidentList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_safety_incident_report
+      description: |-
+        File a safety incident. Reportable by **both parties**: the Customer who saw it and the lead whose worker it was. `reporter_role` is derived from the caller and cannot be sent.
+
+        **This is never a cancellation reason.** Nothing here cancels, suspends or refunds anything and the engagement carries on exactly as it was. A job that has to end because a site is unsafe ends through cancellation *with* a report beside it, so both facts exist separately and either can be read without the other — filing "a worker fell" as "job cancelled, site unsafe" is how a platform ends up unable to say, two years later, what was reported and what was done about it.
+
+        The report body is **frozen** once filed. Operations may add a status and a resolution; nobody may rewrite what was reported.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Shift days
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SafetyIncidentReportRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SafetyIncidentReportRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SafetyIncidentReportRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SafetyIncident'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
           content:
             application/json:
               schema:
@@ -5222,6 +5793,69 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/safety-incidents/{safety_incident_id}/decision/:
+    post:
+      operationId: m2_safety_incident_decide
+      description: |-
+        Move a safety report to `UNDER_REVIEW` or close it as `RESOLVED`. Closing requires an account of what was done.
+
+        The report body is frozen by the model, so this can only ever add a status and a resolution — an operator cannot revise what somebody said happened, which is the property that makes the record worth keeping.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: safety_incident_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SafetyIncidentDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SafetyIncidentDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SafetyIncidentDecisionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SafetyIncident'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/unpayable-partners/:
     get:
       operationId: operations_unpayable_partners
@@ -6819,7 +7453,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RateCardBooking'
+                $ref: '#/components/schemas/CrewOfferAccepted'
           description: ''
         '403':
           content:
@@ -6958,10 +7592,12 @@ paths:
   /api/v1/partner/crew/{membership_id}/archive/:
     post:
       operationId: m2_partner_crew_archive
-      description: 'Take a worker off this roster. **Does not yet refuse when the
-        worker holds a future assignment**: crew assignment is per stage and the stage
-        model arrives with `M2-BE-522`, so there is nothing to read. A guard against
-        a table that does not exist would be a check that always passes.'
+      description: Take a worker off this roster. **Refuses with `m2_crew_conflict`
+        when the worker is booked on a future shift-day**, naming the dates (proposal
+        0013, acceptance criterion 9). Until Wave C4 built the per-stage assignment
+        table there was nothing to read here, and archiving a name that a Customer
+        was expecting on Thursday left the roster and the shift-day disagreeing silently.
+        Replace them on those shifts first.
       parameters:
       - in: path
         name: membership_id
@@ -11301,6 +11937,14 @@ components:
       - kind
       - sha256
       - size_bytes
+    AttendanceResponseEnum:
+      enum:
+      - CONFIRM
+      - DISPUTE
+      type: string
+      description: |-
+        * `CONFIRM` - The count is right
+        * `DISPUTE` - That is not who was here
     AuthenticatedSession:
       type: object
       properties:
@@ -12238,6 +12882,61 @@ components:
       - oldest_overdue_minutes
       - server_now
       - teams
+    CashDemandReport:
+      type: object
+      description: |-
+        A Customer's one-tap account of a cash extra demanded on site (`M2-BE-539`).
+
+        There is no verdict field, no vendor response and no money on this shape, because a report is
+        never proof on its own. It is recorded immutably and counted towards a pattern against a
+        threshold the owner sets; one report changes nothing at all.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        engagement:
+          type: string
+          format: uuid
+          readOnly: true
+        stage:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        amount_claimed_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        note:
+          type: string
+          readOnly: true
+        reported_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount_claimed_paise
+      - engagement
+      - id
+      - note
+      - reported_at
+      - stage
+    CashDemandRequest:
+      type: object
+      properties:
+        amount_claimed_paise:
+          type: integer
+          minimum: 1
+          nullable: true
+        note:
+          type: string
+          default: ''
+          maxLength: 4000
+        stage_id:
+          type: string
+          format: uuid
+          nullable: true
     Category:
       type: object
       properties:
@@ -12684,6 +13383,29 @@ components:
         * `image/jpeg` - image/jpeg
         * `image/png` - image/png
         * `application/pdf` - application/pdf
+    CrewAssignRequest:
+      type: object
+      description: |-
+        The **whole** crew for this shift-day, every time (`M2-BE-522`, `528`).
+
+        A set, not a delta. The supervisor sends who is coming and the server reconciles the day to it:
+        names that dropped off are released with a reason, new names are assigned. That makes a
+        substitution one call a client cannot half-perform, and makes a retried tap a no-op.
+      properties:
+        membership_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 40
+          minItems: 1
+        reason_code:
+          type: string
+          default: ''
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - membership_ids
     CrewAvailability:
       type: object
       properties:
@@ -12852,6 +13574,10 @@ components:
           format: uuid
           readOnly: true
         status:
+          allOf:
+          - $ref: '#/components/schemas/VendorInvitationStatusEnum'
+          readOnly: true
+        decline_reason_code:
           type: string
           readOnly: true
         headcount:
@@ -12900,6 +13626,7 @@ components:
       required:
       - area_label
       - days
+      - decline_reason_code
       - headcount
       - inclusions
       - invitation_id
@@ -12913,6 +13640,91 @@ components:
       - standard_day_hours
       - status
       - verified_roster_size
+    CrewOfferAccepted:
+      type: object
+      description: |-
+        The job a lead just took, at **their** disclosure — not the Customer's booking row.
+
+        This replaces `RateCardBooking` on the accept response, and the replacement is the point.
+        `RateCardBooking` carries `total_customer_paise`, `booking_fee_paise` and `day_rate_paise` —
+        the Customer's all-inclusive numbers, which include this platform's fee — and the crew-offer
+        *list* is scrupulous about withholding all three. Returning them one call later, at the moment
+        the lead commits, left the discipline resting on the client choosing not to render them.
+        ADR-0009 fixes the offer screen as "what they receive per day for the requested crew"; a lead
+        shown the Customer's total would reasonably expect to receive it, and that expectation is an
+        argument on a site.
+
+        Everything a lead needs to work the job is here. Nothing that describes what Vsolve charges is.
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+          readOnly: true
+        requirement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/RateCardBookingStatusEnum'
+          readOnly: true
+        headcount:
+          type: integer
+          readOnly: true
+        days:
+          type: integer
+          readOnly: true
+        lead_day_receipt_paise:
+          type: integer
+          readOnly: true
+        lead_receipt_paise:
+          type: integer
+          readOnly: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+        add_on_rates:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+        inclusions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        hold_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        requested_start:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - add_on_rates
+      - booking_id
+      - days
+      - headcount
+      - hold_expires_at
+      - inclusions
+      - lead_day_receipt_paise
+      - lead_receipt_paise
+      - overtime_hourly_paise
+      - requested_start
+      - requirement_id
+      - server_now
+      - standard_day_hours
+      - status
     CrewOfferDeclineReasonCodeEnum:
       enum:
       - RATE_TOO_LOW
@@ -13214,6 +14026,97 @@ components:
       - non_responsive_rejections_remaining
       - quotes
       - server_now
+    DaySettlement:
+      type: object
+      description: |-
+        The evening dual tap, and the exact published amount behind it (`M2-BE-536`, `537`).
+
+        **This is a record of a payment Vsolve never touches.** There is no checkout here, no
+        `payment_attempt_id`, no refund and no payout — the wage money is peer-to-peer, daily, at day
+        end, and the platform's whole part in it is to state the number both sides already agreed and
+        remember who said they were paid.
+
+        `upi_payment_link` is null whenever the lead has published no VPA, which is an ordinary state
+        and not an error: the amount is still shown and the crew is still paid the way they were paid
+        before this app existed.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/DaySettlementStatusEnum'
+          readOnly: true
+        per_worker_paise:
+          type: integer
+          readOnly: true
+        workers_present:
+          type: integer
+          readOnly: true
+        workers_expected:
+          type: integer
+          readOnly: true
+        extras_paise:
+          type: integer
+          readOnly: true
+        amount_paise:
+          type: integer
+          readOnly: true
+        shortfall_choice:
+          allOf:
+          - $ref: '#/components/schemas/ShortfallChoiceEnum'
+          readOnly: true
+        make_good_requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        supervisor_confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        customer_confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        settled_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        upi_payment_link:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - amount_paise
+      - customer_confirmed_at
+      - extras_paise
+      - id
+      - make_good_requested_at
+      - per_worker_paise
+      - settled_at
+      - shortfall_choice
+      - status
+      - supervisor_confirmed_at
+      - upi_payment_link
+      - workers_expected
+      - workers_present
+    DaySettlementStatusEnum:
+      enum:
+      - AWAITING_BOTH
+      - SUPERVISOR_CLAIMED
+      - CUSTOMER_CLAIMED
+      - SETTLED
+      type: string
+      description: |-
+        * `AWAITING_BOTH` - Neither side has confirmed
+        * `SUPERVISOR_CLAIMED` - Only the supervisor has confirmed
+        * `CUSTOMER_CLAIMED` - Only the Customer has confirmed
+        * `SETTLED` - Both sides confirmed
     DemandPreview:
       type: object
       properties:
@@ -13448,6 +14351,21 @@ components:
       required:
       - dispute_reason
       - expected_version
+    DisputedWorkerRequest:
+      type: object
+      description: One line of a Customer's dispute. Their account, in their words.
+      properties:
+        name:
+          type: string
+          default: ''
+          maxLength: 120
+        was_present:
+          type: boolean
+          default: false
+        note:
+          type: string
+          default: ''
+          maxLength: 400
     EngageKillSwitchRequestRequest:
       type: object
       properties:
@@ -16743,6 +17661,9 @@ components:
         years_in_operation:
           type: integer
           readOnly: true
+        upi_vpa:
+          type: string
+          readOnly: true
         updated_at:
           type: string
           format: date-time
@@ -16754,6 +17675,7 @@ components:
       - legal_name
       - registration_number
       - updated_at
+      - upi_vpa
       - years_in_operation
     PartnerBusinessProfileWriteRequest:
       type: object
@@ -16782,6 +17704,10 @@ components:
           type: integer
           maximum: 200
           minimum: 0
+        upi_vpa:
+          type: string
+          default: ''
+          maxLength: 120
       required:
       - business_type
     PartnerBusinessTypeEnum:
@@ -20672,6 +21598,173 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
       required:
       - role
+    SafetyIncident:
+      type: object
+      description: |-
+        A first-class safety record (`M2-BE-530`). **Never a cancellation reason.**
+
+        A job that has to end because a site is unsafe ends through cancellation *with* a safety report
+        beside it, so both facts exist separately and either can be read without the other. Filing "a
+        worker fell" as "job cancelled, site unsafe" is how a platform ends up unable to say, two years
+        later, what was reported and what was done about it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        engagement:
+          type: string
+          format: uuid
+          readOnly: true
+        stage:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        reporter_role:
+          allOf:
+          - $ref: '#/components/schemas/SafetyIncidentReporterRoleEnum'
+          readOnly: true
+        severity:
+          allOf:
+          - $ref: '#/components/schemas/SafetyIncidentSeverityEnum'
+          readOnly: true
+        category_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+          readOnly: true
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SafetyIncidentStatusEnum'
+          readOnly: true
+        resolution_note:
+          type: string
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category_code
+      - created_at
+      - description
+      - engagement
+      - id
+      - occurred_at
+      - reporter_role
+      - resolution_note
+      - resolved_at
+      - severity
+      - stage
+      - status
+    SafetyIncidentDecisionEnum:
+      enum:
+      - UNDER_REVIEW
+      - RESOLVED
+      type: string
+      description: |-
+        * `UNDER_REVIEW` - Operations is reviewing it
+        * `RESOLVED` - Closed by Operations
+    SafetyIncidentDecisionRequest:
+      type: object
+      description: Operations moves a report to review or to a close. It can never
+        rewrite the report.
+      properties:
+        decision:
+          $ref: '#/components/schemas/SafetyIncidentDecisionEnum'
+        resolution_note:
+          type: string
+          default: ''
+          maxLength: 8000
+      required:
+      - decision
+    SafetyIncidentList:
+      type: object
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/SafetyIncident'
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - incidents
+      - server_now
+    SafetyIncidentReportRequest:
+      type: object
+      description: File a report. `reporter_role` is derived from the caller and is
+        deliberately not here.
+      properties:
+        severity:
+          $ref: '#/components/schemas/SafetyIncidentSeverityEnum'
+        category_code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+          minLength: 1
+          maxLength: 8000
+        occurred_at:
+          type: string
+          format: date-time
+          nullable: true
+        stage_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - category_code
+      - description
+      - severity
+    SafetyIncidentReporterRoleEnum:
+      enum:
+      - CUSTOMER
+      - PARTNER
+      - OPERATIONS
+      type: string
+      description: |-
+        * `CUSTOMER` - The Customer
+        * `PARTNER` - The vendor or their supervisor
+        * `OPERATIONS` - Operations
+    SafetyIncidentSeverityEnum:
+      enum:
+      - NEAR_MISS
+      - MINOR
+      - SERIOUS
+      - CRITICAL
+      type: string
+      description: |-
+        * `NEAR_MISS` - A near miss
+        * `MINOR` - Minor injury or damage
+        * `SERIOUS` - Serious injury or damage
+        * `CRITICAL` - Critical: life-threatening or fatal
+    SafetyIncidentStatusEnum:
+      enum:
+      - REPORTED
+      - UNDER_REVIEW
+      - RESOLVED
+      type: string
+      description: |-
+        * `REPORTED` - Reported
+        * `UNDER_REVIEW` - Operations is reviewing it
+        * `RESOLVED` - Closed by Operations
     ScanStatusEnum:
       enum:
       - PENDING
@@ -21296,6 +22389,281 @@ components:
       - active_role
       - session_expires_at
       - user
+    ShiftAttendance:
+      type: object
+      description: |-
+        What the supervisor said, and what the Customer answered (`M2-BE-524` to `527`).
+
+        `present_count` is null until somebody records the day, and that is a real state rather than a
+        zero: "nobody has said" and "nobody came" are different facts and a settlement depends on
+        which.
+
+        `disputed_worker_details` is populated **only** by a Customer dispute (`M2-BE-526`). It is the
+        Customer's account of who they say was not there — evidence in a case, never an attendance
+        record of its own, and nothing derives a count from it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ShiftAttendanceStatusEnum'
+          readOnly: true
+        expected_count:
+          type: integer
+          readOnly: true
+        present_count:
+          type: integer
+          readOnly: true
+          nullable: true
+        shortfall_count:
+          type: integer
+          readOnly: true
+        arrival_confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+          nullable: true
+        shift_ended_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        checkout_missing:
+          type: boolean
+          readOnly: true
+        flagged_for_review:
+          type: boolean
+          readOnly: true
+        flag_reason_code:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        responded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        dispute_note:
+          type: string
+          readOnly: true
+        disputed_worker_details:
+          readOnly: true
+      required:
+      - arrival_confirmed_at
+      - checkout_missing
+      - confirmed_at
+      - dispute_note
+      - disputed_worker_details
+      - expected_count
+      - flag_reason_code
+      - flagged_for_review
+      - id
+      - present_count
+      - responded_at
+      - shift_ended_at
+      - shortfall_count
+      - standard_day_hours
+      - status
+    ShiftAttendanceRecordRequest:
+      type: object
+      description: |-
+        The supervisor's one action for the day (`M2-BE-525`).
+
+        One count, and deliberately **no per-worker roll call**. `SIM-02` refuses per-worker check-in
+        and check-out with offline sync outright: the workers mostly do not carry smartphones, the
+        supervisor does, and a per-worker product would be a device dependency the market cannot meet
+        wearing the clothes of rigour.
+      properties:
+        present_count:
+          type: integer
+          minimum: 0
+        shift_ended_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - present_count
+    ShiftAttendanceResponseRequest:
+      type: object
+      description: Confirm the day or dispute it (`M2-BE-525`, `526`, `537`).
+      properties:
+        response:
+          $ref: '#/components/schemas/AttendanceResponseEnum'
+        shortfall_choice:
+          default: ''
+          oneOf:
+          - $ref: '#/components/schemas/ShortfallChoiceEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        worker_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisputedWorkerRequest'
+        note:
+          type: string
+          default: ''
+          maxLength: 2000
+      required:
+      - response
+    ShiftAttendanceStatusEnum:
+      enum:
+      - PENDING
+      - SUPERVISOR_CONFIRMED
+      - CUSTOMER_CONFIRMED
+      - DISPUTED
+      type: string
+      description: |-
+        * `PENDING` - Nothing recorded yet
+        * `SUPERVISOR_CONFIRMED` - The supervisor recorded the day
+        * `CUSTOMER_CONFIRMED` - The Customer agreed
+        * `DISPUTED` - The Customer disputed the count
+    ShiftDay:
+      type: object
+      description: |-
+        One shift-day, whole: the day, the crew on it, the attendance and the settlement.
+
+        One read rather than four, for the reason `RateCardStateSerializer` gives: the crew screen, the
+        attendance screen and the settlement screen are the same screen at three moments of one
+        evening, and four endpoints would let them disagree about which day the user is looking at.
+
+        `attendance` and `settlement` are null until somebody touches the day — created lazily, because
+        the engagement is opened inside a payment callback and four more inserts in that transaction
+        are four more ways for a Customer's money to fail to confirm.
+      properties:
+        stage_id:
+          type: string
+          format: uuid
+          readOnly: true
+        engagement_id:
+          type: string
+          format: uuid
+          readOnly: true
+        position:
+          type: integer
+          readOnly: true
+        day_label:
+          type: string
+          readOnly: true
+        scheduled_on:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        stage_status:
+          type: string
+          readOnly: true
+        crew:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageCrewMember'
+          readOnly: true
+        attendance:
+          allOf:
+          - $ref: '#/components/schemas/ShiftAttendance'
+          readOnly: true
+          nullable: true
+        settlement:
+          allOf:
+          - $ref: '#/components/schemas/DaySettlement'
+          readOnly: true
+          nullable: true
+        per_worker_paise:
+          type: integer
+          readOnly: true
+        standard_day_hours:
+          type: integer
+          readOnly: true
+          nullable: true
+        overtime_hourly_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        add_on_rates:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - add_on_rates
+      - attendance
+      - crew
+      - day_label
+      - engagement_id
+      - overtime_hourly_paise
+      - per_worker_paise
+      - position
+      - scheduled_on
+      - server_now
+      - settlement
+      - stage_id
+      - stage_status
+      - standard_day_hours
+    ShiftExtraKindEnum:
+      enum:
+      - OVERTIME
+      - ADD_ON
+      type: string
+      description: |-
+        * `OVERTIME` - Hours past the published shift
+        * `ADD_ON` - A published add-on from the rate card
+    ShiftExtraRequest:
+      type: object
+      description: |-
+        Ask the Customer to approve overtime or an add-on (`M2-BE-531`, `538`).
+
+        **There is no amount field, and there never will be.** The vendor names what and how much of
+        it; the server names the money, from the rate card frozen on the engagement at booking. A
+        vendor who could type a number here could re-price a job the Customer booked at a published
+        rate, which is precisely the on-site renegotiation ADR-0009 exists to leave nowhere to live.
+      properties:
+        kind:
+          $ref: '#/components/schemas/ShiftExtraKindEnum'
+        hours:
+          type: integer
+          maximum: 12
+          minimum: 0
+          default: 0
+        add_on_code:
+          type: string
+          default: ''
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        worker_days:
+          type: integer
+          maximum: 200
+          minimum: 0
+          default: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 240
+      required:
+      - kind
+      - reason
+    ShortfallChoiceEnum:
+      enum:
+      - CONTINUE_SHORT
+      - ADD_DAY
+      - CANCEL_SHORTFALL
+      type: string
+      description: |-
+        * `CONTINUE_SHORT` - Carry on with the crew that came
+        * `ADD_DAY` - Ask the lead for an extra day to make it up
+        * `CANCEL_SHORTFALL` - Cancel the missing workers, free
     SiteVisit:
       type: object
       description: |-
@@ -21440,6 +22808,78 @@ components:
           maxLength: 2000
       required:
       - note
+    StageCrewList:
+      type: object
+      properties:
+        crew:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageCrewMember'
+          readOnly: true
+        expected_count:
+          type: integer
+          readOnly: true
+        shift_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+        server_now:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - crew
+      - expected_count
+      - server_now
+      - shift_date
+    StageCrewMember:
+      type: object
+      description: |-
+        One named worker on one shift-day, at the disclosure the reader is entitled to.
+
+        `membership_id` is present for the Partner — it is their own roster row and the id their
+        assignment screen sends back — and **null for the Customer**. The global `crew_member_id`
+        appears for nobody.
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        display_name:
+          type: string
+          readOnly: true
+        phone_masked:
+          type: string
+          readOnly: true
+        is_supervisor:
+          type: boolean
+          readOnly: true
+        is_verified:
+          type: boolean
+          readOnly: true
+        verified_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        status:
+          type: string
+          readOnly: true
+        assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assigned_at
+      - display_name
+      - is_supervisor
+      - is_verified
+      - membership_id
+      - phone_masked
+      - status
+      - verified_at
     StageDisputeDecisionRequest:
       type: object
       properties:

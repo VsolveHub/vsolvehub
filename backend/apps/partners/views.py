@@ -1038,6 +1038,7 @@ class PartnerBusinessProfileView(APIView):
                 gst_registered=values.get("gst_registered", False),
                 gstin=values.get("gstin", ""),
                 years_in_operation=values.get("years_in_operation", 0),
+                upi_vpa=values.get("upi_vpa", ""),
             )
         except PartnerDomainError as exc:
             _raise_api_error(exc)
@@ -1524,10 +1525,12 @@ class PartnerCrewArchiveView(APIView):
         operation_id="m2_partner_crew_archive",
         request=None,
         description=(
-            "Take a worker off this roster. **Does not yet refuse when the worker holds a future "
-            "assignment**: crew assignment is per stage and the stage model arrives with "
-            "`M2-BE-522`, so there is nothing to read. A guard against a table that does not exist "
-            "would be a check that always passes."
+            "Take a worker off this roster. "
+            "**Refuses with `m2_crew_conflict` when the worker is booked on a future shift-day**, "
+            "naming the dates (proposal 0013, acceptance criterion 9). Until Wave C4 built the "
+            "per-stage assignment table there was nothing to read here, and archiving a name that "
+            "a Customer was expecting on Thursday left the roster and the shift-day disagreeing "
+            "silently. Replace them on those shifts first."
         ),
         responses={
             200: CrewMemberSerializer,

@@ -18,6 +18,7 @@ from django.db.models import Count, Q, QuerySet
 from apps.catalog.models import ServiceVariant
 from apps.identity.hashing import keyed_hash
 from apps.identity.models import User
+from apps.partners.capabilities import masked_crew_phone
 from apps.partners.models import (
     PartnerApplication,
     PartnerCapability,
@@ -28,6 +29,7 @@ from apps.requirements.exceptions import RequirementNotFoundError
 from apps.requirements.models import (
     BookingFee,
     CustomerRequirement,
+    DaySettlement,
     Engagement,
     EngagementAmendment,
     EngagementEvent,
@@ -37,7 +39,9 @@ from apps.requirements.models import (
     QuoteUnlock,
     RequirementQuestion,
     RequirementTransition,
+    ShiftAttendance,
     SiteVisit,
+    StageCrewAssignment,
     VendorInvitation,
     VisitPlan,
 )
@@ -859,3 +863,78 @@ def requirement_timeline(requirement: CustomerRequirement) -> list[dict[str, Any
 
     events.sort(key=lambda event: (event["at"], event["id"]))
     return events
+
+
+# ---------------------------------------------------------------------------
+# Wave C4: the shift-day read (`M2-BE-521`, `522`, `523`)
+#
+# Two readers, one projection, and the difference between them is `M2-BE-523`. A Partner is
+# reading their own roster and gets the membership id their assignment screen sends back. A
+# Customer is reading who is coming to their site and gets a name, four digits and a verification
+# summary — never `crew_member_id`, which is global and would let two Customers, or two agencies,
+# correlate a fact about a worker that neither is entitled to learn from us.
+# ---------------------------------------------------------------------------
+
+
+def stage_crew_rows(
+    assignments: Sequence[StageCrewAssignment],
+    *,
+    include_membership_id: bool,
+) -> list[dict[str, Any]]:
+    """Assigned workers as the caller is allowed to see them.
+
+    `include_membership_id` is the whole disclosure switch and it is decided by the view from the
+    caller's role, never sent by the client. The verification *summary* — a boolean and a date —
+    is published for both readers because it is the thing a Customer is entitled to know and the
+    thing `M2-BE-523` names; the documents behind it are published to nobody.
+    """
+    return [
+        {
+            "membership_id": assignment.membership_id if include_membership_id else None,
+            "display_name": assignment.crew_member.display_name,
+            "phone_masked": masked_crew_phone(assignment.crew_member.phone_suffix),
+            "is_supervisor": assignment.is_supervisor,
+            "is_verified": assignment.membership.documents_verified_at is not None,
+            "verified_at": assignment.membership.documents_verified_at,
+            "status": assignment.status,
+            "assigned_at": assignment.assigned_at,
+        }
+        for assignment in assignments
+    ]
+
+
+def shift_day_payload(
+    *,
+    stage: EngagementStage,
+    include_membership_id: bool,
+) -> dict[str, Any]:
+    """One shift-day, whole, for whichever party is looking at it.
+
+    Reads rather than creates: `attendance` and `settlement` are `None` until a command touches the
+    day, and publishing `null` is the honest answer to "has anything happened yet". Creating the
+    rows on a `GET` would make a read change the database, which is how a stage acquires an
+    attendance row on the day somebody merely opened the screen.
+    """
+    from apps.requirements import workforce  # noqa: PLC0415 — read layer calling the domain
+
+    terms = workforce.shift_terms(stage.engagement)
+    attendance = ShiftAttendance.objects.filter(stage=stage).first()
+    settlement = DaySettlement.objects.filter(stage=stage).first()
+    return {
+        "stage_id": stage.id,
+        "engagement_id": stage.engagement_id,
+        "position": stage.position,
+        "day_label": stage.label,
+        "scheduled_on": stage.scheduled_on,
+        "stage_status": stage.status,
+        "crew": stage_crew_rows(
+            workforce.assigned_crew(stage),
+            include_membership_id=include_membership_id,
+        ),
+        "attendance": attendance,
+        "settlement": settlement,
+        "per_worker_paise": terms.per_worker_paise,
+        "standard_day_hours": terms.standard_day_hours,
+        "overtime_hourly_paise": terms.overtime_hourly_paise,
+        "add_on_rates": terms.add_on_rates,
+    }

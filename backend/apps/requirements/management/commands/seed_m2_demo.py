@@ -308,6 +308,37 @@ BOOKING_FEE_TRAVEL_COMPENSATION_BASIS_POINTS = 6_000
 CREW_DECLINE_ALARM_BASIS_POINTS = 6_000
 CREW_DECLINE_ALARM_MIN_OFFERS = 5
 
+# ---------------------------------------------------------------------------
+# Wave C4 / revision 4 (ADR-0009): the shift-day's own policy values.
+#
+# Four more inventions, and they are the four Wave C4 reads fail-closed. Two of them decide
+# nothing until they are set — the standing thresholds gate a background consequence, so unset
+# means no demotion and no removal ever fires while the events still accumulate. One of them
+# **refuses a command** while unset, and that asymmetry is the point: the retroactive overtime
+# window decides whether work that has already been done gets paid for, and there is no safe
+# direction to guess it in.
+# ---------------------------------------------------------------------------
+
+#: How long after a shift ends the Customer may still approve overtime that was already worked
+#: (`M2-BE-531`). Two hours: long enough for a supervisor to ask on the way out, short enough that
+#: nobody is approving hours at midnight that nobody can now check. Pre-phase decision list.
+OVERTIME_RETROACTIVE_WINDOW_MINUTES = 120
+
+#: How many short shift-days or cash-demand reports make a pattern, and the window they are
+#: counted in (`M2-BE-537`, `539`). Three and three inside ninety days, all three invented. The
+#: window is the load-bearing one — "three reports" without "three reports since when" is not a
+#: rule at all — which is why an unset window disables both patterns and an unset threshold
+#: disables only its own.
+CREW_SHORTFALL_STANDING_THRESHOLD = 3
+CASH_DEMAND_REMOVAL_THRESHOLD = 3
+VENDOR_STANDING_WINDOW_DAYS = 90
+
+#: The lead's UPI handle for the evening "Day settled?" convenience link (`M2-BE-536`). A `.test`
+#: handle for the same reason every seeded phone is in a reserved block: this is a **peer-to-peer**
+#: address the Customer's own UPI app sends money to, and a real-looking one in a development
+#: fixture is a real-looking one somebody eventually pays.
+DEMO_UPI_VPA_DOMAIN = "vsolvedemo.test"
+
 
 class Command(BaseCommand):
     help = (
@@ -579,6 +610,15 @@ class Command(BaseCommand):
                 "booking_fee_travel_compensation_basis_points": (
                     BOOKING_FEE_TRAVEL_COMPENSATION_BASIS_POINTS
                 ),
+                # Wave C4. Four columns whose readers are `requirements.workforce` and
+                # `partners.standing`; without a writer here the retroactive overtime request
+                # answers `m2_policy_unavailable` in every environment and no standing pattern can
+                # ever be evaluated. Every configuration column M2 adds gets a writer in this
+                # command — that rule is what the C2R post-mortem cost.
+                "overtime_retroactive_window_minutes": OVERTIME_RETROACTIVE_WINDOW_MINUTES,
+                "crew_shortfall_standing_threshold": CREW_SHORTFALL_STANDING_THRESHOLD,
+                "cash_demand_removal_threshold": CASH_DEMAND_REMOVAL_THRESHOLD,
+                "vendor_standing_window_days": VENDOR_STANDING_WINDOW_DAYS,
             },
         )
 
@@ -841,6 +881,11 @@ class Command(BaseCommand):
                     ),
                     "legal_name": f"{display_name} Services LLP",
                     "years_in_operation": 6,
+                    # `M2-BE-536`: the evening settlement link needs somewhere to point. Blank is
+                    # a legitimate production state — the amount is shown either way and the crew
+                    # is paid the way they were paid before this app — but a demo with no VPA
+                    # anywhere never renders the link at all, so the walkthrough cannot see it.
+                    "upi_vpa": f"m2demo{index}@{DEMO_UPI_VPA_DOMAIN}",
                 },
             )
             PartnerSkill.objects.update_or_create(

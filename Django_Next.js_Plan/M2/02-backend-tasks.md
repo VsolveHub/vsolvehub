@@ -942,35 +942,93 @@ agreement, amendment or approval subsystem exists.
 
 ### Assignment and attendance
 
-- [ ] `M2-BE-521` Configure A3 stages as shift-days with required roles, worker count, rate, inclusions,
-  attendance policy and an immutable pricing snapshot.
-- [ ] `M2-BE-522` Model crew assignment **per stage** rather than per engagement, so multi-day work can
-  rotate crew legitimately; enforce verified skills, Partner ownership, no overlapping assignments and
-  the required crew count. `GAP-024`
-- [ ] `M2-BE-523` Expose only policy-approved crew identity and verification summaries to Customers.
-- [ ] `M2-BE-524` Implement arrival confirmation with the non-OTP fallback as the default path and an
-  Operations override. `SIM-02`
-- [ ] `M2-BE-525` Implement **supervisor-level daily attendance confirmation** ("n of m present") with
-  one-tap Customer confirm or dispute. Do not build per-worker check-in/check-out with offline sync.
-  `SIM-02`
-- [ ] `M2-BE-526` Capture per-worker discrepancy detail **only when the Customer disputes**. `SIM-02`
-- [ ] `M2-BE-527` Default a missing check-out to the agreed shift length, flagged for review, disputed
-  only on Customer dispute. `GAP-025`
+- [~] `M2-BE-521` built - static gates green, owner manual verification pending. The shift-days come
+  from the **booked preset**, not from a quote: `engagements.open_rate_card_engagement` lays one
+  stage per day at the card's frozen rate, with the inclusions, day length and add-on table frozen
+  in `terms_snapshot`. The half that was missing is now written - `engagements.shift_dates` stamps
+  `EngagementStage.scheduled_on` on both A3 paths. It had a reader (`workforce.shift_date_of`) and
+  no writer, so every A3 engagement opened undated and the whole crew surface was unreachable in
+  every environment.
+- [~] `M2-BE-522` built - static gates green, owner manual verification pending.
+  `StageCrewAssignment`, per stage. The cross-agency conflict is a **partial unique index** on
+  `(crew_member, shift_date)` scoped to `ASSIGNED`, not only a service check - `assign_crew` raises
+  `m2_crew_conflict` with the name and the date because a supervisor can act on that, and the
+  constraint is what holds when two supervisors tap at the same instant. Ownership, archives and
+  declared days off stay `capabilities.assert_crew_available`'s; unverified memberships are refused
+  here; and the crew may not exceed the booked headcount. `GAP-024`
+- [~] `M2-BE-523` built - static gates green, owner manual verification pending. `StageCrewMember`
+  publishes a name, four masked digits and a verification **summary**. `membership_id` is null for
+  the Customer and the global `crew_member_id` is published to nobody - handing it out would let two
+  bookings, or two agencies, be correlated into a fact about a worker nobody is entitled to learn
+  from us.
+- [~] `M2-BE-524` built - static gates green, owner manual verification pending. Either party
+  confirms; **non-OTP is the default path in M2**, not a degraded mode with a banner. One
+  transaction stamps the arrival, starts the stage on the C3 spine and - on position 1 only - earns
+  the booking fee (section 4c, `ACTIVE` to `EARNED`). The Operations override is **not** built:
+  Operations has no route here and inventing one would be a third party asserting a crew arrived at
+  a site nobody from this platform was at. `SIM-02`
+- [~] `M2-BE-525` built - static gates green, owner manual verification pending. One
+  `ShiftAttendance` row per shift-day, never one per worker. The count *is* the evidence, so it goes
+  through `submit_stage_evidence` and the Customer's answer through `approve_stage` /
+  `dispute_stage` - there is no second review mechanism for A3, which is what keeps the review
+  timeout, the audit trail and the Operations decision working here for free. **No per-worker
+  check-in/check-out exists and no endpoint could reach one.** `SIM-02`
+- [~] `M2-BE-526` built - static gates green, owner manual verification pending.
+  `ShiftAttendance.disputed_worker_details` is written by exactly one branch of one command. Nothing
+  derives a count from it: the supervisor's number is the supervisor's, this is the Customer's
+  objection to it, and a case decides between them - a third number computed from the dispute would
+  be a fact neither party stated. `SIM-02`
+- [~] `M2-BE-527` built - static gates green, owner manual verification pending. `shift_ended_at` is
+  optional; its absence sets `checkout_missing` and `flagged_for_review` with reason
+  `checkout_missing`, and the day settles at `standard_day_hours`. It is a flag and **not** a
+  dispute: a supervisor whose crew left at six and who closed the day at nine has done nothing
+  wrong. **`standard_day_hours` is nullable**, which is the fail-closed half - the quote-flow
+  fallback never published a day length, so the row records "not published" and is flagged rather
+  than assuming eight, because an assumed shift length is the number that decides when overtime
+  starts. `GAP-025`
 
 ### Exceptions and settlement
 
-- [ ] `M2-BE-528` Implement pre-start and same-day crew substitution with Customer notification and
-  approval where required by policy.
-- [ ] `M2-BE-529` Implement vendor no-show, partial crew, late arrival, Customer unavailable, unsafe
-  site and force-majeure commands with evidence and reason codes.
-- [ ] `M2-BE-530` Model `SafetyIncident` as a first-class record with its own report flow, evidence,
-  severity and Operations routing. It is not a cancellation reason. `GAP-022`
-- [ ] `M2-BE-531` Implement overtime as a scope amendment at the card's published overtime rate
-  (revision 4), requiring Customer approval, plus a short retroactive confirmation window;
-  unconfirmed overtime is unpaid and stated in the vendor terms up front. `GAP-026`
-- [ ] `M2-BE-532` Compute partial completion and settlement through explicit policy; disputed records
-  must open a case rather than auto-complete.
-- [ ] `M2-BE-533` Release vendor payout only after the completion/dispute window and ledger checks.
+- [~] `M2-BE-528` built - static gates green, owner manual verification pending. `assign_crew` takes
+  the **whole** intended crew and reconciles the day to it, so a substitution is one call rather than
+  a delete-then-add a client can half-perform, and a retried tap is a no-op. Released rows carry a
+  reason code and the `m2.shift.crew_assigned` outbox event carries the Customer notification.
+  Customer *approval* of a substitution is deliberately not built: no policy names when it is
+  required, and a guess would either block a legitimate swap on the morning of a shift or wave one
+  through that should have been asked about.
+- [~] `M2-BE-529` built - static gates green, owner manual verification pending, **on the four that
+  have a money or record consequence**. Vendor no-show and Customer-unavailable are C2R's
+  `report_crew_no_show`, where `party` decides the money and the reason code cannot move it - and it
+  now also writes a `VENDOR_NO_SHOW` standing event, the sentence that was in a docstring and
+  nowhere else. Partial crew is the attendance shortfall and its three Customer choices. Unsafe site
+  is `SafetyIncident`, and it is **not** a cancellation reason. Late arrival and force majeure are
+  **not** built: neither changes any amount or any state under revision 4, and a reason-code enum
+  nothing reads is the shape this plan calls a check that always passes.
+- [~] `M2-BE-530` built - static gates green, owner manual verification pending. Own table, own
+  paths, four severities, both-party reporting with the role derived from the caller, and Operations
+  routing through the outbox rather than an email somebody wrote. The report body is **frozen in
+  `save()`** - Operations may add a status and a resolution and nobody may rewrite what was
+  reported, which is the property that makes the record worth keeping. Photographic evidence is
+  deferred: the stage-evidence presign is the reusable rail and pointing it at an incident is C6
+  work, not a second uploader. `GAP-022`
+- [~] `M2-BE-531` built - static gates green, owner manual verification pending. Through the **M1
+  amendment engine**, priced from the card frozen on the engagement - there is no amount field on
+  the request and there never will be. The retroactive window is applied to the **acceptance**, not
+  the request: the amendment's own deadline is shortened to it, so an unanswered retroactive claim
+  expires and expired means unpaid. Unset window means `m2_policy_unavailable` on a *retroactive*
+  request only; overtime proposed while the shift is still running needs no window because nothing
+  has been worked unapproved yet. `GAP-026`
+- [~] `M2-BE-532` built - static gates green, owner manual verification pending. The explicit policy
+  is `DaySettlement`'s own check constraint - amount equals per-worker rate times workers present
+  plus authorized extras - so a violation is refused rather than found by a reconciliation report a
+  month later. A dispute routes to `dispute_stage`, which clears `review_due_at` so the C3 timeout
+  structurally cannot auto-approve it, and leaves the settlement unconfirmed: a count nobody agrees
+  on is not an amount either.
+- [~] `M2-BE-533` built in Wave C3 and **correct by absence here**. A3 is `LEAD_ONLY`: Vsolve
+  collects no service payment, so `stages._approve` releases the stage immediately and writes no
+  ledger entry, and there is no payout to hold - a dispute window over a payout Vsolve does not make
+  would be theatre. The payout rails that do run on this path are C2R's travel-compensation hold and
+  its hourly sweep. No endpoint in Wave C4 moves wage money and none may be added.
 
 ### Daily wage settlement (revision 4, ADR-0009 — not started)
 
@@ -978,29 +1036,63 @@ Wages are direct, daily, peer-to-peer at day end — the platform never holds th
 with the rest of BE5A in Wave C4, which is unbuilt anyway; per the build-first amendment their tests
 are neither written nor run during the build sprint — static gates only.
 
-- [ ] `M2-BE-536` Implement `confirm_day_settled`: each evening both sides get a one-tap
+- [~] `M2-BE-536` built - static gates green, owner manual verification pending.
+  `confirm_day_settled` records **who tapped** and nothing else: no `PaymentAttempt`, no ledger
+  entry, no refund, no payout. `upi_payment_link` is a deep link into the Customer's own app at the
+  exact published amount and is `null` when the lead published no VPA, which is an ordinary state.
+  `PartnerBusinessProfile.upi_vpa` is where the handle lives rather than the payout account,
+  because that table is where Vsolve pays somebody and this is where somebody else pays them. One
+  tap leaves the row `SUPERVISOR_CLAIMED` or `CUSTOMER_CLAIMED`, which
+  `sweep_unproven_day_settlements` raises to Operations after a day as **unproven** - there is no
+  command anywhere that could settle a day on one person's word. Original row: each evening both
+  sides get a one-tap
   "Day settled?" prompt — supervisor and Customer — carrying a UPI QR/deep-link to the lead's VPA at
   the **exact published amount**, as a convenience only. The money is P2P and the platform never
   holds wages; the dual tap trail is the evidence pack, and a one-sided settlement claim without it
   reaches Operations as unproven, not as fact.
-- [ ] `M2-BE-537` Settle **per worker-day present, never per job**: the day settles at the present
+- [~] `M2-BE-537` built - static gates green, owner manual verification pending. The arithmetic is a
+  **check constraint**, so a 3-of-4 day cannot settle at four workers' rate in any code path. The
+  three choices are required from the Customer when there is a shortfall; `ADD_DAY` records the
+  request and stops, because appending a shift-day to somebody's week without their agreement would
+  be the platform committing a vendor's labour. Every shortfall writes a `CREW_SHORTFALL` standing
+  event whichever choice is made, and the matching demotion fires only past the owner's threshold
+  inside the owner's window - unset, no demotion ever fires and the events still accumulate.
+  Original row: the day settles at the present
   workers' published rate ("3 of 4" settles at 3), reading `M2-BE-525`'s supervisor count. On a
   shortfall the Customer chooses — continue short, add a day, or cancel the shortfall free; repeated
   shortfall is a matching-priority hit. Multi-day engagements settle daily by default;
   end-settlement only where the lead's own terms allow it — the app's convenience must not override
   the gang's cash cycle.
-- [ ] `M2-BE-538` Route genuine extras through the M1 amendment engine **at the card's published
+- [~] `M2-BE-538` built - static gates green, owner manual verification pending. Add-on codes are
+  read from the **snapshot frozen at booking**, not from today's card, so a card superseded mid-job
+  cannot reprice work already agreed; a code that is not on that snapshot has no published price and
+  is refused. That refusal is the mechanism - an extra with no published rate is exactly the on-site
+  renegotiation the preset and the card exist to leave nowhere to live. Original row: route genuine
+  extras through the M1 amendment engine at the card's published
   add-on rates**: a one-tap scope amendment, in-app, before the extra counts. The preset already
   asked the price-moving facts, so the on-site surprise has nowhere to live.
-- [ ] `M2-BE-539` Implement `report_cash_demand`: a one-tap Customer report of a cash extra demanded
+- [~] `M2-BE-539` built - static gates green, owner manual verification pending. The report is
+  immutable and carries no verdict, no vendor response and no money. It writes a
+  `PartnerStandingEvent` and, past the owner's threshold inside the owner's window, suspends the A3
+  capability through `suspend_partner_a3_capabilities` - which routes live engagements exactly as an
+  Operations suspension does, because it *is* `transition_capability`. Threshold unset means nothing
+  at all happens to the vendor and the reports accumulate, which is the fail-closed direction here:
+  refusing a Customer's report because a policy is unconfigured would punish them for an Operations
+  gap. Original row: a one-tap Customer report of a cash extra demanded
   on site. The report hits vendor standing and removes the vendor on a pattern; it is never treated
   as proof on its own.
 
 ### Verification
 
-- [ ] `M2-BE-534` Test overlapping workers across agencies, same-day replacement, partial attendance,
-  contradictory attendance, missing check-out, retroactive overtime and duplicate completion.
-- [ ] `M2-BE-535` Test payout hold, partial refund, commission reversal and settlement reconciliation.
+- [ ] `M2-BE-534` **Tests deferred per the build-first amendment** (`task.md` section "Build-first
+  amendment (2026-08-13)"). Neither written nor run in this wave. The smoke script that replaces
+  both rows for the sprint is `docs/runbooks/m2-workforce-shift-day-smoke.md`, which walks every
+  scenario named here: overlapping workers across agencies, same-day replacement, partial
+  attendance, a disputed count, a missing check-out and retroactive overtime.
+- [ ] `M2-BE-535` Deferred on the same row, and half of it is **correct by absence** on this path:
+  A3 is `LEAD_ONLY`, so there is no payout hold, no commission and no platform-held wage money to
+  reconcile. What does reconcile - amount equals per-worker rate times workers present plus extras -
+  is a database constraint rather than a test assertion.
 
 **BE5A gate:** Multi-worker and multi-day work can be fulfilled or failed with correct evidence,
 Customer remedy and financial settlement, with no per-worker device dependency.

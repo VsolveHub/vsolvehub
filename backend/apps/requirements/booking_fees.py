@@ -34,6 +34,8 @@ from apps.commerce.services import (
 )
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
+from apps.partners import standing
+from apps.partners.models import PartnerStandingEvent
 from apps.payouts.models import PartnerLedgerEntry
 from apps.payouts.services import payable_account
 from apps.requirements import crew_dispatch, engagements, matching, rate_cards, services
@@ -102,6 +104,96 @@ def booking_fee_checkout_availability(requirement: CustomerRequirement) -> bool:
         BookingFee.Status.OFFER_ACCEPTED,
         BookingFee.Status.PENDING,
     )
+
+
+# ---------------------------------------------------------------------------
+# The held fee (`OFFER_ACCEPTED`), written where §4c says it starts
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def hold_booking_fee(
+    *, booking: RateCardBooking, invitation: VendorInvitation
+) -> BookingFee | None:
+    """Open the fee in `OFFER_ACCEPTED` the moment a lead takes the job.
+
+    **This is the writer `BookingFee.Status.OFFER_ACCEPTED` did not have.**
+    `07-state-machines-and-permissions.md` §4c draws the machine as
+    `OFFER_ACCEPTED → PENDING → ACTIVE`, and until now the first state was a model default that no
+    path persisted: `accept_crew_offer` wrote no row and `create_booking_fee_checkout` constructed
+    one straight into `PENDING`. A published state with a reader and no writer, which is the shape
+    RULES §3(b) names one level up from a configuration column.
+
+    It was not merely cosmetic. `cancel_booking` has always had an `OFFER_ACCEPTED` branch — the
+    Customer who changes their mind while a lead is holding the job and before they have paid —
+    and that branch was **unreachable**: `_locked_fee` found nothing and refused with
+    "There is no booking fee on this request", in exactly the window the command was written for.
+
+    What it does **not** change is whether the fee can be paid. `booking_fee_checkout_availability`
+    keys on `booking.status == OFFER_HELD` and explicitly tolerates a missing fee row, and
+    `create_booking_fee_checkout` builds the row itself when there is none — so the checkout has
+    always worked, and it works identically now with the row already there (the `existing` branch
+    picks it up and moves it to `PENDING`).
+
+    Reuse rather than insert, because `requirements_one_live_booking_fee` permits exactly one
+    non-`FAILED` fee per booking and one booking is reused across every cascade wave. An existing
+    `OFFER_ACCEPTED` row is repointed at whoever is holding the job now. Anything else — a charge
+    in flight, a settled fee, a refunded one after a vendor no-show — is **left exactly as it is**
+    and no row is written, which keeps this strictly a state that was missing rather than a change
+    to money that already moved.
+    """
+    existing = (
+        BookingFee.objects.select_for_update()
+        .filter(booking=booking)
+        .exclude(status=BookingFee.Status.FAILED)
+        .first()
+    )
+    if existing is not None:
+        if existing.status != BookingFee.Status.OFFER_ACCEPTED:
+            return None
+        if existing.invitation_id != invitation.id:
+            existing.invitation = invitation
+            existing.save(update_fields=("invitation", "updated_at"))
+        return existing
+    return BookingFee.objects.create(
+        booking=booking,
+        requirement_id=booking.requirement_id,
+        invitation=invitation,
+        rate_card_id=booking.rate_card_id,
+        amount_paise=booking.booking_fee_paise,
+        status=BookingFee.Status.OFFER_ACCEPTED,
+    )
+
+
+@transaction.atomic
+def release_held_booking_fee(*, booking: RateCardBooking) -> BookingFee | None:
+    """Let go of an unpaid held fee when the hold lapses or the job leaves the instant path.
+
+    Only ever touches a row that is `OFFER_ACCEPTED` **and** has no payment attempt behind it, so
+    it can never reach money. `FAILED` is the published status for "not a state the Customer is
+    in" — it is what `live_booking_fee` excludes and what
+    `requirements_one_live_booking_fee` permits a second row beside — and `failure_code` carries
+    the truth the status name cannot, because nobody's payment failed here: the Customer simply
+    never started one.
+
+    Without this a lapsed hold would leave a fee row the next lead's acceptance has to reuse and
+    the Customer's screen would keep rendering an amount for a job nobody is holding.
+    """
+    fee = (
+        BookingFee.objects.select_for_update()
+        .filter(
+            booking=booking,
+            status=BookingFee.Status.OFFER_ACCEPTED,
+            payment_attempt__isnull=True,
+        )
+        .first()
+    )
+    if fee is None:
+        return None
+    fee.status = BookingFee.Status.FAILED
+    fee.failure_code = "offer_hold_released"
+    fee.save(update_fields=("status", "failure_code", "updated_at"))
+    return fee
 
 
 # ---------------------------------------------------------------------------
@@ -482,11 +574,36 @@ def report_crew_no_show(
     """
     if party == "VENDOR":
         fee = refund_booking_fee(requirement_id=requirement_id, reason_code=REASON_VENDOR_NO_SHOW)
+        # "The vendor's standing takes the hit" was a sentence in this docstring and nothing else
+        # until Wave C4 built somewhere to put it. Recorded before the re-dispatch clears the
+        # accepted invitation, because that is where the identity of the lead who did not turn up
+        # still is. One event per fee row, so a retried report does not count twice.
+        _record_vendor_no_show_standing(fee=fee)
         _redispatch_after_vendor_no_show(requirement_id=requirement_id)
         return fee
     return forfeit_booking_fee(
         requirement_id=requirement_id,
         reason_code=reason_code or REASON_CUSTOMER_NO_SHOW,
+    )
+
+
+def _record_vendor_no_show_standing(*, fee: BookingFee) -> None:
+    """A crew that never arrived is a fact about the lead, kept as one.
+
+    Not a penalty and not a score — `apps.partners.standing` stores events and counts patterns
+    against thresholds the owner has not set. Nothing happens to the vendor here beyond the record,
+    which is the fail-closed direction: the money consequence already ran (a full refund, no travel
+    compensation) and taking their trade as well on an unconfigured number is not code's call.
+    """
+    invitation = fee.invitation
+    if invitation is None:  # pragma: no cover - the FK is not nullable
+        return
+    standing.record_event(
+        partner=invitation.partner,
+        kind=PartnerStandingEvent.Kind.VENDOR_NO_SHOW,
+        source_kind="booking_fee",
+        source_id=fee.id,
+        reason=f"requirement {fee.requirement_id}",
     )
 
 

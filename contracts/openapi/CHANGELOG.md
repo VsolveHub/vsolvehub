@@ -4,6 +4,139 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.30.0 - The shift-day: who came, what it is worth, and who says it was paid
+
+**Wave C4 ([ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md)).** Ten new
+paths on the far side of 1.29.0's booking fee. Entirely additive — nothing published before is
+removed, renamed or reshaped, verified by diffing every component name and path against the
+committed contract before publishing.
+
+### Why
+
+1.29.0 got a crew confirmed at a published price. This is the week that follows: the days
+themselves, the named people on each one, the supervisor's count at seven in the evening, the
+Customer's one tap on it, and the amount the two of them settle between themselves.
+
+### New paths
+
+| Path | operationId |
+|---|---|
+| `GET /engagement-stages/{stage_id}/shift/` | `m2_shift_day_read` |
+| `POST /engagement-stages/{stage_id}/crew/` | `m2_shift_crew_assign` |
+| `POST /engagement-stages/{stage_id}/arrival/` | `m2_shift_arrival_confirm` |
+| `POST /engagement-stages/{stage_id}/attendance/` | `m2_shift_attendance_confirm` |
+| `POST /engagement-stages/{stage_id}/attendance/response/` | `m2_shift_attendance_respond` |
+| `POST /engagement-stages/{stage_id}/settlement/` | `m2_shift_day_settled_confirm` |
+| `POST /engagement-stages/{stage_id}/extras/` | `m2_shift_extra_propose` |
+| `GET`/`POST /engagements/{id}/safety-incidents/` | `m2_safety_incident_list` / `m2_safety_incident_report` |
+| `POST /engagements/{id}/cash-demand/` | `m2_cash_demand_report` |
+| `POST /operations/safety-incidents/{id}/decision/` | `m2_safety_incident_decide` |
+
+New components: `ShiftDay`, `StageCrewMember`, `StageCrewList`, `CrewAssignRequest`,
+`ShiftAttendance`, `ShiftAttendanceRecordRequest`, `ShiftAttendanceResponseRequest`,
+`DisputedWorkerRequest`, `DaySettlement`, `ShiftExtraRequest`, `SafetyIncident`,
+`SafetyIncidentList`, `SafetyIncidentReportRequest`, `SafetyIncidentDecisionRequest`,
+`CashDemandReport`, `CashDemandRequest`, plus eight named enums.
+
+`PartnerBusinessProfile` gains **`upi_vpa`**, readable and writable on the existing
+`m2_partner_business_profile_read` / `_replace` pair. It is the lead's own UPI ID and it is
+deliberately not on the payout account: that table is where Vsolve pays somebody, this is where
+somebody else pays them, and a collection handle in the payout table is the first step to a
+settlement job finding it.
+
+### Everything hangs off a **stage**, not the engagement
+
+An A3 stage **is a shift-day**. Assignment is per stage because a four-day job legitimately has a
+different gang on day three, and a per-engagement roster would either forbid that or record a lie
+about who was there. `ShiftDay.scheduled_on` is the day, and it is now written when the engagement
+opens — until this wave it was null on every A3 engagement, which made the whole crew surface
+unreachable.
+
+### The two traps a client would otherwise step in
+
+- **`ShiftDay.attendance` and `ShiftDay.settlement` are `null` until a command touches the day**,
+  and that is a real state rather than a missing one. Reading a shift-day creates nothing. Render
+  "nothing recorded yet" rather than treating `null` as a load failure.
+- **`ShiftDay.day_label`, not `label`.** `label` is DRF's own `Serializer` attribute and a field of
+  that name shadows it. The shift-day's name ("Day 3") is therefore `day_label`.
+
+Two further shapes worth reading before building against them. `StageCrewMember.membership_id` is
+**`null` for the Customer** and populated for the Partner — crew identity is global, and the global
+`crew_member_id` is published to nobody. And `ShiftExtraRequest` has **no amount field**: the vendor
+says what and how much of it, the server prices it from the card frozen at booking.
+
+### Money, said plainly, again
+
+**No path in this release moves money.** `DaySettlement.amount_paise` is the published figure the
+two parties exchange peer-to-peer — present workers at the day rate plus extras both sides accepted
+through the amendment engine — and `upi_payment_link` is a deep link into the Customer's own UPI
+app at that amount. A convenience, not a rail; `null` whenever the lead has published no VPA, which
+is an ordinary state. There is no checkout, no funding call and no payout release on the A3
+shift-day path, and none may be added.
+
+`m2_shift_day_settled_confirm` records **who tapped** and nothing else. One tap leaves the row at
+`SUPERVISOR_CLAIMED` or `CUSTOMER_CLAIMED`, which is what Operations reads as *unproven* — a
+different sentence from either "they were paid" or "they were not". Only both taps make `SETTLED`,
+and the amount freezes there.
+
+### Error codes reachable for the first time
+
+- `m2_crew_conflict` — the cross-agency one. The same **person**, promised through two agencies on
+  one date, is refused here and by a partial unique index, so two supervisors tapping at the same
+  instant cannot both win. Also raised for an unverified worker and for a declared day off.
+- `m2_crew_roster_required` — the progressive gate, at the first assignment rather than at
+  registration.
+- `m2_amendment_required` on a shift extra — this booking publishes no overtime or add-on rate (the
+  quote-flow fallback never published one), or the retroactive overtime window has closed. Overtime
+  outside the window is **unpaid**, which is the rule and not a failure.
+- `m2_policy_unavailable` on a **retroactive** overtime request while the owner has set no window.
+  Overtime proposed while the shift is still running is unaffected. This is the only owner-blocked
+  value in the wave that refuses a command; the standing thresholds refuse nothing and simply mean
+  no demotion and no removal fires while the events accumulate.
+
+`m2_booking_fee_payment_pending` is **still declared and raised by no path** — unchanged from
+1.29.0 and recorded again rather than quietly removed.
+
+### Five corrections to the 1.29.0 A3 surface
+
+Four were logged against C2R by the Partner column and one was found here. They ship in this
+release because they are all one file deep and leaving them would make the frontend build its
+workarounds permanent.
+
+**1. `BookingFee.OFFER_ACCEPTED` now has a writer.** §4c draws the fee starting at
+`OFFER_ACCEPTED`, and no path persisted it: `accept_crew_offer` wrote no row and the checkout built
+one straight into `PENDING`. So `RateCardState.booking_fee` was **`null`** between a lead taking the
+job and the Customer paying, and a client gating its pay button on that status could never offer
+it. The charge itself was never blocked — `checkout_available` keys on `booking.status ==
+OFFER_HELD` and tolerates a missing fee row — but **`m2_booking_fee_cancel` was**, refusing with
+"There is no booking fee on this request" in exactly the window it was written for. Accepting now
+opens the fee in `OFFER_ACCEPTED`; a lapsed hold releases it as `FAILED` with
+`failure_code: "offer_hold_released"`, so it never blocks the next lead. **Clients should now
+expect `booking_fee` to be non-null from acceptance onward, and should still gate the pay button on
+`checkout_available` rather than on the status.**
+
+**2. `m2_crew_offer_accept` no longer returns the Customer's money to the lead.** It returned
+`RateCardBooking`, which carries `total_customer_paise`, `booking_fee_paise` and `day_rate_paise` —
+the three numbers the crew-offer *list* is scrupulous about withholding. The discipline was resting
+on the client choosing not to render them. The response is now **`CrewOfferAccepted`**: the same
+job at the lead's own disclosure — headcount, days, `lead_day_receipt_paise`,
+`lead_receipt_paise`, the day length, the overtime and add-on rates, the inclusions and
+`hold_expires_at`.
+
+> **This is the one response-shape change in 1.30.0 and it needs a client regeneration.**
+> `RateCardBooking` is **not** removed or renamed — `m2_rate_card_read` still returns it to the
+> Customer, whose booking it is. Only which schema the *accept* operation answers with has changed.
+
+**3. `CrewOffer.status` is published as `VendorInvitationStatusEnum`** instead of a bare string. The
+enum has been in the schema since 1.21.0; the field simply failed to say which vocabulary it spoke.
+
+**4. `CrewOffer.decline_reason_code` — new.** A decline confirmation could only show what the client
+sent, not what the server recorded. Empty on a live offer.
+
+**5. `crew_offer.view` / `.accept` / `.decline` join the A3 workspace actions.** The partner crew-offer
+screen was mounted behind `enquiry.accept`, which is correct today and wrong the day Operations
+wants to stop offering instant crew without also stopping quote enquiries.
+
 ## 1.29.0 - The A3 front door: a published rate, a crew offer, a booking fee
 
 **Wave C2R, revision 4 ([ADR-0009](../../docs/adr/0009-m2-rate-card-instant-dispatch-for-a3.md)).**

@@ -296,6 +296,29 @@ def forfeit_split(requirement: CustomerRequirement, *, amount_paise: int) -> tup
     return travel, amount_paise - travel
 
 
+def overtime_retroactive_window_minutes(requirement: CustomerRequirement) -> int:
+    """How long after a shift ends overtime may still be approved (`M2-BE-531`). Owner-blocked.
+
+    ADR-0009: overtime counts "only after customer one-tap approval, with the retroactive window
+    unchanged". This is that window, and unset **blocks a retroactive overtime request outright** —
+    a request made while the shift is still running is unaffected, because that one is not
+    retroactive and needs no window at all.
+
+    Fails closed rather than defaulting, and the direction matters: a window invented here is the
+    single number deciding whether work that has already been done gets paid for. Too long and a
+    Customer is asked at midnight to approve hours nobody can now check; too short and a lead
+    loses two hours of a gang's labour to an app they were not looking at. Neither is a call code
+    may make.
+    """
+    minutes = _configuration(requirement).overtime_retroactive_window_minutes
+    if minutes is None:
+        raise PolicyUnavailableError(
+            "We have not set how long overtime can be approved for after a shift ends. Ask for "
+            "overtime before the shift ends, or contact support.",
+        )
+    return minutes
+
+
 @dataclass(frozen=True, slots=True)
 class DeclineAlarmPolicy:
     threshold_basis_points: int

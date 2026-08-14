@@ -54,6 +54,7 @@ from apps.requirements import (
     services,
     stages,
     visit_slots,
+    workforce,
 )
 from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
@@ -70,6 +71,7 @@ from apps.requirements.models import (
     RateCardBooking,
     RequirementAttachment,
     RequirementQuestion,
+    SafetyIncident,
     SiteVisit,
     VendorInvitation,
     VisitPlan,
@@ -92,7 +94,9 @@ from apps.requirements.selectors import (
     requirement_summary_text,
     requirement_timeline,
     selection_for_partner,
+    shift_day_payload,
     site_visit_for_participant,
+    stage_crew_rows,
     stage_for_customer,
     stage_for_participant,
     stage_for_partner,
@@ -104,12 +108,17 @@ from apps.requirements.serializers import (
     AttachmentUploadGrantSerializer,
     AttachmentUploadRequestSerializer,
     BookingFeeSerializer,
+    CashDemandReportSerializer,
+    CashDemandSerializer,
+    CrewAssignSerializer,
     CrewNoShowSerializer,
+    CrewOfferAcceptedSerializer,
     CrewOfferDeclineSerializer,
     CrewOfferListSerializer,
     CrewOfferSerializer,
     CustomerProposalSerializer,
     CustomerQuoteListSerializer,
+    DaySettlementSerializer,
     DemandPreviewSerializer,
     DuplicateCheckQuerySerializer,
     EngagementAmendmentCreateSerializer,
@@ -133,7 +142,6 @@ from apps.requirements.serializers import (
     QuestionAnswerSerializer,
     QuestionCreateSerializer,
     QuoteTeaserListSerializer,
-    RateCardBookingSerializer,
     RateCardBookSerializer,
     RateCardListSerializer,
     RateCardPublishSerializer,
@@ -149,13 +157,23 @@ from apps.requirements.serializers import (
     RequirementSummarySerializer,
     RequirementTimelineSerializer,
     RequirementUpdateSerializer,
+    SafetyIncidentDecisionSerializer,
+    SafetyIncidentListSerializer,
+    SafetyIncidentReportSerializer,
+    SafetyIncidentSerializer,
     SelectionCreateSerializer,
     SelectionDeclineSerializer,
+    ShiftAttendanceRecordSerializer,
+    ShiftAttendanceResponseSerializer,
+    ShiftAttendanceSerializer,
+    ShiftDaySerializer,
+    ShiftExtraSerializer,
     SiteVisitCompleteSerializer,
     SiteVisitRequestSerializer,
     SiteVisitScheduleSerializer,
     SiteVisitSerializer,
     StageCorrectionSerializer,
+    StageCrewListSerializer,
     StageDisputeDecisionSerializer,
     StageDisputeSerializer,
     StageEvidenceFinalizeSerializer,
@@ -4159,6 +4177,7 @@ def _crew_offer_payload(offer: crew_dispatch.CrewOffer) -> dict[str, object]:
         "invitation_id": invitation.id,
         "requirement_id": requirement.id,
         "status": invitation.status,
+        "decline_reason_code": invitation.decline_reason_code,
         "headcount": offer.headcount,
         "days": offer.days,
         "lead_day_receipt_paise": offer.lead_day_receipt_paise,
@@ -4234,7 +4253,7 @@ class PartnerCrewOfferAcceptView(APIView):
             "accountable for the whole crew."
         ),
         responses={
-            200: RateCardBookingSerializer,
+            200: CrewOfferAcceptedSerializer,
             403: ApiErrorSerializer,
             404: ApiErrorSerializer,
             409: OpenApiResponse(
@@ -4253,7 +4272,26 @@ class PartnerCrewOfferAcceptView(APIView):
             booking = crew_dispatch.accept_crew_offer(invitation_id=invitation.id)
         except (RequirementDomainError, PartnerDomainError) as exc:
             _raise_api_error(exc)
-        return Response(RateCardBookingSerializer(booking).data)
+        return Response(
+            CrewOfferAcceptedSerializer(
+                {
+                    "booking_id": booking.id,
+                    "requirement_id": booking.requirement_id,
+                    "status": booking.status,
+                    "headcount": booking.headcount,
+                    "days": booking.days,
+                    "lead_day_receipt_paise": booking.lead_day_receipt_paise,
+                    "lead_receipt_paise": booking.lead_receipt_paise,
+                    "standard_day_hours": booking.standard_day_hours,
+                    "overtime_hourly_paise": booking.overtime_hourly_paise,
+                    "add_on_rates": booking.add_on_rates,
+                    "inclusions": booking.inclusions,
+                    "hold_expires_at": booking.hold_expires_at,
+                    "requested_start": invitation.requirement.requested_start,
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
 
 
 class PartnerCrewOfferDeclineView(APIView):
@@ -4408,6 +4446,743 @@ class OperationsRateCardView(APIView):
             operation="m2.rate_card.publish",
             key=key,
             request_payload={key_name: str(value) for key_name, value in sorted(data.items())},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C4 (`M2-BE-521..539`): the shift-day surface.
+#
+# Nine paths, and none of them moves wage money. ADR-0009 is explicit that A3 wages are direct,
+# daily and peer-to-peer at day end; there is no checkout, no funding call and no payout release in
+# this section, and adding one would make the platform a party to a payment it has always said it
+# is not. The settlement path below records two taps against a published figure and returns a UPI
+# deep link into the Customer's own app — a convenience, not a rail.
+# ---------------------------------------------------------------------------
+
+
+def _shift_stage_for_participant(request: Request, stage_id: uuid.UUID) -> EngagementStage:
+    """One shift-day, if the caller is either party. `404` otherwise, never `403`.
+
+    Both sides operate the same day — the supervisor records the count, the Customer answers it —
+    so the read is resolved by participation exactly as `stage_for_participant` is. A stranger
+    gets `404` because the existence of a shift-day says a named crew is at a named Customer's
+    site today.
+    """
+    try:
+        return stage_for_participant(user=cast(User, request.user), stage_id=stage_id)
+    except RequirementDomainError as exc:
+        _raise_api_error(exc)
+
+
+def _is_partner_side(request: Request, stage: EngagementStage) -> bool:
+    return stage.engagement.partner.user_id == cast(User, request.user).id
+
+
+class EngagementStageShiftView(APIView):
+    """The whole shift-day as one read: the crew, the attendance and the settlement."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_day_read",
+        description=(
+            "One A3 shift-day, whole. Returns the day's crew at the disclosure the caller is "
+            "entitled to, the supervisor's attendance record and the evening settlement.\n\n"
+            "**The Customer never receives `crew_member_id`.** Crew identity is global — one "
+            "person is one row however many agencies carry them — so `membership_id` is published "
+            "to the Partner only and the global id to nobody. What a Customer gets is a name, four "
+            "digits of phone and whether this platform has verified the person's documents.\n\n"
+            "`attendance` and `settlement` are `null` until a command touches the day. That is a "
+            "real state and not a missing one: nothing is created by reading."
+        ),
+        responses={
+            200: ShiftDaySerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` on an A5 milestone: a project "
+                "stage has no crew, no attendance and no daily settlement.",
+            ),
+        },
+    )
+    def get(self, request: Request, stage_id: uuid.UUID) -> Response:
+        stage = _shift_stage_for_participant(request, stage_id)
+        try:
+            payload = shift_day_payload(
+                stage=stage,
+                include_membership_id=_is_partner_side(request, stage),
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(ShiftDaySerializer({**payload, "server_now": timezone.now()}).data)
+
+
+class EngagementStageCrewView(APIView):
+    """Name the workers coming to one shift-day (`M2-BE-522`, `528`)."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_crew_assign",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CrewAssignSerializer,
+        description=(
+            "Assign crew to **one shift-day**, not to the engagement. Multi-day work rotates faces "
+            "legitimately, and a roster hung off the engagement would either forbid that or record "
+            "a lie about who was there.\n\n"
+            "Send the **whole** intended crew every time. The server reconciles the day to it: "
+            "names that are gone are released with `reason_code`, new names are assigned. A "
+            "substitution is therefore one call rather than a delete-then-add a client can half "
+            "perform, and re-sending the same set is a no-op.\n\n"
+            "Four refusals, each a different failure: `m2_crew_roster_required` (the progressive "
+            "gate, at the first assignment rather than at registration), `m2_crew_conflict` for an "
+            "unverified worker, for a worker who is not on your roster or is marked unavailable, "
+            "and — the cross-agency one — for the same **person** already promised on that date "
+            "through any agency. The last is held by a database constraint as well as by this "
+            "check, so two supervisors tapping at the same instant cannot both win."
+        ),
+        responses={
+            200: StageCrewListSerializer,
+            400: ApiErrorSerializer,
+            403: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_crew_roster_required` — add a verified worker to your roster "
+                "before assigning anybody to a shift.",
+            ),
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_crew_conflict`, or `m2_stage_transition_not_allowed` when the "
+                "shift-day has no date on it, is already settled, or is an A5 milestone.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        payload = CrewAssignSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        membership_ids = list(payload.validated_data["membership_ids"])
+        reason_code = payload.validated_data["reason_code"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                assignments = workforce.assign_crew(
+                    stage_id=stage.id,
+                    actor=actor,
+                    membership_ids=membership_ids,
+                    reason_code=reason_code,
+                )
+                attendance = workforce.ensure_attendance(stage=stage)
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            body = StageCrewListSerializer(
+                {
+                    "crew": stage_crew_rows(assignments, include_membership_id=True),
+                    "expected_count": attendance.expected_count,
+                    "shift_date": stage.scheduled_on,
+                    "server_now": timezone.now(),
+                }
+            ).data
+            return status.HTTP_200_OK, cast(dict[str, object], body)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.shift.crew_assign",
+            key=key,
+            request_payload={
+                "stage_id": str(stage_id),
+                "membership_ids": [str(value) for value in membership_ids],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageArrivalView(APIView):
+    """The crew is on site (`M2-BE-524`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_arrival_confirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Confirm the crew arrived for this shift-day. **Non-OTP, and that is the default path "
+            "in M2** rather than a degraded one — the start OTP is M3. Either party may record it: "
+            "both were at the site.\n\n"
+            "Three things happen in one transaction, because a half-started day is a support "
+            "ticket: the arrival is stamped, the stage starts on the shared spine, and **on day "
+            "one the booking fee is earned**. Crew must be named first — confirming that people "
+            "arrived before saying who they are records nothing anybody can act on."
+        ),
+        responses={
+            200: ShiftAttendanceSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` when no crew is assigned yet, the "
+                "engagement is closed, or the stage is an A5 milestone.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        stage = _shift_stage_for_participant(request, stage_id)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                attendance = workforce.confirm_shift_arrival(stage_id=stage.id, actor=actor)
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], ShiftAttendanceSerializer(attendance).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.shift.arrival",
+            key=key,
+            request_payload={"stage_id": str(stage_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageAttendanceView(APIView):
+    """The supervisor's one action for the day (`M2-BE-525`, `527`)."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_attendance_confirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ShiftAttendanceRecordSerializer,
+        description=(
+            "Record **n of m present** for this shift-day. One tap, from the supervisor.\n\n"
+            "There is deliberately **no per-worker check-in or check-out**: the workers mostly do "
+            "not carry smartphones, the supervisor does, and a per-worker attendance product would "
+            "be a device dependency this market cannot meet wearing the clothes of rigour. "
+            "Per-worker detail is captured in exactly one place — a Customer dispute.\n\n"
+            "The count *is* the evidence, so this hands the stage to the Customer through the "
+            "ordinary spine and starts the same review clock every other stage runs on.\n\n"
+            "`shift_ended_at` is optional and its absence is the point: a **missing check-out** "
+            "settles at the agreed shift length and is flagged for review, not disputed. A "
+            "supervisor whose crew left at six and who closed the day at nine has done nothing "
+            "wrong, and the amount never depended on the end time — only overtime does, and that "
+            "needs the Customer's approval either way."
+        ),
+        responses={
+            200: ShiftAttendanceSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` before arrival is confirmed, after "
+                "the Customer has already answered, or for a count above the booked crew — an "
+                "extra worker is a scope amendment at the published rate, not a bigger number in "
+                "an attendance box.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        payload = ShiftAttendanceRecordSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        present_count = payload.validated_data["present_count"]
+        shift_ended_at = payload.validated_data["shift_ended_at"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                attendance = workforce.confirm_attendance(
+                    stage_id=stage.id,
+                    actor=actor,
+                    present_count=present_count,
+                    shift_ended_at=shift_ended_at,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], ShiftAttendanceSerializer(attendance).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.shift.attendance",
+            key=key,
+            request_payload={"stage_id": str(stage_id), "present_count": present_count},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageAttendanceResponseView(APIView):
+    """The Customer's one tap on a recorded day (`M2-BE-525`, `526`, `537`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_attendance_respond",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ShiftAttendanceResponseSerializer,
+        description=(
+            "Confirm the supervisor's count or dispute it.\n\n"
+            "**Confirm** approves the shift-day on the shared spine, which for a workforce "
+            "engagement also releases it — there is no payout to hold because Vsolve collected "
+            "nothing. On a shortfall `shortfall_choice` is **required**: continue short, ask for "
+            "an extra day, or cancel the missing workers free. The day settles at the present "
+            "workers' published rate whichever you choose — that is `M2-BE-537`, settlement per "
+            "worker-day present and never per job — and the choice decides what happens to the "
+            "missing worker-days rather than to the money for the ones who came.\n\n"
+            "`ADD_DAY` records a request, and only that. The extra day is the lead's to offer "
+            "through the amendment engine; appending a shift-day to somebody's week without their "
+            "agreement would be the platform committing a vendor's labour.\n\n"
+            "**Dispute** is the only place per-worker detail is ever captured. It stops the review "
+            "clock and opens the Operations path; the settlement stays unconfirmed, because a "
+            "count nobody agrees on is not an amount either. Nothing derives a third number from "
+            "`worker_details` — it is the Customer's objection, and a case decides between them."
+        ),
+        responses={
+            200: ShiftAttendanceSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` before the supervisor has recorded "
+                "the day, or when a shortfall was left without a choice.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_customer(customer=actor, stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        payload = ShiftAttendanceResponseSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        response_value = payload.validated_data["response"]
+        shortfall_choice = payload.validated_data["shortfall_choice"]
+        worker_details = list(payload.validated_data["worker_details"])
+        note = payload.validated_data["note"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                attendance = workforce.respond_attendance(
+                    stage_id=stage.id,
+                    actor=actor,
+                    response=response_value,
+                    shortfall_choice=shortfall_choice,
+                    worker_details=worker_details,
+                    note=note,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], ShiftAttendanceSerializer(attendance).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.shift.attendance_response",
+            key=key,
+            request_payload={"stage_id": str(stage_id), "response": response_value},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageSettlementView(APIView):
+    """The evening "Day settled?" tap (`M2-BE-536`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_day_settled_confirm",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=None,
+        description=(
+            "Record that this day was settled. Either party taps; the server records **who**, and "
+            "nothing else.\n\n"
+            "**No money moves here and none can.** A3 wages are direct, daily and peer-to-peer at "
+            "day end — the platform never holds them. `amount_paise` is the exact published figure "
+            "for the day (present workers at the day rate, plus any extras both sides accepted "
+            "through the amendment engine) and `upi_payment_link` is a deep link into the "
+            "Customer's own UPI app at that amount. A convenience, not a rail; `null` when the "
+            "lead has published no VPA, which is an ordinary state.\n\n"
+            "**A one-sided claim is left standing as `SUPERVISOR_CLAIMED` or `CUSTOMER_CLAIMED`.** "
+            "That is what Operations reads as *unproven* — one person says they settled and the "
+            'other has not answered, which is a different sentence from either "they were paid" '
+            'or "they were not". Only both taps make `SETTLED`, and the amount freezes there.'
+        ),
+        responses={
+            200: DaySettlementSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_stage_transition_not_allowed` before the day has been recorded — "
+                "there is no amount to settle until somebody says who was there.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        stage = _shift_stage_for_participant(request, stage_id)
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                settlement = workforce.confirm_day_settled(stage_id=stage.id, actor=actor)
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            body = DaySettlementSerializer(settlement).data
+            body["upi_payment_link"] = workforce.upi_payment_link(settlement)
+            return status.HTTP_200_OK, cast(dict[str, object], body)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.shift.day_settled",
+            key=key,
+            request_payload={"stage_id": str(stage_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementStageExtraView(APIView):
+    """Overtime and published add-ons, through the amendment engine (`M2-BE-531`, `538`)."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_shift_extra_propose",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ShiftExtraSerializer,
+        description=(
+            "Ask the Customer to approve overtime or an add-on **at the card's published rate**. "
+            "This is a caller into the one amendment engine this codebase has, not a second one: "
+            "the status machine, the expiry and the acceptance are the M1 engine's, and what this "
+            "adds is the *price*, read from the card frozen on the engagement at booking.\n\n"
+            "**There is no amount field.** The vendor names what and how much of it; the server "
+            "names the money. A vendor who could type a number could re-price a job the Customer "
+            "booked at a published rate, which is exactly the on-site renegotiation the rate card "
+            "exists to leave nowhere to live.\n\n"
+            "**Unapproved overtime is unpaid.** Overtime proposed while the shift is still running "
+            "needs no window. Overtime for a shift that has already ended must be approved inside "
+            "the configured retroactive window, and the amendment's deadline is shortened to it — "
+            "past the window the request is refused outright, and while the owner has not set the "
+            "window a retroactive request is refused with `m2_policy_unavailable` rather than "
+            "granted on a guess.\n\n"
+            "An add-on code that is not on the frozen card has no published price and is refused."
+        ),
+        responses={
+            201: EngagementAmendmentSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_amendment_required` when this booking publishes no overtime or "
+                "add-on rate, or the retroactive window has closed; `m2_policy_unavailable` when "
+                "the owner has set no window; `m2_stage_transition_not_allowed` otherwise.",
+            ),
+        },
+    )
+    def post(self, request: Request, stage_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            stage = stage_for_partner(partner=_partner_profile(request), stage_id=stage_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        payload = ShiftExtraSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        extra = workforce.ShiftExtra(
+            kind=payload.validated_data["kind"],
+            hours=payload.validated_data["hours"],
+            add_on_code=payload.validated_data["add_on_code"],
+            worker_days=payload.validated_data["worker_days"],
+        )
+        reason = payload.validated_data["reason"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                amendment = workforce.propose_shift_extra(
+                    stage_id=stage.id,
+                    actor=actor,
+                    extra=extra,
+                    reason=reason,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object],
+                EngagementAmendmentSerializer(_amendment_payload(amendment)).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.shift.extra",
+            key=key,
+            request_payload={
+                "stage_id": str(stage_id),
+                "kind": extra.kind,
+                "hours": extra.hours,
+                "add_on_code": extra.add_on_code,
+                "worker_days": extra.worker_days,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementSafetyIncidentView(APIView):
+    """Safety incidents as first-class records (`M2-BE-530`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_safety_incident_list",
+        description=(
+            "Every safety report on this engagement, readable by both parties. Empty is the "
+            "ordinary answer and is a `200`."
+        ),
+        responses={200: SafetyIncidentListSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        try:
+            engagement = engagement_for_participant(
+                user=cast(User, request.user), engagement_id=engagement_id
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            SafetyIncidentListSerializer(
+                {
+                    "incidents": engagement.safety_incidents.all(),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_safety_incident_report",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=SafetyIncidentReportSerializer,
+        description=(
+            "File a safety incident. Reportable by **both parties**: the Customer who saw it and "
+            "the lead whose worker it was. `reporter_role` is derived from the caller and cannot "
+            "be sent.\n\n"
+            "**This is never a cancellation reason.** Nothing here cancels, suspends or refunds "
+            "anything and the engagement carries on exactly as it was. A job that has to end "
+            "because a site is unsafe ends through cancellation *with* a report beside it, so both "
+            'facts exist separately and either can be read without the other — filing "a worker '
+            'fell" as "job cancelled, site unsafe" is how a platform ends up unable to say, two '
+            "years later, what was reported and what was done about it.\n\n"
+            "The report body is **frozen** once filed. Operations may add a status and a "
+            "resolution; nobody may rewrite what was reported."
+        ),
+        responses={
+            201: SafetyIncidentSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            engagement = engagement_for_participant(user=actor, engagement_id=engagement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        payload = SafetyIncidentReportSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        reporter_role = (
+            SafetyIncident.ReporterRole.PARTNER
+            if engagement.partner.user_id == actor.id
+            else SafetyIncident.ReporterRole.CUSTOMER
+        )
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                incident = workforce.report_safety_incident(
+                    engagement=engagement,
+                    actor=actor,
+                    reporter_role=reporter_role,
+                    severity=data["severity"],
+                    category_code=data["category_code"],
+                    description=data["description"],
+                    occurred_at=data["occurred_at"],
+                    stage_id=data["stage_id"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], SafetyIncidentSerializer(incident).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.safety.report",
+            key=key,
+            request_payload={
+                "engagement_id": str(engagement_id),
+                "severity": data["severity"],
+                "category_code": data["category_code"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsSafetyIncidentDecisionView(APIView):
+    """Operations moves a report through review to a close (`M2-BE-530`)."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_safety_incident_decide",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=SafetyIncidentDecisionSerializer,
+        description=(
+            "Move a safety report to `UNDER_REVIEW` or close it as `RESOLVED`. Closing requires an "
+            "account of what was done.\n\n"
+            "The report body is frozen by the model, so this can only ever add a status and a "
+            "resolution — an operator cannot revise what somebody said happened, which is the "
+            "property that makes the record worth keeping."
+        ),
+        responses={
+            200: SafetyIncidentSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, safety_incident_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        get_object_or_404(SafetyIncident, pk=safety_incident_id)
+        payload = SafetyIncidentDecisionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        decision = payload.validated_data["decision"]
+        note = payload.validated_data["resolution_note"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                incident = workforce.decide_safety_incident(
+                    incident_id=safety_incident_id,
+                    actor=actor,
+                    status_value=decision,
+                    resolution_note=note,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], SafetyIncidentSerializer(incident).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.safety.decision",
+            key=key,
+            request_payload={
+                "safety_incident_id": str(safety_incident_id),
+                "decision": decision,
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementCashDemandView(APIView):
+    """One tap: they asked for extra in cash (`M2-BE-539`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Shift days"],
+        operation_id="m2_cash_demand_report",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CashDemandSerializer,
+        description=(
+            "Report that a cash extra was demanded on site. The Customer's tap, and one tap is all "
+            'it takes — `amount_claimed_paise` is optional because a required amount turns "they '
+            'demanded extra" into a form, and the form is what stops it being reported.\n\n'
+            "**It is never proof on its own.** The report is recorded immutably and a standing "
+            "event is written against the lead — a fact with a date, not a penalty and not a "
+            "score. If the owner has configured a removal threshold and a window and this vendor "
+            "has crossed it, their A3 capability is suspended through the same command Operations "
+            "uses, which routes their live engagements exactly as a human suspension does.\n\n"
+            "While the threshold is unset nothing at all happens to the vendor and the reports "
+            "still accumulate. That asymmetry is deliberate: refusing a Customer's report because "
+            "a policy is unconfigured would punish them for an Operations gap, and ending "
+            "somebody's trade on an invented number is not a decision code may take."
+        ),
+        responses={
+            201: CashDemandReportSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        try:
+            engagement = engagement_for_participant(user=actor, engagement_id=engagement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        if engagement.customer_id != actor.id:
+            raise NotFound()
+        payload = CashDemandSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                report = workforce.report_cash_demand(
+                    engagement=engagement,
+                    actor=actor,
+                    amount_claimed_paise=data["amount_claimed_paise"],
+                    note=data["note"],
+                    stage_id=data["stage_id"],
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], CashDemandReportSerializer(report).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.cash_demand.report",
+            key=key,
+            request_payload={"engagement_id": str(engagement_id)},
             command=command,
         )
         return Response(result.body, status=result.status_code)

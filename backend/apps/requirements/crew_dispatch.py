@@ -391,6 +391,13 @@ def accept_crew_offer(*, invitation_id: uuid.UUID) -> RateCardBooking:
     booking.accepted_invitation = invitation
     booking.hold_expires_at = timezone.now() + timedelta(seconds=policy.hold_seconds)
     booking.save(update_fields=("status", "accepted_invitation", "hold_expires_at", "updated_at"))
+    # §4c starts the fee at `OFFER_ACCEPTED`, and until this line nothing wrote that state — the
+    # checkout constructed a row straight into `PENDING`, so `cancel_booking`'s
+    # not-yet-paid branch could never be reached. Imported late because `booking_fees` imports this
+    # module at module scope; this is the rarer direction and the one that runs once per accept.
+    from apps.requirements import booking_fees  # noqa: PLC0415 — mutual import with this module
+
+    booking_fees.hold_booking_fee(booking=booking, invitation=invitation)
     record_rate_card_acceptance(
         partner=invitation.partner,
         variant_id=requirement.variant_id,
@@ -549,8 +556,9 @@ def release_expired_offer_hold(*, booking_id: uuid.UUID) -> RateCardBooking:
     """The Customer never paid, so the lead's Saturday goes back on the market.
 
     §4c: "the hold expires harmlessly; next offer or wave proceeds". Harmless is literal — no
-    charge was made, the fee row (if one was started) is left in whatever state its provider put
-    it, and the lead's standing is untouched because they did nothing wrong.
+    charge was made, an unpaid held fee is released with it, a fee with a payment attempt behind it
+    is left in whatever state its provider put it, and the lead's standing is untouched because
+    they did nothing wrong.
 
     Idempotent by state, like every other sweep command in this app.
     """
@@ -567,6 +575,11 @@ def release_expired_offer_hold(*, booking_id: uuid.UUID) -> RateCardBooking:
     booking.accepted_invitation = None
     booking.hold_expires_at = None
     booking.save(update_fields=("status", "accepted_invitation", "hold_expires_at", "updated_at"))
+    # The held fee goes with the hold. It only ever touches a row with no payment attempt behind
+    # it, so nothing that reaches money can be reached from here.
+    from apps.requirements import booking_fees  # noqa: PLC0415 — mutual import with this module
+
+    booking_fees.release_held_booking_fee(booking=booking)
     if invitation_id is not None:
         # Penalty-free: §2's `ACCEPTED → WITHDRAWN` for a change the vendor did not cause. It also
         # releases the capacity hold, which is the half that matters to the lead.

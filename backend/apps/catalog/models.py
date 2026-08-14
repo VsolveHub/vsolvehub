@@ -1,6 +1,7 @@
 """Marketable services and their configurable booking questions."""
 
 import uuid
+from typing import Final
 
 from django.conf import settings
 from django.db import models
@@ -199,6 +200,21 @@ class A1VariantConfiguration(models.Model):
         return f"{self.variant_id}:v{self.version}:{self.status}"
 
 
+#: The Wave C4 policy columns that are meaningless at zero, and the short name each one's check
+#: constraint is built from. **The constraints below are generated from this tuple** rather than
+#: typed out beside it: Wave C2R lost real time to a hand-copied purpose list whose comment claimed
+#: it was generated from the tuple it had drifted from, and `makemigrations --check` cannot see that
+#: kind of divergence because model state and migration state agree with each other while both
+#: disagree with the code. The short names exist only because PostgreSQL identifiers stop at 63
+#: characters and `catalog_m2_configuration_overtime_retroactive_window_minutes_positive` does not.
+M2_POSITIVE_WHEN_SET_POLICY_FIELDS: Final[tuple[tuple[str, str], ...]] = (
+    ("overtime_retroactive_window_minutes", "overtime_window"),
+    ("crew_shortfall_standing_threshold", "shortfall_threshold"),
+    ("cash_demand_removal_threshold", "cash_demand_threshold"),
+    ("vendor_standing_window_days", "standing_window"),
+)
+
+
 class M2VariantConfiguration(models.Model):
     """Versioned Operations-owned configuration for one A3 or A5 variant.
 
@@ -352,6 +368,33 @@ class M2VariantConfiguration(models.Model):
         null=True, blank=True
     )
 
+    # --- Wave C4 / revision 4: the shift-day's own policy values. -----------------------------
+    #
+    # Four more, on the same rule as everything above: nullable, no default in code, and each one
+    # naming what stops working while it is unset. `apps.requirements.rate_cards` reads all four
+    # and `apps.partners.standing` consumes the last three.
+
+    #: How long after a shift ends the Customer may still approve overtime that was already
+    #: worked (`M2-BE-531`). ADR-0009: unapproved overtime is unpaid, "with the retroactive window
+    #: unchanged". Null blocks a **retroactive** overtime request outright — overtime proposed
+    #: while the shift is still running is unaffected — because the alternative is inventing the
+    #: one number that decides whether work already done gets paid for.
+    overtime_retroactive_window_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: How many short shift-days inside `vendor_standing_window_days` make a pattern, after which
+    #: the lead is demoted in matching (`M2-BE-537`). Null means **no demotion ever fires**: the
+    #: short days are still recorded as standing events, so the evidence exists either way, but
+    #: guessing the threshold would decide how much under-delivery costs a vendor's livelihood.
+    crew_shortfall_standing_threshold = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: How many cash-demand reports inside the same window remove the vendor (`M2-BE-539`). Null
+    #: means **no automatic removal fires** and the reports are still recorded — the same
+    #: asymmetry `crew_decline_alarm_basis_points` draws, and for the same reason: a report is a
+    #: Customer's account of what happened and is never refused for want of a threshold, while
+    #: suspending somebody's trade on an invented number is not a decision code may take.
+    cash_demand_removal_threshold = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: The window both thresholds above count inside, in days. Null means neither pattern can be
+    #: evaluated at all, because "three reports" without "three reports since when" is not a rule.
+    vendor_standing_window_days = models.PositiveSmallIntegerField(null=True, blank=True)
+
     evidence_policy = models.JSONField(default=dict)
     contact_policy = models.JSONField(default=dict)
     created_by = models.ForeignKey(
@@ -406,6 +449,14 @@ class M2VariantConfiguration(models.Model):
                 | models.Q(crew_decline_alarm_basis_points__lte=10000),
                 name="catalog_m2_configuration_decline_alarm_within_range",
             ),
+            *[
+                models.CheckConstraint(
+                    condition=models.Q(**{f"{field}__isnull": True})
+                    | models.Q(**{f"{field}__gte": 1}),
+                    name=f"catalog_m2_configuration_{short_name}_positive",
+                )
+                for field, short_name in M2_POSITIVE_WHEN_SET_POLICY_FIELDS
+            ],
         ]
 
     def __str__(self) -> str:

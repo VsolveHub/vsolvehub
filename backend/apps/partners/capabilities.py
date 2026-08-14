@@ -73,6 +73,14 @@ WORKSPACE_ACTIONS: dict[str, tuple[str, ...]] = {
         "enquiry.view",
         "enquiry.accept",
         "enquiry.decline",
+        # Revision 4. Its own vocabulary rather than a reuse of `enquiry.accept`, and the
+        # difference matters the day Operations wants to stop offering instant crew without also
+        # stopping quote enquiries: a rate-card offer and a quote enquiry are answered on different
+        # clocks by different screens, and one action name for both makes that an all-or-nothing
+        # switch.
+        "crew_offer.view",
+        "crew_offer.accept",
+        "crew_offer.decline",
         "proposal.submit",
         "crew.manage",
         "crew.assign",
@@ -162,6 +170,7 @@ def upsert_business_profile(
     gst_registered: bool = False,
     gstin: str = "",
     years_in_operation: int = 0,
+    upi_vpa: str = "",
 ) -> PartnerBusinessProfile:
     """Create or replace the business profile. A replace, not a merge.
 
@@ -181,6 +190,16 @@ def upsert_business_profile(
             "Tick GST registered before entering a GSTIN.",
             field="gstin",
         )
+    # `M2-BE-536`. A UPI address is one `@` and two non-empty halves, and that is the whole of
+    # what is checked: this platform never sends money to it, so a stricter rule here would be
+    # this system claiming to know which handles a bank will accept. Blank clears it, which is a
+    # thing a lead must be able to do — the deep link then simply stops being offered.
+    handle = upi_vpa.strip()
+    if handle and (handle.count("@") != 1 or not all(handle.split("@"))):
+        raise BusinessTypeInvalidError(
+            "A UPI ID looks like name@bank.",
+            field="upi_vpa",
+        )
 
     profile, _created = PartnerBusinessProfile.objects.update_or_create(
         partner=partner,
@@ -191,6 +210,7 @@ def upsert_business_profile(
             "gst_registered": gst_registered,
             "gstin": gstin,
             "years_in_operation": years_in_operation,
+            "upi_vpa": handle,
         },
     )
     return profile
@@ -639,6 +659,50 @@ def transition_capability(
     return capability
 
 
+@transaction.atomic
+def suspend_partner_a3_capabilities(
+    *,
+    partner: PartnerProfile,
+    reason_code: str,
+    actor: User | None = None,
+) -> list[PartnerCapability]:
+    """Remove a lead from the A3 market, through the command Operations already uses.
+
+    ADR-0009's "removes the vendor on a pattern" (`M2-BE-539`), and deliberately **not** a second
+    suspension mechanism: every one of these goes through `transition_capability`, so the audit
+    row, the `m2.capability.suspended` outbox event and the engagement routing
+    (`M2-BE-113`) all happen exactly as they do when a human suspends somebody. A silent flag
+    would take a vendor's livelihood without any of the three.
+
+    Scoped to `A3_TIME_BLOCK` and to `APPROVED` rows. A cash-demand pattern on shifting work says
+    nothing about the same firm's project capability, and suspending it too would be punishing
+    a business for a fact about one of its trades.
+
+    Returns what it suspended, which is empty when there was nothing approved to suspend — this is
+    reached from a report a Customer filed, and a vendor whose capability already lapsed is not an
+    error to raise at them.
+    """
+    capabilities = list(
+        PartnerCapability.objects.select_for_update()
+        .filter(
+            partner=partner,
+            archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
+            status=PartnerCapability.Status.APPROVED,
+        )
+        .order_by("id")
+    )
+    return [
+        transition_capability(
+            capability_id=capability.id,
+            to_status=PartnerCapability.Status.SUSPENDED,
+            actor=actor,
+            reason_code=reason_code,
+            reason="Suspended automatically on a reported pattern. Operations reviews the reports.",
+        )
+        for capability in capabilities
+    ]
+
+
 def _record_transition(
     *,
     capability: PartnerCapability,
@@ -1051,14 +1115,28 @@ def update_crew_member(
 
 @transaction.atomic
 def archive_crew_member(*, membership: PartnerCrewMembership) -> PartnerCrewMembership:
-    """Take a worker off one roster.
+    """Take a worker off one roster, unless somebody is expecting them on a shift.
 
-    **Does not yet refuse when the worker holds a future assignment.** Proposal 0013's acceptance
-    criterion 9 asks for `409 m2_crew_conflict` naming the shift, and there is nothing to read: crew
-    assignment is per *stage* and the stage model arrives with `M2-BE-522` in Wave C4. Adding a
-    guard against a table that does not exist would be a check that always passes, which is worse
-    than a recorded gap. Recorded in `02-backend-tasks.md` under `M2-BE-111`.
+    **Proposal 0013's acceptance criterion 9, finally enforceable.** Until Wave C4 there was no
+    table saying who was promised where, so this command archived a name that a Customer was
+    expecting on Thursday and the roster and the shift-day disagreed silently. `M2-BE-522` built
+    the table; this reads it and refuses with `m2_crew_conflict`, naming the dates.
+
+    The import is late on purpose. `apps.requirements` imports this module — the reverse at module
+    scope closes a cycle — and this is the branch that runs once, when somebody edits a roster,
+    rather than on every dispatch.
     """
+    from apps.requirements.workforce import (  # noqa: PLC0415 — mutual import with this module
+        future_assignment_dates,
+    )
+
+    booked = future_assignment_dates(membership=membership)
+    if booked:
+        days = ", ".join(day.isoformat() for day in booked[:5])
+        raise CrewConflictError(
+            f"{membership.crew_member.display_name} is booked on {days}. Replace them on those "
+            "shifts before taking them off the roster.",
+        )
     membership.status = PartnerCrewMembership.Status.ARCHIVED
     membership.archived_at = timezone.now()
     membership.save(update_fields=("status", "archived_at"))
@@ -1079,7 +1157,7 @@ class CrewRosterEntry:
     added_at: datetime
 
 
-def _masked_phone(suffix: str) -> str:
+def masked_crew_phone(suffix: str) -> str:
     """`•••••• 4821`, or an all-mask string for a person registered before the suffix existed."""
     return f"•••••• {suffix}" if suffix else "••••••"
 
@@ -1106,7 +1184,7 @@ def crew_roster(partner: PartnerProfile) -> list[CrewRosterEntry]:
         CrewRosterEntry(
             membership_id=membership.id,
             display_name=membership.crew_member.display_name,
-            phone_masked=_masked_phone(membership.crew_member.phone_suffix),
+            phone_masked=masked_crew_phone(membership.crew_member.phone_suffix),
             status=membership.status,
             is_supervisor=membership.is_supervisor,
             skill_codes=tuple(sorted(link.skill.code for link in membership.skills.all())),

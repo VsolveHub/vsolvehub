@@ -28,7 +28,7 @@ half-built.
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -341,18 +341,48 @@ def _proposal_terms(proposal: Proposal) -> dict[str, Any]:
     }
 
 
-def _a3_stages(proposal: Proposal) -> list[dict[str, Any]]:
+def shift_dates(requirement: CustomerRequirement, *, days: int) -> list[date | None]:
+    """Which calendar day each A3 shift-day falls on (`M2-BE-521`).
+
+    **This is the writer for `EngagementStage.scheduled_on` on the workforce path**, and it exists
+    because the column had a reader and no writer: `workforce.shift_date_of` refuses to assign crew
+    to an undated shift-day, and every A3 engagement was opened with `scheduled_on` null — so the
+    whole per-stage assignment, conflict and attendance surface was unreachable in every
+    environment. Consecutive days from the date the Customer asked for, which is the shape ADR-0009
+    describes ("four helpers for two days of shifting") and the only one the preset collects.
+
+    `None` — every entry — when the requirement carries no `requested_start`. Not today's date:
+    a server-chosen working day would make the cross-agency conflict guard check a day nobody is
+    working, which is a check that reads as passing while protecting nothing. An undated shift-day
+    refuses crew assignment with a message Operations can act on instead.
+    """
+    start = requirement.requested_start
+    if start is None:
+        return [None] * days
+    first = timezone.localtime(start).date()
+    return [first + timedelta(days=offset) for offset in range(days)]
+
+
+def _a3_stages(proposal: Proposal, *, requirement: CustomerRequirement) -> list[dict[str, Any]]:
     """One stage per shift-day. Amounts are server-calculated from the quoted rate.
 
     `M2-BE-413`: the client never supplies a total. A workforce quote is a rate per worker per day
     and a number of days, so the stage amounts are arithmetic over fields the wage-floor guard has
     already validated — not a number the composer sent.
+
+    Each row also carries the day it is (`M2-BE-521`). The fallback quote flow lays out shift-days
+    exactly as the rate-card path does, so its crew, attendance and settlement work identically —
+    a vendor whose customer came through the fallback still has a Thursday to assign people to.
     """
     days = proposal.minimum_days or 1
     workers = proposal.worker_count or 1
     rate = proposal.rate_paise_per_worker_day or 0
     per_day = rate * workers
-    return [{"label": f"Day {index}", "amount_paise": per_day} for index in range(1, days + 1)]
+    scheduled = shift_dates(requirement, days=days)
+    return [
+        {"label": f"Day {index}", "amount_paise": per_day, "scheduled_on": scheduled[index - 1]}
+        for index in range(1, days + 1)
+    ]
 
 
 def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
@@ -411,7 +441,7 @@ def _open_engagement(
             requirement, total_paise=proposal.total_paise
         )
 
-    rows = _a3_stages(proposal) if is_lead_only else _a5_stages(proposal)
+    rows = _a3_stages(proposal, requirement=requirement) if is_lead_only else _a5_stages(proposal)
     staged_total = sum(int(row["amount_paise"]) for row in rows)
     if staged_total != proposal.total_paise:
         # `M2-BE-504` at the one moment it can still be prevented rather than reported. The stage
@@ -588,6 +618,11 @@ def open_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
         contact_released_at=now,
         work_may_start_at=now,
     )
+    # `M2-BE-521`: a shift-day is a *day*, and the date is what the whole of Wave C4 hangs off —
+    # the cross-agency crew conflict rule is "this person, on this date", and it cannot run
+    # against a null. Written here rather than left to be inferred later, because the requirement
+    # knows the answer at exactly this moment and nothing downstream does.
+    scheduled = shift_dates(requirement, days=booking.days)
     EngagementStage.objects.bulk_create(
         [
             EngagementStage(
@@ -596,6 +631,7 @@ def open_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
                 label=f"Day {day}",
                 amount_paise=per_day,
                 kind=EngagementStage.Kind.WORK,
+                scheduled_on=scheduled[day - 1],
                 funding_state=EngagementStage.FundingState.NOT_REQUIRED,
             )
             for day in range(1, booking.days + 1)

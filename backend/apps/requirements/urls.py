@@ -11,21 +11,31 @@ from apps.requirements.views import (
     EngagementAmendmentCollectionView,
     EngagementAmendmentDecisionView,
     EngagementAmendmentDeclineView,
+    EngagementCashDemandView,
     EngagementCollectionView,
     EngagementCompletionView,
     EngagementDetailView,
     EngagementEventListView,
+    EngagementSafetyIncidentView,
     EngagementStageApprovalView,
+    EngagementStageArrivalView,
+    EngagementStageAttendanceResponseView,
+    EngagementStageAttendanceView,
     EngagementStageCorrectionView,
+    EngagementStageCrewView,
     EngagementStageDetailView,
     EngagementStageDisputeDecisionView,
     EngagementStageDisputeView,
     EngagementStageEvidenceUploadView,
     EngagementStageEvidenceView,
+    EngagementStageExtraView,
     EngagementStageFundingView,
+    EngagementStageSettlementView,
+    EngagementStageShiftView,
     EngagementStageStartView,
     EngagementStageSubmitView,
     OperationsRateCardView,
+    OperationsSafetyIncidentDecisionView,
     PartnerCrewOfferAcceptView,
     PartnerCrewOfferDeclineView,
     PartnerCrewOfferListView,
@@ -416,6 +426,69 @@ urlpatterns = [
         "partner/crew-offers/<uuid:invitation_id>/decline/",
         PartnerCrewOfferDeclineView.as_view(),
         name="m2-partner-crew-offer-decline",
+    ),
+    # Wave C4 - the A3 shift-day (`M2-BE-521..539`). Every one of these hangs off a *stage*
+    # rather than off the engagement, because an A3 stage **is** a shift-day: the crew that comes
+    # on Thursday is legitimately not Monday's crew, and a per-engagement route could not say so.
+    #
+    # Nothing here moves wage money. The settlement route records two taps against a published
+    # figure and hands back a UPI deep link into the Customer's own app; there is no checkout on
+    # this path and none may be added.
+    path(
+        "engagement-stages/<uuid:stage_id>/shift/",
+        EngagementStageShiftView.as_view(),
+        name="m2-engagement-stage-shift",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/crew/",
+        EngagementStageCrewView.as_view(),
+        name="m2-engagement-stage-crew",
+    ),
+    # Deliberately its own route rather than a flag on the stage `start/`: arrival is the
+    # non-OTP fact that a crew is standing at a site, either party may record it, and on day one
+    # it is what earns the booking fee.
+    path(
+        "engagement-stages/<uuid:stage_id>/arrival/",
+        EngagementStageArrivalView.as_view(),
+        name="m2-engagement-stage-arrival",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/attendance/",
+        EngagementStageAttendanceView.as_view(),
+        name="m2-engagement-stage-attendance",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/attendance/response/",
+        EngagementStageAttendanceResponseView.as_view(),
+        name="m2-engagement-stage-attendance-response",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/settlement/",
+        EngagementStageSettlementView.as_view(),
+        name="m2-engagement-stage-settlement",
+    ),
+    path(
+        "engagement-stages/<uuid:stage_id>/extras/",
+        EngagementStageExtraView.as_view(),
+        name="m2-engagement-stage-extras",
+    ),
+    # Safety and cash demands sit on the **engagement**, not the stage: an incident can be about
+    # the job as a whole or be reported after the day it belongs to has closed, and a report that
+    # needed a live shift-day to attach to would be one nobody could file the next morning.
+    path(
+        "engagements/<uuid:engagement_id>/safety-incidents/",
+        EngagementSafetyIncidentView.as_view(),
+        name="m2-engagement-safety-incidents",
+    ),
+    path(
+        "engagements/<uuid:engagement_id>/cash-demand/",
+        EngagementCashDemandView.as_view(),
+        name="m2-engagement-cash-demand",
+    ),
+    path(
+        "operations/safety-incidents/<uuid:safety_incident_id>/decision/",
+        OperationsSafetyIncidentDecisionView.as_view(),
+        name="m2-operations-safety-incident-decision",
     ),
     path(
         "operations/rate-cards/",

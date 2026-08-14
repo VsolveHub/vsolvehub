@@ -44,6 +44,7 @@ a mode where Vsolve holds nothing.
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Final
 
 from django.db import transaction
@@ -76,17 +77,47 @@ MAXIMUM_AMENDMENT_LINES: Final = 10
 #: fortnight of extra time is renegotiating the job, not extending it.
 MAXIMUM_EXTENSION_DAYS: Final = 14
 
+#: The most worker-hours of overtime one amendment may carry. A sanity bound of the same kind as
+#: the one above and explicitly **not** a policy: eight workers at twelve hours is already a day
+#: nobody should be having, and a request past it is a typo or a renegotiation. The rate itself is
+#: the card's and is owner-published; this only stops a slipped decimal reaching a Customer.
+MAXIMUM_OVERTIME_WORKER_HOURS: Final = 96
+
+
+class LineUnit:
+    """What one amendment line counts, so the server knows which published rate prices it.
+
+    Deliberately not a `TextChoices` and deliberately not on `ScopeAmendmentLine`: the M1 line
+    kinds (`LABOUR_DAY`, `PROJECT_WORK`) already say which *engine door* a line came through, and a
+    second published enum for "hours or days or add-ons" would be a second vocabulary for one fact
+    plus a new OpenAPI component. The unit lives on the input, is recorded in the line snapshot,
+    and never becomes a column.
+    """
+
+    DAY: Final = "DAY"
+    OVERTIME_HOUR: Final = "OVERTIME_HOUR"
+    ADD_ON: Final = "ADD_ON"
+
+    ALL: Final = (DAY, OVERTIME_HOUR, ADD_ON)
+
 
 @dataclass(frozen=True, slots=True)
 class AmendmentLineInput:
     """One line a vendor proposed, before the server has decided what it costs."""
 
     label: str
-    #: Worker-days for a time extension; a count of the described work for a change order.
+    #: Worker-days for a time extension; a count of the described work for a change order. On a
+    #: rate-card overtime line it is **worker-hours**, computed server-side from the day's present
+    #: count — never a number of hours a vendor typed against a crew size they chose.
     quantity: int
     #: A5 only, and signed: a negative amount removes scope. Ignored on A3, where the rate is
     #: frozen on the engagement and the vendor does not get to restate it.
     amount_paise: int | None = None
+    #: Which published rate on the frozen card prices this line (`M2-BE-531`, `538`). Defaults to
+    #: a whole extra shift-day, which is what every caller before Wave C4 meant.
+    unit: str = LineUnit.DAY
+    #: The add-on's code on the card's published table. Empty for every other unit.
+    code: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +145,22 @@ def _frozen_day_rate_paise(engagement: Engagement) -> int:
 def _price_time_extension(
     *, engagement: Engagement, lines: list[AmendmentLineInput]
 ) -> list[tuple[AmendmentLineInput, int]]:
+    """Price an A3 extension from the terms frozen on the engagement, whichever shape they are.
+
+    Two shapes, because A3 has two front doors. A **rate-card** engagement carries the card's
+    published overtime and add-on rates, so overtime and extras are priced from the numbers the
+    Customer was shown before they booked (`M2-BE-531`, `538`). A **quote-flow** engagement carries
+    a vendor's own day rate and nothing else, so an extra day is all it can price — and asking for
+    overtime against it is refused rather than multiplied by an invented factor.
+    """
+    if (engagement.terms_snapshot or {}).get("source") == "rate_card":
+        return _price_rate_card_lines(engagement=engagement, lines=lines)
+    for line in lines:
+        if line.unit != LineUnit.DAY:
+            raise StageTransitionError(
+                "This booking has no published overtime or add-on rate, so only extra days can be "
+                "requested against it.",
+            )
     day_rate = _frozen_day_rate_paise(engagement)
     total_days = sum(line.quantity for line in lines)
     if total_days <= 0:
@@ -123,6 +170,66 @@ def _price_time_extension(
             f"A time extension can add at most {MAXIMUM_EXTENSION_DAYS} days.",
         )
     return [(line, day_rate * line.quantity) for line in lines]
+
+
+def _price_rate_card_lines(
+    *, engagement: Engagement, lines: list[AmendmentLineInput]
+) -> list[tuple[AmendmentLineInput, int]]:
+    """Every line at a number Operations published, or a refusal naming what is missing.
+
+    ADR-0009: "any genuine extra is a one-tap scope amendment at the card's published add-on
+    rates". The rates come from the snapshot frozen at booking rather than from today's card, for
+    the same reason the day rate does — a card superseded mid-job must not reprice work already
+    agreed — and an add-on code that is not on that snapshot has no published price, so it is
+    refused. That refusal is the mechanism: an extra with no published rate is exactly the on-site
+    renegotiation the preset and the card exist to leave nowhere to live.
+    """
+    terms: dict[str, Any] = engagement.terms_snapshot or {}
+    day_rate = int(terms.get("lead_day_receipt_paise") or 0)
+    overtime_rate = int(terms.get("overtime_hourly_paise") or 0)
+    published_add_ons = terms.get("add_on_rates") or {}
+    add_on_rates = {str(code): int(rate) for code, rate in published_add_ons.items()}
+
+    priced: list[tuple[AmendmentLineInput, int]] = []
+    extension_days = 0
+    overtime_hours = 0
+    for line in lines:
+        if line.quantity <= 0:
+            raise StageTransitionError("Every line needs an amount of work on it.")
+        if line.unit == LineUnit.DAY:
+            if day_rate <= 0:
+                raise AmendmentRequiredError(
+                    "This engagement has no agreed daily rate, so extra time cannot be priced.",
+                )
+            extension_days += line.quantity
+            priced.append((line, day_rate * line.quantity))
+        elif line.unit == LineUnit.OVERTIME_HOUR:
+            if overtime_rate <= 0:
+                raise AmendmentRequiredError(
+                    "This booking has no published overtime rate, so overtime cannot be charged.",
+                )
+            overtime_hours += line.quantity
+            priced.append((line, overtime_rate * line.quantity))
+        elif line.unit == LineUnit.ADD_ON:
+            rate = add_on_rates.get(line.code)
+            if rate is None:
+                raise AmendmentRequiredError(
+                    "That extra is not on the published rate card for this booking.",
+                )
+            priced.append((line, rate * line.quantity))
+        else:
+            raise StageTransitionError("That is not something this booking can be extended by.")
+
+    if extension_days > MAXIMUM_EXTENSION_DAYS:
+        raise StageTransitionError(
+            f"A time extension can add at most {MAXIMUM_EXTENSION_DAYS} days.",
+        )
+    if overtime_hours > MAXIMUM_OVERTIME_WORKER_HOURS:
+        raise StageTransitionError(
+            f"One request can carry at most {MAXIMUM_OVERTIME_WORKER_HOURS} worker-hours of "
+            "overtime.",
+        )
+    return priced
 
 
 def _price_change_order(*, lines: list[AmendmentLineInput]) -> list[tuple[AmendmentLineInput, int]]:
@@ -157,6 +264,7 @@ def propose_engagement_amendment(
     reason: str,
     lines: list[AmendmentLineInput],
     stage_id: uuid.UUID | None = None,
+    expires_at: datetime | None = None,
 ) -> EngagementAmendment:
     """The vendor asks to change the agreed work (`M2-BE-505`).
 
@@ -212,16 +320,24 @@ def propose_engagement_amendment(
     if delta_paise < 0:
         _assert_reduction_is_possible(stage=stage, delta_paise=delta_paise)
 
+    # Raises `m2_policy_unavailable` when the owner has set no response window.
+    # `ScopeAmendment.expires_at` is not nullable and an amendment with no deadline is an
+    # open-ended claim on a Customer's money, so refusing to propose one is the fail-closed
+    # answer and inventing a window is not.
+    response_deadline = pricing.amendment_response_deadline(engagement.requirement)
+    if expires_at is not None:
+        # A caller-supplied deadline may only ever be **shorter**. Wave C4's retroactive overtime
+        # window is the one that uses it: overtime already worked has to be confirmed inside a
+        # short window or it is unpaid (`M2-BE-531`), and letting that claim inherit the ordinary
+        # two-day amendment deadline would quietly extend the very window that decides it.
+        response_deadline = min(response_deadline, expires_at)
+
     amendment = ScopeAmendment.objects.create(
         booking=None,
         proposed_by=engagement.partner,
         reason=reason.strip()[:240],
         total_paise=abs(delta_paise),
-        # Raises `m2_policy_unavailable` when the owner has set no response window.
-        # `ScopeAmendment.expires_at` is not nullable and an amendment with no deadline is an
-        # open-ended claim on a Customer's money, so refusing to propose one is the fail-closed
-        # answer and inventing a window is not.
-        expires_at=pricing.amendment_response_deadline(engagement.requirement),
+        expires_at=response_deadline,
     )
     line_kind = (
         ScopeAmendmentLine.Kind.LABOUR_DAY
@@ -246,6 +362,10 @@ def propose_engagement_amendment(
                         if kind == EngagementAmendment.Kind.TIME_EXTENSION
                         else "vendor"
                     ),
+                    # Which published rate produced this number, so a dispute reads "3 worker-hours
+                    # at the card's overtime rate" rather than a total it has to reverse-engineer.
+                    "unit": line.unit,
+                    "add_on_code": line.code,
                 },
             )
             for position, (line, amount) in enumerate(priced, start=1)
