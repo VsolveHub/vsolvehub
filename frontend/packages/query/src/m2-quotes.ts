@@ -652,3 +652,376 @@ export function canReportVendorNoShow(visit: SiteVisit, planIsCharged: boolean):
 
 /** The only party a Customer is permitted to report. */
 export const CUSTOMER_REPORTS_PARTY: VisitNoShowParty = "VENDOR";
+
+/* ==========================================================================
+   The A3 rate-card front door — contract 1.29.0, revision 4 (ADR-0009)
+   ==========================================================================
+
+   The instant path: a published day rate, a crew offer cascade, and one online
+   charge. It lives in this module rather than a new one for the reason the
+   header gives — A3 and A5 sell different things through the same shape, and
+   `isAccessPriceUnavailable` / `isPolicyUnavailable` are the fail-closed
+   refusals both doors share.
+
+   ## The rule that decides every function below
+
+   **A3 is `LEAD_ONLY` and the booking fee is the only money Vsolve touches.**
+   `total_customer_paise = lead_receipt_paise + booking_fee_paise`, the server
+   calculates all three, and the wage half is paid direct to the lead at day end
+   and never held by us. Nothing here computes a component: `RateCard` publishes
+   the three parts separately precisely so neither side has to infer them, and a
+   client that multiplied a day rate by a headcount would eventually disagree
+   with the number the Customer agreed to.
+
+   ## `m2_booking_fee_payment_pending` is declared and raised by nothing
+
+   The contract names it (202, retryable) and no path returns it today —
+   recorded in `contracts/openapi/CHANGELOG.md` §1.29.0 and in the execution plan
+   §7. So the pending state is derived from the `BookingFee` object's own
+   `PENDING` status, exactly as `unlockPhase` derives its own, and never from a
+   refusal code. Building the wait on a code nothing sends would be a screen that
+   never reaches the state it was written for.
+   -------------------------------------------------------------------------- */
+
+export type RateCardState = Schemas["RateCardState"];
+export type RatePreview = Schemas["RatePreview"];
+export type RateCardBooking = Schemas["RateCardBooking"];
+export type RateCardBookingStatus = Schemas["RateCardBookingStatusEnum"];
+export type BookingFee = Schemas["BookingFee"];
+export type BookingFeeStatus = Schemas["BookingFeeStatusEnum"];
+export type CrewNoShowReason = Schemas["CrewNoShowRequest"]["reason_code"];
+export type CrewNoShowParty = Schemas["CrewNoShowRequest"]["party"];
+
+/**
+ * The rate-card read's cache key.
+ *
+ * Composed locally and nested under `requirements.detail(id)`, on the Wave A2
+ * precedent: `m2-keys.ts` predates revision 4 and is frozen, so the alternative
+ * to composing it here is editing a file this session may not touch. Nesting is
+ * the load-bearing part rather than tidiness — `M2_INVALIDATION`'s
+ * `requirementScope` invalidates `requirements.detail(id)` as a *prefix*, so
+ * every existing requirement-level invalidation already clears this. Promotion
+ * to the factory is requested in `frontend-execution-plan.md` §7.
+ *
+ * Keyed by **requirement**, exactly as `unlock` and `visits.plan` are and for
+ * the same reason: a Customer coming back from a lost payment redirect holds a
+ * requirement id and nothing else, and keying a purchase by an id the recovery
+ * path cannot produce is how somebody who has paid cannot find what they bought.
+ */
+export const m2RateCardKeys = {
+  state: (requirementId: string) =>
+    [...m2QueryKeys.requirements.detail(requirementId), "rate-card"] as const,
+} as const;
+
+/* --------------------------------------------------------------------------
+   Refusals
+   -------------------------------------------------------------------------- */
+
+/**
+ * `409 m2_rate_card_unavailable` — no published card for this city and skill.
+ *
+ * **Fail-closed, and the failure is the product decision.** No card means no
+ * instant booking and never a guessed price; the honest degradation is the quote
+ * flow, which is still built and is still there. Also raised when the service
+ * area carries no `state_code`, because the wage-floor check cannot run without
+ * one and a guard that silently skips is indistinguishable from one that passed.
+ *
+ * Not retryable. Nothing the Customer can press publishes a rate.
+ */
+export function isRateCardUnavailable(error: unknown): boolean {
+  return hasCode(error, "m2_rate_card_unavailable");
+}
+
+/**
+ * `409 m2_booking_fee_not_chargeable` — there is nothing to pay for.
+ *
+ * No lead is holding the job, the hold lapsed, or the fee is already settled.
+ * The Customer cannot make a lead accept, so the only next step is to wait —
+ * which is why no screen offers a retry against it.
+ */
+export function isBookingFeeNotChargeable(error: unknown): boolean {
+  return hasCode(error, "m2_booking_fee_not_chargeable");
+}
+
+/** `409 m2_roster_insufficient` — a lead's verified roster is smaller than the headcount. */
+export function isRosterInsufficient(error: unknown): boolean {
+  return hasCode(error, "m2_roster_insufficient");
+}
+
+/* --------------------------------------------------------------------------
+   The published rate, before anything is booked
+   -------------------------------------------------------------------------- */
+
+/**
+ * Whether a rate can be shown at all — and unavailability is a `200`, not an error.
+ *
+ * `GET .../rate-card/` publishes unavailability as a **state on a successful
+ * read**, deliberately: an A3 Customer whose city has no published card can
+ * still send their request, it simply collects quotes. Refusing the whole screen
+ * would hide a path that works.
+ *
+ * Every money field is checked, not just the flag. A rate is four numbers the
+ * screen has to print, and `is_available` with a null total is a screen with a
+ * heading and no price on it — which is the one thing a rate disclosure may
+ * never be.
+ */
+export function isRatePublished(preview: RatePreview): boolean {
+  return (
+    preview.is_available &&
+    preview.total_customer_paise !== null &&
+    preview.lead_receipt_paise !== null &&
+    preview.booking_fee_paise !== null &&
+    preview.day_rate_paise !== null
+  );
+}
+
+/**
+ * Why the preset itself is incomplete, as distinct from why the city is unpriced.
+ *
+ * The read reports a draft with no headcount or day count through the same
+ * `is_available: false` channel as an unpriced city, under its own code. Told
+ * apart here because the two need opposite screens: one asks the Customer for a
+ * number they can supply, the other says we cannot sell this here at all and
+ * must never look like something they can fix.
+ *
+ * **A missing or empty code is not an incomplete preset.** `unavailable_code` is
+ * nullable, and a `null` means the server declined to say why — which is exactly
+ * when guessing costs the most. Sending somebody back to a form they have
+ * already filled in, over and over, is the worse of the two wrong answers; the
+ * fail-closed branch at least tells them the truth (we have no published rate
+ * here) and hands them the quote flow, which works. So this requires a named
+ * code that is neither of the two fail-closed ones, rather than merely not being
+ * them.
+ */
+export function isPresetIncomplete(preview: RatePreview): boolean {
+  const code = preview.unavailable_code;
+  return (
+    !preview.is_available &&
+    code !== null &&
+    code !== "" &&
+    code !== "m2_rate_card_unavailable" &&
+    code !== "m2_policy_unavailable"
+  );
+}
+
+/* --------------------------------------------------------------------------
+   The booking, through the cascade
+   -------------------------------------------------------------------------- */
+
+/**
+ * Where one instant booking stands, from the server's own record.
+ *
+ * | Phase | Means | What the screen offers |
+ * |---|---|---|
+ * | `unbooked` | No booking exists | The preset and the rate, if there is one |
+ * | `matching` | The cascade is out. Nothing has been charged | The holding state, and nothing to press |
+ * | `offer_held` | A lead accepted and is holding the job | The booking-fee checkout, and only here |
+ * | `confirmed` | Fee verified; the crew and the engagement exist | The engagement |
+ * | `fell_back` | The threshold passed. This request is on the quote flow now | The unlock surface, with the handoff explained |
+ * | `cancelled` | Called off | The money outcome, from the fee |
+ *
+ * A status this build does not recognise falls to `unbooked`, on
+ * `readScanStatus`'s reasoning: a value learned after this bundle shipped could
+ * mean anything, and only "we cannot describe this" cannot do harm.
+ */
+export type RateCardBookingPhase =
+  | "unbooked"
+  | "matching"
+  | "offer_held"
+  | "confirmed"
+  | "fell_back"
+  | "cancelled";
+
+export function bookingPhase(state: RateCardState): RateCardBookingPhase {
+  const booking = state.booking;
+  if (booking === null) return "unbooked";
+  switch (booking.status) {
+    case "MATCHING":
+      return "matching";
+    case "OFFER_HELD":
+      return "offer_held";
+    case "CONFIRMED":
+      return "confirmed";
+    case "FELL_BACK":
+      return "fell_back";
+    case "CANCELLED":
+      return "cancelled";
+    default:
+      return "unbooked";
+  }
+}
+
+/**
+ * Whether this requirement has been handed to the quote flow.
+ *
+ * The one predicate the fallback handoff turns on. `FELL_BACK` is a real,
+ * recorded transition with a `fallback_reason_code` and a timestamp — not an
+ * absence — and **nothing has been charged when it happens**. The already-built
+ * unlock and teaser surface is what renders next; it is the thin-supply fallback
+ * and it stays.
+ */
+export function hasFallenBackToQuotes(state: RateCardState): boolean {
+  return bookingPhase(state) === "fell_back";
+}
+
+/* --------------------------------------------------------------------------
+   The booking fee — §4c, the money spec
+   -------------------------------------------------------------------------- */
+
+/**
+ * What the money did, read off the `BookingFee` record and nothing else.
+ *
+ * | Phase | `BookingFee.status` | Means |
+ * |---|---|---|
+ * | `none` | (no record) | Nothing has been charged and nothing is owed |
+ * | `awaiting_payment` | `OFFER_ACCEPTED` | A lead is holding the job; the checkout is open |
+ * | `pending` | `PENDING` | An attempt exists and no verified callback has landed. Nothing to press |
+ * | `active` | `ACTIVE` | Paid and verified. The crew is confirmed |
+ * | `earned` | `EARNED` | The crew arrived on day one |
+ * | `forfeited` | `FORFEIT_SPLIT` | Customer no-show, locked gate or late cancel — split with the lead |
+ * | `refunded` | `REFUNDED` | Returned in full: vendor no-show, a free-window cancel, or expiry |
+ * | `failed` | `FAILED` | The provider reported a failure. A safe retry, same key |
+ *
+ * **Never derived from a refusal code.** `m2_booking_fee_payment_pending` is
+ * declared and returned by no path, so a `pending` screen built on it would
+ * never render. This reads the aggregate, which is also the whole recovery path:
+ * a Customer who closed the tab mid-UPI holds a requirement id and this answers
+ * from that alone.
+ *
+ * ## `awaiting_payment` is mapped and currently unreachable
+ *
+ * `OFFER_ACCEPTED` is the model default and no code path saves it:
+ * `accept_crew_offer` creates no `BookingFee` row at all, and the one
+ * construction site overwrites the status to `PENDING` first — Session C,
+ * `frontend-execution-plan.md` §7, 14 August. While a lead holds the job the
+ * read therefore carries **no fee**, and this answers `none`.
+ *
+ * The mapping stays, because a status published in the enum is part of the
+ * contract and dropping it would leave a real value falling to the fail-closed
+ * branch the day the server starts writing it. What must not happen is a
+ * *screen* gated on it: "may I pay now" is answered by
+ * `RateCardState.checkout_available`, which is the field that knows, and
+ * {@link canCheckOutBookingFee} is the only predicate any control uses.
+ */
+export type BookingFeePhase =
+  | "none"
+  | "awaiting_payment"
+  | "pending"
+  | "active"
+  | "earned"
+  | "forfeited"
+  | "refunded"
+  | "failed";
+
+export function bookingFeePhase(state: RateCardState): BookingFeePhase {
+  const fee = state.booking_fee;
+  if (fee === null) return "none";
+  switch (fee.status) {
+    case "OFFER_ACCEPTED":
+      return "awaiting_payment";
+    case "PENDING":
+      return "pending";
+    case "ACTIVE":
+      return "active";
+    case "EARNED":
+      return "earned";
+    case "FORFEIT_SPLIT":
+      return "forfeited";
+    case "REFUNDED":
+      return "refunded";
+    case "FAILED":
+      return "failed";
+    default:
+      // Same fail-closed direction as everywhere else: an unrecognised status
+      // offers nothing and promises nothing.
+      return "none";
+  }
+}
+
+/**
+ * Whether the fee checkout may be opened.
+ *
+ * `checkout_available` is the server's own guard — a lead is holding this job
+ * *right now* and the fee is not yet settled — and a booking must exist for
+ * there to be anything to pay for. Mirrored, never trusted as permission: the
+ * command re-checks under the booking's row lock and answers
+ * `m2_booking_fee_not_chargeable`, because a hold that lapsed a second ago is
+ * exactly the state a stale `true` lives in.
+ */
+export function canCheckOutBookingFee(state: RateCardState): boolean {
+  return state.booking !== null && state.checkout_available;
+}
+
+/**
+ * Whether a poll of the rate-card read can still learn something.
+ *
+ * Two unsettled states rather than one, and the second is what makes the cascade
+ * holding state honest:
+ *
+ * - **A fee in `PENDING`.** The verified callback can land seconds after the
+ *   Customer returns from the provider, minutes later on a UPI collect, or after
+ *   the tab has been closed and reopened.
+ * - **A booking still `MATCHING` or `OFFER_HELD`.** Unlike a quote wave, which
+ *   moves in hours, the A3 cascade runs on the M1 dispatch clock in *minutes* —
+ *   the offer timeout is seconds-to-minutes and the hold is quarter-hours. A
+ *   screen that said "confirming your crew" and never changed without a manual
+ *   refresh would be the holding state lying about being live.
+ *
+ * Everything else is an answer the server has already given.
+ */
+export function isRateCardSettled(state: RateCardState): boolean {
+  if (state.booking_fee !== null && state.booking_fee.status === "PENDING") return false;
+  const phase = bookingPhase(state);
+  return phase !== "matching" && phase !== "offer_held";
+}
+
+/**
+ * Whether the Customer may still call this booking off.
+ *
+ * Offered against a fee that exists and has not settled. **This client never
+ * decides which way the money goes** — the free-cancel window T is server
+ * configuration, `POST .../booking-fee/cancel/` reads it fail-closed, and while
+ * it is unset the command refuses with `m2_policy_unavailable` rather than
+ * guessing between a refund and a forfeit. So the control is offered and the
+ * outcome is the server's to state.
+ *
+ * `active` is the only phase this reaches today — see {@link bookingFeePhase} on
+ * why `awaiting_payment` never arrives. That matches the endpoint: with no fee
+ * row, cancel answers `m2_booking_fee_not_chargeable`, so offering the control
+ * earlier would offer a button that cannot work. The consequence is real and
+ * logged in the execution plan §7: a Customer whose booking is still out to the
+ * cascade has **no** published way to call it off, because no requirement-level
+ * cancel exists for `MATCHING` either.
+ */
+export function canCancelBooking(state: RateCardState): boolean {
+  const phase = bookingFeePhase(state);
+  return phase === "awaiting_payment" || phase === "active";
+}
+
+/**
+ * Whether day one can be recorded — arrival, or a no-show.
+ *
+ * Only against a paid, verified booking. `ACTIVE` is the one status where the
+ * crew is confirmed and the day has not been settled either way; `EARNED` means
+ * arrival was already confirmed, and confirming twice is not a state the
+ * Customer needs a button for.
+ */
+export function canRecordCrewDay(state: RateCardState): boolean {
+  return bookingFeePhase(state) === "active";
+}
+
+/**
+ * The only party a Customer is permitted to report on the crew path.
+ *
+ * The same rule as the visit no-show, and a **separate constant on purpose**:
+ * the crew endpoint reuses `VisitNoShowPartyEnum` (one question, two answers,
+ * and a second vocabulary for it is how two names for one fact start
+ * disagreeing), but the server does not enforce direction here the way the visit
+ * path does — `party` decides the money and `report_crew_no_show` takes whatever
+ * it is given. So the value is fixed at the one call site that could set it, and
+ * no control in this app can produce `CUSTOMER`.
+ */
+export const CUSTOMER_REPORTS_CREW_PARTY: CrewNoShowParty = "VENDOR";
+
+/** The reason a Customer reports when nobody arrived. Published vocabulary, not a slug. */
+export const CREW_VENDOR_NO_SHOW_REASON: CrewNoShowReason = "vendor_no_show";

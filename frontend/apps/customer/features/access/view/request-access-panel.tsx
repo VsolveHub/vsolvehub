@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  bookingPhase,
   canCheckOutVisitPlan,
   canReadFullEstimates,
   unlockPhase,
@@ -8,6 +9,8 @@ import {
 } from "@vsolve/query";
 import type { ReactNode } from "react";
 
+import { useRateCardState } from "@/features/crew/queries";
+import { CrewDispatchPanel } from "@/features/crew/view/crew-dispatch-panel";
 import { useCustomerQuotes } from "@/features/quotes/queries";
 import type { RequirementArchetype } from "@/features/requirement/adapters";
 import {
@@ -55,6 +58,8 @@ export interface RequestAccessPanelProps {
   quotesHref: string;
   /** Where the A5 plan is paid for. */
   bookVisitsHref: string;
+  /** Where the A3 booking fee is paid (revision 4). */
+  bookCrewFeeHref: string;
   supportAction?: ReactNode;
 }
 
@@ -64,11 +69,78 @@ export function RequestAccessPanel(props: RequestAccessPanelProps) {
   return null;
 }
 
+/**
+ * The A3 money surface — two doors since revision 4, and never both at once.
+ *
+ * The **rate card** is the primary front door: a published day rate, a crew
+ * offer cascade and one booking fee. The **unlock** is the thin-supply fallback,
+ * built in Wave A2 and deliberately not deleted — it is what a request falls
+ * back to past the cascade threshold, and it is still the only path for a city
+ * or skill with no published card.
+ *
+ * Which one renders is decided by the server's own `RateCardBooking`:
+ *
+ * | Booking | Renders |
+ * |---|---|
+ * | none | The unlock surface, exactly as before. This request never used the instant path |
+ * | `MATCHING` / `OFFER_HELD` / `CONFIRMED` / `CANCELLED` | The crew panel only |
+ * | `FELL_BACK` | The handoff explanation **and** the unlock surface beneath it |
+ *
+ * Rendering both in the ordinary case would give one request two money controls
+ * and two different promises about what happens next, which is the one thing a
+ * Customer looking at a request must never see.
+ */
 function A3Access({
   requirementId,
   quotesHref,
+  bookCrewFeeHref,
   supportAction,
 }: RequestAccessPanelProps) {
+  const rateQuery = useRateCardState(requirementId);
+  const rateState = rateQuery.data ?? null;
+  const crewPhase = rateState === null ? null : bookingPhase(rateState);
+
+  // Until the rate-card read answers, the request is on neither door yet. The
+  // unlock panel's own loading state covers it — showing the quote surface and
+  // then replacing it with a crew panel would flash a paywall at somebody who
+  // has a crew booked.
+  const onInstantPath = crewPhase !== null && crewPhase !== "unbooked";
+  const showQuoteFallback = !onInstantPath || crewPhase === "fell_back";
+
+  return (
+    <div className="flex flex-col gap-6">
+      {onInstantPath ? (
+        <CrewDispatchPanel
+          requirementId={requirementId}
+          bookCrewFeeHref={bookCrewFeeHref}
+          supportAction={supportAction}
+        />
+      ) : null}
+
+      {showQuoteFallback ? (
+        <A3QuoteAccess
+          requirementId={requirementId}
+          quotesHref={quotesHref}
+          isResolvingDoor={rateQuery.isPending}
+          supportAction={supportAction}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** The A3 quote-flow door: teasers, then the unlock. Unchanged since Wave A2. */
+function A3QuoteAccess({
+  requirementId,
+  quotesHref,
+  isResolvingDoor,
+  supportAction,
+}: {
+  requirementId: string;
+  quotesHref: string;
+  isResolvingDoor: boolean;
+  supportAction?: ReactNode;
+}) {
   const teasersQuery = useQuoteTeasers(requirementId);
   const unlockQuery = useUnlockState(requirementId);
   const checkout = useStartUnlockCheckout();
@@ -83,7 +155,7 @@ function A3Access({
       priceLabel={unlockPriceLabel(unlock?.price_paise ?? null)}
       usableQuoteCount={unlock?.usable_quote_count ?? teasers?.usableQuoteCount ?? 0}
       teasers={teasers?.teasers ?? []}
-      isLoading={unlockQuery.isPending || teasersQuery.isPending}
+      isLoading={isResolvingDoor || unlockQuery.isPending || teasersQuery.isPending}
       // The unlock read is the one that decides what may be offered, so its
       // failure is the one that must stop the panel. A teaser read that fails
       // leaves an empty list, which reads as "no quotes yet" — and that is why

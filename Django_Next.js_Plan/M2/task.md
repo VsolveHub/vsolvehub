@@ -13,10 +13,22 @@ B3's project half is landed**. Operations/admin: **nothing started**.
 aggregate and `publish_rate_card`, the A3 preset and `book_at_published_rate`, the crew-offer
 cascade caller, `BookingFee` with its forfeit split and refunds, and `fall_back_to_quote_flow` —
 ten new paths. Both frontend columns consumed their outstanding contract fields in the same gate.
-**Remaining work:** backend **C4–C7**; frontend **A2R** and **B2R** (the revision 4 *UI* for C2R —
-no rate-card screen exists in either app yet), the workforce fulfilment UI, and **A4/B4** (the M2
-Operations surfaces; note the admin app is a working M1 Operations app already — only its M2
-screens are missing).
+**Wave A2R is built (2026-08-14)**: the Customer A3 rate-card front door — the preset at
+`/requests/book/[service]`, the published rate and its inclusion list before any booking, the
+cascade holding state and its honest handoff to the kept unlock fallback, the booking-fee checkout
+at `/requests/[id]/book-crew`, and the forfeit/refund surfaces. `M2-FE-425..429` all `[~]`.
+**Remaining work:** backend **C4–C7**; frontend **B2R** (the Partner rate-card half), the workforce
+fulfilment UI, and **A4/B4** (the M2 Operations surfaces; note the admin app is a working M1
+Operations app already — only its M2 screens are missing).
+
+> **A2R found the frontend twin of Gate 1's second blocker, and it was the whole wave.**
+> `BookingFee.Status.OFFER_ACCEPTED` is a model default that nothing persists — `accept_crew_offer`
+> writes no fee row and the one construction site overwrites it to `PENDING` — so the booking-fee
+> checkout, which gated its pay button on that status, could **never offer it**. At the one moment a
+> lead was holding the job the screen read "No supervisor has accepted this job yet". Lint,
+> typecheck and build were all green. **A reader with no writer, one layer up from the C2R
+> version**, and the check that catches it is not a gate but asking of every branch: *who sends
+> this?* Fixed by gating on `RateCardState.checkout_available`, the field that actually knows.
 HTTP tests **exist for the C0–C2 paths and have not been run**; the C3 onward waves wrote none, per
 the build-first amendment. No phase has passed its gate.
 
@@ -482,11 +494,22 @@ caller does not exist; automatic replacement does not exist.
 **Status `[~]`** — the quote-unlock and visit-plan backend surface is built and published at
 contract 1.24.0 (Wave C2, 13 August), and the Customer access surface is built (Wave A2). Revision 4
 (2026-08-13) demotes the whole A3 unlock half to the **thin-supply fallback** and adds the primary
-A3 front door — rate-card booking fee — as **new, unstarted** work; nothing built is deleted.
+A3 front door — rate-card booking fee — which is now built on both sides: **backend C2R at contract
+1.29.0 (Gate 1), Customer frontend A2R (2026-08-14)**. Nothing built is deleted; the Partner half
+(`B2R`) and the notification that tells a Customer their crew is held are the remaining pieces.
 **The remaining frontend halves are in flight** (`FE-314`/`315`), and a published path nobody can
 reach has not demonstrated anything.
 
-A3 — rate-card booking fee (revision 4, not started):
+> **Customer frontend update, 2026-08-14.** Wave A2R is built — `M2-FE-425..429` are `[~]`, the
+> rate-card front door is mounted on two new routes, and the unlock surface below is untouched and
+> is now the handoff target for a `FELL_BACK` booking. The backend criteria in the next list are
+> Session C's to flip; the Customer half of each is on screen and in
+> `apps/customer/features/crew/SMOKE.md`. **One of them cannot be demonstrated as written:** the
+> "offered only against a held accepted offer" criterion is met through
+> `RateCardState.checkout_available`, not through `BookingFee.OFFER_ACCEPTED`, which no code path
+> persists.
+
+A3 — rate-card booking fee (revision 4, backend criteria):
 
 - [ ] The booking fee is server-priced from the rate card's fee component, effective-dated and
   fail-closed, and offered only against a held accepted offer
@@ -716,3 +739,4 @@ table promises the owner something to run.
 | 2026-08-12 | Wave A1 wiring (Session A) | `[~]` 15 of 15 built and wired, owner verification pending | **The Customer requirement flow is reachable.** Four routes under `app/(flow)/requests/` — `My requests`, one request's page, the category-first entry and the four screens — all `force-dynamic`, `robots: noindex`, behind one `CustomerShell` gate. `features/requirement/queries.ts` + `packages/query/src/m2-requirement.ts` consume requirement list/create/read/patch/submit/duplicate-check/timeline at 1.21.0. The three stale M2 entries removed from the Customer boundary guard; `contract-pending/` deleted per its own README and its rule re-stated as `features/requirement/boundary.test.ts` (view/model may not name the generated client, through either package), carrying the `SCREENS.length === 4` assertion across. Adapters re-pointed: `flexibility_days` written through one named constant, `PHOTO`→`IMAGE`, `CLEAN`→`VERIFIED` with an unknown scan state failing **closed**, plus two the handover note missed (`answers`/`detail` arrive as `unknown`; no `file_name` at all). `FE-211` built — the consequence and the confirmation — with `onConfirmEdit` deliberately unsupplied, because no amend command exists and a confirmation that reaches a 409 teaches a Customer that confirming does nothing. **One field was missing from a screen**: `requested_start` is required by `_assert_submittable` and matched on by the duplicate check, and screen 2 did not ask for it — it would have been invisible until a real submit. **Eleven contract gaps logged**, the two largest being no merge endpoint for `GAP-004` and two separately-authored question schemas whose mismatch surfaces only when the Customer presses Send. `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` **9 of 9**, `pnpm build --filter=customer` green. **No tests were run** — 10 files written and queued above. | Claude |
 | 2026-08-13 | Build sprint — GATE 1 (Sessions A + B merged) | `[~]` built — static gates green, owner manual verification pending | **Two in-flight frontend waves reconciled, finished and merged into one commit.** Session A shipped requirement **attachments** (`FE-205`: presign → PUT → finalize → delete as one mutation, resumable from a held presign, finalize under a key derived from the upload id so a retried finalize replays Django's `201` instead of creating a second attachment) and the **voice fast path** (`FE-204`: `voice-note-recorder.tsx` + `model/language.ts`, language recorded for routing). Session B **mounted the built-but-dark registration surface** on four `/apply` routes — business profile, capabilities, insurance, masked demand preview — plus `features/capability/queries.ts`, `crew/queries.ts` and `session/use-partner-role.ts`, and handled the sixth capability status **`REJECTED`** (ranked above `SUSPENDED`, renders the reviewer's own words, terminal but never blocking a fresh request). `features/capability/contract-pending/` deleted per its own README, its rule carried across as `features/capability/boundary.test.ts`. **§7 drained by the orchestrator:** the four `errors.ts` codes and the `m2-keys.ts` `duplicates` rename confirmed landed; **both compensating list narrowings deleted** now that 1.23.0 declares `RequirementSummaryPage`/`EnquirySummaryPage` — `readRequirementList` and `readEnquiryPage` take the generated page types, and the test cases covering the deleted bare-array branches went with them (the `e2e/support/responsive.ts` hook is deferred: `e2e/**` is test code the amendment does not touch during the sprint). **Static gates on the merged tree: backend `quality-static.cmd` green** (ruff format + check across 338 files, strict MyPy across 218 source files, `makemigrations --check` no changes); **frontend `pnpm lint` clean at `--max-warnings 0`, `pnpm typecheck` 9 of 9 including `generate:check` at contract 1.23.0, `pnpm build --filter=customer` and `--filter=partner` both green.** No test written or run (build-first amendment). | Claude |
 | 2026-08-13 | Revision 4 — rate-card A3 | Docs revised | **Owner decision applied across the plan set.** ADR-0009 written and indexed; ADR-0007/0008 status lines annotated. A3 becomes rate-card-first: Operations publishes an all-inclusive per-worker-day rate per city+skill (wage ≥ floor + supervision margin + booking fee, printed inclusion list, effective-dated and fail-closed on the `M2AccessPrice` pattern); the requirement narrows to a preset asking the 3–4 price-moving facts; dispatch to leads through the A1 offer cascade (first accept wins, roster-sized holds); the booking fee charges at vendor accept on the 2026-08-13 split rails (customer no-show forfeits to lead travel compensation + platform share; vendor no-show auto-refunds + free re-dispatch; free-cancel until T hours); wages direct, daily, P2P with the dual "Day settled?" taps + UPI link; extras via amendments at published add-on rates; `report_cash_demand` one-tap; thin supply falls back to the built quote flow (unlock status there = owner decision 14). New aggregates `RateCard` + `BookingFee`; new commands and 4 error codes in `07`; decline rate is an ops alarm. New blocking owner decisions 12–14. **The unlock surface (Waves C2/A2) is demoted to fallback, not deleted; every rate-card item is new, unstarted build.** Updated: `README.md`, `07`, `task.md`, `02`, `03`, `04`, `05`, `06`, `08`, `09`, all three session files, `frontend-execution-plan.md`, ADR index. | Claude |
+| 2026-08-14 | Wave A2R / `M2-FE-425..429` (Session A) | `[~]` 5 of 5 built — static gates green, owner manual verification pending | **The Customer A3 rate-card front door, on two routes: `/requests/book/[service]` (the preset and the published rate) and `/requests/[requirementId]/book-crew` (the booking fee).** Opened by a new **Book a crew** action on the catalog service page, offered on `A3_TIME_BLOCK` alone. Every money figure is a separate server field — nothing is computed, summed or defaulted — and the supervision margin is neither published to the Customer nor reconstructed from the two that are. `is_available: false` prints the server's own reason, offers the quote flow and **shows no number at all**. The holding state carries the server's own wave and no invented countdown; `FELL_BACK` renders the handoff **and the kept Wave A2 unlock surface beneath it**. Cancel states both money outcomes because T is on no read; the forfeit split prints only once the server has settled it. `eslint --max-warnings 0` clean, `turbo typecheck --filter=customer --force` and `turbo build --filter=customer --force` both green on real runs (no cache hit, no `os error 112`). **No tests written, none run** — the smoke script is `apps/customer/features/crew/SMOKE.md`. **One blocking runtime defect inherited and fixed: the pay button was gated on `BookingFee.OFFER_ACCEPTED`, a status nothing persists, so the booking fee could never be paid** — now gated on `RateCardState.checkout_available`. Seven rows added to `frontend-execution-plan.md` §7. | Claude (Session A) |

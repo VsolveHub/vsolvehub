@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { buttonStyles, formatMoney } from "@vsolve/ui";
 
 import { getCategory, getService } from "@/features/catalog/queries";
+import { bookCrewHref } from "@/lib/routes";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
 import { ServiceJsonLd } from "@/features/catalog/components/service-json-ld";
 import { VariantList } from "@/features/catalog/components/variant-list";
@@ -14,6 +15,9 @@ type PageProps = { params: Promise<{ category: string; service: string }> };
 
 /** Literal because Next statically analyses segment config; see catalog/page.tsx. */
 export const revalidate = 300;
+
+/** The archetype that can be booked at a published day rate. Never rendered. */
+const A3_TIME_BLOCK = "A3_TIME_BLOCK";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category, service: slug } = await params;
@@ -112,8 +116,37 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         A link rather than a button, so middle-click and "open in new tab" behave the way the
         browser promises.
       */}
-      <div className="pb-8">
-        {service.request_archetypes.length > 0 ? (
+      {/*
+        Revision 4 (ADR-0009) adds a third action, and it is the **primary** one
+        wherever it applies: a service that can be booked at a published day rate
+        leads to the A3 preset rather than to three competing essays and a
+        72-hour SLA. `Book a crew` is offered on `A3_TIME_BLOCK` alone —
+        `request_archetypes` is the server's own list — and the quote route stays
+        beside it as the honest second option, because a published rate is not
+        guaranteed for every city and the preset screen falls closed to exactly
+        that route when there is no card.
+
+        A5 keeps `Tell us what you need` as its only action: there is no rate
+        card for a defined outcome, and offering one would be a price for work
+        nobody has seen.
+      */}
+      <div className="flex flex-wrap items-center gap-3 pb-8">
+        {service.request_archetypes.includes(A3_TIME_BLOCK) ? (
+          <>
+            <Link
+              href={bookCrewHref(service.slug)}
+              className={buttonStyles({ size: "lg" })}
+            >
+              Book a crew
+            </Link>
+            <Link
+              href={`/requests/new/${service.slug}`}
+              className={buttonStyles({ size: "lg", variant: "outline" })}
+            >
+              Get quotes instead
+            </Link>
+          </>
+        ) : service.request_archetypes.length > 0 ? (
           <Link href={`/requests/new/${service.slug}`} className={buttonStyles({ size: "lg" })}>
             Tell us what you need
           </Link>

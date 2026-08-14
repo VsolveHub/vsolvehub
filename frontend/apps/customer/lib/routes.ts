@@ -45,6 +45,31 @@ export const REQUESTS_HREF = "/requests";
 /** The catalog, for a Customer who wants to describe something else. */
 export const BROWSE_HREF = "/catalog";
 
+/**
+ * The A3 preset — `Book a crew` at the published day rate (revision 4).
+ *
+ * A **static** `book` segment beside the existing `new` one, deliberately: the
+ * level already carries `/requests/[requirementId]`, and Next refuses two
+ * different dynamic slug names at one path level. A static segment wins over the
+ * dynamic sibling and leaves `[requirementId]` untouched, which is the same
+ * lesson `/bookings/workforce` was built on after `/bookings/[groupId]` blocked
+ * `/bookings/[engagementId]`.
+ */
+export function bookCrewHref(serviceSlug: string): string {
+  return `/requests/book/${serviceSlug}`;
+}
+
+/**
+ * The A3 booking-fee checkout, opened only while a lead's offer is held.
+ *
+ * A route rather than a modal, for the reason `/requests/[id]/book-visits` is
+ * one: a payment is a record that outlives the screen that started it, and a
+ * Customer who closed the tab mid-UPI comes back to a URL.
+ */
+export function bookCrewFeeHref(requirementId: string): string {
+  return `/requests/${requirementId}/book-crew`;
+}
+
 /** One agreement, keyed by the engagement so a months-old notification resolves. */
 export function engagementHref(engagementId: string): string {
   return `/engagements/${engagementId}`;

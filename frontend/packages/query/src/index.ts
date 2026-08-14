@@ -160,6 +160,23 @@ export {
   canConfirmArrival,
   canReportVendorNoShow,
   CUSTOMER_REPORTS_PARTY,
+  // The A3 rate-card front door, contract 1.29.0 (revision 4, ADR-0009).
+  // Appended rather than interleaved so the diff stays one block.
+  m2RateCardKeys,
+  isRateCardUnavailable,
+  isBookingFeeNotChargeable,
+  isRosterInsufficient,
+  isRatePublished,
+  isPresetIncomplete,
+  bookingPhase,
+  hasFallenBackToQuotes,
+  bookingFeePhase,
+  canCheckOutBookingFee,
+  isRateCardSettled,
+  canCancelBooking,
+  canRecordCrewDay,
+  CUSTOMER_REPORTS_CREW_PARTY,
+  CREW_VENDOR_NO_SHOW_REASON,
 } from "./m2-quotes";
 export type {
   AccessCheckout,
@@ -190,6 +207,17 @@ export type {
   VisitPlanStatus,
   VisitPlanTier,
   VisitSlotState,
+  // Revision 4 — see the value block above.
+  BookingFee,
+  BookingFeePhase,
+  BookingFeeStatus,
+  CrewNoShowParty,
+  CrewNoShowReason,
+  RateCardBooking,
+  RateCardBookingPhase,
+  RateCardBookingStatus,
+  RateCardState,
+  RatePreview,
 } from "./m2-quotes";
 
 export {

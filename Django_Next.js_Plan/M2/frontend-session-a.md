@@ -222,19 +222,25 @@ Nothing in Wave A2 is reworked: the teaser/unlock surface above stays as built a
 thin-supply fallback. The checkout below mirrors `book-visits-screen.tsx` — the same held-commitment
 gating, the same pending-with-nothing-to-press, the same callback-only hardening.
 
-- [ ] `M2-FE-425` The preset capture: skill, headcount, dates and the 3–4 price-moving facts —
-  opened from the catalog's `Book a crew` action, never the four-screen flow.
-- [ ] `M2-FE-426` The published rate and its inclusion list on screen **before** booking; fails
-  closed on `m2_rate_card_unavailable` — never a guessed price.
-- [ ] `M2-FE-427` The cascade holding state ("confirming your crew — usually within 2 hours") and
-  the honest fallback handoff past the configured threshold — nothing charged, the quote flow takes
-  over.
-- [ ] `M2-FE-428` The booking-fee checkout: held-offer gating (`m2_booking_fee_not_chargeable`),
-  pending as `m2_booking_fee_payment_pending` (202) with nothing to press, verified-callback-only
-  hardening — the callback also creates the engagement.
-- [ ] `M2-FE-429` Forfeit and refund states: the free-cancel window until T hours before the slot;
-  the forfeit split on customer no-show / locked gate / late cancel (lead travel compensation +
-  platform share); full auto-refund plus free re-dispatch on vendor no-show.
+- [~] `M2-FE-425` built — static gates green, owner manual verification pending. `/requests/book/
+  [service]`, opened by the catalog's new **Book a crew** action, which is offered on
+  `A3_TIME_BLOCK` alone and leaves **Get quotes instead** beside it. One screen, never the four —
+  and the questions are **rendered from the variant's published list**, so a field Operations stops
+  asking for stops appearing.
+- [~] `M2-FE-426` built — static gates green, owner manual verification pending. The rate, the
+  inclusion list, the overtime rate and the published add-ons are on screen **before** the book
+  control exists; an unavailable preview renders the server's own reason and offers the quote flow
+  with **no number anywhere**.
+- [~] `M2-FE-427` built — static gates green, owner manual verification pending. The holding state
+  shows the server's own wave, says nothing has been charged, offers nothing to press and re-reads
+  itself; `FELL_BACK` renders the handoff **and** the Wave A2 unlock surface beneath it.
+- [~] `M2-FE-428` built — static gates green, owner manual verification pending.
+  `/requests/[id]/book-crew`, mirrored from `book-visits-screen.tsx`. **Gated on
+  `checkout_available`, not on a fee status** — see the defect below. No branch is built for
+  `m2_booking_fee_payment_pending`, which no path raises.
+- [~] `M2-FE-429` built — static gates green, owner manual verification pending. Arrival, vendor
+  no-show (`party` hard-coded to `VENDOR`), cancel with both money outcomes stated and neither
+  predicted, and the forfeit split printed only once the server has settled it.
 
 **Evidence to record:** the rate and inclusion list provably on screen before the book control; the
 held-offer gating refusing a checkout with no accepted offer; the pending panel offering no control;
@@ -330,7 +336,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 |---|---|---|---|---|
 | A1 | `FE-201..215` | `[~]` 15 of 15 | `[ ]` | Four screens, duplicate notice, the four optional panels, `My requests`, the timeline, the honest closure states and `FE-211`. **Wired and reachable** — 4 routes, queries against the generated client, guard retired. Owner verification pending; see the 2026-08-12 wiring section. |
 | A2 | `FE-216`, `FE-401..424` (revision 3: A3 unlock + A5 visits) | `[~]` 17 of 17 | `[ ]` | Both money doors, the visit tracker, full estimates, comparison, selection and the engagement. **Wired and reachable** — 3 new routes, 3 new features, 2 new query modules. Owner verification pending; see the 2026-08-13 section and `apps/customer/features/access/SMOKE.md`. **Revision 4 (ADR-0009) demotes the A3 teasers/unlock half to the thin-supply fallback — kept as built.** Wave J (2026-08-14) closes `FE-418`'s receipt from `Engagement.access_receipt` and moves `FE-421`'s slot times onto `SiteVisit.timezone`. `FE-419` and `FE-409` are now publishable and unstarted. |
-| A2R | `FE-425..429` (revision 4: rate-card front door) | `[ ]` | `[ ]` | Not started — blocked on backend C2R publishing the rate-card contract. The Wave A2 unlock surface stays as the fallback. |
+| A2R | `FE-425..429` (revision 4: rate-card front door) | `[~]` 5 of 5 | `[ ]` | The preset, the published rate before booking, the cascade holding state and its fallback handoff, the booking-fee checkout and the forfeit/refund surfaces. **Wired and reachable** — 2 new routes, 1 new feature, the rate-card half of `m2-quotes.ts`. Built against 1.29.0. Owner verification pending; see the 2026-08-14 A2R section and `apps/customer/features/crew/SMOKE.md`. The Wave A2 unlock surface is untouched and is now the thin-supply fallback the `FELL_BACK` handoff routes to. |
 | A3 | `FE-509..512`, `FE-608..613` | `[~]` 7 of 10 | `[ ]` | **Wave J (2026-08-14) consumed `EngagementStage.kind`** across the list, the workspace and the stage review, and re-pointed the event and amendment reads onto the factory's own keys and tiers — see the Wave J section. The shared spine's Customer half: two lists, the stage review, amendments, the agreement history, the event record and completion. **Wired and reachable** — 3 new routes, plus the header links that were missing for three waves. `FE-510`/`611`/`612` are Wave III by instruction and render honest not-built-yet blocks. Owner verification pending; see the 2026-08-13 Wave A3 section and `apps/customer/features/engagement/SMOKE.md`. Revision 4 adds `FE-514`/`FE-515` (Day-settled tap, settlement view, cash-demand report) — not started, with C4. |
 | A4 | `FE-706..711` | `[ ]` | `[ ]` | |
 | A5 | quality share | `[ ]` | `[ ]` | |
@@ -1131,3 +1137,248 @@ Customer surface where the contract is ahead of the app.
 | 2026-08-14 | `FE-419` vendor cards | Not blocked. Published at 1.26.0 and unstarted — a new list surface, not a re-point. | yes |
 | 2026-08-14 | `FE-409` Customer questions | Not blocked. Published at 1.26.0 and unstarted — a new compose-and-thread surface. | yes |
 | 2026-08-14 | `FE-609` evidence viewer | Still no download route for `StageEvidence` at 1.28.0. Unchanged. | already logged |
+
+### Wave A2R progress — 2026-08-14 · the A3 rate-card front door, at 1.29.0
+
+`npx eslint <changed paths> --max-warnings 0` clean; `npx turbo run typecheck --filter=customer
+--filter=@vsolve/query --force` green; `npx turbo run build --filter=customer --force` green with
+**two new dynamic routes**. All three re-run after the fixes below, none off a cache hit
+(`Cached: 0 cached`, no `FULL TURBO`), and no `os error 112`. **No tests were run and none were
+written** — the build-first amendment. What replaces them is
+`apps/customer/features/crew/SMOKE.md`.
+
+> The filter is `customer`, not `@vsolve/customer`. Only the `packages/*` workspaces carry the
+> scope, and `turbo --filter=@vsolve/customer` matches nothing and **exits 0 having run nothing** —
+> a gate that lies rather than fails. `--force` on typecheck for the same reason: turbo will serve a
+> cache hit over new files and report success.
+
+**Two routes.**
+
+| Route | What it is | Rendering |
+|---|---|---|
+| `/requests/book/[service]` | The A3 preset and the published rate — `FE-425`, `FE-426` | `force-dynamic`, `robots: noindex` |
+| `/requests/[requirementId]/book-crew` | The booking-fee checkout — `FE-428` | `force-dynamic`, `robots: noindex` |
+
+`book` is a **static** segment beside the existing `new`, because the level already carries
+`/requests/[requirementId]` and Next refuses two different dynamic slug names at one path level —
+the build fails. A static segment wins the match over its dynamic sibling and leaves
+`[requirementId]` untouched. Same lesson `/bookings/workforce` was built on after
+`/bookings/[groupId]` blocked `/bookings/[engagementId]`.
+
+`FE-427` and `FE-429` mount no route: they are panels **inside** `/requests/[id]`, which is where a
+Customer looks when they want to know what is happening to their crew.
+
+#### What was inherited, and what was done with it
+
+A stopped predecessor left A2R roughly two-thirds built and uncommitted. Audited against 1.29.0 and
+ADR-0009 line by line before extending, on the standing rule that a good design is worth keeping and
+somebody's lines are not.
+
+**Kept, essentially as written** — it was right, and the reasoning in it was better than a rewrite
+would have produced: the whole `m2-quotes.ts` rate-card block (phases, refusal predicates,
+`isRateCardSettled`'s two-unsettled-states argument, the `CUSTOMER_REPORTS_CREW_PARTY` constant),
+`features/crew/queries.ts`, `adapters/index.ts`, `rate-disclosure.tsx`, `preset-questions.tsx`,
+`crew-address-picker.tsx`, `crew-dispatch-panel.tsx`, both route files, and the catalog and
+request-detail wiring.
+
+**Rewritten:**
+
+1. **`CheckoutAction` in `book-crew-fee-screen.tsx` — the wave's blocking defect.** Detailed below.
+2. **`useBookAtPublishedRate`'s duplicate override.** Also below.
+3. **`isPresetIncomplete`** now requires a *named* code rather than merely not one of the two
+   fail-closed ones. `unavailable_code` is nullable, and a null meant "send them back to the form" —
+   the worse of the two wrong answers, because it is a loop. A null now falls to the fail-closed
+   branch, which at least tells the truth and hands over a route that works.
+4. **`handlePrice`** wrote the answers twice on every press after the first (a `PATCH` for the
+   answers, then a `PATCH` for the address and dates). One `PATCH` now, with the answers on it only
+   when the create did not already carry them.
+5. **`CrewConfirmed`** gained the link to `/bookings/workforce`. A screen that says the crew is
+   confirmed and offers no way to reach the booking is a dead end.
+
+**Deleted:** nothing. Nothing in it fought the spec.
+
+#### The defect that every static gate passed over, and it was the whole wave
+
+**`BookingFee.Status.OFFER_ACCEPTED` is unreachable, and the checkout's pay button was gated on it.**
+
+Session C recorded the server half in the execution plan §7 on 14 August: `accept_crew_offer`
+creates no `BookingFee` row at all, and the one construction site overwrites the status to `PENDING`
+before saving. So `OFFER_ACCEPTED` is a model default that nothing ever persists.
+
+The consequence for this column was total. `bookingFeePhase` maps it to `awaiting_payment`, and
+`CheckoutAction` offered **Pay Rs.X and confirm the crew** on that phase alone. At the one moment a
+lead is holding the job, the read carries no fee, the reachable phase is `none`, and the screen
+rendered its `none` copy:
+
+> No supervisor has accepted this job yet, so there is nothing to pay for.
+
+A sentence that is confident, well-worded, grammatical and the exact opposite of the truth. **The
+Customer could never pay the booking fee** — which is the only money on the A3 path and the only
+thing `M2-FE-428` exists to do. Lint green, typecheck green, build green, route rendered, no
+exception anywhere.
+
+The fix is not to add a branch. It is that **a fee status cannot answer "may I pay now"**, and
+`RateCardState.checkout_available` can — it is the server's own answer to "is a lead holding this
+right now and is the fee unsettled", checked again under the booking's row lock when the command
+runs. The control now turns on `canCheckOutBookingFee` and nothing else; the fee status decides only
+what to say *afterwards*, which is a different question and the one it can answer.
+
+`OFFER_ACCEPTED` stays mapped in `bookingFeePhase`. A status published in the enum is part of the
+contract, and dropping it would send a real value to the fail-closed branch the day the server
+starts writing it. What must not exist is a *screen* gated on it.
+
+**The general shape is worth naming, because it is the frontend twin of the rule that produced the
+sprint's two backend blockers.** Wave C2R's were a check constraint duplicating a Python tuple, and
+a config column with a reader and no writer. This is *a reader with no writer* one layer up: an enum
+value with a mapping, a phase, a branch and a fully written sentence — and no server that ever sends
+it. Every static gate on both sides of the wire agreed, because the type exists. The check that
+catches it is not a gate; it is asking, of each branch, **who sends this**.
+
+#### The second thing that could not work, and why it looked correct
+
+**Overriding a duplicate warning was a dead end.** `book_at_published_rate` takes a stable
+idempotency key, correctly: booking is a once-per-requirement `DRAFT` to `MATCHING` transition, so
+replaying it after a dropped connection is the behaviour wanted. `allow_duplicate` travels in the
+**body**, not the key.
+
+So the sequence was: press Book, get `409 m2_requirement_duplicate`, press **These are different
+jobs**, press Book again — and the override is sent under the key the refused attempt already spent,
+with a changed payload, and `execute_idempotent` fingerprints the payload and refuses the mismatch.
+The Customer presses the override button and is told the same thing forever. The inherited comment
+argued this was *correct* — "overriding a duplicate warning is a second, different decision and must
+not silently replay the first answer" — which is exactly right about the semantics and exactly
+backwards about what to do with them. It is a second, different decision, so it needs a **second
+key**.
+
+`clearBookAtRateKey` spends the stored key at the **moment of the decision** — in the "these are
+different jobs" handler — rather than inside the mutation. Clearing on every `mutate` would give a
+dropped-connection retry of the override a third key, which is the failure the stable key exists to
+prevent. Safe because the server is what stops a double booking here, not the key: a second
+`DRAFT` to `MATCHING` is refused by state, and this command charges nothing.
+
+#### The rate is the server's, in four separate ways
+
+`M2-FE-426` turns on one rule — **never compute a number the server did not send** — and the wire
+was designed to make it easy, so the code should be boring. It is:
+
+- `RatePreview` publishes `day_rate_paise`, `total_customer_paise`, `lead_receipt_paise` and
+  `booking_fee_paise` as four independent fields with `total = lead_receipt + booking_fee` calculated
+  server-side. `grep` for arithmetic on `paise` across `features/crew/` returns **only** null checks
+  and `formatMoney` calls.
+- **The supervision margin is not on the Customer's read and is not reconstructed.** `RateCard`
+  carries three components; `RatePreview` publishes the two the Customer is entitled to — what goes
+  to the crew and what comes to Vsolve — because the lead's own margin is the lead's business. The
+  disclosure shows two and does not subtract its way to the third, which is the inference those
+  fields were split apart to prevent.
+- **The booking freezes its own rate.** Post-booking screens read `RateCardBooking`, never the live
+  preview, because the preview re-prices against whatever card is in force *now* and a booking made
+  last week reconciles against the number it was made at.
+- **The add-on labels are derived from the server's own keys**, not from a dictionary in a
+  component. A hardcoded map would go stale the first time Operations adds a row, and the staleness
+  would show up as a Customer charged for something the screen never named.
+
+#### Three owner-blocked values are absent from the UI rather than invented
+
+All three logged in §7.
+
+**The cascade's expected wait.** `RateCardBooking` publishes `wave` and `hold_expires_at` and no
+wave timeout, widening step or fallback threshold. So the holding state shows the server's own wave
+number — "Asking nearby supervisors" / "Search widened", which is the honest version of "we are
+still looking" — carries the task's own sentence, *"Confirming your crew — usually within 2 hours"*,
+and shows **no countdown**. `hold_expires_at` *is* published, and the held-offer panel runs a real
+`useServerCountdown` against it, so the one deadline the server actually knows is the one deadline on
+screen.
+
+**The free-cancel window T.** On no read. The cancel confirmation therefore states **both** money
+outcomes — inside the window the fee comes back whole, outside it the fee forfeits and part of it
+pays the supervisor for turning other work down — with no hours, no date and no prediction. The
+server decides and says which happened. With T unset the command refuses `m2_policy_unavailable`,
+which `AccessRefusal` renders as a support path rather than a retry.
+
+**The forfeit split ratio.** Never shown as a percentage. `toFeeMoneyView` returns the two halves as
+`null` until the fee is actually `FORFEIT_SPLIT`, deliberately: both fields are `0` on an `ACTIVE`
+fee, and "Rs.0 to the supervisor" printed beside a live booking would describe a settlement that has
+not happened.
+
+#### Two doors on one request, and never both at once
+
+The A3 request detail now has two money surfaces, and the rule that keeps them from contradicting
+each other is that **the server's own `RateCardBooking` chooses**:
+
+| Booking | Renders |
+|---|---|
+| none | The Wave A2 unlock surface, exactly as before. This request never used the instant path |
+| `MATCHING` / `OFFER_HELD` / `CONFIRMED` / `CANCELLED` | The crew panel only |
+| `FELL_BACK` | The handoff paragraph **and** the unlock surface beneath it |
+
+Rendering both in the ordinary case would give one request two money controls and two different
+promises about what happens next. Rendering neither while the rate-card read is in flight is why
+`isResolvingDoor` feeds the unlock panel's own loading state instead of the quote surface appearing
+and then being replaced — flashing a paywall at somebody who has a crew booked is worse than a
+spinner.
+
+**The unlock surface is untouched.** Not one line of `features/access/**` changed except
+`request-access-panel.tsx`, which gained the door-chooser and passes its A3 half straight through to
+the component that already existed. It is the thin-supply fallback now and it stays.
+
+#### What the screens say about what this is
+
+A3 is `LEAD_ONLY` and the copy says so **before the money**, not only on the engagement afterwards.
+`RateDisclosure` ends in a warning-toned block badged **Not a Vsolve booking**: we find you a
+supervisor and his team, we publish the rate, and we help if the connection fails — we do **not**
+hold the wage money, so payment for the work, any refund on it and any guarantee about it are
+between you and them. The booking fee is the only payment that comes to us. The checkout repeats it
+next to the amount.
+
+Nowhere does any screen call this a protected booking, and no screen implies Vsolve backs the work.
+That is the defect `M2-FE-415` exists to prevent, moved one screen earlier.
+
+#### What was audited for, and what was found
+
+Per the sprint rule that static gates pass on code that cannot run:
+
+- **(a) The drifting duplicate — a hand-copied list beside its own source.** Nothing in this diff
+  duplicates a server-owned list. The preset questions render from the variant's published list, the
+  inclusions from the card's own strings, the add-on labels from the card's own keys, the no-show
+  reason from the published enum, and the archetype gate from `request_archetypes`. The one literal
+  is `A3_TIME_BLOCK` on the catalog page, which is a contract enum value and not a list.
+- **(b) The reader with no writer.** Found, and it was the wave. `OFFER_ACCEPTED` — mapped, phased,
+  branched, worded, and sent by nothing. Fixed as above. A second instance was avoided rather than
+  found: `m2_booking_fee_payment_pending` is declared, described in the contract as the refusal that
+  gates confirmation, and raised by no path — the pending state is derived from the `BookingFee`
+  record's own status, and no branch anywhere waits for that code.
+- **The seed.** This wave adds no configuration column, so (b)'s seed rule does not bite here. The
+  columns it *depends* on are C2R's ten, and Session C's §7 row records `_seed_a3_configuration`
+  writing all of them and `_seed_rate_card` publishing a card **through `publish_rate_card`** so the
+  seed is held to the wage-floor guard Operations is held to. The smoke script's section 0 names
+  every one as a precondition with its symptom, so an unseeded environment is diagnosable from the
+  screen.
+
+#### Files
+
+- `packages/query/src/m2-quotes.ts` (the rate-card block) and the session-A marker block in
+  `packages/query/src/index.ts`.
+- `apps/customer/features/crew/**` — `queries.ts`, `adapters/index.ts`,
+  `view/{book-crew-screen,book-crew-fee-screen,crew-dispatch-panel,rate-disclosure,preset-questions,
+  crew-address-picker}.tsx`, `SMOKE.md`.
+- Touched: `features/access/view/request-access-panel.tsx` (the door chooser),
+  `features/requirement/view/request-detail-screen.tsx` (one prop), `lib/routes.ts` (two builders),
+  `app/(shop)/catalog/[category]/[service]/page.tsx` (the `Book a crew` action).
+- Routes: `app/(flow)/requests/book/[service]/page.tsx`,
+  `app/(flow)/requests/[requirementId]/book-crew/page.tsx`.
+
+**Seven rows added to the execution plan section 7** — two frozen-file requests, five contract gaps.
+The one to read first: **`OFFER_ACCEPTED` is unreachable and a screen was built on it**, because the
+server half of that row is still open and the next column to consume `BookingFee` will make the same
+assumption unless it is warned.
+
+### Blocked / handed off — Wave A2R
+
+| Date | Task | Blocked on | Logged in plan §7 |
+|---|---|---|---|
+| 2026-08-14 | `FE-425` preset schema | `a3_preset_question_schema` is what the server validates against and has no read endpoint; the screen renders the catalog questions, which are the only published preset schema. A mismatch surfaces as an unpriceable form the Customer cannot fix. | yes |
+| 2026-08-14 | `FE-427` cascade clock | No wave timeout, widening step or fallback threshold on any read. The holding state carries the task's own sentence and no countdown; `hold_expires_at` is the one real deadline and it is used. | yes |
+| 2026-08-14 | `FE-428` fee status | `BookingFee.OFFER_ACCEPTED` unreachable. Built against `checkout_available`, which is correct regardless of whether the server half changes. | yes |
+| 2026-08-14 | `FE-428` engagement link | `RateCardState` publishes no engagement id. The confirmed panel routes to `/bookings/workforce`. | yes |
+| 2026-08-14 | `FE-429` cancel before payment | No published way to call off a booking that is out to the cascade — `booking-fee/cancel/` needs a fee row and no requirement-level cancel exists for `MATCHING`. Nothing is charged in that window. | yes |
+| 2026-08-14 | `FE-428` demonstrating any charge | Unchanged from Wave A2: no M2 payment attempt is readable or capturable by its own Customer, so the smoke script captures from the Django shell. | already logged |

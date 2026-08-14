@@ -559,26 +559,38 @@ all of it is blocked on backend wave C2R publishing the rate-card contract (rate
 book-at-rate, crew offers, booking-fee checkout/state; the machine, commands and codes are
 [07-state-machines-and-permissions.md](07-state-machines-and-permissions.md) §1, §2, §4c, §6, §8).
 
-- [ ] `M2-FE-425` **Revision 4.** The A3 preset capture: skill, headcount, dates and the 3–4
-  price-moving facts for the preset (floor number, lift, carry distance, packing), opened by the
-  catalog's `Book a crew` action. Never the four-screen flow — that remains the A5 shape and the
-  fallback's.
-- [ ] `M2-FE-426` **Revision 4.** The published rate and its inclusion list on screen **before**
-  booking: one all-inclusive number per worker per 8-hour day, what counts as a day, when overtime
-  starts and at what published rate, what the preset's scope includes. Fails closed on
-  `m2_rate_card_unavailable` — no rate card, no instant booking, never a guessed price.
-- [ ] `M2-FE-427` **Revision 4.** The cascade holding state — "confirming your crew — usually within
-  2 hours" — widening honestly, and the fallback handoff past the configured threshold: the
-  requirement falls back to the quote flow (the surface above) with an explanation and nothing
-  charged.
-- [ ] `M2-FE-428` **Revision 4.** The booking-fee checkout: offered only against a held accepted
-  offer (`m2_booking_fee_not_chargeable`, 409), pending as `m2_booking_fee_payment_pending` (202)
-  with nothing to press, and hardened **only** by the verified provider callback that also creates
-  the engagement — mirrored from the visit-plan checkout, never success from a redirect.
-- [ ] `M2-FE-429` **Revision 4.** Forfeit and refund state surfaces: the free-cancel window until T
-  hours before the slot; the forfeit split on customer no-show / locked gate / late cancel (lead
-  travel compensation + platform share) stated truthfully; vendor no-show shown as full auto-refund,
-  free re-dispatch and a standing hit.
+- [~] `M2-FE-425` built — static gates green, owner manual verification pending.
+  `/requests/book/[service]`, opened by the catalog's new **Book a crew** action, offered on
+  `A3_TIME_BLOCK` alone with **Get quotes instead** beside it. One screen, deliberately not the four
+  — and **the questions are rendered from the variant's published list**, never a hardcoded "floor /
+  lift / carry / packing", so a field Operations stops asking for stops appearing. Address through
+  the M1 picker, dates as two fields, and any edit takes the price back down. **The schema the
+  server validates against (`a3_preset_question_schema`) is still unpublished** — logged in
+  `frontend-execution-plan.md` §7.
+- [~] `M2-FE-426` built — static gates green, owner manual verification pending. The day rate, the
+  total, what goes to the crew, the booking fee, the standard day, the overtime rate, the inclusion
+  list and the published add-ons — **all four money figures are separate server fields and nothing
+  is computed, summed or filled in**. The supervision margin is absent because the Customer's read
+  omits it, and it is not reconstructed by subtraction. `is_available: false` renders the server's
+  own reason and offers the quote flow, with **no book control and no number at all**.
+- [~] `M2-FE-427` built — static gates green, owner manual verification pending. The holding state
+  shows the server's own wave ("Asking nearby supervisors" / "Search widened"), says nothing has
+  been charged, **offers nothing to press**, and re-reads itself while the cascade is live. No
+  countdown: the wave timeout and widening steps are on no read, and a timer would be a number this
+  client invented. `FELL_BACK` renders the handoff **and the Wave A2 unlock surface beneath it** —
+  the thin-supply fallback, kept.
+- [~] `M2-FE-428` built — static gates green, owner manual verification pending.
+  `/requests/[id]/book-crew`, mirrored from the visit-plan checkout: a route rather than a modal,
+  pending with nothing to press, and the outcome resolved from the aggregate's own state read —
+  never a redirect, never a payment-attempt read. **The pay control is gated on
+  `checkout_available`, not on a fee status**: `BookingFee.OFFER_ACCEPTED` is unreachable today, and
+  a screen built on it could never offer the button. **No branch waits for
+  `m2_booking_fee_payment_pending`**, which no path raises.
+- [~] `M2-FE-429` built — static gates green, owner manual verification pending. Arrival (non-OTP,
+  the default path), vendor no-show with `party` **hard-coded to `VENDOR`** so no control can
+  forfeit the Customer's own fee, and cancel stating **both** money outcomes because T is server
+  configuration on no read. The forfeit split prints its two halves only once the server has settled
+  them, from the record's own paise, and never as a percentage.
 
 ### A5 visits and estimates (revision 3)
 
