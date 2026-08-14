@@ -3,12 +3,15 @@
 from django.urls import path
 
 from apps.cases.views import (
+    OperationsCaseAppealDecisionView,
     OperationsCaseClaimView,
     OperationsCaseDetailView,
     OperationsCaseEscalateView,
     OperationsCaseListView,
     OperationsCaseNoteView,
+    OperationsCaseOverrideView,
     OperationsCaseResolveView,
+    OperationsCaseResponseDeadlineView,
     OperationsCaseSummaryView,
 )
 
@@ -44,5 +47,21 @@ urlpatterns = [
         "operations/cases/<uuid:case_id>/notes/",
         OperationsCaseNoteView.as_view(),
         name="operations-case-notes",
+    ),
+    # Wave C6 (`M2-BE-704`, `712`).
+    path(
+        "operations/cases/<uuid:case_id>/response-deadline/",
+        OperationsCaseResponseDeadlineView.as_view(),
+        name="operations-case-response-deadline",
+    ),
+    path(
+        "operations/cases/<uuid:case_id>/appeal-decision/",
+        OperationsCaseAppealDecisionView.as_view(),
+        name="operations-case-appeal-decision",
+    ),
+    path(
+        "operations/cases/<uuid:case_id>/override/",
+        OperationsCaseOverrideView.as_view(),
+        name="operations-case-override",
     ),
 ]

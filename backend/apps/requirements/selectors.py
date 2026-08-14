@@ -87,7 +87,21 @@ def question_asker_role(question: RequirementQuestion) -> str:
     foreign keys — the requirement's Customer and the invitation's Partner user — so each of the
     three answers is a fact, and the third exists so an assisted question does not silently read as
     the vendor's.
+
+    **Wave C6 gave the third answer its writer, and found it had none.** C1 wrote `OPERATIONS` as
+    the fall-through for "asked by somebody who is neither party", anticipating this wave's
+    assisted capture. When that capture arrived it attributed the question to the **Partner** —
+    which `M2-AC-802` requires, because the question is the vendor's and the operator merely wrote
+    it down — so the fall-through became unreachable and every assisted question read as an
+    ordinary vendor question. A published enum value with a reader, a schema entry and no writer:
+    RULES §3(b), one layer out from a column.
+
+    It now reads `captured_by`, which is a stored fact rather than a fall-through, so the answer is
+    positive in all three cases and the ordering matters: a captured question is `OPERATIONS` even
+    though `asked_by` correctly names the vendor it belongs to.
     """
+    if question.captured_by_id is not None:
+        return "OPERATIONS"
     if question.asked_by_id == question.requirement.customer_id:
         return "CUSTOMER"
     if question.asked_by_id == question.invitation.partner.user_id:

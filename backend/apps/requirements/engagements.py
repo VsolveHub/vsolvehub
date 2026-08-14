@@ -58,6 +58,7 @@ from apps.requirements.models import (
     Proposal,
     ProposalSelection,
     RateCardBooking,
+    StageCrewAssignment,
     VendorInvitation,
 )
 from apps.requirements.services import record_transition
@@ -700,6 +701,146 @@ def open_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
             "requirement_id": str(requirement.id),
             "engagement_id": str(engagement.id),
             "commercial_mode": engagement.commercial_mode,
+        },
+    )
+    return engagement
+
+
+@transaction.atomic
+def reopen_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
+    """Put a replacement crew on the job after a vendor no-show (`M2-BE-719`).
+
+    **The second engagement-opening path**, and the reason there had to be one is a hard structural
+    fact rather than a preference: `Engagement.requirement` is a `OneToOneField`, so a re-dispatched
+    requirement cannot have a second engagement. Wave C4 spotted the gap and deferred it; the free
+    re-dispatch has been unreachable since, because `open_rate_card_engagement` finds the cancelled
+    engagement, returns it untouched, and the replacement lead ends up attached to a cancelled
+    agreement belonging to the vendor who never turned up.
+
+    So the engagement is **re-pointed**, exactly as `projects.decide_project_transfer` re-points an
+    abandoned A5 project. That is a reviewed pattern with a precedent rather than a novelty here,
+    and the reason it is safe in both places is the same: the *agreement* has not changed. The
+    Customer is owed the crew they booked — same headcount, same dates, same frozen rate, §4c's
+    "at its original snapshot" — and what moved is only who is supplying it.
+
+    Three things are handled that a naive re-point would leave behind:
+
+    1. **The old lead's crew assignments are released.** A `StageCrewAssignment` names a worker on
+       the abandoning agency's roster, and leaving it standing would both misrepresent who is
+       coming and hold that worker's date against the cross-agency conflict index.
+    2. **`terms_snapshot` gains the re-dispatch**, so a dispute reads that this engagement had two
+       vendors and why, rather than silently showing the second one as if they had always been it.
+    3. **Contact and work clearance are re-released**, because A3 is a connection and the Customer
+       has a different number to ring.
+
+    The shift-days themselves are **reused, not re-laid**, and the money columns do not move at
+    all. §4c only ever reaches a vendor no-show from an `ACTIVE` fee — the fee earns at first-day
+    arrival, so a no-show is by construction before any day was delivered — and re-laying days
+    nobody worked would inflate `staged_total_paise` and force a matching movement in
+    `amendment_delta_paise`, recording an amendment that nobody proposed and nobody accepted. A
+    stage that has actually progressed therefore **refuses** rather than being reset: a vendor
+    walking off mid-job is a different remedy, and it is not this one.
+    """
+    booking = (
+        RateCardBooking.objects.select_for_update(of=("self",))
+        .select_related("requirement", "accepted_invitation__partner")
+        .get(pk=booking_id)
+    )
+    invitation = booking.accepted_invitation
+    if invitation is None:
+        raise RequirementTransitionError("This booking has no confirmed crew.")
+    engagement = (
+        Engagement.objects.select_for_update().filter(requirement=booking.requirement).first()
+    )
+    if engagement is None:
+        # Nothing to reopen — the no-show landed before an engagement ever existed, which the
+        # ordinary path handles.
+        return open_rate_card_engagement(booking_id=booking.id)
+    if engagement.partner_id == invitation.partner_id and engagement.status in (
+        Engagement.Status.ACTIVE,
+        Engagement.Status.PENDING_START,
+    ):
+        # Already re-pointed by an earlier delivery of the same command.
+        return engagement
+
+    requirement = booking.requirement
+    now = timezone.now()
+    previous_partner_id = engagement.partner_id
+
+    progressed = (
+        EngagementStage.objects.filter(engagement=engagement)
+        .exclude(
+            status__in=(EngagementStage.Status.PENDING, EngagementStage.Status.CANCELLED),
+        )
+        .exists()
+    )
+    if progressed:
+        raise RequirementTransitionError(
+            "Work has already been recorded on this booking, so it cannot be re-dispatched as "
+            "though nothing happened. Support can help.",
+        )
+    StageCrewAssignment.objects.filter(
+        stage__engagement=engagement,
+        status=StageCrewAssignment.Status.ASSIGNED,
+    ).update(
+        status=StageCrewAssignment.Status.RELEASED,
+        released_at=now,
+        released_reason_code="vendor_no_show_redispatch",
+        updated_at=now,
+    )
+
+    snapshot = dict(engagement.terms_snapshot)
+    redispatches = list(snapshot.get("redispatches", []))
+    redispatches.append(
+        {
+            "at": now.isoformat(),
+            "from_partner_id": str(previous_partner_id),
+            "to_partner_id": str(invitation.partner_id),
+            "reason_code": "vendor_no_show",
+        }
+    )
+    snapshot["redispatches"] = redispatches
+    Engagement.objects.filter(pk=engagement.id).update(
+        partner=invitation.partner,
+        status=Engagement.Status.ACTIVE,
+        terms_snapshot=snapshot,
+        contact_released_at=now,
+        work_may_start_at=now,
+        updated_at=now,
+    )
+    engagement.refresh_from_db()
+    stages.record_event(
+        engagement=engagement,
+        stage=None,
+        from_status=Engagement.Status.CANCELLED,
+        to_status=engagement.status,
+        actor=None,
+        reason_code="vendor_no_show_free_redispatch",
+        reason=f"partner {previous_partner_id} -> {invitation.partner_id}",
+    )
+    if requirement.status != CustomerRequirement.Status.ENGAGED:
+        from_status = requirement.status
+        requirement.status = CustomerRequirement.Status.ENGAGED
+        requirement.save(update_fields=("status", "updated_at"))
+        record_transition(
+            requirement=requirement,
+            from_status=from_status,
+            to_status=requirement.status,
+            actor=None,
+            reason_code="free_redispatch_confirmed",
+            reason=f"engagement:{engagement.id} re-pointed to partner {invitation.partner_id}",
+        )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.engagement.redispatched",
+        idempotency_key=f"engagement-redispatched:{engagement.id}:{invitation.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "engagement_id": str(engagement.id),
+            "rate_card_booking_id": str(booking.id),
+            "from_partner_id": str(previous_partner_id),
+            "to_partner_id": str(invitation.partner_id),
         },
     )
     return engagement

@@ -26,8 +26,11 @@ from rest_framework.views import APIView
 from apps.cases.models import OperationsCase
 from apps.cases.selectors import case_queue_summary
 from apps.cases.serializers import (
+    CaseAppealDecisionRequestSerializer,
     CaseNoteRequestSerializer,
+    CaseOverrideRequestSerializer,
     CaseQueueSummarySerializer,
+    CaseResponseDeadlineRequestSerializer,
     EscalateCaseRequestSerializer,
     OpenCaseRequestSerializer,
     OperationsCaseListSerializer,
@@ -36,7 +39,16 @@ from apps.cases.serializers import (
     ResolveCaseRequestSerializer,
     VersionedCaseCommandSerializer,
 )
-from apps.cases.services import add_case_note, claim_case, escalate_case, open_case, resolve_case
+from apps.cases.services import (
+    add_case_note,
+    claim_case,
+    decide_case_appeal,
+    escalate_case,
+    open_case,
+    override_case_outcome,
+    resolve_case,
+    set_case_response_deadline,
+)
 from apps.foundation.services import CommandResult, ResponseBody, execute_idempotent
 from apps.identity.models import User
 from apps.partners.permissions import IsOperationsUser
@@ -362,3 +374,116 @@ class OperationsCaseNoteView(APIView):
             is_communication=serializer.validated_data["is_communication"],
         )
         return Response(_projection(case.id), status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Wave C6 (`M2-BE-704`, `712`): the party deadline, the appeal, and the audited override.
+#
+# All three reuse `_CaseCommandView`, so they inherit the version guard, the required
+# `Idempotency-Key` and the replay-with-current-truth behaviour rather than restating them. What
+# each adds is a refusal the base class cannot know about.
+# ---------------------------------------------------------------------------
+
+
+class OperationsCaseResponseDeadlineView(_CaseCommandView):
+    """Set or extend the window the parties answer in."""
+
+    operation = "cases.response_deadline"
+    request_serializer = CaseResponseDeadlineRequestSerializer
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_case_set_response_deadline",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CaseResponseDeadlineRequestSerializer,
+        description=(
+            "Move the deadline the **parties** are measured on — distinct from `due_at`, which "
+            "is the deadline Operations is measured on.\n\n"
+            "**Forward only.** Moving it backwards would retroactively time somebody out of a "
+            "window they were still inside, which is the one thing a deadline extension must not "
+            "be able to do, and it is why this is a command with a reason rather than a writable "
+            "field."
+        ),
+        responses={200: OperationsCaseSerializer, **_ERRORS},
+    )
+    def post(self, request: Request, case_id: UUID) -> Response:
+        return super().post(request, case_id)
+
+    def run(self, *, case: OperationsCase, actor: User, data: dict[str, Any]) -> None:
+        set_case_response_deadline(
+            case_id=case.id,
+            expected_version=data["expected_version"],
+            response_due_at=data["response_due_at"],
+            actor=actor,
+            reason=data["reason"],
+        )
+
+
+class OperationsCaseAppealDecisionView(_CaseCommandView):
+    """Uphold or overturn a decision a party has appealed."""
+
+    operation = "cases.appeal_decision"
+    request_serializer = CaseAppealDecisionRequestSerializer
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_case_decide_appeal",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CaseAppealDecisionRequestSerializer,
+        description=(
+            "Decide an appeal a party raised through `POST /cases/{case_id}/appeal/`.\n\n"
+            "`UPHELD` keeps the original resolution. `OVERTURNED` **reopens** the case rather "
+            "than re-deciding it: the second decision is a real decision with its own required "
+            "terminal result, taken by somebody looking at the case again. A command that could "
+            "both overturn and re-resolve in one step would be a command that closed a case "
+            "without anybody working it.\n\n"
+            "Reopening also puts the payout hold back, because the reason the money was released "
+            "— the case being finished — has just stopped being true."
+        ),
+        responses={200: OperationsCaseSerializer, **_ERRORS},
+    )
+    def post(self, request: Request, case_id: UUID) -> Response:
+        return super().post(request, case_id)
+
+    def run(self, *, case: OperationsCase, actor: User, data: dict[str, Any]) -> None:
+        decide_case_appeal(
+            case_id=case.id,
+            expected_version=data["expected_version"],
+            outcome=data["outcome"],
+            note=data["note"],
+            actor=actor,
+        )
+
+
+class OperationsCaseOverrideView(_CaseCommandView):
+    """Replace a resolved case's terminal result by hand, recorded as an override."""
+
+    operation = "cases.override"
+    request_serializer = CaseOverrideRequestSerializer
+
+    @extend_schema(
+        tags=[OPERATIONS_TAG],
+        operation_id="operations_case_override_outcome",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CaseOverrideRequestSerializer,
+        description=(
+            "`M2-BE-704`'s audited manual override, and the audit is the whole of it.\n\n"
+            "The new resolution is still checked against the case kind's `allowed_resolutions` — "
+            "an override is permission to reach a *different* documented outcome, never "
+            "permission to reach an undocumented one — and the previous result is kept in the "
+            'event context, so the trail reads "we said X, then we said Y, and here is who and '
+            'why" rather than only ever showing Y.'
+        ),
+        responses={200: OperationsCaseSerializer, **_ERRORS},
+    )
+    def post(self, request: Request, case_id: UUID) -> Response:
+        return super().post(request, case_id)
+
+    def run(self, *, case: OperationsCase, actor: User, data: dict[str, Any]) -> None:
+        override_case_outcome(
+            case_id=case.id,
+            expected_version=data["expected_version"],
+            resolution=data["resolution"],
+            note=data["note"],
+            actor=actor,
+        )

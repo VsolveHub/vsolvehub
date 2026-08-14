@@ -40,13 +40,14 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from apps.cases.models import OperationsCase
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners import standing
 from apps.partners.capabilities import assert_crew_available, assert_crew_roster_present
 from apps.partners.exceptions import CrewConflictError
 from apps.partners.models import PartnerCrewMembership, PartnerStandingEvent
-from apps.requirements import booking_fees, rate_cards, stages
+from apps.requirements import booking_fees, disputes, rate_cards, stages
 from apps.requirements.exceptions import (
     AmendmentRequiredError,
     RequirementNotFoundError,
@@ -682,6 +683,17 @@ def _dispute_attendance(
             reason_code="ATTENDANCE_DISPUTED",
             note=attendance.dispute_note or "The customer disputed the attendance count.",
         )
+    else:
+        # `M2-AC-513`: "conflicting attendance claims open a case and hold settlement." When the
+        # stage was already `AWAITING_REVIEW` the stage dispute above opens a `STAGE` case and the
+        # hold comes with it; when it was not — a dispute raised the morning after, on a day that
+        # already settled — nothing else would have opened one, and the Customer's objection would
+        # have existed only as a flag on a row.
+        disputes.open_attendance_case(
+            stage=stage,
+            opened_by=actor,
+            detail=attendance.dispute_note or "The customer disputed the attendance count.",
+        )
     attendance.refresh_from_db()
     return attendance
 
@@ -1123,6 +1135,24 @@ def report_safety_incident(
         reason_code="safety_incident_reported",
         reason=f"{severity}:{incident.category_code}",
     )
+    # Wave C6 (`M2-BE-703`). The outbox event routes it; the case is what somebody *works*, with an
+    # owner, a one-hour SLA at `URGENT` and a payout hold. Both are needed and neither replaces the
+    # other: an event with no case is a notification nobody is accountable for, and this is the one
+    # report type where "we told somebody" was already called out as insufficient.
+    disputes.open_linked_case(
+        kind=OperationsCase.Kind.SAFETY,
+        summary=f"Safety incident: {incident.category_code}"[:240],
+        source_kind="safety_incident",
+        source_id=incident.id,
+        engagement=engagement,
+        severity=(
+            OperationsCase.Severity.URGENT
+            if severity in (SafetyIncident.Severity.SERIOUS, SafetyIncident.Severity.CRITICAL)
+            else OperationsCase.Severity.HIGH
+        ),
+        detail=incident.description[:4000],
+        opened_by=actor,
+    )
     enqueue_outbox_event(
         aggregate_type="engagement",
         aggregate_id=engagement.id,
@@ -1237,6 +1267,18 @@ def report_cash_demand(
         actor=actor,
         reason_code="cash_demand_reported",
         reason=f"cash_demand_report:{report.id}",
+    )
+    # `M2-AC-705`/`706`: an off-platform money claim reaches Operations as a neutral evidence
+    # review rather than an automatic finding. Opening the case also freezes the vendor's unpaid
+    # earnings on this engagement, which is the point — a cash extra demanded on site is a claim
+    # about money, and settling the platform side of it while the claim is open would decide it.
+    disputes.open_off_platform_case(
+        engagement=engagement,
+        source_kind="cash_demand_report",
+        source_id=report.id,
+        summary="Customer reports an extra demanded in cash on site",
+        opened_by=actor,
+        detail=report.note,
     )
     enqueue_outbox_event(
         aggregate_type="engagement",

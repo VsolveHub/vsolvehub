@@ -34,11 +34,13 @@ from apps.requirements import (
     access,
     attachments,
     booking_fees,
+    cancellations,
     crew_dispatch,
     engagements,
     matching,
     projects,
     proposals,
+    reconciliation,
     services,
     stages,
     workforce,
@@ -816,3 +818,62 @@ def sweep_warranty_windows() -> int:
         close_one_warranty_window.delay(str(engagement_id))
         swept += 1
     return swept
+
+
+# ---------------------------------------------------------------------------
+# Wave C6 — recovery (`M2-BE-702`, `707`, `710`)
+#
+# Two sweeps, and the cadence rule is the one every wave before this followed: a sweep that
+# **decides something on a party's behalf** runs near the deadline it was promised against, and a
+# sweep that only reports runs at the pace somebody could act on it.
+#
+# Neither of these decides money. `sweep_lapsed_cancellation_confirmations` escalates a silence to
+# a person rather than settling on it, and `reconcile_m2_money` opens exceptions rather than
+# correcting them — a reconciliation job that could fix what it found would quietly rewrite history
+# when its own arithmetic was wrong.
+# ---------------------------------------------------------------------------
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=5,
+    acks_late=True,
+)
+def lapse_one_cancellation_confirmation(_self: object, cancellation_id: str) -> None:
+    cancellations.lapse_cancellation_confirmation(cancellation_id=UUID(cancellation_id))
+
+
+@shared_task
+def sweep_lapsed_cancellation_confirmations() -> int:
+    """Nobody answered a cancellation inside the window (`M2-BE-702`).
+
+    **Silence does not execute it.** `07-state-machines-and-permissions.md` offers two routes past
+    a suspicious cancellation — counterparty confirmation *or* Operations review — and a timeout
+    that settled money on one party's account of events would make the second route decorative. So
+    each lapsed record opens a `CANCELLATION_CONFLICT` case, which holds the vendor's unpaid
+    earnings, and the money stays exactly where it is until somebody decides.
+    """
+    swept = 0
+    for cancellation_id in cancellations.lapsed_confirmation_ids()[:SWEEP_BATCH_SIZE]:
+        lapse_one_cancellation_confirmation.delay(str(cancellation_id))
+        swept += 1
+    return swept
+
+
+@shared_task
+def reconcile_m2_money() -> int:
+    """Prove every M2 rupee is where the record says it is (`M2-BE-710`).
+
+    Per product, per row, in integer paise — booking fee and its forfeit split, unlock, visit plan
+    and its per-slot shares, and the engagement money envelope. `M2-AC-712` requires each to
+    reconcile **independently**, and independently is the load-bearing word: one grand total that
+    balances can hide two errors that cancel.
+
+    Returns how many mismatches are currently open, so the beat log itself is a signal. Alerting is
+    per exception through `FinancialException`, which Finance already works from — a second alert
+    channel would be a second queue for the same rupee.
+    """
+    return reconciliation.reconcile_m2_money()

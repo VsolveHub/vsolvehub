@@ -398,6 +398,13 @@ def accept_crew_offer(*, invitation_id: uuid.UUID) -> RateCardBooking:
     from apps.requirements import booking_fees  # noqa: PLC0415 — mutual import with this module
 
     booking_fees.hold_booking_fee(booking=booking, invitation=invitation)
+    # `M2-BE-719`: a booking owed a free re-dispatch after a vendor no-show confirms **here**,
+    # because there is nothing left for the Customer to pay. Returns `None` on every ordinary
+    # acceptance, which is the overwhelming majority, and leaves the hold-then-checkout path
+    # exactly as it was.
+    redispatched = booking_fees.confirm_free_redispatch(booking_id=booking.id)
+    if redispatched is not None:
+        booking.refresh_from_db()
     record_rate_card_acceptance(
         partner=invitation.partner,
         variant_id=requirement.variant_id,
@@ -413,6 +420,10 @@ def accept_crew_offer(*, invitation_id: uuid.UUID) -> RateCardBooking:
         reason_code="crew_offer_accepted",
         reason=(
             f"invitation:{invitation.id} holds the job until {booking.hold_expires_at.isoformat()}"
+            if booking.hold_expires_at is not None
+            # A free re-dispatch confirms in the same breath as the acceptance, so there is no
+            # hold and no deadline — the job is already this lead's.
+            else f"invitation:{invitation.id} confirmed under a free re-dispatch"
         ),
     )
     enqueue_outbox_event(

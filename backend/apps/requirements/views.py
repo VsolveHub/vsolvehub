@@ -27,6 +27,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalog.models import ServiceVariant
+from apps.commerce.models import PaymentAttempt
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
 from apps.locations.models import Address, ServiceArea
@@ -45,13 +46,18 @@ from apps.requirements import (
     amendments,
     attachments,
     booking_fees,
+    cancellations,
     crew_dispatch,
+    disputes,
     engagements,
     matching,
+    operations,
     pricing,
     projects,
     proposals,
     rate_cards,
+    reconciliation,
+    selectors,
     services,
     stages,
     visit_slots,
@@ -69,9 +75,11 @@ from apps.requirements.models import (
     CustomerRequirement,
     Engagement,
     EngagementStage,
+    OperationsTouch,
     Proposal,
     RateCardBooking,
     RequirementAttachment,
+    RequirementCancellation,
     RequirementQuestion,
     SafetyIncident,
     SiteVisit,
@@ -106,18 +114,28 @@ from apps.requirements.selectors import (
 )
 from apps.requirements.serializers import (
     AccessCheckoutSerializer,
+    AssistedClarificationSerializer,
     AttachmentFinalizeSerializer,
     AttachmentUploadGrantSerializer,
     AttachmentUploadRequestSerializer,
     BookingFeeSerializer,
+    CancellationDecisionSerializer,
+    CancellationRequestSerializer,
+    CaseAppealRequestSerializer,
+    CaseEvidenceRecordSerializer,
+    CaseEvidenceSerializer,
     CashDemandReportSerializer,
     CashDemandSerializer,
+    ChargebackSerializer,
     CrewAssignSerializer,
+    CrewMembershipVerificationRowSerializer,
     CrewNoShowSerializer,
     CrewOfferAcceptedSerializer,
     CrewOfferDeclineSerializer,
     CrewOfferListSerializer,
     CrewOfferSerializer,
+    CrewVerificationQueueSerializer,
+    CrewVerificationSerializer,
     CustomerProposalSerializer,
     CustomerQuoteListSerializer,
     DaySettlementSerializer,
@@ -138,6 +156,13 @@ from apps.requirements.serializers import (
     EnquirySummaryPageSerializer,
     EnquirySummarySerializer,
     HandoverSubmitSerializer,
+    OperationsDeadlineExtensionSerializer,
+    OperationsReasonSerializer,
+    OperationsReclassificationSerializer,
+    OperationsRefundReviewSerializer,
+    OperationsTouchSerializer,
+    PartyCaseListSerializer,
+    PartyCaseSerializer,
     ProbableDuplicateListSerializer,
     ProjectDelayClaimSerializer,
     ProjectPlanSerializer,
@@ -158,7 +183,10 @@ from apps.requirements.serializers import (
     RateCardPublishSerializer,
     RateCardSerializer,
     RateCardStateSerializer,
+    ReconciliationSummarySerializer,
+    RequestTimelineSerializer,
     RequirementAttachmentSerializer,
+    RequirementCancellationSerializer,
     RequirementCreateSerializer,
     RequirementDraftSerializer,
     RequirementQuestionSerializer,
@@ -192,6 +220,9 @@ from apps.requirements.serializers import (
     StageEvidenceSubmitSerializer,
     StageEvidenceUploadGrantSerializer,
     StageEvidenceUploadRequestSerializer,
+    StuckQueueListSerializer,
+    TouchMetricSerializer,
+    TouchRollupSerializer,
     UnlockStateSerializer,
     VendorAttachmentListSerializer,
     VendorCardListSerializer,
@@ -203,6 +234,7 @@ from apps.requirements.serializers import (
     VisitSlotConfirmationSerializer,
     VisitSlotConfirmSerializer,
     VisitSlotGridSerializer,
+    WarrantyClaimSerializer,
     WorkspaceGrantListSerializer,
 )
 from common.errors.serializers import ApiErrorSerializer
@@ -5811,3 +5843,1189 @@ class EngagementTerminationView(APIView):
             command=command,
         )
         return Response(result.body, status=result.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Wave C6 — cancellation, cases and the Operations workspace (`M2-BE-701..719`)
+#
+# The split below is 07 §7's permission table expressed as routes. A **party** may call off their
+# own job, answer the other side, show evidence and appeal a decision about them. **Operations**
+# may see everything, rematch, extend, reclassify, capture with consent, verify crew documents,
+# work the queues and record a chargeback. There is no route that lets Operations accept an offer
+# for a vendor, publish a vendor's price without the vendor, or move money by hand — and the
+# absence of those three is deliberate rather than deferred.
+# ---------------------------------------------------------------------------
+
+
+def _requirement_for_party(*, user: User, requirement_id: uuid.UUID) -> CustomerRequirement:
+    """The request, if the caller is its Customer or the engaged vendor.
+
+    `404` rather than `403`, per 07 §7: existence itself is private, and a `403` on somebody
+    else's request confirms that it exists.
+    """
+    requirement = (
+        CustomerRequirement.objects.select_related("configuration", "service_area")
+        .filter(pk=requirement_id)
+        .first()
+    )
+    if requirement is None:
+        raise NotFound("That request does not exist.")
+    if requirement.customer_id == user.id:
+        return requirement
+    engaged = Engagement.objects.filter(requirement=requirement, partner__user_id=user.id).exists()
+    if not engaged:
+        raise NotFound("That request does not exist.")
+    return requirement
+
+
+def _actor_role_for(*, user: User, requirement: CustomerRequirement) -> str:
+    if requirement.customer_id == user.id:
+        return RequirementCancellation.ActorRole.CUSTOMER
+    return RequirementCancellation.ActorRole.PARTNER
+
+
+class RequirementCancellationView(APIView):
+    """Call this job off, and read what happened (`M2-BE-701`, `702`, `706`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Cancellation"],
+        operation_id="m2_cancellation_read",
+        description=(
+            "The cancellation currently open on this request, or `null`. Both parties see the "
+            "same record and the same numbers — a remedy one side could read differently from "
+            "the other is how a support call becomes an argument."
+        ),
+        responses={
+            200: RequirementCancellationSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        requirement = _requirement_for_party(user=actor, requirement_id=requirement_id)
+        live = cancellations.live_cancellation(requirement)
+        if live is None:
+            return Response({}, status=status.HTTP_200_OK)
+        return Response(
+            RequirementCancellationSerializer(cancellations.cancellation_payload(live)).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Cancellation"],
+        operation_id="m2_cancellation_request",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CancellationRequestSerializer,
+        description=(
+            "Evaluate and start a cancellation. **Nothing is charged or refunded by this call "
+            "on its own.**\n\n"
+            "The response says which of two things happened. If contact has not been disclosed "
+            "and nobody has reported work starting, the remedy executes immediately and the "
+            "record comes back `EXECUTED`. If either is true, it comes back "
+            "`AWAITING_CONFIRMATION` with a deadline: past that point one party may no longer "
+            "end an agreement on their own account of it, and the other side confirms or "
+            "disputes (`M2-BE-702`).\n\n"
+            "The remedy is calculated **before** anything moves, because the lifecycle state it "
+            "rests on stops being readable the moment it does. Wages are never part of it: an A3 "
+            "service payment is peer-to-peer and this platform has never held it."
+        ),
+        responses={
+            201: RequirementCancellationSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when the request is already "
+                "closed or already has a cancellation waiting on a decision. "
+                "`m2_policy_unavailable` when the free-cancel window T is unset and a paid A3 "
+                "booking would have to be settled against it — the fail-closed direction, "
+                "because choosing between a refund and a forfeit by guessing is choosing whose "
+                "money it is.",
+            ),
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        requirement = _requirement_for_party(user=actor, requirement_id=requirement_id)
+        payload = CancellationRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                cancellation = cancellations.evaluate_cancellation(
+                    requirement_id=requirement.id,
+                    actor=actor,
+                    actor_role=_actor_role_for(user=actor, requirement=requirement),
+                    reason_code=data["reason_code"],
+                    reason=data["reason"],
+                    evidence=list(data["evidence"]),
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object],
+                RequirementCancellationSerializer(
+                    cancellations.cancellation_payload(cancellation)
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.cancellation.request",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "reason_code": data["reason_code"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class CancellationDecisionView(APIView):
+    """The counterparty confirms or disputes (`M2-BE-702`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Cancellation"],
+        operation_id="m2_cancellation_decide",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CancellationDecisionSerializer,
+        description=(
+            "Confirm the other side's cancellation, or dispute it.\n\n"
+            "Confirming runs the remedy on the terms it was evaluated at. Disputing runs "
+            "nothing: it opens a `CANCELLATION_CONFLICT` case, which **holds the vendor's unpaid "
+            "earnings**, and Operations decides. `M2-AC-703` requires exactly that — a Customer "
+            "who says work and cash payment happened while the Partner claims cancellation must "
+            "not have the payout or the refund auto-resolve around them."
+        ),
+        responses={
+            200: RequirementCancellationSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, cancellation_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        cancellation = cancellations.cancellation_for_participant(
+            user=actor, cancellation_id=cancellation_id
+        )
+        payload = CancellationDecisionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                decided = (
+                    cancellations.confirm_cancellation(cancellation_id=cancellation.id, actor=actor)
+                    if data["confirm"]
+                    else cancellations.dispute_cancellation(
+                        cancellation_id=cancellation.id,
+                        actor=actor,
+                        reason=data["reason"],
+                    )
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                RequirementCancellationSerializer(cancellations.cancellation_payload(decided)).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.cancellation.decide",
+            key=key,
+            request_payload={
+                "cancellation_id": str(cancellation_id),
+                "confirm": data["confirm"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class EngagementCaseListView(APIView):
+    """Every case about this job, as one of its two parties may read it (`M2-BE-703`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Cases"],
+        operation_id="m2_engagement_cases",
+        description=(
+            "The party view of every case opened on this request — a disputed stage, a disputed "
+            "head count, a no-show, a safety report, an off-platform claim, a warranty claim or "
+            "a chargeback.\n\n"
+            "Deliberately narrower than the Operations projection: it carries what the case is, "
+            "when this party has to answer, whether money is held and what was decided. It "
+            "carries no internal notes, no owning team and no statement made by the other side."
+        ),
+        responses={200: PartyCaseListSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        engagement = selectors.engagement_for_participant(user=actor, engagement_id=engagement_id)
+        rows = [
+            disputes.case_payload(case) for case in disputes.request_cases(engagement.requirement)
+        ]
+        return Response(PartyCaseListSerializer({"cases": rows, "server_now": timezone.now()}).data)
+
+
+class EngagementWarrantyClaimView(APIView):
+    """The Customer calls on a warranty the retention was held against."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Cases"],
+        operation_id="m2_warranty_claim_raise",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=WarrantyClaimSerializer,
+        description=(
+            "Raise a warranty claim inside the warranty window.\n\n"
+            "**This is the surface `M2-BE-546` was missing.** Retention is held back out of the "
+            "vendor's payout against a warranty promise, and until 1.32.0 there was no published "
+            "way to call on it: the stage-dispute command accepts only a stage in "
+            "`AWAITING_REVIEW`, and by warranty time every stage is settled, so it refused by "
+            "construction. Money was held for a promise the product could not accept a call "
+            "against.\n\n"
+            "Raising a claim opens a `QUALITY` case — which holds payout — and **stops the "
+            "warranty sweep releasing the retention** while it is open. The window is the "
+            "engagement's own `warranty_ends_at`; an engagement that advertised no warranty "
+            "refuses, because there is nothing held to claim against."
+        ),
+        responses={
+            201: PartyCaseSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when the job carries no "
+                "warranty, the warranty period has ended, or the work is not finished yet.",
+            ),
+        },
+    )
+    def post(self, request: Request, engagement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = WarrantyClaimSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                case = disputes.raise_warranty_claim(
+                    engagement_id=engagement_id,
+                    actor=actor,
+                    summary=data["summary"],
+                    detail=data["detail"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], PartyCaseSerializer(disputes.case_payload(case)).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.warranty.claim",
+            key=key,
+            request_payload={
+                "engagement_id": str(engagement_id),
+                "summary": data["summary"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class CaseEvidenceView(APIView):
+    """A party shows the decision something (`M2-BE-704`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Cases"],
+        operation_id="m2_case_evidence_submit",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CaseEvidenceSerializer,
+        description=(
+            "Attach a statement, a requirement attachment or a stage-evidence record to a case "
+            "you are a party to.\n\n"
+            "**There is no file upload here.** Evidence points at bytes that already came "
+            "through one of the two verified rails — the requirement-attachment presign or the "
+            "stage-evidence presign — so there is exactly one scan pipeline and one place a "
+            "malware verdict can be forgotten. A file you have not uploaded yet is uploaded "
+            "there first.\n\n"
+            "Submitting evidence never moves the case. A case that advanced because somebody "
+            "uploaded a photograph would be a case that could be closed by uploading "
+            "photographs."
+        ),
+        responses={
+            201: CaseEvidenceRecordSerializer,
+            400: ApiErrorSerializer,
+            404: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="Also returned when the artifact belongs to a different request — "
+                "the object-level rule applied to the join, not only to the route.",
+            ),
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, case_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = CaseEvidenceSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                evidence = disputes.submit_evidence(
+                    case_id=case_id,
+                    actor=actor,
+                    statement=data["statement"],
+                    requirement_attachment_id=data.get("requirement_attachment_id"),
+                    stage_evidence_id=data.get("stage_evidence_id"),
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object],
+                CaseEvidenceRecordSerializer(
+                    {
+                        "id": evidence.id,
+                        "party": evidence.party,
+                        "statement": evidence.statement,
+                        "requirement_attachment_id": evidence.requirement_attachment_id,
+                        "stage_evidence_id": evidence.stage_evidence_id,
+                        "created_at": evidence.created_at,
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.case.evidence",
+            key=key,
+            request_payload={"case_id": str(case_id), "statement": data["statement"]},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class CaseAppealView(APIView):
+    """A party challenges a decision that went against them (`M2-BE-704`)."""
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Cases"],
+        operation_id="m2_case_appeal_request",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CaseAppealRequestSerializer,
+        description=(
+            "Ask for a case to be looked at again. One appeal per case.\n\n"
+            "An **open** case may be appealed at any time — nothing has been decided yet. A "
+            "**resolved** one may be appealed only inside the variant's configured appeal "
+            "window, and while that window is unset the appeal is refused with "
+            "`m2_policy_unavailable` rather than allowed indefinitely: an appeal window with no "
+            "bound is an open-ended claim to reverse a decision that already moved money."
+        ),
+        responses={
+            200: PartyCaseSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, case_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = CaseAppealRequestSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        reason = payload.validated_data["reason"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                case = disputes.request_appeal(case_id=case_id, actor=actor, reason=reason)
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object], PartyCaseSerializer(disputes.case_payload(case)).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.case.appeal",
+            key=key,
+            request_payload={"case_id": str(case_id), "reason": reason},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsRequestTimelineView(APIView):
+    """`M2-BE-711`: one chronological history of one request."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_request_timeline",
+        description=(
+            "Everything that happened to one request, in order: transitions, snapshots, "
+            "invitations and cascade offers **with the vendor named**, questions, proposals, "
+            "site visits, the booking fee, the unlock, the visit plan and its shares, the "
+            "engagement and its stages, every case, every cancellation and every Operations "
+            "touch.\n\n"
+            "Assembled from the aggregates rather than from a projection table, deliberately: a "
+            "materialised timeline drifts the first time a command forgets to append to it, and "
+            "the failure mode is the worst available — a timeline that looks complete and is "
+            "not. This is the read a support agent makes a money decision from."
+        ),
+        responses={
+            200: RequestTimelineSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, _request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = operations.find_requirement(requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            RequestTimelineSerializer(
+                {
+                    "requirement_id": requirement.id,
+                    "archetype": requirement.archetype,
+                    "status": requirement.status,
+                    "events": operations.request_timeline(requirement),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class OperationsRematchView(APIView):
+    """`M2-BE-712`: send the request round again, for free."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_rematch",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=OperationsReasonSerializer,
+        description=(
+            "Rematch one request. A rate-card A3 booking advances its **cascade**; everything "
+            "else runs another **invitation wave**. Neither charges anything, and the Customer "
+            "does not have to know which engine answered their question.\n\n"
+            "The reason is required and lands on the timeline as an Operations touch."
+        ),
+        responses={
+            200: RequestTimelineSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = OperationsReasonSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        reason = payload.validated_data["reason"]
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                requirement = operations.rematch_requirement(
+                    requirement_id=requirement_id, actor=actor, reason=reason
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            except CustomerRequirement.DoesNotExist as exc:
+                raise NotFound("That request does not exist.") from exc
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                RequestTimelineSerializer(
+                    {
+                        "requirement_id": requirement.id,
+                        "archetype": requirement.archetype,
+                        "status": requirement.status,
+                        "events": operations.request_timeline(requirement),
+                        "server_now": timezone.now(),
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.rematch",
+            key=key,
+            request_payload={"requirement_id": str(requirement_id), "reason": reason},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsDeadlineView(APIView):
+    """`M2-BE-712`: give a request more time. Forward only."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_extend_deadline",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=OperationsDeadlineExtensionSerializer,
+        description=(
+            "Move a request's needed-by date forward by a number of hours.\n\n"
+            "**Forward only.** A deadline extension that could pull a date in would be a way to "
+            "close somebody's live request by moving its clock, which is the opposite of a "
+            "recovery action."
+        ),
+        responses={
+            200: RequestTimelineSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = OperationsDeadlineExtensionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                requirement = operations.extend_requirement_deadline(
+                    requirement_id=requirement_id,
+                    actor=actor,
+                    extra_hours=data["extra_hours"],
+                    reason=data["reason"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            except CustomerRequirement.DoesNotExist as exc:
+                raise NotFound("That request does not exist.") from exc
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                RequestTimelineSerializer(
+                    {
+                        "requirement_id": requirement.id,
+                        "archetype": requirement.archetype,
+                        "status": requirement.status,
+                        "events": operations.request_timeline(requirement),
+                        "server_now": timezone.now(),
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.extend_deadline",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "extra_hours": data["extra_hours"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsReclassificationView(APIView):
+    """`M2-BE-712`: move an ambiguous request to the other lifecycle."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_reclassify",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=OperationsReclassificationSerializer,
+        description=(
+            "Reclassify a request between the workforce and project lifecycles. Every paid value "
+            "is preserved — unfilled visit shares refund or convert, a charged unlock survives — "
+            "and matching restarts with **no second charge** (`M2-AC-104`, `M2-AC-334`)."
+        ),
+        responses={
+            200: RequestTimelineSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = OperationsReclassificationSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                requirement = operations.reclassify(
+                    requirement_id=requirement_id,
+                    to_archetype=data["to_archetype"],
+                    actor=actor,
+                    reason=data["reason"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            except CustomerRequirement.DoesNotExist as exc:
+                raise NotFound("That request does not exist.") from exc
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                RequestTimelineSerializer(
+                    {
+                        "requirement_id": requirement.id,
+                        "archetype": requirement.archetype,
+                        "status": requirement.status,
+                        "events": operations.request_timeline(requirement),
+                        "server_now": timezone.now(),
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.reclassify",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "to_archetype": data["to_archetype"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsRefundReviewView(APIView):
+    """`M2-BE-712`: record a human decision about a refund."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_refund_review",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=OperationsRefundReviewSerializer,
+        description=(
+            "Record that a refund was reviewed, and what was decided.\n\n"
+            "**It records rather than moves money, and that is the design.** Each product "
+            "refunds through the module that owns it — the booking fee, the unlock, the visit "
+            "share — idempotently and on the M1 rail. An Operations endpoint that could move an "
+            "arbitrary amount to an arbitrary payer would be a second refund path with none of "
+            "the first's reconciliation, and `M2-AC-712` requires each product to reconcile "
+            "independently."
+        ),
+        responses={
+            200: OperationsTouchSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, requirement_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = OperationsRefundReviewSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                touch = operations.review_refund(
+                    requirement_id=requirement_id,
+                    actor=actor,
+                    decision=data["decision"],
+                    reason=data["reason"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                OperationsTouchSerializer(
+                    {
+                        "id": touch.id,
+                        "action": touch.action,
+                        "reason": touch.reason,
+                        "occurred_at": touch.occurred_at,
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.refund_review",
+            key=key,
+            request_payload={
+                "requirement_id": str(requirement_id),
+                "decision": data["decision"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsAssistedClarificationView(APIView):
+    """`M2-BE-713`: write down a clarification that happened on the phone."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_assisted_clarification",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=AssistedClarificationSerializer,
+        description=(
+            "Capture a question and its answer on behalf of the two named parties.\n\n"
+            "**Consent is a refusal, not a checkbox.** Without `consent_recorded` the capture "
+            "does not happen: `M2-AC-802` requires assisted capture to record consent and the "
+            "named actor, and a flag that could be false while the row was still written would "
+            "record the absence of consent next to the thing it was absent for.\n\n"
+            "Attribution goes to the parties, not the operator: the question is the Partner's "
+            "and the answer is the Customer's, with the operator recorded beside them."
+        ),
+        responses={
+            201: RequirementQuestionSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, invitation_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = AssistedClarificationSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                question = operations.capture_assisted_clarification(
+                    invitation_id=invitation_id,
+                    actor=actor,
+                    question=data["question"],
+                    answer=data["answer"],
+                    consent_recorded=data["consent_recorded"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], RequirementQuestionSerializer(question).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.assisted_clarification",
+            key=key,
+            request_payload={
+                "invitation_id": str(invitation_id),
+                "question": data["question"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsAssistedProposalView(APIView):
+    """`M2-BE-713`: write down a quote a vendor gave by phone. The vendor still confirms it."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_assisted_proposal",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ProposalCreateSerializer,
+        description=(
+            "Capture a quote a Partner gave over the phone, attributed to that Partner.\n\n"
+            "Revision 4 makes this a **primary path** rather than a convenience: on the A3 "
+            "fallback the vendors who answer fastest are often the ones who will not fill in a "
+            "form. It is still not a way for staff to publish a price — the proposal is written "
+            "with `vendor_confirmed_at` null, every Customer-facing read already filters on "
+            "that, and the vendor's own confirmation is what makes it visible (`M2-AC-218`).\n\n"
+            "Consent is recorded through the `Idempotency-Key`-scoped command and refused when "
+            "absent, exactly as assisted clarification is. The wage floor is derived and "
+            "enforced here identically to a vendor's own submission."
+        ),
+        responses={
+            201: ProposalSerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = ProposalCreateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = dict(payload.validated_data)
+        invitation_id = data.pop("invitation_id")
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                proposal = operations.capture_assisted_proposal(
+                    invitation_id=invitation_id,
+                    actor=actor,
+                    payload=data,
+                    consent_recorded=True,
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], ProposalSerializer(proposal).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.assisted_proposal",
+            key=key,
+            request_payload={"invitation_id": str(invitation_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsCrewVerificationQueueView(APIView):
+    """Crew waiting on a document check, and the command that clears them."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_crew_verification_queue",
+        parameters=[
+            OpenApiParameter(
+                name="partner",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Narrow to one vendor's roster.",
+            )
+        ],
+        description=(
+            "Active crew memberships whose documents have never been verified, oldest first.\n\n"
+            "This queue is why the A3 cascade can find anybody: `documents_verified_at` is what "
+            "`verified_roster_size` counts when it sizes a lead's roster against the requested "
+            "headcount, and a vendor with no verified crew is excluded from every crew offer."
+        ),
+        responses={200: CrewVerificationQueueSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        raw_partner = request.query_params.get("partner")
+        partner_id: uuid.UUID | None = None
+        if raw_partner:
+            try:
+                partner_id = uuid.UUID(raw_partner)
+            except ValueError as exc:
+                raise ValidationError(
+                    {"partner": "Must be a UUID."}, code="invalid_partner"
+                ) from exc
+        rows = [
+            {
+                "membership_id": membership.id,
+                "partner_id": membership.partner_id,
+                "partner_name": membership.partner.display_name,
+                "crew_member_name": membership.crew_member.display_name,
+                "is_supervisor": membership.is_supervisor,
+                "added_at": membership.added_at,
+                "documents_verified_at": membership.documents_verified_at,
+            }
+            for membership in operations.crew_memberships_awaiting_verification(
+                partner_id=partner_id
+            )
+        ]
+        return Response(
+            CrewVerificationQueueSerializer(
+                {"memberships": rows, "server_now": timezone.now()}
+            ).data
+        )
+
+
+class OperationsCrewVerificationView(APIView):
+    """The writer `PartnerCrewMembership.documents_verified_at` did not have."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_crew_verify",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=CrewVerificationSerializer,
+        description=(
+            "Verify — or un-verify — one worker's documents on one vendor's roster.\n\n"
+            "**This column had four readers and no writer.** `verified_roster_size` counts only "
+            "verified memberships when sizing a lead's roster against the requested headcount, "
+            "`assign_crew` refuses an unverified worker outright, and both apps publish a badge "
+            "from it; with nothing setting it, every vendor's verified roster was zero in every "
+            "environment and every crew offer excluded every lead. The dev seed has stamped it "
+            "since Wave C5 so the demo walks; this is the production writer.\n\n"
+            "Verifying needs no reason — the documents were seen. **Removing** verification "
+            "does, because it takes a named person off jobs they may already be assigned to. "
+            "Verifying an already-verified membership is a no-op rather than a re-stamp, so the "
+            "date keeps meaning when the documents were actually checked."
+        ),
+        responses={
+            200: CrewMembershipVerificationRowSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when the membership is "
+                "archived, or when verification is being removed with no reason given.",
+            ),
+        },
+    )
+    def post(self, request: Request, membership_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = CrewVerificationSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                membership = operations.verify_crew_documents(
+                    membership_id=membership_id,
+                    actor=actor,
+                    verified=data["verified"],
+                    reason=data["reason"],
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(
+                dict[str, object],
+                CrewMembershipVerificationRowSerializer(
+                    {
+                        "membership_id": membership.id,
+                        "partner_id": membership.partner_id,
+                        "partner_name": membership.partner.display_name,
+                        "crew_member_name": membership.crew_member.display_name,
+                        "is_supervisor": membership.is_supervisor,
+                        "added_at": membership.added_at,
+                        "documents_verified_at": membership.documents_verified_at,
+                    }
+                ).data,
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.crew_verify",
+            key=key,
+            request_payload={
+                "membership_id": str(membership_id),
+                "verified": data["verified"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsQueueView(APIView):
+    """`M2-BE-714`: every M2 record that has stopped moving."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_queues",
+        description=(
+            "Eight stuck-state queues with their depth, their oldest member and the recovery "
+            "action that clears them: unmatched, under-quoted, SLA-breached, unconfirmed, "
+            "inactive, unreconciled, plus a cancellation nobody answered and a case past its "
+            "parties' response deadline.\n\n"
+            "**No queue here invents a threshold.** Each is defined by a deadline that already "
+            "exists on the record, so an unset owner value cannot silently change what counts as "
+            "stuck; a queue whose deadline is null is simply empty, which is the honest reading "
+            'of "we promised no clock here".'
+        ),
+        responses={200: StuckQueueListSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, _request: Request) -> Response:
+        return Response(
+            StuckQueueListSerializer(
+                {
+                    "queues": [asdict(queue) for queue in operations.stuck_queues()],
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class OperationsTouchMetricView(APIView):
+    """`M2-BE-715`: what one request cost Operations, against what it earned."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_touch_metric",
+        description=(
+            "Operations touches on one request, the configured budget, and the platform revenue "
+            "the touches have to fit inside. For A3 that revenue is the booking fee's **platform "
+            "share** — decision 10 as restated by ADR-0009 — because the booking fee is the "
+            "platform's entire A3 revenue.\n\n"
+            "`within_budget` is `null` while the owner has not set a budget. Not `false`, which "
+            "would read as a breach, and not `true`, which would read as a pass: the count is "
+            "real and the judgement is not available.\n\n"
+            "Only **settled** money counts as revenue. An `ACTIVE` booking fee is money held "
+            "against a crew that has not arrived, and counting it would make the unit economics "
+            "look healthiest exactly when the most is at risk."
+        ),
+        responses={200: TouchMetricSerializer, 403: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def get(self, _request: Request, requirement_id: uuid.UUID) -> Response:
+        try:
+            requirement = operations.find_requirement(requirement_id=requirement_id)
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        metric = operations.touch_metric(requirement)
+        return Response(
+            TouchMetricSerializer(
+                {
+                    **asdict(metric),
+                    "touches_detail": [
+                        {
+                            "id": touch.id,
+                            "action": touch.action,
+                            "reason": touch.reason,
+                            "occurred_at": touch.occurred_at,
+                        }
+                        for touch in OperationsTouch.objects.filter(requirement=requirement)
+                    ],
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+
+class OperationsTouchRollupView(APIView):
+    """`M2-BE-715`: the whole book, for the unit-economics dashboard."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_touch_rollup",
+        description=(
+            "Operations touches across every request in the last thirty days, by action, with "
+            "the mean per touched request. `M2-AC-810` measures against this."
+        ),
+        responses={200: TouchRollupSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, _request: Request) -> Response:
+        return Response(TouchRollupSerializer(operations.touch_rollup()).data)
+
+
+class OperationsChargebackView(APIView):
+    """`M2-BE-708`: a chargeback on the booking, unlock or visit-plan fee itself."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_record_chargeback",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=ChargebackSerializer,
+        description=(
+            "Record that the Customer's bank pulled back a platform fee, and open the standard "
+            "dispute path.\n\n"
+            "Opening the `CHARGEBACK` case **holds payout**: a visit share or a travel "
+            "compensation funded by the charge being reversed stops being payable immediately, "
+            'which is `M2-AC-711`\'s "freezes unsafe settlement". Money that has already left '
+            "is not reversed — it is reported as an open financial exception, because a status "
+            "flip that made the ledger disagree with the bank is the one failure reconciliation "
+            "cannot repair.\n\n"
+            "The fee row itself does **not** move. A chargeback is a claim in progress, not a "
+            "settlement, and marking an earned fee refunded here would tell both parties a "
+            "decision had been taken that has not been.\n\n"
+            "The rate alarm fires from here when the variant's threshold is configured; while it "
+            "is unset **no alarm fires** and every chargeback is still recorded."
+        ),
+        responses={
+            201: OpenApiResponse(
+                response=PartyCaseSerializer,
+                description="The case that now owns it.",
+            ),
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request, payment_attempt_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        payload = ChargebackSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                case = reconciliation.record_fee_chargeback(
+                    payment_attempt_id=payment_attempt_id,
+                    amount_paise=data["amount_paise"],
+                    provider_reference=data["provider_reference"],
+                    reason_code=data["reason_code"],
+                    actor=actor,
+                )
+            except (RequirementDomainError, PartnerDomainError) as exc:
+                _raise_api_error(exc)
+            except PaymentAttempt.DoesNotExist as exc:
+                raise NotFound("That payment does not exist.") from exc
+            return status.HTTP_201_CREATED, cast(
+                dict[str, object], PartyCaseSerializer(disputes.case_payload(case)).data
+            )
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.operations.chargeback",
+            key=key,
+            request_payload={
+                "payment_attempt_id": str(payment_attempt_id),
+                "provider_reference": data["provider_reference"],
+            },
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)
+
+
+class OperationsReconciliationView(APIView):
+    """`M2-BE-710`: what Finance is carrying right now."""
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Operations"],
+        operation_id="m2_operations_reconciliation_summary",
+        description=(
+            "Open financial exceptions by kind, plus the two refund states a Customer must never "
+            "see presented as complete: refunds the provider has not settled, and refunds it "
+            "explicitly refused (`M2-AC-709`).\n\n"
+            "The sweep that produces these runs on the beat schedule and **never corrects what "
+            "it finds**. A reconciliation job that could fix a mismatch would quietly rewrite "
+            "history when its own arithmetic was wrong, and the first sign of trouble would be a "
+            "ledger that always balanced."
+        ),
+        responses={200: ReconciliationSummarySerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, _request: Request) -> Response:
+        return Response(
+            ReconciliationSummarySerializer(reconciliation.open_exception_summary()).data
+        )

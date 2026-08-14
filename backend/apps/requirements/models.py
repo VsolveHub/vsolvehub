@@ -700,6 +700,22 @@ class RequirementQuestion(models.Model):
     #: Raised when the text looks like a phone number or an off-platform handle. A review signal,
     #: never an automatic penalty.
     contact_sharing_flagged = models.BooleanField(default=False)
+    #: Wave C6 (`M2-BE-713`). The operator who wrote down a clarification that happened on the
+    #: phone, and the moment the other party's consent to that was recorded. The same shape
+    #: `Proposal.captured_by` already uses, and beside it for the same reason: `M2-AC-802` asks
+    #: that assisted capture "record consent and the named Customer/Partner actor", and a capture
+    #: that stored who typed it but not whether anybody agreed would answer half the question.
+    #:
+    #: `asked_by` remains the **named actor on whose behalf** it was captured, so attribution on
+    #: the timeline is unchanged and the operator is visible beside it rather than instead of it.
+    captured_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="requirement_questions_captured",
+    )
+    consent_recorded_at = models.DateTimeField(null=True, blank=True)
     asked_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -708,6 +724,14 @@ class RequirementQuestion(models.Model):
             models.CheckConstraint(
                 condition=models.Q(answered_at__isnull=True) | ~models.Q(answer=""),
                 name="requirements_answered_question_has_an_answer",
+            ),
+            # An assisted capture without recorded consent is the one row this table must not be
+            # able to hold: it is the evidence that somebody agreed, and evidence that can be
+            # written without the thing it evidences is not evidence.
+            models.CheckConstraint(
+                condition=models.Q(captured_by__isnull=True)
+                | models.Q(consent_recorded_at__isnull=False),
+                name="requirements_assisted_question_records_consent",
             ),
         ]
         indexes = [
@@ -2770,6 +2794,25 @@ class RateCardBooking(models.Model):
     fallback_reason_code = models.SlugField(max_length=80, blank=True)
     fell_back_at = models.DateTimeField(null=True, blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    # --- Wave C6 (`M2-BE-719`): the free re-dispatch entitlement. ------------------------------
+    #
+    # `07-state-machines-and-permissions.md` §4c promises a vendor no-show "refunds in full (free
+    # re-dispatch)". The refund was built in C2R; the entitlement had nowhere to live, so the
+    # second half of the promise was unreachable — a replacement lead could accept the re-offered
+    # job and then had to be asked for the money again, which is not free.
+    #
+    # Two timestamps rather than a boolean, because "was owed one" and "has used it" are different
+    # facts and a support conversation needs both. `redispatch_count` is kept beside them so a
+    # requirement that has burned three crews is visible without walking the standing events.
+
+    #: When a vendor no-show granted this booking a replacement crew at no charge. Null on a
+    #: booking that has never had one.
+    free_redispatch_entitled_at = models.DateTimeField(null=True, blank=True)
+    #: When a replacement lead's acceptance used it. Null while the entitlement is live.
+    free_redispatch_consumed_at = models.DateTimeField(null=True, blank=True)
+    #: How many times this booking has gone back through the cascade after a vendor no-show.
+    redispatch_count = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2791,6 +2834,13 @@ class RateCardBooking(models.Model):
                 condition=~models.Q(status="CONFIRMED") | models.Q(confirmed_at__isnull=False),
                 name="requirements_confirmed_booking_has_a_timestamp",
             ),
+            # An entitlement cannot be spent before it is granted. Two nullable timestamps, so
+            # nothing is enumerated and there is no list here to drift.
+            models.CheckConstraint(
+                condition=models.Q(free_redispatch_consumed_at__isnull=True)
+                | models.Q(free_redispatch_entitled_at__isnull=False),
+                name="requirements_consumed_redispatch_was_granted",
+            ),
         ]
         indexes = [
             models.Index(fields=("status", "hold_expires_at")),
@@ -2804,6 +2854,22 @@ class RateCardBooking(models.Model):
     def lead_day_receipt_paise(self) -> int:
         """What the lead receives per day for the whole requested crew. The offer's headline."""
         return (self.worker_day_wage_paise + self.supervision_margin_paise) * self.headcount
+
+
+#: The booking-fee statuses that do **not** occupy the one-live-fee slot.
+#:
+#: `FAILED` never did — a failed attempt must not block a retry. Wave C6 adds `REFUNDED` for the
+#: same class of reason: a fee refunded in full is settled history rather than a live charge, and
+#: leaving it holding the slot is exactly what made the free re-dispatch unreachable (a
+#: replacement lead's acceptance had nowhere to write a fee row, so the checkout refused and the
+#: only engagement-opening path never ran).
+#:
+#: Module scope, and the class attribute is bound to the same object rather than retyped, for the
+#: reason `DELAY_CLAIM_UNDECIDED_STATUSES` records: a nested `Meta` body cannot see its enclosing
+#: class's namespace, so a constraint that wants a status list either reads one from out here or
+#: hand-copies it — and the hand-copied one drifts invisibly to `makemigrations --check`. The
+#: pre-C6 constraint hand-copied a one-element list; this is the moment that list grew.
+BOOKING_FEE_NON_BLOCKING_STATUSES: Final[tuple[str, ...]] = ("FAILED", "REFUNDED")
 
 
 class BookingFee(models.Model):
@@ -2830,10 +2896,33 @@ class BookingFee(models.Model):
         REFUNDED = "REFUNDED", "Refunded in full"
         FAILED = "FAILED", "Payment failed"
 
-    #: Statuses in which the Customer's money has actually been collected.
+        # Wave C6 (`M2-BE-719`). The free re-dispatch's own state, and the reason it had to exist
+        # is structural rather than cosmetic: after a vendor no-show the fee is `REFUNDED`, and
+        # `07-state-machines-and-permissions.md` §1 then promises the Customer "a free
+        # re-dispatch" — a replacement crew at **no second charge**. There is no charge to
+        # represent that with, so before this state the replacement lead's acceptance had nowhere
+        # to go: `create_booking_fee_checkout` refused ("this booking fee is already settled") and
+        # `complete_booking_fee`, the only path that opens an engagement, never ran.
+        #
+        # `WAIVED` records the confirmation without the money: the amount stays the published fee
+        # (what it *would* have cost), nothing is collected, nothing is payable, and it is
+        # deliberately **not** in `CHARGED_STATUSES`, so no reconciliation counts it as revenue.
+        WAIVED = "WAIVED", "Confirmed at no charge under a free re-dispatch"
+
+    #: Statuses in which the Customer's money has actually been collected. `WAIVED` is absent on
+    #: purpose: a re-dispatched booking collected nothing the second time.
     CHARGED_STATUSES = (Status.ACTIVE, Status.EARNED, Status.FORFEIT_SPLIT)
     #: Statuses in which nothing further can happen to this fee.
-    SETTLED_STATUSES = (Status.EARNED, Status.FORFEIT_SPLIT, Status.REFUNDED, Status.FAILED)
+    SETTLED_STATUSES = (
+        Status.EARNED,
+        Status.FORFEIT_SPLIT,
+        Status.REFUNDED,
+        Status.FAILED,
+        Status.WAIVED,
+    )
+    #: Bound from module scope so the constraint below, `live_booking_fee` and `_locked_fee` are
+    #: reading one list rather than three copies of it.
+    NON_BLOCKING_STATUSES = BOOKING_FEE_NON_BLOCKING_STATUSES
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     booking = models.ForeignKey(
@@ -2902,12 +2991,14 @@ class BookingFee(models.Model):
         ordering = ("-created_at", "id")
         constraints = [
             # One live fee per booking, scoped to the statuses that still mean something. A failed
-            # attempt must not block a retry, and this is what makes "exactly one charge per
-            # booking under duplicate webhooks" a database fact rather than a code convention —
-            # the same shape `requirements_one_live_unlock_per_requirement` uses.
+            # attempt must not block a retry, and neither must a refunded one block the free
+            # re-dispatch it is the precondition for. This is still what makes "exactly one charge
+            # per booking under duplicate webhooks" a database fact rather than a code convention:
+            # `OFFER_ACCEPTED`, `PENDING`, `ACTIVE`, `EARNED`, `FORFEIT_SPLIT` and `WAIVED` all
+            # occupy the slot, so at most one chargeable fee can exist at a time.
             models.UniqueConstraint(
                 fields=("booking",),
-                condition=~models.Q(status="FAILED"),
+                condition=~models.Q(status__in=BOOKING_FEE_NON_BLOCKING_STATUSES),
                 name="requirements_one_live_booking_fee",
             ),
             models.CheckConstraint(
@@ -3516,4 +3607,226 @@ class CashDemandReport(models.Model):
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:
             raise ValueError("A cash-demand report is immutable.")
+        super().save(*args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Wave C6 (`M2-BE-701`, `702`, `706`): the cancellation policy evaluation.
+#
+# One row per attempt to call a job off, written **before** anything is executed. That order is
+# the whole design: `M2-BE-701` asks for an evaluation "recording lifecycle state, actor, reason,
+# evidence, contact-disclosure state, fulfilment evidence and calculated remedy", and every one of
+# those facts stops being knowable the moment the cancellation runs. A remedy computed after the
+# engagement was cancelled would be computed against a cancelled engagement.
+#
+# It is deliberately **not** a status on `CustomerRequirement`. Two people can describe the same
+# cancellation differently — that is the entire subject of `M2-AC-702` and `M2-AC-703` — and a
+# single status column cannot hold two accounts of one event, nor the case that settles them.
+# ---------------------------------------------------------------------------
+
+
+#: The statuses in which a cancellation is still open: somebody has asked, and the money has not
+#: moved yet. Module scope so the partial unique index below reads the same list any selector
+#: does, per RULES §3(a).
+CANCELLATION_LIVE_STATUSES: Final[tuple[str, ...]] = (
+    "EVALUATED",
+    "AWAITING_CONFIRMATION",
+    "CONFIRMED",
+    "DISPUTED",
+)
+
+
+class RequirementCancellation(models.Model):
+    """Somebody wants to call this job off, and everything the decision rested on.
+
+    Append-mostly: the row is written once at evaluation and afterwards only its own decision
+    columns move. The `snapshot` of lifecycle state is never rewritten, because its purpose is to
+    say what was true when the remedy was calculated.
+    """
+
+    class ActorRole(models.TextChoices):
+        CUSTOMER = "CUSTOMER", "Customer"
+        PARTNER = "PARTNER", "Partner"
+        OPERATIONS = "OPERATIONS", "Operations"
+        SYSTEM = "SYSTEM", "System"
+
+    class Status(models.TextChoices):
+        #: Recorded and priced. Nothing has moved and nobody else has been asked yet.
+        EVALUATED = "EVALUATED", "Evaluated"
+        #: `M2-BE-702`: the counterparty has to confirm or dispute before this executes.
+        AWAITING_CONFIRMATION = "AWAITING_CONFIRMATION", "Awaiting the other side"
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        #: The counterparty says this is not what happened. A case owns it from here.
+        DISPUTED = "DISPUTED", "Disputed"
+        EXECUTED = "EXECUTED", "Executed"
+        WITHDRAWN = "WITHDRAWN", "Withdrawn"
+
+    LIVE_STATUSES = CANCELLATION_LIVE_STATUSES
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requirement = models.ForeignKey(
+        CustomerRequirement,
+        on_delete=models.PROTECT,
+        related_name="cancellations",
+    )
+    #: Null before an engagement exists. A cancellation during matching is a real cancellation and
+    #: is the cheapest one there is — nothing has been agreed and, on the A3 rate-card path,
+    #: nothing has been charged either.
+    engagement = models.ForeignKey(
+        Engagement,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="cancellations",
+    )
+    actor_role = models.CharField(max_length=16, choices=ActorRole.choices)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_cancellations_requested",
+    )
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.EVALUATED)
+    reason_code = models.SlugField(max_length=80)
+    reason = models.TextField(blank=True)
+
+    # --- The lifecycle state the remedy was calculated against (`M2-BE-701`). -----------------
+    archetype = models.CharField(max_length=24)
+    requirement_status = models.CharField(max_length=24)
+    #: Blank when there is no engagement yet.
+    engagement_status = models.CharField(max_length=16, blank=True)
+    #: `07-state-machines-and-permissions.md` §7: the Customer may not see vendor identity before
+    #: crew confirmation, unlock or visit confirmation. Once contact **has** been disclosed a
+    #: cancellation is a different animal, because the two parties can now transact off-platform —
+    #: which is why this is the flag `M2-BE-702` keys the confirmation requirement off.
+    contact_disclosed = models.BooleanField(default=False)
+    #: Whether anybody has reported work starting: an arrival, an attendance record, a funded
+    #: stage in progress. The second half of `M2-BE-702`'s trigger.
+    work_reported_started = models.BooleanField(default=False)
+    #: What the requester offered. Free-form references into the rails that already hold evidence
+    #: — attachment ids, stage-evidence ids, day-settlement ids — never bytes.
+    evidence = models.JSONField(default=list, blank=True)
+    #: What the platform can see for itself: arrivals, attendance, settled days, approved stages.
+    #: Recorded separately from `evidence` because one is a claim and the other is a record, and a
+    #: decision that could not tell them apart would be a decision made on the louder party.
+    fulfilment_evidence = models.JSONField(default=dict, blank=True)
+
+    # --- The calculated remedy (`M2-BE-706`, `M2-BE-719`, `M2-BE-705`, `M2-BE-718`). ----------
+    #: A stable code naming what will happen to the money, so a support conversation, a ledger row
+    #: and a screen use one vocabulary.
+    remedy_code = models.SlugField(max_length=80, blank=True)
+    #: The arithmetic behind it, in integer paise, per money product. Stored rather than recomputed
+    #: because every input is effective-dated policy and a settled cancellation has to reconcile
+    #: against the policy it was settled under.
+    remedy = models.JSONField(default=dict, blank=True)
+
+    # --- Counterparty confirmation and the case (`M2-BE-702`, `703`). -------------------------
+    requires_counterparty_confirmation = models.BooleanField(default=False)
+    confirmation_due_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_cancellations_confirmed",
+    )
+    disputed_at = models.DateTimeField(null=True, blank=True)
+    case = models.ForeignKey(
+        "cases.OperationsCase",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_cancellations",
+    )
+
+    executed_at = models.DateTimeField(null=True, blank=True)
+    idempotency_key = models.CharField(max_length=128, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        constraints = [
+            # One open cancellation per requirement. Two people calling the same job off in the
+            # same minute is a real race — the vendor rings the Customer while the Customer taps
+            # cancel — and two live evaluations would each compute a remedy against a world the
+            # other was about to change.
+            models.UniqueConstraint(
+                fields=("requirement",),
+                condition=models.Q(status__in=CANCELLATION_LIVE_STATUSES),
+                name="requirements_one_live_cancellation",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="EXECUTED") | models.Q(executed_at__isnull=False),
+                name="requirements_executed_cancellation_has_a_timestamp",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confirmed_at__isnull=True)
+                | models.Q(requires_counterparty_confirmation=True),
+                name="requirements_confirmed_cancellation_needed_confirming",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("requirement", "status")),
+            models.Index(fields=("status", "confirmation_due_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.requirement_id}:{self.status}:{self.remedy_code}"
+
+
+class OperationsTouch(models.Model):
+    """One Operations action on one request (`M2-BE-715`). Append-only.
+
+    `GAP-033` asks that Operations touches per request be **measured**, so the workspace design can
+    be checked against the approved unit economics — for A3 against the booking fee's platform
+    share, because that fee is the platform's entire A3 revenue.
+
+    It is an explicit row rather than a count derived from audit events, and the reason is that
+    every derivation available was wrong in a way that would have made the metric useless:
+    `identity.AccessAuditEvent` counts *requests to a view*, so one operator scrolling a queue
+    would look like ten touches; `RequirementTransition` records the actor but not their role, so
+    a Customer cancelling their own request would count as Operations work. A touch is a
+    deliberate write by a named operator against a named request, and nothing else can tell you
+    that.
+
+    What it deliberately does **not** carry is a cost. The money it has to fit inside is already
+    published on the rate card and the access price table, and duplicating a number here would
+    make two answers to "what did this request cost us".
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requirement = models.ForeignKey(
+        CustomerRequirement,
+        on_delete=models.PROTECT,
+        related_name="operations_touches",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_operations_touches",
+    )
+    #: The command that was run, as its own stable slug. Never a view name — a route can be
+    #: renamed and the history has to stay comparable across that.
+    action = models.SlugField(max_length=80)
+    reason = models.CharField(max_length=480, blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("-occurred_at", "id")
+        indexes = [
+            models.Index(fields=("requirement", "occurred_at")),
+            models.Index(fields=("action", "occurred_at")),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.requirement_id}:{self.action}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValueError("An Operations touch is immutable.")
         super().save(*args, **kwargs)

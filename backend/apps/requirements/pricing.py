@@ -379,6 +379,91 @@ def warranty_terms_or_none(requirement: CustomerRequirement) -> WarrantyTerms | 
         return None
 
 
+# ---------------------------------------------------------------------------
+# Wave C6: the case clocks, the chargeback alarm and the touch budget.
+# ---------------------------------------------------------------------------
+
+
+def case_response_deadline(
+    requirement: CustomerRequirement, *, at: datetime | None = None
+) -> datetime | None:
+    """When the parties' window to answer a case closes (`M2-BE-704`).
+
+    `None` means the variant set no window, and the honest consequence is that **the case carries
+    no party deadline at all** — it still opens, still has its Operations SLA, and nobody is timed
+    out against a clock nobody set. Deliberately not a refusal: a safety case that could not be
+    opened because a response window was unconfigured would be the worst fail-closed direction
+    available in this file.
+    """
+    hours = _configuration(requirement).case_response_window_hours
+    if hours is None:
+        return None
+    return _business_hours_deadline(
+        area=requirement.service_area,
+        start=at or timezone.now(),
+        hours=hours,
+    )
+
+
+def case_appeal_deadline(requirement: CustomerRequirement, *, resolved_at: datetime) -> datetime:
+    """The last moment a resolved case may be appealed. Raises when unset.
+
+    The one case clock that **refuses**, and it is the mirror of `amendment_response_deadline`'s
+    reasoning: an appeal window with no bound is an open-ended claim to reverse a decision that has
+    already moved money, and no default here is defensible. Appealing a case that is still open
+    needs no window and never reaches this function.
+    """
+    hours = _configuration(requirement).case_appeal_window_hours
+    deadline = (
+        None
+        if hours is None
+        else _business_hours_deadline(
+            area=requirement.service_area,
+            start=resolved_at,
+            hours=hours,
+        )
+    )
+    if deadline is None:
+        raise PolicyUnavailableError(
+            "We have not set how long a decision on this service can be appealed for. "
+            "Support can help.",
+        )
+    return deadline
+
+
+@dataclass(frozen=True, slots=True)
+class ChargebackAlarm:
+    """When a chargeback rate stops being noise and starts being an alarm (`M2-BE-708`)."""
+
+    basis_points: int
+    min_charges: int
+
+
+def chargeback_alarm(requirement: CustomerRequirement) -> ChargebackAlarm | None:
+    """The alarm thresholds, or `None` while the owner has not set them.
+
+    `None` means **no alarm fires** and every chargeback is still recorded as a case — the same
+    asymmetry `rate_cards.decline_alarm_policy` draws, and for the same reason: recording is never
+    refused for want of a threshold, and paging somebody on an invented rate is not code's call.
+    """
+    configuration = _configuration(requirement)
+    basis_points = configuration.chargeback_alarm_basis_points
+    min_charges = configuration.chargeback_alarm_min_charges
+    if basis_points is None or min_charges is None:
+        return None
+    return ChargebackAlarm(basis_points=basis_points, min_charges=min_charges)
+
+
+def operations_touch_budget(requirement: CustomerRequirement) -> int | None:
+    """How many Operations touches one request may take (`M2-BE-715`). `None` when unset.
+
+    The metric is emitted either way. Measurement never waits on the owner; only the judgement
+    about whether a number is acceptable does, and reporting "3 touches, budget unset" is more
+    useful than reporting nothing at all.
+    """
+    return _configuration(requirement).operations_touch_budget_per_request
+
+
 def reconfirmation_deadline(
     requirement: CustomerRequirement, *, at: datetime | None = None
 ) -> datetime | None:

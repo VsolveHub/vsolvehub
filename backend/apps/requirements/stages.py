@@ -790,6 +790,13 @@ def dispute_stage(
             reason_code="engagement_disputed",
             reason=f"stage:{stage.id}",
         )
+    # Wave C6 (`M2-BE-703`). Until now a dispute was a status and nothing else: `m2_stage_dispute_
+    # resolve` was drivable, but there was no owner, no deadline and no payout hold behind it, and
+    # C5 recorded that as a gap. `STAGE` is a payout-holding kind, so opening the case *is* the
+    # hold — the vendor's unpaid earnings on this engagement freeze here and thaw when it closes.
+    from apps.requirements import disputes  # noqa: PLC0415 - avoids a module import cycle
+
+    disputes.open_stage_case(stage=stage, opened_by=actor, detail=note or reason_code)
     enqueue_outbox_event(
         aggregate_type="engagement",
         aggregate_id=engagement.id,
@@ -1148,6 +1155,14 @@ def close_warranty_window(*, engagement_id: uuid.UUID) -> Engagement:
     if engagement.status != Engagement.Status.WARRANTY:
         raise StageTransitionError("This engagement is not in its warranty period.")
     if engagement.warranty_ends_at is None or engagement.warranty_ends_at > timezone.now():
+        return engagement
+    # Wave C6. A warranty claim raised inside the window holds the retention past the window's end:
+    # the money is held against a promise somebody is currently calling on, and a sweep that
+    # released it on the calendar would settle the claim by outlasting it. Wave C5 could not guard
+    # this because there was no way for a Customer to raise the claim at all.
+    from apps.requirements import disputes  # noqa: PLC0415 - avoids a module import cycle
+
+    if disputes.engagement_has_open_warranty_claim(engagement):
         return engagement
 
     now = timezone.now()

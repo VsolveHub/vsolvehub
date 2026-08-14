@@ -55,6 +55,8 @@ from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
 from django.utils import timezone
 
+from apps.cases.models import OperationsCase
+from apps.cases.services import open_case
 from apps.catalog.models import (
     Category,
     M2VariantConfiguration,
@@ -371,6 +373,62 @@ WARRANTY_WINDOW_DAYS = 90
 PAYOUT_ACCOUNT_LAST4 = "0000"
 PAYOUT_ACCOUNT_IFSC = "HDFC0000001"
 
+# ---------------------------------------------------------------------------
+# Wave C6 / recovery: the case clocks, the chargeback alarm and the touch budget.
+#
+# Five more inventions, on the rule every wave since C2R has followed: **every configuration
+# column M2 adds gets a writer in this command.** That rule is what the C2R post-mortem cost, and
+# it is why the reader-with-no-writer sweep is run again every wave rather than trusted.
+#
+# The directions they fail in differ, and each one is stated where the column is defined:
+# a missing response window leaves a case with no party deadline (it still opens); a missing
+# appeal window refuses an appeal against a resolved case; a missing chargeback threshold fires no
+# alarm while still recording every chargeback; a missing touch budget still emits the metric and
+# simply declines to judge it.
+# ---------------------------------------------------------------------------
+
+#: Two working days for a party to answer a case about them, and seven to appeal a decision.
+#: Both invented, both business hours through the service area's own calendar.
+CASE_RESPONSE_WINDOW_HOURS = 16
+CASE_APPEAL_WINDOW_HOURS = 56
+
+#: Page Operations when more than 2% of M2 fee charges on a variant are charged back, once at
+#: least twenty have been taken. The shape mirrors `CREW_DECLINE_ALARM_*` deliberately: a rate
+#: plus a minimum count, because a rate over three charges is not a rate.
+CHARGEBACK_ALARM_BASIS_POINTS = 200
+CHARGEBACK_ALARM_MIN_CHARGES = 20
+
+#: The approved unit-economics budget `M2-BE-715` measures against. Two touches per request is a
+#: stand-in for decision 10 and nothing more — for A3 the real check is against the booking fee's
+#: platform share, which is published on the rate card rather than duplicated here.
+OPERATIONS_TOUCH_BUDGET_PER_REQUEST = 2
+
+#: The demo Operations queue. One case to work, one refund to inspect, one held payout and one
+#: stuck-state queue with something in it — `M2-BE-703`, `707`, `709` and `714` each need a row
+#: before their screen shows anything but an empty state, and an Operations workspace that can
+#: only be demonstrated empty is one nobody can review.
+DEMO_CASE_SUMMARY = "Demo: attendance disputed on day one"
+DEMO_CASE_DETAIL = (
+    "Seeded by seed_m2_demo so the Operations queue, the evidence trail and the payout hold have "
+    "something to show. Not a real report."
+)
+#: A partner-subject case needs no requirement, which is what lets the seed write one without
+#: fabricating a whole booking. `QUALITY` because it is a payout-holding kind, so the held-payout
+#: card on the Operations home screen has a row too.
+DEMO_CASE_KIND = "QUALITY"
+
+#: Written onto **both** variant configurations, because a case, an appeal and a chargeback are
+#: not archetype-specific. Held as one mapping rather than repeated in two `extra` dictionaries,
+#: so the two configurations cannot drift — which is the same reason the constraint tuples in
+#: `catalog.models` exist.
+_C6_RECOVERY_POLICY: dict[str, Any] = {
+    "case_response_window_hours": CASE_RESPONSE_WINDOW_HOURS,
+    "case_appeal_window_hours": CASE_APPEAL_WINDOW_HOURS,
+    "chargeback_alarm_basis_points": CHARGEBACK_ALARM_BASIS_POINTS,
+    "chargeback_alarm_min_charges": CHARGEBACK_ALARM_MIN_CHARGES,
+    "operations_touch_budget_per_request": OPERATIONS_TOUCH_BUDGET_PER_REQUEST,
+}
+
 
 class Command(BaseCommand):
     help = (
@@ -651,6 +709,7 @@ class Command(BaseCommand):
                 "crew_shortfall_standing_threshold": CREW_SHORTFALL_STANDING_THRESHOLD,
                 "cash_demand_removal_threshold": CASH_DEMAND_REMOVAL_THRESHOLD,
                 "vendor_standing_window_days": VENDOR_STANDING_WINDOW_DAYS,
+                **_C6_RECOVERY_POLICY,
             },
         )
 
@@ -682,6 +741,12 @@ class Command(BaseCommand):
                 # writer in this command; that rule is what the C2R post-mortem cost.
                 "warranty_retention_basis_points": WARRANTY_RETENTION_BASIS_POINTS,
                 "warranty_window_days": WARRANTY_WINDOW_DAYS,
+                # Wave C6's five, on **both** archetypes. A case, an appeal and a chargeback are
+                # not A3 facts: an A5 project is exactly where a disputed milestone and a
+                # chargeback on a visit plan happen, and writing these on one configuration only
+                # would have made half the recovery surface refuse in the half of the demo where
+                # it matters most.
+                **_C6_RECOVERY_POLICY,
             },
         )
 
@@ -964,7 +1029,57 @@ class Command(BaseCommand):
             self._record_recent_presence(partner=partner, area=area)
             self._seed_payout_account(partner=partner)
             self._seed_crew(partner=partner, index=index)
+            if index == 1:
+                # One case on one vendor, not one per vendor. A queue seeded three deep with three
+                # copies of the same complaint teaches an operator that the queue is noise.
+                self._seed_operations_queue(partner=partner)
         return phones
+
+    def _seed_operations_queue(self, *, partner: PartnerProfile) -> bool:
+        """One case to work, one held payout, and a queue with something in it (`M2-BE-703`, `709`).
+
+        Wave C6 publishes an Operations workspace whose every screen renders an empty state until
+        somebody disputes something, and an empty workspace is one nobody can review. So the seed
+        writes exactly one case — about a **Partner**, which needs no requirement, no engagement
+        and no fabricated booking behind it — and lets the ordinary command do the rest.
+
+        `open_case` is used rather than `OperationsCase.objects.create`, deliberately: it routes
+        the case to its owning team from the ownership table, stamps the severity SLA, writes the
+        `OPENED` event and sets `holds_payout` from the kind. A hand-built row would be a row the
+        real commands had never touched, which is exactly the fixture that passes a demo and fails
+        the first time somebody clicks Resolve.
+
+        The idempotency key is derived from the partner, so a rerun finds the case it already
+        opened rather than filling the queue with copies of one complaint.
+
+        It writes **no** demo refund and **no** demo chargeback. Both would need a captured
+        `PaymentAttempt` behind them, and a seeded payment that no provider ever saw is a row the
+        reconciliation sweep would immediately and correctly report as a mismatch — a fixture that
+        breaks the surface it was written to demonstrate. The refund and chargeback screens are
+        reached by walking the smoke script instead, which is what
+        `docs/runbooks/m2-recovery-smoke.md` is for.
+        """
+        existing = OperationsCase.objects.filter(
+            idempotency_key=f"{DEV_SEED_MARKER}:case:{partner.id}"
+        ).first()
+        if existing is not None:
+            return False
+        case = open_case(
+            kind=DEMO_CASE_KIND,
+            summary=DEMO_CASE_SUMMARY,
+            severity=OperationsCase.Severity.NORMAL,
+            partner_id=partner.id,
+            detail=DEMO_CASE_DETAIL,
+            # No response deadline: a partner-subject case has no requirement to read a variant
+            # window from, and inventing one here would put a deadline on the board that no
+            # configuration produced.
+            response_due_at=None,
+            idempotency_key=f"{DEV_SEED_MARKER}:case:{partner.id}",
+        )
+        # No seeded note. `add_case_note` requires a real actor and the seed has no operator to
+        # attribute one to; a note signed by nobody is worse in an audit trail than no note.
+        self.stdout.write(f"  Case       : {case.id} ({case.kind}, holds payout)")
+        return True
 
     @staticmethod
     def _seed_payout_account(*, partner: PartnerProfile) -> None:

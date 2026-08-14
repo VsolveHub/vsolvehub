@@ -218,6 +218,29 @@ M2_POSITIVE_WHEN_SET_POLICY_FIELDS: Final[tuple[tuple[str, str], ...]] = (
     ("cash_demand_removal_threshold", "cash_demand_threshold"),
     ("vendor_standing_window_days", "standing_window"),
     ("warranty_window_days", "warranty_window"),
+    # Wave C6. A case response window of zero hours is a deadline that has already passed when it
+    # is set, and an appeal window of zero hours is not an appeal. Both are refusals rather than
+    # configurations.
+    ("case_response_window_hours", "case_response_window"),
+    ("case_appeal_window_hours", "case_appeal_window"),
+    # A chargeback alarm that fires on the first charge is noise, not an alarm.
+    ("chargeback_alarm_min_charges", "chargeback_alarm_min_charges"),
+    # A budget of zero Operations touches per request is unreachable by construction — a request
+    # that reaches Operations at all has been touched once — so it would flag every request as a
+    # breach and mean nothing.
+    ("operations_touch_budget_per_request", "touch_budget"),
+)
+
+#: The basis-point policy columns, which are all bounded at 100%. Same rule as the tuple above and
+#: for the same reason: the four `<= 10000` constraints that existed before Wave C6 were four
+#: hand-written copies of one sentence, and a fifth typed beside them is how the fifth one ends up
+#: bounded at 1000.
+M2_BASIS_POINT_POLICY_FIELDS: Final[tuple[tuple[str, str], ...]] = (
+    ("commission_basis_points", "commission"),
+    ("booking_fee_travel_compensation_basis_points", "forfeit_split"),
+    ("crew_decline_alarm_basis_points", "decline_alarm"),
+    ("warranty_retention_basis_points", "retention"),
+    ("chargeback_alarm_basis_points", "chargeback_alarm"),
 )
 
 
@@ -419,6 +442,36 @@ class M2VariantConfiguration(models.Model):
     #: which is why this one is in `M2_POSITIVE_WHEN_SET_POLICY_FIELDS` and the percentage is not.
     warranty_window_days = models.PositiveSmallIntegerField(null=True, blank=True)
 
+    # --- Wave C6 / recovery: the case clocks, the chargeback alarm and the touch budget. -------
+    #
+    # Five more on the same rule, and the direction each one fails in is chosen so that an unset
+    # value never silences a report and never invents a deadline somebody loses against.
+
+    #: Business hours a named party has to answer a case that is about them — the response
+    #: deadline `M2-BE-704` asks for. Null means a case still opens, still carries its Operations
+    #: `due_at` from the severity SLA, and simply **carries no party deadline**: nobody is timed
+    #: out against a clock nobody set. It does not block the case, because refusing to open a
+    #: safety case for want of a response window would be the worst possible fail-closed direction.
+    case_response_window_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: Business hours after a case resolves within which the losing party may appeal it. Null
+    #: **blocks an appeal against a resolved case** with `m2_policy_unavailable`: an appeal window
+    #: with no bound is an open-ended claim to reverse a decision that already moved money. An
+    #: appeal while the case is still open needs no window and is unaffected.
+    case_appeal_window_hours = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: The chargeback alarm `M2-BE-708` names: the rate above which chargebacks on the booking,
+    #: unlock or visit-plan fee page Operations, in basis points, and the minimum number of
+    #: charges before a rate means anything. Null means **no alarm fires** and every chargeback is
+    #: still recorded as a case — the same asymmetry `crew_decline_alarm_basis_points` draws.
+    chargeback_alarm_basis_points = models.PositiveIntegerField(null=True, blank=True)
+    chargeback_alarm_min_charges = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: The approved unit-economics budget `M2-BE-715` measures against: how many Operations
+    #: touches one request may take before the workspace design has failed. Null means **the
+    #: metric is still emitted and nothing is flagged** — measurement never depends on the owner
+    #: having decided, only the judgement does. For A3 the check is against the booking fee's
+    #: platform share (decision 10 as restated by ADR-0009), which is why the budget is a count
+    #: rather than a currency amount: the money it has to fit inside is already published.
+    operations_touch_budget_per_request = models.PositiveSmallIntegerField(null=True, blank=True)
+
     evidence_policy = models.JSONField(default=dict)
     contact_policy = models.JSONField(default=dict)
     created_by = models.ForeignKey(
@@ -458,26 +511,14 @@ class M2VariantConfiguration(models.Model):
                 | models.Q(visit_plan_fill_sla_hours__gte=models.F("first_visit_sla_hours")),
                 name="catalog_m2_configuration_visit_sla_order",
             ),
-            models.CheckConstraint(
-                condition=models.Q(commission_basis_points__isnull=True)
-                | models.Q(commission_basis_points__lte=10000),
-                name="catalog_m2_configuration_commission_within_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(booking_fee_travel_compensation_basis_points__isnull=True)
-                | models.Q(booking_fee_travel_compensation_basis_points__lte=10000),
-                name="catalog_m2_configuration_forfeit_split_within_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(crew_decline_alarm_basis_points__isnull=True)
-                | models.Q(crew_decline_alarm_basis_points__lte=10000),
-                name="catalog_m2_configuration_decline_alarm_within_range",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(warranty_retention_basis_points__isnull=True)
-                | models.Q(warranty_retention_basis_points__lte=10000),
-                name="catalog_m2_configuration_retention_within_range",
-            ),
+            *[
+                models.CheckConstraint(
+                    condition=models.Q(**{f"{field}__isnull": True})
+                    | models.Q(**{f"{field}__lte": 10000}),
+                    name=f"catalog_m2_configuration_{short_name}_within_range",
+                )
+                for field, short_name in M2_BASIS_POINT_POLICY_FIELDS
+            ],
             *[
                 models.CheckConstraint(
                     condition=models.Q(**{f"{field}__isnull": True})

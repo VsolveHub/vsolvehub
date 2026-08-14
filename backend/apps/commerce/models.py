@@ -557,6 +557,13 @@ class FinancialException(models.Model):
         PROVIDER_AMBIGUITY = "PROVIDER_AMBIGUITY", "Provider ambiguity"
         REFUND_FAILED = "REFUND_FAILED", "Refund failed"
         AMOUNT_MISMATCH = "AMOUNT_MISMATCH", "Amount mismatch"
+        # Wave C6. The Customer's bank pulled a charge back (`M2-BE-708`), and the scheduled
+        # reconciliation found two records of one fact that do not agree (`M2-BE-710`). Both are
+        # `FinancialException` rather than new tables for the reason this model exists at all:
+        # there is one queue for "the money and the record disagree", and a second one would be a
+        # second place for an unreconciled rupee to be somebody else's problem.
+        CHARGEBACK = "CHARGEBACK", "Chargeback"
+        RECONCILIATION_MISMATCH = "RECONCILIATION_MISMATCH", "Reconciliation mismatch"
 
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"

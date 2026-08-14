@@ -1665,21 +1665,294 @@ plus the current field's own name, so the pairing stays mechanical.
 
 ---
 
-## Wave C6 — Recovery, refunds, disputes, Operations APIs (`BE6`)
+## Wave C6 — Recovery, refunds, disputes, Operations APIs (`BE6`) — **`[~]` shipped 15 August 2026**
 
-`M2-BE-701..719`. Frontend Wave 4 integrates against this.
+`M2-BE-701..715`, `718`, `719`. Contract **1.32.0**, twenty-three new paths. Full account in
+§"C6 outcome" below.
 
-- [ ] Policy engine, linked cases, evidence, deadlines, decisions, appeals (`701`–`704`).
-- [ ] Idempotent ledger-backed refunds; provider pending, failed and reversed states (`707`).
-- [ ] Booking-fee outcomes beside the unlock's (`705`) and the visit plan's (`718`): full refund
+- [~] Policy engine, linked cases, evidence, deadlines, decisions, appeals (`701`–`704`).
+- [~] Idempotent ledger-backed refunds; provider pending, failed and reversed states (`707`).
+- [~] Booking-fee outcomes beside the unlock's (`705`) and the visit plan's (`718`): full refund
   with free re-dispatch on vendor no-show; the forfeit split through the M1 payout rails (`719`,
   revision 4).
-- [ ] Chargeback on the booking, unlock or visit-plan fee through the standard dispute path (`708`).
-- [ ] Scheduled reconciliation of payment, refund, ledger and payout with alerts (`710`).
-- [ ] Unified request timeline API (`711`) — one timeline, consumed by both Operations folders.
-- [ ] Assisted clarification and **assisted A3 quote capture as a primary path of the fallback quote
+- [~] Chargeback on the booking, unlock or visit-plan fee through the standard dispute path (`708`).
+- [~] Automatic payout hold when a qualifying case opens (`709`).
+- [~] Scheduled reconciliation of payment, refund, ledger and payout with alerts (`710`).
+- [~] Unified request timeline API (`711`) — one timeline, consumed by both Operations folders.
+- [~] Safe Operations actions: rematch, reclassification, deadline extension, refund review (`712`).
+- [~] Assisted clarification and **assisted A3 quote capture as a primary path of the fallback quote
   flow** (revision 4), attributed to the named Partner with consent recorded (`713`).
-- [ ] Prove Operations can recover every supported failure **without direct database edits** (`717`).
+- [~] Stuck-state queues and scheduled recovery (`714`); Operations-touches-per-request (`715`).
+- [ ] `M2-BE-716` and `M2-BE-717` are **test tasks** and are left unchecked deliberately. The smoke
+  script that replaces them for the sprint is
+  [`docs/runbooks/m2-recovery-smoke.md`](../../docs/runbooks/m2-recovery-smoke.md).
+
+---
+
+### C6 outcome — 15 August 2026
+
+**Built.** Contract **1.32.0**: twenty-three new paths, twenty-four new operations, thirty-six new
+components (99 → 123 M2 operations). Four new modules (`apps/requirements/cancellations.py`,
+`disputes.py`, `operations.py`, `reconciliation.py`), three new aggregates
+(`RequirementCancellation`, `OperationsTouch`, `OperationsCaseEvidence`), migrations `catalog.0013`,
+`cases.0002`, `commerce.0011`, `requirements.0011`, and two new `CELERY_BEAT_SCHEDULE` entries.
+**No test was written or run**, per the build-first amendment.
+
+#### The shape of the wave: one case table, not two
+
+The temptation in a wave called "disputes" is to build a dispute subsystem. `apps.cases` already
+owns a queue, a severity SLA, a required terminal result per kind, an append-only event trail and
+the `holds_payout` column the payout selector reads. So C6 **extended that table** — two new
+subjects (`requirement`, `engagement`), five new kinds, six new event kinds, response deadlines,
+appeals and an evidence child — rather than building a second one beside it. An operator with two
+inboxes has none, and the M1 Operations console gets every M2 case for free.
+
+Three things genuinely could not be reused and are new records:
+
+1. **A cancellation is not a status.** `M2-BE-701` wants "lifecycle state, actor, reason, evidence,
+   contact-disclosure state, fulfilment evidence and calculated remedy" — and every one of those
+   facts stops being knowable the instant the cancellation runs. So `evaluate` writes the row and
+   `_execute` is a separate step that may not run for hours or, if the counterparty disputes, ever.
+   A status column also cannot hold *two* accounts of one event, which is the entire subject of
+   `M2-AC-702` and `M2-AC-703`.
+2. **An Operations touch is not derivable.** `identity.AccessAuditEvent` counts requests to a view,
+   so one operator scrolling a queue looks like ten touches; `RequirementTransition` records the
+   actor but not their role, so a Customer cancelling their own request counts as Operations work.
+   `M2-BE-715` needs a deliberate write by a named operator against a named request, and nothing
+   else can tell you that.
+3. **Case evidence is a reference, not an upload.** Wave C5 recorded the rule — "the stage-evidence
+   presign is the rail to reuse, not a second uploader" — so `OperationsCaseEvidence` points at a
+   `RequirementAttachment` or a `StageEvidence` that already came through a scanned rail. The
+   consequence is deliberate: a party can only show something they have already legitimately put on
+   the platform.
+
+#### Scheduled item 1: the Operations crew-document verification command — **landed**
+
+`operations.verify_crew_documents`, published at
+`POST /operations/crew-memberships/{membership_id}/verification/`, with the queue it works from at
+`GET /operations/crew-memberships/`.
+
+C5 found `PartnerCrewMembership.documents_verified_at` with four readers and no writer anywhere:
+`crew_dispatch.verified_roster_size` counts only verified memberships when sizing a lead's roster
+against the headcount, `workforce.assign_crew` refuses an unverified worker, and both apps publish
+a badge from it. With nothing setting it, **every vendor's verified roster was zero in every
+environment**, the A3 cascade excluded every lead, and the rate-card walkthrough this revision
+exists for could not reach its third step. C5 stamped it in the dev seed and deferred the real
+command here.
+
+It is built as the reviewed surface the brief asked for, and each of the four parts is a decision:
+
+- **an actor** — Operations-only by permission, and the operator lands on the `AccessAuditEvent`
+  the permission class already writes;
+- **a reason on the negative path** — verifying needs none, because the documents were seen;
+  *removing* verification takes a named person off jobs they may already be assigned to, and the
+  command refuses without one;
+- **an audit trail** — an outbox event per transition, keyed on the membership and the timestamp.
+  A `PartnerStandingEvent` was considered and rejected: standing is about a vendor's *conduct* and
+  a document check is about a worker's *paperwork*, and conflating them would put a clerical fact
+  into the table a demotion threshold counts;
+- **idempotence** — verifying an already-verified membership returns it unchanged rather than
+  re-stamping, so the date keeps meaning "when the documents were actually checked".
+
+#### Scheduled item 2: the vendor-no-show free re-dispatch — **landed**
+
+This is the one that needed a money decision and a second engagement-opening path, and it had
+**three** separate blockers rather than the one C4 recorded.
+
+**Blocker 1 — the fee slot.** `requirements_one_live_booking_fee` permitted one non-`FAILED` fee per
+booking. After a vendor no-show the fee is `REFUNDED`, which is non-`FAILED`, so the replacement
+lead's acceptance had nowhere to write a row: `create_booking_fee_checkout` answered "this booking
+fee is already settled" and `complete_booking_fee` — the only engagement-opening path — never ran.
+The constraint now excludes `REFUNDED` as well, derived from a module-scope tuple
+(`BOOKING_FEE_NON_BLOCKING_STATUSES`) rather than the hand-copied one-element list it had. At most
+one *chargeable* fee can still exist at a time, which is the guarantee that mattered.
+
+**Blocker 2 — the money decision, taken explicitly.** Revision 4 promises "refunds in full **and**
+free re-dispatch". Three readings were available and two are wrong: charging again is not free, and
+reversing the refund takes back money the Customer has already been told is theirs. So **Vsolve
+earns nothing on a booking whose first crew did not turn up.** `BookingFee.Status.WAIVED` records
+the confirmation without the money — the published amount, nothing collected, deliberately **not**
+in `CHARGED_STATUSES`, so no reconciliation counts it as revenue.
+
+**Blocker 3 — `Engagement.requirement` is a `OneToOneField`.** A re-dispatched requirement cannot
+have a second engagement, and `open_rate_card_engagement` would find the cancelled one, return it
+untouched, and attach the replacement lead to an agreement belonging to the vendor who never
+arrived. `engagements.reopen_rate_card_engagement` **re-points** it instead — exactly as
+`projects.decide_project_transfer` re-points an abandoned A5 project, a reviewed pattern with a
+precedent rather than a novelty. It is safe in both places for the same reason: the *agreement* has
+not changed. The Customer is owed the crew they booked at the frozen rate, and what moved is who is
+supplying it.
+
+Three details are load-bearing:
+
+- **The shift-days are reused, not re-laid.** §4c only ever reaches a vendor no-show from an
+  `ACTIVE` fee — the fee earns at first-day arrival — so a no-show is by construction before any
+  day was delivered. Re-laying days would inflate `staged_total_paise` and force a matching
+  movement in `amendment_delta_paise`, recording an amendment nobody proposed and nobody accepted.
+  A stage that has actually progressed **refuses**: a vendor walking off mid-job is a different
+  remedy and it is not this one.
+- **The old lead's crew assignments are released**, or they would misrepresent who is coming and
+  hold those workers' dates against the cross-agency conflict index.
+- **It is called from `accept_crew_offer`, not from a route.** There is nothing for the Customer to
+  do, and an endpoint here would be an endpoint that confirms a crew without anybody paying.
+
+The asymmetry it creates is stated rather than papered over: a lead who travels to a locked gate on
+a **re-dispatched** booking is uncompensated, because the platform holds no money for that booking.
+`forfeit_booking_fee` refuses on a `WAIVED` fee with a named message, the no-show is still recorded
+against standing and still opens a case, and this is logged in §7 as an owner question rather than
+answered with an invented payment.
+
+#### The warranty claim, which the Customer column found
+
+`POST /engagements/{engagement_id}/warranty-claim/`, and it closes a real hole rather than adding a
+feature. `M2-BE-546` holds a retention out of the vendor's payout against a warranty promise, and
+there was **no published way to call on it**: `m2_stage_dispute` accepts only a stage in
+`AWAITING_REVIEW`, and by warranty time every stage is settled by definition, so it refused by
+construction; `/operations/cases/` is staff-only. Money was being held for a promise the product
+could not accept a call against.
+
+`QUALITY` rather than a new kind, because the M1 case type already means exactly this and already
+carries the three terminal results a warranty claim can have. It is also already payout-holding,
+which is the second half of the fix: **opening the claim freezes the retention**, and
+`stages.close_warranty_window` now refuses to release while one is open. Wave C5 could not have
+guarded that, because there was no way to raise the claim.
+
+#### The RULES §3 audit, stated
+
+**(a) The drifting duplicate — swept mechanically, and this wave's own two derive.** A throwaway
+script walked every model, extracted every `__in` value set inside every constraint condition, and
+compared each against every class-level tuple of strings. Twenty-three constraints carry an `__in`
+set; **thirteen are bound to a tuple** and ten have no matching tuple, all ten pre-existing M1
+(`assignments.Reservation` ×3, `PartnerOffer` ×2, `payouts` ×3, `carts`, `VendorInvitation`) or the
+three C4 documented near-misses.
+
+C6's own two both derive:
+
+- `requirements_one_live_booking_fee` now reads `BOOKING_FEE_NON_BLOCKING_STATUSES` from module
+  scope. It previously hand-copied a **one-element** list — the shape that looks harmless and is
+  exactly the one that drifts the moment a second status joins it, as one just did.
+- `requirements_one_live_cancellation` reads `CANCELLATION_LIVE_STATUSES` from module scope from
+  the start.
+
+Two more were **derived rather than duplicated** while extending existing code:
+
+- `cases_exactly_one_subject` is now generated from `CASE_SUBJECT_FIELDS` by a helper. This wave
+  took it from three subjects to five, and typing the five-way `Q` by hand is precisely how the
+  sixth gets missed. Verified in the migration: the generated condition is the correct five-way OR.
+- The four `catalog_m2_configuration_*_within_range` basis-point constraints are now generated from
+  `M2_BASIS_POINT_POLICY_FIELDS`, which were four hand-written copies of one sentence before a
+  fifth was needed. **Verified additive**: the generated names reproduce the existing four exactly,
+  and `catalog.0013` only *adds* `chargeback_alarm_within_range` — no rename, no drop.
+
+`OperationsCaseEvidence`'s two constraints and `RequirementQuestion`'s consent constraint enumerate
+nothing; they are null/blank predicates with no list to drift.
+
+**(b) The reader with no writer — one found, one closed, and it is a published enum value.**
+
+Mechanically: every column and status C6's new code reads was listed, and for each one the writer
+was opened and read rather than assumed. A second script asserted that every field on every M2
+model is assigned somewhere outside a migration.
+
+| Column / status | Reader | Writer |
+|---|---|---|
+| `M2VariantConfiguration.case_response_window_hours`, `case_appeal_window_hours` | `pricing.case_response_deadline`, `case_appeal_deadline` | `seed_m2_demo._C6_RECOVERY_POLICY` ✔ |
+| `.chargeback_alarm_basis_points`, `.chargeback_alarm_min_charges` | `pricing.chargeback_alarm` | same ✔ |
+| `.operations_touch_budget_per_request` | `pricing.operations_touch_budget` | same ✔ |
+| `OperationsCase.requirement` / `.engagement` | `disputes._case_subjects`, `request_cases`, the timeline | `disputes.open_linked_case` ✔ |
+| `OperationsCase.response_due_at` | `stuck_queues`, the party payload | `open_case`, `set_case_response_deadline` ✔ |
+| `OperationsCase.held_ledger_entry_ids` | `disputes.release_engagement_payouts` | `disputes.hold_engagement_payouts` ✔ |
+| `OperationsCase.appeal_*` | `decide_case_appeal`, the party payload | `request_case_appeal`, `decide_case_appeal` ✔ |
+| `OperationsCase.Kind` ×5 new | `PAYOUT_HOLDING_KINDS`, `DEFAULT_TEAM`, `ALLOWED_RESOLUTIONS` | five distinct commands ✔ |
+| `OperationsCaseEvent.Kind` ×6 new | the event trail | `cases.services` ✔ |
+| `BookingFee.Status.WAIVED` | `earn_booking_fee`, `cancel_booking`, `_refund`, the remedy, reconciliation | `confirm_free_redispatch` ✔ |
+| `RateCardBooking.free_redispatch_*`, `redispatch_count` | `_redispatch_entitlement_is_live`, the no-show case key | `_redispatch_after_vendor_no_show`, `confirm_free_redispatch` ✔ |
+| `RequirementQuestion.captured_by`, `consent_recorded_at` | `question_asker_role` (**after this wave's fix**) | `operations.capture_assisted_clarification` ✔ |
+| `OperationsTouch.*` | `touch_metric`, `touch_rollup`, the timeline | `operations.record_touch` ×5 commands ✔ |
+| `FinancialException.Kind.CHARGEBACK`, `.RECONCILIATION_MISMATCH` | `open_exception_summary`, `chargeback_rate_basis_points` | `record_fee_chargeback`, `reconcile_m2_money` ✔ |
+| `PartnerCrewMembership.documents_verified_at` | `verified_roster_size`, `assign_crew`, both apps' badges | **`operations.verify_crew_documents`** — the C5 defect, now closed ✔ |
+
+**One genuine defect, and it is the sixth wave running.** `QUESTION_ASKER_ROLES` publishes
+`OPERATIONS`, and `selectors.question_asker_role` returned it as the **fall-through** for "asked by
+somebody who is neither party". C1 wrote it that way explicitly anticipating this wave — its
+docstring says "the third exists so an assisted question does not silently read as the vendor's".
+When the assisted capture arrived it attributed the question to the **Partner**, which `M2-AC-802`
+requires (the question is the vendor's; the operator merely wrote it down), so the fall-through
+became **unreachable** and every assisted question would have read as an ordinary vendor question —
+a published enum value with a reader, a schema entry, a client `switch` and no writer. It now reads
+`captured_by`, a stored fact rather than a fall-through, so the answer is positive in all three
+cases. **No static gate would have caught it**, which is now the sixth consecutive wave that has
+been true of.
+
+#### Fail-closed, and in which direction
+
+Five owner-blocked values were added, and they deliberately fail in three different directions:
+
+| Config | Unset means |
+|---|---|
+| `case_response_window_hours` | The case **still opens** and carries no party deadline. Refusing to open a safety case for want of a response window would be the worst fail-closed direction available. |
+| `case_appeal_window_hours` | An appeal against a **resolved** case is refused (`m2_policy_unavailable`). An appeal window with no bound is an open-ended claim to reverse a decision that already moved money. An appeal against an open case needs no window and is unaffected. |
+| `chargeback_alarm_basis_points` / `_min_charges` | **No alarm fires**, and every chargeback is still recorded as a case. The same asymmetry `crew_decline_alarm_*` draws. |
+| `operations_touch_budget_per_request` | The metric is **still emitted**; `within_budget` is `null`. Measurement never waits on the owner — only the judgement does. |
+
+No new clock was invented for the counterparty confirmation: it reuses
+`pricing.amendment_response_deadline`, because it is the same promise the amendment engine already
+makes — how long one party has to answer the other about the agreed work — and a twelfth unset value
+would have blocked the command on a decision nobody has been asked for.
+
+**Wages stay outside all of it.** The four earnings this wave can freeze are the four that exist as
+`PartnerLedgerEntry` rows — a stage payout, a visit share, a warranty retention and a booking-fee
+travel compensation — and a shift-day's wage is none of them. The A3 cancellation remedy always
+carries a `service_payment` entry reading `no_platform_money` with the sentence saying so, rather
+than omitting it, because a missing entry reads as an oversight and an explicit one reads as a rule.
+
+#### Not done, and why
+
+- **`M2-BE-716` and `M2-BE-717`** are test tasks. Left unchecked deliberately;
+  `docs/runbooks/m2-recovery-smoke.md` replaces them for the sprint.
+- **The frontend client is not regenerated.** `generated/**` is frozen; **1.32.0 needs
+  regeneration** before the admin app's M2 screens can consume any of this.
+- **The chargeback rate alarm is unexercised.** It needs twenty captured M2 fee charges on one
+  variant before a rate means anything, which is more than a hand-walk produces. The threshold is
+  seeded and the path is one `if`; recorded as uncovered rather than quietly assumed.
+- **No demo refund or chargeback row in the seed.** Both need a captured `PaymentAttempt` behind
+  them, and a seeded payment no provider ever saw is a row the reconciliation sweep would
+  immediately and correctly report as a mismatch — a fixture that breaks the surface it was written
+  to demonstrate. The smoke script reaches both instead.
+- **A `WAIVED` fee cannot compensate a lead for a customer no-show.** Stated above, logged in §7.
+- **`reconcile_m2_money` walks every settled M2 row.** Fine at demo volume, hourly on the beat, and
+  it will need a cursor before a production book. Recorded rather than pre-optimised.
+
+#### Static gates
+
+`.\scripts\quality-static.cmd` and `manage.py check`, both from `backend` with
+`backend\.venv\Scripts\python.exe`, both green and both re-run to completion after the last edit —
+ruff format and check clean across 358 files, strict MyPy clean across **238 source files**,
+`makemigrations --check` no changes, `spectacular --validate` zero warnings, contract-drift check
+clean, `manage.py check` no issues.
+
+Additivity was **verified rather than assumed**: every path, `operationId` and component name was
+diffed against the committed 1.31.0 contract. Removed: **none** — 233 → 256 paths, 262 → 286
+operations, 470 → 506 components. Four existing components gained values or fields and none changed
+meaning: `OperationsCaseKindEnum` (+5), `OperationsCaseEventKindEnum` (+6), `BookingFeeStatusEnum`
+(+`WAIVED`) and `OperationsCase` (+11 fields).
+
+#### The field name a client will guess wrong — for the third time
+
+`StuckQueue.queue_label`, not `label`. `label` is DRF's own `Serializer` attribute and a field of
+that name shadows it: mypy refuses the assignment and DRF resolves it at random. This is the
+**third** wave to hit it — `ShiftDay.day_label` was C4's and `ProjectMilestone.milestone_label` was
+C5's — so the rule is now mechanical rather than remembered: every human-readable name on an M2
+shape is `<thing>_label`. The dataclass field is renamed to match, because `asdict()` would
+otherwise silently drop it.
+
+#### Blocked, and left blocked
+
+| What | Blocked on | Behaviour meanwhile |
+|---|---|---|
+| The four C6 policy values | Owner (decisions 12/13 and the pre-phase list) | Each fails in the direction stated above; the dev seed makes the demo walk |
+| Compensating a lead on a customer no-show against a **waived** fee | Owner: revision 4 has no answer, and the platform holds no money for that booking | Refused with a named message; the no-show is still recorded and still opens a case. §7 |
+| Deriving the ten pre-existing M1 constraints from tuples | Unchanged from C4/C5 — needs published `TextChoices` at module scope (RULES §7) | Verified to agree today |
+| `M2-BE-716`, `M2-BE-717` | Build-first amendment | Left unchecked; the smoke script replaces them |
 
 ## Wave C7 — Security, observability, release (`BE7`)
 

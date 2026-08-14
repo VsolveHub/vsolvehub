@@ -12,7 +12,18 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.cases.models import ALLOWED_RESOLUTIONS, OperationsCase, OperationsCaseEvent
+from apps.cases.models import (
+    ALLOWED_RESOLUTIONS,
+    CASE_SUBJECT_FIELDS,
+    OperationsCase,
+    OperationsCaseEvent,
+    OperationsCaseEvidence,
+)
+
+#: The request-body names of the subject columns, derived from the model's own tuple rather than
+#: retyped — RULES §3(a) applied to a validator instead of a constraint. The model gained two
+#: subjects in Wave C6 and this list would otherwise still be checking three.
+CASE_SUBJECT_ID_FIELDS: tuple[str, ...] = tuple(f"{field}_id" for field in CASE_SUBJECT_FIELDS)
 
 
 class OperationsCaseEventSerializer(serializers.ModelSerializer[OperationsCaseEvent]):
@@ -21,6 +32,33 @@ class OperationsCaseEventSerializer(serializers.ModelSerializer[OperationsCaseEv
     class Meta:
         model = OperationsCaseEvent
         fields = ("id", "kind", "actor_id", "body", "context", "created_at")
+        read_only_fields = fields
+
+
+class OperationsCaseEvidenceSerializer(serializers.ModelSerializer[OperationsCaseEvidence]):
+    """What a party put in front of the decision (`M2-BE-704`).
+
+    Publishes the **reference**, never a URL. Reading the bytes goes through the rail that owns
+    them — the requirement-attachment or stage-evidence read — which is where the scan verdict and
+    the object-level check already live. A signed link minted here would be a second door into
+    somebody's file with none of the first door's guards.
+    """
+
+    submitted_by_id = serializers.UUIDField(read_only=True)
+    requirement_attachment_id = serializers.UUIDField(read_only=True, allow_null=True)
+    stage_evidence_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = OperationsCaseEvidence
+        fields = (
+            "id",
+            "party",
+            "submitted_by_id",
+            "statement",
+            "requirement_attachment_id",
+            "stage_evidence_id",
+            "created_at",
+        )
         read_only_fields = fields
 
 
@@ -36,10 +74,17 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     booking_id = serializers.UUIDField(read_only=True, allow_null=True)
     order_id = serializers.UUIDField(read_only=True, allow_null=True)
     partner_id = serializers.UUIDField(read_only=True, allow_null=True)
+    #: Wave C6's two M2 subjects. Additive: an M1 case answers `null` to both, exactly as it
+    #: always answered `null` to two of the three subjects it already had.
+    requirement_id = serializers.UUIDField(read_only=True, allow_null=True)
+    engagement_id = serializers.UUIDField(read_only=True, allow_null=True)
     owner_id = serializers.UUIDField(read_only=True, allow_null=True)
+    appeal_requested_by_id = serializers.UUIDField(read_only=True, allow_null=True)
+    appeal_decided_by_id = serializers.UUIDField(read_only=True, allow_null=True)
     is_overdue = serializers.BooleanField(read_only=True)
     allowed_resolutions = serializers.SerializerMethodField()
     events = serializers.SerializerMethodField()
+    evidence = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -54,17 +99,28 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
             "booking_id",
             "order_id",
             "partner_id",
+            "requirement_id",
+            "engagement_id",
             "summary",
             "detail",
             "due_at",
+            "response_due_at",
             "is_overdue",
             "version",
             "resolution",
             "resolution_note",
             "resolved_at",
             "holds_payout",
+            "held_ledger_entry_ids",
+            "appeal_requested_at",
+            "appeal_requested_by_id",
+            "appeal_reason",
+            "appeal_decided_at",
+            "appeal_decided_by_id",
+            "appeal_outcome",
             "allowed_resolutions",
             "events",
+            "evidence",
             "server_now",
             "created_at",
         )
@@ -77,6 +133,10 @@ class OperationsCaseSerializer(serializers.ModelSerializer[OperationsCase]):
     @extend_schema_field(OperationsCaseEventSerializer(many=True))
     def get_events(self, instance: OperationsCase) -> Any:
         return OperationsCaseEventSerializer(instance.events.all(), many=True).data
+
+    @extend_schema_field(OperationsCaseEvidenceSerializer(many=True))
+    def get_evidence(self, instance: OperationsCase) -> Any:
+        return OperationsCaseEvidenceSerializer(instance.evidence.all(), many=True).data
 
     @extend_schema_field(serializers.DateTimeField())
     def get_server_now(self, _instance: OperationsCase) -> str:
@@ -126,12 +186,14 @@ class OpenCaseRequestSerializer(serializers.Serializer[dict[str, Any]]):
     booking_id = serializers.UUIDField(required=False, allow_null=True)
     order_id = serializers.UUIDField(required=False, allow_null=True)
     partner_id = serializers.UUIDField(required=False, allow_null=True)
+    requirement_id = serializers.UUIDField(required=False, allow_null=True)
+    engagement_id = serializers.UUIDField(required=False, allow_null=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        subjects = [attrs.get(field) for field in ("booking_id", "order_id", "partner_id")]
+        subjects = [attrs.get(field) for field in CASE_SUBJECT_ID_FIELDS]
         if len([value for value in subjects if value is not None]) != 1:
             raise serializers.ValidationError(
-                "A case is about exactly one booking, order or partner."
+                "A case is about exactly one booking, order, partner, request or engagement."
             )
         return attrs
 
@@ -145,6 +207,31 @@ class EscalateCaseRequestSerializer(VersionedCaseCommandSerializer):
 
 
 class ResolveCaseRequestSerializer(VersionedCaseCommandSerializer):
+    resolution = serializers.CharField(max_length=48)
+    note = serializers.CharField(max_length=480)
+
+
+class CaseResponseDeadlineRequestSerializer(VersionedCaseCommandSerializer):
+    """`M2-BE-712`'s deadline extension, applied to a case's party window. Forward only."""
+
+    response_due_at = serializers.DateTimeField()
+    reason = serializers.CharField(max_length=480)
+
+
+class CaseAppealDecisionRequestSerializer(VersionedCaseCommandSerializer):
+    """`UPHELD` keeps the resolution; `OVERTURNED` reopens the case for a second decision."""
+
+    outcome = serializers.ChoiceField(choices=(("UPHELD", "Upheld"), ("OVERTURNED", "Overturned")))
+    note = serializers.CharField(max_length=480)
+
+
+class CaseOverrideRequestSerializer(VersionedCaseCommandSerializer):
+    """An audited manual override of a resolved case's terminal result.
+
+    Still checked against the case kind's `allowed_resolutions`: an override is permission to
+    reach a *different* documented outcome, never permission to reach an undocumented one.
+    """
+
     resolution = serializers.CharField(max_length=48)
     note = serializers.CharField(max_length=480)
 

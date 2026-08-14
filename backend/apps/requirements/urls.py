@@ -8,9 +8,13 @@ tells a reader which role a route belongs to before they open the view.
 from django.urls import path
 
 from apps.requirements.views import (
+    CancellationDecisionView,
+    CaseAppealView,
+    CaseEvidenceView,
     EngagementAmendmentCollectionView,
     EngagementAmendmentDecisionView,
     EngagementAmendmentDeclineView,
+    EngagementCaseListView,
     EngagementCashDemandView,
     EngagementCollectionView,
     EngagementCompletionView,
@@ -40,8 +44,23 @@ from apps.requirements.views import (
     EngagementStageStartView,
     EngagementStageSubmitView,
     EngagementTerminationView,
+    EngagementWarrantyClaimView,
+    OperationsAssistedClarificationView,
+    OperationsAssistedProposalView,
+    OperationsChargebackView,
+    OperationsCrewVerificationQueueView,
+    OperationsCrewVerificationView,
+    OperationsDeadlineView,
+    OperationsQueueView,
     OperationsRateCardView,
+    OperationsReclassificationView,
+    OperationsReconciliationView,
+    OperationsRefundReviewView,
+    OperationsRematchView,
+    OperationsRequestTimelineView,
     OperationsSafetyIncidentDecisionView,
+    OperationsTouchMetricView,
+    OperationsTouchRollupView,
     PartnerCrewOfferAcceptView,
     PartnerCrewOfferDeclineView,
     PartnerCrewOfferListView,
@@ -66,6 +85,7 @@ from apps.requirements.views import (
     RequirementAttachmentFinalizeView,
     RequirementBookingFeeCancelView,
     RequirementBookingFeeCheckoutView,
+    RequirementCancellationView,
     RequirementCollectionView,
     RequirementCrewArrivalView,
     RequirementCrewNoShowView,
@@ -557,5 +577,124 @@ urlpatterns = [
         "engagements/<uuid:engagement_id>/termination/",
         EngagementTerminationView.as_view(),
         name="m2-engagement-termination",
+    ),
+    # Wave C6 — recovery, refunds, disputes and the Operations workspace (`M2-BE-701..719`).
+    #
+    # The split below is 07 §7's permission table expressed as routes, and the three routes that
+    # are **absent** are as deliberate as the ones present: nothing here lets Operations accept an
+    # offer for a vendor, publish a vendor's price without them, or move money by hand.
+    #
+    # A cancellation hangs off the **requirement** rather than the engagement, because it is
+    # reachable before one exists — calling off a job nobody has taken yet is the cheapest
+    # cancellation there is, and a route that required an engagement would have made the cheap
+    # case the unreachable one.
+    path(
+        "requirements/<uuid:requirement_id>/cancellation/",
+        RequirementCancellationView.as_view(),
+        name="m2-requirement-cancellation",
+    ),
+    path(
+        "cancellations/<uuid:cancellation_id>/decision/",
+        CancellationDecisionView.as_view(),
+        name="m2-cancellation-decision",
+    ),
+    # Cases, as a **party** reads them. The staff surface is `apps.cases.urls`, unchanged, and the
+    # two projections stay separate functions rather than one with a role flag — a case can quote
+    # a Customer's complaint verbatim and name a Partner in a safety report, and an accidental
+    # widening of the staff shape would publish both.
+    path(
+        "engagements/<uuid:engagement_id>/cases/",
+        EngagementCaseListView.as_view(),
+        name="m2-engagement-cases",
+    ),
+    path(
+        "engagements/<uuid:engagement_id>/warranty-claim/",
+        EngagementWarrantyClaimView.as_view(),
+        name="m2-engagement-warranty-claim",
+    ),
+    path(
+        "cases/<uuid:case_id>/evidence/",
+        CaseEvidenceView.as_view(),
+        name="m2-case-evidence",
+    ),
+    path(
+        "cases/<uuid:case_id>/appeal/",
+        CaseAppealView.as_view(),
+        name="m2-case-appeal",
+    ),
+    # The Operations workspace. Everything under `operations/` is staff-only by permission, and
+    # every command on it takes a reason and writes an `OperationsTouch` the metric counts.
+    path(
+        "operations/requests/<uuid:requirement_id>/timeline/",
+        OperationsRequestTimelineView.as_view(),
+        name="m2-operations-request-timeline",
+    ),
+    path(
+        "operations/requests/<uuid:requirement_id>/rematch/",
+        OperationsRematchView.as_view(),
+        name="m2-operations-rematch",
+    ),
+    path(
+        "operations/requests/<uuid:requirement_id>/deadline/",
+        OperationsDeadlineView.as_view(),
+        name="m2-operations-deadline",
+    ),
+    path(
+        "operations/requests/<uuid:requirement_id>/reclassification/",
+        OperationsReclassificationView.as_view(),
+        name="m2-operations-reclassification",
+    ),
+    path(
+        "operations/requests/<uuid:requirement_id>/refund-review/",
+        OperationsRefundReviewView.as_view(),
+        name="m2-operations-refund-review",
+    ),
+    path(
+        "operations/requests/<uuid:requirement_id>/touch-metric/",
+        OperationsTouchMetricView.as_view(),
+        name="m2-operations-touch-metric",
+    ),
+    path(
+        "operations/enquiries/<uuid:invitation_id>/assisted-clarification/",
+        OperationsAssistedClarificationView.as_view(),
+        name="m2-operations-assisted-clarification",
+    ),
+    # No path parameter: `ProposalCreateSerializer` already carries `invitation_id`, and the
+    # assisted capture reuses that shape unchanged so a captured quote and a vendor's own quote
+    # cannot drift into two request bodies for one command.
+    path(
+        "operations/assisted-proposals/",
+        OperationsAssistedProposalView.as_view(),
+        name="m2-operations-assisted-proposal",
+    ),
+    path(
+        "operations/crew-memberships/",
+        OperationsCrewVerificationQueueView.as_view(),
+        name="m2-operations-crew-verification-queue",
+    ),
+    path(
+        "operations/crew-memberships/<uuid:membership_id>/verification/",
+        OperationsCrewVerificationView.as_view(),
+        name="m2-operations-crew-verification",
+    ),
+    path(
+        "operations/queues/",
+        OperationsQueueView.as_view(),
+        name="m2-operations-queues",
+    ),
+    path(
+        "operations/metrics/touches/",
+        OperationsTouchRollupView.as_view(),
+        name="m2-operations-touch-rollup",
+    ),
+    path(
+        "operations/payments/<uuid:payment_attempt_id>/chargeback/",
+        OperationsChargebackView.as_view(),
+        name="m2-operations-chargeback",
+    ),
+    path(
+        "operations/reconciliation/",
+        OperationsReconciliationView.as_view(),
+        name="m2-operations-reconciliation",
     ),
 ]

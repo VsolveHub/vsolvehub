@@ -1213,23 +1213,23 @@ project has a path to being finished; clarification cannot alter the agreement.
 
 ### Policy engine and cases
 
-- [ ] `M2-BE-701` Implement policy evaluation that records lifecycle state, actor, reason, evidence,
+- [~] `M2-BE-701` Implement policy evaluation that records lifecycle state, actor, reason, evidence,
   contact-disclosure state, fulfilment evidence and calculated remedy, reusing the M1 cancellation
   policy module.
-- [ ] `M2-BE-702` Require counterparty confirmation or Operations review for suspicious cancellation
+- [~] `M2-BE-702` Require counterparty confirmation or Operations review for suspicious cancellation
   after contact disclosure or reported work start.
-- [ ] `M2-BE-703` Open linked cases for conflicting cancellation, no-show, attendance, safety incident,
+- [~] `M2-BE-703` Open linked cases for conflicting cancellation, no-show, attendance, safety incident,
   stage, payment, quality and off-platform claims.
-- [ ] `M2-BE-704` Implement evidence upload, response deadlines, internal notes, decisions, appeals and
+- [~] `M2-BE-704` Implement evidence upload, response deadlines, internal notes, decisions, appeals and
   audited manual overrides.
 
 ### Refund and payout integrity
 
-- [ ] `M2-BE-705` Implement unlock-fee outcomes (A3 fallback — revision 4): full refund on
+- [~] `M2-BE-705` Implement unlock-fee outcomes (A3 fallback — revision 4): full refund on
   `service_by` expiry or exhausted vendors, free replacement on non-responsive rejection, earned fee
   once valid quotes were unlocked. Whether the fallback still charges the unlock at all is owner
   decision 14; until decided, the built behaviour stands. `FLOW-01`
-- [ ] `M2-BE-719` Implement booking-fee outcomes (A3 rate-card, revision 4): full refund on a vendor
+- [~] `M2-BE-719` Implement booking-fee outcomes (A3 rate-card, revision 4): full refund on a vendor
   no-show (with a free re-dispatch and a standing hit), on a Customer cancellation at or beyond
   T hours before the slot, and of any unearned fee on `service_by` expiry; the **forfeit split** on
   a Customer no-show, a locked gate or a cancellation inside T — a configured share to the lead as
@@ -1237,34 +1237,34 @@ project has a path to being finished; clarification cannot alter the agreement.
   at first-day crew arrival. Every terminal state reconciles in integer paise —
   `fee = travel compensation + platform share` on a forfeit — exactly as a consumed visit share
   does.
-- [ ] `M2-BE-718` Implement visit-plan outcomes (A5): full refund of unconsumed value on `service_by`
+- [~] `M2-BE-718` Implement visit-plan outcomes (A5): full refund of unconsumed value on `service_by`
   expiry; per-share refund on unfilled slots, vendor no-show and missed estimate windows; earned
   shares (vendor payout + platform share) once a completed visit produced a usable estimate; customer
   no-show pays the vendor payout with the platform share per the configured policy. All shares
   reconcile to the plan in paise: `plan = Σ payouts + Σ platform shares + Σ refunds`.
-- [ ] `M2-BE-706` Implement service-payment cancellation outcomes by archetype, work state and verified
+- [~] `M2-BE-706` Implement service-payment cancellation outcomes by archetype, work state and verified
   completion.
-- [ ] `M2-BE-707` Make refund initiation idempotent and ledger-backed; handle provider pending, failed,
+- [~] `M2-BE-707` Make refund initiation idempotent and ledger-backed; handle provider pending, failed,
   reversed and duplicate test callbacks.
-- [ ] `M2-BE-708` Handle a chargeback on the booking, unlock or visit-plan fee itself through the
+- [~] `M2-BE-708` Handle a chargeback on the booking, unlock or visit-plan fee itself through the
   standard dispute path and alert on the rate. `GAP-035`
-- [ ] `M2-BE-709` Hold payout automatically when a qualifying case opens and release/reverse only
+- [~] `M2-BE-709` Hold payout automatically when a qualifying case opens and release/reverse only
   through authorized commands.
-- [ ] `M2-BE-710` Reconcile payment, refund, ledger and payout records on a scheduled job with alerts for
+- [~] `M2-BE-710` Reconcile payment, refund, ledger and payout records on a scheduled job with alerts for
   mismatches.
 
 ### Operations workspace APIs
 
-- [ ] `M2-BE-711` Publish a unified request timeline with the requirement, snapshots, matching or
+- [~] `M2-BE-711` Publish a unified request timeline with the requirement, snapshots, matching or
   cascade offers, questions, proposals, booking fee, unlock, engagement, stages, cases and financial
   events.
-- [ ] `M2-BE-712` Implement safe Operations actions for rematch, reclassification, deadline extension,
+- [~] `M2-BE-712` Implement safe Operations actions for rematch, reclassification, deadline extension,
   refund review, capability hold, payout hold and case resolution.
-- [ ] `M2-BE-713` Implement assisted requirement clarification and assisted proposal capture on behalf
+- [~] `M2-BE-713` Implement assisted requirement clarification and assisted proposal capture on behalf
   of a named actor, with consent and audit attribution.
-- [ ] `M2-BE-714` Implement stuck-state queues and scheduled recovery for unmatched, under-quoted,
+- [~] `M2-BE-714` Implement stuck-state queues and scheduled recovery for unmatched, under-quoted,
   SLA-breached, unconfirmed, inactive and unreconciled records.
-- [ ] `M2-BE-715` Emit the Operations-touches-per-request metric so the workspace design can be checked
+- [~] `M2-BE-715` Emit the Operations-touches-per-request metric so the workspace design can be checked
   against the approved unit economics — for A3 that check is against the **booking fee's platform
   share** (decision 10 as restated by ADR-0009), because the booking fee is the platform's entire A3
   revenue. `GAP-033`
@@ -1273,8 +1273,17 @@ project has a path to being finished; clarification cannot alter the agreement.
 
 - [ ] `M2-BE-716` Test every worst-case scenario in `04-acceptance-and-cutover.md`, including collusion
   indicators without automatic guilt.
+  **Left unchecked deliberately** — a test task under the build-first amendment. The smoke script
+  that replaces it for the sprint is
+  [`docs/runbooks/m2-recovery-smoke.md`](../../docs/runbooks/m2-recovery-smoke.md), which walks the
+  vendor-no-show free re-dispatch, the disputed cancellation that auto-resolves nothing, the
+  warranty claim that holds the retention, the chargeback that freezes settlement, and the
+  reconciliation sweep that reports rather than corrects.
 - [ ] `M2-BE-717` Prove Operations can recover supported failures through APIs without direct database
   edits.
+  **Left unchecked deliberately** — same reason. §7 and §8 of the smoke script are the walk: every
+  recovery in this wave is a domain command with an actor, a required reason and an audit row, and
+  none of them is a writable field.
 
 **BE6 gate:** Every failure has an accountable state, deadline, Customer explanation and audited
 recovery command; money reconciles after retries.

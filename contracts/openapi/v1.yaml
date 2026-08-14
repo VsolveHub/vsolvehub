@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.31.0
+  version: 1.32.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -1381,6 +1381,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/cancellations/{cancellation_id}/decision/:
+    post:
+      operationId: m2_cancellation_decide
+      description: |-
+        Confirm the other side's cancellation, or dispute it.
+
+        Confirming runs the remedy on the terms it was evaluated at. Disputing runs nothing: it opens a `CANCELLATION_CONFLICT` case, which **holds the vendor's unpaid earnings**, and Operations decides. `M2-AC-703` requires exactly that — a Customer who says work and cash payment happened while the Partner claims cancellation must not have the payout or the refund auto-resolve around them.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: cancellation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cancellation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationDecisionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancellationDecisionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancellationDecisionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementCancellation'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/cart/:
     get:
       operationId: cart_retrieve
@@ -1701,6 +1758,128 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CartSuggestions'
+          description: ''
+  /api/v1/cases/{case_id}/appeal/:
+    post:
+      operationId: m2_case_appeal_request
+      description: |-
+        Ask for a case to be looked at again. One appeal per case.
+
+        An **open** case may be appealed at any time — nothing has been decided yet. A **resolved** one may be appealed only inside the variant's configured appeal window, and while that window is unset the appeal is refused with `m2_policy_unavailable` rather than allowed indefinitely: an appeal window with no bound is an open-ended claim to reverse a decision that already moved money.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseAppealRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseAppealRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseAppealRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyCase'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/cases/{case_id}/evidence/:
+    post:
+      operationId: m2_case_evidence_submit
+      description: |-
+        Attach a statement, a requirement attachment or a stage-evidence record to a case you are a party to.
+
+        **There is no file upload here.** Evidence points at bytes that already came through one of the two verified rails — the requirement-attachment presign or the stage-evidence presign — so there is exactly one scan pipeline and one place a malware verdict can be forgotten. A file you have not uploaded yet is uploaded there first.
+
+        Submitting evidence never moves the case. A case that advanced because somebody uploaded a photograph would be a case that could be closed by uploading photographs.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseEvidenceRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseEvidenceRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseEvidenceRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEvidenceRecord'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Also returned when the artifact belongs to a different request
+            — the object-level rule applied to the join, not only to the route.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/categories/:
     get:
@@ -3126,6 +3305,37 @@ paths:
             carries no agreed daily rate to price an extension from; `m2_policy_unavailable`
             when the response window is unset — an amendment with no deadline is an
             open-ended claim on somebody''s money, so it is refused rather than invented.'
+  /api/v1/engagements/{engagement_id}/cases/:
+    get:
+      operationId: m2_engagement_cases
+      description: |-
+        The party view of every case opened on this request — a disputed stage, a disputed head count, a no-show, a safety report, an off-platform claim, a warranty claim or a chargeback.
+
+        Deliberately narrower than the Operations projection: it carries what the case is, when this party has to answer, whether money is held and what was decided. It carries no internal notes, no owning team and no statement made by the other side.
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cases
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyCaseList'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/engagements/{engagement_id}/cash-demand/:
     post:
       operationId: m2_cash_demand_report
@@ -3667,6 +3877,73 @@ paths:
           description: '`m2_stage_disputed`, `m2_amendment_not_actionable` when a
             transfer is already waiting, or `m2_stage_transition_not_allowed` when
             the milestone list does not match.'
+  /api/v1/engagements/{engagement_id}/warranty-claim/:
+    post:
+      operationId: m2_warranty_claim_raise
+      description: |-
+        Raise a warranty claim inside the warranty window.
+
+        **This is the surface `M2-BE-546` was missing.** Retention is held back out of the vendor's payout against a warranty promise, and until 1.32.0 there was no published way to call on it: the stage-dispute command accepts only a stage in `AWAITING_REVIEW`, and by warranty time every stage is settled, so it refused by construction. Money was held for a promise the product could not accept a call against.
+
+        Raising a claim opens a `QUALITY` case — which holds payout — and **stops the warranty sweep releasing the retention** while it is open. The window is the engagement's own `warranty_ends_at`; an engagement that advertised no warranty refuses, because there is nothing held to claim against.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarrantyClaimRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WarrantyClaimRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WarrantyClaimRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` when the job carries
+            no warranty, the warranty period has ended, or the work is not finished
+            yet.'
   /api/v1/finance/refunds/:
     post:
       operationId: finance_refunds_create
@@ -3917,6 +4194,71 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Checkout'
+          description: ''
+  /api/v1/operations/assisted-proposals/:
+    post:
+      operationId: m2_operations_assisted_proposal
+      description: |-
+        Capture a quote a Partner gave over the phone, attributed to that Partner.
+
+        Revision 4 makes this a **primary path** rather than a convenience: on the A3 fallback the vendors who answer fastest are often the ones who will not fill in a form. It is still not a way for staff to publish a price — the proposal is written with `vendor_confirmed_at` null, every Customer-facing read already filters on that, and the vendor's own confirmation is what makes it visible (`M2-AC-218`).
+
+        Consent is recorded through the `Idempotency-Key`-scoped command and refused when absent, exactly as assisted clarification is. The wage floor is derived and enforced here identically to a vendor's own submission.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProposalCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProposalCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
           description: ''
   /api/v1/operations/bookings/{booking_id}/:
     get:
@@ -4244,6 +4586,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/cases/{case_id}/appeal-decision/:
+    post:
+      operationId: operations_case_decide_appeal
+      description: |-
+        Decide an appeal a party raised through `POST /cases/{case_id}/appeal/`.
+
+        `UPHELD` keeps the original resolution. `OVERTURNED` **reopens** the case rather than re-deciding it: the second decision is a real decision with its own required terminal result, taken by somebody looking at the case again. A command that could both overturn and re-resolve in one step would be a command that closed a case without anybody working it.
+
+        Reopening also puts the payout hold back, because the reason the money was released — the case being finished — has just stopped being true.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseAppealDecisionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseAppealDecisionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseAppealDecisionRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/cases/{case_id}/claim/:
     post:
       operationId: operations_case_claim
@@ -4435,6 +4848,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/cases/{case_id}/override/:
+    post:
+      operationId: operations_case_override_outcome
+      description: |-
+        `M2-BE-704`'s audited manual override, and the audit is the whole of it.
+
+        The new resolution is still checked against the case kind's `allowed_resolutions` — an override is permission to reach a *different* documented outcome, never permission to reach an undocumented one — and the previous result is kept in the event context, so the trail reads "we said X, then we said Y, and here is who and why" rather than only ever showing Y.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseOverrideRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseOverrideRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseOverrideRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/cases/{case_id}/resolve/:
     post:
       operationId: operations_case_resolve
@@ -4472,6 +4954,75 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/ResolveCaseRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsCase'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/cases/{case_id}/response-deadline/:
+    post:
+      operationId: operations_case_set_response_deadline
+      description: |-
+        Move the deadline the **parties** are measured on — distinct from `due_at`, which is the deadline Operations is measured on.
+
+        **Forward only.** Moving it backwards would retroactively time somebody out of a window they were still inside, which is the one thing a deadline extension must not be able to do, and it is why this is a command with a reason rather than a writable field.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: case_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaseResponseDeadlineRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CaseResponseDeadlineRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CaseResponseDeadlineRequestRequest'
         required: true
       security:
       - cookieAuth: []
@@ -4853,6 +5404,168 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/crew-memberships/:
+    get:
+      operationId: m2_operations_crew_verification_queue
+      description: |-
+        Active crew memberships whose documents have never been verified, oldest first.
+
+        This queue is why the A3 cascade can find anybody: `documents_verified_at` is what `verified_roster_size` counts when it sizes a lead's roster against the requested headcount, and a vendor with no verified crew is excluded from every crew offer.
+      parameters:
+      - in: query
+        name: partner
+        schema:
+          type: string
+          format: uuid
+        description: Narrow to one vendor's roster.
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewVerificationQueue'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/crew-memberships/{membership_id}/verification/:
+    post:
+      operationId: m2_operations_crew_verify
+      description: |-
+        Verify — or un-verify — one worker's documents on one vendor's roster.
+
+        **This column had four readers and no writer.** `verified_roster_size` counts only verified memberships when sizing a lead's roster against the requested headcount, `assign_crew` refuses an unverified worker outright, and both apps publish a badge from it; with nothing setting it, every vendor's verified roster was zero in every environment and every crew offer excluded every lead. The dev seed has stamped it since Wave C5 so the demo walks; this is the production writer.
+
+        Verifying needs no reason — the documents were seen. **Removing** verification does, because it takes a named person off jobs they may already be assigned to. Verifying an already-verified membership is a no-op rather than a re-stamp, so the date keeps meaning when the documents were actually checked.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: membership_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrewVerificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CrewVerificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CrewVerificationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrewMembershipVerificationRow'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` when the membership
+            is archived, or when verification is being removed with no reason given.'
+  /api/v1/operations/enquiries/{invitation_id}/assisted-clarification/:
+    post:
+      operationId: m2_operations_assisted_clarification
+      description: |-
+        Capture a question and its answer on behalf of the two named parties.
+
+        **Consent is a refusal, not a checkbox.** Without `consent_recorded` the capture does not happen: `M2-AC-802` requires assisted capture to record consent and the named actor, and a flag that could be false while the row was still written would record the absence of consent next to the thing it was absent for.
+
+        Attribution goes to the parties, not the operator: the question is the Partner's and the answer is the Customer's, with the operator recorded beside them.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: invitation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistedClarificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistedClarificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistedClarificationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementQuestion'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/fulfilment-units/{unit_id}/dispatch-explanation/:
     get:
       operationId: operations_fulfilment_unit_dispatch_explanation
@@ -5143,6 +5856,29 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/metrics/touches/:
+    get:
+      operationId: m2_operations_touch_rollup
+      description: Operations touches across every request in the last thirty days,
+        by action, with the mean per touched request. `M2-AC-810` measures against
+        this.
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TouchRollup'
+          description: ''
+        '403':
           content:
             application/json:
               schema:
@@ -5662,6 +6398,79 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/payments/{payment_attempt_id}/chargeback/:
+    post:
+      operationId: m2_operations_record_chargeback
+      description: |-
+        Record that the Customer's bank pulled back a platform fee, and open the standard dispute path.
+
+        Opening the `CHARGEBACK` case **holds payout**: a visit share or a travel compensation funded by the charge being reversed stops being payable immediately, which is `M2-AC-711`'s "freezes unsafe settlement". Money that has already left is not reversed — it is reported as an open financial exception, because a status flip that made the ledger disagree with the bank is the one failure reconciliation cannot repair.
+
+        The fee row itself does **not** move. A chargeback is a claim in progress, not a settlement, and marking an earned fee refunded here would tell both parties a decision had been taken that has not been.
+
+        The rate alarm fires from here when the variant's threshold is configured; while it is unset **no alarm fires** and every chargeback is still recorded.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: payment_attempt_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargebackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChargebackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChargebackRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyCase'
+          description: The case that now owns it.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/payout-batches/:
     get:
       operationId: operations_payout_batches_list
@@ -6005,6 +6814,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/operations/queues/:
+    get:
+      operationId: m2_operations_queues
+      description: |-
+        Eight stuck-state queues with their depth, their oldest member and the recovery action that clears them: unmatched, under-quoted, SLA-breached, unconfirmed, inactive, unreconciled, plus a cancellation nobody answered and a case past its parties' response deadline.
+
+        **No queue here invents a threshold.** Each is defined by a deadline that already exists on the record, so an unset owner value cannot silently change what counts as stuck; a queue whose deadline is null is simply empty, which is the honest reading of "we promised no clock here".
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StuckQueueList'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/rate-cards/:
     get:
       operationId: m2_rate_card_list
@@ -6103,6 +6936,370 @@ paths:
             the check fails closed rather than being skipped. `m2_requirement_transition_not_allowed`
             when the effective date would land on or before a live booking made at
             the current rate.'
+  /api/v1/operations/reconciliation/:
+    get:
+      operationId: m2_operations_reconciliation_summary
+      description: |-
+        Open financial exceptions by kind, plus the two refund states a Customer must never see presented as complete: refunds the provider has not settled, and refunds it explicitly refused (`M2-AC-709`).
+
+        The sweep that produces these runs on the beat schedule and **never corrects what it finds**. A reconciliation job that could fix a mismatch would quietly rewrite history when its own arithmetic was wrong, and the first sign of trouble would be a ledger that always balanced.
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationSummary'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/{requirement_id}/deadline/:
+    post:
+      operationId: m2_operations_extend_deadline
+      description: |-
+        Move a request's needed-by date forward by a number of hours.
+
+        **Forward only.** A deadline extension that could pull a date in would be a way to close somebody's live request by moving its clock, which is the opposite of a recovery action.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsDeadlineExtensionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsDeadlineExtensionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsDeadlineExtensionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestTimeline'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/{requirement_id}/reclassification/:
+    post:
+      operationId: m2_operations_reclassify
+      description: Reclassify a request between the workforce and project lifecycles.
+        Every paid value is preserved — unfilled visit shares refund or convert, a
+        charged unlock survives — and matching restarts with **no second charge**
+        (`M2-AC-104`, `M2-AC-334`).
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsReclassificationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsReclassificationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsReclassificationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestTimeline'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/{requirement_id}/refund-review/:
+    post:
+      operationId: m2_operations_refund_review
+      description: |-
+        Record that a refund was reviewed, and what was decided.
+
+        **It records rather than moves money, and that is the design.** Each product refunds through the module that owns it — the booking fee, the unlock, the visit share — idempotently and on the M1 rail. An Operations endpoint that could move an arbitrary amount to an arbitrary payer would be a second refund path with none of the first's reconciliation, and `M2-AC-712` requires each product to reconcile independently.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsRefundReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsRefundReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsRefundReviewRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsTouch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/{requirement_id}/rematch/:
+    post:
+      operationId: m2_operations_rematch
+      description: |-
+        Rematch one request. A rate-card A3 booking advances its **cascade**; everything else runs another **invitation wave**. Neither charges anything, and the Customer does not have to know which engine answered their question.
+
+        The reason is required and lands on the timeline as an Operations touch.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationsReasonRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperationsReasonRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperationsReasonRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestTimeline'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/{requirement_id}/timeline/:
+    get:
+      operationId: m2_operations_request_timeline
+      description: |-
+        Everything that happened to one request, in order: transitions, snapshots, invitations and cascade offers **with the vendor named**, questions, proposals, site visits, the booking fee, the unlock, the visit plan and its shares, the engagement and its stages, every case, every cancellation and every Operations touch.
+
+        Assembled from the aggregates rather than from a projection table, deliberately: a materialised timeline drifts the first time a command forgets to append to it, and the failure mode is the worst available — a timeline that looks complete and is not. This is the read a support agent makes a money decision from.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestTimeline'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/operations/requests/{requirement_id}/touch-metric/:
+    get:
+      operationId: m2_operations_touch_metric
+      description: |-
+        Operations touches on one request, the configured budget, and the platform revenue the touches have to fit inside. For A3 that revenue is the booking fee's **platform share** — decision 10 as restated by ADR-0009 — because the booking fee is the platform's entire A3 revenue.
+
+        `within_budget` is `null` while the owner has not set a budget. Not `false`, which would read as a breach, and not `true`, which would read as a pass: the count is real and the judgement is not available.
+
+        Only **settled** money counts as revenue. An `ACTIVE` booking fee is money held against a crew that has not arrived, and counting it would make the unit economics look healthiest exactly when the most is at risk.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Operations
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TouchMetric'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/reservations/{reservation_id}/release/:
     post:
       operationId: operations_reservation_release
@@ -10290,6 +11487,105 @@ paths:
           description: '`m2_booking_fee_not_chargeable` when no lead is holding the
             job, when the hold has expired, or when the fee is already settled; `m2_lifecycle_not_supported`
             on a request that is on the quote flow.'
+  /api/v1/requirements/{requirement_id}/cancellation/:
+    get:
+      operationId: m2_cancellation_read
+      description: The cancellation currently open on this request, or `null`. Both
+        parties see the same record and the same numbers — a remedy one side could
+        read differently from the other is how a support call becomes an argument.
+      parameters:
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cancellation
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementCancellation'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_cancellation_request
+      description: |-
+        Evaluate and start a cancellation. **Nothing is charged or refunded by this call on its own.**
+
+        The response says which of two things happened. If contact has not been disclosed and nobody has reported work starting, the remedy executes immediately and the record comes back `EXECUTED`. If either is true, it comes back `AWAITING_CONFIRMATION` with a deadline: past that point one party may no longer end an agreement on their own account of it, and the other side confirms or disputes (`M2-BE-702`).
+
+        The remedy is calculated **before** anything moves, because the lifecycle state it rests on stops being readable the moment it does. Wages are never part of it: an A3 service payment is peer-to-peer and this platform has never held it.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Cancellation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancellationRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancellationRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementCancellation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` when the request is
+            already closed or already has a cancellation waiting on a decision. `m2_policy_unavailable`
+            when the free-cancel window T is unset and a paid A3 booking would have
+            to be settled against it — the fail-closed direction, because choosing
+            between a refund and a forfeit by guessing is choosing whose money it
+            is.'
   /api/v1/requirements/{requirement_id}/crew/arrival/:
     post:
       operationId: m2_crew_arrival_confirm
@@ -12339,6 +13635,25 @@ components:
       - consent_version
       - customer_id
       - quote_id
+    AssistedClarificationRequest:
+      type: object
+      description: Write down a clarification that happened on the phone. Consent
+        is a refusal, not a flag.
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        consent_recorded:
+          type: boolean
+      required:
+      - answer
+      - consent_recorded
+      - question
     AssistedStartRequestRequest:
       type: object
       description: |-
@@ -12595,6 +13910,7 @@ components:
       - FORFEIT_SPLIT
       - REFUNDED
       - FAILED
+      - WAIVED
       type: string
       description: |-
         * `OFFER_ACCEPTED` - A lead accepted; the Customer has not paid yet
@@ -12604,6 +13920,7 @@ components:
         * `FORFEIT_SPLIT` - Forfeited and split with the lead
         * `REFUNDED` - Refunded in full
         * `FAILED` - Payment failed
+        * `WAIVED` - Confirmed at no charge under a free re-dispatch
     BookingGroup:
       type: object
       properties:
@@ -12913,6 +14230,18 @@ components:
       - code
       - condition_text
       - fee
+    CancellationDecisionRequest:
+      type: object
+      description: The counterparty confirms or disputes (`M2-BE-702`).
+      properties:
+        confirm:
+          type: boolean
+        reason:
+          type: string
+          default: ''
+          maxLength: 2000
+      required:
+      - confirm
     CancellationPolicy:
       type: object
       properties:
@@ -12960,6 +14289,27 @@ components:
       - fee_paise
       - fee_waiver
       - refund_paise
+    CancellationRequestRequest:
+      type: object
+      description: Ask what calling this job off would mean, and start it.
+      properties:
+        reason_code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+        reason:
+          type: string
+          default: ''
+          maxLength: 2000
+        evidence:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          maxItems: 20
+      required:
+      - reason_code
     CapabilityOption:
       type: object
       properties:
@@ -13332,6 +14682,90 @@ components:
       required:
       - cart_version
       - suggestions
+    CaseAppealDecisionRequestOutcomeEnum:
+      enum:
+      - UPHELD
+      - OVERTURNED
+      type: string
+      description: |-
+        * `UPHELD` - Upheld
+        * `OVERTURNED` - Overturned
+    CaseAppealDecisionRequestRequest:
+      type: object
+      description: '`UPHELD` keeps the resolution; `OVERTURNED` reopens the case for
+        a second decision.'
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        outcome:
+          $ref: '#/components/schemas/CaseAppealDecisionRequestOutcomeEnum'
+        note:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - expected_version
+      - note
+      - outcome
+    CaseAppealRequestRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - reason
+    CaseEvidenceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        party:
+          type: string
+        statement:
+          type: string
+        requirement_attachment_id:
+          type: string
+          format: uuid
+          nullable: true
+        stage_evidence_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - party
+      - requirement_attachment_id
+      - stage_evidence_id
+      - statement
+    CaseEvidenceRequest:
+      type: object
+      description: |-
+        Point at something already uploaded, and say what it proves.
+
+        There is no file field here and there is not going to be one: `M2-BE-704`'s evidence reuses the
+        two verified rails M2 already has — the requirement-attachment presign and the stage-evidence
+        presign — rather than adding a third place a malware verdict could be forgotten.
+      properties:
+        statement:
+          type: string
+          default: ''
+          maxLength: 1000
+        requirement_attachment_id:
+          type: string
+          format: uuid
+          nullable: true
+        stage_evidence_id:
+          type: string
+          format: uuid
+          nullable: true
     CaseNoteRequestRequest:
       type: object
       properties:
@@ -13344,6 +14778,29 @@ components:
           default: false
       required:
       - body
+    CaseOverrideRequestRequest:
+      type: object
+      description: |-
+        An audited manual override of a resolved case's terminal result.
+
+        Still checked against the case kind's `allowed_resolutions`: an override is permission to
+        reach a *different* documented outcome, never permission to reach an undocumented one.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        resolution:
+          type: string
+          minLength: 1
+          maxLength: 48
+        note:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - expected_version
+      - note
+      - resolution
     CaseQueueSummary:
       type: object
       description: |-
@@ -13380,6 +14837,25 @@ components:
       - oldest_overdue_minutes
       - server_now
       - teams
+    CaseResponseDeadlineRequestRequest:
+      type: object
+      description: '`M2-BE-712`''s deadline extension, applied to a case''s party
+        window. Forward only.'
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+        response_due_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 480
+      required:
+      - expected_version
+      - reason
+      - response_due_at
     CashDemandReport:
       type: object
       description: |-
@@ -13475,6 +14951,28 @@ components:
       description: |-
         * `SMS` - SMS
         * `EMAIL` - Email
+    ChargebackRequest:
+      type: object
+      description: |-
+        `M2-BE-708`. The provider reference is required: a chargeback with no bank reference cannot
+        be represented or reconciled, and recording one would be recording a rumour.
+      properties:
+        amount_paise:
+          type: integer
+          minimum: 1
+        provider_reference:
+          type: string
+          minLength: 1
+          maxLength: 120
+        reason_code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[-a-zA-Z0-9_]+$
+      required:
+      - amount_paise
+      - provider_reference
+      - reason_code
     Checkout:
       type: object
       properties:
@@ -14032,6 +15530,36 @@ components:
       required:
       - display_name
       - phone_e164
+    CrewMembershipVerificationRow:
+      type: object
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        partner_id:
+          type: string
+          format: uuid
+        partner_name:
+          type: string
+        crew_member_name:
+          type: string
+        is_supervisor:
+          type: boolean
+        added_at:
+          type: string
+          format: date-time
+        documents_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - added_at
+      - crew_member_name
+      - documents_verified_at
+      - is_supervisor
+      - membership_id
+      - partner_id
+      - partner_name
     CrewNoShowReasonCodeEnum:
       enum:
       - customer_no_show
@@ -14263,6 +15791,36 @@ components:
       required:
       - offers
       - server_now
+    CrewVerificationQueue:
+      type: object
+      properties:
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrewMembershipVerificationRow'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - memberships
+      - server_now
+    CrewVerificationRequest:
+      type: object
+      description: |-
+        Verify, or un-verify, one worker's documents.
+
+        `reason` is optional on the way in and required by the command on the way down when `verified`
+        is false — the refusal lives in the domain rather than here, so a second caller cannot reach a
+        different rule.
+      properties:
+        verified:
+          type: boolean
+        reason:
+          type: string
+          default: ''
+          maxLength: 480
+      required:
+      - verified
     CsrfToken:
       type: object
       properties:
@@ -15820,6 +17378,16 @@ components:
       - content_type
       - kind
       - size_bytes
+    ExceptionCount:
+      type: object
+      properties:
+        kind:
+          type: string
+        count:
+          type: integer
+      required:
+      - count
+      - kind
     ExcludedCandidate:
       type: object
       properties:
@@ -16818,6 +18386,14 @@ components:
           type: string
           format: uuid
           nullable: true
+        requirement_id:
+          type: string
+          format: uuid
+          nullable: true
+        engagement_id:
+          type: string
+          format: uuid
+          nullable: true
       required:
       - kind
       - summary
@@ -17058,6 +18634,16 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        requirement_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        engagement_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         summary:
           type: string
           readOnly: true
@@ -17068,6 +18654,11 @@ components:
           type: string
           format: date-time
           readOnly: true
+        response_due_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         is_overdue:
           type: boolean
           readOnly: true
@@ -17088,6 +18679,34 @@ components:
         holds_payout:
           type: boolean
           readOnly: true
+        held_ledger_entry_ids:
+          readOnly: true
+        appeal_requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        appeal_requested_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        appeal_reason:
+          type: string
+          readOnly: true
+        appeal_decided_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        appeal_decided_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        appeal_outcome:
+          type: string
+          readOnly: true
         allowed_resolutions:
           type: array
           items:
@@ -17097,6 +18716,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OperationsCaseEvent'
+          readOnly: true
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsCaseEvidence'
           readOnly: true
         server_now:
           type: string
@@ -17108,11 +18732,20 @@ components:
           readOnly: true
       required:
       - allowed_resolutions
+      - appeal_decided_at
+      - appeal_decided_by_id
+      - appeal_outcome
+      - appeal_reason
+      - appeal_requested_at
+      - appeal_requested_by_id
       - booking_id
       - created_at
       - detail
       - due_at
+      - engagement_id
       - events
+      - evidence
+      - held_ledger_entry_ids
       - holds_payout
       - id
       - is_overdue
@@ -17121,9 +18754,11 @@ components:
       - owner_id
       - owner_team
       - partner_id
+      - requirement_id
       - resolution
       - resolution_note
       - resolved_at
+      - response_due_at
       - server_now
       - severity
       - status
@@ -17171,6 +18806,12 @@ components:
       - COMMUNICATION
       - RESOLVED
       - CANCELLED
+      - EVIDENCE
+      - DEADLINE_SET
+      - APPEAL_REQUESTED
+      - APPEAL_DECIDED
+      - OVERRIDE
+      - PAYOUT_HOLD_CHANGED
       type: string
       description: |-
         * `OPENED` - Opened
@@ -17181,6 +18822,69 @@ components:
         * `COMMUNICATION` - Communication sent
         * `RESOLVED` - Resolved
         * `CANCELLED` - Cancelled
+        * `EVIDENCE` - Evidence submitted
+        * `DEADLINE_SET` - Response deadline set
+        * `APPEAL_REQUESTED` - Appeal requested
+        * `APPEAL_DECIDED` - Appeal decided
+        * `OVERRIDE` - Manual override
+        * `PAYOUT_HOLD_CHANGED` - Payout hold changed
+    OperationsCaseEvidence:
+      type: object
+      description: |-
+        What a party put in front of the decision (`M2-BE-704`).
+
+        Publishes the **reference**, never a URL. Reading the bytes goes through the rail that owns
+        them — the requirement-attachment or stage-evidence read — which is where the scan verdict and
+        the object-level check already live. A signed link minted here would be a second door into
+        somebody's file with none of the first door's guards.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        party:
+          allOf:
+          - $ref: '#/components/schemas/OperationsCaseEvidencePartyEnum'
+          readOnly: true
+        submitted_by_id:
+          type: string
+          format: uuid
+          readOnly: true
+        statement:
+          type: string
+          readOnly: true
+        requirement_attachment_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        stage_evidence_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - party
+      - requirement_attachment_id
+      - stage_evidence_id
+      - statement
+      - submitted_by_id
+    OperationsCaseEvidencePartyEnum:
+      enum:
+      - CUSTOMER
+      - PARTNER
+      - OPERATIONS
+      type: string
+      description: |-
+        * `CUSTOMER` - Customer
+        * `PARTNER` - Partner
+        * `OPERATIONS` - Operations
     OperationsCaseKindEnum:
       enum:
       - ASSIGNMENT
@@ -17192,6 +18896,11 @@ components:
       - PAYMENT
       - REFUND
       - PAYOUT
+      - CANCELLATION_CONFLICT
+      - ATTENDANCE
+      - STAGE
+      - OFF_PLATFORM
+      - CHARGEBACK
       type: string
       description: |-
         * `ASSIGNMENT` - Assignment or recovery
@@ -17203,6 +18912,11 @@ components:
         * `PAYMENT` - Payment ambiguity
         * `REFUND` - Refund ambiguity
         * `PAYOUT` - Payout ambiguity
+        * `CANCELLATION_CONFLICT` - Conflicting cancellation claims
+        * `ATTENDANCE` - Disputed attendance
+        * `STAGE` - Disputed stage or milestone
+        * `OFF_PLATFORM` - Off-platform payment claim
+        * `CHARGEBACK` - Chargeback on a platform fee
     OperationsCaseList:
       type: object
       description: |-
@@ -17345,6 +19059,22 @@ components:
         * `QUALITY_SUPPORT` - Quality support
         * `SAFETY` - Restricted safety team
         * `FINANCE` - Finance Operations
+    OperationsDeadlineExtensionRequest:
+      type: object
+      description: Every safe Operations action takes a reason. `M2-AC-804` requires
+        it.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        extra_hours:
+          type: integer
+          maximum: 720
+          minimum: 1
+      required:
+      - extra_hours
+      - reason
     OperationsDocumentReviewDecisionEnum:
       enum:
       - APPROVED
@@ -17591,6 +19321,72 @@ components:
       - consent_purpose
       - exceptions
       - rules
+    OperationsReasonRequest:
+      type: object
+      description: Every safe Operations action takes a reason. `M2-AC-804` requires
+        it.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - reason
+    OperationsReclassificationRequest:
+      type: object
+      description: Every safe Operations action takes a reason. `M2-AC-804` requires
+        it.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        to_archetype:
+          $ref: '#/components/schemas/ToArchetypeEnum'
+      required:
+      - reason
+      - to_archetype
+    OperationsRefundReviewDecisionEnum:
+      enum:
+      - APPROVED
+      - DECLINED
+      type: string
+      description: |-
+        * `APPROVED` - Approved
+        * `DECLINED` - Declined
+    OperationsRefundReviewRequest:
+      type: object
+      description: Every safe Operations action takes a reason. `M2-AC-804` requires
+        it.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        decision:
+          $ref: '#/components/schemas/OperationsRefundReviewDecisionEnum'
+      required:
+      - decision
+      - reason
+    OperationsTouch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        reason:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+      required:
+      - action
+      - id
+      - occurred_at
+      - reason
     OperationsTransitionRequest:
       type: object
       properties:
@@ -19216,6 +21012,75 @@ components:
       - code
       - description
       - name
+    PartyCase:
+      type: object
+      description: |-
+        A case as one of its two parties may read it.
+
+        Deliberately **not** `OperationsCaseSerializer`. That projection carries the owning team, the
+        internal notes and the full event trail, and its own docstring says it has one audience — a
+        case can quote a Customer's complaint verbatim and name a Partner in a safety report. What a
+        party gets is their own view: what it is, when they must answer, and what was decided.
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        status:
+          type: string
+        summary:
+          type: string
+        opened_at:
+          type: string
+          format: date-time
+        response_due_at:
+          type: string
+          format: date-time
+          nullable: true
+        resolution:
+          type: string
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+        appeal_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        appeal_outcome:
+          type: string
+        holds_payout:
+          type: boolean
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - appeal_outcome
+      - appeal_requested_at
+      - holds_payout
+      - id
+      - kind
+      - opened_at
+      - resolution
+      - resolved_at
+      - response_due_at
+      - server_now
+      - status
+      - summary
+    PartyCaseList:
+      type: object
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartyCase'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - cases
+      - server_now
     PatchedAddressRequest:
       type: object
       properties:
@@ -21920,6 +23785,26 @@ components:
         * `PENDING` - Pending
         * `IN_SYNC` - In sync
         * `NEEDS_ATTENTION` - Needs attention
+    ReconciliationSummary:
+      type: object
+      description: What Finance is carrying right now (`M2-BE-710`).
+      properties:
+        server_now:
+          type: string
+          format: date-time
+        open_by_kind:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExceptionCount'
+        refunds_awaiting_provider:
+          type: integer
+        failed_refunds:
+          type: integer
+      required:
+      - failed_refunds
+      - open_by_kind
+      - refunds_awaiting_provider
+      - server_now
     RecoverBookingRequestRequest:
       type: object
       description: |-
@@ -22103,6 +23988,30 @@ components:
           maxLength: 140
       required:
       - scope
+    RequestTimeline:
+      type: object
+      description: '`M2-BE-711`: everything that happened to one request, in order.'
+      properties:
+        requirement_id:
+          type: string
+          format: uuid
+        archetype:
+          type: string
+        status:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelineEvent'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - archetype
+      - events
+      - requirement_id
+      - server_now
+      - status
     RequirementAttachment:
       type: object
       properties:
@@ -22147,6 +24056,79 @@ components:
         * `AUDIO` - Audio
         * `VOICE_NOTE` - Voice note
         * `DOCUMENT` - Document
+    RequirementCancellation:
+      type: object
+      description: One cancellation, as either party may read it. Both sides see the
+        same numbers.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        actor_role:
+          type: string
+        reason_code:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        reason:
+          type: string
+        remedy_code:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        remedy:
+          type: object
+          additionalProperties: {}
+        contact_disclosed:
+          type: boolean
+        work_reported_started:
+          type: boolean
+        requires_counterparty_confirmation:
+          type: boolean
+        confirmation_due_at:
+          type: string
+          format: date-time
+          nullable: true
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        disputed_at:
+          type: string
+          format: date-time
+          nullable: true
+        executed_at:
+          type: string
+          format: date-time
+          nullable: true
+        operations_case_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - actor_role
+      - confirmation_due_at
+      - confirmed_at
+      - contact_disclosed
+      - created_at
+      - disputed_at
+      - executed_at
+      - id
+      - operations_case_id
+      - reason
+      - reason_code
+      - remedy
+      - remedy_code
+      - requires_counterparty_confirmation
+      - server_now
+      - status
+      - work_reported_started
     RequirementCreateRequest:
       type: object
       properties:
@@ -24225,6 +26207,41 @@ components:
         * `COORDINATED_PARALLEL` - Coordinated parallel
         * `INDEPENDENT_VISITS` - Independent visits
         * `MIXED` - Mixed
+    StuckQueue:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        queue_label:
+          type: string
+        depth:
+          type: integer
+        oldest_at:
+          type: string
+          format: date-time
+          nullable: true
+        recovery_action:
+          type: string
+      required:
+      - code
+      - depth
+      - oldest_at
+      - queue_label
+      - recovery_action
+    StuckQueueList:
+      type: object
+      properties:
+        queues:
+          type: array
+          items:
+            $ref: '#/components/schemas/StuckQueue'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - queues
+      - server_now
     Subcategory:
       type: object
       properties:
@@ -24394,6 +26411,104 @@ components:
       - open
       - owner_team
       - unclaimed
+    TimelineEvent:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        type:
+          type: string
+        detail:
+          type: object
+          additionalProperties: {}
+      required:
+      - at
+      - detail
+      - type
+    ToArchetypeEnum:
+      enum:
+      - A3_TIME_BLOCK
+      - A5_CUSTOM_PROJECT
+      type: string
+      description: |-
+        * `A3_TIME_BLOCK` - Workforce
+        * `A5_CUSTOM_PROJECT` - Project
+    TouchActionCount:
+      type: object
+      properties:
+        action:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
+        count:
+          type: integer
+      required:
+      - action
+      - count
+    TouchMetric:
+      type: object
+      description: |-
+        `M2-BE-715`. `within_budget` is nullable, and null is the honest answer while the owner has
+        not set a budget — `false` would read as a breach and `true` as a pass, and neither is known.
+      properties:
+        requirement_id:
+          type: string
+          format: uuid
+        archetype:
+          type: string
+        touches:
+          type: integer
+        budget:
+          type: integer
+          nullable: true
+        within_budget:
+          type: boolean
+          nullable: true
+        platform_revenue_paise:
+          type: integer
+        touches_detail:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationsTouch'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - archetype
+      - budget
+      - platform_revenue_paise
+      - requirement_id
+      - server_now
+      - touches
+      - touches_detail
+      - within_budget
+    TouchRollup:
+      type: object
+      properties:
+        since:
+          type: string
+          format: date-time
+        requests_touched:
+          type: integer
+        total_touches:
+          type: integer
+        mean_touches_per_touched_request:
+          type: number
+          format: double
+        by_action:
+          type: array
+          items:
+            $ref: '#/components/schemas/TouchActionCount'
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - by_action
+      - mean_touches_per_touched_request
+      - requests_touched
+      - server_now
+      - since
+      - total_touches
     TransferQuoteRequest:
       type: object
       description: The replacement's price for one unfinished milestone.
@@ -25135,6 +27250,20 @@ components:
       - server_now
       - timezone
       - visit_duration_minutes
+    WarrantyClaimRequest:
+      type: object
+      description: The Customer calls on a warranty the retention was held against.
+      properties:
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 240
+        detail:
+          type: string
+          default: ''
+          maxLength: 4000
+      required:
+      - summary
     WebhookAccepted:
       type: object
       properties:

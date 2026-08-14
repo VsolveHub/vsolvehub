@@ -267,7 +267,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.31.0",
+    "VERSION": "1.32.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -848,6 +848,23 @@ CELERY_BEAT_SCHEDULE = {
         # Hourly, matching every other payout-hold sweep and `reconcile-payouts`. The retention is
         # already earned and merely held; a warranty period is measured in months, so the tick
         # rate decides nothing except how long after midnight the vendor sees it.
+        "schedule": 60.0 * 60,
+    },
+    # M2 Wave C6 — recovery. Neither of these decides money, which is why neither is urgent: one
+    # escalates a silence to a person and the other opens exceptions for a person to read.
+    "sweep-lapsed-cancellation-confirmations": {
+        "task": "apps.requirements.tasks.sweep_lapsed_cancellation_confirmations",
+        # 15 minutes, matching `sweep-delay-claims`. Both turn one party's silence into an outcome
+        # near the deadline it was promised against — and this one turns it into "a human decides",
+        # so the cost of a late tick is a case opening a quarter-hour later, never money moving.
+        "schedule": 60.0 * 15,
+    },
+    "reconcile-m2-money": {
+        "task": "apps.requirements.tasks.reconcile_m2_money",
+        # Hourly, matching `reconcile-payouts`. It reads every settled M2 money row, so it is the
+        # most expensive sweep on this list and the least urgent: a mismatch that has existed for
+        # an hour has existed for an hour whether or not anybody looked, and the exception it
+        # opens is deduplicated per row so a frequent tick would only re-read the same books.
         "schedule": 60.0 * 60,
     },
 }

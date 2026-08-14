@@ -4,6 +4,169 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.32.0 - What happens when it goes wrong, and the workspace that fixes it
+
+**Wave C6.** Twenty-three new paths: seven a Customer or a Partner calls, sixteen only Operations
+can. This is the release the **admin app's M2 screens are built against**, so the sections below
+are ordered as screens rather than as endpoints, and every refusal a screen has to render is named
+where it happens.
+
+Additive, verified rather than asserted: every path, `operationId` and schema component was diffed
+against the committed 1.31.0 contract before publishing. **Removed: none** — 233 → 256 paths,
+262 → 286 operations, 470 → 506 components. Four existing components gained values or fields and
+none changed meaning; they are the four traps below.
+
+### Why
+
+C0–C5 built the money. This is its other half. A booking fee could be charged, earned, forfeited
+and refunded, and a visit share could be earned or refunded — but nothing could be **disputed**,
+nobody could **appeal**, no case held a payout, and the only way to recover a stuck request was to
+edit the database. `04-acceptance-and-cutover.md` fails a scenario outright for that last one.
+
+### The four traps
+
+**1. `OperationsCaseKindEnum` gains four values, and `OperationsCase` gains two subjects.**
+`CANCELLATION_CONFLICT`, `ATTENDANCE`, `STAGE`, `OFF_PLATFORM` and `CHARGEBACK` are M2 case kinds,
+and a case may now be about a `requirement_id` or an `engagement_id` instead of a
+`booking_id`/`order_id`/`partner_id`. A `switch` over case kind that was exhaustive at 1.31.0 is
+not exhaustive now, and **a subject switch that assumed three keys will show a case about nothing**
+— all five subject fields are nullable and exactly one is set. `allowed_resolutions` is still
+published per case, so the resolve dialog needs no new copy of the rule.
+
+**2. `OperationsCaseEventKindEnum` gains six values.** `EVIDENCE`, `DEADLINE_SET`,
+`APPEAL_REQUESTED`, `APPEAL_DECIDED`, `OVERRIDE` and `PAYOUT_HOLD_CHANGED`. An event trail that
+renders unknown kinds as blank rows will render six kinds of blank row.
+
+**3. `BookingFeeStatusEnum` gains `WAIVED`, and it is not a charge.** A `WAIVED` fee carries the
+published amount but **collected nothing**: it is the free re-dispatch after a vendor no-show.
+Rendering `amount_paise` next to it as money the Customer paid is wrong in the one place it matters
+most. Show it as "replacement crew, no charge".
+
+**4. `within_budget` is nullable and `null` is not `false`.** On `m2_operations_touch_metric`, a
+null budget means the owner has not set one. `false` reads as a breach and `true` as a pass;
+neither is known. Render "no budget set".
+
+### The screens
+
+**Request timeline** — `GET /operations/requests/{requirement_id}/timeline/`. One chronological
+history: transitions, snapshots, invitations and cascade offers **with the vendor named**,
+questions, proposals, site visits, booking fee, unlock, visit plan and its shares, engagement and
+stages, cases, cancellations and Operations touches. Events are `{at, type, detail}` with `detail`
+a free-form object per type — deliberately, because a booking fee and a question have nothing in
+common but a timestamp. This is the read a support agent makes a money decision from, so it is
+assembled from the aggregates and not from a projection table.
+
+**Recovery actions** — `rematch/`, `deadline/`, `reclassification/`, `refund-review/`, all under
+`/operations/requests/{requirement_id}/`. Each takes a **required `reason`** and returns the
+refreshed timeline, so the screen never has to re-fetch to show what it just did. Two behaviours
+worth building against: `rematch` advances the **cascade** on a rate-card A3 booking and runs an
+**invitation wave** on everything else, from one button; and `deadline` moves `service_by`
+**forward only** — a negative extension is refused, not clamped.
+
+`refund-review/` **records a decision and moves no money**, on purpose. Refunds execute through the
+product that owns them. An Operations screen that offered an amount field would be offering a
+second refund path with none of the first's reconciliation.
+
+**Queues** — `GET /operations/queues/`. Eight queues with `code`, `queue_label`, `depth`,
+`oldest_at` and `recovery_action`. `recovery_action` is published rather than inferred from the
+code, exactly as `recovery_action` is on M1 Booking Groups, so the console renders a real button;
+an empty string means only a person can decide. Note **`queue_label`, not `label`** — third wave
+running that `label` collides with DRF's own `Serializer.label`, so every human-readable name on an
+M2 shape is `<thing>_label`.
+
+**Crew verification** — `GET /operations/crew-memberships/` and
+`POST /operations/crew-memberships/{membership_id}/verification/`. **This is the writer
+`PartnerCrewMembership.documents_verified_at` never had.** Four readers, no writer: every vendor's
+verified roster was zero in every environment, so the A3 cascade excluded every lead and
+`accept_crew_offer` answered `m2_roster_insufficient`. Verifying needs no reason; **un-verifying
+does**, and the command refuses without one — build the negative path with a required field.
+
+**Cases** — the existing `/operations/cases/` surface, plus three commands:
+`response-deadline/`, `appeal-decision/` and `override/`. All three take `expected_version` like
+every other case command. Two behaviours to build for: an **overturned** appeal reopens the case
+to `IN_PROGRESS` and clears the resolution rather than re-deciding it, so the screen must return to
+the working state; and an **override** is still checked against `allowed_resolutions` — it reaches
+a different documented outcome, never an undocumented one.
+
+**Chargebacks and reconciliation** — `POST /operations/payments/{payment_attempt_id}/chargeback/`
+and `GET /operations/reconciliation/`. Recording a chargeback opens a `CHARGEBACK` case, which
+**holds payout**. The fee row itself does not move: a chargeback is a claim in progress, and
+marking an earned fee refunded would tell both parties a decision had been taken that has not.
+
+**Assisted capture** — `POST /operations/enquiries/{invitation_id}/assisted-clarification/` and
+`POST /operations/assisted-proposals/`. Both refuse without `consent_recorded`. The assisted
+proposal reuses `ProposalCreateSerializer` unchanged and writes `vendor_confirmed_at: null`, so
+**the Customer cannot see it until the vendor confirms it themselves**. Build the "captured,
+awaiting vendor confirmation" state; there is no way to skip it.
+
+### The party surface
+
+Seven paths the Customer and the Partner apps call. `GET`/`POST
+/requirements/{requirement_id}/cancellation/` evaluates a cancellation **before executing it** and
+returns either `EXECUTED` or `AWAITING_CONFIRMATION` with a deadline; `POST
+/cancellations/{id}/decision/` is the counterparty's confirm-or-dispute. Disputing settles nothing
+and opens a case that freezes the vendor's unpaid earnings.
+
+`remedy` on `RequirementCancellation` is a free-form object keyed by product (`booking_fee`,
+`unlock`, `visit_plan`, `project`, `service_payment`), each with its own `remedy_code` and paise.
+It is not one number because a cancelled A5 request genuinely has three outcomes at once. The A3
+`service_payment` entry always reads `no_platform_money` with a sentence saying wages are paid
+directly to the lead — required copy, not a placeholder.
+
+`POST /engagements/{engagement_id}/warranty-claim/` closes a hole `M2-BE-546` left: retention was
+held back against a warranty promise with **no published way to call on it**, because the
+stage-dispute command accepts only a stage in `AWAITING_REVIEW` and by warranty time every stage is
+settled. Raising a claim opens a `QUALITY` case and stops the warranty sweep releasing the
+retention while it is open.
+
+`POST /cases/{case_id}/evidence/` has **no file field and will not get one**. Evidence points at a
+`requirement_attachment_id` or a `stage_evidence_id` that already came through one of the two
+verified upload rails, so there is one scan pipeline. A file the party has not uploaded yet is
+uploaded there first.
+
+### New paths
+
+| Path | operationId |
+|---|---|
+| `GET`/`POST /requirements/{requirement_id}/cancellation/` | `m2_cancellation_read`, `m2_cancellation_request` |
+| `POST /cancellations/{cancellation_id}/decision/` | `m2_cancellation_decide` |
+| `GET /engagements/{engagement_id}/cases/` | `m2_engagement_cases` |
+| `POST /engagements/{engagement_id}/warranty-claim/` | `m2_warranty_claim_raise` |
+| `POST /cases/{case_id}/evidence/` | `m2_case_evidence_submit` |
+| `POST /cases/{case_id}/appeal/` | `m2_case_appeal_request` |
+| `GET /operations/requests/{requirement_id}/timeline/` | `m2_operations_request_timeline` |
+| `POST /operations/requests/{requirement_id}/rematch/` | `m2_operations_rematch` |
+| `POST /operations/requests/{requirement_id}/deadline/` | `m2_operations_extend_deadline` |
+| `POST /operations/requests/{requirement_id}/reclassification/` | `m2_operations_reclassify` |
+| `POST /operations/requests/{requirement_id}/refund-review/` | `m2_operations_refund_review` |
+| `GET /operations/requests/{requirement_id}/touch-metric/` | `m2_operations_touch_metric` |
+| `POST /operations/enquiries/{invitation_id}/assisted-clarification/` | `m2_operations_assisted_clarification` |
+| `POST /operations/assisted-proposals/` | `m2_operations_assisted_proposal` |
+| `GET /operations/crew-memberships/` | `m2_operations_crew_verification_queue` |
+| `POST /operations/crew-memberships/{membership_id}/verification/` | `m2_operations_crew_verify` |
+| `GET /operations/queues/` | `m2_operations_queues` |
+| `GET /operations/metrics/touches/` | `m2_operations_touch_rollup` |
+| `POST /operations/payments/{payment_attempt_id}/chargeback/` | `m2_operations_record_chargeback` |
+| `GET /operations/reconciliation/` | `m2_operations_reconciliation_summary` |
+| `POST /operations/cases/{case_id}/response-deadline/` | `operations_case_set_response_deadline` |
+| `POST /operations/cases/{case_id}/appeal-decision/` | `operations_case_decide_appeal` |
+| `POST /operations/cases/{case_id}/override/` | `operations_case_override_outcome` |
+
+### Refusals worth building for
+
+| Code | Where | What the screen should say |
+|---|---|---|
+| `m2_policy_unavailable` | cancellation of a paid A3 booking; appeal of a resolved case | The owner has not set the free-cancel window T, or the appeal window. Support can help. **Not** a retry. |
+| `m2_requirement_transition_not_allowed` | cancellation, warranty claim, crew un-verification, deadline | The state does not allow it, or a required reason is missing. The message names which. |
+| `m2_booking_fee_not_chargeable` | booking-fee checkout on a re-dispatched booking | "Your replacement crew is free — there is nothing more to pay." |
+| `404` | any case or cancellation the caller is not a party to | Existence itself is private. Never a `403`. |
+
+### What is deliberately absent
+
+No route lets Operations accept an offer for a vendor, publish a vendor's price without them, or
+move an arbitrary amount of money. `07-state-machines-and-permissions.md` §7's "may never" column
+is enforced by there being no endpoint, not by a check.
+
 ## 1.31.0 - The project: what was agreed, what changed, and who finishes it
 
 **Wave C5 ([ADR-0008](../../docs/adr/0008-m2-visit-first-estimation-for-a5.md), with the two

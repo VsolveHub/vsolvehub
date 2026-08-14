@@ -79,7 +79,7 @@ def live_booking_fee(requirement: CustomerRequirement) -> BookingFee | None:
     """
     return (
         BookingFee.objects.filter(requirement=requirement)
-        .exclude(status=BookingFee.Status.FAILED)
+        .exclude(status__in=BookingFee.NON_BLOCKING_STATUSES)
         .order_by("-created_at")
         .first()
     )
@@ -145,7 +145,7 @@ def hold_booking_fee(
     existing = (
         BookingFee.objects.select_for_update()
         .filter(booking=booking)
-        .exclude(status=BookingFee.Status.FAILED)
+        .exclude(status__in=BookingFee.NON_BLOCKING_STATUSES)
         .first()
     )
     if existing is not None:
@@ -236,6 +236,15 @@ def create_booking_fee_checkout(
         raise BookingFeeNotChargeableError("This crew is already confirmed.")
     if booking.status != RateCardBooking.Status.OFFER_HELD:
         raise BookingFeeNotChargeableError()
+    if _redispatch_entitlement_is_live(booking):
+        # The free re-dispatch after a vendor no-show. There is nothing to pay: the Customer's fee
+        # was refunded in full and §4c promises the replacement crew at no charge. Refusing here
+        # matters even though `accept_crew_offer` confirms such a booking inline, because a
+        # Customer with the checkout screen still open from the first crew would otherwise be
+        # charged a second time for one job.
+        raise BookingFeeNotChargeableError(
+            "Your replacement crew is free — there is nothing more to pay for this booking.",
+        )
     if booking.hold_expires_at is not None and booking.hold_expires_at <= timezone.now():
         raise BookingFeeNotChargeableError(
             "The crew's hold on this job has expired. We are looking for another.",
@@ -247,7 +256,7 @@ def create_booking_fee_checkout(
     existing = (
         BookingFee.objects.select_for_update()
         .filter(booking=booking)
-        .exclude(status=BookingFee.Status.FAILED)
+        .exclude(status__in=BookingFee.NON_BLOCKING_STATUSES)
         .first()
     )
     if existing is not None:
@@ -382,7 +391,10 @@ def earn_booking_fee(*, requirement_id: uuid.UUID, actor: User | None) -> Bookin
     peer-to-peer and are settled by the evening dual tap, which is Wave C4.
     """
     fee = _locked_fee(requirement_id)
-    if fee.status == BookingFee.Status.EARNED:
+    if fee.status in (BookingFee.Status.EARNED, BookingFee.Status.WAIVED):
+        # A waived fee is a free re-dispatch: the crew arriving is exactly what was promised, and
+        # there is no money left on this booking to earn. Idempotent rather than a refusal, because
+        # the caller is a supervisor confirming an arrival that really did happen.
         return fee
     if fee.status != BookingFee.Status.ACTIVE:
         raise RequirementTransitionError(
@@ -428,6 +440,15 @@ def forfeit_booking_fee(*, requirement_id: uuid.UUID, reason_code: str) -> Booki
     fee = _locked_fee(requirement_id)
     if fee.status == BookingFee.Status.FORFEIT_SPLIT:
         return fee
+    if fee.status == BookingFee.Status.WAIVED:
+        # A free re-dispatch collected nothing, so there is nothing to split. The lead who
+        # travelled to a locked gate on a re-dispatched booking is genuinely uncompensated, and
+        # that is a gap in revision 4 rather than something code may invent a payment for: the
+        # platform holds no money for this booking. Recorded as a refusal the caller handles, so
+        # the no-show itself is still logged against standing and still opens a case.
+        raise RequirementTransitionError(
+            "This crew was re-dispatched free of charge, so there is no booking fee to forfeit.",
+        )
     if fee.status != BookingFee.Status.ACTIVE:
         raise RequirementTransitionError("This booking fee cannot be forfeited from here.")
 
@@ -512,6 +533,11 @@ def refund_booking_fee(*, requirement_id: uuid.UUID, reason_code: str) -> Bookin
 def _refund(*, fee: BookingFee, reason_code: str) -> BookingFee:
     if fee.status == BookingFee.Status.REFUNDED:
         return fee
+    if fee.status == BookingFee.Status.WAIVED:
+        # Nothing was collected on a free re-dispatch, so there is nothing to give back. Returned
+        # rather than refused: every caller here is a sweep or a cancellation that must still
+        # close the booking, and a `409` from a settlement path would strand it.
+        return fee
     if fee.status in (BookingFee.Status.EARNED, BookingFee.Status.FORFEIT_SPLIT):
         raise RequirementTransitionError("This booking fee is already settled.")
     if fee.payment_attempt_id is not None and fee.status in BookingFee.CHARGED_STATUSES:
@@ -543,8 +569,14 @@ def cancel_booking(*, requirement_id: uuid.UUID, actor: User) -> BookingFee:
     choosing whose money it is.
     """
     requirement = CustomerRequirement.objects.select_related("configuration").get(pk=requirement_id)
-    hours = rate_cards.free_cancel_hours(requirement)
     fee = _locked_fee(requirement_id)
+    if fee.status == BookingFee.Status.WAIVED:
+        # A free re-dispatch. There is no money on this booking either way, so the free-cancel
+        # window decides nothing and is not read — which also means an unset T does not block a
+        # Customer from calling off a job they are not being charged for.
+        _close_booking(requirement=requirement, actor=actor, reason_code="customer_cancelled")
+        return fee
+    hours = rate_cards.free_cancel_hours(requirement)
     if fee.status not in (BookingFee.Status.ACTIVE, BookingFee.Status.OFFER_ACCEPTED):
         raise RequirementTransitionError("This booking can no longer be cancelled here.")
 
@@ -572,6 +604,7 @@ def report_crew_no_show(
 
     **Customer no-show or a locked gate:** the forfeit split runs. The crew travelled.
     """
+    _open_no_show_case(requirement_id=requirement_id, party=party)
     if party == "VENDOR":
         fee = refund_booking_fee(requirement_id=requirement_id, reason_code=REASON_VENDOR_NO_SHOW)
         # "The vendor's standing takes the hit" was a sentence in this docstring and nothing else
@@ -584,6 +617,38 @@ def report_crew_no_show(
     return forfeit_booking_fee(
         requirement_id=requirement_id,
         reason_code=reason_code or REASON_CUSTOMER_NO_SHOW,
+    )
+
+
+def _open_no_show_case(*, requirement_id: uuid.UUID, party: str) -> None:
+    """`M2-BE-703`: somebody was not there on day one, and that is somebody's job to chase.
+
+    Opened **before** the money settles, deliberately: on the customer-no-show branch
+    `forfeit_booking_fee` can refuse — an unset forfeit split, or a fee that was waived under a
+    free re-dispatch — and a case that only opened after a successful settlement would be missing
+    from exactly the cases that need a person most.
+
+    Imported late for the cycle `apps.cases.services` documents: `disputes` reaches back into
+    `apps.cases`, which reaches into this module's siblings.
+    """
+    from apps.requirements import disputes  # noqa: PLC0415 - avoids a module import cycle
+
+    requirement = CustomerRequirement.objects.filter(pk=requirement_id).first()
+    if requirement is None:  # pragma: no cover - the caller loaded it
+        return
+    booking = RateCardBooking.objects.filter(requirement=requirement).first()
+    engagement = Engagement.objects.filter(requirement=requirement).first()
+    disputes.open_no_show_case(
+        requirement=requirement,
+        engagement=engagement,
+        party=party,
+        source_kind="rate_card_booking_no_show",
+        # Keyed on the booking **and** how many times it has been re-dispatched, so a second crew
+        # that also fails to arrive opens a second case rather than silently joining the first.
+        source_id=uuid.uuid5(
+            uuid.UUID(str(booking.id if booking is not None else requirement.id)),
+            f"{party}:{booking.redispatch_count if booking is not None else 0}",
+        ),
     )
 
 
@@ -633,12 +698,25 @@ def _redispatch_after_vendor_no_show(*, requirement_id: uuid.UUID) -> None:
     booking.accepted_invitation = None
     booking.hold_expires_at = None
     booking.confirmed_at = None
+    # **The entitlement, which is the half of §4c's promise that was unreachable until Wave C6.**
+    # "Refunds in full (free re-dispatch)" has two halves and only the first was built: the refund
+    # left the fee slot occupied, so the replacement lead's acceptance could not write a fee row,
+    # the checkout refused with "already settled", and `complete_booking_fee` — the only path that
+    # opened an engagement — never ran. Granting it here, in the same transaction as the refund,
+    # is what makes the second half reachable: `accept_crew_offer` reads it and confirms the
+    # replacement crew at no charge.
+    booking.free_redispatch_entitled_at = timezone.now()
+    booking.free_redispatch_consumed_at = None
+    booking.redispatch_count += 1
     booking.save(
         update_fields=(
             "status",
             "accepted_invitation",
             "hold_expires_at",
             "confirmed_at",
+            "free_redispatch_entitled_at",
+            "free_redispatch_consumed_at",
+            "redispatch_count",
             "updated_at",
         )
     )
@@ -667,6 +745,111 @@ def _redispatch_after_vendor_no_show(*, requirement_id: uuid.UUID) -> None:
         },
     )
     crew_dispatch.advance_cascade(requirement_id=requirement.id)
+
+
+def _redispatch_entitlement_is_live(booking: RateCardBooking) -> bool:
+    """Whether this booking is owed a replacement crew at no charge."""
+    return (
+        booking.free_redispatch_entitled_at is not None
+        and booking.free_redispatch_consumed_at is None
+    )
+
+
+@transaction.atomic
+def confirm_free_redispatch(*, booking_id: uuid.UUID) -> BookingFee | None:
+    """Confirm a replacement crew at no charge, and reopen the engagement (`M2-BE-719`).
+
+    **The completion of §4c's "refunds in full (free re-dispatch)".** Everything before this
+    existed: the refund, the standing hit, the cascade going out again, a lead accepting. What did
+    not exist was any way for that acceptance to become a confirmed crew, because the only
+    engagement-opening path ran off a verified booking-fee callback and there is — correctly — no
+    second payment to make.
+
+    So this is the money decision C4 deferred, taken explicitly: **Vsolve earns nothing on a
+    booking whose first crew did not turn up.** The fee is refunded whole, the replacement is
+    confirmed at no charge, and `WAIVED` records the confirmation without pretending money moved.
+    The alternative readings were both worse — charging again is not "free", and reversing the
+    refund would take back money the Customer has already been told is theirs.
+
+    Called from `crew_dispatch.accept_crew_offer` rather than from a route: there is nothing for
+    the Customer to do, and an endpoint here would be an endpoint that confirms a crew without
+    anybody paying, which is the shape every guard on this path exists to make unreachable.
+    Returns `None` when there is no entitlement to spend, so the caller stays a plain read.
+    """
+    booking = (
+        RateCardBooking.objects.select_for_update(of=("self",))
+        .select_related("requirement")
+        .get(pk=booking_id)
+    )
+    if not _redispatch_entitlement_is_live(booking):
+        return None
+    if booking.status != RateCardBooking.Status.OFFER_HELD:
+        return None
+    invitation_id = booking.accepted_invitation_id
+    if invitation_id is None:  # pragma: no cover - `OFFER_HELD` always carries one
+        return None
+
+    now = timezone.now()
+    fee = (
+        BookingFee.objects.select_for_update()
+        .filter(booking=booking)
+        .exclude(status__in=BookingFee.NON_BLOCKING_STATUSES)
+        .first()
+    )
+    if fee is not None and fee.status == BookingFee.Status.WAIVED:
+        return fee
+    if fee is not None and fee.status != BookingFee.Status.OFFER_ACCEPTED:
+        # A charge is in flight or already settled on this booking. Never overwrite money.
+        return None
+    if fee is None:
+        fee = BookingFee(
+            booking=booking,
+            requirement_id=booking.requirement_id,
+            invitation_id=invitation_id,
+            rate_card_id=booking.rate_card_id,
+            amount_paise=booking.booking_fee_paise,
+        )
+    fee.invitation_id = invitation_id
+    fee.status = BookingFee.Status.WAIVED
+    fee.settled_at = now
+    fee.settlement_reason_code = "free_redispatch"
+    fee.save()
+
+    booking.status = RateCardBooking.Status.CONFIRMED
+    booking.confirmed_at = now
+    booking.hold_expires_at = None
+    booking.free_redispatch_consumed_at = now
+    booking.save(
+        update_fields=(
+            "status",
+            "confirmed_at",
+            "hold_expires_at",
+            "free_redispatch_consumed_at",
+            "updated_at",
+        )
+    )
+    engagements.reopen_rate_card_engagement(booking_id=booking.id)
+    services.record_transition(
+        requirement=booking.requirement,
+        from_status=booking.requirement.status,
+        to_status=booking.requirement.status,
+        actor=None,
+        reason_code="free_redispatch_confirmed",
+        reason=f"booking_fee:{fee.id} waived; invitation:{invitation_id}",
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=booking.requirement_id,
+        event_type="m2.booking_fee.waived",
+        idempotency_key=f"booking-fee-waived:{fee.id}",
+        payload={
+            "requirement_id": str(booking.requirement_id),
+            "rate_card_booking_id": str(booking.id),
+            "booking_fee_id": str(fee.id),
+            "vendor_invitation_id": str(invitation_id),
+        },
+    )
+    return fee
 
 
 def _close_booking(
@@ -712,6 +895,11 @@ def _locked_fee(requirement_id: uuid.UUID) -> BookingFee:
         .order_by("-created_at")
         .first()
     )
+    # `FAILED` only, deliberately, and **not** `NON_BLOCKING_STATUSES`: a refunded fee is still the
+    # fee this requirement had, and the settlement commands need to find it in order to answer
+    # "already settled" rather than "there is no booking fee on this request". The constraint
+    # excludes `REFUNDED` because a refunded row must not block a *second* row; that is a different
+    # question from whether a reader can still see it.
     if fee is None:
         raise BookingFeeNotChargeableError("There is no booking fee on this request.")
     return fee
