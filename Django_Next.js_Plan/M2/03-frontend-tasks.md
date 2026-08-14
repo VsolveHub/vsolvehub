@@ -491,7 +491,9 @@ understands exactly when and whether they will be asked to pay.
 
 ### A3 crew offer (revision 4)
 
-- [ ] `M2-FE-316` **Revision 4 — wave B2R, blocked on backend C2R.** The A3 primary-path enquiry is a
+- [~] `M2-FE-316` built — static gates green, owner manual verification pending. **Revision 4 — wave
+  B2R, against contract 1.29.0.** `/workforce/offers`, `features/crew-offer/**`. The A3 primary-path
+  enquiry is a
   **crew offer** on one phone screen: it always shows the lead's own number — "You receive ₹X/day for
   N helpers; the customer pays you directly at day end" — with accept or decline and a decline reason
   (declines feed the rate card's decline-rate alarm). Accepting the job is accepting the published

@@ -550,17 +550,210 @@ touched, and not in this column's scope to fix.
 until it does. **Gate:** an A3 lead reads the offer, their own number and the consequence on one
 phone screen, and accepting is accepting the published rate for that job.
 
-- [ ] `M2-FE-316` The crew offer screen: always the lead's own number — "You receive ₹X/day for N
-  helpers; the customer pays you directly at day end" — with accept or decline and a published
-  decline reason (declines feed the rate card's decline-rate alarm). Accept takes a roster-sized
-  capacity hold (`m2_roster_insufficient` when the roster is short) and **holds the win while the
-  Customer pays the booking fee** — held is not confirmed, "do not travel yet", exactly the
-  `opens_plan_checkout` discipline `FE-314` already renders. Minutes-level timeouts on the M1
-  dispatch clock, not business-hours deadlines. No composer on this path; the one-screen composer
-  stays for fallback quote-flow enquiries.
+- [~] `M2-FE-316` built — static gates green, owner manual verification pending.
 
-**Not started.** The A3 composer, teasers and unlock stay built as the thin-supply fallback; nothing
-in Wave B2 is deleted or reworked.
+Built 2026-08-14 against contract **1.29.0**, on one new route, `/workforce/offers`. The A3
+composer, teasers and unlock stay built as the thin-supply fallback; **nothing in Wave B2 was
+deleted or reworked**, and the offers screen names the enquiry inbox in prose so a lead knows why
+there are two.
+
+### Task zero — a stopped predecessor's tree, audited before it was extended
+
+Wave B2R was picked up mid-flight: seven files existed and had never reached a static gate. The
+audit was against the generated client at 1.29.0 and against `07` §2/§4c, field by field.
+
+**Kept, and it was right.** Every field the screens read exists on the wire, and the two model files
+had already made the three decisions this task turns on: the lead's number is **read** rather than
+derived (`lead_day_receipt_paise` / `lead_total_receipt_paise`, never a rate card's parts
+subtracted); the Customer's total and the booking fee are rendered nowhere at any status; and a held
+win says **"do not travel yet"** in those words. The queries module's choice to key the inbox as
+`m2QueryKeys.invitations.list("crew-offers")` — a *bucket* of the invitation inbox, which is what
+`07` §2 says a crew offer is — was kept deliberately rather than worked around, because the prefix
+relationship is load-bearing: confirming an A5 visit slot takes a capacity hold and already
+invalidates `invitations.all`, so it correctly drops an A3 offer this vendor can no longer serve,
+without either module knowing the other exists.
+
+**The one thing the brief said to check hard, checked.** `model/decline-reasons.ts` does **not**
+contain a second client-authored vocabulary. It is `Record<CrewOfferDeclineReasonCode, …>` over the
+published `CrewOfferDeclineReasonCodeEnum`, and its five members match the contract exactly. B2's
+enquiry decline list is a different enum (`InvitationDeclineReasonEnum`) for a different act, and
+the two are correctly not shared — sharing one dialog across two enums would mean casting at the
+seam.
+
+**Rewritten — one defect that every static gate passes.** This is the frontend shape of the failure
+`task.md` records from Gate 1, and it was found by reading the server, not the compiler:
+
+> `GET /partner/crew-offers/` filters `status=INVITED` server-side. Both commands invalidate
+> `invitations.all` on success. So the moment a lead accepted, the row left the list, the card
+> **unmounted**, and the `AcceptedPanel` it was rendering from `mutation.data` went with it — after
+> roughly one frame. Where it was the lead's only offer, the empty state replaced it: a lead who had
+> just won a job was shown **"No jobs waiting on you right now."**
+
+Compiles, lints, builds, and destroys the single sentence the wave exists to say. The fix is
+structural rather than a delay: both mutations now hand the server's answer **upward,
+synchronously, before the invalidation is awaited** (`CrewOfferAnswerHandlers`), the inbox holds the
+answers in its own state, and `crew-offer-outcome.tsx` draws them above the live list where no
+refetch can reach them. A mutate-level `onSuccess` callback would not have worked and was removed
+from both call sites: React Query does not deliver those to a component that has already unmounted,
+and unmounting is precisely the success path here.
+
+The decline half's `setQueryData` — which wrote the `DECLINED` row back into the cache on the line
+before the invalidation that discards it — was **deleted** rather than kept as a belt: two
+mechanisms owning one fact, where the server wins the race anyway.
+
+**Rewritten — a hand-copied list beside the vocabulary it copies.** `REASON_ORDER` was a plain array
+of the five codes sitting next to an exhaustive `Record` of the same five. The `Record` is
+type-checked; the array is not. A sixth published code would be *forced* into the copy by the
+compiler and could still be omitted from the order array, which compiles cleanly and silently
+removes the option from the dropdown — the exact drift shape RULES §3(a) names. It is now
+`REASON_PRIORITY`, a **ranking**: the list is derived from `REASON_COPY`'s own keys and an unranked
+code sorts to the end and still renders.
+
+**Deleted.** `AcceptedPanel` and its `crewLabel` prop (superseded by `CrewOfferOutcome`), the
+decline `setQueryData` block, and both `window.location.assign` calls — a full document reload from
+inside a polling inbox, on a phone, throwing away the app shell to reach `/workforce/crew`. They are
+`router.push` now, and the refusal component takes two intent callbacks rather than an href it
+navigates itself.
+
+Two smaller corrections: `inclusions` is keyed by position (ops-authored free text can repeat, and a
+duplicate React key is not an impossibility), and `describeOvertime` is called once rather than
+twice per render.
+
+### The registry change, and why it is not the lifecycle inference the standing constraints forbid
+
+`/workforce/offers` is mounted as a typed registry entry behind **`enquiry.accept`** — published for
+`A3_TIME_BLOCK` in `partners.capabilities.WORKSPACE_ACTIONS` and for nothing else, so an unapproved
+Partner never sees the tab. The screen re-checks `["enquiry.view", "enquiry.accept",
+"enquiry.decline"]` through `WorkspaceRoute`, because a reachable route never implies its buttons.
+`workspace_grants` returns the full action tuple for any `APPROVED` capability and the progressive
+gates do **not** filter it, so a lead awaiting KYC still reaches the screen and meets
+`m2_kyc_required` on the control — which is what `M2-FE-102` asks for, and better than a hidden tab.
+
+`navigationFor` was changed, and this is the one place Wave 0's file was touched beyond a typed
+entry. The A3 workspace now has five destinations; the tab budget is six, and the cap was a
+**trailing** `slice`, so the sixth item dropped would have been **`/profile`** — the one item the
+function's own docblock says must survive. The budget now comes out of the workspace's own
+destinations instead. `registry.test.ts` › "keeps Home and You reachable from inside a workspace"
+asserts exactly this and would have **failed** without the change; every other assertion in that
+file still holds. The dropped tail item is `/workforce/crew`, which `WorkspaceHome` still lists in
+full — one tap away rather than zero, and the roster shortfall links to it directly.
+
+### The screen itself
+
+One card, one decision, in decision order: **your number** (a `Readout` off
+`lead_day_receipt_paise`, with the job total under it and the settlement sentence beside it) →
+**your clock** → **the job** → **what accepting means** → **the two answers**.
+
+- **The clock is the server's.** `useServerCountdown` reads `serverClock`, which `unwrap` calibrates
+  from `server_now` on every response — and `CrewOfferList` publishes one, so reading the inbox
+  calibrates the clock that renders it. Ticking once a second, which would be a battery leak on the
+  enquiry inbox and is correct on a deadline minutes away. A passed clock stops *offering* an accept
+  and never announces an expiry: the server decides when an offer is gone.
+- **The roster shortfall is stated before the server has to refuse it**, from
+  `verified_roster_size` against `headcount` — and it never disables the accept button, because that
+  count can be a minute old and a verification can land while the screen is open. It warns; the
+  server decides. `m2_roster_insufficient` routes to the crew roster, which is the only refusal on
+  this screen a lead can act on.
+- **Six refusals are worded separately** because they have six different recoveries, and two of them
+  matter most: another lead answering first must not read as a fault, and the roster shortfall must
+  have a door rather than a banner. Nothing retries — neither command carries an idempotency key
+  (`07` §6 marks both **Natural**), so a blind retry is a second attempt, not a replay; an ambiguous
+  failure re-reads the inbox instead, because `status` is the only thing that knows.
+- **Polled at 15 seconds**, unlike the enquiry inbox, which is deliberately not polled at all: a
+  business-hours deadline moves once a day, while crew offers are *pushed* by the cascade and an
+  offer another lead takes stops being returned. Fifteen seconds sits between the A1 offer inbox's
+  five and the shared recovery interval. Hidden tabs pause it and a failing endpoint backs it off.
+  An **empty** list is deliberately not "settled" — `[].every(…)` is `true`, and stopping the poll
+  at the moment a lead is waiting for work is the one thing this screen must not do.
+
+### The audit RULES §3 asks for, and what it found
+
+- **(a) The drifting duplicate — found, in this column, and fixed.** `REASON_ORDER` above. The
+  general shape carries into TypeScript intact: an exhaustive `Record` over a generated enum is
+  checked, an array of the same union is not, and putting both in one file is how the checked half
+  starts protecting a list nobody renders.
+- **(b) The reader with no writer — audited, clean.** Every field these screens read was traced to
+  its writer: `_crew_offer_payload` populates all fifteen, `area_label` degrading to `""` and
+  `requested_start` to `null`, both of which the screen renders as *"Not stated"* rather than as
+  blanks. `standard_day_hours` cannot be the unwritten zero this rule warns about —
+  `RateCard.standard_day_hours` carries a DB check constraint of `> 0 and <= 24` and the booking
+  column is non-null — so the "A day is N hours" row needs no zero guard, while
+  `overtime_hourly_paise` **does** get one and already had it: zero there is a real published value
+  meaning *this card has no overtime rate*, and "₹0 an hour" would read as free overtime.
+- **A third thing the audit found, logged not fixed:** `m2_crew_offer_accept` returns a whole
+  `RateCardBooking` to the lead, carrying `total_customer_paise` and `booking_fee_paise` — the
+  Customer's numbers, which the *list* endpoint is scrupulous about withholding and says why. The
+  screen renders only `lead_receipt_paise`, so the discipline holds in the UI and is enforced by
+  this client rather than by the contract. Plan §7, 2026-08-14.
+
+### Smoke script — the exact clicks
+
+**Seed first.** `python manage.py seed_m2_demo --i-understand-this-is-dev-only` with `DEBUG=1`, so a
+live rate card exists for the demo city and skill — without one the Customer's booking refuses with
+`m2_rate_card_unavailable` and no offer is ever dispatched. Sign in as a Partner **approved** for
+`A3_TIME_BLOCK` whose verified roster covers the headcount.
+
+**See an offer arrive.** `/workforce` → **Offers**. With nothing dispatched, expect *"No jobs waiting
+on you right now"* with the line saying the screen is watching — not an error, not a spinner. Leave
+it open. Have a Customer book at the published rate (`POST /requirements/{id}/rate-card/book/`, or
+the A2R screen once it lands). Within fifteen seconds the offer appears **without a reload**.
+
+**Read the number and the clock.** Expect the first and largest thing on the card to be *"You
+receive ₹X, per day, for 4 helpers"* with *"₹Y for all 3 days"* under it, then the sentence saying
+the customer pays you directly at day end and Vsolve never holds it. Expect a **Time to answer**
+countdown ticking every second, in minutes — and check it against the server, not the phone: change
+the device clock by ten minutes and confirm the countdown **does not move**. Under two minutes it
+turns amber and reads *"This is about to go to the next lead."* Nowhere on this card should the
+customer's all-inclusive price or the booking fee appear.
+
+**Take the job, and confirm the held state survives.** **Take this job** → the dialog names the crew
+and the rate and states the commitment → **Yes, take it at this rate**. Expect the offer row to be
+**replaced by** a panel headed *The job is yours — held*, carrying **Do not travel yet**, the lapse
+sentence, and your money for the job. **This is the assertion that matters:** leave the screen open
+for a full minute so at least four polls land, and confirm the panel is still there. It must not be
+replaced by *"No jobs waiting on you right now"* — that was the defect this wave fixed, and it is
+invisible to every static gate.
+
+**Pass on one, with a reason.** On another offer: **Pass** → expect the reason select with *"The
+rate is below what I can work for"* **first**, and expect a consequence line to appear under your
+choice saying what Vsolve does with it. Try **Pass on it** with nothing chosen — expect the field
+error *"Pick a reason. It is the only way the rate for your city gets looked at."* and **no
+request**. Choose a reason, send. Expect *You passed on this* to persist in place, and the offer to
+be gone from the inbox.
+
+**Hit the roster refusal.** With a verified roster smaller than the headcount, expect the amber block
+*"This job needs 6 verified people and you have 4"* **on the card, before you tap anything**, with
+**Add or verify your crew** linking to `/workforce/crew` — and expect the accept button to still be
+enabled. Tap it anyway: expect the server's refusal to land as *"Your verified crew is smaller than
+this job"* with **Go to your crew**, and expect that to be a **client-side navigation** (the tab bar
+should not blank and reload).
+
+**Hit the race.** Accept the same offer from a second browser first. Expect *"Another lead answered
+first"* worded as information, not as an error — nothing charged, nothing counted against you — and
+expect **no automatic retry** in the network tab.
+
+**Check the tab bar.** Inside `/workforce`, expect exactly six tabs: **Home, Workforce, Offers,
+Enquiries, Shifts, You**. **You** must be present. **Crew** is not a tab and must still be listed on
+the `/workforce` home page. Sign in as a Partner approved only for `A5_CUSTOM_PROJECT` and confirm
+**Offers** does not appear anywhere.
+
+### Static gates — 2026-08-14
+
+- `npx eslint apps/partner/features/crew-offer apps/partner/app/workforce/offers apps/partner/features/workspace/registry.ts --max-warnings 0` — **clean**.
+- `npx turbo run typecheck --filter=partner --force` — **1 of 1 successful**.
+- `npx turbo run build --filter=partner` — **succeeds**; `/workforce/offers` is `ƒ` in the route
+  table, `robots: noindex`.
+- **No test was run and none was written** — build-first amendment.
+
+Two gate notes worth keeping, both about gates that lie:
+
+- **`--filter=@vsolve/partner` exits 0 having run nothing.** The package's name is `partner`, not
+  `@vsolve/partner`, and turbo prints `No package found with name '@vsolve/partner' in workspace`
+  and then **exits 0**. A green gate that executed no work. The filter names are `partner`, `admin`
+  and `@vsolve/query`.
+- **`turbo run typecheck` replayed a cache hit** over the new files on the first attempt — `FULL
+  TURBO`, 54ms, "cache hit, replaying logs". The gate above was re-run with `--force` and executed
+  for real (3.996s, `cache bypass`).
 
 ---
 
@@ -1013,7 +1206,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | B1 | `FE-101..115` | `[~]` 14 of 15 | `[ ]` | 2026-08-12 — 1399/1399 frontend tests, lint clean, 9/9 typecheck, partner build green. `GET /partner/workspaces/` wired and all 7 registry routes mounted. `FE-105` not started; the registration views are still route-less, so nothing exceeds `[~]`. |
 | B2r3 | `FE-314..315` | `[~]` 2 of 2 | `[ ]` | 2026-08-13 — the A5 visit response and the on-site estimate, against contract 1.24.0. `apps/partner` was red at head from the regeneration and is green. Lint clean on owned paths, typecheck 3/3, partner build green with the new `/estimate` route dynamic. **Tests deferred per the build-first amendment.** 12 §7 rows appended, 6 of them closures. |
 | B2 | `FE-301..313` | `[~]` 13 of 13 | `[ ]` | 2026-08-12 — built and wired against contract 1.21.0 on 4 routes. Lint clean, 9/9 typecheck, partner build green, all 4 routes dynamic. **12 unit/component test files and 1 Playwright spec written and not run** — see the owner verification queue in `task.md`. 23 gaps logged in plan §7, of which 3 are backend defects (declared list shape vs. the page envelope Django sends, the inert wage-floor guard, the unreconciled A3 total) and 1 is structural (a Partner cannot read their own quote back). **Revision 4 (ADR-0009): the A3 composer half is the thin-supply fallback — kept as built.** |
-| B2R | `FE-316` (revision 4: crew offer screen) | `[ ]` | `[ ]` | Not started — blocked on backend C2R publishing the crew-offer contract. The A3 composer stays as the fallback response. |
+| B2R | `FE-316` (revision 4: crew offer screen) | `[~]` 1 of 1 | `[ ]` | 2026-08-14 — the A3 crew offer on one route, `/workforce/offers`, against contract 1.29.0. Picked up from a stopped predecessor's seven-file tree: the model layer and the published-enum decline vocabulary were **kept**, two things were **rewritten** and three **deleted**. The rewrite that matters is a defect no static gate can see — the server filters the inbox to `INVITED`, so an accepted offer left the list and took the *"do not travel yet"* panel with it, replacing a won job with "No jobs waiting on you right now"; the answer is now handed up before the invalidation and held above the list. The other is RULES §3(a) in TypeScript: a hand-copied order array beside an exhaustive `Record` over the generated enum, now a ranking derived from the `Record`'s own keys. Lint clean on changed paths, typecheck 1/1 **forced** (the cached run was a replay), partner build green with the route `ƒ`. **Tests deferred per the build-first amendment.** 7 §7 rows appended — 2 frozen-file requests, 5 contract gaps, of which one is a disclosure finding (`accept` returns the Customer's numbers to the lead). |
 | B3 | `FE-501..508`, `FE-601..607` (+ `FE-513`, revision 4 — Day-settled tap, with C4) | `[~]` 6 of 15 | `[ ]` | 2026-08-13 — the **shared spine half only**, against contract 1.25.0: `FE-501`, `FE-601`, `FE-602`, `FE-603`, `FE-604`, `FE-607` on 4 routes (2 replaced, 2 new), all `ƒ`. The nine archetype tails are Wave III and each renders a named not-built-yet block rather than a half-built control. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment.** 13 §7 rows appended, of which 1 closes both Wave I frozen-file grants and 2 are schema corrections (an undeclared `role` parameter, two enums published as bare strings). Two defects found in this column's own wiring and fixed before the gate. |
 | B-C3.5 | 1.26.0 consumption pass — `FE-301`, `FE-305`, `FE-314`, `FE-315` | `[~]` 4 of 4 | `[ ]` | 2026-08-14 — five workarounds removed against contract 1.28.0: `service_name` on the inbox row (and `category_slug` unprojected), `ProposalMaterialLine` as first-class rows with the stage-shaped workaround and its on-screen caveat deleted, `EngagementStage.kind` badged on the vendor's stage panel, two-way clarification with the Partner's answer route, cursor paging on the inbox, and `SiteVisit.timezone` on the visit panel. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment**; one stale assertion recorded. 6 §7 rows appended — 5 closures and 1 frozen-file request (`M2_INVALIDATION.answer_question` targets a key this app does not mount). |
 | B4 | `FE-701..705` | `[ ]` | `[ ]` | |

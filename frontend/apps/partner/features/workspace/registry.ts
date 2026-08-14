@@ -8,6 +8,7 @@ import {
   UserCircle,
   Users,
   Wallet,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -116,6 +117,12 @@ export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
     home: "/workforce",
     nav: [
       { href: "/workforce", label: "Workforce", icon: Users },
+      // The A3 primary path since ADR-0009 revision 4, and first because it is
+      // the one destination with a clock on it: a crew offer runs on the M1
+      // dispatch clock, in minutes. Enquiries stays directly beneath it — that
+      // is the thin-supply quote fallback, not a dead surface, and a lead whose
+      // city has no published rate card yet lives entirely in it.
+      { href: "/workforce/offers", label: "Offers", icon: Zap, action: "enquiry.accept" },
       { href: "/workforce/enquiries", label: "Enquiries", icon: ClipboardList, action: "enquiry.view" },
       { href: "/workforce/shifts", label: "Shifts", icon: CalendarCheck, action: "attendance.confirm" },
       { href: "/workforce/crew", label: "Crew", icon: HardHat, action: "crew.manage" },
@@ -199,6 +206,20 @@ export function activeWorkspace(
  * Capped at six. Past that the labels truncate on a small Android viewport and
  * the tab bar stops being scannable — the switcher, not more tabs, is how a
  * Partner with several capabilities moves between them.
+ *
+ * ## What gets dropped when the cap bites, and what never does
+ *
+ * The cap was a trailing `slice`, which was correct while every workspace had
+ * four destinations or fewer. The A3 workspace gained a fifth at revision 4
+ * (Offers, the rate-card front door) and a trailing slice would have dropped
+ * **You** — the profile tab — because it is composed last. That is the one item
+ * the docblock above says must survive: a Partner who cannot reach their own
+ * profile from inside a workspace is stranded there on a phone.
+ *
+ * So the budget is taken out of the workspace's own destinations instead, from
+ * the tail, in registry order. A dropped destination is not unreachable: the
+ * workspace home lists every authorized destination and is itself always the
+ * first workspace tab, so it is one tap away rather than zero.
  */
 export const MAX_TAB_ITEMS = 6;
 
@@ -208,10 +229,13 @@ export function navigationFor(workspace: ResolvedWorkspace | null): WorkspaceNav
   // Home and You from the base, then the workspace's own. Jobs and Money belong
   // to the A1 lifecycle and would read as this workspace's records if they sat
   // between its tabs.
-  const base = BASE_NAV.filter((item) => item.href === "/dashboard" || item.href === "/profile");
-  const merged = [base[0], ...workspace.authorizedNav, base[1]].filter(
-    (item): item is WorkspaceNavItem => item !== undefined,
-  );
+  const base = BASE_NAV.filter(
+    (item) => item.href === "/dashboard" || item.href === "/profile",
+  ).filter((item): item is WorkspaceNavItem => item !== undefined);
 
-  return merged.slice(0, MAX_TAB_ITEMS);
+  const budget = Math.max(MAX_TAB_ITEMS - base.length, 0);
+  const [home, profile] = base;
+  const own = workspace.authorizedNav.slice(0, budget);
+
+  return [home, ...own, profile].filter((item): item is WorkspaceNavItem => item !== undefined);
 }
