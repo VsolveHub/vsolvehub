@@ -185,6 +185,30 @@ export function orderedStages(engagement: Engagement): readonly EngagementStage[
 }
 
 /**
+ * Nobody owes work on this row any more — contract 1.31.0 (`M2-BE-545`).
+ *
+ * Two paths reach it and neither is a failure of the agreement: a project
+ * **terminated early**, and a **material advance left with the outgoing vendor**
+ * when a project transfers to a replacement.
+ *
+ * It is its own predicate rather than another `status === "..."` scattered
+ * through this file because three separate helpers below decide "is this stage
+ * still outstanding?" **by exclusion** — anything that is not `APPROVED` or
+ * `RELEASED` — and a status added to the enum lands in all three as *outstanding*
+ * by default. That default was right for every value this file was written
+ * against and is wrong for this one.
+ *
+ * **The money is deliberately not part of this question.** `_cancel_stage`
+ * leaves `amount_paise`, `funded_paise` and `refunded_amount_paise` untouched,
+ * because the agreement *was* that big and the money *was* collected; a
+ * terminated work stage has its unearned funding returned and a cancelled
+ * material advance does not. So this answers only what it says: no work is owed.
+ */
+export function isStageCancelled(stage: EngagementStage): boolean {
+  return stage.status === "CANCELLED";
+}
+
+/**
  * The stage the Customer is being asked to fund, or null.
  *
  * **Ordered, and only ever one.** `POST /engagement-stages/{id}/funding/`
@@ -197,10 +221,18 @@ export function orderedStages(engagement: Engagement): readonly EngagementStage[
  * `PENDING` funding state is deliberately not fundable: an attempt is already in
  * flight and a second checkout against it is the duplicate charge this whole
  * wave is written to prevent.
+ *
+ * **A `CANCELLED` stage is skipped, and that guard is load-bearing.**
+ * `_cancel_stage` leaves `funding_state` exactly as it found it — the whole
+ * point of that method is that the money record is *not* rewritten to make a
+ * terminated project look tidy — so a cancelled milestone can sit at `REQUIRED`
+ * forever. Without this line the Customer would be offered a pay button for work
+ * nobody owes any more, which is the worst button on this surface.
  */
 export function nextFundableStage(engagement: Engagement): EngagementStage | null {
   if (!isManagedPayment(engagement)) return null;
   for (const stage of orderedStages(engagement)) {
+    if (isStageCancelled(stage)) continue;
     if (stage.funding_state === "FUNDED" || stage.funding_state === "NOT_REQUIRED") continue;
     // The first stage that is not settled decides, whatever it is. If it is
     // already `PENDING` the answer is "nothing to fund right now", not "skip to
@@ -252,12 +284,16 @@ export function disputedStages(engagement: Engagement): readonly EngagementStage
  * The stage the work is actually on, or null when every stage is settled.
  *
  * "Settled" is `APPROVED` or `RELEASED` — the two states in which the Customer
- * has nothing left to do and the vendor has nothing left to submit.
+ * has nothing left to do and the vendor has nothing left to submit — **or
+ * `CANCELLED`, which is nobody's move at all.** A cancelled row was reported as
+ * the active stage until 1.31.0 widened the enum, which would have put "Now:
+ * Second fix" at the top of a project whose second fix had been terminated.
  */
 export function activeStage(engagement: Engagement): EngagementStage | null {
   return (
     orderedStages(engagement).find(
-      (stage) => stage.status !== "APPROVED" && stage.status !== "RELEASED",
+      (stage) =>
+        !isStageCancelled(stage) && stage.status !== "APPROVED" && stage.status !== "RELEASED",
     ) ?? null
   );
 }
@@ -272,13 +308,19 @@ export function activeStage(engagement: Engagement): EngagementStage | null {
  *
  * No published field carries this. It is the one derivation left in this module
  * and it reads only server-stamped statuses. Logged in §7.
+ *
+ * **Cancelled stages leave the denominator entirely** (1.31.0). They are not
+ * done, so counting them as done would overstate the work; they are not
+ * outstanding either, so leaving them in the total means a terminated or
+ * transferred project reads "3 of 5" for ever and never finishes. Neither is
+ * true, and the honest bar counts only the rows somebody still owes.
  */
 export function stageProgress(engagement: Engagement): { done: number; total: number } {
-  const total = engagement.stages.length;
-  const done = engagement.stages.filter(
+  const live = engagement.stages.filter((stage) => !isStageCancelled(stage));
+  const done = live.filter(
     (stage) => stage.status === "APPROVED" || stage.status === "RELEASED",
   ).length;
-  return { done, total };
+  return { done, total: live.length };
 }
 
 /* --------------------------------------------------------------------------
@@ -893,14 +935,14 @@ export function isSettlementUnproven(day: ShiftDay): boolean {
 /**
  * The exact published amount for this day, in integer paise, or null.
  *
- * **Not exported from the barrel this wave.** Session B wrote a byte-equivalent
- * twin of this function and of `settlementPaymentLink` in
- * `m2-engagement-partner.ts` concurrently, and two exports of one name is a
- * `tsc` failure rather than a style question. Neither session may edit the
- * other's marker block, so both stay here, dormant, and the orchestrator folds
- * them at the gate — the barrel's own rule ("everything both parties read the
- * same way is exported from `m2-engagement-customer` and deliberately not
- * re-exported" in the partner block) says which way. Logged in §7.
+ * **This is the one home.** Session B wrote a byte-equivalent twin of this
+ * function and of `settlementPaymentLink` in `m2-engagement-partner.ts` in the
+ * same wave, and two exports of one name is a `tsc` failure rather than a style
+ * question. Folded here at the Gate 3 integration, on the barrel's own rule:
+ * everything both parties read the same way is exported from
+ * `m2-engagement-customer` and deliberately not re-exported in the partner
+ * block. The vendor's settlement panel imports it from `@vsolve/query` and
+ * needed no change.
  *
  * **Read, never computed.** `amount_paise` is `per_worker_paise × workers_present
  * + extras_paise` by a database check constraint, and re-deriving it here would
@@ -922,12 +964,18 @@ export function settlementAmountPaise(day: ShiftDay): number | null {
  * is a link a client can build wrong, and the failure mode is money reaching the
  * wrong VPA.
  *
- * Null is an ordinary state with two causes this build cannot tell apart — the
- * lead has published no VPA, or the read simply does not carry it (see the §7
- * row: `DaySettlementSerializer` declares `upi_payment_link` as an `allow_null`
- * field over a model attribute that does not exist, so only the *command*
- * response ever populates it). Either way the honest screen shows the amount and
- * does not claim the professional has no UPI address.
+ * **Null now means exactly one thing: the lead has published no VPA** — an
+ * ordinary state and not an error. Until 1.31.0 it meant that *or* that the read
+ * did not carry the link at all, because `DaySettlementSerializer` declared
+ * `upi_payment_link` as an `allow_null` field over a model attribute that did
+ * not exist and only the *command* response ever populated it. That was this
+ * column's §7 gap and the backend closed it with a `SerializerMethodField`; the
+ * link survives a reload and the call site's compensating fallback is deleted.
+ *
+ * The screen still shows the amount and still does not claim the professional
+ * has no UPI address. That copy was written to survive an ambiguity that has
+ * since gone, and it stays because it was never really about the ambiguity: what
+ * somebody owes is the fact, and the link is a shortcut to paying it.
  */
 export function settlementPaymentLink(day: ShiftDay): string | null {
   return day.settlement?.upi_payment_link ?? null;

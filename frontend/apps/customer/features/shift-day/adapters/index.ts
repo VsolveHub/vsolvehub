@@ -6,8 +6,8 @@ import {
   hasCustomerConfirmedSettlement,
   isSettlementUnproven,
   requiresShortfallChoice,
+  settlementPaymentLink,
   settlementPhase,
-  SHORTFALL_CHOICES,
   type AttendancePhase,
   type SettlementPhase,
   type ShiftCrewMember,
@@ -104,10 +104,12 @@ export interface DaySettlementView {
   /**
    * The server's own `upi://pay` deep link, or null.
    *
-   * Carried verbatim and never assembled. Null on the shift-day read is
-   * currently ambiguous — no VPA published, or the read not carrying it at all
-   * (§7) — so the screen states the amount and never claims the professional has
-   * no UPI address.
+   * Carried verbatim and never assembled. **Null now means one thing**: the lead
+   * has published no VPA. Until 1.31.0 it meant that *or* that the read simply
+   * did not carry the link — a serializer field over a model attribute that did
+   * not exist — which is the §7 gap this column logged and the backend closed
+   * with a `SerializerMethodField`. The link now survives a reload, and the
+   * screen can stop hedging about which of the two it was.
    */
   paymentLink: string | null;
 }
@@ -167,6 +169,24 @@ export interface ShiftDayView {
   overtimeHourlyLabel: string | null;
 }
 
+/**
+ * The Customer's choice about the missing worker-days, or null for "not asked".
+ *
+ * `""` is the resting value on every day nobody was missing from, and at 1.31.0
+ * the wire type finally admits it — the response shape now reads
+ * `ShortfallChoiceEnum | BlankEnum`, matching the request shape and matching what
+ * the column always contained. This column logged that mismatch as a §7 gap and
+ * the backend closed it in our favour.
+ *
+ * So the blank is now visible to `tsc` instead of arriving as a lie at runtime,
+ * and the narrowing is an honest comparison rather than the membership test that
+ * stood in for one. It still fails **closed**: only a real choice renders as a
+ * choice.
+ */
+function toShortfallChoice(value: ShortfallChoice | ""): ShortfallChoice | null {
+  return value === "" ? null : value;
+}
+
 /** `attendance_disputed` → "Attendance disputed". Never a lookup this client authored. */
 function deSlug(value: string): string {
   const words = value.trim().replace(/[_-]+/g, " ").toLowerCase();
@@ -222,26 +242,16 @@ export function toShiftDayView(day: ShiftDay): ShiftDayView {
             workersExpected: settlement.workers_expected,
             extrasLabel: formatMoney(settlement.extras_paise),
             hasExtras: settlement.extras_paise > 0,
-            // The wire's "not chosen" is `""`, which is what every day nobody
-            // was missing from carries — but 1.30.0 publishes the field as the
-            // bare `ShortfallChoiceEnum`, so the generated type does not admit
-            // it (§7). Membership-tested rather than compared, which narrows
-            // without a cast and fails **closed** for a fourth choice this
-            // build has never seen: a blank renders as no choice, never as one.
-            shortfallChoice: SHORTFALL_CHOICES.includes(settlement.shortfall_choice)
-              ? settlement.shortfall_choice
-              : null,
+            shortfallChoice: toShortfallChoice(settlement.shortfall_choice),
             makeGoodRequestedAt: formatInstant(settlement.make_good_requested_at),
             supervisorConfirmedAt: formatInstant(settlement.supervisor_confirmed_at),
             customerConfirmedAt: formatInstant(settlement.customer_confirmed_at),
             settledAt: formatInstant(settlement.settled_at),
-            // The server's own string, read straight off the record. Read here
-            // rather than through `settlementPaymentLink` because that helper
-            // is not on the barrel this wave — Session B published a twin of it
-            // and the fold is the orchestrator's (§7). A field read is not the
-            // part worth sharing anyway; **nothing assembles a `upi://pay`
-            // string**, here or anywhere in this app.
-            paymentLink: settlement.upi_payment_link,
+            // The server's own string, through the shared reader — which is back
+            // on the barrel since the Gate 3 fold, so the field read is no
+            // longer inlined here. **Nothing assembles a `upi://pay` string**,
+            // here or anywhere in this app.
+            paymentLink: settlementPaymentLink(day),
           },
     canConfirmSettled: canConfirmDaySettled(day),
     hasCustomerConfirmedSettlement: hasCustomerConfirmedSettlement(day),

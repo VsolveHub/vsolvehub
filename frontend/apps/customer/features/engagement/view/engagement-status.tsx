@@ -218,6 +218,31 @@ export const STAGE_STATUS: Record<EngagementStageStatus, StatusCopy> = {
   CORRECTION_REQUESTED: { label: "Sent back to be corrected", tone: "warning" },
   DISPUTED: { label: "You raised a problem", tone: "danger" },
   RELEASED: { label: "Paid out", tone: "success" },
+  /**
+   * Contract 1.31.0 (`M2-BE-545`). Two paths reach it, and the copy has to be
+   * true of both: a project **terminated early**, and a **material advance left
+   * with the outgoing vendor** when a project transfers.
+   *
+   * **The badge says nothing about money, deliberately.** The obvious label here
+   * is "Refunded", and it would be wrong: `_cancel_stage` leaves `amount_paise`,
+   * `funded_paise` and `refunded_amount_paise` exactly as they are — the
+   * agreement *was* that big and the money *was* collected, and shrinking the
+   * totals to make a cancelled project look tidy would erase the record a
+   * dispute reads. A terminated work stage does have its unearned funding
+   * returned; a cancelled **material advance does not**, because the vendor
+   * already bought the goods. One badge cannot claim both, so it claims neither
+   * and the money panel keeps reporting the four published figures.
+   *
+   * What is true of every case is the server's own sentence: **nobody owes work
+   * on this row any more.**
+   *
+   * `info` rather than the three tempting alternatives. `neutral` reads as
+   * "nothing happened here" and something did. `warning` asks for an action the
+   * Customer does not have — nothing on a cancelled row is theirs to do.
+   * `danger` would paint a *transfer* red, which is the platform rescuing the
+   * job rather than failing at it.
+   */
+  CANCELLED: { label: "Cancelled", tone: "info" },
 };
 
 export function EngagementStatusBadge({ status }: { status: EngagementStatus }) {

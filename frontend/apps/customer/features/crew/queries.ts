@@ -11,6 +11,7 @@ import {
   CUSTOMER_REPORTS_CREW_PARTY,
   M2_FRESHNESS,
   boundedPoll,
+  invalidateForM2Command,
   isRateCardSettled,
   m2QueryKeys,
   m2RateCardKeys,
@@ -332,9 +333,21 @@ export function useConfirmCrewArrival() {
           },
         }),
       ),
+    // `confirm_shift_arrival` landed in `M2_INVALIDATION` at the Gate 3
+    // integration, so the rate-card half now goes through the published table
+    // rather than being named here.
+    //
+    // **The timeline invalidation stays, and it is not redundant.** With only a
+    // requirement id in hand the table resolves to `rateCard.state(id)` alone —
+    // `stageScope` contributes nothing without an engagement or stage id — and
+    // `requirements.timeline(id)` is that key's *sibling* under
+    // `requirements.detail(id)`, not its child, so no prefix of the table's
+    // answer reaches it. Checked in the factory rather than assumed. Arrival is
+    // a timeline event, so dropping this line would leave the record a day
+    // behind on the one screen a Customer looks at to see it.
     onSettled: (_data, _error, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: m2RateCardKeys.state(input.requirementId),
+      void invalidateForM2Command(queryClient, "confirm_shift_arrival", {
+        requirementId: input.requirementId,
       });
       void queryClient.invalidateQueries({
         queryKey: m2QueryKeys.requirements.timeline(input.requirementId),
@@ -378,14 +391,18 @@ export function useReportCrewNoShow() {
           },
         }),
       ),
-    onSettled: (_data, _error, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: m2RateCardKeys.state(input.requirementId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: m2QueryKeys.requirements.detail(input.requirementId),
-      });
-    },
+    // `report_crew_no_show` landed in `M2_INVALIDATION` at the Gate 3
+    // integration and its scope is a **strict superset** of the two keys named
+    // here before: `requirementScope` leads with `requirements.detail(id)`,
+    // which is a prefix of both `rateCard.state(id)` and the requirement read,
+    // and adds the list and the quote surfaces — all of which move when a
+    // no-show returns the request to matching for a free re-dispatch. Verified
+    // against the factory before deleting the hand-written pair, because a
+    // re-point that quietly narrows an invalidation is worse than none.
+    onSettled: (_data, _error, input) =>
+      void invalidateForM2Command(queryClient, "report_crew_no_show", {
+        requirementId: input.requirementId,
+      }),
     retry: false,
   });
 }

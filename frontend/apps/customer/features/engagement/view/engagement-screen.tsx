@@ -594,7 +594,21 @@ function StageRow({
         </p>
       ) : null}
 
-      {mode !== "managed" ? null : stage.isFundingPending ? (
+      {/* A cancelled row (1.31.0) owes nobody any work, so every funding
+          sentence below is false of it — including the quiet one, "you will be
+          asked for this when the stage before it is done", which `_cancel_stage`
+          guarantees will never happen because it leaves `funding_state` exactly
+          as it found it. Said plainly instead, and deliberately without a claim
+          about the money: a terminated work stage has its unearned funding
+          returned and a cancelled material advance does not, and the totals
+          above already report both truthfully. */}
+      {stage.status === "CANCELLED" ? (
+        <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
+          {isMaterial
+            ? "These materials are no longer part of this project. What was already spent on them is shown above."
+            : `This ${nouns.stage} is no longer part of this project and nobody is working on it. Nothing more will be asked of you for it.`}
+        </p>
+      ) : mode !== "managed" ? null : stage.isFundingPending ? (
         <p className="mt-3 text-sm leading-6 text-text-secondary" role="status">
           We are confirming your payment for this stage. Your bank or UPI app
           tells us the outcome and that can take a few minutes — do not pay again.

@@ -38,7 +38,7 @@ below will work.
 | Needed | Written by | Symptom when missing |
 |---|---|---|
 | A confirmed A3 booking with an engagement | the booking-fee callback | No stages; `/engagements/{id}` has an empty day list |
-| A Partner with a **verified** crew roster | the seed's `_seed_crew` | Crew assignment refuses `m2_crew_roster_required`; no attendance is possible |
+| A Partner with a **verified** crew roster | the seed's `_seed_crew`, whose `documents_verified_at` writer landed at 1.31.0 | Crew assignment refuses `m2_crew_roster_required`; no attendance is possible |
 | `business_profile.upi_vpa` on that Partner | the seed (`m2demo{n}@vsolvedemo.test`) | The UPI link is absent. **§5 is where you check that this is stated honestly** |
 
 **The seed publishes ₹900 per worker per day.** Every number on these screens
@@ -235,34 +235,33 @@ Back on Day 1 (or Day 2 for the short day).
    do not confirm it*. A screen that nudges a Customer to agree they paid
    somebody they did not is the failure mode here.
 
-### The known gap: the UPI link on a reload
+### The UPI link — a gap that was open at 1.30.0 and is closed at 1.31.0
 
-**`GET .../shift/` currently returns `upi_payment_link: null` on every request**,
-even when the professional has a VPA. `DaySettlementSerializer` declares the
-field over a model attribute that does not exist and DRF's `allow_null=True`
-silently substitutes `None`; only the **settlement command's** own view injects
-the real link. Logged in `Django_Next.js_Plan/M2/frontend-execution-plan.md` §7.
+The shift-day read used to answer `upi_payment_link: null` on **every** request,
+even when the professional had a VPA: `DaySettlementSerializer` declared the
+field over a model attribute that did not exist, and only the settlement
+command's own view injected a real link. The backend closed it with a
+`SerializerMethodField`, wire shape unchanged, and this column deleted its
+compensating fallback rather than leaving it beside the fix.
 
-So the behaviour to expect, and to check:
+**So the check is now the plain one, and the reload is the point:**
 
 | When | Expect |
 |---|---|
-| Before you tap | No link. The panel says **we do not have a UPI link to open for this one**, names the amount and says to pay them the way you agreed |
-| Immediately after you tap | **Open your UPI app for ₹X** appears — the link the *command* returned |
-| After a page reload | The link is gone again, and the honest absence sentence is back |
+| Before you tap | **Open your UPI app for ₹X** — the link is on the read now |
+| After you tap | Unchanged; the link is still there |
+| **After a page reload** | **Still there.** This is the regression check — if it vanishes, the read has stopped carrying the field again |
 
-Two things must be true of the absent case, and they are the point:
-
-- It must **never** say the professional has no UPI address. `null` has two
-  causes this build cannot tell apart, and asserting the wrong one puts a false
-  fact about somebody's business on screen.
-- The **amount must still be shown**. The figure is what matters; the link is a
-  shortcut.
-
-When the link is there, check it: `upi://pay?pa=m2demo1@vsolvedemo.test&…&am=900.00&cu=INR`.
+Check the link itself: `upi://pay?pa=m2demo1@vsolvedemo.test&…&am=900.00&cu=INR`.
 The amount in it must equal `amount_paise` to the paise. **Nothing in the client
 assembles this string** — grep the customer app for `upi://` and you should find
 it only in comments.
+
+Then reach the genuinely absent case on purpose: clear `upi_vpa` on the
+professional's business profile and reload. The panel must say **we do not have a
+UPI link to open for this one**, still show the amount, and **never** say the
+professional has no UPI address — the amount is what a Customer standing in their
+hallway needs, not a remark about somebody else's payment setup.
 
 ---
 

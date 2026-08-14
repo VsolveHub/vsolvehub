@@ -57,17 +57,19 @@ export function DaySettlementPanel({ day, onDone }: DaySettlementPanelProps) {
   const settlement = day.settlement;
 
   /**
-   * The live UPI link, preferring the command response over the read.
+   * The UPI link, straight off the read.
    *
-   * Not a cache trick and not a fallback to something invented: both values are
-   * the **server's own string**. The read currently answers `null` for this
-   * field on every request — `DaySettlementSerializer` declares it over a model
-   * attribute that does not exist, so only the settlement command's view
-   * populates it (logged in `frontend-execution-plan.md` §7) — and
-   * `mutation.data` is where that populated value lands. When the read starts
-   * carrying it, this line keeps working and the fallback stops being reached.
+   * This used to prefer `confirm.data` over the read, because the shift-day read
+   * answered `null` for the field on every request and only the settlement
+   * command's own response carried a live link. That was the §7 gap this column
+   * logged; the backend closed it at 1.31.0 with a `SerializerMethodField`, the
+   * wire shape unchanged, and **the link now survives a reload**.
+   *
+   * So the compensating fallback is deleted rather than left beside its fix — a
+   * workaround kept next to the thing that made it unnecessary is how the next
+   * reader concludes the gap is still open.
    */
-  const paymentLink = settlement?.paymentLink ?? confirm.data?.upi_payment_link ?? null;
+  const paymentLink = settlement?.paymentLink ?? null;
 
   return (
     <section aria-labelledby="settlement-heading" className="mt-6">
@@ -197,9 +199,11 @@ function NoAmountYet({ day }: { day: ShiftDayView }) {
  * server's, because a `upi://pay` string this client built is one it can build
  * wrong, and the failure mode is money reaching the wrong VPA.
  *
- * The absent case deliberately does not say "this professional has no UPI
- * address": null has two causes this build cannot tell apart (see §7), and
- * asserting the wrong one puts a false fact about somebody's business on screen.
+ * The absent case still does not say "this professional has no UPI address",
+ * even though since 1.31.0 that is now the only thing null can mean. The reason
+ * changed and the copy did not need to: what a Customer standing in their hallway
+ * needs is the amount and permission to pay it however they agreed — not a
+ * remark about somebody else's payment setup.
  */
 function PaymentLink({ link, amountLabel }: { link: string | null; amountLabel: string }) {
   if (link === null) {
