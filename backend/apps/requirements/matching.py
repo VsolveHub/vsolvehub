@@ -912,3 +912,36 @@ def expired_invitation_ids(*, at: datetime | None = None) -> list[uuid.UUID]:
             responds_by__lt=moment,
         ).values_list("id", flat=True)
     )
+
+
+def open_matching_on_submission(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:
+    """Invite the opening vendor wave for a requirement that has just been submitted.
+
+    This is the consumer half of `m2.requirement.submitted`. Until it existed the event was
+    emitted by `services.submit_requirement` and consumed by nothing, so a submitted A5 project
+    or A3 quote request sat at `MATCHING` with no invitation ever written and no vendor able to
+    see it at all. Every other caller of `invite_wave` opens a *later* wave — a rematch, a
+    replacement, a fallback from the cascade — so the opening wave was the one nobody owned.
+
+    Two guards, and both are about not putting one job in front of vendors twice:
+
+    * **A rate-card booking owns its own dispatch.** `crew_dispatch.book_at_published_rate`
+      submits through the ordinary command on purpose (one submission path, one set of rules)
+      and then runs the A1 offer cascade itself. Opening a quote wave here as well would offer
+      the same job on two different commercial terms at once.
+    * **Existing invitations mean matching has already opened.** Outbox delivery is
+      at-least-once, so a re-driven event has to settle on the same outcome; without this,
+      every redelivery would open another wave.
+
+    A requirement that has left its live statuses is skipped rather than raised on. The event is
+    a fact about the past, and a request cancelled between submission and delivery is not a
+    failure worth retrying.
+    """
+    if RateCardBooking.objects.filter(requirement_id=requirement_id).exists():
+        return []
+    if VendorInvitation.objects.filter(requirement_id=requirement_id).exists():
+        return []
+    requirement = CustomerRequirement.objects.filter(pk=requirement_id).first()
+    if requirement is None or requirement.status not in CustomerRequirement.LIVE_STATUSES:
+        return []
+    return invite_wave(requirement_id=requirement_id)

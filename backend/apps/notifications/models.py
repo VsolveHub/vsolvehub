@@ -93,6 +93,12 @@ class NotificationIntent(models.Model):
     """We decided to tell somebody something. Whether it arrived is `deliveries`."""
 
     class Channel(models.TextChoices):
+        #: Rung zero, added for the M2 feed. It costs nothing and reaches nobody who is not
+        #: already looking, which is precisely why it is the bottom of the ladder and never the
+        #: whole of it — `escalation.DEFAULT_LADDER` still climbs away from here as a deadline
+        #: nears. A notice that exists only in the app is a notice a Customer asleep at 7am
+        #: never got.
+        IN_APP = "IN_APP", "In-app"
         SMS = "SMS", "SMS"
         EMAIL = "EMAIL", "Email"
         PUSH = "PUSH", "Push"
@@ -124,6 +130,13 @@ class NotificationIntent(models.Model):
     context = models.JSONField(default=dict)
     attempts = models.PositiveSmallIntegerField(default=0)
     suppressed_reason = models.CharField(max_length=140, blank=True)
+    #: When the recipient opened this notice in the app.
+    #:
+    #: Only an in-app notice can be read. An SMS has no such fact — a provider reports that it
+    #: accepted a message, never that a person looked at it — so a column carrying a meaning on
+    #: one channel out of five is a column that eventually gets filled in on the other four. The
+    #: check constraint below refuses that rather than trusting every future caller to remember.
+    read_at = models.DateTimeField(null=True, blank=True)
     idempotency_key = models.CharField(max_length=128, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -133,12 +146,23 @@ class NotificationIntent(models.Model):
         indexes = [
             models.Index(fields=("status", "created_at")),
             models.Index(fields=("recipient", "purpose")),
+            #: The feed read and the unread badge, which is polled on every authenticated screen
+            #: in both apps. Ordering is `-created_at` from `Meta.ordering`, so this covers the
+            #: filter and leaves only the sort.
+            models.Index(fields=("recipient", "channel", "read_at")),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=("idempotency_key",),
                 condition=~models.Q(idempotency_key=""),
                 name="notifications_unique_intent_key",
+            ),
+            #: `Channel.IN_APP` is spelled literally because a nested `Meta` cannot see the
+            #: enclosing class's own attributes, and the literal is what the migration records
+            #: either way.
+            models.CheckConstraint(
+                condition=models.Q(read_at__isnull=True) | models.Q(channel="IN_APP"),
+                name="notifications_only_in_app_is_read",
             ),
         ]
 

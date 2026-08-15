@@ -5,6 +5,7 @@ import { Button, Logo, cn } from "@vsolve/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import { getApiClient } from "@/lib/api/browser";
 
 import { useCustomerSession } from "../queries";
@@ -101,6 +102,14 @@ export function SiteHeader() {
         {/* Resolving shows nothing rather than guessing. */}
         {session.isResolving ? null : session.isAuthenticated ? (
           <div className="flex items-center gap-3">
+            {/* Inside the authenticated cluster and nowhere else. The bell polls
+                an `IsAuthenticated` endpoint, so mounting it for a visitor would
+                start a minute-long poll against a refusal — and mounting it
+                while the session is still resolving would do the same on every
+                cold load, which is the same flicker this branch exists to
+                avoid. Its being rendered *is* the session gate; the component
+                itself asks no question about who is signed in. */}
+            <NotificationBell />
             {session.phoneNumber !== null ? (
               <span className="hidden text-sm text-text-secondary sm:inline">
                 {session.phoneNumber}

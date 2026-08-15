@@ -129,6 +129,13 @@ const RECOVERY_BY_CODE: Record<string, RecoveryIntent> = {
   // visit codes from 07 §8, plus the codes Django published outside that table.
   // ---------------------------------------------------------------------------
 
+  // Notification feed (contract 1.34.0)
+  //
+  // `retry` rather than `contact_support`: the only way to meet this is to mark a
+  // notice that is not yours or one that has since been removed, and in both
+  // cases re-reading the feed is the whole fix. Support has nothing to add.
+  notification_not_found: "retry",
+
   // Requirement lifecycle
   m2_requirement_not_found: "contact_support",
   m2_requirement_expired: "choose_again",

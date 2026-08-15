@@ -20,6 +20,28 @@ from apps.foundation.models import OutboxEvent
 from apps.foundation.tasks import register_outbox_handler
 from apps.requirements.crew_dispatch import record_acceptances_for_approved_capability
 from apps.requirements.engagements import route_suspended_capability_engagements
+from apps.requirements.matching import open_matching_on_submission
+from apps.requirements.notifications import notified_event_types, notify_for_outbox_event
+
+
+@register_outbox_handler(event_type="m2.requirement.submitted")
+def handle_requirement_submitted(event: OutboxEvent) -> None:
+    """Open matching for a newly submitted requirement.
+
+    `services.submit_requirement` has emitted this event since Wave C0 and **nothing consumed
+    it**, so every submitted A5 project and every A3 quote request reached `MATCHING` and stopped
+    there: no `VendorInvitation` was ever written, no vendor could see the job, and the outbox row
+    exhausted its nine attempts against `No handler registered.` — a failure visible only to
+    somebody reading the outbox table. Every static gate passed over it, because an emitter with
+    no consumer is not a type error.
+
+    The dispatch decisions live in `matching.open_matching_on_submission`, including why an A3
+    rate-card booking is deliberately skipped here.
+    """
+    requirement_id = event.payload.get("requirement_id")
+    if not isinstance(requirement_id, str):
+        raise ValueError("m2.requirement.submitted requires requirement_id.")
+    open_matching_on_submission(requirement_id=UUID(requirement_id))
 
 
 @register_outbox_handler(event_type="m2.capability.suspended")
@@ -58,3 +80,39 @@ def handle_capability_approved(event: OutboxEvent) -> None:
     if not isinstance(capability_id, str):
         raise ValueError("m2.capability.approved requires partner_capability_id.")
     record_acceptances_for_approved_capability(capability_id=UUID(capability_id))
+
+
+def _consume_notification_event(event: OutboxEvent) -> None:
+    """Adapt the domain command to the registry's shape.
+
+    `notify_for_outbox_event` returns what it wrote so tests can assert the wording; the outbox
+    contract is `(OutboxEvent) -> None`. This is the one line that reconciles them, rather than
+    weakening either signature.
+    """
+
+    notify_for_outbox_event(event)
+
+
+def _register_notification_consumers() -> None:
+    """Give every routed M2 event a consumer that tells the people it concerns.
+
+    Registered from a loop over `notifications.NOTIFICATION_ROUTES` rather than as fourteen
+    near-identical functions: each would differ only in a string, and a wall of copies is where a
+    missing recipient hides. The routing decisions stay reviewable in one table.
+
+    Idempotent by key rather than by state — `notify_for_outbox_event` derives each intent's
+    idempotency key from this event's own, and `request_notification` returns the existing row for
+    a key it has already seen, so a re-driven event shows nobody the same notice twice.
+
+    These consumers are additive: they are the *first* consumer for every event in the table,
+    each of which was previously exhausting its nine attempts against `No handler registered.`
+    Registering here means those events now settle instead of dead-lettering. If one later needs a
+    second effect, it belongs inside that event's own domain command, not in a rival handler —
+    `register_outbox_handler` permits exactly one consumer per event type.
+    """
+
+    for event_type in notified_event_types():
+        register_outbox_handler(event_type=event_type)(_consume_notification_event)
+
+
+_register_notification_consumers()

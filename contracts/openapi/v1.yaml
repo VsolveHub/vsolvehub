@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.33.0
+  version: 1.34.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -4160,6 +4160,117 @@ paths:
           description: Required dependencies are reachable.
         '503':
           description: One or more required dependencies are unavailable.
+  /api/v1/notifications/:
+    get:
+      operationId: notification_feed_list
+      description: |-
+        What this person has been told.
+
+        Scoped to `request.user` and to nothing else — there is no recipient parameter to get wrong,
+        which is the same reasoning that keeps `partner_id` off the partner ledger.
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+          minLength: 1
+      tags:
+      - Notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/notifications/read/:
+    post:
+      operationId: notification_mark_read
+      description: |-
+        Mark one notice read, or all of them.
+
+        `ThrottledWriteMixin` exempts safe methods, so mounting a scope here costs the polled reads
+        above nothing while still bounding a script hammering the write.
+      tags:
+      - Notifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkNotificationReadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MarkNotificationReadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MarkNotificationReadRequestRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadNotificationCount'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`notification_not_found` when the notice is not this person''s.'
+  /api/v1/notifications/unread-count/:
+    get:
+      operationId: notification_unread_count
+      description: |-
+        The badge number.
+
+        Its own endpoint rather than a field on the feed page, because the badge is polled on every
+        authenticated screen and the feed is read only when somebody opens the panel. Making the cheap
+        question carry the expensive answer is how a poll becomes a page fetch every few seconds.
+      tags:
+      - Notifications
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadNotificationCount'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/operations/assisted-checkouts/:
     post:
       operationId: operations_assisted_checkouts_create
@@ -18284,6 +18395,20 @@ components:
           format: uuid
       required:
       - partner_id
+    MarkNotificationReadRequestRequest:
+      type: object
+      description: |-
+        Mark one notice read, or all of them.
+
+        Exactly one of the two is required. "Neither" would be a request with no meaning, and "both"
+        would leave the server guessing which the person actually pressed.
+      properties:
+        notification_id:
+          type: string
+          format: uuid
+        all:
+          type: boolean
+          default: false
     ModeEnum:
       enum:
       - SAME_PARTNER_SEQUENTIAL
@@ -18306,6 +18431,88 @@ components:
       required:
       - amount_paise
       - currency
+    Notification:
+      type: object
+      description: |-
+        One in-app notice as a person reads it.
+
+        `title` and `body` are rendered here rather than stored, which is the whole point of
+        `templates_registry`: the feed always shows today's copy, and the row never holds a sentence
+        with somebody's address in it.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        purpose:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        target:
+          allOf:
+          - $ref: '#/components/schemas/NotificationTarget'
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        read_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - body
+      - created_at
+      - id
+      - purpose
+      - read_at
+      - target
+      - title
+    NotificationPage:
+      type: object
+      description: |-
+        The cursor page envelope.
+
+        Declared rather than implied: drf-spectacular cannot see a paginator instantiated inside a
+        plain `APIView`, so an operation declaring a bare array would publish a shape the view never
+        sends — the defect `RequirementSummaryPageSerializer` was written to correct.
+      properties:
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+      required:
+      - next
+      - previous
+      - results
+    NotificationTarget:
+      type: object
+      description: What a notice is about, so an app can decide where to send the
+        reader.
+      properties:
+        kind:
+          type: string
+        id:
+          type: string
+          format: uuid
+      required:
+      - id
+      - kind
     NullEnum:
       enum:
       - null
@@ -26870,6 +27077,14 @@ components:
             format: uuid
       required:
       - partner_ids
+    UnreadNotificationCount:
+      type: object
+      description: The badge number, and nothing else.
+      properties:
+        unread:
+          type: integer
+      required:
+      - unread
     User:
       type: object
       properties:

@@ -19,6 +19,12 @@ from django.utils import timezone
 
 from apps.identity.models import CommunicationPreference, User
 from apps.notifications.models import KillSwitch, NotificationDelivery, NotificationIntent
+from apps.notifications.templates_registry import assert_template_registered
+
+#: The provider name recorded against an in-app delivery. Not a provider at all — the row is
+#: written by this process — but `NotificationDelivery` asks who carried the message, and "we did"
+#: is a truthful answer that keeps in-app inside the same audit trail as MSG91 will be.
+IN_APP_PROVIDER = "in_app"
 
 #: How many attempts an intent gets before it is `FAILED` and visible.
 #:
@@ -60,6 +66,22 @@ TRANSACTIONAL_PURPOSES = frozenset(
         "partner.job_assigned",
         "partner.job_cancelled",
         "partner.payout_paid",
+        # M2. Each of these is a hold, a clock or a settled amount, and muting any of them makes
+        # the platform's own deadlines unfair: a booking-fee hold that expires unseen, a stage
+        # review that auto-approves and releases money because nobody was told it had started, a
+        # cancellation that goes ahead because the counterparty's window closed in silence. A
+        # preference screen that could switch these off would be a preference screen that breaks
+        # the product's promises — the same sentence this frozenset already existed to enforce.
+        "m2.crew_offer.accepted",
+        "m2.booking_fee.charged",
+        "m2.crew.vendor_no_show",
+        "m2.visit_plan.charged",
+        "m2.selection.reconfirm_required",
+        "m2.engagement.opened",
+        "m2.stage.review_required",
+        "m2.stage.disputed",
+        "m2.amendment.authorized",
+        "m2.cancellation.evaluated",
     }
 )
 
@@ -154,7 +176,18 @@ def request_notification(
     Suppression is recorded as an intent with a reason rather than as nothing at all. "We chose
     not to send this, because a kill switch was engaged" is a fact an incident review needs; a
     missing row looks identical to a bug.
+
+    **In-app is the exception to "sending is a later step."** Writing the row *is* the delivery —
+    there is no provider to accept it and no sweep that would ever pick it up — so an in-app
+    intent left `PENDING` would be a notice sitting in a queue that does not exist. It is
+    therefore delivered inline, through the same `record_delivery_attempt` every other channel
+    uses, so one intent still means one auditable attempt. Its template is checked here for the
+    reason `templates_registry` documents: a code that cannot render must fail at the call site
+    that wrote it, never in front of the person reading their feed.
     """
+
+    if channel == NotificationIntent.Channel.IN_APP:
+        assert_template_registered(template_code)
 
     if idempotency_key:
         existing = NotificationIntent.objects.filter(idempotency_key=idempotency_key).first()
@@ -180,6 +213,15 @@ def request_notification(
         intent.status = NotificationIntent.Status.SUPPRESSED
         intent.suppressed_reason = "recipient_opted_out"
     intent.save()
+    if (
+        channel == NotificationIntent.Channel.IN_APP
+        and intent.status == NotificationIntent.Status.PENDING
+    ):
+        return record_delivery_attempt(
+            intent_id=intent.id,
+            provider=IN_APP_PROVIDER,
+            status=NotificationDelivery.Status.DELIVERED,
+        )
     return intent
 
 

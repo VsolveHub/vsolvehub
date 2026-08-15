@@ -4,6 +4,79 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.34.0 - Somebody is finally told
+
+**The in-app notification feed.** M2 emitted thirty-nine outbox events and three had consumers;
+the rest exhausted their nine attempts against `No handler registered.` and stopped. Every deadline
+the product runs on — the booking-fee hold, the visit-plan hold, the post-visit estimate window,
+the stage review that auto-approves and releases money — was written assuming the other party finds
+out, and nothing told them. This release publishes the surface that does.
+
+Additive, verified rather than asserted: paths, `operationId`s and schema component names were
+each name-diffed against the committed 1.33.0 contract. **Paths 257 → 260, operations 287 → 290,
+schema components 508 → 513. Removed: none.**
+
+### 1. Read what you have been told
+
+`GET /api/v1/notifications/` — `notification_feed_list`. Cursor-paginated (`NotificationPage`,
+page size 20, newest first), scoped to the session. There is no recipient parameter: a Customer, a
+labour lead and an operator all read their own feed through this one route, which is why it carries
+no role prefix.
+
+Each `Notification` publishes `id`, `purpose`, `title`, `body`, `target`, `created_at`, `read_at`.
+
+**`title` and `body` are rendered per request, not stored.** `NotificationIntent.context` holds the
+values a template needs and never the rendered message, so the feed always shows today's copy and
+the row never holds a sentence containing somebody's address. A client must not cache them as
+immutable.
+
+**`target` is nullable and is not a URL.** It is `{kind, id}` — `ENGAGEMENT` or `REQUIREMENT` —
+because the customer and partner apps route the same engagement to different paths, and publishing
+a link here would make Django the owner of two route tables it cannot see. `null` is a real answer:
+a notice about something with no page left to open should lead nowhere rather than to a 404.
+
+### 2. The badge
+
+`GET /api/v1/notifications/unread-count/` — `notification_unread_count`, returning
+`UnreadNotificationCount` (`{"unread": <int>}`).
+
+Its own endpoint rather than a field on the feed page, and the split is load-bearing: this is
+polled on every authenticated screen in both apps while the feed itself is read only when somebody
+opens the panel. Putting the count on the page would turn a cheap poll into a page fetch every few
+seconds.
+
+### 3. Mark read
+
+`POST /api/v1/notifications/read/` — `notification_mark_read`, taking
+`MarkNotificationReadRequestRequest` and returning the same `UnreadNotificationCount` so a client
+never needs a second round trip to move its badge.
+
+Exactly one of `notification_id` or `all` is required; sending both or neither is a
+`validation_error`. Marking read is idempotent and keeps the **first** `read_at` — "when did they
+first see this" is the question an escalation asks before it climbs, and a re-tap that moved the
+timestamp would make a notice look freshly seen every time the panel reopened.
+
+Reads are exempt from throttling through `ThrottledWriteMixin`; the write carries the new
+`m2_notification_read` scope at 300/hour.
+
+**The refusal it produces**
+
+**`notification_not_found`** — HTTP 404, **not retryable**. Returned when the notice is not this
+person's. 404 rather than 403 for the reason the requirement selectors already give: existence is
+itself private, and a 403 confirms a record is there to be found. New, and not in the frozen error
+table, so until `packages/api-client/src/errors.ts` carries it a client falls through to the
+generic refusal path.
+
+### 4. What is not here
+
+`NotificationIntent.Channel` gained `IN_APP`, but the enum is not published — no operation exposes
+a channel — so this is a model change with no wire surface.
+
+Thirteen outbox events now reach the feed. **Twenty-three do not**, and two moments emit no event
+at all and therefore cannot: the A5 visit-slot confirmation that starts the plan-payment hold, and
+the A3 day start. Both need a new emit and are recorded as open work in
+`docs/superpowers/plans/2026-08-15-in-app-notifications.md` rather than left to be discovered.
+
 ## 1.33.0 - One enum value, and a wave that is otherwise not contractual
 
 **Wave C7 — security, observability and release readiness.** Most of this wave never reaches the

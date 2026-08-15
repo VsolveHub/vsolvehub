@@ -6,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * The header's session behaviour.
  *
- * Three properties, each of which fails silently: a private link must not be
+ * Four properties, each of which fails silently: a private link must not be
  * offered to someone it would bounce, a resolving session must not claim the
- * customer is signed out, and a failed session read must not become a login
- * wall over a perfectly usable catalog.
+ * customer is signed out, a failed session read must not become a login wall
+ * over a perfectly usable catalog, and the notification bell must not be mounted
+ * outside a session — mounting it is what starts a minute-long poll against an
+ * `IsAuthenticated` endpoint, so mounting it for a visitor, or during the cold
+ * load when the session has not resolved, is a poll into a refusal.
  */
 
 const session = vi.hoisted(() => ({
@@ -32,6 +35,20 @@ vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
 vi.mock("@vsolve/query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vsolve/query")>()),
   useLogout: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+/**
+ * The bell is stubbed, deliberately.
+ *
+ * What is under test here is the header's *mounting decision* — the bell polls
+ * on mount, so where it is rendered is the question, not what it renders. A
+ * stub also keeps this file from depending on the notification query layer,
+ * which has its own tests. The marker is a `data-testid` rather than the real
+ * accessible name so that a rename of the bell's own copy cannot make this file
+ * quietly assert against a stub that no longer resembles it.
+ */
+vi.mock("@/features/notifications/view/notification-bell", () => ({
+  NotificationBell: () => <div data-testid="notification-bell" />,
 }));
 
 const { SiteHeader } = await import("./site-header");
@@ -125,6 +142,43 @@ describe("SiteHeader", () => {
       "page",
     );
     expect(screen.getByRole("link", { name: "Services" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("mounts the notification bell once there is a session", () => {
+    setSession({ isAuthenticated: true, isAnonymous: false, phoneNumber: "+919876500011" });
+
+    render(<SiteHeader />, { wrapper });
+
+    expect(screen.getByTestId("notification-bell")).toBeInTheDocument();
+  });
+
+  it("does not mount the bell for a signed-out visitor", () => {
+    render(<SiteHeader />, { wrapper });
+
+    // Mounting it starts a one-minute poll against an `IsAuthenticated`
+    // endpoint. For a visitor that is a timer running into a 403 forever.
+    expect(screen.queryByTestId("notification-bell")).not.toBeInTheDocument();
+  });
+
+  it("does not mount the bell while the session is still resolving", () => {
+    setSession({ isResolving: true, isAnonymous: false });
+
+    render(<SiteHeader />, { wrapper });
+
+    // The same reason "Log in" is withheld here: on a cold load the answer is
+    // not known yet, and the bell would ask a question that needs it.
+    expect(screen.queryByTestId("notification-bell")).not.toBeInTheDocument();
+  });
+
+  it("does not mount the bell when the session read failed", () => {
+    setSession({ isAuthenticated: false, isAnonymous: false, isUnavailable: true });
+
+    render(<SiteHeader />, { wrapper });
+
+    // `isUnavailable` is treated as signed-out for navigation, and the bell is
+    // navigation-adjacent: the links stay usable, but nothing starts polling a
+    // private endpoint off the back of a failed session read.
+    expect(screen.queryByTestId("notification-bell")).not.toBeInTheDocument();
   });
 
   it("does not mark a sibling whose href is a string prefix", () => {

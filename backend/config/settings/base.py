@@ -188,6 +188,10 @@ REST_FRAMEWORK = {
         # A vendor answering enquiries, offers and proposals. Generous: a busy lead on a good day
         # genuinely answers a great many offers, and throttling that would cost real supply.
         "m2_partner_response": "300/hour",
+        # Marking notifications read. Generous because it is one write per notice opened and a
+        # busy day legitimately produces a lot of them; the polled feed and badge reads are
+        # exempt through `ThrottledWriteMixin`, which is what keeps this scope affordable.
+        "m2_notification_read": "300/hour",
         # A Customer acting on quotes: selection, rejection, revalidation. The non-responsive
         # rejection path is here, and it is the one worth naming — it reopens a quote slot each
         # time, so a loop on it churns real vendors' invitations.
@@ -304,7 +308,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.33.0",
+    "VERSION": "1.34.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,

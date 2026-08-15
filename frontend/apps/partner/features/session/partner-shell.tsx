@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import {
   activeWorkspace,
   navigationFor,
@@ -261,15 +262,31 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             <Logo className="h-7 w-auto" />
             <span className="text-sm font-semibold text-text-secondary">Partner</span>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => logout.mutate()}
-            loading={logout.isPending}
-            loadingLabel="Signing out"
-          >
-            Sign Out
-          </Button>
+          {/*
+            The bell sits beside Sign Out rather than in the tab bar, and only in
+            this branch. `MAX_TAB_ITEMS` is six and the A3 workspace already fills
+            it, so a seventh nav item would not appear — `navigationFor` takes the
+            overflow out of the workspace's own destinations from the tail, so it
+            would have silently evicted Crew. And mounting it any earlier would
+            poll an unread count for a session that is still being checked, or one
+            that turned out not to hold a Partner account at all.
+
+            `workspaceKeys` decides where an ENGAGEMENT notice may safely link. It
+            is passed down from the list already resolved here so the panel does
+            not re-ask for grants that are on screen.
+          */}
+          <div className="flex items-center gap-1">
+            <NotificationBell workspaceKeys={workspaces.map((item) => item.key)} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => logout.mutate()}
+              loading={logout.isPending}
+              loadingLabel="Signing out"
+            >
+              Sign Out
+            </Button>
+          </div>
         </div>
 
         {/* Renders nothing until a Partner actually holds an M2 capability. */}

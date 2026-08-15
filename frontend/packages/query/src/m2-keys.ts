@@ -134,6 +134,26 @@ export const m2QueryKeys = {
   },
 
   /**
+   * The in-app notification feed, published at contract 1.34.0.
+   *
+   * A root of its own rather than a branch of anything, because a feed is the
+   * one read in M2 that is not about a single aggregate — one page can carry a
+   * crew offer, a stage review and a cancellation at once. Hanging it under
+   * `requirements` or `engagements` would mean every requirement invalidation
+   * also refetched a list that has nothing to do with that requirement.
+   *
+   * `unreadCount` is separate from `feed` because they are polled on completely
+   * different rhythms: the badge is live on every screen, the list is read when
+   * somebody opens the panel. One key for both would make the cheap read pay
+   * the expensive read's cost.
+   */
+  notifications: {
+    all: ["m2", "notifications"] as const,
+    feed: () => [...m2QueryKeys.notifications.all, "feed"] as const,
+    unreadCount: () => [...m2QueryKeys.notifications.all, "unread-count"] as const,
+  },
+
+  /**
    * Proposals, from both sides.
    *
    * `mine(requirementId)` is the Partner's own submission history for one
@@ -418,6 +438,15 @@ export const M2_FRESHNESS = {
   unlock: EXPIRING_STATE,
   /** Shares settle and refund on server clocks the customer cannot see. */
   visitPlan: EXPIRING_STATE,
+  /**
+   * The unread badge. `VOLATILE_STATE` rather than `EXPIRING_STATE`: nothing
+   * about a count expires server-side, so refetching on focus and treating it
+   * as immediately stale is enough, and the tighter tier would only shorten the
+   * cache window on a read that every authenticated screen holds open.
+   */
+  notificationCount: VOLATILE_STATE,
+  /** Read when the panel opens, so focus refetch matters more than a short gc. */
+  notificationFeed: VOLATILE_STATE,
   /**
    * The strictest tier in the table, and the only read where staleness hands
    * back a **credential**: every slot `id` is a signed token with a TTL, so a

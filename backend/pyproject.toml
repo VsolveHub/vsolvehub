@@ -41,7 +41,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# `models/` is the package form of the same thing: apps whose model layer outgrew one file split it
+# into `models/<slice>.py` with a re-exporting `__init__.py`. The ignore has to name both spellings
+# or it silently stops applying the moment an app crosses that line.
 "**/models.py" = ["RUF012"]
+"**/models/*.py" = ["RUF012"]
 "config/settings/*.py" = ["F403", "F405"]
 "tests/**/*.py" = ["S101"]
 # Seed commands drive real endpoints and assert the responses, and use `random` for spread.

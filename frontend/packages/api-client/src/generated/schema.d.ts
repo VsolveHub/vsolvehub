@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.33.0)
- * Checksum: 0d32844a0fe2e746
+ * Source:   contracts/openapi/v1.yaml (version 1.34.0)
+ * Checksum: 604d9b6e76869d16
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1645,6 +1645,73 @@ export interface paths {
             cookie?: never;
         };
         get: operations["health_ready_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description What this person has been told.
+         *
+         *     Scoped to `request.user` and to nothing else — there is no recipient parameter to get wrong,
+         *     which is the same reasoning that keeps `partner_id` off the partner ledger.
+         */
+        get: operations["notification_feed_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Mark one notice read, or all of them.
+         *
+         *     `ThrottledWriteMixin` exempts safe methods, so mounting a scope here costs the polled reads
+         *     above nothing while still bounding a script hammering the write.
+         */
+        post: operations["notification_mark_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The badge number.
+         *
+         *     Its own endpoint rather than a field on the feed page, because the badge is polled on every
+         *     authenticated screen and the feed is read only when somebody opens the panel. Making the cheap
+         *     question carry the expensive answer is how a poll becomes a page fetch every few seconds.
+         */
+        get: operations["notification_unread_count"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6957,6 +7024,18 @@ export interface components {
             partner_id: string;
         };
         /**
+         * @description Mark one notice read, or all of them.
+         *
+         *     Exactly one of the two is required. "Neither" would be a request with no meaning, and "both"
+         *     would leave the server guessing which the person actually pressed.
+         */
+        MarkNotificationReadRequestRequest: {
+            /** Format: uuid */
+            notification_id?: string;
+            /** @default false */
+            all: boolean;
+        };
+        /**
          * @description * `SAME_PARTNER_SEQUENTIAL` - Same Partner sequential
          *     * `PARALLEL_ALLOWED` - Parallel allowed
          *     * `MUST_BE_SEPARATE` - Must be separate
@@ -6966,6 +7045,45 @@ export interface components {
         Money: {
             readonly amount_paise: number;
             readonly currency: string;
+        };
+        /**
+         * @description One in-app notice as a person reads it.
+         *
+         *     `title` and `body` are rendered here rather than stored, which is the whole point of
+         *     `templates_registry`: the feed always shows today's copy, and the row never holds a sentence
+         *     with somebody's address in it.
+         */
+        Notification: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly purpose: string;
+            readonly title: string;
+            readonly body: string;
+            readonly target: components["schemas"]["NotificationTarget"] | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly read_at: string | null;
+        };
+        /**
+         * @description The cursor page envelope.
+         *
+         *     Declared rather than implied: drf-spectacular cannot see a paginator instantiated inside a
+         *     plain `APIView`, so an operation declaring a bare array would publish a shape the view never
+         *     sends — the defect `RequirementSummaryPageSerializer` was written to correct.
+         */
+        NotificationPage: {
+            /** Format: uri */
+            next: string | null;
+            /** Format: uri */
+            previous: string | null;
+            results: components["schemas"]["Notification"][];
+        };
+        /** @description What a notice is about, so an app can decide where to send the reader. */
+        NotificationTarget: {
+            kind: string;
+            /** Format: uuid */
+            id: string;
         };
         /** @enum {unknown} */
         NullEnum: null;
@@ -10464,6 +10582,10 @@ export interface components {
          */
         UnpayablePartner: {
             partner_ids: string[];
+        };
+        /** @description The badge number, and nothing else. */
+        UnreadNotificationCount: {
+            unread: number;
         };
         User: {
             /** Format: uuid */
@@ -14610,6 +14732,120 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    notification_feed_list: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    notification_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MarkNotificationReadRequestRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkNotificationReadRequestRequest"];
+                "multipart/form-data": components["schemas"]["MarkNotificationReadRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadNotificationCount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description `notification_not_found` when the notice is not this person's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    notification_unread_count: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadNotificationCount"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
             };
         };
     };
