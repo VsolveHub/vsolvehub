@@ -29,7 +29,14 @@
 
 import type { QueryClient } from "@tanstack/react-query";
 
-import { EXPIRING_STATE, SESSION_STATE, VOLATILE_STATE, type FreshnessTier } from "./freshness";
+import {
+  EXPIRING_STATE,
+  SESSION_STATE,
+  STATIC_CONTENT,
+  VOLATILE_STATE,
+  type FreshnessTier,
+} from "./freshness";
+import { queryKeys } from "./keys";
 
 export const m2QueryKeys = {
   all: ["m2"] as const,
@@ -319,6 +326,42 @@ export const m2QueryKeys = {
   },
 
   /**
+   * The Operations reads published at 1.32.0 — **one namespace, both columns.**
+   *
+   * Promoted at Gate 5 on two §7 requests that arrived independently, and the
+   * fold was not optional. Session B's recovery commands (`rematch`,
+   * `extend_deadline`, `reclassify`) each answer with the refreshed
+   * `RequestTimeline` and write it straight into the cache with `setQueryData`
+   * rather than invalidating — deliberately, because a refetch races the cascade
+   * the command just advanced. Session A's money screen reads the same endpoint.
+   * Two keys for one endpoint meant a rematch would refresh one copy and leave
+   * the other stale **on the screen where somebody decides who keeps the money.**
+   * `touchMetric` had the identical shape and the identical risk.
+   *
+   * Rooted at `queryKeys.operations.all` rather than at `["m2"]`, exactly as both
+   * columns built it: a broad Operations invalidation still reaches these, and
+   * the M1 case cache is **shared rather than forked** — the case list and detail
+   * hooks come from `features/cases/queries.ts`, so there is one cache of one
+   * case, not an M1 copy and an M2 copy that can disagree.
+   */
+  operations: {
+    all: [...queryKeys.operations.all, "m2"] as const,
+    /** The read a money decision is made from; carries live case and fee state. */
+    requestTimeline: (requirementId: string) =>
+      [...m2QueryKeys.operations.all, "timeline", requirementId] as const,
+    touchMetric: (requirementId: string) =>
+      [...m2QueryKeys.operations.all, "touch-metric", requirementId] as const,
+    /** The 30-day trend. Session A's surface; Session B deliberately dropped it. */
+    touchRollup: () => [...m2QueryKeys.operations.all, "touch-rollup"] as const,
+    queues: () => [...m2QueryKeys.operations.all, "queues"] as const,
+    rateCards: (serviceArea: string) =>
+      [...m2QueryKeys.operations.all, "rate-cards", serviceArea] as const,
+    crewVerification: (partnerId: string) =>
+      [...m2QueryKeys.operations.all, "crew-verification", partnerId] as const,
+    reconciliation: () => [...m2QueryKeys.operations.all, "reconciliation"] as const,
+  },
+
+  /**
    * One A3 shift-day — crew, attendance and settlement in a single read.
    *
    * Landed at Gate 1 on the backend column's §7 request, once 1.30.0 published
@@ -405,6 +448,32 @@ export const M2_FRESHNESS = {
    * somebody watches a window close that closed an hour ago.
    */
   project: EXPIRING_STATE,
+
+  /* Operations, 1.32.0. Tiers copied from the two §7 requests, not re-decided. */
+
+  /** The read a money decision is made from, carrying live case and fee state. */
+  operationsTimeline: EXPIRING_STATE,
+  /** Every member is already past a deadline. */
+  operationsQueues: EXPIRING_STATE,
+  /**
+   * Read to decide whether a Customer has been paid back. A minute-old "no
+   * failed refunds" is a claim about money made from a stale count.
+   */
+  operationsReconciliation: VOLATILE_STATE,
+  operationsTouchMetric: VOLATILE_STATE,
+  /**
+   * Deliberately the calmest of these: a trend over a server-chosen window that
+   * nobody makes a per-request decision from.
+   */
+  operationsTouchRollup: SESSION_STATE,
+  /**
+   * The one row worth arguing about, and safe for a reason peculiar to this
+   * surface: a rate card is **loaded, never edited**, and every row it holds is
+   * immutable — so a stale list is missing a card rather than misstating one.
+   * Revising a card publishes a new effective-dated row; it does not mutate this
+   * one. If that ever stops being true, this tier is wrong.
+   */
+  operationsRateCards: STATIC_CONTENT,
 } as const satisfies Record<string, FreshnessTier>;
 
 /* ---------------------------------------------------------------------------

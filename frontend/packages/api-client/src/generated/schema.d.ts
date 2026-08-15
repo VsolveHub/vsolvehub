@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.32.0)
- * Checksum: cb61d6195764e082
+ * Source:   contracts/openapi/v1.yaml (version 1.33.0)
+ * Checksum: 0d32844a0fe2e746
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -1683,7 +1683,9 @@ export interface paths {
          *
          *     Revision 4 makes this a **primary path** rather than a convenience: on the A3 fallback the vendors who answer fastest are often the ones who will not fill in a form. It is still not a way for staff to publish a price — the proposal is written with `vendor_confirmed_at` null, every Customer-facing read already filters on that, and the vendor's own confirmation is what makes it visible (`M2-AC-218`).
          *
-         *     Consent is recorded through the `Idempotency-Key`-scoped command and refused when absent, exactly as assisted clarification is. The wage floor is derived and enforced here identically to a vendor's own submission.
+         *     **Consent is a refusal, not a checkbox**, exactly as on assisted clarification: without `consent_recorded` the capture does not happen. It is optional on the wire and defaults to `false`, so a client that does not send it is refused with `m2_requirement_transition_not_allowed` rather than having a consent it never collected written into the record. Until 1.33.0 this view passed `true` unconditionally and the documented refusal could not fire.
+         *
+         *     The wage floor is derived and enforced here identically to a vendor's own submission.
          */
         post: operations["m2_operations_assisted_proposal"];
         delete?: never;
@@ -2569,6 +2571,31 @@ export interface paths {
          *     Two refusals are the point of this endpoint. The wage component is checked against the statutory floor with the same fail-closed guard vendor quotes pass — a platform that refuses a vendor's rate for being below the floor and publishes its own below it has no rule at all. And a card cannot be **backdated under a live booking**, because that would retroactively change the number a live booking was priced at.
          */
         post: operations["m2_rate_card_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/operations/rate-cards/decline-alarm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every live rate card's crew-offer decline rate over the alarm window, **including the cards no alarm can fire on**.
+         *
+         *     `armed` is the field to build the panel around. `armed: false` means owner decision 13 is still open for that card's skill and no alarm will ever fire for it — the rate is still measured and published, because measurement never waits on the owner, but rendering it as a healthy card would be a lie. `armed: true, breached: false` is the only green state, and `offers` below `minimum_offers` means a threshold exists and not enough offers have gone out for the rate to mean anything yet.
+         *
+         *     The denominator is offers **sent**, not offers answered: a lead who ignores an offer until it expires is saying the same thing as one who declines it, and a rate measured only over explicit declines looks healthy in exactly the market where every lead has stopped answering.
+         *
+         *     An empty `readings` list means no card is published at all, which is a different and worse state than every card being quiet.
+         */
+        get: operations["m2_operations_decline_alarm_read"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5034,6 +5061,48 @@ export interface components {
             consent_recorded: boolean;
         };
         /**
+         * @description A quote captured over the phone: the vendor's own shape, plus the consent that permits it.
+         *
+         *     Wave C7 closed a hole here. `capture_assisted_proposal` has always refused without
+         *     `consent_recorded` — its docstring, the endpoint's published description and `M2-AC-802` all say
+         *     so — but the view passed `True` unconditionally, so the refusal could not fire and every
+         *     assisted quote wrote an audit row asserting a consent nobody had recorded. That is worse than
+         *     having no consent field: it puts a false statement in the record of a real vendor's price.
+         *
+         *     A subclass rather than a field on `ProposalCreateSerializer`, because a vendor submitting their
+         *     own quote is not consenting to anything on anybody's behalf and asking them to tick a box would
+         *     be meaningless.
+         *
+         *     **`default=False` rather than `required=True`**, and that is the deliberate half. A required
+         *     field would be a breaking change to a published request body; an optional one that defaults to
+         *     the refusing value is additive on the wire and fails closed in behaviour — a client that has
+         *     not been updated gets a clear `409` telling it consent was not recorded, rather than silently
+         *     continuing to write the false row this change exists to stop.
+         */
+        AssistedProposalRequest: {
+            /** Format: uuid */
+            invitation_id: string;
+            total_paise: number;
+            tax_basis: components["schemas"]["ProposalTaxBasisEnum"];
+            /** @default 0 */
+            tax_paise: number;
+            rate_paise_per_worker_day?: number | null;
+            minimum_days?: number | null;
+            worker_count?: number | null;
+            stages?: components["schemas"]["ProposalStageRequest"][];
+            material_lines?: components["schemas"]["ProposalMaterialLineRequest"][];
+            inclusions?: string[];
+            exclusions?: string[];
+            warranty_terms?: string;
+            /** Format: date-time */
+            valid_until?: string | null;
+            commission_treatment?: string;
+            /** Format: uuid */
+            site_visit_id?: string | null;
+            /** @default false */
+            consent_recorded: boolean;
+        };
+        /**
          * @description The floor every state-changing fulfilment command sits on.
          *
          *     `expected_version` is required, never defaulted. A command that would apply to whatever
@@ -6841,9 +6910,10 @@ export interface components {
          *     * `DISPATCH` - Partner dispatch
          *     * `SERVICE_AREA` - One service area
          *     * `SERVICE` - One service
+         *     * `M2_PURCHASES` - New M2 purchases
          * @enum {string}
          */
-        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE";
+        KillSwitchScopeEnum: "NOTIFICATIONS" | "SMS" | "WHATSAPP" | "VOICE" | "PAYMENTS" | "PAYOUTS" | "DISPATCH" | "SERVICE_AREA" | "SERVICE" | "M2_PURCHASES";
         /**
          * @description A correction, which is always a new entry rather than an edit.
          *
@@ -7966,7 +8036,22 @@ export interface components {
             readonly code: string;
             readonly name: string;
         };
+        /**
+         * @description A skill a Partner can claim — and, since Wave C7, the id a rate card is published against.
+         *
+         *     `id` was added because of what its absence did on a different screen. `m2_rate_card_publish`
+         *     takes `skill_id` as a uuid, and this was the only endpoint that lists skills; publishing
+         *     `code`, `name` and `description` and withholding the id meant the form that decides **what
+         *     every A3 customer in a city is charged** required an operator to type a uuid they had no way to
+         *     look up. Paste the wrong one and the price is published against the wrong trade, and it is
+         *     priced into every booking made until somebody notices.
+         *
+         *     Read-only and additive: the applicant-onboarding chooser that already reads this list is
+         *     unaffected by a field it does not use.
+         */
         PartnerSkillOption: {
+            /** Format: uuid */
+            readonly id: string;
             readonly code: string;
             readonly name: string;
             readonly description: string;
@@ -9034,6 +9119,56 @@ export interface components {
          * @enum {string}
          */
         RateCardBookingStatusEnum: "MATCHING" | "OFFER_HELD" | "CONFIRMED" | "FELL_BACK" | "CANCELLED";
+        /**
+         * @description One card's decline-rate reading, and whether an alarm can fire on it at all.
+         *
+         *     `armed` is the field the panel is built around, and it is published rather than inferred. Three
+         *     states need three different sentences and only two of them are about the numbers:
+         *
+         *     * `armed: true, breached: false` — a threshold is set and the rate is under it. Green.
+         *     * `armed: false` — owner decision 13 is open for this card's skill, so **no alarm can ever
+         *       fire**. The rate is still measured and published, because measurement never waits on the
+         *       owner; only the judgement does. Rendering this as green would be a lie.
+         *     * `armed: true, offers < minimum_offers` — a threshold is set and too few offers have gone out
+         *       for a rate to mean anything. Quiet, but not yet evidence of anything.
+         *
+         *     `threshold_basis_points` and `minimum_offers` are nullable precisely because an unarmed card has
+         *     neither, and a zero in their place would read as "alarm on everything".
+         */
+        RateCardDeclineAlarm: {
+            /** Format: uuid */
+            readonly rate_card_id: string;
+            readonly service_area_slug: string;
+            readonly skill_code: string;
+            readonly skill_name: string;
+            readonly customer_day_rate_paise: number;
+            readonly armed: boolean;
+            readonly offers: number;
+            readonly declines: number;
+            readonly rate_basis_points: number;
+            readonly threshold_basis_points: number | null;
+            readonly minimum_offers: number | null;
+            readonly breached: boolean;
+        };
+        /**
+         * @description The whole alarm board, plus the window every rate on it was measured over.
+         *
+         *     `window_hours` is published rather than assumed by the client for the same reason the constant
+         *     moved out of `tasks.py`: a screen showing a 24-hour rate beside a threshold that pages on a
+         *     different window is worse than no screen.
+         *
+         *     `armed_cards` is a count and not a filter. An operator's first question on the day A3 supply
+         *     fails is "is anything watching this", and a list they have to count themselves answers it worse
+         *     than a number does.
+         */
+        RateCardDeclineAlarmList: {
+            readonly readings: components["schemas"]["RateCardDeclineAlarm"][];
+            readonly window_hours: number;
+            readonly armed_cards: number;
+            readonly breached_cards: number;
+            /** Format: date-time */
+            readonly server_now: string;
+        };
         RateCardList: {
             readonly rate_cards: components["schemas"]["RateCard"][];
             /** Format: date-time */
@@ -14518,9 +14653,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProposalCreateRequest"];
-                "application/x-www-form-urlencoded": components["schemas"]["ProposalCreateRequest"];
-                "multipart/form-data": components["schemas"]["ProposalCreateRequest"];
+                "application/json": components["schemas"]["AssistedProposalRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AssistedProposalRequest"];
+                "multipart/form-data": components["schemas"]["AssistedProposalRequest"];
             };
         };
         responses: {
@@ -17109,6 +17244,33 @@ export interface operations {
             };
             /** @description `m2_wage_floor_unavailable` when no floor is loaded for the area's state and this skill, or when the area carries no state code — the check fails closed rather than being skipped. `m2_requirement_transition_not_allowed` when the effective date would land on or before a live booking made at the current rate. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_operations_decline_alarm_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateCardDeclineAlarmList"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
