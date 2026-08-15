@@ -305,8 +305,15 @@ export function useAssistedClarification(requirementId: string) {
   });
 }
 
-/** The composed body, in the shape `ProposalCreateSerializer` accepts. */
-export type AssistedProposalBody = Schemas["ProposalCreateRequest"];
+/**
+ * The composed body, in the shape the assisted route accepts.
+ *
+ * `AssistedProposalRequest` since 1.33.0 — `ProposalCreateRequest` plus
+ * `consent_recorded`. A subclass rather than a field on the vendor's own shape,
+ * because a vendor submitting their own quote is not consenting on anybody's
+ * behalf.
+ */
+export type AssistedProposalBody = Schemas["AssistedProposalRequest"];
 
 /**
  * Capture a quote a Partner gave over the phone, attributed to that Partner.
@@ -321,6 +328,20 @@ export type AssistedProposalBody = Schemas["ProposalCreateRequest"];
  * The wage floor is derived and enforced here identically to a vendor's own
  * submission, so a captured A3 rate below the statutory floor is refused with
  * `m2_proposal_below_wage_floor` — the same refusal the vendor would have got.
+ *
+ * ## `consent_recorded` carries what the operator ticked, and nothing else
+ *
+ * Contract 1.33.0 closed a real defect: the view passed `consent_recorded=True`
+ * unconditionally, so `capture_assisted_proposal`'s refusal could not fire and
+ * every assisted quote wrote an audit row asserting a consent nobody had
+ * recorded — a false statement in the record of a real vendor's price.
+ *
+ * The fix is only a fix if the value on the wire is the value a person set. This
+ * hook therefore takes the flag from the caller and **never defaults it**: an
+ * unticked box sends `false` and earns a `409`, which is the correct outcome and
+ * the whole point. Passing a literal `true` from here to satisfy the type would
+ * recreate the defect one layer up and make it worse, because the server would
+ * then be faithfully recording a consent the *client* invented.
  */
 export function useAssistedProposal(requirementId: string) {
   const cache = useTimelineCache(requirementId);

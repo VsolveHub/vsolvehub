@@ -109,6 +109,16 @@ export const m2OpsKeys = {
    */
   rateCards: (serviceArea: string | null) => [...OPS, "m2", "rate-cards", serviceArea] as const,
 
+  /**
+   * Every live card's decline rate over the alarm window, armed or not.
+   *
+   * Its own key rather than nested under `rateCards`, and the difference is the
+   * point: a card is immutable, but its decline rate moves every time a lead
+   * answers an offer. Nesting would have put a live reading on the calm
+   * `STATIC_CONTENT` tier the immutable cards sit on.
+   */
+  declineAlarm: () => [...OPS, "m2", "decline-alarm"] as const,
+
   /** Crew memberships whose documents have never been verified. */
   crewVerification: (partner: string | null) =>
     [...OPS, "m2", "crew-verification", partner] as const,
@@ -118,7 +128,13 @@ export const m2OpsKeys = {
 } as const;
 
 export const M2_OPS_FRESHNESS: Record<
-  "queues" | "timeline" | "touchMetric" | "touchRollup" | "rateCards" | "crewVerification",
+  | "queues"
+  | "timeline"
+  | "touchMetric"
+  | "touchRollup"
+  | "rateCards"
+  | "declineAlarm"
+  | "crewVerification",
   FreshnessTier
 > = {
   /**
@@ -140,6 +156,13 @@ export const M2_OPS_FRESHNESS: Record<
    * immutable.
    */
   rateCards: STATIC_CONTENT,
+  /**
+   * `VOLATILE_STATE`, and pointedly **not** the `STATIC_CONTENT` its cards sit
+   * on. The cards are immutable; the rate over them is not, and a five-minute
+   * cache on an alarm is a five-minute delay on the one screen whose entire
+   * argument is that somebody has to act today.
+   */
+  declineAlarm: VOLATILE_STATE,
   crewVerification: VOLATILE_STATE,
 };
 
@@ -785,49 +808,96 @@ export function publishRefusalFor(code: string, status: number): PublishRefusal 
    `M2-FE-713` — the decline-rate alarm
    --------------------------------------------------------------------------- */
 
-/**
- * What this console can honestly say about the decline-rate alarm.
- *
- * **No endpoint publishes the reading or the threshold.** The alarm itself is
- * real and server-side: `sweep_rate_card_decline_alarm` runs on the beat
- * schedule, `crew_dispatch.breached_decline_rates` measures declines *and
- * expiries* as a share of offers sent, and a breach notifies Operations. What
- * 1.32.0 does not publish is any read of it — no rate, no threshold, no
- * per-card reasons.
- *
- * The consequence is stated rather than papered over, and it is the whole point
- * of `M2-FE-713`: **the console cannot show a green state**, because it cannot
- * tell "the threshold is set and nothing has breached it" from "the threshold is
- * unset and no alarm can ever fire". `rate_cards.decline_alarm_policy` answers
- * `None` while owner decision 13 is open, and a card with no policy is *skipped*
- * — silently, by design, and correctly, because inventing a percentage would be
- * worse. A screen that rendered "all clear" over that would be the one lie this
- * task exists to prevent.
- *
- * So there is one state, and it is not "ok".
- */
-export const DECLINE_ALARM_UNREADABLE = "decline_alarm_not_published" as const;
+export type DeclineAlarmReading = Schemas["RateCardDeclineAlarm"];
+export type DeclineAlarmBoard = Schemas["RateCardDeclineAlarmList"];
 
-export interface DeclineAlarmStatement {
-  readonly code: typeof DECLINE_ALARM_UNREADABLE;
-  readonly headline: string;
-  readonly detail: string;
-  /** Never `true`. Present so a caller cannot accidentally render a pass. */
-  readonly armed: false;
+/**
+ * What one card's reading means, as four named states rather than a colour.
+ *
+ * Contract 1.33.0 published `GET /operations/rate-cards/decline-alarm/`, and the
+ * panel is built around **`armed`**, which is published rather than inferred.
+ * Until then this module carried a single hard-typed "unreadable" statement,
+ * because the alarm existed, paged by email, and had no read — so the honest
+ * screen could not show a green state at all. That was right for a missing
+ * endpoint. It is now unnecessary, and keeping it would be its own dishonesty.
+ *
+ * What survives the change is the reason it was written. **`unarmed` is not
+ * `quiet`.** An unarmed card is measured and published — measurement never waits
+ * on the owner, only the judgement does — so it has a real rate and no alarm
+ * that can ever fire on it. Rendering that as green because `breached` is
+ * `false` would be exactly the lie the old panel refused to tell, now with
+ * numbers behind it to make it convincing.
+ *
+ * Ordered by what an operator should look at first. Written as a positive
+ * enumeration in one place, so no screen re-derives it from `breached` alone.
+ */
+export type DeclineAlarmState =
+  /** A threshold is set and the rate is over it. Somebody acts today. */
+  | "breached"
+  /** No threshold for this card's skill: **no alarm can ever fire**. Not green. */
+  | "unarmed"
+  /** Armed, but too few offers have gone out for the rate to mean anything yet. */
+  | "insufficient_offers"
+  /** Armed, enough offers, under the threshold. The only green. */
+  | "quiet";
+
+export function declineAlarmState(reading: DeclineAlarmReading): DeclineAlarmState {
+  // `armed` first, and before `breached`. The server can only set `breached` on
+  // an armed card, but reading them in the other order would make an unarmed
+  // card fall through to "quiet" the day that stopped being true.
+  if (!reading.armed) return "unarmed";
+  if (reading.breached) return "breached";
+  if (reading.minimum_offers !== null && reading.offers < reading.minimum_offers) {
+    return "insufficient_offers";
+  }
+  return "quiet";
 }
 
-export function declineAlarmStatement(): DeclineAlarmStatement {
-  return {
-    code: DECLINE_ALARM_UNREADABLE,
-    armed: false,
-    headline: "This console cannot tell you whether the decline alarm is armed.",
-    detail:
-      "The alarm runs on the server and pages Operations when a card's decline rate breaches its " +
-      "threshold. No endpoint publishes the reading, the threshold or the per-card decline " +
-      "reasons, and the threshold is owner-blocked configuration — while it is unset, no alarm " +
-      "fires at all. Treat the absence of a page as unknown, not as healthy, and use the review " +
-      "dates below.",
-  };
+/** Basis points as a percentage string. Server-sent integer, formatted, never recomputed. */
+export function basisPointsPercent(basisPoints: number): string {
+  return `${(basisPoints / 100).toFixed(basisPoints % 100 === 0 ? 0 : 1)}%`;
+}
+
+/**
+ * Worst first: breached, then unarmed, then insufficient, then quiet.
+ *
+ * **Unarmed outranks insufficient-offers deliberately.** A card nothing is
+ * watching is a standing hole in the supply-side alarm; a card with too few
+ * offers is a temporary absence of evidence, and it at least has something
+ * watching it when the offers arrive.
+ */
+const STATE_RANK: Record<DeclineAlarmState, number> = {
+  breached: 0,
+  unarmed: 1,
+  insufficient_offers: 2,
+  quiet: 3,
+};
+
+export function declineAlarmsByUrgency(board: DeclineAlarmBoard): DeclineAlarmReading[] {
+  return [...board.readings].sort((left, right) => {
+    const byState = STATE_RANK[declineAlarmState(left)] - STATE_RANK[declineAlarmState(right)];
+    if (byState !== 0) return byState;
+    return right.rate_basis_points - left.rate_basis_points;
+  });
+}
+
+/**
+ * The one sentence the whole board reduces to, for the panel's headline.
+ *
+ * Three states, and two of them are not "fine". An empty `readings` means **no
+ * card is published at all**, which the contract is explicit is a different and
+ * worse thing than every card being quiet — so it gets its own answer rather
+ * than falling into "nothing is breached".
+ */
+export type DeclineAlarmVerdict = "no_cards" | "breached" | "gaps_in_cover" | "all_clear";
+
+export function declineAlarmVerdict(board: DeclineAlarmBoard): DeclineAlarmVerdict {
+  if (board.readings.length === 0) return "no_cards";
+  if (board.breached_cards > 0) return "breached";
+  // `armed_cards` is published as a count precisely so this question does not
+  // need a filter: if any card is unarmed, something is unwatched.
+  if (board.armed_cards < board.readings.length) return "gaps_in_cover";
+  return "all_clear";
 }
 
 /* ---------------------------------------------------------------------------

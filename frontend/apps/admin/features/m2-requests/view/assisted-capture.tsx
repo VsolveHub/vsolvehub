@@ -120,8 +120,31 @@ function VendorPicker({
   );
 }
 
-/** The call script. Read aloud, in this order, and the consent line is not optional. */
-function CallScript({ vendorName }: { vendorName: string }) {
+/**
+ * The call script, and the consent control at the step where consent is asked.
+ *
+ * The tick lives **here** rather than at the bottom of the composer because this
+ * is where the operator obtains it: step five is the sentence they say, and the
+ * box is the record of the answer. A checkbox at the end of a form, after the
+ * call, is a box somebody ticks to enable a button.
+ *
+ * Contract 1.33.0 is why this is a real control at all. `capture_assisted_proposal`
+ * has always refused without `consent_recorded`, but until C7 the view passed
+ * `True` unconditionally — so the refusal could not fire and every assisted quote
+ * wrote an audit row asserting a consent nobody had recorded. **Whatever is
+ * ticked here is what goes on the wire**, unticked included: it sends `false` and
+ * the server refuses, which is the correct outcome. Nothing in this file supplies
+ * a value the operator did not.
+ */
+function CallScript({
+  vendorName,
+  consent,
+  onConsentChange,
+}: {
+  vendorName: string;
+  consent: boolean;
+  onConsentChange: (value: boolean) => void;
+}) {
   return (
     <Card className="p-5">
       <h3 className="text-sm font-semibold text-text">Call script</h3>
@@ -140,8 +163,34 @@ function CallScript({ vendorName }: { vendorName: string }) {
         </li>
         <li>
           &ldquo;May I record this quote on your behalf? You will get it to confirm yourself, and
-          the customer will not see it until you do.&rdquo; — <strong>tick the consent box only
-          after they say yes.</strong>
+          the customer will not see it until you do.&rdquo;
+          <div className="mt-2 rounded-control border border-line bg-surface-sunken p-3">
+            <label className="flex items-start gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={consent}
+                onChange={(event) => onConsentChange(event.target.checked)}
+              />
+              <span>{CONSENT_SENTENCE}</span>
+            </label>
+            <p className="mt-2 text-xs leading-5 text-text-secondary">
+              {consent ? (
+                <>
+                  This will be sent as <strong className="text-text">consent recorded: yes</strong>{" "}
+                  and written to the audit trail against your account and{" "}
+                  {vendorName || "the vendor"}&rsquo;s name. Tick it only if they said yes.
+                </>
+              ) : (
+                <>
+                  Unticked is sent as{" "}
+                  <strong className="text-text">consent recorded: no</strong> — not left out — and
+                  the server will refuse the capture. That is deliberate: an assisted quote with no
+                  recorded consent is exactly the row that should not exist.
+                </>
+              )}
+            </p>
+          </div>
         </li>
         <li>Tell them a confirmation is coming and that the quote does nothing until they act.</li>
       </ol>
@@ -274,22 +323,31 @@ function QuotePanel({
   archetype,
   vendors,
   siteVisits,
+  invitationId,
+  onInvitationChange,
+  consent,
+  onConsentSpent,
 }: {
   requirementId: string;
   archetype: ComposableArchetype;
   vendors: readonly InvitedVendor[];
   siteVisits: readonly { siteVisitId: string; status: string; at: string }[];
+  /** Lifted, so the call script can name the vendor the quote is actually for. */
+  invitationId: string;
+  onInvitationChange: (value: string) => void;
+  /** Lifted, and obtained on the call script where the question is asked. */
+  consent: boolean;
+  /** Clears the tick once it has been spent — consent is per quote, not per session. */
+  onConsentSpent: () => void;
 }) {
   const capture = useAssistedProposal(requirementId);
 
-  const [invitationId, setInvitationId] = useState("");
   const [taxBasis, setTaxBasis] = useState<ProposalTaxBasis>("INCLUSIVE");
   // Starts empty and is required. `tax_paise` carries a server-side default of
   // zero, and taking it would mean this screen quietly declaring "no tax" on
   // behalf of a vendor who was never asked — on a quote that becomes an
   // agreement. Zero is a perfectly good answer; it just has to be given.
   const [taxRupees, setTaxRupees] = useState("");
-  const [consent, setConsent] = useState(false);
 
   // A3
   const [rate, setRate] = useState("");
@@ -330,9 +388,23 @@ function QuotePanel({
     stages.length > 0 &&
     stages.every((stage, index) => stage.title.trim() !== "" && stagePaise[index] !== null);
 
-  const ready =
+  /**
+   * What makes the request well-formed — and **consent is deliberately not in it.**
+   *
+   * The obvious move is to disable the button until the box is ticked. It is the
+   * wrong one here. Consent is a server-side refusal (`capture_assisted_proposal`
+   * raises without it, and since 1.33.0 that refusal can actually fire), and a
+   * client that greys the control out is a client keeping its own copy of an
+   * authorization answer — the argument `step-up-gate.tsx` already settled for
+   * refunds on this app. It also means `consent_recorded: false` would never
+   * reach the wire, so the field the whole change exists for would be untestable
+   * from the only screen that sends it.
+   *
+   * So the button stays live, the value sent is whatever was ticked, and the
+   * screen says plainly what pressing it will do. The server decides.
+   */
+  const wellFormed =
     invitationId !== "" &&
-    consent &&
     taxValid &&
     total !== null &&
     total > 0 &&
@@ -347,6 +419,12 @@ function QuotePanel({
       total_paise: total,
       tax_basis: taxBasis,
       tax_paise: taxPaise,
+      // Whatever the operator ticked on the call script, including `false`.
+      // Never a literal `true` and never omitted: a hard-coded value here would
+      // put back the exact defect 1.33.0 removed from the view, one layer up and
+      // worse — the server would then be faithfully recording a consent this
+      // client invented.
+      consent_recorded: consent,
     };
 
     const body: AssistedProposalBody =
@@ -367,11 +445,9 @@ function QuotePanel({
             })) satisfies Schemas["ProposalStageRequest"][],
           };
 
-    capture.mutate(body, {
-      onSuccess: () => {
-        setConsent(false);
-      },
-    });
+    // Consent is spent on success: it was given for *this* quote, on that call,
+    // and a tick left standing would carry into the next capture unasked.
+    capture.mutate(body, { onSuccess: onConsentSpent });
   }
 
   return (
@@ -383,7 +459,7 @@ function QuotePanel({
       </p>
 
       <div className="mt-4 space-y-3">
-        <VendorPicker vendors={vendors} value={invitationId} onChange={setInvitationId} />
+        <VendorPicker vendors={vendors} value={invitationId} onChange={onInvitationChange} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
@@ -573,15 +649,32 @@ function QuotePanel({
           )}
         </p>
 
-        <label className="flex items-start gap-2 text-sm text-text-secondary">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={consent}
-            onChange={(event) => setConsent(event.target.checked)}
-          />
-          <span>{CONSENT_SENTENCE}</span>
-        </label>
+        {/*
+          The consent control is on the call script, not here. This is a read of
+          it, so the operator can see what is about to be written without
+          scrolling back — a statement, never a second place to set it.
+        */}
+        <p
+          className={[
+            "rounded-control border p-3 text-sm",
+            consent
+              ? "border-line bg-surface-sunken text-text-secondary"
+              : "border-warning-line bg-warning-surface text-warning-text",
+          ].join(" ")}
+        >
+          {consent ? (
+            <>
+              Consent recorded: <strong className="text-text">yes</strong> — that is what will be
+              written to the audit trail beside this quote.
+            </>
+          ) : (
+            <>
+              Consent recorded: <strong>no</strong>. Recording now sends exactly that, and the
+              server will refuse the capture. Tick the box at step 5 of the call script once the
+              vendor has agreed.
+            </>
+          )}
+        </p>
       </div>
 
       {capture.isError ? <Refusal error={capture.error} /> : null}
@@ -604,12 +697,13 @@ function QuotePanel({
 
       <Button
         className="mt-3"
-        disabled={!ready || capture.isPending}
+        variant={consent ? "primary" : "outline"}
+        disabled={!wellFormed || capture.isPending}
         loading={capture.isPending}
         loadingLabel="Recording"
         onClick={submit}
       >
-        Record this quote
+        {consent ? "Record this quote" : "Record without consent (will be refused)"}
       </Button>
 
       {archetype === "A5_CUSTOM_PROJECT" ? (
@@ -630,6 +724,14 @@ function QuotePanel({
 
 export function AssistedCapture({ requirementId }: { requirementId: string }) {
   const timeline = useRequestTimeline(requirementId);
+
+  // Both lifted so the call script can name the vendor the quote is for and own
+  // the consent tick at the step where it is asked for. Changing the vendor
+  // clears the consent: it was given by one named person about one quote, and
+  // carrying it to the next vendor would be the console asserting something
+  // nobody said — the same defect 1.33.0 removed from the server.
+  const [quoteInvitationId, setQuoteInvitationId] = useState("");
+  const [quoteConsent, setQuoteConsent] = useState(false);
 
   const vendors = useMemo(
     () => (timeline.data ? invitedVendors(timeline.data) : []),
@@ -696,10 +798,23 @@ export function AssistedCapture({ requirementId }: { requirementId: string }) {
             archetype={archetype}
             vendors={vendors}
             siteVisits={visits}
+            invitationId={quoteInvitationId}
+            onInvitationChange={(value) => {
+              setQuoteInvitationId(value);
+              setQuoteConsent(false);
+            }}
+            consent={quoteConsent}
+            onConsentSpent={() => setQuoteConsent(false)}
           />
           <ClarificationPanel requirementId={requirementId} vendors={vendors} />
         </div>
-        <CallScript vendorName={vendors[0]?.partnerName ?? ""} />
+        <CallScript
+          vendorName={
+            vendors.find((vendor) => vendor.invitationId === quoteInvitationId)?.partnerName ?? ""
+          }
+          consent={quoteConsent}
+          onConsentChange={setQuoteConsent}
+        />
       </div>
     </div>
   );

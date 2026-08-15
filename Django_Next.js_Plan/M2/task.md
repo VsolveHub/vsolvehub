@@ -65,9 +65,18 @@ vendor's own confirmation* read from the published `vendor_confirmed_at`. **The 
 screens** at `/operations/rate-cards`: the three rate-card components published, rendered separately
 and **never summed** — the publish form previews no total at all — with effective dating, an
 empty-by-default date field and named copy for each of the three publish refusals; and the
-decline-rate alarm, which **says it cannot tell you whether it is armed** rather than showing a green
-state, because 1.32.0 publishes no read of the alarm and an unset owner threshold means no alarm can
-fire. `M2-FE-701..705`, `712`, `713` all `[~]`.
+decline-rate alarm. `M2-FE-701..705`, `712`, `713` all `[~]`.
+
+**Wave B4R consumed contract 1.33.0 (2026-08-15).** Three closures. **Assisted-proposal consent now
+bites**: C7 stopped the view hard-coding `consent_recorded=True`, and this console's tick moved onto
+the call script at the step where the question is actually asked — the value sent is always what a
+person set, `false` included, and the submit button is deliberately not disabled on it, because a
+literal `true` from the client would have recreated the defect one layer up and worse. **The decline
+alarm reads**: the panel is rebuilt around the published `armed`, read *before* `breached`, because
+an unarmed card is still measured and colouring a real 80% decline rate green — with numbers behind
+it — would be worse than the old panel that refused to show any state at all; the hard-typed refusal
+is deleted rather than kept beside its fix. **The skill is picked, not pasted** — `PartnerSkillOption`
+gained `id`, so no hand-typed uuid remains on the screen that prices every A3 booking.
 
 **Remaining work:** the remaining workforce and project fulfilment UI against 1.31.0
 (`FE-509..512`, `FE-611/612`) and the two unowned Operations surfaces Wave B4 logged in plan §7

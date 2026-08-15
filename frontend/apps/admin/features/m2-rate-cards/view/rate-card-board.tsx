@@ -29,9 +29,12 @@ import {
 } from "@vsolve/ui";
 import { useMemo, useState } from "react";
 
-import { isUuid, maskId } from "@/features/shared/identifiers";
+// `isUuid` is gone from this screen with the pasted skill id it guarded: both
+// halves of a card's key are picked from published option lists now, so there is
+// no hand-typed identifier left here to shape-check.
+import { maskId } from "@/features/shared/identifiers";
 
-import { usePublishRateCard, useRateCards, useServiceAreas } from "../queries";
+import { usePublishRateCard, useRateCards, useServiceAreas, useSkillOptions } from "../queries";
 import { DeclineAlarmPanel } from "./decline-alarm";
 
 /**
@@ -257,10 +260,12 @@ function HistoryCard({
   history,
   serverNow,
   cityName,
+  skillName,
 }: {
   history: RateCardHistory;
   serverNow: string;
   cityName: string | null;
+  skillName: string | null;
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? history.cards : history.cards.slice(0, 1);
@@ -273,14 +278,18 @@ function HistoryCard({
             {cityName ?? `City ${maskId(history.serviceArea)}`}
           </h3>
           {/*
-            The skill can only be shown as an id: `GET /partner/skills/`
-            publishes `code` and `name` and omits the uuid these cards are keyed
-            on, so nothing maps one to the other. Said out loud rather than
-            rendered as if the id were a name.
+            Named since 1.33.0: `PartnerSkillOption` gained `id`, so the uuid a
+            card is keyed on resolves to a trade. A skill missing from the
+            options list still falls back to its masked id and says so, rather
+            than rendering a uuid as if it were a name.
           */}
           <p className="mt-0.5 text-sm text-text-secondary">
-            Skill <span className="font-mono">{maskId(history.skill)}</span> — the contract
-            publishes no name for a skill id.
+            {skillName ?? (
+              <>
+                Skill <span className="font-mono">{maskId(history.skill)}</span> — not in the
+                published skill list
+              </>
+            )}
           </p>
         </div>
         <div className="text-right text-sm text-text-secondary">
@@ -340,7 +349,13 @@ function rupeesToPaise(value: string): number | null {
   return Number.isSafeInteger(paise) && paise > 0 ? paise : null;
 }
 
-function PublishForm({ areas }: { areas: readonly { id: string; name: string }[] }) {
+function PublishForm({
+  areas,
+  skills,
+}: {
+  areas: readonly { id: string; name: string }[];
+  skills: readonly { id: string; name: string; code: string }[];
+}) {
   const publish = usePublishRateCard();
 
   const [serviceAreaId, setServiceAreaId] = useState("");
@@ -374,7 +389,7 @@ function PublishForm({ areas }: { areas: readonly { id: string; name: string }[]
 
   const ready =
     serviceAreaId !== "" &&
-    isUuid(skillId) &&
+    skillId !== "" &&
     wagePaise !== null &&
     marginPaise !== null &&
     feePaise !== null &&
@@ -433,18 +448,26 @@ function PublishForm({ areas }: { areas: readonly { id: string; name: string }[]
           </Select>
         </Field>
 
+        {/*
+          A picker since 1.33.0. This field used to take a pasted uuid, because
+          `PartnerSkillOption` published `code` and `name` and withheld `id` —
+          so the form that sets what every A3 customer in a city is charged asked
+          an operator to type an identifier they had no way to look up, and the
+          wrong paste priced a trade against another trade's card.
+        */}
         <Field
-          label="Skill id"
-          description="Pasted, not picked: no published read maps a skill name to the uuid this card is keyed on. Take it from the variant's wage-floor configuration."
+          label="Skill"
+          description="The statutory skill this rate is published against. The wage floor is checked for this skill in this city's state."
           required
-          error={skillId !== "" && !isUuid(skillId) ? "That is not the shape of a skill id." : undefined}
         >
-          <Input
-            value={skillId}
-            spellCheck={false}
-            placeholder="00000000-0000-0000-0000-000000000000"
-            onChange={(event) => setSkillId(event.target.value)}
-          />
+          <Select value={skillId} onChange={(event) => setSkillId(event.target.value)}>
+            <option value="">Choose a skill…</option>
+            {skills.map((skill) => (
+              <option key={skill.id} value={skill.id}>
+                {skill.name}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
 
@@ -683,12 +706,21 @@ export function RateCardBoard() {
   const [city, setCity] = useState("");
   const cards = useRateCards(city === "" ? null : city);
   const areas = useServiceAreas();
+  const skills = useSkillOptions();
 
   const areaNames = useMemo(() => {
     const map = new Map<string, string>();
     for (const area of areas.data ?? []) map.set(area.id, area.name);
     return map;
   }, [areas.data]);
+
+  // Closes the 1.32.0 gap: `PartnerSkillOption` carries `id` since 1.33.0, so
+  // the uuid a card is keyed on resolves to a trade rather than being masked.
+  const skillNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const skill of skills.data ?? []) map.set(skill.id, skill.name);
+    return map;
+  }, [skills.data]);
 
   const histories = useMemo(
     () => (cards.data ? rateCardHistories(cards.data) : []),
@@ -697,11 +729,12 @@ export function RateCardBoard() {
 
   return (
     <div className="space-y-6">
-      <DeclineAlarmPanel
-        histories={histories}
-        serverNow={cards.data?.server_now ?? null}
-        areaNames={areaNames}
-      />
+      {/*
+        Reads its own endpoint since 1.33.0 and takes no props: it covers every
+        live card in every city, so narrowing it by this screen's city filter
+        would hide the one thing it exists to say.
+      */}
+      <DeclineAlarmPanel />
 
       <Field label="City" className="max-w-sm">
         <Select value={city} onChange={(event) => setCity(event.target.value)}>
@@ -744,11 +777,12 @@ export function RateCardBoard() {
             history={history}
             serverNow={cards.data?.server_now ?? ""}
             cityName={areaNames.get(history.serviceArea) ?? null}
+            skillName={skillNames.get(history.skill) ?? null}
           />
         ))}
       </div>
 
-      <PublishForm areas={areas.data ?? []} />
+      <PublishForm areas={areas.data ?? []} skills={skills.data ?? []} />
     </div>
   );
 }

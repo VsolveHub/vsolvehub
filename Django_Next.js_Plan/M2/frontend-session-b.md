@@ -1947,6 +1947,145 @@ and take the *Switch to Operations* button if it appears.
 
 ---
 
+---
+
+## Wave B4R — the 1.33.0 consumption pass (2026-08-15)
+
+**Built 2026-08-15** against **contract 1.33.0** (Wave C7). Three items, one of which was a defect
+this column was downstream of and could have re-created while fixing the build.
+
+### 1. Assisted-proposal consent was decorative, and the one-character fix was the wrong one
+
+`capture_assisted_proposal` has always refused without `consent_recorded` — its docstring, the
+endpoint's published description and `M2-AC-802` all said so — but the view passed `True`
+unconditionally, so the refusal could not fire and **every assisted quote wrote an audit row
+asserting a consent nobody had recorded**. C7 added `AssistedProposalRequest.consent_recorded` and
+stopped hard-coding it.
+
+The typed client then failed this column's build at `queries.ts:336`, and the trap is worth naming
+because this session has now hit it three times: **openapi-typescript emits a field carrying
+`default:` as REQUIRED in TypeScript**, so `consent_recorded` is not optional to a client whatever
+`default: false` says on the wire. The compiler-satisfying fix is a literal `true`. That would have
+put the defect back one layer up and made it **worse** — the server would then be faithfully
+recording a consent the *client* invented, which is harder to find than a hard-coded server default
+because it looks like real data all the way down.
+
+What was built instead:
+
+- **The tick moved onto the call script, at step five** — the step where the operator says *"May I
+  record this quote on your behalf?"* and hears the answer. A checkbox at the foot of a form, after
+  the call, is a box somebody ticks to enable a button.
+- **The vendor name is in the sentence.** The script step and the consent line name the vendor
+  selected in the composer, so the operator is not consenting on behalf of "the vendor".
+- **Changing vendor clears it**, and **success spends it**. Consent was given by one named person
+  about one quote; carrying it into the next capture would be the console asserting something
+  nobody said — the same defect, in a different place.
+- **The composer reads it back rather than offering a second place to set it**, in the two states it
+  can be in, saying which value goes to the audit trail.
+- **The submit button is deliberately not disabled on consent.** Greying out a server-side refusal
+  is a client keeping its own copy of an authorization answer — the argument `step-up-gate.tsx`
+  already settled on this app for refunds — and it would mean `consent_recorded: false` could never
+  reach the wire from the only screen that sends it. The button relabels to **"Record without
+  consent (will be refused)"** and the `409` is the enforcement. The value on the wire is always the
+  value a person set.
+
+### 2. The decline alarm reads, and the panel's refusal to show green is deleted rather than kept
+
+1.33.0 published `GET /operations/rate-cards/decline-alarm/`. The 1.32.0 panel said *this console
+cannot tell you whether the alarm is armed* and hard-typed `armed` as `false` so no later edit could
+add a pass. That was right for a missing endpoint and is now itself untrue, so it is **gone** rather
+than left standing beside its own fix.
+
+**The reason it was written survives, and needed the endpoint's own shape to survive properly.**
+`armed` is published rather than inferred, and an unarmed card is still *measured and published* —
+measurement never waits on the owner; only the judgement does. So a card can carry a real 80%
+decline rate with `breached: false`, because owner decision 13 is open for its skill and no alarm
+can ever fire on it. **Deriving the colour from `breached` alone would render that green, with
+numbers behind it to make it convincing** — strictly worse than the old unreadable panel. Hence:
+
+- `declineAlarmState` reads **`armed` first**, then `breached`, then the minimum-offers floor. Four
+  states named positively: `breached`, `unarmed`, `insufficient_offers`, `quiet`.
+- **`unarmed` sorts above `insufficient_offers`.** A card nothing is watching is a standing hole in
+  the cover; too few offers is a temporary absence of evidence on a card that *is* watched.
+- The board verdict has four answers too, because `readings: []` means **no card is published at
+  all** — which the contract is explicit is worse than every card being quiet, and which would
+  otherwise fall through to "nothing is breached".
+- `threshold_basis_points` and `minimum_offers` render as **"not set"** in words. A `0` in their
+  place would read as *alarm on everything*, which is why the contract made them nullable.
+- `window_hours` is displayed, because a 24-hour rate shown beside a threshold that pages on a
+  different window is worse than no screen.
+- Tiered `VOLATILE_STATE` and polled at 60s — pointedly **not** the `STATIC_CONTENT` its immutable
+  cards sit on. The cards cannot change; the rate over them changes every time a lead answers.
+
+The panel also stopped taking props: it covers every live card in every city, so narrowing it by the
+board's city filter would hide the one thing it exists to say.
+
+### 3. The skill is picked, not pasted
+
+`PartnerSkillOption` gained `id`. The publish form's uuid field and its `isUuid` shape-check are
+deleted for a real picker, and the card list resolves `RateCard.skill` to a trade name instead of
+saying the contract publishes none. Both halves of a card's key now come from published option
+lists, so **no hand-typed identifier is left on the screen that decides what every A3 customer in a
+city is charged** — which was the failure mode: paste the wrong uuid, publish the price against the
+wrong trade, and it is priced into every booking until somebody notices. A skill missing from the
+options list still falls back to its masked id and says so.
+
+### `KillSwitchScopeEnum` gains `M2_PURCHASES` — checked, not assumed
+
+1.33.0 warns that a screen rendering scopes from a hand-written list will be missing one. Checked:
+**no screen in this wave renders kill-switch scopes**, and `features/kill-switches/` is M1 and
+outside this wave's owned paths. Recorded in §7 so the warning is answered rather than assumed to be
+somebody else's.
+
+### Static gates — green
+
+```
+npx eslint packages/query/src/m2-ops.ts packages/query/src/index.ts \
+  apps/admin/features/m2-requests apps/admin/features/m2-rate-cards --max-warnings 0
+npx turbo run typecheck --filter=@vsolve/query --force   # 1 successful
+npx turbo run typecheck --filter=admin --force           # 1 successful
+npx turbo run build --filter=admin                       # 1 successful
+```
+
+Route table unchanged — four M2 routes, all `ƒ`. **No test written, none run.**
+
+### Smoke script — what to re-check, and nothing else
+
+The Wave B4 script above still stands. Four steps change:
+
+1. **Step 8, consent.** The tick is now on the **call script**, at step 5, not at the foot of the
+   composer. Pick a vendor: the script names them. Fill a valid quote and leave the box unticked —
+   the button is **live** and reads **"Record without consent (will be refused)"**, and the panel
+   above it says consent recorded: **no**.
+   *Expect on pressing it:* a refusal from the server, not a client-side block. That is the proof the
+   field is real: `consent_recorded: false` genuinely goes on the wire.
+   Now tick it and press again. *Expect:* **Captured — awaiting the vendor's own confirmation**, and
+   the tick clears itself, because consent is per quote.
+   Change the vendor in the picker with the box ticked. *Expect:* the tick clears.
+
+2. **Step 9/10, the skill.** The publish form now has a **Skill** dropdown of real trade names.
+   There is nowhere left to paste a uuid. The published card names its skill instead of showing
+   *the contract publishes no name for a skill id*.
+
+3. **Step 13, the alarm — this is the one that actually changed.** The panel now reads.
+   With the seeded card (`crew_decline_alarm_basis_points` is seeded, so it is **armed**) and no
+   crew offers sent yet: *expect* **Not enough offers yet**, and the headline *Every published card
+   is armed and under its threshold* — the only green state on the screen, and it says so.
+   To see the state that matters, make a card **unarmed**: clear the threshold on the active
+   variant configuration for that skill, then reload.
+   *Expect:* the card badges **No alarm can fire**, the headline changes to *N of M cards have no
+   alarm behind them*, threshold and minimum read **not set** in words rather than `0`, **and the
+   measured rate is still shown** — because it is still measured. It must not render as green or as
+   quiet.
+   With no card published at all: *expect* **No rate card is published at all**, which is its own
+   sentence and not "nothing is breached".
+
+4. **Nothing else moved.** The queues, the timeline, the four recovery actions and the rate-card
+   publish/refusal paths are untouched by 1.33.0 — re-run them only if something else changed under
+   them.
+
+---
+
 ## Wave B5 — Partner and Operations quality (runs alongside Wave 5)
 
 - [ ] `M2-FE-802` (partner/ops share) WCAG 2.2 AA across registration forms, dialogs, uploaders,
@@ -1976,6 +2115,7 @@ lint during the waves; the browser suite runs once at the wave gate.
 | B-C3.5 | 1.26.0 consumption pass — `FE-301`, `FE-305`, `FE-314`, `FE-315` | `[~]` 4 of 4 | `[ ]` | 2026-08-14 — five workarounds removed against contract 1.28.0: `service_name` on the inbox row (and `category_slug` unprojected), `ProposalMaterialLine` as first-class rows with the stage-shaped workaround and its on-screen caveat deleted, `EngagementStage.kind` badged on the vendor's stage panel, two-way clarification with the Partner's answer route, cursor paging on the inbox, and `SiteVisit.timezone` on the visit panel. Lint clean on owned paths, typecheck 3/3, partner build green. **Tests deferred per the build-first amendment**; one stale assertion recorded. 6 §7 rows appended — 5 closures and 1 frozen-file request (`M2_INVALIDATION.answer_question` targets a key this app does not mount). |
 | B3W | `FE-502..508`, `FE-513` (B3's workforce half) | `[~]` 8 of 8 | `[ ]` | 2026-08-14 — the A3 shift-day on one new route, `/workforce/shifts/[engagementId]/days/[stageId]`, against contract 1.30.0. One read (`shiftDays.forStage`) drives crew, arrival, the one-tap count, the settled tap, extras and the on-site report router. The three Gate-1 frozen grants are consumed and the hand-written `engagements.all` on `submit_stage_evidence` is deleted; `useStartStage` keeps one, now for the different reason that no `start_stage` row exists. Lint clean on changed paths, typecheck **1/1 forced** for partner and **2/2** for `@vsolve/query` + admin (the barrel is shared with Session A, so every prefixed export and the private wire aliases are proved against their concurrent block), partner build green with the route `ƒ`. **Tests deferred per the build-first amendment.** 10 §7 rows appended — 4 frozen-file requests, 6 contract gaps. **RULES §3(b) hit, and it blocks the walkthrough:** `PartnerCrewMembership.documents_verified_at` has four readers and no writer anywhere including the seed, so no seeded worker is assignable and no seeded vendor has a verified roster. The smoke script carries the one-line shell workaround and says why it should not have to. |
 | B3W-C | Gate 3 cleanup — no task numbers | n/a | n/a | 2026-08-14 — all four Gate 3 grants consumed against contract 1.31.0 and every hand-written invalidation in this column deleted. **`report_crew_no_show`'s row was *not* a superset as the hook called it** — `requirementScope` carries no engagements prefix and the `engagements.all` half is gated on an engagement id the hook did not hold — so it took a two-field `CrewNoShowScope`, which is the only thing in this wave that needed more than a swap. `safetyIncidentsKey()` deleted for the promoted factory key. 1.31.0's seed writer removed the shell workaround from the B3W smoke script; the `upi_payment_link` fix needed **no** client change, verified rather than assumed. `not-built-yet.tsx` **stays** — two references (`FE-605`, `FE-606`) that no built screen covers — with its stale "waiting on Wave C5" reasons corrected, since C5 published both endpoints. Lint clean, typecheck 1/1 partner + 2/2 query/admin forced, partner build 1/1 with the route table unchanged. 4 §7 rows appended. |
+| B4R | 1.33.0 consumption — `FE-705`, `FE-712`, `FE-713` | `[~]` 3 of 3 | `[ ]` | 2026-08-15 — three closures against contract 1.33.0, one of which this column could have re-broken while fixing its own build. **Assisted-proposal consent was decorative** — C7 stopped the view hard-coding `True`, the typed client then failed here (openapi-typescript emits a `default:` field as **required**, the third time this session has hit that), and the compiler-satisfying fix was a literal `true` that would have put the defect back one layer up and made it worse, since the server would then faithfully record a consent the *client* invented. Built a real control instead: the tick lives **on the call script at step five** where the question is asked, names the selected vendor, clears on vendor change, is spent on success — and the submit button is **deliberately not disabled** on it, because greying out a server-side refusal is the copy-of-an-authorization-answer `step-up-gate.tsx` already settled, and it would mean `consent_recorded: false` could never reach the wire from the only screen that sends it. **The decline alarm reads**, and the hard-typed `armed: false` is deleted rather than kept beside its fix — but the reason it existed survives: `armed` is read **before** `breached`, because an unarmed card is still measured and can carry a real 80% rate with `breached: false`, and colouring that green *with numbers behind it* would be worse than the old unreadable panel; `unarmed` sorts above `insufficient_offers`, nullable threshold/minimum render as **“not set”** rather than `0`, and an empty board gets its own sentence because no card published is worse than every card quiet. **The skill is picked, not pasted** — `PartnerSkillOption.id` landed, so the uuid field and its shape-check are gone and cards name their trade. Lint clean, typecheck 2/2 forced, admin build green with the route table unchanged. **Tests deferred per the build-first amendment.** 4 §7 rows appended — 3 closures and 1 checked-not-assumed (`KillSwitchScopeEnum` gained `M2_PURCHASES`; no screen in this wave renders scopes). |
 | B4 | `FE-701..705`, `FE-712`, `FE-713` | `[~]` 7 of 7 | `[ ]` | 2026-08-15 — the Operations M2 surface on four new routes in `apps/admin`, against contract 1.32.0. `packages/query/src/m2-ops.ts` is new and pure (keys composed **from** `queryKeys.operations.all`, the fifteen-kind timeline descriptor table, the money-safety helpers); the hooks live in the app, because one app reads this surface. **The two revision-4 screens got the care:** the rate card renders its three components separately and never sums them — the publish form previews no total at all, because a figure computed at the moment of the decision is the one somebody would trust over the server's — and the three publish refusals get named copy rather than *check your details*. The decline alarm is the honest build rather than the asked-for one: **1.32.0 publishes no read of it**, the threshold is owner-blocked and while unset no alarm can fire, so the panel says it cannot tell you whether the alarm is armed and `DeclineAlarmStatement.armed` is typed `false` so no later edit can render a pass; the monthly-review backstop is derived from published effective dates against the response's own `server_now`. **RULES §3(a) caught a live error**: rewriting `bookingFeeStatement` from a hand-written `switch` into a `Record` over `BookingFeeStatusEnum` proved three of seven statuses did not exist and four real ones — `OFFER_ACCEPTED`, `EARNED`, `FORFEIT_SPLIT`, `FAILED` — would have fallen to the default, two of them rendering as money the Customer paid. §3(b) clean: `seed_m2_demo` writes the rate card (through `publish_rate_card`, so the wage-floor guard applies to the seed too), the floor and both decline-alarm columns. Lint clean on changed paths, typecheck **2/2 forced** (`@vsolve/query` + admin — the barrel is shared with Session A), admin build green with all four routes `ƒ` **beside A's three `cases/**` routes**, which is the Gate-4 composition proof. **Tests deferred per the build-first amendment.** 10 §7 rows appended — 1 frozen-file request, 9 contract/plan gaps, of which the headline is that the decline-rate alarm has no endpoint and two are unowned surfaces (`m2_project_transfer_propose`, `m2_operations_crew_verify`). |
 | B5 | quality share | `[ ]` | `[ ]` | |
 

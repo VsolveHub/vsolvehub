@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/browser";
 
 /**
- * The revision-4 rate card (`M2-FE-712`), contract 1.29.0 and 1.32.0.
+ * The revision-4 rate card (`M2-FE-712`, `M2-FE-713`), contracts 1.29.0 to 1.33.0.
  *
  * ## A card is loaded, never edited
  *
@@ -25,13 +25,13 @@ import { getApiClient } from "@/lib/api/browser";
  * component, so the key is derived from the body the operator composed: same
  * numbers, same effective date, same key.
  *
- * ## Service areas are named; skills are not
+ * ## Both halves of the key are named now
  *
- * `RateCard` publishes `service_area` and `skill` as bare uuids, and the only
- * published options list that names a skill (`GET /partner/skills/`) omits the
- * id. So the city can be named by joining against `GET /service-areas/` and the
- * skill cannot be named at all. Logged in `frontend-execution-plan.md` §7; the
- * screen says so rather than pretending the uuid is a name.
+ * `RateCard` publishes `service_area` and `skill` as bare uuids, so the board
+ * joins both against their option lists. Until 1.33.0 only the city could be
+ * resolved — `PartnerSkillOption` withheld `id` — and the publish form asked an
+ * operator to paste a skill uuid they had no way to look up. That gap was logged
+ * in `frontend-execution-plan.md` §7 and is now closed by `useSkillOptions`.
  */
 
 /**
@@ -50,6 +50,50 @@ export function useRateCards(serviceArea: string | null) {
         }),
       ),
     ...M2_OPS_FRESHNESS.rateCards,
+  });
+}
+
+/**
+ * `M2-FE-713`. Every live card's crew-offer decline rate, **armed or not**.
+ *
+ * Published at 1.33.0 after the panel was first built against its absence. Not
+ * filtered client-side and not narrowed by city: unarmed cards are returned on
+ * purpose, because the most useful thing this endpoint can say on the day A3
+ * supply fails is *nothing here is watching*, and a list that dropped them would
+ * say the opposite by being short.
+ *
+ * Polled, unlike everything else in this module. It is an alarm — a stale one is
+ * a supply failure nobody has been told about — and the interval is well inside
+ * the published `window_hours` the rates are measured over.
+ */
+export function useDeclineAlarm() {
+  return useQuery({
+    queryKey: m2OpsKeys.declineAlarm(),
+    queryFn: () =>
+      request(() => getApiClient().GET("/api/v1/operations/rate-cards/decline-alarm/", {})),
+    ...M2_OPS_FRESHNESS.declineAlarm,
+    refetchInterval: 60_000,
+  });
+}
+
+/**
+ * The skills a card can be published against, **with their ids**.
+ *
+ * `PartnerSkillOption` gained `id` at 1.33.0, and the reason is this screen: the
+ * publish form takes `skill_id` as a uuid, this was the only endpoint listing
+ * skills, and withholding the id meant the form that decides what every A3
+ * customer in a city is charged asked an operator to type a uuid they had no way
+ * to look up. Paste the wrong one and the price is published against the wrong
+ * trade, and it is priced into every booking until somebody notices.
+ *
+ * The same list the applicant-onboarding chooser reads, which is the point — one
+ * source for what a skill is.
+ */
+export function useSkillOptions() {
+  return useQuery({
+    queryKey: ["partner-skill-options"] as const,
+    queryFn: () => request(() => getApiClient().GET("/api/v1/partner/skills/", {})),
+    ...STATIC_CONTENT,
   });
 }
 
