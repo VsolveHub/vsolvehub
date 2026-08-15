@@ -155,6 +155,43 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "geocoding": "30/min",
         "serviceability": "60/min",
+        # M2 abuse controls (`M2-BE-803`), enforced by `common.throttling.ScopedWriteThrottle`
+        # and keyed per authenticated user.
+        #
+        # Every rate below is a **ceiling on abuse, not a pacing limit**: each is set well above
+        # what the fastest honest use of the screen behind it can produce, so a real Customer or
+        # vendor never meets one, and a script does. Setting them near honest use would produce a
+        # steady drip of 429s on the busiest legitimate accounts, which is how a rate limit gets
+        # turned off in production.
+        #
+        # These are operational limits, not commercial policy, so they are code and not
+        # `M2VariantConfiguration` — nothing here is an owner decision and nothing fails closed on
+        # them being absent (a scope with no rate is simply not enforced by DRF).
+        #
+        # Registration: a vendor requesting capabilities and submitting applications. Low, because
+        # the honest act happens a handful of times in an onboarding session and the abusive one
+        # enumerates variants.
+        "m2_partner_registration": "20/hour",
+        # Uploads: one presign plus one finalize per file, and `MAXIMUM_ATTACHMENTS_PER_REQUIREMENT`
+        # is 12. Sixty an hour covers several requirements' worth of retried photographs on a bad
+        # connection and stops a loop that mints signed URLs.
+        "m2_attachment_upload": "60/hour",
+        # Clarification: the per-thread cap in `proposals.ask_question` is the real control (a rate
+        # cannot express "three unanswered"). This is the second layer, against a script writing to
+        # many threads at once.
+        "m2_clarification": "60/hour",
+        # Money: every checkout creation, on every product. Deliberately the tightest scope here.
+        # A Customer taps pay once and retries a handful of times when a bank is slow; nothing
+        # honest needs thirty in an hour, and a payment-creation loop is both a cost and a way to
+        # fill the provider's books with orphaned orders.
+        "m2_money": "30/hour",
+        # A vendor answering enquiries, offers and proposals. Generous: a busy lead on a good day
+        # genuinely answers a great many offers, and throttling that would cost real supply.
+        "m2_partner_response": "300/hour",
+        # A Customer acting on quotes: selection, rejection, revalidation. The non-responsive
+        # rejection path is here, and it is the one worth naming — it reopens a quote slot each
+        # time, so a loop on it churns real vendors' invitations.
+        "m2_quote_action": "120/hour",
     },
 }
 
@@ -267,7 +304,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.32.0",
+    "VERSION": "1.33.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -631,6 +668,60 @@ CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", def
 # an event pushes the deadline out by the lease; a worker that dies without publishing lets the
 # deadline lapse, and the recovery sweep re-drives the event. The lease must exceed
 # CELERY_TASK_TIME_LIMIT, otherwise the sweep re-queues work that is still legitimately running.
+# Wave C7: how many rows of each M2 product one `reconcile_m2_money` tick checks.
+#
+# The sweep used to read every settled row of every product on every hourly tick, so its cost grew
+# with the lifetime size of the books rather than with what had changed. It now walks a keyset
+# cursor per product and wraps at the end. 500 x 4 products x 24 ticks is 48,000 rows a day, which
+# laps a book of any plausible M2 size several times over while keeping one tick bounded.
+#
+# Raising this does not make the check more correct — only faster to complete a lap. It reads only,
+# so a row not reached this tick is a mismatch reported an hour later, never one that is missed.
+M2_RECONCILIATION_BATCH_SIZE = env.int("M2_RECONCILIATION_BATCH_SIZE", default=500)
+
+# Wave C7 (`M2-BE-805`): retention.
+#
+# **The financial schedule is deliberately unset, and `0` means "the hold never lapses".** It is a
+# legal question, not an engineering one — `apps.identity.retention` records the same gap for
+# verified KYC and refuses to guess it too — and a default here would decide how long this business
+# keeps its books, on the day a Customer asks for their data to be removed. Fail-closed for a
+# retention schedule means *keeping* the record, so the unset value holds rather than releases.
+M2_FINANCIAL_RECORD_RETENTION_DAYS = env.int("M2_FINANCIAL_RECORD_RETENTION_DAYS", default=0)
+# How long a **closed** request's attachment bytes are kept. Measured from close rather than from
+# upload, because a vendor reads them for as long as the request is live and a request can
+# legitimately stay open for weeks. Ninety days is an operational storage judgement and not an
+# owner decision: nothing commercial turns on it and no money moves on it. `0` disables the sweep.
+#
+# The safety is not the number. `retention.purge_expired_attachments` skips any request under a
+# financial hold, which is what stops this from destroying the photographs in an open dispute.
+M2_ATTACHMENT_RETENTION_DAYS = env.int("M2_ATTACHMENT_RETENTION_DAYS", default=90)
+
+# Wave C7 (`M2-BE-808`): how long a piece of asynchronous work may sit before
+# `apps.requirements.watchdog` counts it as stuck. Operational judgements about this deployment's
+# queue and provider, deliberately **not** `M2VariantConfiguration` columns — nothing here is an
+# owner decision, no money moves on any of them, and none fails closed. They report.
+#
+# Every one is set to comfortably more than the sweep that is supposed to handle the work: the
+# watchdog's job is to notice that a recovery did not happen, so a threshold at or below the
+# recovery's own cadence would report normal latency as an incident and teach everyone to ignore it.
+#
+# Outbox: the recovery beat runs every 30 seconds, so ten minutes overdue means roughly twenty
+# ticks did not happen.
+M2_STUCK_OUTBOX_SECONDS = env.int("M2_STUCK_OUTBOX_SECONDS", default=600)
+# Payments: `reconcile-payments` runs every 30 seconds and `M1_PAYMENT_WINDOW_SECONDS` is 300. An
+# attempt unresolved after an hour is not a slow bank.
+M2_STUCK_PAYMENT_SECONDS = env.int("M2_STUCK_PAYMENT_SECONDS", default=60 * 60)
+# Refunds: a real bank refund genuinely takes days, so this is deliberately far looser than the
+# rest. Six hours matches `reconciliation.refunds_awaiting_provider`'s own default cutoff, which is
+# the queue an operator already works from.
+M2_STUCK_REFUND_SECONDS = env.int("M2_STUCK_REFUND_SECONDS", default=6 * 60 * 60)
+# The cascade: an *instant* product. Thirty minutes still looking for a crew is not slow, it is
+# broken — the Customer has been watching a holding state that promised minutes.
+M2_STUCK_CASCADE_SECONDS = env.int("M2_STUCK_CASCADE_SECONDS", default=30 * 60)
+# Notifications: an intent only reaches `FAILED` once its whole retry budget is spent, so this is
+# a grace period on top of a process that has already given up.
+M2_STUCK_NOTIFICATION_SECONDS = env.int("M2_STUCK_NOTIFICATION_SECONDS", default=30 * 60)
+
 OUTBOX_LEASE_SECONDS = env.int("OUTBOX_LEASE_SECONDS", default=120)
 OUTBOX_MAX_ATTEMPTS = env.int("OUTBOX_MAX_ATTEMPTS", default=10)
 OUTBOX_RETRY_BACKOFF_SECONDS = env.int("OUTBOX_RETRY_BACKOFF_SECONDS", default=30)
@@ -859,12 +950,30 @@ CELERY_BEAT_SCHEDULE = {
         # so the cost of a late tick is a case opening a quarter-hour later, never money moving.
         "schedule": 60.0 * 15,
     },
+    # M2 Wave C7 — retention (`M2-BE-805`) and the watchdog on the watchdogs (`M2-BE-808`).
+    "purge-expired-m2-attachments": {
+        "task": "apps.requirements.tasks.purge_expired_attachments",
+        # Daily, matching `identity-retention-sweep` and for the same reason: deleting storage
+        # nobody is reading is not urgent, and doing it in the middle of a booking peak would be.
+        "schedule": 60.0 * 60 * 24,
+    },
+    "report-stuck-async-work": {
+        "task": "apps.requirements.tasks.report_stuck_async_work",
+        # 5 minutes. It reads counts and writes nothing, so it is cheap; and it is the series an
+        # alert on "the beat itself has stopped" is written against, which only works if the series
+        # is dense enough that a gap is obvious within minutes rather than within an hour.
+        "schedule": 60.0 * 5,
+    },
     "reconcile-m2-money": {
         "task": "apps.requirements.tasks.reconcile_m2_money",
-        # Hourly, matching `reconcile-payouts`. It reads every settled M2 money row, so it is the
-        # most expensive sweep on this list and the least urgent: a mismatch that has existed for
-        # an hour has existed for an hour whether or not anybody looked, and the exception it
-        # opens is deduplicated per row so a frequent tick would only re-read the same books.
+        # Hourly, matching `reconcile-payouts`. The least urgent sweep on this list: a mismatch that
+        # has existed for an hour has existed for an hour whether or not anybody looked, and the
+        # exception it opens is deduplicated per row so a frequent tick would only re-read the same
+        # books.
+        #
+        # It used to also be the most expensive, reading **every** settled M2 money row every tick.
+        # Wave C7 gave it a per-product keyset cursor bounded by `M2_RECONCILIATION_BATCH_SIZE`, so
+        # a tick is now bounded and the whole book is covered over a few laps instead.
         "schedule": 60.0 * 60,
     },
 }

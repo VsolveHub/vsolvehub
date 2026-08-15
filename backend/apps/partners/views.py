@@ -137,6 +137,7 @@ from apps.partners.services import (
 from common.errors.serializers import ApiErrorSerializer
 from common.observability.context import get_request_id
 from common.schema import IDEMPOTENCY_KEY_HEADER, PARTNER_VERSION_CONFLICT_EXAMPLE
+from common.throttling import ThrottledWriteMixin
 
 
 class PartnerApiException(APIException):
@@ -344,8 +345,9 @@ class PartnerApplicationSubmitView(APIView):
         return _application_response(cast(User, request.user))
 
 
-class PartnerDocumentUploadView(APIView):
+class PartnerDocumentUploadView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_attachment_upload"
 
     @extend_schema(
         tags=["Partner application"],
@@ -388,8 +390,9 @@ class PartnerDocumentUploadView(APIView):
         )
 
 
-class PartnerDocumentCreateView(APIView):
+class PartnerDocumentCreateView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_attachment_upload"
 
     @extend_schema(
         tags=["Partner application"],
@@ -1085,8 +1088,9 @@ class PartnerCapabilityOptionListView(APIView):
         )
 
 
-class PartnerCapabilityCollectionView(APIView):
+class PartnerCapabilityCollectionView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_registration"
 
     @extend_schema(
         tags=["M2 - Partner registration"],
@@ -1186,7 +1190,7 @@ class PartnerCapabilityCollectionView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class PartnerCapabilitySubmitView(APIView):
+class PartnerCapabilitySubmitView(ThrottledWriteMixin, APIView):
     """The Partner's own submit and resubmit (`M2-BE-110`).
 
     The button that was missing. Until now a capability sitting in `CHANGES_REQUIRED` could only be
@@ -1197,6 +1201,7 @@ class PartnerCapabilitySubmitView(APIView):
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_registration"
 
     @extend_schema(
         tags=["M2 - Partner registration"],
@@ -1258,8 +1263,9 @@ class PartnerCapabilitySubmitView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class PartnerCapabilityWithdrawView(APIView):
+class PartnerCapabilityWithdrawView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_registration"
 
     @extend_schema(
         tags=["M2 - Partner registration"],
@@ -1383,8 +1389,9 @@ class PartnerGateListView(APIView):
         )
 
 
-class PartnerCrewCollectionView(APIView):
+class PartnerCrewCollectionView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_registration"
 
     @extend_schema(
         tags=["M2 - Partner crew"],

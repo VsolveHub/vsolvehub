@@ -51,6 +51,7 @@ from apps.requirements.views import (
     OperationsCrewVerificationQueueView,
     OperationsCrewVerificationView,
     OperationsDeadlineView,
+    OperationsDeclineAlarmView,
     OperationsQueueView,
     OperationsRateCardView,
     OperationsReclassificationView,
@@ -522,6 +523,14 @@ urlpatterns = [
         "operations/rate-cards/",
         OperationsRateCardView.as_view(),
         name="m2-operations-rate-cards",
+    ),
+    # Wave C7 (`M2-BE-806`). Nested under the cards rather than under `operations/metrics/`,
+    # because the reading is *about* a card: the operator's next action after seeing a breached
+    # rate is to publish a new one on the surface immediately above.
+    path(
+        "operations/rate-cards/decline-alarm/",
+        OperationsDeclineAlarmView.as_view(),
+        name="m2-operations-decline-alarm",
     ),
     # Wave C5 - the A5 project (`M2-BE-541..549`). The mirror of the shift-day block above, and
     # the split is the same: the plan hangs off the **engagement**, because a project is one

@@ -41,8 +41,10 @@ from apps.requirements import (
     projects,
     proposals,
     reconciliation,
+    retention,
     services,
     stages,
+    watchdog,
     workforce,
 )
 from apps.requirements.exceptions import RequirementTransitionError
@@ -494,10 +496,11 @@ def sweep_orphaned_attachment_uploads() -> int:
 # cadences below say so.
 # ---------------------------------------------------------------------------
 
-#: How far back the decline-rate alarm looks. A day, because ADR-0009's failure mode is a rate that
-#: went stale *this week* and a window long enough to smooth that out is a monthly report wearing
-#: an alarm's clothes.
-DECLINE_ALARM_WINDOW_HOURS = 24
+#: How far back the decline-rate alarm looks. Bound from `crew_dispatch`, which owns the reading,
+#: so this sweep and the Operations panel that reads the same numbers cannot disagree about which
+#: window they are describing — the panel would otherwise show one day's rate beside a threshold
+#: that paged on another's.
+DECLINE_ALARM_WINDOW_HOURS = crew_dispatch.DECLINE_ALARM_WINDOW_HOURS
 
 
 @shared_task(
@@ -877,3 +880,32 @@ def reconcile_m2_money() -> int:
     channel would be a second queue for the same rupee.
     """
     return reconciliation.reconcile_m2_money()
+
+
+@shared_task
+def report_stuck_async_work() -> dict[str, int]:
+    """Count asynchronous M2 work nobody is going to finish, and emit it (`M2-BE-808`).
+
+    Reads only. Every other sweep on this schedule recovers something; this one exists to notice
+    that a recovery **did not happen** — a dead-lettered outbox event, a payment the provider never
+    resolved, a cascade that stopped advancing while the sweep meant to advance it was not running.
+    In each case the fix is a person, so a second retry here would only hide the incident.
+
+    Returns the counts so the beat log itself is readable, in the shape `reconcile_m2_money`
+    already established.
+    """
+    return watchdog.report_stuck_async_work()
+
+
+@shared_task
+def purge_expired_attachments() -> dict[str, int]:
+    """Delete attachment bytes on long-closed requests (`M2-BE-805`, `GAP-008`).
+
+    Bytes only. A Customer's own description and answers are untouched — a retention schedule is
+    not an erasure request, and scrubbing somebody's words because time passed is not a decision a
+    cron entry should be making.
+
+    Skips any request under a financial hold, which is the guard that stops a schedule from
+    destroying the photographs an open dispute turns on.
+    """
+    return retention.purge_expired_attachments()

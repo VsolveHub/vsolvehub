@@ -40,7 +40,7 @@ from apps.commerce.services import initiate_standalone_payment_attempt
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_capability_active
-from apps.requirements import access, matching, pricing, stages
+from apps.requirements import access, matching, metrics, pricing, stages
 from apps.requirements.exceptions import (
     CapacityUnavailableError,
     ProposalNotSelectableError,
@@ -691,6 +691,20 @@ def open_rate_card_engagement(*, booking_id: uuid.UUID) -> Engagement:
         actor=None,
         reason_code="booking_fee_verified",
         reason=f"engagement:{engagement.id} from rate_card_booking:{booking.id}",
+    )
+    # `M2-BE-806`: A3's "time to confirmed crew". This is the moment the README's phrase
+    # "accepted, fee-confirmed crew" becomes true — a lead has accepted, the provider has verified
+    # the fee, and the engagement exists.
+    #
+    # Measured against `first_quote_due_at`, the deadline stamped on the row at submission, for two
+    # reasons. It is the only promise this platform has actually made about an A3 requirement —
+    # ADR-0009 declares no separate instant-crew SLA, and the cascade's wave timeouts are an
+    # internal shape rather than a published promise — and being a stamped column it cannot be
+    # rewritten by a configuration change made after the Customer booked. Null is `no_promise`.
+    metrics.record_crew_confirmed(
+        requirement=requirement,
+        confirmed_at=now,
+        deadline=requirement.first_quote_due_at,
     )
     enqueue_outbox_event(
         aggregate_type="requirement",

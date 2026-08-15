@@ -1724,6 +1724,58 @@ class RateCardListSerializer(serializers.Serializer[dict[str, Any]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
+class RateCardDeclineAlarmSerializer(serializers.Serializer[Any]):
+    """One card's decline-rate reading, and whether an alarm can fire on it at all.
+
+    `armed` is the field the panel is built around, and it is published rather than inferred. Three
+    states need three different sentences and only two of them are about the numbers:
+
+    * `armed: true, breached: false` — a threshold is set and the rate is under it. Green.
+    * `armed: false` — owner decision 13 is open for this card's skill, so **no alarm can ever
+      fire**. The rate is still measured and published, because measurement never waits on the
+      owner; only the judgement does. Rendering this as green would be a lie.
+    * `armed: true, offers < minimum_offers` — a threshold is set and too few offers have gone out
+      for a rate to mean anything. Quiet, but not yet evidence of anything.
+
+    `threshold_basis_points` and `minimum_offers` are nullable precisely because an unarmed card has
+    neither, and a zero in their place would read as "alarm on everything".
+    """
+
+    rate_card_id = serializers.UUIDField(source="card.id", read_only=True)
+    service_area_slug = serializers.CharField(source="card.service_area.slug", read_only=True)
+    skill_code = serializers.CharField(source="card.skill.code", read_only=True)
+    skill_name = serializers.CharField(source="card.skill.name", read_only=True)
+    customer_day_rate_paise = serializers.IntegerField(
+        source="card.customer_day_rate_paise", read_only=True
+    )
+    armed = serializers.BooleanField(read_only=True)
+    offers = serializers.IntegerField(read_only=True)
+    declines = serializers.IntegerField(read_only=True)
+    rate_basis_points = serializers.IntegerField(read_only=True)
+    threshold_basis_points = serializers.IntegerField(read_only=True, allow_null=True)
+    minimum_offers = serializers.IntegerField(read_only=True, allow_null=True)
+    breached = serializers.BooleanField(read_only=True)
+
+
+class RateCardDeclineAlarmListSerializer(serializers.Serializer[dict[str, Any]]):
+    """The whole alarm board, plus the window every rate on it was measured over.
+
+    `window_hours` is published rather than assumed by the client for the same reason the constant
+    moved out of `tasks.py`: a screen showing a 24-hour rate beside a threshold that pages on a
+    different window is worse than no screen.
+
+    `armed_cards` is a count and not a filter. An operator's first question on the day A3 supply
+    fails is "is anything watching this", and a list they have to count themselves answers it worse
+    than a number does.
+    """
+
+    readings = RateCardDeclineAlarmSerializer(many=True, read_only=True)
+    window_hours = serializers.IntegerField(read_only=True)
+    armed_cards = serializers.IntegerField(read_only=True)
+    breached_cards = serializers.IntegerField(read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
 class RatePreviewSerializer(serializers.Serializer[dict[str, Any]]):
     """What instant booking would cost, on the screen the Customer reads **before** booking.
 
@@ -2871,6 +2923,29 @@ class OperationsTouchSerializer(serializers.Serializer[dict[str, Any]]):
     action = serializers.SlugField()
     reason = serializers.CharField(allow_blank=True)
     occurred_at = serializers.DateTimeField()
+
+
+class AssistedProposalSerializer(ProposalCreateSerializer):
+    """A quote captured over the phone: the vendor's own shape, plus the consent that permits it.
+
+    Wave C7 closed a hole here. `capture_assisted_proposal` has always refused without
+    `consent_recorded` — its docstring, the endpoint's published description and `M2-AC-802` all say
+    so — but the view passed `True` unconditionally, so the refusal could not fire and every
+    assisted quote wrote an audit row asserting a consent nobody had recorded. That is worse than
+    having no consent field: it puts a false statement in the record of a real vendor's price.
+
+    A subclass rather than a field on `ProposalCreateSerializer`, because a vendor submitting their
+    own quote is not consenting to anything on anybody's behalf and asking them to tick a box would
+    be meaningless.
+
+    **`default=False` rather than `required=True`**, and that is the deliberate half. A required
+    field would be a breaking change to a published request body; an optional one that defaults to
+    the refusing value is additive on the wire and fails closed in behaviour — a client that has
+    not been updated gets a clear `409` telling it consent was not recorded, rather than silently
+    continuing to write the false row this change exists to stop.
+    """
+
+    consent_recorded = serializers.BooleanField(default=False)
 
 
 class AssistedClarificationSerializer(serializers.Serializer[dict[str, Any]]):

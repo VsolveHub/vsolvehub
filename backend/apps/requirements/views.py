@@ -55,6 +55,7 @@ from apps.requirements import (
     pricing,
     projects,
     proposals,
+    purchase_gates,
     rate_cards,
     reconciliation,
     selectors,
@@ -115,6 +116,7 @@ from apps.requirements.selectors import (
 from apps.requirements.serializers import (
     AccessCheckoutSerializer,
     AssistedClarificationSerializer,
+    AssistedProposalSerializer,
     AttachmentFinalizeSerializer,
     AttachmentUploadGrantSerializer,
     AttachmentUploadRequestSerializer,
@@ -179,6 +181,7 @@ from apps.requirements.serializers import (
     QuestionCreateSerializer,
     QuoteTeaserListSerializer,
     RateCardBookSerializer,
+    RateCardDeclineAlarmListSerializer,
     RateCardListSerializer,
     RateCardPublishSerializer,
     RateCardSerializer,
@@ -244,6 +247,7 @@ from common.pagination import (
     reject_invalid_cursor_query,
 )
 from common.schema import IDEMPOTENCY_KEY_HEADER
+from common.throttling import ThrottledWriteMixin
 
 DomainError = RequirementDomainError | PartnerDomainError
 
@@ -738,10 +742,11 @@ class RequirementVendorCardListView(APIView):
         )
 
 
-class RequirementQuoteQuestionView(APIView):
+class RequirementQuoteQuestionView(ThrottledWriteMixin, APIView):
     """The Customer's half of clarification (`M2-FE-409`)."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_clarification"
 
     @extend_schema(
         tags=["M2 - Quotes"],
@@ -808,10 +813,11 @@ class RequirementQuoteQuestionView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class RequirementAttachmentCollectionView(APIView):
+class RequirementAttachmentCollectionView(ThrottledWriteMixin, APIView):
     """Presign an attachment upload. Bytes go straight to storage, never through Django."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_attachment_upload"
 
     @extend_schema(
         tags=["M2 - Requirements"],
@@ -879,10 +885,11 @@ class RequirementAttachmentCollectionView(APIView):
         )
 
 
-class RequirementAttachmentFinalizeView(APIView):
+class RequirementAttachmentFinalizeView(ThrottledWriteMixin, APIView):
     """Turn a completed upload into an attachment, after verifying what actually arrived."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_attachment_upload"
 
     @extend_schema(
         tags=["M2 - Requirements"],
@@ -943,8 +950,9 @@ class RequirementAttachmentFinalizeView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class RequirementAttachmentDetailView(APIView):
+class RequirementAttachmentDetailView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_attachment_upload"
 
     @extend_schema(
         tags=["M2 - Requirements"],
@@ -982,10 +990,11 @@ class RequirementAttachmentDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class RequirementQuestionAnswerView(APIView):
+class RequirementQuestionAnswerView(ThrottledWriteMixin, APIView):
     """The Customer answers a vendor's question."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_clarification"
 
     @extend_schema(
         tags=["M2 - Requirements"],
@@ -1030,7 +1039,7 @@ class RequirementQuestionAnswerView(APIView):
         return Response(RequirementQuestionSerializer(answered).data)
 
 
-class PartnerQuestionAnswerView(APIView):
+class PartnerQuestionAnswerView(ThrottledWriteMixin, APIView):
     """The vendor answers a Customer's question.
 
     The mirror of `RequirementQuestionAnswerView`, and it exists because the Customer-asks command
@@ -1039,6 +1048,7 @@ class PartnerQuestionAnswerView(APIView):
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_clarification"
 
     @extend_schema(
         tags=["M2 - Partner enquiries"],
@@ -1137,8 +1147,9 @@ class PartnerEnquiryDetailView(APIView):
         return Response(EnquiryDetailSerializer(invitation).data)
 
 
-class PartnerEnquiryAcceptView(APIView):
+class PartnerEnquiryAcceptView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Partner enquiries"],
@@ -1212,8 +1223,9 @@ class PartnerEnquiryAcceptView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class PartnerEnquiryDeclineView(APIView):
+class PartnerEnquiryDeclineView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Partner enquiries"],
@@ -1266,8 +1278,9 @@ class PartnerEnquiryDeclineView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class PartnerEnquiryQuestionView(APIView):
+class PartnerEnquiryQuestionView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_clarification"
 
     @extend_schema(
         tags=["M2 - Partner enquiries"],
@@ -1543,8 +1556,9 @@ class ProposalCursorPagination(StrictCursorPagination):
     ordering = ("-submitted_at", "id")
 
 
-class PartnerProposalCollectionView(APIView):
+class PartnerProposalCollectionView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Proposals"],
@@ -1687,8 +1701,9 @@ class PartnerProposalDetailView(APIView):
         return Response(ProposalSerializer(proposal).data)
 
 
-class PartnerProposalWithdrawView(APIView):
+class PartnerProposalWithdrawView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Proposals"],
@@ -1736,10 +1751,11 @@ class PartnerProposalWithdrawView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class RequirementUnlockView(APIView):
+class RequirementUnlockView(ThrottledWriteMixin, APIView):
     """The A3 paywall. Read it to know whether it can be bought; post to start buying it."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_money"
 
     @extend_schema(
         tags=["M2 - Access"],
@@ -1842,10 +1858,11 @@ class RequirementUnlockView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class RequirementVisitPlanView(APIView):
+class RequirementVisitPlanView(ThrottledWriteMixin, APIView):
     """The A5 front door: the tier chooser before a plan exists, the tracker after."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
 
     @extend_schema(
         tags=["M2 - Access"],
@@ -1870,10 +1887,22 @@ class RequirementVisitPlanView(APIView):
             _raise_api_error(exc)
 
         plan = VisitPlan.objects.filter(requirement=requirement).prefetch_related("shares").first()
-        tiers = [
-            {"plan_size": tier.row.plan_size, "price_paise": tier.amount_paise}
-            for tier in pricing.available_visit_plan_tiers()
-        ]
+        # `M2-BE-810`. `choose_visit_plan` is one of the three gated doors, so while a pause is
+        # engaged the chooser offers nothing rather than offering tiers the next tap will refuse.
+        # An empty `available_tiers` is already the published honest answer for "no tier is priced
+        # yet", and this is the second reason it can be empty — which is why the pause is a *read*
+        # on the existing field rather than a new one: no client changes, and no screen offers a
+        # purchase that cannot be made. A plan already chosen is untouched, and its tracker below
+        # renders exactly as before.
+        paused = not purchase_gates.new_purchases_allowed(variant_id=requirement.variant_id)
+        tiers = (
+            []
+            if paused
+            else [
+                {"plan_size": tier.row.plan_size, "price_paise": tier.amount_paise}
+                for tier in pricing.available_visit_plan_tiers()
+            ]
+        )
         visits = SiteVisit.objects.filter(
             requirement=requirement,
             plan_share__isnull=False,
@@ -1952,8 +1981,9 @@ class RequirementVisitPlanView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class RequirementVisitPlanCheckoutView(APIView):
+class RequirementVisitPlanCheckoutView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_money"
 
     @extend_schema(
         tags=["M2 - Access"],
@@ -2070,8 +2100,9 @@ class RequirementQuoteListView(APIView):
         )
 
 
-class RequirementQuoteRejectView(APIView):
+class RequirementQuoteRejectView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
 
     @extend_schema(
         tags=["M2 - Quotes"],
@@ -2137,8 +2168,9 @@ class RequirementQuoteRejectView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class RequirementQuoteRevalidateView(APIView):
+class RequirementQuoteRevalidateView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
 
     @extend_schema(
         tags=["M2 - Quotes"],
@@ -2203,8 +2235,9 @@ class RequirementQuoteRevalidateView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class RequirementSelectionView(APIView):
+class RequirementSelectionView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_quote_action"
 
     @extend_schema(
         tags=["M2 - Selection"],
@@ -2296,10 +2329,11 @@ class RequirementSelectionView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class SelectionReconfirmView(APIView):
+class SelectionReconfirmView(ThrottledWriteMixin, APIView):
     """The vendor commits, and the engagement opens."""
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Selection"],
@@ -2361,8 +2395,9 @@ class SelectionReconfirmView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class SelectionDeclineView(APIView):
+class SelectionDeclineView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Selection"],
@@ -2444,8 +2479,9 @@ class EngagementDetailView(APIView):
         return Response(EngagementSerializer(engagement).data)
 
 
-class EngagementStageFundingView(APIView):
+class EngagementStageFundingView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_money"
 
     @extend_schema(
         tags=["M2 - Engagements"],
@@ -2506,7 +2542,7 @@ class EngagementStageFundingView(APIView):
 # ---------------------------------------------------------------------------
 
 
-class PartnerEnquiryVisitSlotView(APIView):
+class PartnerEnquiryVisitSlotView(ThrottledWriteMixin, APIView):
     """Candidate visit starts for this vendor, and the command that books one.
 
     The read and the write sit on one path deliberately. `confirm_visit_slot` redeems a token this
@@ -2516,6 +2552,7 @@ class PartnerEnquiryVisitSlotView(APIView):
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Visit slots"],
@@ -3071,10 +3108,11 @@ class EngagementStageStartView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class EngagementStageEvidenceUploadView(APIView):
+class EngagementStageEvidenceUploadView(ThrottledWriteMixin, APIView):
     """Presign one evidence file. Bytes never pass through Django."""
 
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_attachment_upload"
 
     @extend_schema(
         tags=["M2 - Stages"],
@@ -3899,10 +3937,11 @@ class RequirementRateCardView(APIView):
         return Response(RateCardStateSerializer(_rate_card_state_payload(requirement)).data)
 
 
-class RequirementRateCardBookView(APIView):
+class RequirementRateCardBookView(ThrottledWriteMixin, APIView):
     """Submit an A3 preset at the published rate and start the crew cascade, in one step."""
 
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_money"
 
     @extend_schema(
         tags=["M2 - Rate card"],
@@ -3971,8 +4010,9 @@ class RequirementRateCardBookView(APIView):
         return Response(result.body, status=result.status_code)
 
 
-class RequirementBookingFeeCheckoutView(APIView):
+class RequirementBookingFeeCheckoutView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated,)
+    throttle_scope = "m2_money"
 
     @extend_schema(
         tags=["M2 - Rate card"],
@@ -4287,8 +4327,9 @@ class PartnerCrewOfferListView(APIView):
         )
 
 
-class PartnerCrewOfferAcceptView(APIView):
+class PartnerCrewOfferAcceptView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Rate card"],
@@ -4348,8 +4389,9 @@ class PartnerCrewOfferAcceptView(APIView):
         )
 
 
-class PartnerCrewOfferDeclineView(APIView):
+class PartnerCrewOfferDeclineView(ThrottledWriteMixin, APIView):
     permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
 
     @extend_schema(
         tags=["M2 - Rate card"],
@@ -4503,6 +4545,57 @@ class OperationsRateCardView(APIView):
             command=command,
         )
         return Response(result.body, status=result.status_code)
+
+
+class OperationsDeclineAlarmView(APIView):
+    """The A3 decline-rate alarm, as a reading (`M2-BE-434`, `M2-BE-806`).
+
+    Built in Wave C7 to close a hole that had no owner: the decline data was recorded from C4, the
+    threshold has been an owner-blocked configuration column since C2R, and
+    `sweep_rate_card_decline_alarm` has been paging Operations by email — but **nothing published a
+    reading**, so the one signal that says A3 supply is failing could not be looked at on a screen.
+    The Operations panel built against that gap correctly refused to show a green state, which is
+    the right behaviour for a missing endpoint and a bad thing to leave permanently true.
+    """
+
+    permission_classes = (IsAuthenticated, IsOperationsUser)
+
+    @extend_schema(
+        tags=["M2 - Rate card"],
+        operation_id="m2_operations_decline_alarm_read",
+        description=(
+            "Every live rate card's crew-offer decline rate over the alarm window, **including "
+            "the cards no alarm can fire on**.\n\n"
+            "`armed` is the field to build the panel around. `armed: false` means owner decision "
+            "13 is still open for that card's skill and no alarm will ever fire for it — the rate "
+            "is still measured and published, because measurement never waits on the owner, but "
+            "rendering it as a healthy card would be a lie. `armed: true, breached: false` is the "
+            "only green state, and `offers` below `minimum_offers` means a threshold exists and "
+            "not enough offers have gone out for the rate to mean anything yet.\n\n"
+            "The denominator is offers **sent**, not offers answered: a lead who ignores an offer "
+            "until it expires is saying the same thing as one who declines it, and a rate measured "
+            "only over explicit declines looks healthy in exactly the market where every lead has "
+            "stopped answering.\n\n"
+            "An empty `readings` list means no card is published at all, which is a different and "
+            "worse state than every card being quiet."
+        ),
+        responses={200: RateCardDeclineAlarmListSerializer, 403: ApiErrorSerializer},
+    )
+    def get(self, _request: Request) -> Response:
+        readings = crew_dispatch.decline_rate_readings(
+            window_hours=crew_dispatch.DECLINE_ALARM_WINDOW_HOURS
+        )
+        return Response(
+            RateCardDeclineAlarmListSerializer(
+                {
+                    "readings": readings,
+                    "window_hours": crew_dispatch.DECLINE_ALARM_WINDOW_HOURS,
+                    "armed_cards": sum(1 for reading in readings if reading.armed),
+                    "breached_cards": sum(1 for reading in readings if reading.breached),
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -6650,7 +6743,7 @@ class OperationsAssistedProposalView(APIView):
         tags=["M2 - Operations"],
         operation_id="m2_operations_assisted_proposal",
         parameters=[IDEMPOTENCY_KEY_HEADER],
-        request=ProposalCreateSerializer,
+        request=AssistedProposalSerializer,
         description=(
             "Capture a quote a Partner gave over the phone, attributed to that Partner.\n\n"
             "Revision 4 makes this a **primary path** rather than a convenience: on the A3 "
@@ -6658,9 +6751,14 @@ class OperationsAssistedProposalView(APIView):
             "form. It is still not a way for staff to publish a price — the proposal is written "
             "with `vendor_confirmed_at` null, every Customer-facing read already filters on "
             "that, and the vendor's own confirmation is what makes it visible (`M2-AC-218`).\n\n"
-            "Consent is recorded through the `Idempotency-Key`-scoped command and refused when "
-            "absent, exactly as assisted clarification is. The wage floor is derived and "
-            "enforced here identically to a vendor's own submission."
+            "**Consent is a refusal, not a checkbox**, exactly as on assisted clarification: "
+            "without `consent_recorded` the capture does not happen. It is optional on the "
+            "wire and defaults to `false`, so a client that does not send it is refused with "
+            "`m2_requirement_transition_not_allowed` rather than having a consent it never "
+            "collected written into the record. Until 1.33.0 this view passed `true` "
+            "unconditionally and the documented refusal could not fire.\n\n"
+            "The wage floor is derived and enforced here identically to a vendor's own "
+            "submission."
         ),
         responses={
             201: ProposalSerializer,
@@ -6673,10 +6771,15 @@ class OperationsAssistedProposalView(APIView):
     def post(self, request: Request) -> Response:
         actor = cast(User, request.user)
         key = _idempotency_key(request)
-        payload = ProposalCreateSerializer(data=request.data)
+        payload = AssistedProposalSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         data = dict(payload.validated_data)
         invitation_id = data.pop("invitation_id")
+        # Popped, not passed through. `submit_proposal` takes the quote's own fields and consent is
+        # not one of them: it belongs to the *capture*, not to the price. Until 1.33.0 this line
+        # was `consent_recorded=True` — the command's refusal, this endpoint's published
+        # description and `M2-AC-802` all said consent was required, and none of them could fire.
+        consent_recorded = bool(data.pop("consent_recorded", False))
 
         def command() -> tuple[int, dict[str, object]]:
             try:
@@ -6684,7 +6787,7 @@ class OperationsAssistedProposalView(APIView):
                     invitation_id=invitation_id,
                     actor=actor,
                     payload=data,
-                    consent_recorded=True,
+                    consent_recorded=consent_recorded,
                 )
             except (RequirementDomainError, PartnerDomainError) as exc:
                 _raise_api_error(exc)

@@ -43,9 +43,10 @@ from apps.identity.models import User
 from apps.partners.models import PartnerProfile
 from apps.payouts.models import PartnerLedgerEntry
 from apps.payouts.services import payable_account
-from apps.requirements import matching, pricing, visit_slots
+from apps.requirements import matching, metrics, pricing, purchase_gates, visit_slots
 from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
+    RequirementDomainError,
     RequirementTransitionError,
     UnlockNotAvailableError,
     UnlockRequiredError,
@@ -158,12 +159,18 @@ def unlock_availability(requirement: CustomerRequirement) -> bool:
 
     A read, never a decision: `create_unlock_checkout` re-checks independently, because a stale
     `true` on a client is exactly the state a duplicate purchase lives in.
+
+    Consults the Wave C7 purchase pause (`M2-BE-810`) too, and that is why the mirror has to be
+    kept honest rather than merely close: without it a paused product publishes
+    `is_available: true`, the Customer taps, and the refusal arrives after they have committed to
+    paying. A disabled button with an explanation is the same rule delivered before the tap.
     """
     return (
         requirement.archetype == A3
         and requirement.status == CustomerRequirement.Status.QUOTES_READY
         and active_unlock(requirement) is None
         and bool(usable_proposals(requirement))
+        and purchase_gates.new_purchases_allowed(variant_id=requirement.variant_id)
     )
 
 
@@ -212,6 +219,12 @@ def create_unlock_checkout(
 
     if not usable_proposals(requirement):
         raise UnlockNotAvailableError()
+
+    # `M2-BE-810`, and deliberately **after** the resume branch above. A Customer returning to a
+    # `PENDING` attempt they already started is continuing a purchase, not making a new one, and
+    # refusing them there would leave them holding a charge nobody would honour. Only the path
+    # that is about to create a *new* `PaymentAttempt` consults the gate.
+    purchase_gates.assert_new_purchase_allowed(requirement, door="a3_unlock_checkout")
 
     price = pricing.unlock_price()
     attempt = initiate_standalone_payment_attempt(
@@ -390,6 +403,12 @@ def choose_visit_plan(*, requirement_id: uuid.UUID, plan_size: int, actor: User)
         raise RequirementTransitionError(
             "A vendor has already committed to a visit, so the plan cannot be resized.",
         )
+    # `M2-BE-810`. Choosing charges nothing, but it is where the commitment is made — the plan and
+    # its shares are created here and the invitation wave is bounded by them — so this is the door
+    # a pause has to close. Deliberately *after* the two guards above: a plan already in progress
+    # must hear "already in progress", not "we have paused new bookings", because only one of those
+    # two sentences is true of it.
+    purchase_gates.assert_new_purchase_allowed(requirement, door="a5_visit_plan_choice")
 
     if plan is None:
         plan = VisitPlan(requirement=requirement)
@@ -622,6 +641,17 @@ def _mark_visits_booked(requirement: CustomerRequirement) -> None:
             actor=None,
             reason_code="first_visit_slot_confirmed",
         )
+        # `M2-BE-806`: A5's "time to first confirmed visit, against the declared promise". Emitted
+        # here rather than from `record_transition` because this is the one measure a counter cannot
+        # express — it needs the elapsed time and the SLA that was in force, and this branch runs
+        # exactly once per requirement, on the *first* confirmed slot.
+        try:
+            deadline = pricing.first_visit_deadline(requirement)
+        except RequirementDomainError:
+            # An unset or retired configuration is `no_promise`, not a breach. A measurement may
+            # never be the reason a vendor's confirmed slot fails to record.
+            deadline = None
+        metrics.record_first_visit_confirmed(requirement=requirement, deadline=deadline)
 
 
 def _activate_free_plan(plan: VisitPlan) -> None:

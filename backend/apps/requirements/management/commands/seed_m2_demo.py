@@ -392,11 +392,22 @@ PAYOUT_ACCOUNT_IFSC = "HDFC0000001"
 CASE_RESPONSE_WINDOW_HOURS = 16
 CASE_APPEAL_WINDOW_HOURS = 56
 
-#: Page Operations when more than 2% of M2 fee charges on a variant are charged back, once at
-#: least twenty have been taken. The shape mirrors `CREW_DECLINE_ALARM_*` deliberately: a rate
-#: plus a minimum count, because a rate over three charges is not a rate.
+#: Page Operations when more than 2% of M2 fee charges on a variant are charged back, once at least
+#: `CHARGEBACK_ALARM_MIN_CHARGES` have been taken. The shape mirrors `CREW_DECLINE_ALARM_*`
+#: deliberately: a rate plus a minimum count, because a rate over three charges is not a rate.
 CHARGEBACK_ALARM_BASIS_POINTS = 200
-CHARGEBACK_ALARM_MIN_CHARGES = 20
+#: **Lowered from 20 to 2 in Wave C7, and the reason is the seed's own purpose rather than the
+#: alarm's design.** At 20 the alarm was unreachable by hand: a walkthrough produces one or two real
+#: charges, so the branch could never be demonstrated and the whole `M2-BE-708` path was shipped
+#: unexercised in every environment — which is the state this file exists to prevent for prices and
+#: clocks and is no better for an alarm.
+#:
+#: A minimum of 2 is still a minimum: one chargeback out of one charge is 10,000 basis points and
+#: means nothing, and refusing to alarm on a population of one is the real point of the knob. A
+#: production threshold would be a much larger number over a much larger population, and the owner
+#: sets it; **this is a dev-seed placeholder and is marked as one**, exactly like the INR 149 unlock
+#: sitting twenty lines above it.
+CHARGEBACK_ALARM_MIN_CHARGES = 2
 
 #: The approved unit-economics budget `M2-BE-715` measures against. Two touches per request is a
 #: stand-in for decision 10 and nothing more — for A3 the real check is against the booking fee's

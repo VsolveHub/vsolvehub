@@ -30,9 +30,10 @@ from apps.cases.models import TERMINAL_CASE_STATUSES, OperationsCase
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.models import PartnerCrewMembership
-from apps.requirements import disputes, matching, pricing, proposals, services
+from apps.requirements import disputes, matching, metrics, pricing, proposals, services
 from apps.requirements.exceptions import (
     PolicyUnavailableError,
+    RequirementDomainError,
     RequirementNotFoundError,
     RequirementTransitionError,
 )
@@ -76,12 +77,31 @@ def record_touch(
     reason: str = "",
 ) -> OperationsTouch:
     """Write one row saying an operator did something to this request."""
-    return OperationsTouch.objects.create(
+    touch = OperationsTouch.objects.create(
         requirement=requirement,
         actor=actor,
         action=action,
         reason=reason.strip()[:480],
     )
+    # `M2-BE-806` / `M2-BE-715`: "Operations touches per request, against the unit economics
+    # model". Emitted with the running count and the configured budget so an alert can fire on the
+    # *first* request that goes over rather than on a nightly aggregate — the number matters most
+    # while the request is still open and somebody could stop touching it.
+    #
+    # `reason` is deliberately absent from the labels: it is an operator's free text about a real
+    # Customer's situation, and a metric line is a log line.
+    budget: int | None
+    try:
+        budget = pricing.operations_touch_budget(requirement)
+    except RequirementDomainError:
+        budget = None
+    metrics.record_operations_touch(
+        requirement=requirement,
+        action=action,
+        touch_count=OperationsTouch.objects.filter(requirement=requirement).count(),
+        budget=budget,
+    )
+    return touch
 
 
 # ---------------------------------------------------------------------------

@@ -1292,25 +1292,69 @@ recovery command; money reconciles after retries.
 
 ### Production hardening
 
-- [ ] `M2-BE-801` Threat-model object access, ID enumeration, upload abuse, clarification abuse, payment
+- [~] `M2-BE-801` Threat-model object access, ID enumeration, upload abuse, clarification abuse, payment
   replay, staff privilege, vendor collusion, slot squatting and personal-data exposure.
+  **Built** — [`docs/runbooks/m2-threat-model.md`](../../docs/runbooks/m2-threat-model.md), written
+  in the runbook voice: each section names what an attacker would try, what stops it, and where the
+  answer is "nothing yet" it says so with the task id. It ships with the guards it justifies rather
+  than only describing them.
 - [ ] `M2-BE-802` Add object-level authorization regression tests for every M2 endpoint and role.
-- [ ] `M2-BE-803` Add rate limits and abuse controls for registration, upload, clarification,
+  **Left unchecked — this is a TEST task and the build-first amendment forbids writing one.** The
+  rule itself is enforced: every M2 read resolves through an actor-scoped selector and a record
+  belonging to somebody else answers `404`, never `403`, so existence stays private. **Nothing
+  proves it stays enforced.** This is the largest single hole in the M2 security posture and the
+  threat model says so in those words.
+- [~] `M2-BE-803` Add rate limits and abuse controls for registration, upload, clarification,
   invitations, proposals, callbacks, non-responsive rejection, selection and payment creation.
+  **Built** — `common/throttling.py`, six named scopes over 32 write views, extending the
+  `ScopedRateThrottle` the geocoding routes already use so the transport and the `code: "throttled"`
+  envelope already existed. Safe methods are exempt, and that is load-bearing: several M2 routes
+  carry a `GET` and a `POST` on one class and the `GET` is what a Customer's screen **polls** while
+  a payment confirms. Plus a **three-unanswered-questions-per-thread** clarification cap, which is
+  the control a rate cannot express. The limiter fails **open** on a cache outage and emits
+  `m2.abuse.throttle_cache_unavailable` — the one deliberate departure from RULES §4, argued in the
+  module docstring. Provider callbacks are deliberately **not** throttled: refusing one loses a
+  payment confirmation the Customer has already been charged for.
 - [ ] `M2-BE-804` Add database transaction/concurrency tests for quote slots, capacity holds, selection,
   crew assignment, stage approval, refund and payout.
-- [ ] `M2-BE-805` Add retention, redaction and deletion workflows consistent with financial and legal
+  **Left unchecked — this is a TEST task.** The row locks, the `select_for_update` under the
+  requirement, and the partial unique indexes are all in place from C2–C5; **none of them is
+  exercised by anything.**
+- [~] `M2-BE-805` Add retention, redaction and deletion workflows consistent with financial and legal
   retention requirements, including attachment-access expiry. `GAP-008`
+  **Built** — `apps/requirements/retention.py`. **The platform redacts and never deletes**, for two
+  independent reasons: the books are not the platform's to waive, and every foreign key into
+  `CustomerRequirement` is `on_delete=PROTECT`, so a delete does not cascade, it raises.
+  `handle_erasure_request` **always redacts and reports the holds** rather than refusing on them —
+  a hold outranks *deletion*, not the Customer's right to have their personal content removed.
+  Removes the free-text description, free-text answers, both directions of every clarification
+  thread, and the stored bytes; keeps amounts, statuses and every attachment's metadata, because a
+  `RequirementSnapshot` records what a vendor was shown and deleting the rows under it would rewrite
+  that. `M2_FINANCIAL_RECORD_RETENTION_DAYS` defaults to `0` and **`0` means the hold never lapses**
+  — the schedule is a legal question, and for retention fail-closed means *keeping* the record.
+  Audited management command `redact_m2_requirement`; daily attachment sweep that skips anything
+  under a hold.
 
 ### Reliability and operations
 
-- [ ] `M2-BE-806` Add structured metrics for the success measures in `README.md`: crew-confirmation
+- [~] `M2-BE-806` Add structured metrics for the success measures in `README.md`: crew-confirmation
   rate, time-to-crew against the cascade SLA, the per-card decline rate (`M2-BE-434`) and the
   fallback rate (A3, revision 4), quote fill rate and time to first quote (A3 fallback), visit fill
   rate, visit-to-estimate rate and time to first confirmed visit against SLA (A5), booking-fee
   conversion and refund/forfeit rates (A3), unlock and plan conversion, unlock and visit-plan refund
   rates, vendor response rate, selection-to-confirmation rate, dispute rate and Operations touches
   per request. `PLN-05`
+  **Built** — eleven names in `common/observability/metrics.M2Metric`, emitters in
+  `apps/requirements/metrics.py`. Almost every measure above is a **ratio of two counts on one
+  funnel**, so the funnel is emitted **once**, from `services.record_transition` — the single
+  audited write every M2 command already makes — carrying the `reason_code` as a label. A command
+  that starts recording a new code is measured the day it ships. The two measures a counter cannot
+  express (time-to-crew, time-to-first-visit) get their own metric with a `within_sla` label whose
+  third value is `no_promise`, because an unset SLA is neither kept nor broken. **`reason` is never
+  a label; `reason_code` is.** Also closes the alarm that had no reader: `M2-BE-434`'s decline rate
+  was recorded from C4 and paged by email, and **nothing published a reading** —
+  `GET /api/v1/operations/rate-cards/decline-alarm/` now does, including the cards no alarm can fire
+  on. Emitting, not computing a dashboard.
 - [~] `M2-BE-807` Define and implement the notification escalation ladder (in-app, push, SMS, WhatsApp,
   call) so no deadline depends on an unread in-app notice. `PLN-06`
   Build on `notifications.NotificationIntent` / `NotificationDelivery` / `KillSwitch`, which already
@@ -1325,15 +1369,68 @@ recovery command; money reconciles after retries.
   MSG91 lands in: `MESSAGE_TRANSPORT` defaults to `unconfigured` and raises, production refuses the
   fake outright, and `unreachable_channels` reports the gap instead of letting the ladder degrade
   silently. **13/13 tests pass** (verified 2026-08-10). Sending is still not wired to any provider.
-- [ ] `M2-BE-808` Add correlation IDs, structured safe logs, traces and alerts for stuck or failed
+  **Wave C7 confirmed this state rather than rebuilding it.** The watchdog counts `FAILED` intents
+  on `m2_*` purposes, and nothing added in C7 calls a transport that raises.
+- [~] `M2-BE-808` Add correlation IDs, structured safe logs, traces and alerts for stuck or failed
   asynchronous workflows.
-- [ ] `M2-BE-809` Document timeout, retry, circuit-breaker and reconciliation behavior for payment,
+  **Built**, and it closed two live defects. **Correlation stopped at the queue**: the request id
+  has been on every HTTP line since M1 and nothing carried it into a task, so a command that
+  enqueued an event logged under one id and the work it caused logged under none — which matters
+  most here, because almost nothing important in M2 finishes inside the request.
+  `common/observability/tasks.py` carries it through Celery message headers; a beat-published task
+  mints `task:<uuid>` so scheduled work is correlatable and visibly not the tail of a request.
+  **`JsonFormatter` was discarding every `extra` field**, so every counter this platform has ever
+  emitted reached the log as an indistinguishable `"message": "metric"` — a writer with no reader.
+  Extras are now rendered, and **redacted first** by `common/observability/redaction.py`, which is
+  `AGENTS.md`'s never-log rule as a deny-list enforced in the formatter so it cannot be forgotten at
+  a call site. `apps/requirements/watchdog.py` counts seven classes of stuck work every five minutes
+  and **emits zeros too**, so an alert can fire on the absence of the series — the failure most
+  likely to hide the others. It reports and never acts.
+- [~] `M2-BE-809` Document timeout, retry, circuit-breaker and reconciliation behavior for payment,
   storage, notification, masked calling, transcription and malware-scan adapters.
-- [ ] `M2-BE-810` Ensure feature flags gate **new** purchases only; in-flight requirements and funded
+  **Built** — [`docs/runbooks/m2-adapter-reliability.md`](../../docs/runbooks/m2-adapter-reliability.md),
+  with the alert thresholds. The rule every row is an instance of: a read may be retried freely, a
+  write that moves money is retried only through an idempotency key, and anything ambiguous is
+  reported to a person rather than resolved by a guess. **There is no inline retry on a capture and
+  there must not be**, and no automatic circuit breaker on payments — the manual one is the
+  `PAYMENTS` kill switch. **Masked calling, transcription and malware scanning have no adapter at
+  all**; the malware seam is named as a seam rather than documented as if it worked.
+- [~] `M2-BE-810` Ensure feature flags gate **new** purchases only; in-flight requirements and funded
   stages remain reachable and refundable when a flag is turned off. `GAP-036`
-- [ ] `M2-BE-811` Create migration, backfill, feature-flag, rollback and data-reconciliation runbooks.
-- [ ] `M2-BE-812` Run Ruff, strict MyPy, tests with branch-aware coverage, migration checks and OpenAPI
+  **Built** — `apps/requirements/purchase_gates.py`, reusing `notifications.KillSwitch` (already a
+  row not a setting, already audited, already has a published Operations write pair) with one new
+  scope `M2_PURCHASES` and an optional per-variant target. The rule: **gate the door that starts
+  burning supply; never gate the payment that resolves a hold a vendor is already sitting on.**
+  Gated: `book_at_published_rate`, `create_unlock_checkout`, `choose_visit_plan` — all three run
+  before any vendor has been asked for anything. **Not gated: the booking-fee checkout and the
+  visit-plan checkout** (a lead is holding their Saturday and the payment releases it either way),
+  every provider callback, stage and amendment funding, and every refund, forfeit, payout and
+  cancellation. New code `m2_purchases_paused` (409, retryable). The already-published availability
+  reads now tell the truth **before** the tap, so a paused product shows a disabled control rather
+  than refusing after the Customer has committed to paying.
+- [~] `M2-BE-811` Create migration, backfill, feature-flag, rollback and data-reconciliation runbooks.
+  **Built** — [`docs/runbooks/m2-release.md`](../../docs/runbooks/m2-release.md). **There is no data
+  backfill**, and that is a design outcome rather than luck: both C7 columns are "this happened"
+  markers whose null is correct for every existing row. What does need loading is configuration, and
+  the runbook tables what refuses while each value is unset. Rollback names three different wrongs
+  with three different answers, and says **do not reverse the migrations** — unnecessary (both
+  columns are additive and nullable) and dangerous (`purged_at` is the only record of which
+  attachment objects have already been deleted from storage).
+- [~] `M2-BE-812` Run Ruff, strict MyPy, tests with branch-aware coverage, migration checks and OpenAPI
   validation; attach results to the master board.
+  **Non-test half only, and the split is the point.** Ruff format (366 files) and check, strict MyPy
+  across 246 source files, `makemigrations --check` (`No changes detected`, both new migrations in
+  place), `spectacular --validate` (zero warnings) and the contract-drift check: **all green, run to
+  completion**, plus `manage.py check` clean. **Branch-aware coverage was NOT run and no test was
+  written** — that half is a test task under the build-first amendment, and it stays open.
 
 **BE7 gate:** All backend acceptance criteria pass, alerts and recovery jobs are active, rollback is
 tested and the M2 OpenAPI contract is published.
+
+**Gate status, honestly.** Alerts and recovery jobs **are** active (two new beat entries, thresholds
+in `m2-adapter-reliability.md`), rollback **is** documented and reasoned rather than tested, and the
+contract **is** published at 1.33.0. "All backend acceptance criteria pass" is the half that cannot
+be claimed: **`M2-BE-802` and `M2-BE-804` were not written, and `M2-BE-812`'s coverage half was not
+run.** Object-level authorization and every concurrency invariant in M2 are enforced in code and
+proven by nothing. The correct phrase for this wave is **built — static gates green, owner manual
+verification pending**, and the three unchecked halves above are real gaps rather than paperwork.

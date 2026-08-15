@@ -747,12 +747,51 @@ def looks_like_contact_sharing(text: str) -> bool:
     return bool(_CONTACT_PATTERN.search(text))
 
 
+#: How many questions one asker may leave **unanswered** on one enquiry thread before they have to
+#: wait (`M2-BE-803`, clarification abuse).
+#:
+#: A cap on the open ones rather than on the total, because the two describe different behaviour. A
+#: total cap punishes a long, healthy back-and-forth over a complicated site — exactly the
+#: conversation clarification exists to support — while leaving a burst of thirty unanswered
+#: messages under the limit for the first thirty. A cap on the *unanswered* count is the shape of
+#: the abuse: it is unbounded only for somebody who is not waiting for a reply.
+#:
+#: It is also the control a rate limit cannot express. `m2_clarification` at 60/hour is the second
+#: layer and catches a script writing to many threads; neither one catches what the other does.
+#:
+#: Deliberately **not** an `M2VariantConfiguration` column. It is not an owner decision — nothing
+#: about the commercial model changes with it, no money moves on it, and adding it to the
+#: configuration table would mean one more column that fails closed while unset and one more row
+#: for `seed_m2_demo` to write, to express "be reasonable".
+MAXIMUM_OPEN_QUESTIONS_PER_THREAD = 3
+
+
+def _assert_thread_not_flooded(*, invitation: VendorInvitation, asked_by: User) -> None:
+    """Refuse a new question while this asker already has too many waiting on this enquiry.
+
+    Scoped to the asker as well as the thread, so a vendor's three open questions never stop the
+    Customer from asking one. The two directions of clarification are separate conversations that
+    happen to share a table.
+    """
+    open_questions = RequirementQuestion.objects.filter(
+        invitation=invitation,
+        asked_by=asked_by,
+        answered_at__isnull=True,
+    ).count()
+    if open_questions >= MAXIMUM_OPEN_QUESTIONS_PER_THREAD:
+        raise RequirementTransitionError(
+            f"You have {open_questions} questions here still waiting for an answer. "
+            "Wait for a reply before asking another.",
+        )
+
+
 @transaction.atomic
 def ask_question(*, invitation_id: uuid.UUID, asked_by: User, question: str) -> RequirementQuestion:
     """Structured clarification: one question, answered once, on the shared timeline."""
     invitation = VendorInvitation.objects.select_related("requirement").get(pk=invitation_id)
     if invitation.requirement.status in CustomerRequirement.CLOSED_STATUSES:
         raise RequirementTransitionError("This request is closed.")
+    _assert_thread_not_flooded(invitation=invitation, asked_by=asked_by)
 
     return RequirementQuestion.objects.create(
         requirement=invitation.requirement,
@@ -797,6 +836,7 @@ def ask_vendor_question(
     if requirement.status in CustomerRequirement.CLOSED_STATUSES:
         raise RequirementTransitionError("This request is closed.")
     access.assert_customer_may_read_full_quotes(requirement)
+    _assert_thread_not_flooded(invitation=proposal.invitation, asked_by=asked_by)
 
     return RequirementQuestion.objects.create(
         requirement=requirement,

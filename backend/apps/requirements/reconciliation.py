@@ -22,8 +22,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, QuerySet, Sum
 from django.utils import timezone
 
 from apps.cases.models import OperationsCase
@@ -294,15 +296,102 @@ def _succeeded_refund_paise(attempt_id: uuid.UUID | None) -> int:
 
 # ---------------------------------------------------------------------------
 # `M2-BE-710`: the scheduled reconciliation
+#
+# ## The cursor (Wave C7)
+#
+# Until this wave the sweep read **every settled row of every product on every tick**, hourly,
+# forever. That is correct and it does not scale: the work grows with the lifetime size of the books
+# rather than with what has changed, so the hour the platform cannot afford to re-read its whole
+# history is the hour this sweep stops running — and a reconciliation that has quietly stopped is
+# indistinguishable from books that balance.
+#
+# So each product now walks forward in bounded pages and **wraps**. A keyset cursor on
+# `(created_at, id)` is stored per product; a page shorter than the batch means the product is
+# exhausted and its cursor resets to the beginning. Over a few ticks the whole book is still read;
+# in any one tick a bounded amount is.
+#
+# Two properties make this safe to do to a money check:
+#
+# * **It reads only.** A mismatch it has not reached yet is a mismatch reported an hour later, not
+#   one that is missed — and `reconcile_m2_money` already deduplicates by `(record, code)`, so a row
+#   seen on every wrap produces one open exception, not one per lap.
+# * **The cursor lives in the cache, and losing it is harmless.** A cache flush restarts every
+#   product at the beginning, which re-reads rows that were already checked and finds the same
+#   answers. There is deliberately no cursor *table*: a durable watermark on a reporting job is a
+#   migration, a row somebody can edit, and a new way for the sweep to skip work permanently.
 # ---------------------------------------------------------------------------
 
+#: Cache key prefix for the per-product keyset cursor. Versioned in the name so a change to the
+#: cursor's shape cannot be misread as a valid cursor of the old shape.
+_CURSOR_KEY = "m2:reconciliation:cursor:v1:{product}"
 
-def _booking_fee_mismatches() -> list[Mismatch]:
+#: How long a cursor survives idle. Generous — the sweep runs hourly — and expiry is a wrap, which
+#: is the same thing that happens at the end of a pass anyway.
+_CURSOR_TTL_SECONDS = 60 * 60 * 24 * 7
+
+#: A stored cursor is `(created_at, id)`. Named so the shape check below is a comparison against a
+#: fact rather than against a literal that means nothing to the next reader.
+_CURSOR_PARTS = 2
+
+
+def _read_cursor(product: str) -> tuple[datetime, uuid.UUID] | None:
+    try:
+        stored = cache.get(_CURSOR_KEY.format(product=product))
+    except Exception:
+        # A cache outage means "start from the beginning", which is the pre-C7 behaviour and is
+        # always correct — only slower. It must never stop the reconciliation from running.
+        return None
+    if not isinstance(stored, tuple) or len(stored) != _CURSOR_PARTS:
+        return None
+    moment, record_id = stored
+    if not isinstance(moment, datetime) or not isinstance(record_id, uuid.UUID):
+        return None
+    return moment, record_id
+
+
+def _write_cursor(product: str, position: tuple[datetime, uuid.UUID] | None) -> None:
+    key = _CURSOR_KEY.format(product=product)
+    try:
+        if position is None:
+            cache.delete(key)
+        else:
+            cache.set(key, position, timeout=_CURSOR_TTL_SECONDS)
+    except Exception:
+        return
+
+
+def _page(queryset: QuerySet[Any], *, product: str, batch_size: int) -> list[Any]:
+    """One bounded page of a product, ordered by `(created_at, id)`, advancing its cursor.
+
+    Answers the rows; the caller checks them. The cursor is advanced to the last row of the page,
+    or cleared when the page is short — a short page is the end of the book, and clearing is how the
+    next tick starts the lap again.
+    """
+    ordered = queryset.order_by("created_at", "id")
+    position = _read_cursor(product)
+    if position is not None:
+        moment, record_id = position
+        ordered = ordered.filter(Q(created_at__gt=moment) | Q(created_at=moment, id__gt=record_id))
+    rows = list(ordered[:batch_size])
+    if len(rows) < batch_size:
+        _write_cursor(product, None)
+    else:
+        last = rows[-1]
+        _write_cursor(product, (last.created_at, last.id))
+    return rows
+
+
+def _booking_fee_mismatches(fees: list[Any] | None = None) -> list[Mismatch]:
     """A3 booking fees, per row, in paise."""
     found: list[Mismatch] = []
-    for fee in BookingFee.objects.exclude(
-        status__in=(BookingFee.Status.OFFER_ACCEPTED, BookingFee.Status.FAILED)
-    ).select_related("payment_attempt"):
+    rows = (
+        fees
+        if fees is not None
+        else BookingFee.objects.exclude(
+            status__in=(BookingFee.Status.OFFER_ACCEPTED, BookingFee.Status.FAILED)
+        ).select_related("payment_attempt")
+    )
+    for fee in rows:
         attempt = fee.payment_attempt
         if fee.status == BookingFee.Status.WAIVED:
             # A free re-dispatch collected nothing, so a payment attempt on it would be the error.
@@ -367,15 +456,20 @@ def _booking_fee_mismatches() -> list[Mismatch]:
     return found
 
 
-def _unlock_mismatches() -> list[Mismatch]:
+def _unlock_mismatches(unlocks: list[Any] | None = None) -> list[Mismatch]:
     found: list[Mismatch] = []
-    for unlock in QuoteUnlock.objects.filter(
-        status__in=(
-            QuoteUnlock.Status.ACTIVE,
-            QuoteUnlock.Status.CONSUMED,
-            QuoteUnlock.Status.REFUNDED,
-        )
-    ).select_related("payment_attempt"):
+    rows = (
+        unlocks
+        if unlocks is not None
+        else QuoteUnlock.objects.filter(
+            status__in=(
+                QuoteUnlock.Status.ACTIVE,
+                QuoteUnlock.Status.CONSUMED,
+                QuoteUnlock.Status.REFUNDED,
+            )
+        ).select_related("payment_attempt")
+    )
+    for unlock in rows:
         attempt = unlock.payment_attempt
         if attempt is None or attempt.status not in PAYMENT_FINAL_STATES:
             found.append(
@@ -410,10 +504,15 @@ def _unlock_mismatches() -> list[Mismatch]:
     return found
 
 
-def _visit_plan_mismatches() -> list[Mismatch]:
+def _visit_plan_mismatches(plans: list[Any] | None = None) -> list[Mismatch]:
     """§4a's reconciliation, checked: `plan = Σ payouts + Σ platform shares + Σ refunds`."""
     found: list[Mismatch] = []
-    for plan in VisitPlan.objects.filter(status__in=VisitPlan.CHARGED_STATUSES):
+    rows = (
+        plans
+        if plans is not None
+        else VisitPlan.objects.filter(status__in=VisitPlan.CHARGED_STATUSES)
+    )
+    for plan in rows:
         shares = list(VisitPlanShare.objects.filter(plan=plan))
         settled = [
             share
@@ -456,7 +555,7 @@ def _visit_plan_mismatches() -> list[Mismatch]:
     return found
 
 
-def _engagement_mismatches() -> list[Mismatch]:
+def _engagement_mismatches(engagements: list[Any] | None = None) -> list[Mismatch]:
     """`M2-BE-504`'s envelope, checked from outside the constraint that enforces it.
 
     Deliberately redundant with the database check. The constraint fires on a *write*; this fires
@@ -465,7 +564,12 @@ def _engagement_mismatches() -> list[Mismatch]:
     expression, and none of those is a write the constraint saw.
     """
     found: list[Mismatch] = []
-    for engagement in Engagement.objects.exclude(status=Engagement.Status.CANCELLED):
+    rows = (
+        engagements
+        if engagements is not None
+        else Engagement.objects.exclude(status=Engagement.Status.CANCELLED)
+    )
+    for engagement in rows:
         if (
             engagement.staged_total_paise
             != engagement.total_paise + engagement.amendment_delta_paise
@@ -500,7 +604,11 @@ def _engagement_mismatches() -> list[Mismatch]:
 
 
 def find_mismatches() -> list[Mismatch]:
-    """Every M2 product, independently, in integer paise."""
+    """Every M2 product, independently, in integer paise. **Unbounded — reads the whole book.**
+
+    Kept as the exhaustive read for an operator who needs one now: a release cutover, an incident,
+    an audit. The scheduled path is `reconcile_m2_money`, which pages through the same checks.
+    """
     return [
         *_booking_fee_mismatches(),
         *_unlock_mismatches(),
@@ -509,14 +617,69 @@ def find_mismatches() -> list[Mismatch]:
     ]
 
 
-@transaction.atomic
-def reconcile_m2_money() -> int:
-    """Run the whole check and open one exception per mismatch. Returns how many it found.
+def find_mismatches_page(*, batch_size: int) -> list[Mismatch]:
+    """One bounded page of each product, advancing that product's cursor. See the section note.
 
-    One `FinancialException` per `(record, code)`, through `get_or_create`, so a mismatch that
-    persists for a week is one row somebody is working on rather than a hundred and sixty-eight.
+    Four independent cursors rather than one, because the products have wildly different row
+    counts: a single shared cursor would spend most of its laps in whichever table is largest and
+    leave the smallest one checked once a day by accident.
     """
-    mismatches = find_mismatches()
+    return [
+        *_booking_fee_mismatches(
+            _page(
+                BookingFee.objects.exclude(
+                    status__in=(BookingFee.Status.OFFER_ACCEPTED, BookingFee.Status.FAILED)
+                ).select_related("payment_attempt"),
+                product="booking_fee",
+                batch_size=batch_size,
+            )
+        ),
+        *_unlock_mismatches(
+            _page(
+                QuoteUnlock.objects.filter(
+                    status__in=(
+                        QuoteUnlock.Status.ACTIVE,
+                        QuoteUnlock.Status.CONSUMED,
+                        QuoteUnlock.Status.REFUNDED,
+                    )
+                ).select_related("payment_attempt"),
+                product="quote_unlock",
+                batch_size=batch_size,
+            )
+        ),
+        *_visit_plan_mismatches(
+            _page(
+                VisitPlan.objects.filter(status__in=VisitPlan.CHARGED_STATUSES),
+                product="visit_plan",
+                batch_size=batch_size,
+            )
+        ),
+        *_engagement_mismatches(
+            _page(
+                Engagement.objects.exclude(status=Engagement.Status.CANCELLED),
+                product="engagement",
+                batch_size=batch_size,
+            )
+        ),
+    ]
+
+
+@transaction.atomic
+def reconcile_m2_money(*, batch_size: int | None = None) -> int:
+    """Check one bounded page of each product and open an exception per mismatch found.
+
+    Returns how many mismatches **this pass** found, which is deliberately not the same number as
+    "how many exist" — that is `open_exception_summary`, read from the exceptions themselves. A
+    sweep that returned a total would have to read the whole book to compute it, which is the thing
+    the cursor exists to stop.
+
+    One `FinancialException` per `(record, code)`, so a mismatch that persists for a week is one row
+    somebody is working on rather than a hundred and sixty-eight — and, now that the sweep wraps,
+    one row rather than one per lap.
+    """
+    mismatches = find_mismatches_page(
+        batch_size=batch_size or settings.M2_RECONCILIATION_BATCH_SIZE
+    )
     for mismatch in mismatches:
         already_open = FinancialException.objects.filter(
             kind=FinancialException.Kind.RECONCILIATION_MISMATCH,

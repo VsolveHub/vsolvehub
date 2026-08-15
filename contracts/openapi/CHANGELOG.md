@@ -4,6 +4,115 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.33.0 - One enum value, and a wave that is otherwise not contractual
+
+**Wave C7 — security, observability and release readiness.** Most of this wave never reaches the
+wire: it is guards, rate limits, metrics, retention, a watchdog and runbooks. What does reach it is
+one new read, one enum value, one new request body and one field — and three of those four exist
+because a screen somebody had already built could not tell the truth without them.
+
+Additive, verified rather than asserted: every path, `operationId` and schema component was
+name-diffed against the committed 1.32.0 contract before publishing. **Paths 256 → 257, operations
+286 → 287, components 511 → 514. Removed: none.**
+
+### 1. The A3 decline alarm can finally be looked at
+
+`GET /api/v1/operations/rate-cards/decline-alarm/` — `m2_operations_decline_alarm_read`.
+
+The decline data has been recorded since C4, the threshold has been an owner-blocked configuration
+column since C2R, and `sweep_rate_card_decline_alarm` has been paging Operations by email since
+then. **Nothing published a reading.** `M2-FE-713` is specified as an alarm rather than a report —
+a sustained crew-offer decline rate is a supply failure somebody has to act on *today* — and the
+Operations panel built against the gap correctly refused to show a green state, hard-typing `armed`
+as `false` so no later edit could quietly add a pass. That was right for a missing endpoint and a
+bad permanent outcome.
+
+**Build the panel around `armed`.** It is published, not inferred, because three states need three
+different sentences and only two of them are about the numbers:
+
+* `armed: true, breached: false` — a threshold is set and the rate is under it. The only green.
+* `armed: false` — owner decision 13 is open for that card's skill, so **no alarm can ever fire**.
+  The rate is still measured and published (measurement never waits on the owner; only the
+  judgement does), and rendering it green would be a lie.
+* `armed: true` with `offers` below `minimum_offers` — a threshold exists and too few offers have
+  gone out for the rate to mean anything yet.
+
+`threshold_basis_points` and `minimum_offers` are **nullable**, because an unarmed card has neither
+and a `0` in their place would read as "alarm on everything". Unarmed cards are returned rather
+than filtered out: the most useful thing this endpoint can say on the day supply fails is *nothing
+here is watching*, and a list that omitted them would say the opposite by being short.
+`window_hours` is published so a client cannot pair a 24-hour rate with a threshold that pages on a
+different window. An empty `readings` means no card is published at all — a different and worse
+state than every card being quiet.
+
+### 2. `PartnerSkillOption` gains `id`
+
+`m2_rate_card_publish` takes `skill_id` as a uuid and `GET /api/v1/partner/skills/` was the only
+endpoint listing skills — publishing `code`, `name` and `description` and withholding the id. So
+the form that decides **what every A3 customer in a city is charged** required an operator to type
+a uuid they had no way to look up. Paste the wrong one and the price is published against the wrong
+trade, and it is priced into every booking until somebody notices.
+
+Read-only and additive; the applicant-onboarding chooser that already reads this list is unaffected.
+
+### 3. `m2_operations_assisted_proposal` takes `AssistedProposalRequest`, and consent now bites
+
+`capture_assisted_proposal` has always refused without `consent_recorded` — its own docstring, this
+endpoint's published description and `M2-AC-802` all say so — but **the view passed `true`
+unconditionally**, so the refusal could not fire and every assisted quote wrote an audit row
+asserting a consent nobody had recorded. That is worse than having no consent field: it puts a
+false statement into the record of a real vendor's price.
+
+The request body is now `AssistedProposalRequest` — `ProposalCreateRequest` plus
+`consent_recorded`. `ProposalCreateRequest` itself is **untouched**, because a vendor submitting
+their own quote is not consenting on anybody's behalf.
+
+**`consent_recorded` is optional on the wire and defaults to `false`.** A required field would be a
+breaking change; an optional one that defaults to the refusing value is additive on the wire and
+fails closed in behaviour. A client that has not been updated now gets a clear `409
+m2_requirement_transition_not_allowed` instead of silently continuing to write the false row. **The
+assisted-proposal form needs a consent checkbox**, exactly as the assisted-clarification form
+already has one.
+
+### 4. `KillSwitchScopeEnum` gains `M2_PURCHASES`
+
+`M2-BE-810` requires that a feature flag gate **new purchases only**, and this is the flag. Engaged through the existing published pair —
+`POST /api/v1/operations/kill-switches/` and `.../release/` — with the actor and reason those
+already require, and read by `apps.requirements.purchase_gates`.
+
+An admin screen that renders the scope list from the enum gets a new row and needs no other change.
+A screen that renders scopes from a hand-written list will be missing one.
+
+### What it stops, and what it deliberately does not
+
+Gated: the A3 instant booking (`m2_rate_card_book`), the A3 unlock checkout
+(`m2_requirement_unlock_create`) and the A5 visit-plan choice (`m2_requirement_visit_plan_create`).
+All three run **before any vendor has been asked for anything**.
+
+Not gated, and this is the point of the task rather than an omission: the booking-fee checkout and
+the visit-plan checkout (a vendor is already holding a slot or a Saturday, and the payment is what
+resolves that hold either way), every provider callback, stage and amendment funding, and every
+refund, forfeit, payout and cancellation. **A flag that strands a funded stage is worse than no
+flag**, and a pause must never make money harder to give back than it was to take.
+
+### The refusal it produces
+
+**`m2_purchases_paused`** — HTTP 409, **retryable**. New, and not in the frozen 29 codes, so until
+`packages/api-client/src/errors.ts` carries it a client falls through to the generic refusal path.
+Logged in `frontend-execution-plan.md` §7.
+
+Deliberately its own code rather than reusing `m2_policy_unavailable`: that one means "nobody has
+decided this yet, and only an owner decision fixes it", and this one means "we decided, and we have
+stopped selling for a moment". Time helps with the second and not the first, which is why only this
+one is retryable.
+
+### Not published, and named so it is not looked for
+
+The **erasure workflow** (`M2-BE-805`) ships as a management command,
+`manage.py redact_m2_requirement`, not as an endpoint. It is rare, irreversible and needs a named
+human on the audit row, and no screen consumes it yet. An Operations API surface for it is an M3
+item and is recorded in §7 rather than half-built here.
+
 ## 1.32.0 - What happens when it goes wrong, and the workspace that fixes it
 
 **Wave C6.** Twenty-three new paths: seven a Customer or a Partner calls, sixteen only Operations

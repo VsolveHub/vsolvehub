@@ -22,6 +22,7 @@ from apps.catalog.models import M2VariantConfiguration, ServiceVariant
 from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.locations.models import Address, ServiceArea
+from apps.requirements import metrics
 from apps.requirements.exceptions import (
     LifecycleNotSupportedError,
     RequirementDuplicateError,
@@ -473,4 +474,15 @@ def record_transition(
         actor=actor,
         reason_code=reason_code,
         reason=reason,
+    )
+    # `M2-BE-806`. The whole M2 funnel is emitted from here and nowhere else, because this is the
+    # one write every M2 command already makes: a counter emitted beside the audit row it counts
+    # cannot drift from it, and a command that starts recording a new `reason_code` is measured the
+    # day it ships. `reason` is deliberately **not** a label — it carries free text (`"visit_plan:…
+    # for 4900 paise"`, an operator's note) and a metric label is a log line.
+    metrics.record_transition(
+        requirement=requirement,
+        from_status=from_status,
+        to_status=to_status,
+        reason_code=reason_code,
     )

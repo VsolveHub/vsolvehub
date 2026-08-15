@@ -468,3 +468,33 @@ class BookingFeePaymentPendingError(RequirementDomainError):
             status_code=409,
             retryable=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wave C7: security, observability and release readiness.
+# ---------------------------------------------------------------------------
+
+
+class PurchasesPausedError(RequirementDomainError):
+    """Operations has paused **new** M2 purchases (`M2-BE-810`).
+
+    Deliberately its own code rather than `m2_policy_unavailable`. The two say opposite things to
+    the person reading them: `m2_policy_unavailable` means "nobody has decided this yet, and the
+    recovery is an owner decision", while this means "we have decided, and we have deliberately
+    stopped selling for now". Support cannot help with the first; time can help with the second,
+    which is why this one is **retryable** and the other is not.
+
+    Raised only on paths that would take a *new* commercial commitment. Nothing that continues,
+    settles or refunds work already in flight consults the gate — see
+    `apps.requirements.purchase_gates` for the list and the reasoning.
+    """
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_purchases_paused",
+            message=message
+            or "We have paused new bookings for this service for a moment. Anything already "
+            "under way is unaffected. Try again shortly.",
+            status_code=409,
+            retryable=True,
+        )

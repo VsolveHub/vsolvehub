@@ -64,6 +64,71 @@ class Metric:
     NOTIFICATION_FAILED = "notification.failed"
 
 
+class M2Metric:
+    """M2's own counters (`M2-BE-806`), named once, for `README.md`'s success measures.
+
+    ## Why so few names for so many measures
+
+    `Django_Next.js_Plan/M2/README.md` §"Success measures" lists fifteen things a launch category
+    declares a target for, and almost all of them are **ratios of two counts on the same funnel**:
+    crew fill rate is accepted-and-confirmed over booked, fallback rate is fallen-back over booked,
+    unlock conversion is unlocked over quoted, plan conversion is charged over chosen. A separate
+    metric per ratio would mean fifteen emitters that can each drift from the transition they claim
+    to count.
+
+    So the funnel is emitted **once**, from `apps.requirements.services.record_transition` — the
+    single audited spine every M2 command already writes to — carrying the `reason_code` as a
+    label. `booked_at_published_rate`, `crew_offer_accepted`, `booking_fee_verified`,
+    `fell_back_to_quote_flow`, `first_visit_slot_confirmed`, `estimate_delivered`,
+    `proposal_selected`, `day_settled_confirmed` and `cash_demand_reported` are all already written
+    there, so every rate above is two `label` filters apart downstream. The task says *emit them,
+    do not compute a dashboard*, and this is what that distinction buys: a counter that cannot
+    disagree with the audit trail, because it is emitted from inside it.
+
+    What a funnel counter genuinely cannot give is **elapsed time**. "Time to confirmed crew" and
+    "time to first confirmed visit, against the declared promise" need the clock read at the moment
+    of confirmation and compared with the SLA that was in force, so those two get their own metric
+    with a duration and a `within_sla` label on it.
+    """
+
+    #: One row of the requirement audit trail, as a counter. Labels: `archetype`, `from_status`,
+    #: `to_status`, `reason_code`. The denominator and the numerator of nearly every published rate.
+    REQUIREMENT_TRANSITION = "m2.requirement.transition"
+
+    #: `M2-BE-806`'s two clocks, both against the SLA that was in force at the time. Labels carry
+    #: `elapsed_seconds`, `within_sla` (`true` / `false` / `no_promise`) and `variant_id`.
+    #: `no_promise` is a real third answer, not a missing value: an unset `first_visit_sla_hours`
+    #: means the owner promised nothing, and scoring that as a breach would invent a target.
+    CREW_CONFIRMED = "m2.crew.time_to_confirmed"
+    FIRST_VISIT_CONFIRMED = "m2.visit.time_to_first_confirmed"
+
+    #: A new purchase refused because Operations paused the product (`M2-BE-810`). Emitted so a
+    #: pause is visible as demand that was turned away rather than only as a switch somebody flipped
+    #: — the two numbers together are what says whether the pause cost anything.
+    PURCHASE_PAUSED = "m2.purchase.paused"
+
+    #: An Operations touch on one request (`M2-BE-715`), against the configured budget. Labels
+    #: carry `action`, `touch_count` and `budget` — where `budget` may be `unset`, because
+    #: measurement never waits on the owner and only the judgement does.
+    OPERATIONS_TOUCH = "m2.operations.touch"
+
+    #: Abuse controls (`M2-BE-803`). A throttled request, and the one case that must never be
+    #: silent: the rate limiter could not reach its cache and therefore allowed a request it may
+    #: have been supposed to refuse.
+    REQUEST_THROTTLED = "m2.abuse.request_throttled"
+    THROTTLE_CACHE_UNAVAILABLE = "m2.abuse.throttle_cache_unavailable"
+
+    #: Retention and redaction (`M2-BE-805`). A redaction that ran, and a deletion request that a
+    #: financial or legal hold outranked.
+    SUBJECT_REDACTED = "m2.retention.subject_redacted"
+    DELETION_BLOCKED_BY_HOLD = "m2.retention.deletion_blocked_by_hold"
+    ATTACHMENT_ACCESS_EXPIRED = "m2.retention.attachment_access_expired"
+
+    #: Stuck asynchronous work (`M2-BE-808`). Emitted by the watchdog sweep, one per class of stuck
+    #: work found, so an alert can fire on the number rather than on a log line's wording.
+    ASYNC_WORK_STUCK = "m2.async.work_stuck"
+
+
 def emit(metric: str, value: int = 1, **labels: Any) -> None:
     """Record one observation.
 

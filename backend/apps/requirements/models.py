@@ -16,6 +16,24 @@ from apps.catalog.models import M2VariantConfiguration, ServiceVariant
 from apps.locations.models import Address, ServiceArea
 from apps.partners.models import PartnerProfile
 
+#: The six terminal requirement statuses, at module scope so the `requirements_closed_has_timestamp`
+#: check constraint reads the same list `CustomerRequirement.CLOSED_STATUSES` publishes.
+#:
+#: Hoisted in Wave C7's constraint/tuple sweep. It was a hand-copied six-string list inside `Meta`
+#: beside an identical class attribute, which is the drift `BOOKING_FEE_NON_BLOCKING_STATUSES`
+#: already records the cost of: a nested `Meta` body cannot see its enclosing class's namespace, so
+#: a constraint either reads a list from out here or copies one — and a copied list drifts while
+#: `makemigrations --check` stays green, because model state and migration state agree with each
+#: other and both disagree with the code.
+REQUIREMENT_CLOSED_STATUSES: Final[tuple[str, ...]] = (
+    "CLOSED_NO_SUPPLY",
+    "CLOSED_SLA_BREACH",
+    "CLOSED_EXPIRED",
+    "CLOSED_ABANDONED",
+    "CLOSED_COMPLETE",
+    "CLOSED_CANCELLED",
+)
+
 
 class CustomerRequirement(models.Model):
     """One thing a Customer needs done, captured in four screens and priced by nobody yet."""
@@ -46,14 +64,9 @@ class CustomerRequirement(models.Model):
         Status.QUOTES_READY,
         Status.UNLOCKED,
     )
-    CLOSED_STATUSES = (
-        Status.CLOSED_NO_SUPPLY,
-        Status.CLOSED_SLA_BREACH,
-        Status.CLOSED_EXPIRED,
-        Status.CLOSED_ABANDONED,
-        Status.CLOSED_COMPLETE,
-        Status.CLOSED_CANCELLED,
-    )
+    #: Bound from module scope so the closed-has-a-timestamp constraint and every `status__in`
+    #: read in `apps.requirements` are looking at one list rather than two copies of it.
+    CLOSED_STATUSES = REQUIREMENT_CLOSED_STATUSES
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer = models.ForeignKey(
@@ -126,6 +139,18 @@ class CustomerRequirement(models.Model):
     submitted_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     closed_reason_code = models.SlugField(max_length=80, blank=True)
+    #: Wave C7 (`M2-BE-805`). When the personal content of this request was scrubbed — the free-text
+    #: description, the free-text answers, the clarification threads and any attachment bytes.
+    #:
+    #: A column rather than a derived guess, because a redacted request and a sparse one look
+    #: identical from the outside, and the difference is the whole answer to "what happened to my
+    #: data". `apps.requirements.retention` is the only writer and it is reachable only through an
+    #: audited Operations command.
+    #:
+    #: The **money rows are untouched** by that command, which is the rule the whole module exists
+    #: to enforce: a financial hold outranks an erasure request, and a ledger entry, a fee, a
+    #: payment attempt and an invoice number are not personal content.
+    redacted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -143,16 +168,7 @@ class CustomerRequirement(models.Model):
                 name="requirements_submitted_has_timestamp",
             ),
             models.CheckConstraint(
-                condition=~models.Q(
-                    status__in=(
-                        "CLOSED_NO_SUPPLY",
-                        "CLOSED_SLA_BREACH",
-                        "CLOSED_EXPIRED",
-                        "CLOSED_ABANDONED",
-                        "CLOSED_COMPLETE",
-                        "CLOSED_CANCELLED",
-                    )
-                )
+                condition=~models.Q(status__in=REQUIREMENT_CLOSED_STATUSES)
                 | models.Q(closed_at__isnull=False),
                 name="requirements_closed_has_timestamp",
             ),
@@ -221,6 +237,15 @@ class RequirementAttachment(models.Model):
     #: Populated for voice notes so a vendor who does not speak the language can still be matched.
     transcript = models.TextField(blank=True)
     transcript_language = models.CharField(max_length=16, blank=True)
+    #: Wave C7 (`M2-BE-805`). When the stored object behind this row was deleted, by the retention
+    #: sweep or by an erasure request.
+    #:
+    #: The **row survives its bytes**, deliberately. A vendor was shown this attachment and a
+    #: `RequirementSnapshot` records that they were; deleting the row would leave a snapshot
+    #: pointing at nothing and quietly rewrite what a vendor saw when they quoted. So the metadata
+    #: — kind, size, hash, scan verdict — stays as the record of what existed, and the photograph
+    #: of somebody's home does not.
+    purged_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -820,6 +845,12 @@ class M2AccessPrice(models.Model):
         return f"{self.kind}:{self.plan_size}:{self.amount_paise}"
 
 
+#: The two unlock statuses that entitle a Customer to read full quotes. Module scope for the same
+#: reason as `REQUIREMENT_CLOSED_STATUSES`: the constraint inside `QuoteUnlock.Meta` cannot see the
+#: class attribute, so before Wave C7 it carried its own copy of this pair.
+QUOTE_UNLOCK_READABLE_STATUSES: Final[tuple[str, ...]] = ("ACTIVE", "CONSUMED")
+
+
 class QuoteUnlock(models.Model):
     """A3 only. What the Customer bought when they paid to read the delivered quotes.
 
@@ -835,8 +866,9 @@ class QuoteUnlock(models.Model):
         REFUNDED = "REFUNDED", "Refunded"
         FAILED = "FAILED", "Failed"
 
-    #: Statuses in which the Customer may read full quotes.
-    READABLE_STATUSES = (Status.ACTIVE, Status.CONSUMED)
+    #: Statuses in which the Customer may read full quotes. Bound from module scope so the
+    #: active-unlock-has-a-timestamp constraint below reads this list rather than a copy of it.
+    READABLE_STATUSES = QUOTE_UNLOCK_READABLE_STATUSES
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.ForeignKey(
@@ -890,7 +922,7 @@ class QuoteUnlock(models.Model):
                 name="requirements_one_live_unlock_per_requirement",
             ),
             models.CheckConstraint(
-                condition=~models.Q(status__in=("ACTIVE", "CONSUMED"))
+                condition=~models.Q(status__in=QUOTE_UNLOCK_READABLE_STATUSES)
                 | models.Q(activated_at__isnull=False),
                 name="requirements_active_unlock_has_a_timestamp",
             ),
@@ -902,6 +934,11 @@ class QuoteUnlock(models.Model):
 
     def __str__(self) -> str:
         return f"{self.requirement_id}:{self.status}"
+
+
+#: The two plan statuses in which the Customer's money has been collected. Module scope for the
+#: same reason as the two tuples above.
+VISIT_PLAN_CHARGED_STATUSES: Final[tuple[str, ...]] = ("ACTIVE", "SETTLED")
 
 
 class VisitPlan(models.Model):
@@ -922,7 +959,9 @@ class VisitPlan(models.Model):
         SETTLED = "SETTLED", "Every share earned or refunded"
 
     #: Statuses in which the plan has been paid for and its shares are live.
-    CHARGED_STATUSES = (Status.ACTIVE, Status.SETTLED)
+    #: Bound from module scope so the charged-plan-has-a-timestamp constraint below reads this
+    #: list rather than a copy of it.
+    CHARGED_STATUSES = VISIT_PLAN_CHARGED_STATUSES
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.OneToOneField(
@@ -981,7 +1020,7 @@ class VisitPlan(models.Model):
                 name="requirements_visit_plan_price_positive",
             ),
             models.CheckConstraint(
-                condition=~models.Q(status__in=("ACTIVE", "SETTLED"))
+                condition=~models.Q(status__in=VISIT_PLAN_CHARGED_STATUSES)
                 | models.Q(charged_at__isnull=False),
                 name="requirements_charged_plan_has_a_timestamp",
             ),

@@ -176,9 +176,22 @@ class PartnerConsentDocumentSerializer(serializers.ModelSerializer[PartnerConsen
 
 
 class PartnerSkillOptionSerializer(serializers.ModelSerializer[Skill]):
+    """A skill a Partner can claim — and, since Wave C7, the id a rate card is published against.
+
+    `id` was added because of what its absence did on a different screen. `m2_rate_card_publish`
+    takes `skill_id` as a uuid, and this was the only endpoint that lists skills; publishing
+    `code`, `name` and `description` and withholding the id meant the form that decides **what
+    every A3 customer in a city is charged** required an operator to type a uuid they had no way to
+    look up. Paste the wrong one and the price is published against the wrong trade, and it is
+    priced into every booking made until somebody notices.
+
+    Read-only and additive: the applicant-onboarding chooser that already reads this list is
+    unaffected by a field it does not use.
+    """
+
     class Meta:
         model = Skill
-        fields = ("code", "name", "description")
+        fields = ("id", "code", "name", "description")
         read_only_fields = fields
 
 

@@ -113,3 +113,10 @@ disable_error_code = ["type-arg"]
 module = "apps.*.tasks"
 # Celery's shared_task decorator is not fully typed.
 disable_error_code = ["untyped-decorator"]
+
+[[tool.mypy.overrides]]
+# Same reason one block up, for Celery's signal decorators rather than its task decorator.
+# `common.observability.tasks` is the correlation-id bridge (`M2-BE-808`) and is nothing but three
+# `@signal.connect` handlers, so without this every function in it is reported untyped.
+module = "common.observability.tasks"
+disable_error_code = ["untyped-decorator", "import-untyped"]

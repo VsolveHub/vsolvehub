@@ -24,3 +24,10 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 app = Celery("vsolve_hub")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
+# Imported for its `@…signal.connect` side effects (`M2-BE-808`): the request id crosses the queue
+# so a booking fee's callback, the task that opens the engagement and the sweep that settles it all
+# log under one correlation id. Imported here rather than in an `AppConfig.ready` because the beat
+# and worker entrypoints load this module and a scheduled task published from beat has no Django
+# request to hang a signal off.
+from common.observability import tasks as _observability_tasks  # noqa: E402, F401

@@ -42,6 +42,15 @@ class KillSwitch(models.Model):
         DISPATCH = "DISPATCH", "Partner dispatch"
         SERVICE_AREA = "SERVICE_AREA", "One service area"
         SERVICE = "SERVICE", "One service"
+        #: Wave C7 (`M2-BE-810`). Stops M2 from taking **new** commercial commitments — the A3
+        #: instant booking, the A3 unlock checkout and the A5 visit-plan choice and checkout —
+        #: while every in-flight requirement, funded stage, refund, forfeit and payout continues.
+        #: `target` is a `ServiceVariant` id when the pause is for one product, blank for all M2.
+        #:
+        #: A separate scope rather than reusing `PAYMENTS`, because they answer different
+        #: questions: `PAYMENTS` is "the provider is down, take no money at all", and this is "stop
+        #: selling this, the money rails are fine". `apps.requirements.purchase_gates` reads both.
+        M2_PURCHASES = "M2_PURCHASES", "New M2 purchases"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     scope = models.CharField(max_length=20, choices=Scope.choices)

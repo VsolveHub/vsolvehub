@@ -43,7 +43,7 @@ from apps.partners.models import (
     PartnerCrewMembership,
     PartnerProfile,
 )
-from apps.requirements import matching, rate_cards, services
+from apps.requirements import matching, purchase_gates, rate_cards, services
 from apps.requirements.exceptions import (
     InvitationTransitionError,
     LifecycleNotSupportedError,
@@ -60,6 +60,15 @@ from apps.requirements.models import (
 )
 
 A3 = ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+
+#: How far back the decline-rate alarm looks. A day, because ADR-0009's failure mode is a rate that
+#: went stale *this week* and a window long enough to smooth that out is a monthly report wearing
+#: an alarm's clothes.
+#:
+#: Lives here rather than in `tasks.py` since Wave C7: the sweep is no longer the only reader.
+#: `M2-BE-806` publishes the same numbers to Operations, and a screen showing a rate over one window
+#: beside a threshold that pages on another is worse than no screen.
+DECLINE_ALARM_WINDOW_HOURS = 24
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +146,10 @@ def book_at_published_rate(
         )
     if requirement.status != CustomerRequirement.Status.DRAFT:
         raise RequirementTransitionError("This request has already been sent to vendors.")
+    # `M2-BE-810`, and the earliest of the three gated doors. Refused here, no lead's phone rings
+    # for a job that is about to be turned down, and the Customer keeps a `DRAFT` they can submit
+    # the moment Operations releases the switch — nothing they typed is thrown away.
+    purchase_gates.assert_new_purchase_allowed(requirement, door="a3_instant_booking")
 
     card = rate_cards.rate_card_for_requirement(requirement)
     # Reading the preset schema before submitting is a guard, not a formality: an instant booking
@@ -785,6 +798,89 @@ def _alarm_policy_for_card(card: RateCard) -> rate_cards.DeclineAlarmPolicy | No
     if configuration is None:
         return None
     return rate_cards.decline_alarm_policy(configuration)
+
+
+@dataclass(frozen=True, slots=True)
+class DeclineReading:
+    """One card's decline rate **and whether an alarm could fire on it at all** (`M2-BE-806`).
+
+    `breached_decline_rates` answers only the cards that are alarming, which is the right shape for
+    a sweep that pages people and the wrong shape for a screen. A screen that only ever receives
+    breaches cannot distinguish three states that need three different sentences:
+
+    * **armed and quiet** — a threshold is configured and the rate is under it. The only genuinely
+      green state.
+    * **not armed** — owner decision 13 is still open for this card's skill, so no alarm can ever
+      fire. Rendering that as green would be a lie, and it is exactly what the Operations panel
+      refused to do while there was no endpoint to ask.
+    * **armed, quiet, and measuring nothing** — a threshold exists but too few offers have gone out
+      for a rate to mean anything yet. `minimum_offers` is the knob that says so.
+
+    So `armed` is published beside the numbers rather than inferred from them, and
+    `threshold_basis_points` is nullable because an unarmed card genuinely has no threshold.
+    """
+
+    card: RateCard
+    armed: bool
+    offers: int
+    declines: int
+    rate_basis_points: int
+    threshold_basis_points: int | None
+    minimum_offers: int | None
+    breached: bool
+
+
+def decline_rate_readings(*, window_hours: int, at: datetime | None = None) -> list[DeclineReading]:
+    """Every live card's decline rate, armed or not. The read behind the Operations alarm panel.
+
+    Deliberately returns unarmed cards rather than filtering them out. The single most useful thing
+    this endpoint can tell an operator on the day A3 supply starts failing is *"nothing here is
+    watching"* — and a list that silently omitted the unconfigured cards would say the opposite by
+    being short.
+    """
+    moment = at or timezone.now()
+    since = moment - timedelta(hours=window_hours)
+    readings: list[DeclineReading] = []
+    for card in RateCard.objects.select_related("service_area", "skill").filter(
+        effective_from__lte=moment.date()
+    ):
+        policy = _alarm_policy_for_card(card)
+        if policy is None:
+            # Counted with a real rate anyway. The measurement does not depend on the owner having
+            # decided a threshold — only the judgement does — which is the same asymmetry
+            # `pricing.operations_touch_budget` draws one module along.
+            unarmed = decline_rate_for_card(
+                card=card,
+                since=since,
+                policy=rate_cards.DeclineAlarmPolicy(threshold_basis_points=0, minimum_offers=0),
+            )
+            readings.append(
+                DeclineReading(
+                    card=card,
+                    armed=False,
+                    offers=unarmed.offers,
+                    declines=unarmed.declines,
+                    rate_basis_points=unarmed.rate_basis_points,
+                    threshold_basis_points=None,
+                    minimum_offers=None,
+                    breached=False,
+                )
+            )
+            continue
+        reading = decline_rate_for_card(card=card, since=since, policy=policy)
+        readings.append(
+            DeclineReading(
+                card=card,
+                armed=True,
+                offers=reading.offers,
+                declines=reading.declines,
+                rate_basis_points=reading.rate_basis_points,
+                threshold_basis_points=reading.threshold_basis_points,
+                minimum_offers=policy.minimum_offers,
+                breached=reading.breached,
+            )
+        )
+    return readings
 
 
 def breached_decline_rates(*, window_hours: int, at: datetime | None = None) -> list[DeclineRate]:
