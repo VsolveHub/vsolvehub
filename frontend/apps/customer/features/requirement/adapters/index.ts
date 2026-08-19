@@ -20,6 +20,7 @@ import {
   type LifecycleVerdict,
 } from "../model/state";
 import { MAXIMUM_ATTACHMENTS, formatBytes, maximumSizeFor } from "../model/upload";
+import { FIT_OUT_SERVICE_OPTIONS } from "../model/fit-out-services";
 
 /**
  * The only code that knows what the wire looks like.
@@ -32,7 +33,7 @@ import { MAXIMUM_ATTACHMENTS, formatBytes, maximumSizeFor } from "../model/uploa
  *
  * | Was | Is | Where |
  * |---|---|---|
- * | `is_date_flexible: boolean` | `flexibility_days: number`, source of truth | `toDraftIntent` / `flexibilityDaysFor` |
+ * | `is_date_flexible: boolean` | `flexibility_days: number`, source of truth | `toDraftIntent`, which now reads the integer directly |
  * | `AttachmentKind: "PHOTO"` | `"IMAGE"` | the model's own union, renamed |
  * | `ScanStatus: "CLEAN" \| "INFECTED"` | `PENDING \| VERIFIED \| INFECTED \| FAILED` | `toScanOutcome` |
  *
@@ -80,8 +81,33 @@ export interface RequirementQuestionView {
   help?: string;
   kind: "text" | "number" | "choice" | "boolean";
   /** Present for `choice` only. */
-  options?: readonly { value: string; label: string }[];
+  options?: readonly { value: string; label: string; description?: string }[];
   required: boolean;
+  /**
+   * The catalogue's floor for a `number`, when it publishes one.
+   *
+   * Read so a control can offer the range the server will actually accept — a
+   * stepper that can reach zero people renders a booking the rate card refuses
+   * to price, and the refusal lands on the Customer after they have filled the
+   * rest of the form. Absent where Operations set no rule, and a caller must
+   * then choose its own floor rather than assume one.
+   */
+  minimum?: number;
+}
+
+/**
+ * `minimum` out of the catalogue's free-form `validation_rules`.
+ *
+ * The field is published untyped — `readOnly` with no schema — so this narrows
+ * rather than casts. A rule shape this build does not recognise yields
+ * `undefined` and the control falls back to its own floor, which is the safe
+ * direction: too permissive a stepper is refused by the server, where too
+ * restrictive a one silently prevents a booking that was allowed.
+ */
+function readMinimum(rules: unknown): number | undefined {
+  if (rules === null || typeof rules !== "object" || Array.isArray(rules)) return undefined;
+  const value = (rules as Record<string, unknown>).minimum;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -150,14 +176,65 @@ export function toQuestionSet(
       help: question.help_text === "" ? undefined : question.help_text,
       kind,
       required: question.is_required,
+      minimum: kind === "number" ? readMinimum(question.validation_rules) : undefined,
       options:
         kind === "choice"
-          ? question.options.map((option) => ({ value: option.code, label: option.label }))
+          ? question.options.map((option) => ({
+              value: option.code,
+              label: option.label,
+              description: option.description === "" ? undefined : option.description,
+            }))
           : undefined,
     });
   }
 
   return { questions, unsupported };
+}
+
+const FIT_OUT_OPTIONS: RequirementQuestionView["options"] = FIT_OUT_SERVICE_OPTIONS.map(
+  (option) => ({
+    value: option.value,
+    label: option.label,
+    description: option.description,
+  }),
+);
+
+/**
+ * The live demo database may still publish the old A5 text question. Keep the
+ * Customer surface selection-only while the seed/DB catches up by using the
+ * existing answer code when needed; a text-backed `deliverable` still accepts
+ * the selected option code as its value.
+ */
+export function selectionOnlyQuestionSet(serviceSlug: string, set: QuestionSet): QuestionSet {
+  if (serviceSlug !== "interior-fit-out-project") return set;
+
+  // A catalogue that publishes more than the style question is answering the
+  // brief properly — the space, the size, the budget — and collapsing it would
+  // throw those away and send a vendor the same one-line enquiry this narrowing
+  // was a workaround for. The collapse stays for a variant that still has only
+  // the one question, so an environment that has not been reseeded keeps
+  // working.
+  if (set.questions.length > 1) return set;
+
+  const source =
+    set.questions.find((question) => question.code === "fit_out_style") ??
+    set.questions.find((question) => question.code === "deliverable");
+
+  if (source === undefined) return set;
+
+  return {
+    questions: [
+      {
+        code: source.code,
+        label: "What kind of fit-out do you need?",
+        help: "Pick the closest match. We fill in the rest from the option you choose.",
+        kind: "choice",
+        required: true,
+        options: source.options && source.options.length > 0 ? source.options : FIT_OUT_OPTIONS,
+      },
+    ],
+    unsupported: [],
+  };
 }
 
 /** A probable duplicate, ready to render. */
@@ -338,7 +415,8 @@ export interface DraftIntent {
   answers: Readonly<Record<string, unknown>>;
   addressId: string | null;
   serviceBy: string | null;
-  isDateFlexible: boolean;
+  /** Days either side the Customer can move the start. Zero means exact. */
+  flexibilityDays: number;
   additionalDetails: string;
   language: string | null;
 }
@@ -348,37 +426,16 @@ export function toDraftIntent(draft: RequirementDraft): DraftIntent {
     answers: readAnswers(draft.answers),
     addressId: draft.address_id,
     serviceBy: draft.service_by,
-    // The integer is the source of truth and the boolean is the server's own
-    // derivation of it (`flexibility_days > 0`). Read the boolean rather than
-    // re-deriving it, so the two cannot disagree about what zero days means.
-    isDateFlexible: draft.is_date_flexible,
+    // The integer, which is the source of truth. `is_date_flexible` is the
+    // server's own derivation of it (`flexibility_days > 0`) and carries less:
+    // it cannot say *how* flexible, which is the whole reason the capture screen
+    // now asks in bands.
+    flexibilityDays: draft.flexibility_days,
     additionalDetails: draft.additional_details,
     language: draft.language === "" ? null : draft.language,
   };
 }
 
-/**
- * How many days of flexibility a ticked checkbox means.
- *
- * The one place the boolean/integer mismatch has to be resolved in the writing
- * direction, and the only value in this feature that is neither the Customer's
- * nor the server's. `PATCH /requirements/{id}/` accepts `flexibility_days` and
- * not `is_date_flexible`, while screen 2 asks a yes/no question — deliberately,
- * because "how many days" is a question most Customers cannot answer about a
- * job they have not scoped.
- *
- * Three, because "a few days" is what the control says and three is what "a
- * few" means. It is stated here rather than buried in a call site so that if
- * either the copy or the contract changes, the other one is visible in the same
- * file. If matching ever needs a real window, screen 2 asks for one and this
- * constant goes away — it must not quietly become a default that outlives the
- * question it stands in for.
- */
-export const FLEXIBLE_WINDOW_DAYS = 3;
-
-export function flexibilityDaysFor(isDateFlexible: boolean): number {
-  return isDateFlexible ? FLEXIBLE_WINDOW_DAYS : 0;
-}
 
 export function toDuplicateView(duplicate: ProbableDuplicate, createdLabel: string): DuplicateView {
   return {

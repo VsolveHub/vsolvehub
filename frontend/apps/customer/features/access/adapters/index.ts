@@ -291,19 +291,81 @@ export interface VisitSlotRow {
    * The professional's name, once we are entitled to publish it.
    *
    * Disclosure is per vendor and starts at slot confirmation — someone entering
-   * a home must be nameable. **The visit read carries no vendor at all**
-   * (`SiteVisit` publishes no partner and `VendorCardSerializer` is published on
-   * no path), so the only identity this app can reach is the one on a delivered
-   * estimate. A slot with a confirmed time and no estimate yet therefore has no
-   * name here, and the row says so rather than inventing one. Logged in
-   * `frontend-execution-plan.md` §7.
+   * a home must be nameable.
+   *
+   * This used to be reachable only through a *delivered estimate*, because the
+   * visit read published no vendor at all, so a confirmed slot with nobody
+   * named on it was the ordinary case: the screen whose whole job is to say who
+   * is about to knock on the door was the one screen that could not say. The
+   * visit now publishes its own vendor (contract 1.39.0), and the estimate map
+   * is kept only as a fallback for a visit whose disclosure window has not
+   * opened but whose estimate has already landed.
    */
   vendorName: string | null;
+  /**
+   * Everything else about the professional, or null before disclosure.
+   *
+   * A single nullable object rather than four nullable fields, because they are
+   * one fact — "we are allowed to say who this is" — and four flags can
+   * represent states that do not exist, like a photograph with no name.
+   */
+  vendor: VisitVendorView | null;
   money: SlotMoneyView;
   /** When a completed visit stops being allowed to produce an estimate. */
   estimateDueAt: string | null;
   canConfirmArrival: boolean;
   canReportNoShow: boolean;
+}
+
+/**
+ * The professional on a confirmed visit, as a screen needs them.
+ *
+ * `photoUrl` is a short-lived signed link and is null for four different server
+ * reasons — no photograph, one in review, one refused, storage unreachable. They
+ * are collapsed deliberately: every one of them renders as initials, and a
+ * client that told them apart would be describing a partner's review status to
+ * a Customer.
+ */
+export interface VisitVendorView {
+  displayName: string;
+  businessType: string;
+  isVerified: boolean;
+  experienceYears: number;
+  photoUrl: string | null;
+  /** What the avatar falls back to. Derived from the real name, never invented. */
+  initials: string;
+}
+
+/**
+ * Up to two letters from a name, for the avatar that has no photograph.
+ *
+ * Not a placeholder in the sense this codebase forbids: it is a rendering of the
+ * vendor's actual name, not stand-in data. A name that yields nothing — all
+ * punctuation, an empty string the server should never send — gives an empty
+ * string back, and the avatar draws its neutral shape rather than a stray glyph.
+ */
+export function vendorInitials(displayName: string): string {
+  const words = displayName
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter((word) => word.length > 0);
+  if (words.length === 0) return "";
+  const first = words[0]?.[0] ?? "";
+  const second = words.length > 1 ? (words[words.length - 1]?.[0] ?? "") : "";
+  return `${first}${second}`.toUpperCase();
+}
+
+function toVendorView(visit: SiteVisit | null): VisitVendorView | null {
+  const vendor = visit?.vendor ?? null;
+  if (vendor === null) return null;
+  return {
+    displayName: vendor.display_name,
+    businessType: vendor.business_type,
+    isVerified: vendor.is_verified,
+    experienceYears: vendor.experience_years,
+    photoUrl: vendor.photo_url,
+    initials: vendorInitials(vendor.display_name),
+  };
 }
 
 export interface VisitTrackerView {
@@ -364,7 +426,14 @@ export function toVisitTrackerView(
       state: visit === null ? "awaiting" : visitSlotState(visit, isCharged),
       scheduledFor: visit?.scheduled_for ?? null,
       timeZone: visit?.timezone ?? null,
-      vendorName: visit === null ? null : (vendorNames.get(visit.id) ?? null),
+      // The visit's own vendor first; the estimate map only as the fallback it
+      // now is. Preferring the map would keep showing the estimate-derived name
+      // on a visit the server has already disclosed properly.
+      vendorName:
+        visit === null
+          ? null
+          : (visit.vendor?.display_name ?? vendorNames.get(visit.id) ?? null),
+      vendor: toVendorView(visit),
       money: toSlotMoney(share),
       estimateDueAt: visit?.estimate_due_at ?? null,
       canConfirmArrival: visit !== null && canConfirmArrival(visit, isCharged),

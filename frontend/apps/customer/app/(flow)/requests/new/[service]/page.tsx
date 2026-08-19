@@ -44,10 +44,17 @@ const M2_ARCHETYPES = ["A3_TIME_BLOCK", "A5_CUSTOM_PROJECT"];
 
 export default async function NewRequestForServicePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ service: string }>;
+  searchParams?: Promise<{ selected_service?: string | string[] }>;
 }) {
   const { service: serviceSlug } = await params;
+  const query = await searchParams;
+  const selectedService =
+    typeof query?.selected_service === "string"
+      ? query.selected_service
+      : (query?.selected_service?.[0] ?? null);
   const service = await getServiceConfiguration(serviceSlug);
 
   if (service === null) notFound();
@@ -97,7 +104,7 @@ export default async function NewRequestForServicePage({
       {/* No route props. They were functions, and a Server Component cannot hand
           a function to a Client Component — see `@/lib/routes`, which both sides
           import instead. */}
-      <RequirementFlow service={service} variant={variant} />
+      <RequirementFlow service={service} variant={variant} initialSelection={selectedService} />
     </main>
   );
 }

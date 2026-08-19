@@ -143,3 +143,7 @@ class ProposalCursorPagination(StrictCursorPagination):
 
 class EngagementCursorPagination(StrictCursorPagination):
     page_size = 20
+    # Was missing, and inherited DRF's default `-created` — a column no model in this project
+    # has. Every read of `/api/v1/engagements/` was a 500 from `FieldError`, which is why the
+    # base class now refuses a subclass that does not name its own ordering.
+    ordering = ("-created_at", "id")

@@ -55,8 +55,11 @@ export function QuoteCard({
 
   return (
     <article
+      // The comparison table's "Read it" links here. `scroll-mt` keeps the
+      // heading clear of the sticky page chrome when it does.
+      id={`estimate-${card.proposalId}`}
       aria-labelledby={headingId}
-      className="rounded-card border border-line bg-surface p-4"
+      className="scroll-mt-6 rounded-card border border-line bg-surface p-4"
     >
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -14,8 +14,14 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.partners.photos import partner_photo_url
 from apps.requirements.models import Proposal, RequirementQuestion, SiteVisit, VendorInvitation
-from apps.requirements.selectors import QUESTION_ASKER_ROLES, question_asker_role
+from apps.requirements.selectors import (
+    QUESTION_ASKER_ROLES,
+    question_asker_role,
+    vendor_business_type,
+    verified_partner_ids,
+)
 
 from .base import INVITATION_DECLINE_REASONS
 
@@ -66,6 +72,53 @@ class QuestionAnswerSerializer(serializers.Serializer[dict[str, Any]]):
     answer = serializers.CharField(max_length=2000)
 
 
+class VisitVendorSerializer(serializers.Serializer[dict[str, Any]]):
+    """Who is coming to the Customer's home.
+
+    ## Why this exists
+
+    `SiteVisit` reaches its vendor through `invitation.partner` and always has — but nothing
+    published it, so the Customer's tracker could only name a vendor who had already delivered an
+    *estimate*, and a confirmed slot with nobody named on it was the ordinary case. The screen
+    that tells somebody who is about to knock on their door was the one screen that could not say.
+
+    ## Why it is not published on every visit
+
+    Disclosure starts when a vendor confirms a slot on a paid plan, and `SCHEDULED` is precisely
+    that state — a visit whose plan payment has not been verified is *held*, not scheduled. Before
+    then the pool of invited vendors is deliberately private: publishing it would let a Customer
+    (or anybody who got hold of the read) enumerate which businesses were approached for what.
+
+    ## What is deliberately absent
+
+    No phone number and no address. Contact is released by the engagement, not by a visit, and a
+    visit read that carried a mobile number would be a contact-unlock nobody paid for.
+    """
+
+    display_name = serializers.CharField()
+    business_type = serializers.CharField(allow_blank=True)
+    #: The badge, from the only thing that verifies a Partner: an approved application.
+    is_verified = serializers.BooleanField()
+    experience_years = serializers.IntegerField()
+    #: A short-lived signed link, or null. Null covers every honest case at once — no photograph,
+    #: one still in review, one refused, and storage being unreachable — because the client renders
+    #: all four identically, as the vendor's initials. See `PartnerProfile.has_publishable_photo`.
+    photo_url = serializers.URLField(allow_null=True)
+
+
+#: The visit states in which the Customer may be told who is coming.
+#:
+#: `SCHEDULED` is the earliest, and it carries two facts at once: a vendor has committed to a time
+#: *and* the plan payment behind it was verified. The three later states are kept because a
+#: Customer reading back a completed visit still needs to know whose it was.
+_VENDOR_DISCLOSED_STATUSES = (
+    SiteVisit.Status.SCHEDULED,
+    SiteVisit.Status.IN_PROGRESS,
+    SiteVisit.Status.COMPLETED,
+    SiteVisit.Status.VENDOR_NO_SHOW,
+)
+
+
 class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
     """One visit, in both its shapes.
 
@@ -83,6 +136,8 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
     #: a deprecated Hyderabad-only constant: correct while the platform is one city and wrong the
     #: day it is not (`M2-FE-421`).
     timezone = serializers.SerializerMethodField()
+    #: Who is coming, once the Customer is entitled to know. See `VisitVendorSerializer`.
+    vendor = serializers.SerializerMethodField()
 
     class Meta:
         model = SiteVisit
@@ -91,6 +146,7 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
             "status",
             "is_plan_visit",
             "timezone",
+            "vendor",
             "fee_paise",
             "adjusts_against_final_price",
             "scheduled_for",
@@ -109,6 +165,28 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
     def get_is_plan_visit(self, obj: SiteVisit) -> bool:
         return obj.plan_share_id is not None
 
+    @extend_schema_field(VisitVendorSerializer(allow_null=True))
+    def get_vendor(self, obj: SiteVisit) -> dict[str, Any] | None:
+        """The vendor, or null while the Customer is not entitled to one.
+
+        Reads through `invitation.partner`, so callers that page a list of visits should
+        `select_related("invitation__partner")` — the tracker reads at most a plan's worth of
+        visits, but the relation is a query per row without it.
+        """
+
+        if obj.status not in _VENDOR_DISCLOSED_STATUSES:
+            return None
+        partner = getattr(getattr(obj, "invitation", None), "partner", None)
+        if partner is None:  # pragma: no cover - the FK is non-null
+            return None
+        return {
+            "display_name": partner.display_name,
+            "business_type": vendor_business_type(partner),
+            "is_verified": partner.id in verified_partner_ids([partner.id]),
+            "experience_years": partner.experience_years,
+            "photo_url": partner_photo_url(partner),
+        }
+
     def get_timezone(self, obj: SiteVisit) -> str:
         """The area's zone, or the platform's own as a last resort.
 
@@ -119,6 +197,31 @@ class SiteVisitSerializer(serializers.ModelSerializer[SiteVisit]):
         """
         area = getattr(obj.requirement, "service_area", None)
         return str(area.timezone) if area is not None else str(settings.TIME_ZONE)
+
+
+class VisitArrivalCodeSerializer(serializers.Serializer[dict[str, Any]]):
+    """The Customer's live arrival code, and whether a new one can be asked for.
+
+    `code` and `can_issue` answer two different questions and a client needs both. A visit that is
+    live but whose display copy has been evicted returns a null `code` with `can_issue` true —
+    "ask for a new one" — while a visit that has already started returns null with `can_issue`
+    false, which is "there is nothing left to prove here".
+    """
+
+    code = serializers.CharField(allow_null=True)
+    expires_at = serializers.DateTimeField(allow_null=True)
+    can_issue = serializers.BooleanField()
+    server_now = serializers.DateTimeField()
+
+
+class VisitArrivalCodeEntrySerializer(serializers.Serializer[dict[str, Any]]):
+    """What the vendor types in.
+
+    Bounded rather than free text: the length is fixed by `OTP_CODE_LENGTH`, and accepting an
+    unbounded string would hand the hasher arbitrary input on an unauthenticated-ish guess path.
+    """
+
+    code = serializers.CharField(min_length=4, max_length=12, trim_whitespace=True)
 
 
 class SiteVisitRequestSerializer(serializers.Serializer[dict[str, Any]]):

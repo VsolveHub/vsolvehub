@@ -172,13 +172,16 @@ describe("the invalidation cascade", () => {
       type: "SET_REQUESTED_START",
       requestedStart: "2026-08-20",
     });
-    const withServiceBy = requirementReducer(withStart, {
-      type: "SET_SERVICE_BY",
-      serviceBy: "2026-08-24",
+    const flexible = requirementReducer(withStart, {
+      type: "SET_FLEXIBILITY_DAYS",
+      days: 7,
     });
 
-    expect(withServiceBy.verdict).toEqual(verdict);
-    expect(withServiceBy.requestedStart).toBe("2026-08-20");
+    // One date, not two. "Needed by" was removed from capture — the server derives
+    // the closing date from the start day — so the start date and the flexibility
+    // flag are now the whole of what this screen collects about timing.
+    expect(flexible.verdict).toEqual(verdict);
+    expect(flexible.requestedStart).toBe("2026-08-20");
   });
 
   it("records the requirement id even when the server sent no sentence", () => {
@@ -193,5 +196,67 @@ describe("the invalidation cascade", () => {
 
     expect(next.requirementId).toBe("req-1");
     expect(next.verdict).toBeNull();
+  });
+});
+
+/**
+ * Forward navigation on the desktop brief.
+ *
+ * `GO_TO` refuses any screen not already in `visited`, which is right for the
+ * phone wizard and was wrong for the rail: the rail *is* the navigation, so
+ * every forward click and the `review` move at the end of a successful send were
+ * silently refused. `OPEN` is the navigation that answers to the container's
+ * guard rather than to `visited`.
+ *
+ * The mobile flow never hit any of this because it moves with `ADVANCE`, which
+ * records `visited` as it steps — which is exactly why the bug read as
+ * "desktop broken, mobile fine".
+ */
+describe("OPEN — the brief's own navigation", () => {
+  const atWhereWhen = (): RequirementDraftState => ({
+    ...initialDraftState("interior-fit-out-project"),
+    screen: "where_when",
+    // What `RESTORE_SCREEN` produces for `?step=where_when`: the screens before
+    // it, and nothing after.
+    visited: ["what"],
+  });
+
+  it("reaches a section the customer has never visited", () => {
+    const next = requirementReducer(atWhereWhen(), { type: "OPEN", screen: "details" });
+
+    expect(next.screen).toBe("details");
+  });
+
+  it("reaches review, which GO_TO refused after three good writes", () => {
+    const state = atWhereWhen();
+
+    expect(requirementReducer(state, { type: "GO_TO", screen: "review" }).screen).toBe(
+      "where_when",
+    );
+    expect(requirementReducer(state, { type: "OPEN", screen: "review" }).screen).toBe("review");
+  });
+
+  it("records the screen it leaves, so Back still works from where it lands", () => {
+    const next = requirementReducer(atWhereWhen(), { type: "OPEN", screen: "details" });
+
+    expect(next.visited).toContain("where_when");
+    expect(requirementReducer(next, { type: "BACK" }).screen).toBe("where_when");
+  });
+
+  it("leaves the per-screen guards alone", () => {
+    // Reaching a screen has never been what lets somebody past a rule. An empty
+    // draft opened straight at review is still blocked, by the same reason it
+    // would have been blocked for on the screen that owns it.
+    const opened = requirementReducer(atWhereWhen(), { type: "OPEN", screen: "review" });
+
+    expect(blockedReason(opened, TODAY)).not.toBeNull();
+  });
+
+  it("ignores a screen that is not in the sequence", () => {
+    const state = atWhereWhen();
+
+    expect(
+      requirementReducer(state, { type: "OPEN", screen: "nowhere" as never }).screen,
+    ).toBe("where_when");
   });
 });

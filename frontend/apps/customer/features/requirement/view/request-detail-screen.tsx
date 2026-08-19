@@ -1,11 +1,13 @@
 "use client";
 
+import type { Schemas } from "@vsolve/api-client";
 import { isFreelyEditable, isVendorVisible } from "@vsolve/query";
 import { buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { RequestAccessPanel } from "@/features/access/view/request-access-panel";
+import { useAddresses } from "@/features/addresses/queries";
 import { bookCrewFeeHref } from "@/lib/routes";
 import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
 import {
@@ -43,6 +45,42 @@ export interface RequestDetailScreenProps {
   requirementId: string;
 }
 
+/**
+ * "Kondapur — 500084": enough to recognise the place, not the whole line.
+ *
+ * The rail is a summary beside a status, not a delivery label, and a full
+ * Hyderabad address wraps to three lines in a 20rem column. Locality and pincode
+ * are what somebody checks when they want to confirm it is the right site.
+ */
+function addressSummary(
+  addresses: readonly Schemas["Address"][],
+  addressId: string | null,
+): string | null {
+  if (addressId === null) return null;
+  const address = addresses.find((candidate) => candidate.id === addressId);
+  if (address === undefined) return null;
+  const locality = address.locality || address.city;
+  return locality === "" ? address.postal_code : `${locality} — ${address.postal_code}`;
+}
+
+/**
+ * The start day, in the Customer's own locale.
+ *
+ * `requested_start` is a date-time built from the start of their chosen local
+ * day, so only the day is meaningful — printing a time would present midnight as
+ * an arrival time somebody agreed to.
+ */
+function formatStartDay(iso: string | null): string | null {
+  if (iso === null) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(date);
+}
+
 function stanceFor(status: string): MaterialEditStance {
   if (isFreelyEditable(status)) return "free";
   if (isVendorVisible(status)) return "vendor_visible";
@@ -74,8 +112,21 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
     </Link>
   );
 
+  /**
+   * The two request facts the A3 waiting rail shows beside the search.
+   *
+   * Resolved here because this is where the requirement is already read. The
+   * address is an id on the record, so it is looked up in the address book the
+   * session has usually already loaded; a request pointing at an address this
+   * Customer can no longer see renders as absent rather than as a broken row.
+   */
+  const addresses = useAddresses(draft !== null);
+  const requestFacts = {
+    addressLine: addressSummary(addresses.data ?? [], draft?.address_id ?? null),
+    startsOn: formatStartDay(draft?.requested_start ?? null),
+  };
+
   return (
-    <div>
       <RequestDetail
         request={request}
         isRequestPending={requirementQuery.isPending}
@@ -86,10 +137,13 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
         onRetryRequest={() => void requirementQuery.refetch()}
         onRetryTimeline={() => void timelineQuery.refetch()}
         supportAction={supportAction}
-      />
-
+      >
       {draft !== null ? (
-        <div className="mx-auto w-full max-w-2xl px-4 pb-10">
+        // Inside the record's own container now, so the page is one width from
+        // top to bottom. The money surface takes the full width because it puts
+        // a rail beside itself; everything after it keeps a reading column,
+        // because a timeline stretched to 1100px is harder to read, not easier.
+        <div className="flex w-full flex-col">
           {/* Wave A2, extended by A2R. The A3 money surface — the rate-card crew
               panel or its quote-flow fallback — or the A5 visit tracker, chosen
               from the server's inferred archetype, and nothing at all for a
@@ -104,9 +158,12 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
               bookVisitsHref={`/requests/${requirementId}/book-visits`}
               bookCrewFeeHref={bookCrewFeeHref(requirementId)}
               supportAction={supportAction}
+              requestFacts={requestFacts}
+              serviceName={draft.service_name}
             />
           </div>
 
+          <div className="flex max-w-2xl flex-col gap-6">
           {/* The removal affordance the server keeps open in every status, for
               the one case it keeps it open for: a file the malware scan
               rejected. See `RequestAttachments`. */}
@@ -140,8 +197,9 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
             }
             supportAction={supportAction}
           />
+          </div>
         </div>
       ) : null}
-    </div>
+      </RequestDetail>
   );
 }

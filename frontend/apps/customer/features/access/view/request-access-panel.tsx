@@ -20,13 +20,13 @@ import {
   vendorNamesByVisit,
 } from "../adapters";
 import {
-  useConfirmVisitArrival,
   useQuoteTeasers,
-  useReportVendorNoShow,
   useStartUnlockCheckout,
   useUnlockState,
   useVisitPlan,
 } from "../queries";
+import { visitHref } from "@/lib/routes";
+
 import { UnlockPanel } from "./unlock-panel";
 import { VisitTracker } from "./visit-tracker";
 
@@ -61,6 +61,10 @@ export interface RequestAccessPanelProps {
   /** Where the A3 booking fee is paid (revision 4). */
   bookCrewFeeHref: string;
   supportAction?: ReactNode;
+  /** Forwarded to the A3 phone screens. See `CrewDispatchPanel`. */
+  serviceName?: string;
+  /** Forwarded to the A3 waiting screen's rail. See `CrewDispatchPanel`. */
+  requestFacts?: { addressLine: string | null; startsOn: string | null };
 }
 
 export function RequestAccessPanel(props: RequestAccessPanelProps) {
@@ -95,6 +99,8 @@ function A3Access({
   quotesHref,
   bookCrewFeeHref,
   supportAction,
+  requestFacts,
+  serviceName,
 }: RequestAccessPanelProps) {
   const rateQuery = useRateCardState(requirementId);
   const rateState = rateQuery.data ?? null;
@@ -114,6 +120,8 @@ function A3Access({
           requirementId={requirementId}
           bookCrewFeeHref={bookCrewFeeHref}
           supportAction={supportAction}
+          requestFacts={requestFacts}
+          serviceName={serviceName}
         />
       ) : null}
 
@@ -183,18 +191,18 @@ function A5Access({
   supportAction,
 }: RequestAccessPanelProps) {
   const planQuery = useVisitPlan(requirementId);
-  const arrival = useConfirmVisitArrival();
-  const noShow = useReportVendorNoShow();
 
   const state = planQuery.data ?? null;
 
   /**
-   * The estimates, read only to put a name on a confirmed slot.
+   * The estimates, read now only as a *fallback* name for a confirmed slot.
    *
-   * The visit read publishes no vendor, so a delivered estimate is the only
-   * place this app can learn who came. Enabled strictly on the server's own
-   * entitlement flag, because an unentitled call is a `409` on the ordinary
-   * pre-payment path.
+   * The visit publishes its own vendor since contract 1.39.0, so this is no
+   * longer how the tracker learns who is coming. It is kept because a delivered
+   * estimate can name a vendor on a visit whose own disclosure window has not
+   * opened, and losing that would be a name disappearing from a screen that
+   * already showed it. Enabled strictly on the server's own entitlement flag,
+   * because an unentitled call is a `409` on the ordinary pre-payment path.
    */
   const quotesQuery = useCustomerQuotes(
     requirementId,
@@ -216,16 +224,25 @@ function A5Access({
       bookVisitsHref={bookVisitsHref}
       checkoutAvailable={state !== null && canCheckOutVisitPlan(state)}
       estimatesHref={quotesHref}
-      onConfirmArrival={(siteVisitId) => arrival.mutate({ siteVisitId, requirementId })}
-      onReportNoShow={(siteVisitId) =>
-        // The reason code is fixed rather than collected. The Customer already
-        // confirmed the one fact that matters — nobody turned up — and asking
-        // them to classify it would be collecting a taxonomy nothing publishes.
-        noShow.mutate({ siteVisitId, requirementId, reasonCode: "VENDOR_DID_NOT_ARRIVE" })
-      }
-      isCommandPending={arrival.isPending || noShow.isPending}
-      commandError={arrival.error ?? noShow.error}
+      // The visit-day commands moved with the prose, onto the visit's own page.
+      // A destructive control repeated once per row on a list somebody is
+      // scanning is a control pressed by accident.
+      visitHref={(siteVisitId) => visitHref(requirementId, siteVisitId)}
       supportAction={supportAction}
+      // No plan switcher here, and that is a correction rather than an omission.
+      //
+      // The server does allow re-choosing until a vendor commits, so a control
+      // was added on this screen. What it produced was worse than the
+      // convenience: the invitation wave is bounded by the plan size *at the
+      // moment it went out*, so resizing afterwards leaves a request showing
+      // "2 professionals invited" above three slots, two of which nobody was
+      // ever asked to fill. One tap silently rearranged the flow.
+      //
+      // The choice belongs on review, before the request is sent, which is where
+      // it is offered — and where changing it costs nothing because nothing has
+      // been invited yet. Once professionals are looking at this job, resizing
+      // it is a support conversation, not a segmented control.
     />
   );
 }
+

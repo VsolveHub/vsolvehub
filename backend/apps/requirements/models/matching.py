@@ -8,6 +8,7 @@ read through are in `access`, and the agreement a quote becomes is in `engagemen
 import uuid
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.utils import timezone
 
@@ -285,11 +286,23 @@ class Proposal(models.Model):
     #: every proposal; an open owner decision, so it is recorded rather than assumed.
     commission_treatment = models.CharField(max_length=24, blank=True)
 
-    inclusions = models.JSONField(default=list, blank=True)
-    exclusions = models.JSONField(default=list, blank=True)
+    inclusions = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    exclusions = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     #: A5 stage breakdown. Stage totals plus material lines must reconcile to `total_paise`
     #: before selection.
-    stages = models.JSONField(default=list, blank=True)
+    #:
+    #: **`encoder` is load-bearing, not decoration.** These rows arrive as DRF *validated* data,
+    #: and a validated value is a Python object rather than JSON: `ProposalStageSerializer.ends_on`
+    #: is a `DateField`, so every stage carrying a milestone date held a `datetime.date`. A plain
+    #: `JSONField` encodes with the stdlib encoder, which raises `TypeError: Object of type date is
+    #: not JSON serializable` — inside `submit_proposal`'s transaction, after the quote had been
+    #: built, so the write rolled back and the vendor got `internal_error` for a perfectly valid
+    #: estimate. Any vendor who dated a stage simply could not submit.
+    #:
+    #: `DjangoJSONEncoder` stores it as the ISO string the API publishes anyway, so nothing about
+    #: the contract moves and `to_representation` passes it straight through. `EngagementStage.
+    #: scheduled_on` is a `DateField` and parses that string on the way in.
+    stages = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     #: A5 material lines, and the reason they are **not** stages (`M2-BE-543`).
     #:
     #: Until 1.26.0 the wire carried exactly one money-carrying row type, so a vendor pricing
@@ -303,7 +316,9 @@ class Proposal(models.Model):
     #: `EngagementStage` rows, because there is one money spine and a second one would be the
     #: duplication this plan forbids. What changes is the *kind* of stage they become, which is
     #: what the recovery rule reads.
-    material_lines = models.JSONField(default=list, blank=True)
+    #: Same encoder as `stages`, and for the same reason: this column takes validated serializer
+    #: output too, and the next field added to a material line will be the one that is a date.
+    material_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
     warranty_terms = models.TextField(blank=True)
     valid_until = models.DateTimeField(null=True, blank=True)
 

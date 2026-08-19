@@ -1,12 +1,23 @@
 "use client";
 
 import type { VisitPlanPhase } from "@vsolve/query";
-import { Badge, Button, ConfirmAction, EmptyState, Skeleton } from "@vsolve/ui";
+import {
+  Badge,
+  Button,
+  Disclosure,
+  EmptyState,
+  RailHeadline,
+  RailLayout,
+  Skeleton,
+  buttonStyles,
+  cn,
+} from "@vsolve/ui";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { formatVisitSlot, type VisitSlotRow, type VisitTrackerView } from "../adapters";
 import { AccessRefusal } from "./access-refusal";
+import { VendorIdentity } from "./vendor-identity";
 
 /**
  * The A5 tracker — `M2-FE-421`, `M2-FE-422`, `M2-FE-424`.
@@ -49,12 +60,31 @@ export interface VisitTrackerProps {
   /** Where the delivered estimates are read. Shown once any visit has completed. */
   estimatesHref: string;
 
-  onConfirmArrival: (visitId: string) => void;
-  onReportNoShow: (visitId: string) => void;
-  isCommandPending: boolean;
-  commandError: unknown;
+  /**
+   * Where one visit's own page lives.
+   *
+   * The list stopped carrying the visit-day commands when the visit page landed.
+   * Arrival, the no-show report and the arrival code all need the context that
+   * page has — who is coming, what the money did, what happens next — and a row
+   * that offered "they did not come" beside four other rows was a destructive
+   * control on a scanning surface.
+   */
+  visitHref: (visitId: string) => string;
 
   supportAction?: ReactNode;
+
+  /**
+   * The plan-size chooser, when re-choosing is still allowed.
+   *
+   * A slot rather than a prop set, because the chooser owns its own read, its
+   * own command and its own refusal — and it is already built. Absent once a
+   * professional has committed to a slot: resizing a plan somebody is already
+   * travelling for is not a choice, and `POST .../visit-plan/` says so with a
+   * `409`.
+   */
+  planSwitcher?: ReactNode;
+  /** The brief this plan is for, behind a disclosure. Supplied by the caller. */
+  brief?: ReactNode;
 }
 
 export function VisitTracker({
@@ -66,11 +96,10 @@ export function VisitTracker({
   bookVisitsHref,
   checkoutAvailable,
   estimatesHref,
-  onConfirmArrival,
-  onReportNoShow,
-  isCommandPending,
-  commandError,
+  visitHref,
   supportAction,
+  planSwitcher,
+  brief,
 }: VisitTrackerProps) {
   if (isLoading) {
     return (
@@ -94,40 +123,33 @@ export function VisitTracker({
   }
 
   return (
+    <RailLayout
+      railLabel="Your visit plan"
+      rail={
+        <VisitPlanRail
+          phase={phase}
+          tracker={tracker}
+          checkoutAvailable={checkoutAvailable}
+          bookVisitsHref={bookVisitsHref}
+          planSwitcher={planSwitcher}
+          brief={brief}
+        />
+      }
+    >
     <section aria-labelledby="visits-heading" className="rounded-card border border-line bg-surface p-4">
       <h2 id="visits-heading" className="text-lg font-semibold text-text">
-        Site visits
+        {tracker === null || tracker.planSize <= 1
+          ? "Your site visit"
+          : `Your ${tracker.planSize} site visits`}
       </h2>
 
-      <PlanStatement phase={phase} tracker={tracker} />
-
-      {/* The disclosure ladder, said out loud on the screen it applies to. A
-          Customer wondering why there are no names yet should not have to guess
-          whether it is a policy or a bug — and the sentence is also what makes
-          the name appearing later read as a deliberate release rather than a
-          leak. */}
-      {tracker !== null && tracker.rows.some((row) => row.vendorName === null) ? (
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          We do not show you who has been invited. Once somebody confirms a time
-          we tell you their name, because they are coming into your home — their
-          phone number stays with us until you have agreed the work.
-        </p>
-      ) : null}
-
-      {checkoutAvailable ? (
-        <div className="mt-3 rounded-card border border-action-line bg-action-surface p-3">
-          <p className="font-medium text-text">A professional has confirmed a time</p>
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            They are holding that slot while you pay for the plan. If you do not,
-            the hold simply lapses and nothing is charged.
-          </p>
-          <div className="mt-3">
-            <Link href={bookVisitsHref} className="inline-block">
-              <Button>Book your visits</Button>
-            </Link>
-          </div>
-        </div>
-      ) : null}
+      {/* Three counts before any prose.
+          The page used to open with a paragraph about the plan and put a
+          paragraph between every row, so working out whether anything needed
+          the Customer *today* meant reading all of it. The counts answer that
+          in one glance; the paragraph that used to be here is still on the
+          screen, folded, at the bottom. */}
+      <VisitCounts tracker={tracker} />
 
       {tracker === null || tracker.rows.length === 0 ? (
         <div className="mt-3">
@@ -144,9 +166,7 @@ export function VisitTracker({
               key={row.id}
               row={row}
               planSize={tracker.planSize}
-              onConfirmArrival={onConfirmArrival}
-              onReportNoShow={onReportNoShow}
-              isCommandPending={isCommandPending}
+              visitHref={visitHref}
             />
           ))}
         </ul>
@@ -160,14 +180,108 @@ export function VisitTracker({
         </div>
       ) : null}
 
-      <div className="mt-3">
-        <AccessRefusal
-          error={commandError}
-          attempting="update this visit"
-          supportAction={supportAction}
-        />
-      </div>
+      {/* Everything the page used to say up front, kept and folded.
+          None of it is deleted — a Customer who wants to know why nobody is
+          named yet, or what happens to an unfilled slot's money, still has the
+          answer on this screen. It is simply no longer in the way of the three
+          rows they came to look at. */}
+      <Disclosure summary="How these visits work" className="mt-4">
+        <PlanStatement phase={phase} tracker={tracker} />
+        {tracker !== null && tracker.rows.some((row) => row.vendor === null) ? (
+          <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
+            We do not show you who has been invited. Once somebody confirms a time
+            we tell you their name and show you their photograph, because they are
+            coming into your home — their phone number stays with us until you have
+            agreed the work.
+          </p>
+        ) : null}
+      </Disclosure>
     </section>
+    </RailLayout>
+  );
+}
+
+/**
+ * The plan, the amount, and the one control — beside the visits rather than under them.
+ *
+ * The mobile design split "your visits" and "pay for visits" across two screens.
+ * On a wide screen they belong together, and the reason is the unfilled slot: it
+ * sits directly beside the amount, which is exactly the question somebody has
+ * when they are asked to pay for two visits and can only see one time. Putting
+ * the answer a screen away is how that question becomes a support message.
+ *
+ * **Nothing here is charged by being rendered.** The checkout opens only when
+ * the server says a professional is holding a slot, and the rail says so in the
+ * `chosen` phase rather than implying the money is already due.
+ */
+function VisitPlanRail({
+  phase,
+  tracker,
+  checkoutAvailable,
+  bookVisitsHref,
+  planSwitcher,
+  brief,
+}: {
+  phase: VisitPlanPhase;
+  tracker: VisitTrackerView | null;
+  checkoutAvailable: boolean;
+  bookVisitsHref: string;
+  planSwitcher?: ReactNode;
+  brief?: ReactNode;
+}) {
+  if (tracker === null) return null;
+
+  const held = tracker.rows.find((row) => row.state === "held") ?? null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <RailHeadline
+        eyebrow={tracker.planSize === 1 ? "1-visit plan" : `${tracker.planSize}-visit plan`}
+        value={tracker.priceLabel}
+        footnote={
+          tracker.planSize === 1
+            ? "The visit and the written estimate."
+            : `All ${tracker.planSize} visits and their written estimates.`
+        }
+      />
+
+      {checkoutAvailable ? (
+        <div className="flex flex-col gap-2">
+          <Link href={bookVisitsHref} className={buttonStyles({ size: "lg", block: true })}>
+            Pay {tracker.priceLabel} and lock the visits
+          </Link>
+          {held !== null ? (
+            <p className="text-center text-[0.8125rem] leading-5 text-text-secondary">
+              {formatVisitSlot(held.scheduledFor, held.timeZone) ?? "The confirmed slot"} is
+              held until you do.
+            </p>
+          ) : null}
+        </div>
+      ) : phase === "chosen" ? (
+        <p className="rounded-card border border-success-line bg-success-surface p-4 text-sm leading-5 text-text">
+          <strong className="font-semibold">Nothing charged yet.</strong> You pay
+          once, when the first professional confirms a time.
+        </p>
+      ) : null}
+
+      {tracker.openSlots > 0 ? (
+        <p className="text-sm leading-5 text-text-secondary">
+          A visit that never happens refunds its share on its own — you do not
+          have to ask.
+        </p>
+      ) : null}
+
+      <Disclosure summary="What the visit fee covers" hint="Not the project price">
+        <p>
+          Travel and the professional&rsquo;s time on site, plus a written estimate
+          you keep whether or not you hire them. It is not part of the project
+          price.
+        </p>
+      </Disclosure>
+
+      {planSwitcher}
+      {brief}
+    </div>
   );
 }
 
@@ -272,85 +386,157 @@ const SLOT_BADGE: Record<VisitSlotRow["state"], { label: string; tone: "neutral"
   customer_no_show: { label: "Nobody was on site", tone: "warning" },
 };
 
+/**
+ * The three counts that open the list.
+ *
+ * Derived here rather than published, because each one is a question about
+ * *rows* — "is anything happening today" — and the server publishes a plan.
+ * `openSlots` is the tracker's own; the other two are read off the row states.
+ *
+ * Renders nothing when there is nothing to count. A strip of zeroes above an
+ * empty state is a summary of an absence.
+ */
+function VisitCounts({ tracker }: { tracker: VisitTrackerView | null }) {
+  if (tracker === null || tracker.rows.length === 0) return null;
+
+  const today = tracker.rows.filter((row) => isToday(row.scheduledFor, row.timeZone)).length;
+  const upcoming = tracker.rows.filter(
+    (row) =>
+      (row.state === "scheduled" || row.state === "held") &&
+      !isToday(row.scheduledFor, row.timeZone),
+  ).length;
+
+  return (
+    <dl className="mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-control border border-line">
+      <VisitCount label="Today" value={today} emphasise={today > 0} />
+      <VisitCount label="Upcoming" value={upcoming} />
+      <VisitCount label="Open slots" value={tracker.openSlots} />
+    </dl>
+  );
+}
+
+function VisitCount({
+  label,
+  value,
+  emphasise = false,
+}: {
+  label: string;
+  value: number;
+  emphasise?: boolean;
+}) {
+  return (
+    <div className="px-2 py-2 text-center">
+      <dd
+        className={cn(
+          "text-xl font-semibold tabular-nums",
+          emphasise ? "text-action-active" : "text-text",
+        )}
+      >
+        {value}
+      </dd>
+      <dt className="text-xs font-medium text-text-secondary">{label}</dt>
+    </div>
+  );
+}
+
+/**
+ * Whether a visit falls on the reader's today, in the visit's own zone.
+ *
+ * The zone matters more than it looks: a 9pm visit in one area is already
+ * tomorrow in another, and "Today" is the one label on this screen somebody
+ * acts on immediately. Compared as formatted date strings in that zone rather
+ * than by arithmetic on instants, so the comparison is the same one the row's
+ * own label is rendered from.
+ */
+function isToday(scheduledFor: string | null, timeZone: string | null): boolean {
+  if (scheduledFor === null) return false;
+  const when = new Date(scheduledFor);
+  if (Number.isNaN(when.getTime())) return false;
+  const zone = timeZone ?? undefined;
+  try {
+    const format = (value: Date) => value.toLocaleDateString("en-IN", { timeZone: zone });
+    return format(when) === format(new Date());
+  } catch {
+    // An unknown IANA zone from a future service area must not take the list
+    // down over a badge. Not-today is the quiet answer.
+    return false;
+  }
+}
+
+/**
+ * One slot, as a card you scan rather than a paragraph you read.
+ *
+ * The row used to carry the vendor sentence, the money sentence, the estimate
+ * deadline sentence and up to two destructive controls — four blocks of prose
+ * per row, three rows deep. All of it still exists; it moved to the visit's own
+ * page, which is linked from here and is where somebody who has picked a row
+ * actually wants to be.
+ *
+ * What stays is what a scanning reader needs to choose between rows: who,
+ * when, how much, and what state it is in.
+ */
 function VisitRow({
   row,
   planSize,
-  onConfirmArrival,
-  onReportNoShow,
-  isCommandPending,
+  visitHref,
 }: {
   row: VisitSlotRow;
   planSize: number;
-  onConfirmArrival: (visitId: string) => void;
-  onReportNoShow: (visitId: string) => void;
-  isCommandPending: boolean;
+  visitHref: (visitId: string) => string;
 }) {
-  const [reporting, setReporting] = useState(false);
   const badge = SLOT_BADGE[row.state] ?? SLOT_BADGE.awaiting;
   // The visit's own zone since 1.26.0, not the deprecated single-city constant.
   const when = formatVisitSlot(row.scheduledFor, row.timeZone);
+  const today = isToday(row.scheduledFor, row.timeZone);
 
   return (
-    <li className="rounded-card border border-line p-3">
+    <li
+      className={cn(
+        "rounded-card border p-3",
+        // Today's visit is the one row that might need somebody in the next hour,
+        // so it is the one row drawn differently. Emphasis is the palette's own
+        // action tint rather than a second colour.
+        today ? "border-action-line bg-action-surface" : "border-line",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm text-text-secondary">
-            Visit {row.position} of {planSize}
-          </p>
-          <p className="mt-0.5 font-medium text-text">{when ?? "No time yet"}</p>
-          <VendorLine row={row} />
-        </div>
+        {row.vendor !== null ? (
+          <VendorIdentity vendor={row.vendor} />
+        ) : (
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text">
+              {row.state === "awaiting"
+                ? "Nobody has taken this slot yet"
+                : "We will name them before they arrive"}
+            </p>
+            <p className="text-sm text-text-secondary">
+              Visit {row.position} of {planSize}
+            </p>
+          </div>
+        )}
         <Badge tone={badge.tone}>{badge.label}</Badge>
       </div>
 
-      <SlotMoneyLine row={row} />
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-control bg-surface-sunken px-3 py-2">
+        <span className="text-sm font-medium text-text">{when ?? "No time yet"}</span>
+        {/* One clause, not the paragraph the row used to carry. The full
+            sentence about what this money is doing is on the visit page. */}
+        <span className="text-sm tabular-nums text-text-secondary">
+          {row.money.amountLabel} {MONEY_CLAUSE[row.money.kind]}
+        </span>
+      </div>
 
-      {row.state === "completed" && row.estimateDueAt !== null ? (
-        <p className="mt-2 text-sm text-text-secondary">
-          Their written estimate is due by{" "}
-          {formatVisitSlot(row.estimateDueAt, row.timeZone)}. If
-          it does not arrive, this visit refunds its share or we send somebody
-          else, free.
-        </p>
-      ) : null}
-
-      {row.canConfirmArrival || row.canReportNoShow ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {row.canConfirmArrival && row.visitId !== null ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onConfirmArrival(row.visitId!)}
-              loading={isCommandPending}
-              loadingLabel="Confirming"
-            >
-              They have arrived
-            </Button>
-          ) : null}
-
-          {row.canReportNoShow && row.visitId !== null ? (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => setReporting(true)}>
-                They did not come
-              </Button>
-              <ConfirmAction
-                open={reporting}
-                onOpenChange={setReporting}
-                title="Tell us they did not come?"
-                // The consequence, stated before the press. A vendor no-show
-                // costs the Customer nothing and buys a replacement visit — and
-                // it is also a mark against a real person's standing, which is
-                // why it is a confirmation rather than a one-tap.
-                consequence="This visit will not cost you anything, and we will either refund its share of the plan or send another professional free. It also counts against them, so only do this if nobody turned up."
-                confirmLabel="Yes, nobody came"
-                pending={isCommandPending}
-                onConfirm={() => {
-                  setReporting(false);
-                  onReportNoShow(row.visitId!);
-                }}
-              />
-            </>
-          ) : null}
+      {row.visitId !== null ? (
+        <div className="mt-3">
+          <Link
+            href={visitHref(row.visitId)}
+            className={buttonStyles({
+              variant: today ? "primary" : "outline",
+              size: "sm",
+            })}
+          >
+            {today ? "Open today's visit" : "Open visit"}
+          </Link>
         </div>
       ) : null}
     </li>
@@ -358,70 +544,16 @@ function VisitRow({
 }
 
 /**
- * Who is coming, where we are allowed to say.
+ * The money, in three words rather than three lines.
  *
- * Three genuinely different sentences and none of them is a placeholder: no
- * professional has taken the slot; one has and we cannot name them yet; one has
- * and here they are.
+ * Every clause is the short form of the sentence `SlotMoneyLine` still renders
+ * in full on the visit page. The list says which of the five things happened;
+ * the page says what it means.
  */
-function VendorLine({ row }: { row: VisitSlotRow }) {
-  if (row.state === "awaiting") {
-    return (
-      <p className="mt-0.5 text-sm text-text-secondary">
-        Nobody has taken this slot yet.
-      </p>
-    );
-  }
-  if (row.vendorName === null) {
-    return (
-      <p className="mt-0.5 text-sm text-text-secondary">
-        We will tell you who is coming, by name, before they arrive.
-      </p>
-    );
-  }
-  return <p className="mt-0.5 text-sm text-text">{row.vendorName}</p>;
-}
-
-/** `M2-FE-424` — what this slot's money did, per the server's own split. */
-function SlotMoneyLine({ row }: { row: VisitSlotRow }) {
-  switch (row.money.kind) {
-    case "unspent":
-      return (
-        <p className="mt-2 text-sm text-text-secondary">
-          {row.money.amountLabel} of your plan is set aside for this slot. If
-          nobody takes it, that comes back to you.
-        </p>
-      );
-    case "committed":
-      return (
-        <p className="mt-2 text-sm text-text-secondary">
-          {row.money.amountLabel} of your plan covers this visit. It is paid to
-          the professional only once they have been and sent you an estimate.
-        </p>
-      );
-    case "earned":
-      return (
-        <p className="mt-2 text-sm text-text">
-          {row.money.vendorPayoutLabel ?? row.money.amountLabel} of your{" "}
-          {row.money.amountLabel} goes to the professional who came and wrote your
-          estimate. The rest is our fee.
-        </p>
-      );
-    case "refunded":
-      return (
-        <p className="mt-2 text-sm text-text">
-          {row.money.amountLabel} refunded to you. Nobody is paid for a visit that
-          did not deliver an estimate.
-        </p>
-      );
-    case "replaced":
-      return (
-        <p className="mt-2 text-sm text-text">
-          This slot is owed a replacement visit, free. Your {row.money.amountLabel}{" "}
-          stays with the plan rather than being refunded.
-        </p>
-      );
-    default:
-      return null;
-  }
-}
+const MONEY_CLAUSE: Record<VisitSlotRow["money"]["kind"], string> = {
+  unspent: "set aside",
+  committed: "covering this visit",
+  earned: "paid out",
+  refunded: "refunded",
+  replaced: "held for a free replacement",
+};

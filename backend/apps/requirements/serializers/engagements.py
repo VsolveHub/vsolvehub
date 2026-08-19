@@ -11,9 +11,11 @@ what an engagement becomes once work starts.
 
 from typing import Any
 
+from django.conf import settings
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.commerce.providers import FakePaymentProvider
 from apps.requirements.models import (
     Engagement,
     EngagementAmendment,
@@ -131,6 +133,16 @@ class VisitPlanTierSerializer(serializers.Serializer[dict[str, Any]]):
 
 class VisitPlanSerializer(serializers.ModelSerializer[VisitPlan]):
     shares = VisitPlanShareSerializer(many=True, read_only=True)
+    payment_attempt_id = serializers.UUIDField(read_only=True, allow_null=True)
+    simulated_capture_available = serializers.SerializerMethodField()
+
+    @staticmethod
+    @extend_schema_field(serializers.BooleanField())
+    def get_simulated_capture_available(plan: VisitPlan) -> bool:
+        attempt = plan.payment_attempt
+        return bool(settings.PAYMENTS_ALLOW_SIMULATED_CAPTURE) and (
+            attempt is not None and attempt.provider == FakePaymentProvider.code
+        )
 
     class Meta:
         model = VisitPlan
@@ -143,6 +155,13 @@ class VisitPlanSerializer(serializers.ModelSerializer[VisitPlan]):
             #: A3 unlock when Operations reclassified the request. `M2-BE-427` — never charge twice.
             "credit_paise",
             "chargeable_paise",
+            #: The pending checkout-free charge backing this plan, exposed so local development
+            #: can drive the existing simulated-capture endpoint after a page reload. It is null
+            #: before checkout, after a fully credited plan, and after a never-charged void.
+            "payment_attempt_id",
+            #: Server-owned dev affordance. The Customer app uses this to show "Mark as paid"
+            #: only where the simulated-capture endpoint can really complete the charge.
+            "simulated_capture_available",
             "shares",
             "receipt_series",
             "receipt_sequence",
@@ -476,6 +495,10 @@ class AccessReceiptSerializer(serializers.Serializer[dict[str, Any]]):
     series = serializers.CharField(read_only=True)
     sequence = serializers.IntegerField(read_only=True)
     amount_paise = serializers.IntegerField(read_only=True)
+    #: When the money was **verified**, not when the Customer pressed pay — the two differ by
+    #: however long the provider callback took, and a receipt dated before the payment cleared is
+    #: a receipt for something that had not happened yet. Null on a row that predates the stamp.
+    paid_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
 
 class EngagementSerializer(serializers.ModelSerializer[Engagement]):

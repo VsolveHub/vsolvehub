@@ -182,7 +182,15 @@ export interface RequirementDraftState {
   requestedStart: string | null;
   /** ISO date. The hard date after which quotes are worthless (`GAP-001`). */
   serviceBy: string | null;
-  isDateFlexible: boolean;
+  /**
+   * Days either side the Customer can move the start.
+   *
+   * A number rather than the boolean this used to be. The wire has always taken
+   * `flexibility_days`, and collapsing it to yes-or-no meant the brief could say
+   * "flexible" and never how flexible — which is the difference between a vendor
+   * offering a slot next Tuesday and not bothering.
+   */
+  flexibilityDays: number;
 
   attachments: readonly DraftAttachment[];
   /** BCP-47, captured with the voice note so matching can route by language. */
@@ -212,7 +220,7 @@ export function initialDraftState(categorySlug: string): RequirementDraftState {
     addressId: null,
     requestedStart: null,
     serviceBy: null,
-    isDateFlexible: false,
+    flexibilityDays: 0,
     attachments: [],
     language: null,
     additionalDetails: "",
@@ -347,7 +355,18 @@ function blockedAttachments(state: RequirementDraftState): BlockReason | null {
 function blockedDates(state: RequirementDraftState, today: string): BlockReason | null {
   if (state.requestedStart === null) return "START_DATE_NOT_CHOSEN";
   if (!isServiceDateUsable(state.requestedStart, today)) return "START_DATE_IN_PAST";
-  if (state.serviceBy === null) return "SERVICE_DATE_NOT_CHOSEN";
+  // The deadline is optional and absent is the ordinary answer.
+  //
+  // It used to be required, back when the Customer was asked to name the date
+  // the job stops being useful. The server derives a closing date from the start
+  // day now, so the field survives only for the minority who genuinely have a
+  // hard deadline — and a guard still demanding one was blocking Continue on a
+  // question the screen itself labels "Optional".
+  //
+  // What is still checked is a deadline that *was* given and does not make
+  // sense: one already past, or one before the work begins. Absent is fine;
+  // contradictory is not.
+  if (state.serviceBy === null) return null;
   if (!isServiceDateUsable(state.serviceBy, today)) return "SERVICE_DATE_IN_PAST";
   if (state.serviceBy < state.requestedStart) return "SERVICE_DATE_BEFORE_START";
   return null;
@@ -432,6 +451,43 @@ export function canAdvance(
   hasUnresolvedDuplicate = false,
 ): boolean {
   return blockedReason(state, today, hasUnresolvedDuplicate) === null;
+}
+
+/** The three brief sections, in the order the page renders them. */
+export const BRIEF_SECTIONS = ["what", "where_when", "details"] as const;
+
+export type BriefSection = (typeof BRIEF_SECTIONS)[number];
+
+/**
+ * What is still missing in each section of the one-page brief.
+ *
+ * The desktop brief shows all three capture screens at once, so "can I continue"
+ * stops being one question about the current screen and becomes three questions
+ * about three sections. Rather than write a second set of rules — which is how
+ * the page and the wizard end up disagreeing about whether a brief is complete —
+ * this asks `blockedReason` the same question once per section, by handing it a
+ * state that claims to be on that screen.
+ *
+ * Safe because `blockedReason` is pure and reads `screen` only to choose a
+ * branch. The synthetic value never reaches the reducer.
+ *
+ * `review` is deliberately not a section: it is the act of sending, not a part
+ * of the brief, and its guard re-asserts all three of these anyway.
+ */
+export function briefSectionBlocks(
+  state: RequirementDraftState,
+  today: string,
+  hasUnresolvedDuplicate = false,
+): Record<BriefSection, BlockReason | null> {
+  return {
+    what: blockedReason({ ...state, screen: "what" }, today, hasUnresolvedDuplicate),
+    where_when: blockedReason(
+      { ...state, screen: "where_when" },
+      today,
+      hasUnresolvedDuplicate,
+    ),
+    details: blockedReason({ ...state, screen: "details" }, today, hasUnresolvedDuplicate),
+  };
 }
 
 /**

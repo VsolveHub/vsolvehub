@@ -44,6 +44,8 @@ export interface RequirementWorkspaceProps {
   onAdvance?: () => void;
   /** True while that write is in flight. Keeps "Next" from being pressed twice. */
   isAdvancing?: boolean;
+  /** Selection-only screens advance from their own cards instead of a generic button. */
+  hideForwardControl?: boolean;
 }
 
 export function RequirementWorkspace({
@@ -51,6 +53,7 @@ export function RequirementWorkspace({
   notice,
   onAdvance,
   isAdvancing = false,
+  hideForwardControl = false,
 }: RequirementWorkspaceProps) {
   const { state, blocked, canContinue, advance, back } = useRequirement();
   const goForward = onAdvance ?? advance;
@@ -69,7 +72,7 @@ export function RequirementWorkspace({
 
       {/* The final screen owns its own submit control — review *is* the
           confirmation, so a generic "Next" beside it would be a second one. */}
-      {!isLast ? (
+      {!isLast && !hideForwardControl ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
             {current > 0 ? (
@@ -92,13 +95,13 @@ export function RequirementWorkspace({
             </p>
           ) : null}
         </div>
-      ) : (
+      ) : isLast ? (
         <div>
           <Button variant="secondary" onClick={back}>
             Back
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

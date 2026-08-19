@@ -69,13 +69,11 @@ import { SelectionStatus } from "./selection-status";
 export interface QuotesScreenProps {
   requirementId: string;
   requestHref: string;
-  engagementHrefFor: (engagementId: string) => string;
 }
 
 export function QuotesScreen({
   requirementId,
   requestHref,
-  engagementHrefFor,
 }: QuotesScreenProps) {
   const unlockQuery = useUnlockState(requirementId);
   const planQuery = useVisitPlan(requirementId);
@@ -129,7 +127,11 @@ export function QuotesScreen({
   const accessPending = unlockQuery.isPending && planQuery.isPending;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+    // Wider than a reading column, because a three-estimate comparison needs the
+    // room — the table has a label column plus one per estimate, and squeezing it
+    // into 48rem turns the thing that makes this screen worth building into a
+    // horizontal scroll. The prose inside still holds itself to `max-w-prose`.
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
       <header>
         <h1 className="text-xl font-semibold text-text">
           {isA5 ? "Your estimates" : "Your quotes"}
@@ -146,7 +148,6 @@ export function QuotesScreen({
           selection={selection}
           vendorName={selectedCard?.vendorName ?? null}
           reconfirmRemaining={countdown?.isExpired === false ? countdown.announce : null}
-          engagementHrefFor={engagementHrefFor}
           supportAction={supportAction}
         />
       ) : null}
@@ -323,10 +324,26 @@ function QuoteBody({
 
   return (
     <>
-      <QuoteComparison
-        cards={list.cards}
-        isComparableOnOneBasis={list.isComparableOnOneBasis}
-      />
+      {/* The table is the reason this screen is worth building on a wide
+          display: aligned rows let somebody read across totals, first stages and
+          exclusions instead of comparing two stacked cards from memory. It is
+          unusable on a phone, so it is not rendered there — `hidden` is
+          `display:none`, which takes it out of the accessibility tree too rather
+          than leaving a screen reader to walk a table nobody can see.
+
+          **It compares and it does not decide.** Choosing stays on the cards
+          below, which render at every size. Putting a Choose control in the
+          table as well would give one estimate two of them — two places a
+          selection can be made, two places a refusal has to be rendered, and two
+          things to keep in step with `canChoose`. "Read it" links each column to
+          the card that holds the vendor's own words. */}
+      <div className="hidden lg:block">
+        <QuoteComparison
+          cards={list.cards}
+          isComparableOnOneBasis={list.isComparableOnOneBasis}
+          detailHrefFor={(proposalId) => `#estimate-${proposalId}`}
+        />
+      </div>
 
       <div className="flex flex-col gap-4">
         {list.cards.map((card, index) => (

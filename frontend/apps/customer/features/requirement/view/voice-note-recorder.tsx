@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Field, Select } from "@vsolve/ui";
+import { Button, Field, Select, cn } from "@vsolve/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -88,6 +88,19 @@ export interface VoiceNoteRecorderProps {
   onLanguageChange: (language: string) => void;
   /** False while there is nowhere to upload to — before the draft exists. */
   enabled: boolean;
+  /**
+   * The phone shape: one tappable row, no paragraph.
+   *
+   * The full panel explains what a voice note is for, which is the right thing
+   * on a desktop screen with room for it. At 390px the same copy is four
+   * paragraphs and a labelled dropdown before the button — the whole screen
+   * turned to prose, on the one step that is supposed to be pictures and a tap.
+   *
+   * Compact keeps every behaviour and drops the explanation: a mic, a title, one
+   * line, and the language as a bare select underneath. Nothing about permission
+   * handling, the timer, the cap or the failure states changes.
+   */
+  compact?: boolean;
 }
 
 type RecorderState = "idle" | "recording" | "unsupported" | "denied" | "failed";
@@ -97,6 +110,7 @@ export function VoiceNoteRecorder({
   language,
   onLanguageChange,
   enabled,
+  compact = false,
 }: VoiceNoteRecorderProps) {
   const [state, setState] = useState<RecorderState>("idle");
   const [seconds, setSeconds] = useState(0);
@@ -195,6 +209,85 @@ export function VoiceNoteRecorder({
 
   const isRecording = state === "recording";
 
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-2.5">
+        <button
+          type="button"
+          onClick={isRecording ? stop : () => void start()}
+          aria-pressed={isRecording}
+          disabled={!enabled}
+          className={cn(
+            "flex w-full items-center gap-[13px] rounded-control p-1 text-left",
+            "transition-colors duration-fast hover:bg-surface-hover",
+            "disabled:cursor-not-allowed disabled:opacity-60",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+              isRecording
+                ? "bg-danger-text text-text-inverse"
+                : "bg-action-secondary text-action-secondary-text",
+            )}
+          >
+            {isRecording ? (
+              <span className="h-3.5 w-3.5 rounded-[3px] bg-current" />
+            ) : (
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.7}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-5 w-5"
+              >
+                <rect x="7.5" y="2.5" width="5" height="9" rx="2.5" />
+                <path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V17" />
+              </svg>
+            )}
+          </span>
+
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-bold text-text">
+              {isRecording ? "Stop and attach" : "Record a voice note"}
+            </span>
+            <span className="mt-0.5 block text-[12.5px] leading-5 text-text-muted">
+              {isRecording ? (
+                <span role="status" className="tabular-nums">
+                  Recording {seconds}s / {MAXIMUM_SECONDS}s
+                </span>
+              ) : (
+                "Faster than typing. Any language."
+              )}
+            </span>
+          </span>
+        </button>
+
+        {/* The language decides which professionals the request reaches, so it
+            is on screen rather than behind the recorder's own defaults — but as
+            a bare select, because the sentence explaining it is what turned this
+            step into prose. */}
+        <Select
+          aria-label="Language you will speak"
+          value={language ?? DEFAULT_LANGUAGE_TAG}
+          onChange={(event) => onLanguageChange(event.target.value)}
+          disabled={isRecording}
+        >
+          {REQUIREMENT_LANGUAGES.map((option) => (
+            <option key={option.tag} value={option.tag}>
+              {option.label} · {option.nativeLabel}
+            </option>
+          ))}
+        </Select>
+
+        <RecorderNotice state={state} enabled={enabled} />
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-card border border-action-line bg-action-surface p-4">
       <p className="font-semibold text-text">Rather just talk?</p>
@@ -240,34 +333,57 @@ export function VoiceNoteRecorder({
         ) : null}
       </div>
 
-      {!enabled ? (
-        <p className="mt-2 max-w-prose text-sm text-text-secondary">
-          Answer the first question and we will save your request — then you can
-          record.
-        </p>
-      ) : null}
-
-      {state === "unsupported" ? (
-        <p className="mt-2 max-w-prose text-sm text-text-secondary">
-          This browser cannot record audio. You can attach an existing recording
-          as a file, or type what you need in the box below — both reach the same
-          professionals.
-        </p>
-      ) : null}
-
-      {state === "denied" ? (
-        <p className="mt-2 max-w-prose text-sm text-text-secondary">
-          We did not get permission to use your microphone. Allow it in your
-          browser settings and press record again, or type what you need below.
-        </p>
-      ) : null}
-
-      {state === "failed" ? (
-        <p className="mt-2 max-w-prose text-sm text-text-secondary">
-          The recording could not start. Nothing was captured — try again, or type
-          what you need below.
-        </p>
-      ) : null}
+      <div className="mt-2">
+        <RecorderNotice state={state} enabled={enabled} />
+      </div>
     </div>
   );
+}
+
+/**
+ * The four states that stop a recording, in the Customer's terms.
+ *
+ * Shared by both shapes rather than written twice — these are the sentences a
+ * Customer acts on, and two copies is how one of them gets a fix the other does
+ * not. Every one names the same fallback: type it instead, and it reaches the
+ * same professionals.
+ */
+function RecorderNotice({ state, enabled }: { state: RecorderState; enabled: boolean }) {
+  if (!enabled) {
+    return (
+      <p className="max-w-prose text-[12.5px] leading-5 text-text-secondary">
+        Answer the first question and we will save your request — then you can
+        record.
+      </p>
+    );
+  }
+
+  if (state === "unsupported") {
+    return (
+      <p className="max-w-prose text-[12.5px] leading-5 text-text-secondary">
+        This browser cannot record audio. Attach an existing recording as a file,
+        or type what you need below — both reach the same professionals.
+      </p>
+    );
+  }
+
+  if (state === "denied") {
+    return (
+      <p className="max-w-prose text-[12.5px] leading-5 text-text-secondary">
+        We did not get permission to use your microphone. Allow it in your browser
+        settings and press record again, or type what you need below.
+      </p>
+    );
+  }
+
+  if (state === "failed") {
+    return (
+      <p className="max-w-prose text-[12.5px] leading-5 text-text-secondary">
+        The recording could not start. Nothing was captured — try again, or type
+        what you need below.
+      </p>
+    );
+  }
+
+  return null;
 }

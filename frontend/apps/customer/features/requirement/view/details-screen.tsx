@@ -64,6 +64,14 @@ export interface DetailsScreenProps {
   /** True while a removal is in flight, so a row cannot be pressed twice. */
   isBusy?: boolean;
   previewUrlFor: (id: string) => string | null;
+  /**
+   * Suppresses this screen's own heading.
+   *
+   * The one-page brief wraps each capture screen in a numbered section that
+   * supplies the heading, and two headings for one section is a broken document
+   * outline rather than a cosmetic duplicate.
+   */
+  hideHeading?: boolean;
 }
 
 export function DetailsScreen({
@@ -74,6 +82,7 @@ export function DetailsScreen({
   canAttach,
   isBusy = false,
   previewUrlFor,
+  hideHeading = false,
 }: DetailsScreenProps) {
   const { state, dispatch } = useRequirement();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -83,7 +92,9 @@ export function DetailsScreen({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text">Anything that helps</h2>
+      {hideHeading ? null : (
+        <h2 className="text-lg font-semibold text-text">Anything that helps</h2>
+      )}
       <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
         All of this is optional. A photo or a voice note usually gets you a more
         accurate quote than a form does.

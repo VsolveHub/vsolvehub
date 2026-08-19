@@ -204,6 +204,29 @@ describe("where a notice leads", () => {
     );
   });
 
+  it("links a project invitation notice to the enquiry", async () => {
+    serve({
+      unread: 1,
+      results: [
+        notice({
+          purpose: "m2.invitation.received",
+          title: "New customer enquiry",
+          target: { kind: "PROJECT_INVITATION", id: "invite-1" },
+        }),
+      ],
+    });
+    renderBell([WORKFORCE_WORKSPACE, PROJECT_WORKSPACE]);
+
+    fireEvent.click(screen.getByRole("button", { name: /notifications/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /open.*new customer enquiry/i })).toHaveAttribute(
+        "href",
+        "/projects/enquiries/invite-1",
+      ),
+    );
+  });
+
   it("offers no link at all when the workspace cannot be told from the payload", async () => {
     // The headline negative. Both capabilities held, no archetype on the target —
     // so there is nothing to decide on, and the wrong screen would describe a

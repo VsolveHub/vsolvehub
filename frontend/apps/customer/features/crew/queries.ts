@@ -97,6 +97,66 @@ export function useRateCardState(requirementId: string | null, enabled = true) {
   });
 }
 
+/**
+ * The published rate at a size the draft has not been saved at — `M2-FE-426`.
+ *
+ * What lets the booking screen hold the price beside the form and keep it right
+ * while the Customer changes their mind, instead of making them press "see the
+ * rate" and watch a screen change.
+ *
+ * ## Why this asks the server rather than multiplying
+ *
+ * The arithmetic is trivial — the rate is per worker per day and the total is
+ * linear in both — and that is exactly the trap. `features/crew/adapters` is
+ * explicit that nothing on this path may print a figure the server did not send,
+ * because the day rate, the wage half and the booking-fee component are three
+ * separately published numbers whose relationship is the card's to define and
+ * not this client's to assume. So the size goes up as two query parameters and
+ * the whole priced answer comes back.
+ *
+ * ## It prices; it cannot book
+ *
+ * `rate-card/book/` still reads the size off the stored draft, so a size
+ * previewed here and never saved cannot become a purchase. The screen writes the
+ * draft once, when the Customer books.
+ *
+ * ## No polling
+ *
+ * `useRateCardState` polls because it is watching a cascade and a payment
+ * settle. Nothing here is in flight — it is a price for a form — so this is a
+ * plain read, and `placeholderData` keeps the previous figures on screen while
+ * the next size is fetched. A rail that blanks on every press of a stepper is
+ * worse than one that lags by a moment.
+ */
+export function useRateCardPreview(
+  requirementId: string | null,
+  size: { headcount: number; days: number } | null,
+) {
+  const headcount = size?.headcount ?? 0;
+  const days = size?.days ?? 0;
+
+  return useQuery({
+    queryKey: m2RateCardKeys.preview(requirementId ?? "", headcount, days),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/requirements/{requirement_id}/rate-card/", {
+          params: {
+            path: { requirement_id: requirementId! },
+            query: { headcount, days },
+          },
+        }),
+      ),
+    enabled: requirementId !== null && size !== null,
+    // Keeps the last size's figures rendered while the next one loads, so the
+    // rail dims rather than empties. The screen pairs this with `isFetching` to
+    // mark the stale figures busy — showing them *without* saying so would be
+    // presenting one size's price as another's.
+    placeholderData: (previous) => previous,
+    ...M2_FRESHNESS.unlock,
+    retry: shouldRetryM2Read,
+  });
+}
+
 /* --------------------------------------------------------------------------
    Booking at the published rate — `M2-FE-425`
    -------------------------------------------------------------------------- */
@@ -299,6 +359,102 @@ export function useCancelBooking() {
     },
     retry: false,
   });
+}
+
+/* --------------------------------------------------------------------------
+   Nobody accepted — the Customer's three ways out
+   -------------------------------------------------------------------------- */
+
+export interface RateCardRecoveryInput {
+  requirementId: string;
+}
+
+/**
+ * The three commands reachable from `EXHAUSTED`, and nothing else.
+ *
+ * They share a factory because they share a shape — one path parameter, one
+ * stable key, the same two invalidations — and differ only in which door they
+ * open. What they must **not** share is a single endpoint taking an action
+ * string: "cancel my request" and "keep looking" would then be one typo apart on
+ * the wire, and the server could not describe their refusals separately.
+ *
+ * `retry: false` on all three for the reason the rest of this file uses it: each
+ * refusal here is a state the Customer has to read — the cascade restarted under
+ * them, a lead accepted while they were deciding — and none changes on a resend.
+ */
+function useRateCardRecovery(
+  path:
+    | "/api/v1/requirements/{requirement_id}/rate-card/retry/"
+    | "/api/v1/requirements/{requirement_id}/rate-card/quotes/"
+    | "/api/v1/requirements/{requirement_id}/rate-card/cancel/",
+  scope: string,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: RateCardRecoveryInput) =>
+      request(() =>
+        getApiClient().POST(path, {
+          params: {
+            path: { requirement_id: input.requirementId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `${scope}:${input.requirementId}`,
+              ),
+            },
+          },
+        }),
+      ),
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: m2RateCardKeys.state(input.requirementId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.requirements.detail(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
+ * Search wider, at the same published rate.
+ *
+ * **There is no price control here and there must not be one.** The A3 day rate
+ * is an Operations-published card above a statutory wage floor, and its wage half
+ * is paid to the crew directly in cash at day end — money this platform never
+ * holds. A "pay more" button would advertise a rate nobody could enforce, on top
+ * of the rule that a partner may never charge above the card. The server widens
+ * the search instead, which is what thin supply usually needs.
+ */
+export function useRetryCrewSearch() {
+  return useRateCardRecovery(
+    "/api/v1/requirements/{requirement_id}/rate-card/retry/",
+    "m2-rate-card-retry",
+  );
+}
+
+/** Take quotes instead. The transition that used to happen without being asked. */
+export function useChooseQuotesInstead() {
+  return useRateCardRecovery(
+    "/api/v1/requirements/{requirement_id}/rate-card/quotes/",
+    "m2-rate-card-quotes",
+  );
+}
+
+/**
+ * Stop looking and close the request. Free, and the server proves it rather than
+ * promising it: this refuses any state but `EXHAUSTED`, where no lead accepted
+ * and so no booking fee was ever written.
+ *
+ * Not to be confused with `useCancelBooking`, which cancels a crew that *was*
+ * booked and has real money behind it.
+ */
+export function useCancelUnmatchedRequest() {
+  return useRateCardRecovery(
+    "/api/v1/requirements/{requirement_id}/rate-card/cancel/",
+    "m2-rate-card-cancel",
+  );
 }
 
 /* --------------------------------------------------------------------------

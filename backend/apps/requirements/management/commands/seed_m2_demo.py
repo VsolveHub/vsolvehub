@@ -62,6 +62,7 @@ from apps.catalog.models import (
     M2VariantConfiguration,
     Service,
     ServiceQuestion,
+    ServiceQuestionOption,
     ServiceVariant,
     Subcategory,
 )
@@ -142,21 +143,177 @@ _SCOPE_KIND_BY_QUESTION_KIND: dict[str, str] = {
     ServiceQuestion.Kind.SINGLE_CHOICE: "SELECT",
 }
 
-#: One authored question: `(code, prompt, catalogue kind, required, minimum)`.
-QuestionSeed = tuple[str, str, str, bool, int | None]
+#: One authored option: `(code, label, description)`.
+QuestionOptionSeed = tuple[str, str, str]
+
+#: One authored question: `(code, prompt, catalogue kind, required, minimum, options)`.
+QuestionSeed = tuple[str, str, str, bool, int | None, tuple[QuestionOptionSeed, ...] | None]
+
+#: `help_text` for the questions that have one, keyed by code.
+#:
+#: A separate map rather than a seventh tuple element, so the questions that need no help stay
+#: three lines instead of four. The words matter: a stepper labelled "People" beside a live price
+#: invites "do I count the supervisor?", and a Customer who answers that wrong books a crew one
+#: person short. The catalogue is where that sentence belongs — the booking screen renders whatever
+#: help the server publishes and authors none of its own.
+QUESTION_HELP: dict[str, str] = {
+    "worker_count": "A supervisor is included with every crew.",
+    "duration_days": "Consecutive days, 8-hour shifts.",
+    "floor_area_sqft": "A rough number is fine. Vendors measure on the visit.",
+}
 
 #: `(code, prompt, kind, required, minimum)`. The A3 set answers `services.infer_archetype`'s
 #: workforce branch — a headcount and a duration — and the A5 set answers its project branch, an
 #: outcome. They are deliberately disjoint: an answer set carrying both is ambiguous by definition
 #: and is left on the variant's own archetype for Operations to reclassify.
+#
+#: The order of this tuple **is** `display_order`, and `display_order` is the order the booking
+#: screen renders in — the client takes the catalogue's sequence and never re-sorts it. So the
+#: sequence is a product decision made here: what the crew will do comes first, because it is the
+#: question a Customer can answer without thinking, and the two numbers that move the price follow
+#: it. Asking "how many people?" before "to do what?" is the order that makes somebody guess.
 A3_QUESTIONS: tuple[QuestionSeed, ...] = (
-    ("worker_count", "How many people do you need?", ServiceQuestion.Kind.NUMBER, True, 1),
-    ("duration_days", "For how many days?", ServiceQuestion.Kind.NUMBER, True, 1),
-    ("work_description", "What will they be doing?", ServiceQuestion.Kind.TEXT, False, None),
+    # Picked, not described. `work_description` was a free-text box asking a Customer to write a
+    # job spec for people they have not met, and it is the field they abandon the form on: it is
+    # optional, so most leave it blank, and a lead then reads "3 people, 2 days" and has no idea
+    # what to bring. A named list answers both — the Customer taps once, and the offer a lead
+    # receives says what the work actually is.
+    #
+    # The vocabulary is authored **here**, on the same versioned question schema A5's fit-out
+    # picker uses, so the codes are the server's and the client only decorates them.
+    (
+        "work_type",
+        "What will they be doing?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            (
+                "loading-unloading",
+                "Loading and unloading",
+                "Moving material off and onto vehicles, stacking and carrying by hand.",
+            ),
+            (
+                "material-shifting",
+                "Material shifting on site",
+                "Carrying cement, sand, bricks and tools between floors and store rooms.",
+            ),
+            (
+                "site-clearing",
+                "Site clearing and debris removal",
+                "Clearing rubble and waste, sweeping down and preparing a space to work in.",
+            ),
+            (
+                "masonry-helper",
+                "Masonry and concreting helper",
+                "Mixing, carrying and feeding a mason or a concreting crew.",
+            ),
+            (
+                "painting-helper",
+                "Painting and finishing helper",
+                "Surface preparation, masking, sanding and assisting a painter.",
+            ),
+            (
+                "demolition-support",
+                "Demolition support",
+                "Breaking out, bagging and clearing away under a supervisor's direction.",
+            ),
+            (
+                "general-labour",
+                "General site labour",
+                "A mix of the above, directed on the day by your site supervisor.",
+            ),
+            (
+                "other",
+                "Something else",
+                "Tell us in a sentence and we will pass it to the supervisor with the offer.",
+            ),
+        ),
+    ),
+    ("worker_count", "People", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    ("duration_days", "Days", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    # Kept, and now doing one job instead of two: the free text behind "Something else". Optional
+    # by design — a Customer who picked a named task has already said enough, and asking them to
+    # write it out again is the friction this change exists to remove.
+    (
+        "work_description",
+        "Tell us what the work is",
+        ServiceQuestion.Kind.TEXT,
+        False,
+        None,
+        None,
+    ),
 )
 A5_QUESTIONS: tuple[QuestionSeed, ...] = (
-    ("deliverable", "What should be finished at the end?", ServiceQuestion.Kind.TEXT, True, None),
-    ("site_ready", "Is the site empty and ready?", ServiceQuestion.Kind.BOOLEAN, False, None),
+    (
+        "fit_out_style",
+        "What kind of fit-out do you need?",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            (
+                "office-fit-out",
+                "Office fit-out",
+                "Open desks, meeting rooms, power and data, with a tidy move-in finish.",
+            ),
+            (
+                "retail-fit-out",
+                "Retail fit-out",
+                "Shopfronts, display walls, lighting and customer flow.",
+            ),
+            (
+                "hospitality-fit-out",
+                "Hospitality fit-out",
+                "Counters, seating zones and durable guest-facing finishes.",
+            ),
+            (
+                "shell-core-completion",
+                "Shell and core completion",
+                "Partitions, ceilings, flooring and services brought together for a bare shell.",
+            ),
+        ),
+    ),
+    # The three facts a vendor needs before deciding whether to spend half a day
+    # visiting, and the three a Customer can answer without thinking.
+    #
+    # They were absent, which meant the brief a professional received said what
+    # kind of fit-out and nothing about the size, the setting or the money —
+    # so the first question on every enquiry was one of these three, asked by
+    # phone, days later. Asking them here costs four taps and a number.
+    (
+        "space_type",
+        "The space",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        True,
+        None,
+        (
+            ("home", "Home", ""),
+            ("office", "Office", ""),
+            ("shop", "Shop", ""),
+        ),
+    ),
+    ("floor_area_sqft", "Roughly how big?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+    # **Not required, and "Not sure" is a real option rather than a way to skip.**
+    # A Customer who does not know their budget is the ordinary case on a project
+    # nobody has priced yet, and forcing a band would make them invent one —
+    # which is worse than silence, because a vendor quotes against it.
+    (
+        "budget_band",
+        "Budget in mind",
+        ServiceQuestion.Kind.SINGLE_CHOICE,
+        False,
+        None,
+        (
+            ("under-5l", "Under ₹5L", ""),
+            # An en dash, which is the correct character for a numeric range and
+            # what the customer sees. RUF001 flags it as confusable with a
+            # hyphen, which is true of identifiers and irrelevant to display copy.
+            ("5l-15l", "₹5–15L", ""),  # noqa: RUF001
+            ("over-15l", "₹15L+", ""),
+            ("not-sure", "Not sure", ""),
+        ),
+    ),
 )
 
 #: The vendor's own registration questions for the A3 capability (`M2-BE-106`), on the same
@@ -168,6 +325,7 @@ A3_REGISTRATION_QUESTIONS: tuple[QuestionSeed, ...] = (
         ServiceQuestion.Kind.NUMBER,
         True,
         1,
+        None,
     ),
 )
 A3_REGISTRATION_ANSWERS: dict[str, object] = {"crew_capacity": 12}
@@ -182,8 +340,18 @@ def _question_schema(questions: tuple[QuestionSeed, ...]) -> dict[str, object]:
                 "kind": _SCOPE_KIND_BY_QUESTION_KIND[kind],
                 "required": required,
                 **({"minimum": minimum} if minimum is not None else {}),
+                **(
+                    {
+                        "options": [
+                            {"code": option_code, "label": label, "description": description}
+                            for option_code, label, description in options
+                        ]
+                    }
+                    if options is not None
+                    else {}
+                ),
             }
-            for code, prompt, kind, required, minimum in questions
+            for code, prompt, kind, required, minimum, options in questions
         ]
     }
 
@@ -276,16 +444,24 @@ RATE_CARD_ADD_ON_RATES: dict[str, int] = {
 #: instant path refuses — an instant booking whose scope was never pinned down is the "third floor,
 #: no lift? Extra, bhaiya" the rate card exists to prevent.
 A3_PRESET_QUESTIONS: tuple[QuestionSeed, ...] = (
-    ("floor_number", "Which floor?", ServiceQuestion.Kind.NUMBER, True, 0),
-    ("has_lift", "Is there a working lift?", ServiceQuestion.Kind.BOOLEAN, True, None),
+    ("floor_number", "Which floor?", ServiceQuestion.Kind.NUMBER, True, 0, None),
+    ("has_lift", "Is there a working lift?", ServiceQuestion.Kind.BOOLEAN, True, None, None),
     (
         "carry_distance_m",
         "How far from the vehicle to the door, in metres?",
         ServiceQuestion.Kind.NUMBER,
         True,
         0,
+        None,
     ),
-    ("needs_packing", "Do you need packing as well?", ServiceQuestion.Kind.BOOLEAN, True, None),
+    (
+        "needs_packing",
+        "Do you need packing as well?",
+        ServiceQuestion.Kind.BOOLEAN,
+        True,
+        None,
+        None,
+    ),
 )
 
 #: The cascade's shape. Pre-phase decision list, all four of them. A wave of three, widening by two
@@ -439,6 +615,17 @@ _C6_RECOVERY_POLICY: dict[str, Any] = {
     "chargeback_alarm_min_charges": CHARGEBACK_ALARM_MIN_CHARGES,
     "operations_touch_budget_per_request": OPERATIONS_TOUCH_BUDGET_PER_REQUEST,
 }
+
+
+def _matches_seeded_rate(card: RateCard) -> bool:
+    """Whether a published card already carries exactly the components this seed would write."""
+    return (
+        card.worker_day_wage_paise == RATE_CARD_WORKER_DAY_WAGE_PAISE
+        and card.supervision_margin_paise == RATE_CARD_SUPERVISION_MARGIN_PAISE
+        and card.booking_fee_paise == RATE_CARD_BOOKING_FEE_PAISE
+        and card.standard_day_hours == RATE_CARD_STANDARD_DAY_HOURS
+        and card.overtime_hourly_paise == RATE_CARD_OVERTIME_HOURLY_PAISE
+    )
 
 
 class Command(BaseCommand):
@@ -665,12 +852,32 @@ class Command(BaseCommand):
                 "is_active": True,
             },
         )
-        for order, (code, prompt, kind, required, minimum) in enumerate(questions, start=1):
-            ServiceQuestion.objects.update_or_create(
+        # The authored list is the whole list.
+        #
+        # Without this the command only ever *added*: a question dropped from the tuple stayed
+        # active on the variant forever, so every environment accumulated whatever any earlier
+        # revision of this file had asked for. That is how a fit-out brief ended up asking "what
+        # should be finished at the end?" — a question removed from the design months ago and
+        # still required, still blocking the form's Continue.
+        #
+        # Deactivated rather than deleted: `CustomerRequirement.answers` may still hold answers
+        # keyed on these codes, and deleting the question a stored answer refers to would leave a
+        # submitted requirement describing a field nobody can look up.
+        authored_codes = {code for code, *_ in questions}
+        ServiceQuestion.objects.filter(variant=variant, is_active=True).exclude(
+            code__in=authored_codes
+        ).update(is_active=False)
+
+        for order, (code, prompt, kind, required, minimum, options) in enumerate(
+            questions,
+            start=1,
+        ):
+            question, _ = ServiceQuestion.objects.update_or_create(
                 variant=variant,
                 code=code,
                 defaults={
                     "prompt": prompt,
+                    "help_text": QUESTION_HELP.get(code, ""),
                     "kind": kind,
                     "is_required": required,
                     "validation_rules": ({"minimum": minimum} if minimum is not None else {}),
@@ -678,6 +885,20 @@ class Command(BaseCommand):
                     "is_active": True,
                 },
             )
+            question.options.all().delete()
+            if options is not None:
+                for option_order, (option_code, option_label, option_description) in enumerate(
+                    options,
+                    start=1,
+                ):
+                    ServiceQuestionOption.objects.create(
+                        question=question,
+                        code=option_code,
+                        label=option_label,
+                        description=option_description,
+                        display_order=option_order,
+                        is_active=True,
+                    )
         return variant
 
     # -- the owner-blocked configuration -----------------------------------
@@ -846,6 +1067,14 @@ class Command(BaseCommand):
             label=label,
         ):
             return False
+        # Already published, and identical. Re-publishing would be a no-op with a side effect:
+        # `publish_rate_card` refuses a card whose effective date is covered by a live booking, so
+        # the second run of an "idempotent" seed failed hard the moment anybody had booked at this
+        # rate — which is every environment the seed is useful in. Skipping an unchanged card keeps
+        # the guard doing its real job, which is catching a *changed* price landing under live work.
+        if existing is not None and _matches_seeded_rate(existing):
+            self.stdout.write(f"  {label}: already published, unchanged")
+            return True
         publish_rate_card(
             service_area_id=area.id,
             skill_id=skill.id,

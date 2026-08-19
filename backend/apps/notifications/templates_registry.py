@@ -86,16 +86,24 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "We could not confirm a crew at the published rate. Nothing has been charged. Vendors can "
         "now send you quotes instead.",
     ),
+    # Sent where `m2_rate_card_fell_back` used to be sent automatically. The difference is the
+    # whole point: this one reports a **pause**, not a product change, so the body has to say that
+    # the request is untouched and name the ways out without picking one.
+    "m2_rate_card_exhausted": (
+        "No crew accepted yet",
+        "Nothing has been charged. You can search wider, switch to quotes, or cancel — your "
+        "request is exactly as you left it.",
+    ),
     # ---- A5: visit-first projects --------------------------------------------------------
+    "m2_invitation_received": (
+        "New customer enquiry",
+        "A customer has sent a new enquiry. Open it now to accept or quote before the slot moves "
+        "on.",
+    ),
     "m2_visit_plan_charged": (
         "Your site visits are booked",
         "Your visit plan is paid and {visit_count} scheduled. Each professional will estimate on "
         "site.",
-    ),
-    "m2_proposal_selected": (
-        "You were selected — confirm to start",
-        "The customer chose your estimate. Reconfirm to open the job; the invitation lapses if you "
-        "do not.",
     ),
     "m2_proposal_rejected": (
         "Your quote was not selected",
@@ -107,8 +115,9 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
         "Everything is agreed with {partner_name} and the job is open.",
     ),
     "m2_engagement_opened_partner": (
-        "The job is open",
-        "The customer has confirmed. You can start work as the agreed schedule allows.",
+        "You won this job",
+        "The customer chose your quote and the job is open — there is nothing to confirm. You can "
+        "start work as the agreed schedule allows.",
     ),
     "m2_stage_awaiting_review": (
         "Work is waiting for your review",
@@ -131,6 +140,136 @@ _TEMPLATES: dict[str, tuple[str, str]] = {
     "m2_requirement_closed": (
         "Your request is closed",
         "This request has ended. Anything you paid that was not used has been refunded.",
+    ),
+    # ---- Capture and matching, the half the Customer used to hear nothing about --------------
+    #
+    # Everything from here down was added because the Customer's feed stayed empty through the
+    # part of the journey they are most anxious during: they send a request, three vendors accept
+    # it, quotes arrive — and nothing at all is said until money moves. Two of these notices
+    # (`m2_invitation_accepted`, `m2_proposal_submitted`) needed a domain event to be emitted
+    # before they could exist; see `matching.accept_invitation` and `proposals._announce_proposal`.
+    "m2_requirement_submitted": (
+        "Your request is on its way",
+        "We are sending it to professionals near you. You will hear as soon as someone accepts, "
+        "and nothing is charged for asking.",
+    ),
+    "m2_invitation_accepted": (
+        "{partner_name} accepted your request",
+        "They are taking one of the quote slots on this job. Nothing is charged yet — you choose "
+        "who to go with once the quotes are in.",
+    ),
+    #: The one notice the whole A5 product turns on. It must say what arrived *and* what the
+    #: Customer has to do next, because the price is deliberately a band until they unlock.
+    "m2_proposal_submitted": (
+        "{partner_name} sent you a quote",
+        "Open your request to see the price, then unlock to read the full quote and contact them "
+        "directly.",
+    ),
+    "m2_unlock_activated": (
+        "Your quotes are unlocked",
+        "You can now read every quote in full, see who sent it and contact them directly.",
+    ),
+    "m2_requirement_reclassified": (
+        "We moved your request",
+        "This job is a better fit for a different kind of service, so we have moved it. "
+        "Everything you entered is still here and nothing extra is charged.",
+    ),
+    "m2_booking_fee_waived": (
+        "No booking fee on this job",
+        "We have waived the booking fee. Nothing has been charged for it.",
+    ),
+    # ---- A3: the working day -----------------------------------------------------------------
+    "m2_shift_crew_assigned": (
+        "Your crew for {shift_date} is named",
+        "{partner_name} has assigned {crew_size} to that day. You can see who is coming on the "
+        "job page.",
+    ),
+    "m2_shift_arrival_confirmed": (
+        "Your crew has arrived",
+        "Arrival is confirmed on site and the day has started.",
+    ),
+    "m2_shift_shortfall": (
+        "Fewer workers arrived than agreed",
+        "{workers_present} of {workers_expected} turned up. What you owe for the day has been "
+        "adjusted to match what actually arrived.",
+    ),
+    "m2_shift_day_settled_customer": (
+        "Today is settled",
+        "You and {partner_name} both confirmed the day at {amount}. Pay the crew directly at the "
+        "rate you agreed.",
+    ),
+    "m2_shift_day_settled_partner": (
+        "The day is settled",
+        "Both sides confirmed today at {amount}. Collect from the customer directly, as agreed.",
+    ),
+    # ---- A5: the project ---------------------------------------------------------------------
+    "m2_project_handover_submitted": (
+        "Your deliverables are ready to review",
+        "{partner_name} submitted {deliverables} for your approval. Review them on the job page.",
+    ),
+    "m2_project_delay_claimed": (
+        "{partner_name} asked for more time",
+        "They have claimed {extension_days} extra day(s) on this project. Accept it or dispute it "
+        "on the job page.",
+    ),
+    "m2_project_transfer_proposed": (
+        "A replacement professional is proposed",
+        "We have found someone who can take this project over. Review the change before it goes "
+        "ahead — nothing moves until you answer.",
+    ),
+    "m2_project_transferred_customer": (
+        "Your project moved to another professional",
+        "{partner_name} has taken it over. Anything the previous vendor had not earned has been "
+        "returned to you.",
+    ),
+    "m2_project_transferred_partner": (
+        "This project has been transferred",
+        "It has moved to another vendor. Nothing further is expected from you on it.",
+    ),
+    "m2_project_terminated_customer": (
+        "This project was ended",
+        "The project is closed. Anything you funded that nobody had earned has been refunded.",
+    ),
+    "m2_project_terminated_partner": (
+        "This project was ended",
+        "The project is closed. Anything you had already earned stays yours.",
+    ),
+    # ---- Endings and trouble -----------------------------------------------------------------
+    "m2_cancellation_executed": (
+        "The cancellation went through",
+        "This job is cancelled. Any refund it earned has been issued.",
+    ),
+    "m2_cancellation_disputed": (
+        "The cancellation is disputed",
+        "Our team is looking at it. Nothing moves and no money changes hands until they decide.",
+    ),
+    "m2_engagement_completing_customer": (
+        "The work is finished",
+        "{partner_name} marked this job complete. Accept it or raise a problem — if you do "
+        "nothing, it closes on its own when the window ends.",
+    ),
+    "m2_engagement_completing_partner": (
+        "You marked this job complete",
+        "The customer has been asked to accept it. If they do nothing, it closes when the review "
+        "window ends.",
+    ),
+    "m2_engagement_redispatched": (
+        "We found you another professional",
+        "The previous vendor could not continue, so {partner_name} is taking this job on at the "
+        "same rate. Nothing extra is charged.",
+    ),
+    "m2_engagement_capability_suspended": (
+        "We had to pause your professional",
+        "This vendor has been suspended. Anything you funded that nobody earned has been returned "
+        "and we are arranging a replacement.",
+    ),
+    "m2_safety_incident_reported": (
+        "A safety incident was reported",
+        "It is logged and our team is on it. Work here may pause while they look into it.",
+    ),
+    "m2_proposal_revalidation_requested": (
+        "Confirm your quote is still good",
+        "This quote has been open a while. Reconfirm it so the customer can still choose it.",
     ),
 }
 

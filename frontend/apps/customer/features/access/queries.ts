@@ -251,10 +251,33 @@ export function useChooseVisitPlan() {
           body: { plan_size: input.planSize },
         }),
       ),
-    onSuccess: (_plan: VisitPlan, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: m2AccessKeys.visitPlan(input.requirementId),
-      });
+    /**
+     * The response **is** the new plan, so it is written in rather than fetched
+     * again.
+     *
+     * This used to invalidate, which meant every press of a tier cost two round
+     * trips — the write, and then a full re-read of the plan, the priced tiers
+     * and the visits — and the chooser did not move until the second one landed.
+     * On a phone that reads as the screen reloading each time you change your
+     * mind between one professional and two.
+     *
+     * Only `plan` is replaced. `available_tiers` is Operations' price list and
+     * `visits` are the vendors' commitments; neither changes because the
+     * Customer picked a different size, and re-reading them was the expensive
+     * half of the refetch.
+     *
+     * Falls back to invalidating when there is nothing cached to merge into —
+     * a first render, or a cache cleared under us — because writing a partial
+     * state would be worse than fetching one.
+     */
+    onSuccess: (plan: VisitPlan, input) => {
+      const key = m2AccessKeys.visitPlan(input.requirementId);
+      const previous = queryClient.getQueryData<VisitPlanState>(key);
+      if (previous === undefined) {
+        void queryClient.invalidateQueries({ queryKey: key });
+        return;
+      }
+      queryClient.setQueryData<VisitPlanState>(key, { ...previous, plan });
     },
     retry: false,
   });
@@ -271,6 +294,10 @@ const PLAN_CHECKOUT_SCOPE = "m2-visit-plan-checkout";
  */
 export function visitPlanCheckoutKey(planId: string): string {
   return getStableIdempotencyKey(`${PLAN_CHECKOUT_SCOPE}:${planId}`);
+}
+
+export function canSimulateAccessCheckout(checkout: Schemas["AccessCheckout"]): boolean {
+  return checkout.provider === "fake";
 }
 
 export interface StartVisitPlanCheckoutInput {
@@ -305,6 +332,37 @@ export function useStartVisitPlanCheckout() {
         }),
       );
     },
+    onSettled: (_data, _error, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: m2AccessKeys.visitPlan(input.requirementId),
+      });
+    },
+    retry: false,
+  });
+}
+
+export interface SimulateVisitPlanCaptureInput {
+  requirementId: string;
+  paymentAttemptId: string;
+}
+
+/**
+ * Development-only capture for the checkout-free A5 visit-plan charge.
+ *
+ * The server remains the gatekeeper: production returns 404 because simulated
+ * capture is disabled, and non-fake providers are refused. After the command,
+ * the visit-plan aggregate is the read that says whether payment became active.
+ */
+export function useSimulateVisitPlanCapture() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SimulateVisitPlanCaptureInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+          params: { path: { attempt_id: input.paymentAttemptId } },
+        }),
+      ),
     onSettled: (_data, _error, input) => {
       void queryClient.invalidateQueries({
         queryKey: m2AccessKeys.visitPlan(input.requirementId),
@@ -418,6 +476,81 @@ export function useReportVendorNoShow() {
       void queryClient.invalidateQueries({
         queryKey: m2QueryKeys.requirements.timeline(input.requirementId),
       });
+    },
+    retry: false,
+  });
+}
+
+/* --------------------------------------------------------------------------
+   The arrival code — contract 1.39.0
+   -------------------------------------------------------------------------- */
+
+export type VisitArrivalCode = Schemas["VisitArrivalCode"];
+
+/**
+ * The code the Customer reads out to the professional at the door.
+ *
+ * ## Why this is a read of its own and not part of the plan
+ *
+ * The plan read is shared: `SiteVisitSerializer` is published to both roles, so
+ * the code cannot live on it — a code the party who *enters* it can also fetch
+ * proves nothing, and the arrival record would be back to an unverified tap. The
+ * server scopes this route to the Customer alone, and that scoping is the whole
+ * security property of the feature.
+ *
+ * ## Why it is not polled
+ *
+ * Nothing about the code changes underneath the reader. It is minted by their own
+ * tap and dies on a clock the response publishes, so the page counts down from
+ * `expires_at` rather than asking again. The one thing that *does* change without
+ * them — the vendor entering it, which starts the visit — is a change to the
+ * visit, and the plan read is what carries that.
+ */
+export function useVisitArrivalCode(siteVisitId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: m2AccessKeys.visitArrivalCode(siteVisitId ?? ""),
+    queryFn: () =>
+      request(() =>
+        getApiClient().GET("/api/v1/site-visits/{site_visit_id}/arrival-code/", {
+          params: { path: { site_visit_id: siteVisitId as string } },
+        }),
+      ),
+    enabled: enabled && siteVisitId !== null,
+    ...M2_FRESHNESS.visitPlan,
+    retry: shouldRetryM2Read,
+  });
+}
+
+/**
+ * Mints a fresh code and retires the previous one.
+ *
+ * Two controls in the UI reach this, and they are the same command: "get a new
+ * code" when the customer wants one, and the recovery when the display copy has
+ * been evicted from the server's cache while the challenge is still live. The
+ * server refuses a second mint inside the resend cooldown with
+ * `m2_arrival_code_too_soon`, which is a real answer — the previous code still
+ * works — so the screen shows it rather than treating it as a failure.
+ *
+ * No idempotency key, deliberately. Every tap is meant to produce a *different*
+ * code; replaying one under a stable key would hand back digits the server has
+ * already retired.
+ */
+export function useIssueVisitArrivalCode() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { siteVisitId: string }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/site-visits/{site_visit_id}/arrival-code/", {
+          params: { path: { site_visit_id: input.siteVisitId } },
+        }),
+      ),
+    onSuccess: (data, input) => {
+      // Written straight into the cache rather than invalidated. The response
+      // *is* the code, and a refetch would ask the server for digits it only
+      // holds in a short-lived cache — the one case where re-reading can turn a
+      // code the customer is looking at into a null.
+      queryClient.setQueryData(m2AccessKeys.visitArrivalCode(input.siteVisitId), data);
     },
     retry: false,
   });

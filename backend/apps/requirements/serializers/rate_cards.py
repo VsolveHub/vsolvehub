@@ -162,6 +162,14 @@ class RatePreviewSerializer(serializers.Serializer[dict[str, Any]]):
     #: not imply otherwise — an A3 booking is not wage-protected and saying so is the promise this
     #: platform cannot keep.
     lead_receipt_paise = serializers.IntegerField(read_only=True, allow_null=True)
+    #: The same cash, for **one day** — the whole crew, at the end of one shift. Published rather
+    #: than left to be divided out of `lead_receipt_paise`, because it is the number the Customer
+    #: actually has to act on: it is what they put in an envelope on the morning of day one, and
+    #: the booking screen and the confirmed engagement both print it against each day. A client
+    #: recovering it by dividing the total by the day count would be doing money arithmetic on a
+    #: figure whose divisor it also had to trust, in the one disclosure that may not contain a
+    #: number this platform did not calculate.
+    lead_day_receipt_paise = serializers.IntegerField(read_only=True, allow_null=True)
     booking_fee_paise = serializers.IntegerField(read_only=True, allow_null=True)
     standard_day_hours = serializers.IntegerField(read_only=True, allow_null=True)
     overtime_hourly_paise = serializers.IntegerField(read_only=True, allow_null=True)
@@ -188,6 +196,12 @@ class RateCardBookSerializer(serializers.Serializer[dict[str, Any]]):
 class RateCardBookingSerializer(serializers.ModelSerializer[RateCardBooking]):
     """The Customer's booking, frozen at the rate it was made at."""
 
+    #: The whole crew's cash for **one** day, from the components frozen onto this booking rather
+    #: than divided out of `lead_receipt_paise`. It is the figure the confirmation screen prints
+    #: against each day — "have this ready on day one" — and the model already owns the sum, so
+    #: publishing it keeps the arithmetic on the side that has the authoritative components.
+    lead_day_receipt_paise = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = RateCardBooking
         fields = (
@@ -198,6 +212,7 @@ class RateCardBookingSerializer(serializers.ModelSerializer[RateCardBooking]):
             "day_rate_paise",
             "total_customer_paise",
             "lead_receipt_paise",
+            "lead_day_receipt_paise",
             "booking_fee_paise",
             "standard_day_hours",
             "overtime_hourly_paise",
@@ -241,6 +256,23 @@ class BookingFeeSerializer(serializers.ModelSerializer[BookingFee]):
         read_only_fields = fields
 
 
+class CascadeProgressSerializer(serializers.Serializer[dict[str, Any]]):
+    """How far the crew search has got, while it is still running.
+
+    Everything here answers a question the waiting screen could not answer before: how many leads
+    are looking at this offer right now, how many waves there are, and when the current one runs
+    out — which is when the search widens on its own. Null on the whole object once the cascade is
+    no longer out.
+    """
+
+    wave = serializers.IntegerField(read_only=True)
+    total_waves = serializers.IntegerField(read_only=True)
+    offers_out = serializers.IntegerField(read_only=True)
+    #: Null on the final wave, because there is no next one to name. A screen that counted down to
+    #: a wave that never fires would be promising a search that has already reached its end.
+    next_wave_at = serializers.DateTimeField(read_only=True, allow_null=True)
+
+
 class RateCardStateSerializer(serializers.Serializer[dict[str, Any]]):
     """The whole A3 instant path as one read: the price before, the crew and the fee after.
 
@@ -252,6 +284,9 @@ class RateCardStateSerializer(serializers.Serializer[dict[str, Any]]):
     preview = RatePreviewSerializer(read_only=True)
     booking = RateCardBookingSerializer(read_only=True, allow_null=True)
     booking_fee = BookingFeeSerializer(read_only=True, allow_null=True)
+    #: The live search, while one is running. Null at every other moment — including a held offer,
+    #: where the cascade has stopped and the question is no longer "who might take this".
+    cascade = CascadeProgressSerializer(read_only=True, allow_null=True)
     #: Mirrors `create_booking_fee_checkout`'s guard so the pay button can be disabled — never so
     #: the client can decide. The command re-checks under the booking's row lock.
     checkout_available = serializers.BooleanField(read_only=True)
@@ -260,6 +295,14 @@ class RateCardStateSerializer(serializers.Serializer[dict[str, Any]]):
     #: confirmation, not by the hold.
     confirmed_partner_id = serializers.UUIDField(read_only=True, allow_null=True)
     confirmed_partner_name = serializers.CharField(read_only=True, allow_null=True)
+    #: The agreement this booking became, once a verified fee created one. Null before that.
+    #:
+    #: Published because the Customer's request screen has to be able to *reach* the booking, and
+    #: until now it could not: it knew the confirmed partner and no engagement id, so the only
+    #: honest link it could offer was to the whole list. Everything that happens after
+    #: confirmation — the day controls, the receipt, the frozen terms — lives on the engagement,
+    #: and a record you can only find by browsing is a record most people do not find.
+    engagement_id = serializers.UUIDField(read_only=True, allow_null=True)
     server_now = serializers.DateTimeField(read_only=True)
 
 

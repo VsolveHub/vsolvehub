@@ -16,7 +16,8 @@ import { cn } from "./cn";
  *   - it renders in the top layer, which ends z-index fights permanently
  *
  * What still has to be done by hand: scroll locking, closing on a backdrop
- * click, and restoring focus in the cases the platform misses.
+ * click, and restoring focus in the cases the platform misses — see
+ * `useModalDialog`, which now does all three.
  *
  * `Sheet` is the same machinery docked to the bottom edge. On a phone that is
  * the reachable position for a summary or a picker; plan 03 asks for the price
@@ -44,6 +45,18 @@ interface BaseProps {
 
 function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
   const ref = useRef<HTMLDialogElement>(null);
+  /**
+   * What had focus before the dialog opened — almost always the trigger.
+   *
+   * The platform is supposed to restore this on `close()`, and usually does.
+   * It stops doing it in exactly the cases that matter here: when the trigger
+   * re-renders while the dialog is open, when it is removed and replaced (the
+   * address row's label changes the moment a new address is chosen), or when
+   * the dialog is closed programmatically rather than by the user. In all three
+   * the browser drops focus on `<body>`, and a keyboard user is returned to the
+   * top of the document having lost their place entirely.
+   */
+  const trigger = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -51,8 +64,28 @@ function useModalDialog(open: boolean, onOpenChange: (open: boolean) => void) {
 
     // Guarded because React may run effects twice in development, and calling
     // showModal() on an already-open dialog throws.
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      trigger.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      dialog.showModal();
+    }
     if (!open && dialog.open) dialog.close();
+  }, [open]);
+
+  useEffect(() => {
+    if (open) return;
+    const element = trigger.current;
+    trigger.current = null;
+    if (element === null) return;
+
+    // Only when the platform did not already do it. Re-focusing an element that
+    // already has focus is harmless, but re-focusing when the *user* has since
+    // moved on — a close that happened because they clicked something else —
+    // would yank them backwards.
+    const active = document.activeElement;
+    const platformRestored = active !== null && active !== document.body;
+    if (platformRestored || !element.isConnected) return;
+    element.focus();
   }, [open]);
 
   useEffect(() => {

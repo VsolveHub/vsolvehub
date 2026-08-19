@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.34.0
+  version: 1.39.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -3640,6 +3640,40 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: '`m2_stage_transition_not_allowed` on an A3 engagement: a workforce
             booking has shift-days, not milestones.'
+  /api/v1/engagements/{engagement_id}/receipt/download/:
+    get:
+      operationId: m2_engagement_receipt_download
+      description: |-
+        Download the access-fee receipt as a PDF. `Content-Disposition: attachment`.
+
+        **Not a tax invoice, and the document says so on its face.** An access fee has no `Order`, `TaxDocument.order` is not nullable, and GST treatment of these fees is an open owner decision — so this is a receipt for money received and is labelled as one.
+
+        On an A3 crew booking the sheet also states the money paid **directly to the crew**, marked as not collected by Vsolve. The booking costs several times this receipt, and a document mentioning only its own slice leaves the reader wondering where the rest went.
+      parameters:
+      - in: path
+        name: engagement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Engagements
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/engagements/{engagement_id}/safety-incidents/:
     get:
       operationId: m2_safety_incident_list
@@ -10533,6 +10567,72 @@ paths:
                 items:
                   $ref: '#/components/schemas/PartnerConsentDocument'
           description: ''
+  /api/v1/partner/site-visits/{site_visit_id}/arrival/:
+    post:
+      operationId: m2_site_visit_arrival_with_code
+      description: Confirm arrival by entering the code the Customer is holding. Records
+        `arrival_method=START_OTP`. A wrong code spends one of the challenge's attempts
+        and the spend survives the refusal, so the attempt limit cannot be reset by
+        retrying.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: site_visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Site visits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitArrivalCodeEntryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VisitArrivalCodeEntryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VisitArrivalCodeEntryRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteVisit'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_arrival_code_invalid` — wrong, expired, already used,
+            or too many wrong attempts. Deliberately one code for all four: telling
+            the entering party which it was is what makes an attempt limit worth guessing
+            against.'
   /api/v1/partner/skills/:
     get:
       operationId: partner_skills_list
@@ -12128,7 +12228,21 @@ paths:
         The published day rate for this request and everything that has happened to it since. **`preview.is_available: false` is not an error** — it means this city and skill have no published card, or instant dispatch is not configured for this service, and the request will collect quotes instead. `unavailable_code` says which.
 
         The money split published here is the Customer's: `total_customer_paise` divides into `lead_receipt_paise`, **paid directly to the crew at day end and never held by Vsolve**, and `booking_fee_paise`, the one online charge. The lead's own wage and supervision split is deliberately absent.
+
+        `headcount` and `days` price a size the draft has not been saved at, so the booking screen can put the price beside the form and keep it correct while the Customer changes their mind. They affect `preview` **only** — never `booking`, which is a record of what happened — and they book nothing: `m2_rate_card_book` still prices the stored draft, so a size previewed here and never saved cannot become a purchase. Supply both or neither; anything else is ignored and the saved preset answers.
       parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: How many days to price, instead of the saved draft's answer.
+          Ignored unless `headcount` is supplied too.
+      - in: query
+        name: headcount
+        schema:
+          type: integer
+        description: How many workers to price, instead of the saved draft's answer.
+          Ignored unless `days` is supplied too.
       - in: path
         name: requirement_id
         schema:
@@ -12224,6 +12338,149 @@ paths:
             honest degradation rather than a guessed price. `m2_policy_unavailable`
             when instant dispatch is not configured for this service. `m2_requirement_duplicate`
             unless `allow_duplicate` is set.'
+  /api/v1/requirements/{requirement_id}/rate-card/cancel/:
+    post:
+      operationId: m2_rate_card_cancel
+      description: |-
+        Close a request that no crew accepted. **Free, and provably so**: a booking fee only exists once a lead accepts, and this refuses any state but `EXHAUSTED` — where, by definition, none did.
+
+        Cancelling a crew that *was* booked is a different command with real money behind it (`m2_booking_fee_cancel`), and is deliberately not reachable from here.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardBooking'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` unless the booking
+            is `EXHAUSTED`. A cascade that is still running has not asked the Customer
+            anything yet, and a job a crew already took is not theirs to redirect.'
+  /api/v1/requirements/{requirement_id}/rate-card/quotes/:
+    post:
+      operationId: m2_rate_card_choose_quotes
+      description: |-
+        Move the request onto the quote flow after nobody accepted at the published rate. Nothing has been charged and nothing is charged here.
+
+        This is the transition that used to happen automatically. It is the same transition — vendors now send quotes on the ordinary business-hours clock — but it happens because the Customer chose it, and the booking records which.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardBooking'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` unless the booking
+            is `EXHAUSTED`. A cascade that is still running has not asked the Customer
+            anything yet, and a job a crew already took is not theirs to redirect.'
+  /api/v1/requirements/{requirement_id}/rate-card/retry/:
+    post:
+      operationId: m2_rate_card_retry
+      description: |-
+        Send another, wider wave of crew offers after nobody accepted.
+
+        **The price does not change and cannot be changed here.** The A3 day rate is an Operations-published card sitting above a statutory wage floor, and its wage half is paid to the crew directly in cash at day end — money this platform never holds. A customer-set premium would advertise a rate nobody could enforce, on top of the rule that a partner may never charge above the card. Thin supply is answered by reaching further, which is what it usually needs.
+
+        The wave counter is not reset, so this reaches leads the earlier waves did not. Each retry buys another `max_waves` of reach; when that is spent the booking parks again.
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: Stable opaque key for this logical command. Reuse it only when
+          retrying the identical request; using it with a different payload returns
+          409.
+        required: true
+      - in: path
+        name: requirement_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Rate card
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCardBooking'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` unless the booking
+            is `EXHAUSTED`. A cascade that is still running has not asked the Customer
+            anything yet, and a job a crew already took is not theirs to redirect.'
   /api/v1/requirements/{requirement_id}/selection/:
     get:
       operationId: m2_selection_read
@@ -13169,6 +13426,79 @@ paths:
           description: '`m2_requirement_transition_not_allowed` when the visit is
             not scheduled — a visit whose plan payment has not been verified is still
             held, not scheduled, and nobody has arrived at it.'
+  /api/v1/site-visits/{site_visit_id}/arrival-code/:
+    get:
+      operationId: m2_site_visit_arrival_code_read
+      description: The live arrival code for this visit, for the Customer to read
+        out. `code` is null when no challenge is live, and also when one is live but
+        the short-lived display copy has expired from cache — in both cases the client
+        offers to issue a new one rather than showing digits that would be refused.
+      parameters:
+      - in: path
+        name: site_visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Site visits
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitArrivalCode'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+    post:
+      operationId: m2_site_visit_arrival_code_issue
+      description: Mint a fresh arrival code and retire any predecessor, so only one
+        code can ever open a visit.
+      parameters:
+      - in: path
+        name: site_visit_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - M2 - Site visits
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitArrivalCode'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_requirement_transition_not_allowed` when the visit has
+            no confirmed time, or has already started.'
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: '`m2_arrival_code_too_soon` — a code was issued moments ago.
+            The existing one is still valid; read it from the `GET`.'
   /api/v1/site-visits/{site_visit_id}/complete/:
     post:
       operationId: m2_site_visit_complete
@@ -13378,6 +13708,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaxDocument'
           description: ''
+  /api/v1/tax-documents/{document_id}/download/:
+    get:
+      operationId: tax_document_download
+      description: |-
+        Download this invoice as a PDF. `Content-Disposition: attachment`, so a browser saves it rather than rendering it in a tab.
+
+        A document flagged `is_test` renders with a **TEST DOCUMENT** watermark across the page — a test invoice that printed like a real one is a test invoice somebody files with their accounts.
+      parameters:
+      - in: path
+        name: document_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Orders
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
 components:
   schemas:
     A1TaskLine:
@@ -13480,10 +13842,16 @@ components:
         amount_paise:
           type: integer
           readOnly: true
+        paid_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
       required:
       - amount_paise
       - kind
       - number
+      - paid_at
       - sequence
       - series
     ActionEnum:
@@ -14909,6 +15277,35 @@ components:
       required:
       - cart_version
       - suggestions
+    CascadeProgress:
+      type: object
+      description: |-
+        How far the crew search has got, while it is still running.
+
+        Everything here answers a question the waiting screen could not answer before: how many leads
+        are looking at this offer right now, how many waves there are, and when the current one runs
+        out — which is when the search widens on its own. Null on the whole object once the cascade is
+        no longer out.
+      properties:
+        wave:
+          type: integer
+          readOnly: true
+        total_waves:
+          type: integer
+          readOnly: true
+        offers_out:
+          type: integer
+          readOnly: true
+        next_wave_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - next_wave_at
+      - offers_out
+      - total_waves
+      - wave
     CaseAppealDecisionRequestOutcomeEnum:
       enum:
       - UPHELD
@@ -23798,6 +24195,9 @@ components:
         lead_receipt_paise:
           type: integer
           readOnly: true
+        lead_day_receipt_paise:
+          type: integer
+          readOnly: true
         booking_fee_paise:
           type: integer
           readOnly: true
@@ -23850,6 +24250,7 @@ components:
       - hold_expires_at
       - id
       - inclusions
+      - lead_day_receipt_paise
       - lead_receipt_paise
       - overtime_hourly_paise
       - standard_day_hours
@@ -23861,6 +24262,7 @@ components:
       - MATCHING
       - OFFER_HELD
       - CONFIRMED
+      - EXHAUSTED
       - FELL_BACK
       - CANCELLED
       type: string
@@ -23868,6 +24270,7 @@ components:
         * `MATCHING` - Looking for a crew
         * `OFFER_HELD` - A lead is holding this job
         * `CONFIRMED` - Crew confirmed and the booking fee is paid
+        * `EXHAUSTED` - No crew accepted
         * `FELL_BACK` - Fell back to the quote flow
         * `CANCELLED` - Cancelled
     RateCardDeclineAlarm:
@@ -24075,6 +24478,11 @@ components:
           - $ref: '#/components/schemas/BookingFee'
           readOnly: true
           nullable: true
+        cascade:
+          allOf:
+          - $ref: '#/components/schemas/CascadeProgress'
+          readOnly: true
+          nullable: true
         checkout_available:
           type: boolean
           readOnly: true
@@ -24087,6 +24495,11 @@ components:
           type: string
           readOnly: true
           nullable: true
+        engagement_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
         server_now:
           type: string
           format: date-time
@@ -24094,9 +24507,11 @@ components:
       required:
       - booking
       - booking_fee
+      - cascade
       - checkout_available
       - confirmed_partner_id
       - confirmed_partner_name
+      - engagement_id
       - preview
       - server_now
     RatePreview:
@@ -24134,6 +24549,10 @@ components:
           readOnly: true
           nullable: true
         lead_receipt_paise:
+          type: integer
+          readOnly: true
+          nullable: true
+        lead_day_receipt_paise:
           type: integer
           readOnly: true
           nullable: true
@@ -24181,6 +24600,7 @@ components:
       - headcount
       - inclusions
       - is_available
+      - lead_day_receipt_paise
       - lead_receipt_paise
       - overtime_hourly_paise
       - rate_card_id
@@ -26239,6 +26659,11 @@ components:
             the deployment's `TIME_ZONE` rather than a literal so that the one impossible case cannot
             become a second place Hyderabad is hardcoded.
           readOnly: true
+        vendor:
+          allOf:
+          - $ref: '#/components/schemas/VisitVendor'
+          nullable: true
+          readOnly: true
         fee_paise:
           type: integer
           readOnly: true
@@ -26291,6 +26716,7 @@ components:
       - scheduled_for
       - status
       - timezone
+      - vendor
     SiteVisitCompleteRequest:
       type: object
       properties:
@@ -27316,6 +27742,47 @@ components:
           minimum: 1
       required:
       - expected_version
+    VisitArrivalCode:
+      type: object
+      description: |-
+        The Customer's live arrival code, and whether a new one can be asked for.
+
+        `code` and `can_issue` answer two different questions and a client needs both. A visit that is
+        live but whose display copy has been evicted returns a null `code` with `can_issue` true —
+        "ask for a new one" — while a visit that has already started returns null with `can_issue`
+        false, which is "there is nothing left to prove here".
+      properties:
+        code:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        can_issue:
+          type: boolean
+        server_now:
+          type: string
+          format: date-time
+      required:
+      - can_issue
+      - code
+      - expires_at
+      - server_now
+    VisitArrivalCodeEntryRequest:
+      type: object
+      description: |-
+        What the vendor types in.
+
+        Bounded rather than free text: the length is fixed by `OTP_CODE_LENGTH`, and accepting an
+        unbounded string would hand the hasher arbitrary input on an unauthenticated-ish guess path.
+      properties:
+        code:
+          type: string
+          minLength: 4
+          maxLength: 12
+      required:
+      - code
     VisitArrivalMethodEnum:
       enum:
       - NON_OTP_FALLBACK
@@ -27389,6 +27856,14 @@ components:
           description: 'What the Customer still owes: the tier price less any carried-over
             unlock credit.'
           readOnly: true
+        payment_attempt_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        simulated_capture_available:
+          type: boolean
+          readOnly: true
         shares:
           type: array
           items:
@@ -27427,12 +27902,14 @@ components:
       - credit_paise
       - fill_due_at
       - id
+      - payment_attempt_id
       - plan_size
       - price_paise
       - receipt_sequence
       - receipt_series
       - settled_at
       - shares
+      - simulated_capture_available
       - status
     VisitPlanChooseRequest:
       type: object
@@ -27707,6 +28184,48 @@ components:
       - server_now
       - timezone
       - visit_duration_minutes
+    VisitVendor:
+      type: object
+      description: |-
+        Who is coming to the Customer's home.
+
+        ## Why this exists
+
+        `SiteVisit` reaches its vendor through `invitation.partner` and always has — but nothing
+        published it, so the Customer's tracker could only name a vendor who had already delivered an
+        *estimate*, and a confirmed slot with nobody named on it was the ordinary case. The screen
+        that tells somebody who is about to knock on their door was the one screen that could not say.
+
+        ## Why it is not published on every visit
+
+        Disclosure starts when a vendor confirms a slot on a paid plan, and `SCHEDULED` is precisely
+        that state — a visit whose plan payment has not been verified is *held*, not scheduled. Before
+        then the pool of invited vendors is deliberately private: publishing it would let a Customer
+        (or anybody who got hold of the read) enumerate which businesses were approached for what.
+
+        ## What is deliberately absent
+
+        No phone number and no address. Contact is released by the engagement, not by a visit, and a
+        visit read that carried a mobile number would be a contact-unlock nobody paid for.
+      properties:
+        display_name:
+          type: string
+        business_type:
+          type: string
+        is_verified:
+          type: boolean
+        experience_years:
+          type: integer
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+      required:
+      - business_type
+      - display_name
+      - experience_years
+      - is_verified
+      - photo_url
     WarrantyClaimRequest:
       type: object
       description: The Customer calls on a warranty the retention was held against.

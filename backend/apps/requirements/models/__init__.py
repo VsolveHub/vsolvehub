@@ -24,6 +24,7 @@ from .access import (
     ProposalSelection,
     QuoteUnlock,
     SiteVisit,
+    SiteVisitArrivalOtp,
     VisitPlan,
     VisitPlanShare,
 )
@@ -112,6 +113,7 @@ __all__ = [
     "SafetyIncident",
     "ShiftAttendance",
     "SiteVisit",
+    "SiteVisitArrivalOtp",
     "StageCrewAssignment",
     "StageEvidence",
     "StageEvidenceUpload",

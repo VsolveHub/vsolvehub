@@ -68,60 +68,137 @@ GET /api/v1/requirements/{id}/rate-card/
 
 ## 2. The preset — `M2-FE-425`
 
-1. The screen is **one screen**, not the four-screen flow. If you see a stepper,
-   you are on the A5 shape and something routed you wrong.
-2. **The questions are the server's.** They come from the variant's own published
-   question list — floor number, lift, carry distance, packing, headcount, days,
-   or whatever Operations authored. **Nothing here is hardcoded**, so the check
-   worth making is the negative one: remove a question from the variant in
-   Django, reload, and confirm the field is gone from the screen.
-3. Fill it in. Choose an address (the M1 picker, with the same serviceability
-   check the cart runs), a **Start from** date and a **Needed by** date.
-4. **See the published rate** is disabled until every required question, the
-   address and both dates are present.
+1. The screen is **one screen**, not the four-screen flow. If you see a progress
+   stepper across the top, you are on the A5 shape and something routed you
+   wrong.
+2. **The layout is two columns from `lg` up**: the form on the left, the price
+   rail on the right, and the rail sticky as the form scrolls. Narrow the window
+   below `lg` and the rail must move **below** the form and stop being sticky. A
+   rail that follows you down a phone screen is the defect.
+3. **The questions are the server's, and so is their order.** They come from the
+   variant's own published question list, rendered by `display_order`. **Nothing
+   here is hardcoded**, so the check worth making is the negative one: remove a
+   question from the variant in Django, reload, and confirm the field is gone.
+4. **The control is chosen from the data, not from the question's code.** A
+   `NUMBER` question renders as a stepper, a short choice list with no option
+   descriptions renders as chips, and a choice list *with* descriptions keeps
+   stacked cards. Add a description to an option in Django and the chips must
+   become cards — losing the server's own words to save space is not a trade
+   this form makes.
+5. Fill it in. Choose an address (the M1 picker, with the same serviceability
+   check the cart runs) and a **Start from** date.
+6. **Book this crew** is disabled until every required question, the address and
+   the start date are present.
 
 ---
 
-## 3. The rate, before anything is booked — `M2-FE-426`
+## 2a. The address dialog
 
-1. Press **See the published rate**. This writes a **draft** — free, charged
-   nothing, abandonable — and then reads `GET .../rate-card/`. Watch the network
-   tab: `POST /requirements/` then one `PATCH`, then the rate read. **Never a
-   second `PATCH` writing the same answers twice.**
-2. The disclosure must carry, all from the server:
-   - **₹X per person per N-hour day, all in** — the published day rate;
-   - the total for *this* headcount × *these* days;
-   - **paid to the crew directly at the end of each day** — the lead receipt;
-   - **booking fee, paid to Vsolve now** — the only money we collect;
+Shared with the requirement flow and the checkout, so a defect here is a defect
+in four places. Reach it from the accent-bordered **Where** row.
+
+1. **Nothing commits until you confirm.** Highlight a saved address and press
+   **Escape**. The row behind the dialog must be **unchanged**. Do it again with
+   a backdrop click and with **Cancel** — all three are cancels. Reopen: the
+   abandoned row must not still be highlighted.
+2. **Use this address** is the only thing that commits.
+3. **Focus.** Tab to the Where row and open it with the keyboard. Focus must land
+   inside the dialog; Tab must cycle within it and never reach the page behind.
+   Close it and focus must return **to the Where row** — not to the top of the
+   document.
+4. **Add a new address** →
+   - the pin block says **Pin the location first**, and **Save and use** does
+     nothing until you press **Use my location**. This is not a nicety:
+     `AddressRequest` requires coordinates and there is no forward geocoder, so
+     a typed-only address genuinely cannot be saved.
+   - after locating, the fields fill in and are **editable**. Change the flat
+     number. Confirm the *edited* value is what gets saved — the old flow saved
+     the geocoder's guess unseen, which is why so many saved addresses have the
+     wrong first line.
+   - the **Save it as** chips set the label. Pick **Other** and a text field
+     appears.
+   - type a pincode and the coverage verdict appears **inside the dialog**.
+     An uncovered pincode is a warning, never a block — Operations can serve
+     areas the lookup has not caught up with.
+5. **Errors stay inside.** Force a save failure. The message must render in the
+   dialog, must **not** also appear on the page behind it, and the close button
+   must stay enabled throughout.
+6. A newly saved address is selected outright — no second confirm. Somebody who
+   has just typed an address into a dialog headed "Where is the work?" has
+   answered the question.
+
+---
+
+## 3. The rate, beside the form — `M2-FE-426`
+
+**There is no "see the rate" step any more.** The rail prices what is on the
+form, and it re-prices as the form changes.
+
+1. **Nothing is priced until an address is chosen.** The card is resolved through
+   the requirement's service area, so before that the rail shows an em dash and
+   the sentence "Choose where the work is…" — **never a zero**. A blank total
+   reads as "not known yet"; `₹0` reads as free.
+2. **Choosing an address writes the draft.** Watch the network tab: `POST
+   /requirements/` then one `PATCH` carrying the address, then a rate read.
+3. **Now press the People stepper twice, quickly.** In the network tab you must
+   see:
+   - **exactly one** further `GET .../rate-card/?headcount=3&days=…` — the
+     presses collapse into one read, 400ms after the last one;
+   - and **no `PATCH` at all**. Changing the size costs a read, never a write.
+     A draft write per press of a stepper is the defect this design removed.
+4. While that read is in flight the rail's figures **dim** and carry `aria-busy`.
+   They are the *previous* size's real figures — true numbers for a job the
+   Customer has stopped asking for — so they must be marked, not blanked and not
+   left looking current.
+5. The rail must carry, all from the server:
+   - the published **day rate** as the rail's one hero number, on the dark plate,
+     with the city from the chosen address beside it;
    - what counts as a day, and the **overtime hourly rate**;
-   - the inclusion list, in the card's own words;
-   - the published **add-on rates** table, if the card has any.
-3. **The two customer-facing components must add to the total.** Lead receipt +
-   booking fee = total, to the paise. They are three separate server fields and
+   - the total for *this* headcount × *these* days;
+   - **cash to the crew**, with the **per-day** figure underneath it;
+   - **booking fee, to us** — the only money we collect;
+   - three collapsed rows: what the rate includes, what can change the price
+     (the card's add-on rates), and the cancellation rules.
+6. **The two customer-facing components must add to the total.** Cash to the crew
+   + booking fee = total, to the paise. They are separate server fields and
    nothing on the screen adds them up — this check is on the *server's*
    arithmetic, and if it fails, the client is right and the card is wrong.
-4. **The supervision margin must appear nowhere.** It is deliberately not
+7. **The per-day cash is a server field, not a division.** It is
+   `lead_day_receipt_paise`. Set a card where the total does not divide evenly by
+   the day count and confirm the per-day figure is still the server's number
+   rather than a rounded quotient.
+8. **The supervision margin must appear nowhere.** It is deliberately not
    published to the Customer, and it must not be reconstructible by subtraction
    from anything on the screen.
-5. **Scroll to the bottom.** There must be a warning-toned block badged **Not a
-   Vsolve booking**, saying in as many words that we do not hold the wage money
-   and that payment for the work, refunds on it and any guarantee about it are
-   between the Customer and the vendor. If this screen ever reads as a protected
-   booking, that is the defect `M2-FE-415` exists to prevent.
-6. **Now change an answer.** The rate must disappear and the button must go back
-   to **See the published rate**. A rate priced against three helpers must never
-   stay on screen while the Customer edits it to five.
+9. **The "You pay the crew directly" block is open on the page, never behind a
+   chevron.** It must say in as many words that we do not hold the wage money and
+   that payment for the work, refunds on it and any guarantee about it are
+   between the Customer and the vendor. The three disclosures above it are
+   explanation and may collapse; this one is a disclosure in the legal sense and
+   may not. If this screen ever reads as a protected booking, that is the defect
+   `M2-FE-415` exists to prevent.
+10. **Unprice it.** Point the address at a city with no published card. There
+    must be **no booking control at all**, the server's own `unavailable_reason`
+    on screen, a link to the quote flow — and **not one rupee figure anywhere**.
 
 ---
 
 ## 4. Booking charges nothing — `M2-FE-425`
 
-1. Press **Book this crew — ₹Total**. The sentence under it must say **nothing is
-   charged now**, that we send it to supervisors at that rate, and that the fee is
-   paid only once one accepts.
-2. `POST /requirements/{id}/rate-card/book/` returns `201`. You land on
+1. Press **Book this crew**. The line under it must name the booking fee and say
+   it is paid **only when a supervisor accepts**.
+2. **Watch the order of calls.** There must be a `PATCH` carrying the answers
+   *immediately before* `POST .../rate-card/book/`. This is the load-bearing one:
+   the rail has been pricing by query string, which writes nothing, so the draft
+   still holds whatever size was last saved — and the book command prices the
+   **draft**. Skip that `PATCH` and the Customer is booked at a size they never
+   saw priced.
+   - The test worth running by hand: set People to 5, wait for the rail to show
+     five people's total, press Book, and confirm the created booking's headcount
+     is **5**. If it is 1, the sync is broken.
+3. `POST /requirements/{id}/rate-card/book/` returns `201`. You land on
    **`/requests/{id}`**.
-3. Confirm in the database or the admin that **no `PaymentAttempt` exists**. This
+4. Confirm in the database or the admin that **no `PaymentAttempt` exists**. This
    call charges nothing; the fee is charged at vendor accept.
 
 ### The duplicate override — the branch most likely to be broken
@@ -139,17 +216,30 @@ GET /api/v1/requirements/{id}/rate-card/
 
 ## 5. The holding state — `M2-FE-427`
 
-1. On `/requests/{id}` you should see **"Confirming your crew — usually within 2
-   hours"**, badged **Asking nearby supervisors**.
-2. Check three things hardest:
-   - **There is nothing to press.** A Customer cannot make a supervisor accept,
-     and any control here would be one.
-   - It says **nothing has been charged**, and names the fee they *would* pay.
-   - It re-reads on its own. The A3 cascade runs on the M1 dispatch clock in
-     **minutes**, so leave the tab open and confirm the panel changes without a
-     manual refresh once a lead accepts.
-3. Let the first wave time out. The badge must change to **Search widened** and
-   the sentence must say so. The wave number is the server's own.
+1. On `/requests/{id}`: **"Finding your crew"**, "Usually within 2 hours", and a
+   **wave strip** beside a summary rail.
+2. **The strip is the server's, column for column.**
+   - One column per configured wave — four with the seeded
+     `crew_cascade_max_waves`, not the three the mock drew.
+   - The **current** wave names how many supervisors are holding the offer. Kill
+     one invitation in the admin and the count must drop.
+   - Only the **next** wave shows a time, counted down off `next_wave_at`. Waves
+     after it say **If needed** and carry no time at all — their timing depends
+     on offers that have not been sent, and a projected schedule here would be a
+     promise nobody can keep.
+   - On the **final** wave, no column shows a countdown. There is no next wave to
+     count down to.
+3. **There is still nothing required to press.** A Customer cannot make a
+   supervisor accept. The two **While you wait** actions are optional and the
+   heading says so — they exist so Cancel is not the only button on the page.
+4. The rail must say **Nothing charged yet** and name the fee they *would* pay.
+5. It re-reads on its own. The A3 cascade runs on the M1 dispatch clock in
+   **minutes**, so leave the tab open and confirm the strip advances without a
+   manual refresh.
+6. **Unconfigure the cascade** (clear `crew_cascade_max_waves`). The strip must
+   disappear entirely rather than render a guessed wave count — the whole
+   `cascade` object goes null, fail-closed like every other reader of that
+   configuration.
 
 ---
 
@@ -169,6 +259,23 @@ GET /api/v1/requirements/{id}/rate-card/
 3. **There is still no vendor name.** Identity is released by the confirmation,
    not by the hold.
 4. Press **Confirm this crew — ₹Fee** → **`/requests/{id}/book-crew`**.
+
+### The confirmation screen
+
+1. The countdown is in the **top bar**, not the body. The fee is the rail's hero
+   number and the only large figure on the page — the timer must not compete
+   with it.
+2. **The supervisor is still unnamed here**, and the screen says the name comes
+   with the confirmation. If a name appears before payment, the identity rule has
+   been broken somewhere on the server.
+3. Press **Pay ₹Fee and confirm**. A dialog opens and **nothing is charged yet** —
+   check the network tab. Press **Not now**, then Escape, then the backdrop: all
+   three are cancels, no `POST` is sent, and the hold survives every one.
+4. The dialog names UPI/card/netbanking as the *next* step rather than listing
+   saved methods. There is no stored-instrument endpoint, and rows here would be
+   a saved-card list this product does not have.
+5. **Refunded in full if nobody arrives** is open in the dialog, not behind the
+   disclosure beside it. It is a promise, not an explanation.
 
 ---
 
@@ -200,6 +307,30 @@ Let a hold **lapse** without paying, then press the pay button from a stale tab.
 any more"** — nothing charged, we are still looking, **no Try again button**.
 If you get "That option is no longer available" instead, the explicit branch was
 lost and the code is falling through the frozen `errors.ts`.
+
+---
+
+## 7a. The confirmed booking, as a receipt
+
+Land on `/engagements/{id}` the moment the fee verifies.
+
+1. It opens with **"Your crew is confirmed"**, the supervisor's name — the server
+   publishes it *now* and not before — and **one card per day**, side by side
+   from `sm` up.
+2. **The day cards are the engagement's own stages.** A3 writes one
+   `EngagementStage` per shift-day at confirmation, each with `scheduled_on` and
+   the whole crew's cash for that day. Book **three** days and confirm three
+   cards appear with three dates. If a card shows a divided figure rather than
+   the stage's own `amount_paise`, something is computing money.
+3. The rail's hero is **cash for day one**, not the booking total. It is the only
+   figure somebody has to act on before tomorrow morning.
+4. The **booking fee receipt** and its `M2A-` reference appear once the server has
+   issued one, and not before.
+5. **The day controls appear exactly once.** They used to be mounted twice on this
+   screen — two copies of the same two buttons, either of which could be pressed.
+   Search the page for "They have arrived": one match.
+6. No start time is printed anywhere. The frozen terms carry a shift *length* and
+   no start time, and nobody ever asked the Customer for one.
 
 ---
 

@@ -24,6 +24,7 @@ from apps.requirements.views import (
     EngagementHandoverView,
     EngagementProjectTransferView,
     EngagementProjectView,
+    EngagementReceiptDownloadView,
     EngagementSafetyIncidentView,
     EngagementStageApprovalView,
     EngagementStageArrivalView,
@@ -98,6 +99,9 @@ from apps.requirements.views import (
     RequirementQuoteRejectView,
     RequirementQuoteRevalidateView,
     RequirementRateCardBookView,
+    RequirementRateCardCancelView,
+    RequirementRateCardQuotesView,
+    RequirementRateCardRetryView,
     RequirementRateCardView,
     RequirementSelectionView,
     RequirementSubmitView,
@@ -109,7 +113,9 @@ from apps.requirements.views import (
     RequirementVisitPlanView,
     SelectionDeclineView,
     SelectionReconfirmView,
+    SiteVisitArrivalCodeView,
     SiteVisitArrivalView,
+    SiteVisitArrivalWithCodeView,
     SiteVisitCompleteView,
     SiteVisitNoShowView,
     SiteVisitScheduleView,
@@ -212,6 +218,11 @@ urlpatterns = [
         name="m2-selection-decline",
     ),
     path("engagements/", EngagementCollectionView.as_view(), name="m2-engagement-list"),
+    path(
+        "engagements/<uuid:engagement_id>/receipt/download/",
+        EngagementReceiptDownloadView.as_view(),
+        name="m2-engagement-receipt-download",
+    ),
     path(
         "engagements/<uuid:engagement_id>/",
         EngagementDetailView.as_view(),
@@ -323,6 +334,16 @@ urlpatterns = [
         name="m2-site-visit-complete",
     ),
     path(
+        "site-visits/<uuid:site_visit_id>/arrival-code/",
+        SiteVisitArrivalCodeView.as_view(),
+        name="site-visit-arrival-code",
+    ),
+    path(
+        "partner/site-visits/<uuid:site_visit_id>/arrival/",
+        SiteVisitArrivalWithCodeView.as_view(),
+        name="site-visit-arrival-with-code",
+    ),
+    path(
         "site-visits/<uuid:site_visit_id>/arrival/",
         SiteVisitArrivalView.as_view(),
         name="m2-site-visit-arrival",
@@ -414,6 +435,23 @@ urlpatterns = [
         "requirements/<uuid:requirement_id>/rate-card/book/",
         RequirementRateCardBookView.as_view(),
         name="m2-requirement-rate-card-book",
+    ),
+    # The three ways out of `EXHAUSTED`. Separate paths rather than one action parameter, because
+    # "cancel my request" and "keep looking" must not be one typo apart.
+    path(
+        "requirements/<uuid:requirement_id>/rate-card/retry/",
+        RequirementRateCardRetryView.as_view(),
+        name="m2-requirement-rate-card-retry",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/rate-card/quotes/",
+        RequirementRateCardQuotesView.as_view(),
+        name="m2-requirement-rate-card-quotes",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/rate-card/cancel/",
+        RequirementRateCardCancelView.as_view(),
+        name="m2-requirement-rate-card-cancel",
     ),
     path(
         "requirements/<uuid:requirement_id>/booking-fee/checkout/",

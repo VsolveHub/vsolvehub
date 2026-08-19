@@ -386,7 +386,55 @@ def submit_proposal(
         access.settle_share_for_estimate(proposal=proposal)
 
     _promote_requirement_when_quoted(requirement)
+    _announce_proposal(proposal)
     return proposal
+
+
+def _announce_proposal(proposal: Proposal) -> None:
+    """Tell the Customer a quote has landed — the single most important M2 notice.
+
+    ## Why this event had to be added rather than routed
+
+    `submit_proposal` wrote the `Proposal`, marked the invitation `QUOTED` and let
+    `_promote_requirement_when_quoted` move the requirement to `QUOTES_READY` — a status column
+    changing with no announcement of any kind. The whole point of A5 is that the Customer pays to
+    unlock what a vendor estimated, and nothing told them there was anything to unlock. It was not
+    a notification that failed to deliver; it was a notification nobody ever asked for.
+
+    ## Why it is gated on vendor confirmation rather than on the row existing
+
+    A quote Operations captured by phone is not shown to the Customer until the vendor confirms it
+    (`confirm_captured_proposal`), and `teasers_for` filters on exactly that. Announcing at
+    creation would put a notice in the feed pointing at a quotes screen that still shows nothing —
+    so the announcement is made from wherever confirmation actually happens, and both call sites
+    share this one function.
+
+    ## Why every confirmed proposal is announced, usable or not
+
+    `teasers_for` publishes every vendor-confirmed proposal and lets the Customer see its
+    usability, so a quote outside their budget is still a real thing that arrived and is still on
+    the screen this notice opens. Announcing only the usable ones would leave a Customer looking
+    at three teasers having been told about one.
+
+    Idempotent on the proposal id, so the re-drive an outbox retry performs — and the second call
+    a superseding revision would make — writes at most one notice per quote.
+    """
+
+    if proposal.vendor_confirmed_at is None:
+        return
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=proposal.requirement_id,
+        event_type="m2.proposal.submitted",
+        idempotency_key=f"proposal-submitted:{proposal.id}",
+        payload={
+            "requirement_id": str(proposal.requirement_id),
+            "vendor_invitation_id": str(proposal.invitation_id),
+            "proposal_id": str(proposal.id),
+            "usability": proposal.usability,
+            "revision": proposal.revision,
+        },
+    )
 
 
 @transaction.atomic
@@ -403,6 +451,10 @@ def confirm_captured_proposal(*, proposal_id: uuid.UUID) -> Proposal:
         proposal.vendor_confirmed_at = timezone.now()
         proposal.save(update_fields=("vendor_confirmed_at", "updated_at"))
         _promote_requirement_when_quoted(proposal.requirement)
+        # Confirmation is the moment this quote becomes visible, so it is the moment it is
+        # announced. `submit_proposal` announced nothing for a captured quote precisely because
+        # `vendor_confirmed_at` was still null when it ran.
+        _announce_proposal(proposal)
     return proposal
 
 

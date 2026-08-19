@@ -24,7 +24,12 @@ from apps.partners.exceptions import PartnerDomainError
 from apps.partners.permissions import IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
 from apps.requirements import access, visit_slots
-from apps.requirements.exceptions import RequirementDomainError, RequirementTransitionError
+from apps.requirements.exceptions import (
+    RequirementDomainError,
+    RequirementNotFoundError,
+    RequirementTransitionError,
+)
+from apps.requirements.models import SiteVisit
 from apps.requirements.selectors import (
     demand_preview,
     invitation_for_partner,
@@ -33,6 +38,8 @@ from apps.requirements.selectors import (
 from apps.requirements.serializers import (
     DemandPreviewSerializer,
     SiteVisitSerializer,
+    VisitArrivalCodeEntrySerializer,
+    VisitArrivalCodeSerializer,
     VisitArrivalSerializer,
     VisitNoShowSerializer,
     VisitSlotConfirmationSerializer,
@@ -382,3 +389,159 @@ class PartnerDemandPreviewView(APIView):
                 }
             ).data
         )
+
+
+class SiteVisitArrivalCodeView(APIView):
+    """`GET`/`POST /site-visits/{id}/arrival-code/` — the Customer's half of the arrival proof.
+
+    Scoped to the Customer alone, and that is the whole security property. The vendor must *not*
+    be able to read this code: a code the party entering it can also fetch proves nothing, and
+    would turn the arrival record into the same unverified tap it replaced. Which is also why the
+    code is not a field on `SiteVisitSerializer` — that serializer is read by both roles.
+
+    `GET` is the page load and issues nothing. `POST` mints a new code and retires the previous
+    one, which is both the "get a new code" control and the recovery for a display copy the cache
+    has evicted.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["M2 - Site visits"],
+        operation_id="m2_site_visit_arrival_code_read",
+        description=(
+            "The live arrival code for this visit, for the Customer to read out. `code` is null "
+            "when no challenge is live, and also when one is live but the short-lived display "
+            "copy has expired from cache — in both cases the client offers to issue a new one "
+            "rather than showing digits that would be refused."
+        ),
+        responses={
+            200: VisitArrivalCodeSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, site_visit_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        visit = SiteVisit.objects.filter(
+            pk=site_visit_id,
+            requirement__customer=customer,
+        ).first()
+        if visit is None:
+            _raise_api_error(RequirementNotFoundError())
+        live = access.live_visit_arrival_code(visit)
+        return Response(
+            VisitArrivalCodeSerializer(
+                {
+                    "code": None if live is None else live.digits,
+                    "expires_at": None if live is None else live.expires_at,
+                    "can_issue": visit.status == SiteVisit.Status.SCHEDULED,
+                    "server_now": timezone.now(),
+                }
+            ).data
+        )
+
+    @extend_schema(
+        tags=["M2 - Site visits"],
+        operation_id="m2_site_visit_arrival_code_issue",
+        request=None,
+        description=(
+            "Mint a fresh arrival code and retire any predecessor, so only one code can ever open "
+            "a visit."
+        ),
+        responses={
+            201: VisitArrivalCodeSerializer,
+            404: ApiErrorSerializer,
+            409: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_requirement_transition_not_allowed` when the visit has no "
+                "confirmed time, or has already started.",
+            ),
+            429: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_arrival_code_too_soon` — a code was issued moments ago. The "
+                "existing one is still valid; read it from the `GET`.",
+            ),
+        },
+    )
+    def post(self, request: Request, site_visit_id: uuid.UUID) -> Response:
+        customer = cast(User, request.user)
+        try:
+            issued = access.issue_visit_arrival_code(
+                site_visit_id=site_visit_id,
+                customer=customer,
+            )
+        except RequirementDomainError as exc:
+            _raise_api_error(exc)
+        return Response(
+            VisitArrivalCodeSerializer(
+                {
+                    "code": issued.digits,
+                    "expires_at": issued.expires_at,
+                    "can_issue": True,
+                    "server_now": timezone.now(),
+                }
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SiteVisitArrivalWithCodeView(APIView):
+    """`POST /partner/site-visits/{id}/arrival/` — the vendor types in what the Customer read out.
+
+    Separate from `SiteVisitArrivalView` rather than an optional field on it. That route is the
+    audited fallback either party may use when a phone is dead or a site has no signal, and
+    folding the code into it as optional would make the strong path opt-in on the request body —
+    which is to say, not a requirement at all. Two routes, two `arrival_method` values, and the
+    stored method says forever which of them proved any given visit.
+    """
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+
+    @extend_schema(
+        tags=["M2 - Site visits"],
+        operation_id="m2_site_visit_arrival_with_code",
+        parameters=[IDEMPOTENCY_KEY_HEADER],
+        request=VisitArrivalCodeEntrySerializer,
+        description=(
+            "Confirm arrival by entering the code the Customer is holding. Records "
+            "`arrival_method=START_OTP`. A wrong code spends one of the challenge's attempts and "
+            "the spend survives the refusal, so the attempt limit cannot be reset by retrying."
+        ),
+        responses={
+            200: SiteVisitSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+            422: OpenApiResponse(
+                response=ApiErrorSerializer,
+                description="`m2_arrival_code_invalid` — wrong, expired, already used, or too "
+                "many wrong attempts. Deliberately one code for all four: telling the entering "
+                "party which it was is what makes an attempt limit worth guessing against.",
+            ),
+        },
+    )
+    def post(self, request: Request, site_visit_id: uuid.UUID) -> Response:
+        actor = cast(User, request.user)
+        key = _idempotency_key(request)
+        serializer = VisitArrivalCodeEntrySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        code = str(serializer.validated_data["code"])
+
+        def command() -> tuple[int, dict[str, object]]:
+            try:
+                arrived = access.confirm_visit_arrival_with_code(
+                    site_visit_id=site_visit_id,
+                    vendor_user=actor,
+                    code=code,
+                )
+            except RequirementDomainError as exc:
+                _raise_api_error(exc)
+            return status.HTTP_200_OK, cast(dict[str, object], SiteVisitSerializer(arrived).data)
+
+        result = execute_idempotent(
+            actor=actor,
+            operation="m2.site_visit.arrival_with_code",
+            key=key,
+            request_payload={"site_visit_id": str(site_visit_id)},
+            command=command,
+        )
+        return Response(result.body, status=result.status_code)

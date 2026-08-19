@@ -5,14 +5,29 @@ import {
   bookingPhase,
   canCheckOutBookingFee,
   isBookingFeeNotChargeable,
+  useServerCountdown,
   type BookingFeePhase,
 } from "@vsolve/query";
-import { Button, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import {
+  Button,
+  Disclosure,
+  ErrorState,
+  RailHeadline,
+  RailLayout,
+  RailMoney,
+  Skeleton,
+  buttonStyles,
+  useIsWideScreen,
+} from "@vsolve/ui";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { confirmedCrewName, toBookingView } from "../adapters";
 import { useRateCardState, useStartBookingFeeCheckout } from "../queries";
+import { BookingFeeDialog } from "./booking-fee-dialog";
+import { ConfirmCrewScreen } from "./mobile/confirm-crew-screen";
 
 /**
  * The booking-fee checkout — `M2-FE-428`.
@@ -71,11 +86,21 @@ export interface BookCrewFeeScreenProps {
 }
 
 export function BookCrewFeeScreen({ requirementId, requestHref }: BookCrewFeeScreenProps) {
+  const router = useRouter();
+  const isWide = useIsWideScreen();
   const rateQuery = useRateCardState(requirementId);
   const checkout = useStartBookingFeeCheckout();
+  const [paying, setPaying] = useState(false);
 
   const state = rateQuery.data ?? null;
   const booking = state?.booking ?? null;
+
+  // Above the early returns, because hooks are. The dialog names the remaining
+  // hold in words — "held for 27 minutes" — rather than showing a second ticking
+  // clock next to the one already in the top bar.
+  const holdCountdown = useServerCountdown(booking?.hold_expires_at ?? null);
+  const holdRemaining =
+    holdCountdown === null || holdCountdown.isExpired ? null : holdCountdown.display;
 
   if (rateQuery.isPending) {
     return (
@@ -105,106 +130,297 @@ export function BookCrewFeeScreen({ requirementId, requestHref }: BookCrewFeeScr
   const view = toBookingView(booking);
   const feePhase = bookingFeePhase(state);
   const crewName = confirmedCrewName(state);
+  const isHeld = bookingPhase(state) === "offer_held";
+
+  const checkoutAction = (
+    <CheckoutAction
+      phase={feePhase}
+      canCheckOut={canCheckOutBookingFee(state)}
+      feeLabel={view.bookingFeeLabel}
+      isPending={checkout.isPending}
+      onStart={() => setPaying(true)}
+      requestHref={requestHref}
+    />
+  );
+
+  const refusal = isBookingFeeNotChargeable(checkout.error) ? (
+    // Handled here rather than through `describeError`, because
+    // `m2_booking_fee_not_chargeable` is not in the frozen `errors.ts` and falls
+    // through to `choose_again` — "that option is no longer available", offered
+    // against nothing the Customer can choose. What actually happened is that the
+    // hold lapsed between the render and the tap, and the only true next step is
+    // to wait. Requested in §7.
+    <ErrorState
+      title="Nobody is holding this job any more"
+      message="The supervisor's hold ran out while you were here, so there is nothing to pay for right now. Nothing has been charged. We are still looking for a crew at the same published rate — this page will tell you the moment somebody accepts."
+      severity="warning"
+      inline
+    />
+  ) : (
+    <AccessRefusal error={checkout.error} attempting="pay the booking fee" />
+  );
+
+  const paymentDialog = (
+    <BookingFeeDialog
+      open={paying}
+      onOpenChange={setPaying}
+      feeLabel={view.bookingFeeLabel}
+      leadReceiptLabel={view.leadReceiptLabel}
+      holdRemaining={holdRemaining}
+      isPending={checkout.isPending}
+      isRetry={feePhase === "failed"}
+      onConfirm={() =>
+        checkout.mutate(
+          {
+            requirementId,
+            bookingId: booking.id,
+            isRetryAfterFailure: feePhase === "failed",
+          },
+          // Closed on both outcomes. A `201` hands off to the provider and the
+          // screen behind takes over the pending state; a refusal is rendered
+          // there too, because the dialog it came from is about to be replaced
+          // by whatever the server now says is true.
+          { onSettled: () => setPaying(false) },
+        )
+      }
+    />
+  );
+
+  if (!isWide) {
+    return (
+      <>
+        <ConfirmCrewScreen
+          booking={view}
+          crewName={crewName}
+          holdRemaining={holdRemaining}
+          holdAnnouncement={holdCountdown?.announce ?? null}
+          dateRange={null}
+          onBack={() => router.push(requestHref)}
+          onPay={() => setPaying(true)}
+          canPay={canCheckOutBookingFee(state) && feePhase !== "pending"}
+          isPaying={checkout.isPending}
+          // The phase states that have nothing to press — a charge in flight, a
+          // settled fee, nobody holding — say so in the body instead of docking
+          // a button that would be a way to pay twice.
+          status={canCheckOutBookingFee(state) && feePhase !== "pending" ? undefined : checkoutAction}
+          notice={refusal}
+        />
+        {paymentDialog}
+      </>
+    );
+  }
 
   return (
     <Wrapper>
-      <h1 className="text-xl font-semibold text-text">Confirm your crew</h1>
+      {/* The countdown lives in the top bar rather than in the body, so the
+          amount owns the rail. A timer beside a price competes with it, and the
+          price is the thing being decided. */}
+      <HoldBar holdExpiresAt={view.holdExpiresAt} isHeld={isHeld} />
 
-      {bookingPhase(state) === "offer_held" ? (
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          A supervisor has accepted this job at the published rate and is{" "}
-          <strong className="font-semibold text-text">holding it for you</strong>{" "}
-          while you finish here. If you do not pay, the hold lapses and we keep
-          looking — nothing is charged either way.
-        </p>
-      ) : null}
-
-      {crewName !== null ? (
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          Your crew is from{" "}
-          <strong className="font-semibold text-text">{crewName}</strong>.
-        </p>
-      ) : null}
-
-      <dl className="mt-4 rounded-card border border-line bg-surface">
-        <div className="flex items-baseline justify-between gap-3 border-b border-line p-4">
-          <dt className="text-sm text-text-secondary">
-            {view.headcount} {view.headcount === 1 ? "person" : "people"} for{" "}
-            {view.days} {view.days === 1 ? "day" : "days"} at {view.dayRateLabel} each
-            per day
-          </dt>
-          <dd data-numeric className="font-medium text-text">
-            {view.totalLabel}
-          </dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3 border-b border-line p-4">
-          <dt className="text-sm text-text-secondary">
-            Paid to the crew directly, at the end of each day
-          </dt>
-          <dd data-numeric className="font-medium text-text">
-            {view.leadReceiptLabel}
-          </dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3 p-4">
-          <dt className="font-semibold text-text">Booking fee to pay now</dt>
-          <dd data-numeric className="text-lg font-semibold text-text">
-            {view.bookingFeeLabel}
-          </dd>
-        </div>
-      </dl>
-
-      <p className="mt-4 max-w-prose text-sm leading-6 text-text-secondary">
-        This booking fee is the{" "}
-        <strong className="font-semibold text-text">only money Vsolve collects</strong>{" "}
-        on this job. The {view.leadReceiptLabel} for the work is paid straight to
-        the supervisor at the end of each day — we never hold it, so payment for
-        the work, any refund on it and any guarantee about it are between you and
-        them.
-      </p>
+      <h1 className="mt-4 text-2xl font-bold text-text">
+        {isHeld ? "A supervisor accepted. Confirm to keep them." : "Confirm your crew"}
+      </h1>
 
       <div className="mt-6">
-        <CheckoutAction
-          phase={feePhase}
-          canCheckOut={canCheckOutBookingFee(state)}
-          feeLabel={view.bookingFeeLabel}
-          isPending={checkout.isPending}
-          onStart={() =>
-            checkout.mutate({
+        <RailLayout
+          railLabel="Pay now to confirm"
+          rail={
+            <div className="flex flex-col gap-3">
+              <RailHeadline
+                eyebrow="Pay now to confirm"
+                value={view.bookingFeeLabel}
+                footnote="UPI, card or netbanking"
+              />
+
+              <CheckoutAction
+                phase={feePhase}
+                canCheckOut={canCheckOutBookingFee(state)}
+                feeLabel={view.bookingFeeLabel}
+                isPending={checkout.isPending}
+                onStart={() => setPaying(true)}
+                requestHref={requestHref}
+              />
+
+              {isBookingFeeNotChargeable(checkout.error) ? (
+                // Handled here rather than through `describeError`, because
+                // `m2_booking_fee_not_chargeable` is not in the frozen
+                // `errors.ts` and falls through to `choose_again` — "that option
+                // is no longer available", offered against nothing the Customer
+                // can choose. What actually happened is that the hold lapsed
+                // between the render and the tap, and the only true next step is
+                // to wait. Requested in §7.
+                <ErrorState
+                  title="Nobody is holding this job any more"
+                  message="The supervisor's hold ran out while you were here, so there is nothing to pay for right now. Nothing has been charged. We are still looking for a crew at the same published rate — this page will tell you the moment somebody accepts."
+                  severity="warning"
+                  inline
+                />
+              ) : (
+                <AccessRefusal error={checkout.error} attempting="pay the booking fee" />
+              )}
+
+              <Disclosure summary={`What the ${view.bookingFeeLabel} is for`} hint="Fee rules">
+                <p>
+                  It holds this crew for your dates and is the only money we
+                  collect on this job. Refunded in full if nobody arrives.
+                </p>
+              </Disclosure>
+
+              <p className="text-sm leading-5 text-text-secondary">
+                Wages stay between you and the crew. We only ever take this fee.
+              </p>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <AcceptedCrew crewName={crewName} headcount={view.headcount} />
+
+            <section className="rounded-card border border-line bg-surface p-5">
+              <h2 className="text-sm font-bold text-text">The job you are confirming</h2>
+              <p className="mt-1 text-[0.9375rem] font-semibold text-text">
+                {view.headcount} {view.headcount === 1 ? "person" : "people"} ×{" "}
+                {view.days} {view.days === 1 ? "day" : "days"}
+              </p>
+
+              <div className="mt-4">
+                <RailMoney
+                  rows={[
+                    {
+                      label: `${view.dayRateLabel} per person per day`,
+                      amount: view.totalLabel,
+                      emphasis: true,
+                    },
+                    {
+                      label: "Cash to the crew, at day end",
+                      note: `${view.leadDayReceiptLabel} at the end of each day`,
+                      amount: view.leadReceiptLabel,
+                    },
+                  ]}
+                />
+              </div>
+
+              <p className="mt-4 max-w-prose text-sm leading-6 text-text-secondary">
+                The {view.leadReceiptLabel} for the work is paid straight to the
+                supervisor at the end of each day — we never hold it, so payment
+                for the work, any refund on it and any guarantee about it are
+                between you and them.
+              </p>
+            </section>
+
+            {isHeld ? (
+              <p className="max-w-prose text-sm leading-6 text-text-secondary">
+                Leave this and the hold lapses — we keep looking, and nothing is
+                charged either way.
+              </p>
+            ) : null}
+
+            <BackLink href={requestHref} />
+          </div>
+        </RailLayout>
+      </div>
+
+      <BookingFeeDialog
+        open={paying}
+        onOpenChange={setPaying}
+        feeLabel={view.bookingFeeLabel}
+        leadReceiptLabel={view.leadReceiptLabel}
+        holdRemaining={holdRemaining}
+        isPending={checkout.isPending}
+        isRetry={feePhase === "failed"}
+        onConfirm={() =>
+          checkout.mutate(
+            {
               requirementId,
               bookingId: booking.id,
               isRetryAfterFailure: feePhase === "failed",
-            })
-          }
-          requestHref={requestHref}
-        />
-      </div>
-
-      <div className="mt-4">
-        {isBookingFeeNotChargeable(checkout.error) ? (
-          // Handled here rather than through `describeError`, because
-          // `m2_booking_fee_not_chargeable` is not in the frozen `errors.ts` and
-          // falls through to `choose_again` — "that option is no longer
-          // available", offered against nothing the Customer can choose. What
-          // actually happened is that the hold lapsed between the render and the
-          // tap, and the only true next step is to wait. Requested in §7.
-          <ErrorState
-            title="Nobody is holding this job any more"
-            message="The supervisor's hold ran out while you were here, so there is nothing to pay for right now. Nothing has been charged. We are still looking for a crew at the same published rate — this page will tell you the moment somebody accepts."
-            severity="warning"
-            inline
-          />
-        ) : (
-          <AccessRefusal error={checkout.error} attempting="pay the booking fee" />
-        )}
-      </div>
-
-      <BackLink href={requestHref} />
+            },
+            {
+              // Closed on both outcomes. A `201` hands off to the provider and
+              // the screen behind takes over the pending state; a refusal is
+              // rendered on that screen too, because the dialog it came from is
+              // about to be replaced by whatever the server says is true now.
+              onSettled: () => setPaying(false),
+            },
+          )
+        }
+      />
     </Wrapper>
   );
 }
 
+/**
+ * Who accepted — as much as this screen is entitled to say.
+ *
+ * **The name is deliberately absent while the offer is only held.** The server
+ * publishes `confirmed_partner_name` as null at every status but `CONFIRMED`,
+ * because vendor identity is released by the confirmation rather than by the
+ * hold — otherwise anybody who reached this screen and never paid would collect
+ * the identities of the leads who accepted. So this says that *a* supervisor
+ * took it, which is the true and complete answer at this moment, and the name
+ * appears on the confirmed booking where the server does publish it.
+ */
+function AcceptedCrew({
+  crewName,
+  headcount,
+}: {
+  crewName: string | null;
+  headcount: number;
+}) {
+  return (
+    <section className="rounded-card border border-success-line bg-success-surface p-5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-success-text">
+          Accepted · holding for you
+        </p>
+      </div>
+      <p className="mt-1.5 text-lg font-bold text-text">
+        {crewName ?? "A supervisor accepted your job"}
+      </p>
+      <p className="mt-1 text-sm leading-6 text-text-secondary">
+        They have taken it at our published rate and are holding{" "}
+        {headcount === 1 ? "one person" : `${headcount} people`} for your dates.
+        {crewName === null
+          ? " We will introduce them by name the moment the booking is confirmed."
+          : ""}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The hold, counted down where it does not compete with the amount.
+ *
+ * `useServerCountdown` rather than a device clock: a phone whose time is ten
+ * minutes fast would show a hold that has already lapsed, and the Customer would
+ * abandon a booking that was still theirs.
+ */
+function HoldBar({
+  holdExpiresAt,
+  isHeld,
+}: {
+  holdExpiresAt: string | null;
+  isHeld: boolean;
+}) {
+  const countdown = useServerCountdown(holdExpiresAt);
+  if (!isHeld || countdown === null || countdown.isExpired) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-card border border-warning-line bg-warning-surface px-4 py-2.5">
+      <span className="text-sm font-semibold text-text">Holding your crew</span>
+      <span
+        data-numeric
+        className="text-sm font-bold tabular-nums text-warning-text"
+        // The digits change every second; the announcement does not.
+        aria-label={countdown.announce}
+      >
+        {countdown.display} left
+      </span>
+    </div>
+  );
+}
+
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-2xl flex-col px-4 py-6">{children}</div>;
+  return <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</div>;
 }
 
 function BackLink({ href }: { href: string }) {
@@ -312,8 +528,14 @@ function CheckoutAction({
           paying now keeps it.
         </p>
       ) : null}
-      <Button onClick={onStart} loading={isPending} loadingLabel="Starting your payment">
-        {hasFailed ? `Try again — ${feeLabel}` : `Pay ${feeLabel} and confirm the crew`}
+      <Button
+        block
+        size="lg"
+        onClick={onStart}
+        loading={isPending}
+        loadingLabel="Starting your payment"
+      >
+        {hasFailed ? `Try again — ${feeLabel}` : `Pay ${feeLabel} and confirm`}
       </Button>
     </div>
   );

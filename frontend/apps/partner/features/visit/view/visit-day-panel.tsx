@@ -24,7 +24,13 @@ import {
   describeVisitStatus,
   visitPermissionsFor,
 } from "../model/visit-state";
-import { useCompleteVisit, useConfirmVisitArrival, useReportCustomerNoShow } from "../queries";
+import {
+  useCompleteVisit,
+  useConfirmVisitArrival,
+  useConfirmVisitArrivalWithCode,
+  useReportCustomerNoShow,
+} from "../queries";
+import { ArrivalCodeEntry } from "./arrival-code-entry";
 
 /**
  * The A5 plan visit on this enquiry: where it stands, and the two commands that
@@ -38,12 +44,21 @@ import { useCompleteVisit, useConfirmVisitArrival, useReportCustomerNoShow } fro
  * beside the estimate rather than on some other screen because they happen in
  * the same five minutes, on the same phone, at the same address.
  *
- * ## Arrival is the non-OTP fallback, and that is the default path
+ * ## Arrival is proved by the customer's code, and only failing that by a tap
  *
- * Not a degraded one. The start OTP is M3 activation; `arrival_method` is stored
- * so a historical arrival still says truthfully how it was proved once OTP is
- * switched on. Either party may confirm, so the customer confirming first is not
- * a conflict.
+ * The code path landed with contract 1.39.0 and inverted what this panel used to
+ * say. The customer holds a code on their own visit page; entering it here is
+ * what starts the visit, and it is proof because the two of you have to be
+ * standing together for the digits to move.
+ *
+ * The tap-only confirmation is still here and still works — it is the audited
+ * fallback for a dead phone or a basement with no signal, which are real places.
+ * It is placed and worded as a fallback rather than removed, because a vendor
+ * unable to start a visit they travelled for is a worse failure than a weaker
+ * proof. `arrival_method` records which of the two proved each visit, forever.
+ *
+ * Either party may still confirm, so the customer confirming from their side
+ * first is not a conflict — the panel simply stops offering both.
  *
  * ## Completion does not require arrival
  *
@@ -79,6 +94,7 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
 
   const visit = planVisitOf(enquiry.siteVisits);
   const arrival = useConfirmVisitArrival(enquiry.id);
+  const arrivalWithCode = useConfirmVisitArrivalWithCode(enquiry.id);
   const complete = useCompleteVisit(enquiry.id);
   const noShow = useReportCustomerNoShow(enquiry.id);
 
@@ -88,7 +104,11 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
 
   const status = describeVisitStatus(visit.status);
   const permissions = visitPermissionsFor(visit);
-  const pending = arrival.isPending || complete.isPending || noShow.isPending;
+  const pending =
+    arrival.isPending || arrivalWithCode.isPending || complete.isPending || noShow.isPending;
+  // The code's own refusal is deliberately kept out of this: a wrong code is an
+  // ordinary event with its own field-level message, not an outage banner at the
+  // top of the panel.
   const error = arrival.error ?? complete.error ?? noShow.error;
   const presentation = error ? describeError(error, "mutation") : null;
   // `SiteVisit.timezone` (1.26.0). Until it was published this row could only
@@ -176,6 +196,7 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
           actionLabel="Try again"
           onAction={() => {
             arrival.reset();
+            arrivalWithCode.reset();
             complete.reset();
             noShow.reset();
           }}
@@ -183,18 +204,34 @@ export function VisitDayPanel({ enquiry, estimateHref }: VisitDayPanelProps) {
         />
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {permissions.canConfirmArrival ? (
+      {permissions.canConfirmArrival ? (
+        <div className="flex flex-col gap-3 rounded-card border border-action-line bg-action-surface p-3">
+          <ArrivalCodeEntry
+            onSubmit={(code) => arrivalWithCode.mutate({ siteVisitId: visit.id, code })}
+            isSubmitting={arrivalWithCode.isPending}
+            error={
+              arrivalWithCode.error
+                ? describeError(arrivalWithCode.error, "mutation").message
+                : null
+            }
+          />
+          {/* The fallback, and worded so nobody reaches for it first. It is a
+              real path — signal fails and phones die — but it proves less, and a
+              vendor should know that before choosing it rather than after. */}
           <Button
+            variant="ghost"
+            size="sm"
             disabled={pending}
             loading={arrival.isPending}
             loadingLabel="Recording"
             onClick={() => arrival.mutate({ siteVisitId: visit.id })}
           >
-            I am on site
+            The customer cannot give me a code
           </Button>
-        ) : null}
+        </div>
+      ) : null}
 
+      <div className="flex flex-wrap gap-2">
         {permissions.canComplete ? (
           <Button variant="outline" disabled={pending} onClick={() => setConfirmingComplete(true)}>
             Close the visit

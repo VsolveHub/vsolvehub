@@ -11,8 +11,10 @@ import {
   type ReactNode,
 } from "react";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
 import { requirementReducer, type RequirementAction } from "../model/machine";
-import { type Screen } from "../model/screens";
+import { SCREENS, type Screen } from "../model/screens";
 import {
   blockedReason,
   canAdvance,
@@ -40,6 +42,14 @@ interface RequirementContextValue {
   /** Today in the Customer's timezone, as an ISO date. */
   today: string;
   goTo: (screen: Screen) => void;
+  /**
+   * Navigate to any screen, visited or not.
+   *
+   * For the desktop brief, where the rail *is* the navigation and every
+   * section is a button. `goTo` refuses forward moves — correct for the
+   * phone wizard, and the reason the rail's own controls did nothing.
+   */
+  open: (screen: Screen) => void;
   advance: () => void;
   back: () => void;
 }
@@ -76,8 +86,13 @@ interface PersistedIntent {
   addressId: string | null;
   /** Optional on the way in: entries written before "Start from" existed still restore. */
   requestedStart?: string | null;
-  serviceBy: string | null;
-  isDateFlexible: boolean;
+  /**
+   * Optional on the way in, because entries written while this was a boolean
+   * still have to restore. A draft persisted before the change carries
+   * `isDateFlexible` and no day count; it restores as "exact" rather than
+   * throwing away the rest of the brief.
+   */
+  flexibilityDays?: number;
   additionalDetails: string;
   language: string | null;
   /**
@@ -95,6 +110,14 @@ const STORAGE_PREFIX = "vsolve.requirement.";
 
 function storageKey(categorySlug: string): string {
   return `${STORAGE_PREFIX}${categorySlug}`;
+}
+
+/** The query parameter carrying the current step. */
+const STEP_PARAM = "step";
+
+/** Whether a query value names a screen this build has. */
+function isScreen(value: string): value is Screen {
+  return (SCREENS as readonly string[]).includes(value);
 }
 
 function readIntent(categorySlug: string): PersistedIntent | null {
@@ -118,8 +141,7 @@ function writeIntent(state: RequirementDraftState): void {
     answers: state.answers,
     addressId: state.addressId,
     requestedStart: state.requestedStart,
-    serviceBy: state.serviceBy,
-    isDateFlexible: state.isDateFlexible,
+    flexibilityDays: state.flexibilityDays,
     additionalDetails: state.additionalDetails,
     language: state.language,
     optionalDetails: state.optionalDetails,
@@ -186,8 +208,7 @@ export function RequirementProvider({
       answers: intent.answers,
       addressId: intent.addressId,
       requestedStart: intent.requestedStart ?? null,
-      serviceBy: intent.serviceBy,
-      isDateFlexible: intent.isDateFlexible,
+      flexibilityDays: intent.flexibilityDays ?? 0,
       additionalDetails: intent.additionalDetails,
       language: intent.language,
       // Older entries predate this field. An absent bag restores as empty
@@ -202,9 +223,61 @@ export function RequirementProvider({
     writeIntent(state);
   }, [state]);
 
+  /**
+   * The step lives in the URL, so a reload lands where the Customer was.
+   *
+   * The answers were already persisted; the *screen* was not, so refreshing on
+   * step 3 restored everything the Customer had typed and then put them back on
+   * step 1 to walk through it again. That reads as having lost the form even
+   * though nothing was lost.
+   *
+   * The URL rather than the same sessionStorage entry, for two reasons. It is
+   * where navigation state belongs — the browser's own Back button now moves
+   * through the wizard instead of leaving the flow entirely, which is what a
+   * phone's back gesture does. And it is shareable and restorable across tabs,
+   * where a session entry is neither.
+   *
+   * `replace`, not `push`: the reducer's own Back already pushes a history entry
+   * through this effect, and pushing again would make one tap of Back move half
+   * a step.
+   */
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const stepParam = searchParams.get(STEP_PARAM);
+
+  // Read once, on mount. After that the reducer is the source of truth and the
+  // effect below only writes — otherwise a `replace` would feed back in as a
+  // restore and the two would fight.
+  //
+  // Deliberately **not** dependent on `state`: at this point the intent restore
+  // above has dispatched but React has not re-rendered, so `state` here is still
+  // the empty initial draft. Reading it to decide reachability is what made the
+  // first attempt at this silently do nothing. `RESTORE_SCREEN` carries the
+  // decision into the reducer, where the post-restore state actually exists.
+  const restoredStep = useRef(false);
+  useEffect(() => {
+    if (restoredStep.current) return;
+    restoredStep.current = true;
+    if (stepParam === null || !isScreen(stepParam)) return;
+    dispatch({ type: "RESTORE_SCREEN", screen: stepParam });
+    // Mount only. `stepParam` changes on every step from here on and re-running
+    // would fight the writer below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!restoredStep.current) return;
+    if (stepParam === state.screen) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set(STEP_PARAM, state.screen);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [pathname, router, searchParams, state.screen, stepParam]);
+
   const blocked = blockedReason(state, today, hasUnresolvedDuplicate);
 
   const goTo = useCallback((screen: Screen) => dispatch({ type: "GO_TO", screen }), []);
+  const open = useCallback((screen: Screen) => dispatch({ type: "OPEN", screen }), []);
   const advance = useCallback(() => dispatch({ type: "ADVANCE" }), []);
   const back = useCallback(() => dispatch({ type: "BACK" }), []);
 
@@ -216,10 +289,11 @@ export function RequirementProvider({
       canContinue: canAdvance(state, today, hasUnresolvedDuplicate),
       today,
       goTo,
+      open,
       advance,
       back,
     }),
-    [state, blocked, today, hasUnresolvedDuplicate, goTo, advance, back],
+    [state, blocked, today, hasUnresolvedDuplicate, goTo, open, advance, back],
   );
 
   return <RequirementContext.Provider value={value}>{children}</RequirementContext.Provider>;

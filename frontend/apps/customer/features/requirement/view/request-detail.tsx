@@ -47,6 +47,15 @@ export interface RequestDetailProps {
 
   /** Offered inside the state notice where we are the reason there is nothing to show. */
   supportAction?: ReactNode;
+  /**
+   * The money surface for this request, placed between the heading and the
+   * history.
+   *
+   * A slot rather than a prop set, because which surface it is depends on the
+   * archetype and this component knows nothing about archetypes — it renders a
+   * record and a timeline.
+   */
+  children?: ReactNode;
 }
 
 export function RequestDetail({
@@ -59,24 +68,37 @@ export function RequestDetail({
   onRetryRequest,
   onRetryTimeline,
   supportAction,
+  children,
 }: RequestDetailProps) {
   // Hooks run before any early return, so the countdown cannot be conditional on
   // the request having arrived. Null is a legitimate input to it.
   const countdown = useServerCountdown(request?.deadlineAt ?? null, 60_000);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6">
-      <RequestHeader
-        request={request}
-        isPending={isRequestPending}
-        error={requestError}
-        onRetry={onRetryRequest}
-        remainingMs={countdown?.remainingMs ?? null}
-        remainingAnnounce={countdown?.isExpired === false ? countdown.announce : null}
-        supportAction={supportAction}
-      />
+    // One page width, and the reading column is a constraint *inside* it rather
+    // than a narrower container above it. The record used to be `max-w-2xl` and
+    // the money surface below it `max-w-6xl`, so the page visibly changed width
+    // halfway down and the two halves read as different screens.
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
+      <div className="max-w-3xl">
+        <RequestHeader
+          request={request}
+          isPending={isRequestPending}
+          error={requestError}
+          onRetry={onRetryRequest}
+          remainingMs={countdown?.remainingMs ?? null}
+          remainingAnnounce={countdown?.isExpired === false ? countdown.announce : null}
+          supportAction={supportAction}
+        />
+      </div>
 
-      <section aria-labelledby="timeline-heading">
+      {/* What is happening and what it costs, between the heading and the
+          history. It was below the timeline, which put a list of things that
+          have already happened above the only part of the page a Customer can
+          act on. */}
+      {children}
+
+      <section aria-labelledby="timeline-heading" className="max-w-3xl">
         <h2 id="timeline-heading" className="text-lg font-semibold text-text">
           What has happened
         </h2>

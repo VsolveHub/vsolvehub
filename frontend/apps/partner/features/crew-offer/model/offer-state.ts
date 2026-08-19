@@ -111,6 +111,28 @@ export function isOfferAnswerable(offer: CrewOffer): boolean {
   return readOfferStatus(offer.status) === "INVITED";
 }
 
+/**
+ * Answerable **and the clock has not run out**, judged against the server's own
+ * `server_now` rather than the device's.
+ *
+ * The list endpoint already refuses to return a lapsed offer, so this is the
+ * second of two guards rather than the only one. It earns its place because the
+ * two are racing different things: the server filters at the moment it answers,
+ * and this filters at the moment the lead looks. Between a fifteen-second poll
+ * and a hundred-and-twenty-second deadline there is always a window where the
+ * cached list is a few seconds stale, and an offer rendered inside it is a button
+ * that produces a refusal describing a race that did not happen.
+ *
+ * `server_now` and not `Date.now()`: a partner phone with a skewed clock would
+ * otherwise hide live offers or show dead ones, and the payload publishes the
+ * server's own instant precisely so no client has to trust its own.
+ */
+export function isOfferLive(offer: CrewOffer, serverNow: string): boolean {
+  if (!isOfferAnswerable(offer)) return false;
+  if (offer.responds_by === null || offer.responds_by === undefined) return true;
+  return new Date(offer.responds_by).getTime() > new Date(serverNow).getTime();
+}
+
 /* ---------------------------------------------------------------------------
    The lead's own number
    --------------------------------------------------------------------------- */

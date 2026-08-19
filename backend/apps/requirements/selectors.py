@@ -391,6 +391,19 @@ def verified_partner_ids(partner_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
     )
 
 
+def vendor_business_type(partner: PartnerProfile) -> str:
+    """How a vendor trades — sole trader, firm, agency — or blank when unrecorded.
+
+    Read through the optional `business_profile` rather than assumed, and blank rather than
+    `"INDIVIDUAL"` when there is no profile at all. Defaulting would tell a Customer something
+    specific about a vendor nobody has actually stated, on the screen where they are deciding
+    whether to let that vendor into their home.
+    """
+
+    business = getattr(partner, "business_profile", None)
+    return str(business.business_type) if business is not None else ""
+
+
 def invitation_distance_band_km(invitation: VendorInvitation) -> int | None:
     """The distance band the matcher measured for this vendor, out of its own provenance.
 
@@ -621,6 +634,13 @@ def access_receipt_for(engagement: Engagement) -> dict[str, Any] | None:
     price was covered by a reclassification credit, or the row predates receipt numbering. Each of
     them means the same thing to the screen — there is no number to show — and none of them is an
     error.
+
+    `paid_at` is published so the screen can render a receipt somebody can keep rather than a
+    reference floating without a date. It is the moment the money was **verified**, not the moment
+    the Customer pressed pay: the two differ by however long a provider callback took, and a
+    receipt dated before the payment cleared is a receipt for something that had not happened yet.
+    It can be null on a row that predates the stamp, which is why the client renders the date
+    conditionally rather than assuming one.
     """
     requirement_id = engagement.requirement_id
     if engagement.archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
@@ -638,6 +658,7 @@ def access_receipt_for(engagement: Engagement) -> dict[str, Any] | None:
             "series": plan.receipt_series,
             "sequence": plan.receipt_sequence,
             "amount_paise": plan.chargeable_paise,
+            "paid_at": plan.charged_at,
         }
 
     # Revision 4: an A3 engagement now grows out of one of two fees. The booking fee is checked
@@ -657,6 +678,7 @@ def access_receipt_for(engagement: Engagement) -> dict[str, Any] | None:
             "series": booking_fee.receipt_series,
             "sequence": booking_fee.receipt_sequence,
             "amount_paise": booking_fee.amount_paise,
+            "paid_at": booking_fee.activated_at,
         }
 
     unlock = (
@@ -766,6 +788,18 @@ def _transition_events(requirement: CustomerRequirement) -> list[dict[str, Any]]
     """
     events: list[dict[str, Any]] = []
     for transition in RequirementTransition.objects.filter(requirement=requirement):
+        # A transition that does not change the status is a *record*, not a move.
+        #
+        # `choose_visit_plan` writes one — `from_status == to_status`, reason
+        # `visit_plan_chosen` — so the append-only history says what the Customer
+        # picked and when. On a live request that status is `MATCHING`, and
+        # matching `to_status` alone turned every plan change into a second "You
+        # sent this request" on the Customer's own timeline, timestamped minutes
+        # after the first.
+        #
+        # Entering a status is the event. Being recorded against one is not.
+        if transition.from_status == transition.to_status:
+            continue
         if transition.to_status == CustomerRequirement.Status.MATCHING:
             event_type = "REQUIREMENT_SUBMITTED"
         elif transition.to_status == CustomerRequirement.Status.CLOSED_SLA_BREACH:

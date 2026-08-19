@@ -29,10 +29,21 @@ The package map, door by door:
   plan charge, and rescheduling a booked visit (`M2-BE-215`, `419`..`427`).
 * `settlement` — what a booked visit becomes: arrival, completion, the two no-shows, the share each
   outcome earns or refunds (`M2-BE-423`, `425`, `426`), and the sweep selectors `tasks.py` reads.
+* `arrival` — the code the Customer reads out and the vendor enters, which is what turns "somebody
+  tapped arrived" into proof the two of them were in the same place.
+  `settlement.confirm_visit_arrival` remains the audited fallback for a dead phone or no signal.
 * `reclassification` — money carried across an A3↔A5 archetype change, and never charged twice
   (`M2-BE-427`).
 """
 
+from .arrival import (
+    ArrivalCode,
+    ArrivalCodeInvalidError,
+    ArrivalCodeRateLimitError,
+    confirm_visit_arrival_with_code,
+    issue_visit_arrival_code,
+    live_visit_arrival_code,
+)
 from .base import (
     A3,
     A5,
@@ -91,6 +102,9 @@ __all__ = [
     "A3",
     "A5",
     "ACCESS_RECEIPT_KIND",
+    "ArrivalCode",
+    "ArrivalCodeInvalidError",
+    "ArrivalCodeRateLimitError",
     "VisitSlotConfirmation",
     "_activate_free_plan",
     "_create_shares",
@@ -112,6 +126,7 @@ __all__ = [
     "complete_unlock",
     "complete_visit_plan",
     "confirm_visit_arrival",
+    "confirm_visit_arrival_with_code",
     "confirm_visit_slot",
     "consume_unlock",
     "create_unlock_checkout",
@@ -119,7 +134,9 @@ __all__ = [
     "customer_may_read_full_quotes",
     "expired_visit_hold_ids",
     "held_visit_payout_share_ids",
+    "issue_visit_arrival_code",
     "latest_unlock",
+    "live_visit_arrival_code",
     "missed_estimate_visit_ids",
     "refund_share",
     "refund_unlock",

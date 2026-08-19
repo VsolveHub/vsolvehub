@@ -257,6 +257,33 @@ def test_the_feed_endpoint_publishes_rendered_copy_and_a_target() -> None:
     assert row["read_at"] is None
 
 
+def test_an_explicit_target_is_published_before_generic_context_ids() -> None:
+    """An invitation notice must open the invitation, not the requirement behind it."""
+
+    recipient = _user()
+    requirement_id = str(uuid.uuid4())
+    invitation_id = str(uuid.uuid4())
+    _notice(
+        recipient,
+        purpose="m2.invitation.received",
+        template_code="m2_invitation_received",
+        context={
+            "requirement_id": requirement_id,
+            "target_kind": "PROJECT_INVITATION",
+            "target_id": invitation_id,
+        },
+    )
+    client = _client(recipient)
+
+    response = client.get("/api/v1/notifications/")
+
+    assert response.status_code == HTTP_OK
+    assert response.json()["results"][0]["target"] == {
+        "kind": "PROJECT_INVITATION",
+        "id": invitation_id,
+    }
+
+
 def test_a_notice_about_nothing_addressable_publishes_a_null_target() -> None:
     """Null is a real answer — it should lead nowhere rather than to a 404."""
 

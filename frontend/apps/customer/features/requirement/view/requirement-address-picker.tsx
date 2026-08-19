@@ -36,9 +36,17 @@ import { useRequirement } from "./requirement-context";
 export interface RequirementAddressPickerProps {
   /** The variant serviceability is checked against. */
   variantId: string;
+  /** See `AddressStage`. The phone flow supplies its own trigger row. */
+  presentation?: "card" | "row" | "none";
+  /** Opens the dialog from outside, for a caller with its own trigger. */
+  openSignal?: number;
 }
 
-export function RequirementAddressPicker({ variantId }: RequirementAddressPickerProps) {
+export function RequirementAddressPicker({
+  variantId,
+  presentation = "card",
+  openSignal,
+}: RequirementAddressPickerProps) {
   const { state, dispatch } = useRequirement();
   const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -110,6 +118,8 @@ export function RequirementAddressPicker({ variantId }: RequirementAddressPicker
       locationError={locationError}
       onUpdateAddress={(id, patch) => updateAddress.mutate({ addressId: id, patch })}
       isUpdatingAddress={updateAddress.isPending}
+      presentation={presentation}
+      openSignal={openSignal}
     />
   );
 }

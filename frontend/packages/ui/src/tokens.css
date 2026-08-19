@@ -122,7 +122,26 @@
      states "where contrast is strong"; navy is 13.7:1, so it qualifies. */
   --color-selected: var(--color-navy-700);
   --color-selected-surface: var(--color-navy-50);
+  --color-selected-line: var(--color-navy-200);
   --color-focus-ring: var(--color-navy-600);
+
+  /* The tinted plate that marks the one row on a screen carrying the action —
+     the promoted address row on the crew form, the chosen visit tier, a
+     recording in progress. Orange at full strength is a fill for controls; this
+     is its quietest step, so the emphasis reads as "this one" rather than as a
+     second button.
+
+     These names were already in use across six components before they were
+     defined here, which in Tailwind v4 means `bg-action-surface` compiled to
+     nothing at all and every one of those emphases was silently invisible. They
+     are ramp steps rather than new colours, so nothing about the palette moves. */
+  --color-action-surface: var(--color-signal-50);
+  --color-action-line: var(--color-signal-200);
+
+  /* Focus on the dark rail. `focus-ring` is navy-600 for a light surface and
+     all but disappears against navy-900, so anything inside the price rail
+     switches to this. Same ring, legible ground. */
+  --color-focus-ring-inverse: var(--color-warm-0);
 
   /* Status. Each role has surface / line / text so state is never colour alone:
      components pair these with an icon and a text label. */

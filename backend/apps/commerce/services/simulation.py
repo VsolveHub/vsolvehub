@@ -17,9 +17,13 @@ from .base import PAYMENT_FINAL_STATES
 from .capture import apply_provider_payment
 
 
-@transaction.atomic
 def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID) -> bool:
     """Whose charge is a checkout-free `PaymentAttempt`?
+
+    Deliberately **not** `@transaction.atomic`. It is three `.exists()` reads, it is only ever
+    called from inside `simulate_capture`'s transaction, and a decorator here reads as though the
+    transaction requirement lives on the helper — which is how `simulate_capture` came to lose its
+    own. The lock belongs to the function that takes it.
 
     Answered from the aggregate that sold it rather than from the attempt, because the attempt
     genuinely does not know: `initiate_standalone_payment_attempt` deliberately takes no customer,
@@ -66,8 +70,19 @@ def _standalone_attempt_belongs_to(*, attempt: PaymentAttempt, customer_id: UUID
     return False
 
 
+@transaction.atomic
 def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
     """Marks a payment captured with no gateway involved. Development only.
+
+    ## The decorator is load-bearing
+
+    `select_for_update` below raises `TransactionManagementError` outside a transaction, and this
+    is the outermost call — the view does not wrap it and `ATOMIC_REQUESTS` is off. The decorator
+    was lost when `_standalone_attempt_belongs_to` was introduced directly above this function and
+    inherited it, which turned every "Mark as paid" press into a `500`. Test suites cannot see that
+    regression on their own: `django_db` runs each test inside a transaction, so the lock succeeds
+    there and only a real request fails. `tests/commerce/test_simulated_capture.py` therefore takes
+    the `transaction=True` database explicitly.
 
     ## Why this routes through `apply_provider_payment`
 
@@ -123,6 +138,13 @@ def simulate_capture(*, attempt_id: UUID, customer_id: UUID) -> Order | None:
     if attempt.status in PAYMENT_FINAL_STATES:
         # Already settled. Idempotent by re-reading rather than by charging again.
         return Order.objects.filter(booking_group_id=attempt.booking_group_id).first()
+    if not attempt.provider_order_id:
+        from .payments import create_provider_order  # noqa: PLC0415 - dev-only provider handoff
+
+        # The real browser flow waits for the outbox worker to stamp the provider order before
+        # handing off to a gateway. The development shortcut is deliberately more direct: one
+        # click should be enough to mark a fake payment paid, even if the worker has not run yet.
+        attempt = create_provider_order(attempt_id=attempt.id)
     if not attempt.provider_order_id:
         raise ValueError("This payment has no provider order yet.")
 

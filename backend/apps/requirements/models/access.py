@@ -561,3 +561,86 @@ class ProposalSelection(models.Model):
 
     def __str__(self) -> str:
         return f"{self.requirement_id}:{self.proposal_id}:{self.status}"
+
+
+class SiteVisitArrivalOtp(models.Model):
+    """The code the Customer reads out and the vendor types in, to prove arrival.
+
+    ## Why arrival needed proving at all
+
+    `SiteVisit.arrival_confirmed_at` was written by whichever party tapped a button, from
+    anywhere. The A5 visit plan is money the Customer has already paid for somebody to travel, and
+    the visit is what earns the vendor their share of it — so "did they actually turn up" is a
+    financial question, and a button either side can press from a sofa is not an answer to it.
+
+    ## Why the Customer holds the code and the vendor enters it
+
+    The code is issued to the Customer and displayed on their visit page; the vendor types it into
+    the partner app. That direction is what makes it proof: the two people have to be in the same
+    place for the code to move between them. Reversing it would prove the same thing, but M1's
+    start OTP already runs this way (`apps.fulfilment.otp`), and one platform teaching two
+    opposite habits for the same gesture is how a vendor ends up reading their code down a phone.
+
+    ## Why this is its own model rather than `BookingOtp` reused
+
+    `BookingOtp` is scoped to an M1 `Booking` by a non-null foreign key, and a site visit is a
+    different aggregate on a different lifecycle. Widening it would make both nullable and put
+    "which one is this" into every query. The shape is deliberately identical — hashed, expiring,
+    single-use, attempt-limited — because that shape has already been through review once.
+
+    The code itself is never stored. `code_hash` is a password hash, so a database read cannot
+    tell a vendor what to type, and a leaked backup does not become a set of skeleton keys.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    site_visit = models.ForeignKey(
+        SiteVisit,
+        on_delete=models.PROTECT,
+        related_name="arrival_otps",
+    )
+    code_hash = models.CharField(max_length=255)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    #: Who typed the accepted code. The vendor, on every live path — stored anyway, because
+    #: "which account proved this arrival" is the first question asked about a disputed visit.
+    consumed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_visit_arrival_otps_consumed",
+    )
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=5)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        indexes = [models.Index(fields=("site_visit", "created_at"))]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(max_attempts__gt=0),
+                name="requirements_visit_otp_attempts_positive",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.site_visit_id}:{self.created_at.isoformat()}"
+
+    @property
+    def is_consumed(self) -> bool:
+        return self.consumed_at is not None
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at <= timezone.now()
+
+    @property
+    def is_exhausted(self) -> bool:
+        return self.failed_attempts >= self.max_attempts
+
+    @property
+    def is_live(self) -> bool:
+        """Whether this code can still be entered. All three refusals, in one place."""
+
+        return not (self.is_consumed or self.is_expired or self.is_exhausted)

@@ -9,10 +9,10 @@ already documents for the one case that had been caught before. Every deadline i
 the booking-fee hold, the visit-plan hold, the estimate window, the stage review that auto-approves
 and releases money — was written assuming the other party finds out. Nothing told them.
 
-## Why a table rather than fourteen hand-written functions
+## Why a table rather than fifteen hand-written functions
 
 Each route is the same three decisions: whose event is this, who needs to know, and what does it
-say. Writing that fourteen times would make the differences hard to see and the omissions
+say. Writing that out once per event would make the differences hard to see and the omissions
 impossible to spot. The table is readable top to bottom as "what the platform tells people", which
 is a thing the owner should be able to review without reading Python.
 
@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from apps.catalog.models import ServiceVariant
 from apps.foundation.models import OutboxEvent
 from apps.notifications.models import NotificationIntent
 from apps.notifications.services import request_notification
@@ -108,18 +109,26 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         audience=Audience.CUSTOMER,
         customer_template="m2_rate_card_fell_back",
     ),
+    #: The cascade parked and is waiting on the Customer. This is the one A3 notification that
+    #: asks for a decision rather than reporting one, so it is the one that must arrive.
+    NotificationRoute(
+        event_type="m2.rate_card.exhausted",
+        purpose="m2.rate_card.exhausted",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_rate_card_exhausted",
+    ),
     # ---- A5: visit-first projects --------------------------------------------------------
+    NotificationRoute(
+        event_type="m2.invitation.received",
+        purpose="m2.invitation.received",
+        audience=Audience.PARTNER,
+        partner_template="m2_invitation_received",
+    ),
     NotificationRoute(
         event_type="m2.visit_plan.charged",
         purpose="m2.visit_plan.charged",
         audience=Audience.CUSTOMER,
         customer_template="m2_visit_plan_charged",
-    ),
-    NotificationRoute(
-        event_type="m2.proposal.selected",
-        purpose="m2.selection.reconfirm_required",
-        audience=Audience.PARTNER,
-        partner_template="m2_proposal_selected",
     ),
     NotificationRoute(
         event_type="m2.proposal.rejected",
@@ -166,6 +175,158 @@ NOTIFICATION_ROUTES: tuple[NotificationRoute, ...] = (
         purpose="m2.requirement.closed",
         audience=Audience.CUSTOMER,
         customer_template="m2_requirement_closed",
+    ),
+    # ---- Capture and matching ------------------------------------------------------------
+    #
+    # The stretch of the journey the Customer used to hear nothing about at all. They sent a
+    # request, vendors accepted it, quotes arrived — and their feed stayed empty until money
+    # moved. The first three routes below are the fix for that silence, and two of them needed
+    # a domain event to be emitted before there was anything to route.
+    #
+    # `m2.requirement.submitted` is the exception in this table: it already had a dedicated
+    # consumer (`handlers.handle_requirement_submitted`, which opens matching), so the
+    # registration loop must not claim it a second time. That handler calls the notifier itself.
+    NotificationRoute(
+        event_type="m2.requirement.submitted",
+        purpose="m2.requirement.submitted",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_requirement_submitted",
+    ),
+    NotificationRoute(
+        event_type="m2.invitation.accepted",
+        purpose="m2.invitation.accepted",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_invitation_accepted",
+    ),
+    NotificationRoute(
+        event_type="m2.proposal.submitted",
+        purpose="m2.proposal.submitted",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_proposal_submitted",
+    ),
+    NotificationRoute(
+        event_type="m2.unlock.activated",
+        purpose="m2.unlock.activated",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_unlock_activated",
+    ),
+    NotificationRoute(
+        event_type="m2.requirement.reclassified",
+        purpose="m2.requirement.reclassified",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_requirement_reclassified",
+    ),
+    NotificationRoute(
+        event_type="m2.booking_fee.waived",
+        purpose="m2.booking_fee.waived",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_booking_fee_waived",
+    ),
+    NotificationRoute(
+        event_type="m2.proposal.revalidation_requested",
+        purpose="m2.proposal.revalidation_requested",
+        audience=Audience.PARTNER,
+        partner_template="m2_proposal_revalidation_requested",
+    ),
+    # ---- A3: the working day -------------------------------------------------------------
+    NotificationRoute(
+        event_type="m2.shift.crew_assigned",
+        purpose="m2.shift.crew_assigned",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_shift_crew_assigned",
+    ),
+    NotificationRoute(
+        event_type="m2.shift.arrival_confirmed",
+        purpose="m2.shift.arrival_confirmed",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_shift_arrival_confirmed",
+    ),
+    NotificationRoute(
+        event_type="m2.shift.shortfall",
+        purpose="m2.shift.shortfall",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_shift_shortfall",
+    ),
+    NotificationRoute(
+        event_type="m2.shift.day_settled",
+        purpose="m2.shift.day_settled",
+        audience=Audience.BOTH,
+        customer_template="m2_shift_day_settled_customer",
+        partner_template="m2_shift_day_settled_partner",
+    ),
+    # ---- A5: the project -----------------------------------------------------------------
+    NotificationRoute(
+        event_type="m2.project.handover_submitted",
+        purpose="m2.project.handover_submitted",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_project_handover_submitted",
+    ),
+    NotificationRoute(
+        event_type="m2.project.delay_claimed",
+        purpose="m2.project.delay_claimed",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_project_delay_claimed",
+    ),
+    NotificationRoute(
+        event_type="m2.project.transfer_proposed",
+        purpose="m2.project.transfer_proposed",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_project_transfer_proposed",
+    ),
+    NotificationRoute(
+        event_type="m2.project.transferred",
+        purpose="m2.project.transferred",
+        audience=Audience.BOTH,
+        customer_template="m2_project_transferred_customer",
+        partner_template="m2_project_transferred_partner",
+    ),
+    NotificationRoute(
+        event_type="m2.project.terminated",
+        purpose="m2.project.terminated",
+        audience=Audience.BOTH,
+        customer_template="m2_project_terminated_customer",
+        partner_template="m2_project_terminated_partner",
+    ),
+    # ---- Endings and trouble -------------------------------------------------------------
+    NotificationRoute(
+        event_type="m2.cancellation.executed",
+        purpose="m2.cancellation.executed",
+        audience=Audience.BOTH,
+        customer_template="m2_cancellation_executed",
+        partner_template="m2_cancellation_executed",
+    ),
+    NotificationRoute(
+        event_type="m2.cancellation.disputed",
+        purpose="m2.cancellation.disputed",
+        audience=Audience.BOTH,
+        customer_template="m2_cancellation_disputed",
+        partner_template="m2_cancellation_disputed",
+    ),
+    NotificationRoute(
+        event_type="m2.engagement.completing",
+        purpose="m2.engagement.completing",
+        audience=Audience.BOTH,
+        customer_template="m2_engagement_completing_customer",
+        partner_template="m2_engagement_completing_partner",
+    ),
+    NotificationRoute(
+        event_type="m2.engagement.redispatched",
+        purpose="m2.engagement.redispatched",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_engagement_redispatched",
+    ),
+    NotificationRoute(
+        event_type="m2.engagement.capability_suspended",
+        purpose="m2.engagement.capability_suspended",
+        audience=Audience.CUSTOMER,
+        customer_template="m2_engagement_capability_suspended",
+    ),
+    NotificationRoute(
+        event_type="m2.safety.incident_reported",
+        purpose="m2.safety.incident_reported",
+        audience=Audience.BOTH,
+        customer_template="m2_safety_incident_reported",
+        partner_template="m2_safety_incident_reported",
     ),
 )
 
@@ -249,20 +410,174 @@ def _resolve(event: OutboxEvent) -> _Recipients:
                 .first()
             )
 
-    invitation_id = _uuid_from(payload, "vendor_invitation_id")
+    # `vendor_invitation_id` is the name most emitters use; `proposals.request_revalidation`
+    # writes `invitation_id`. Reading both here is one line, where teaching every emitter a
+    # shared name would be a migration of live payloads for no behavioural gain.
+    invitation_id = _uuid_from(payload, "vendor_invitation_id") or _uuid_from(
+        payload, "invitation_id"
+    )
     if invitation_id is not None:
         invitation = (
-            VendorInvitation.objects.select_related("partner").filter(id=invitation_id).first()
+            VendorInvitation.objects.select_related("partner", "requirement")
+            .filter(id=invitation_id)
+            .first()
         )
         if invitation is not None:
             if partner_user_id is None:
                 partner_user_id = invitation.partner.user_id
+            context["invitation_id"] = str(invitation.id)
+            context.setdefault("requirement_id", str(invitation.requirement_id))
+            context.setdefault("archetype", invitation.requirement.archetype)
             context.setdefault("partner_name", invitation.partner.display_name or "Your crew")
 
     context.setdefault("partner_name", _partner_name(engagement))
     context.setdefault("headcount", payload.get("crew_size") or "your crew")
     context.setdefault("visit_count", payload.get("visit_count") or "the visits you chose")
+    _add_payload_details(context, payload)
     return _Recipients(customer_id=customer_id, partner_user_id=partner_user_id, context=context)
+
+
+#: The Indian numbering system groups the last three digits and then every two above them —
+#: 12,34,567 rather than 1,234,567.
+_LAST_GROUP_DIGITS = 3
+_LEADING_GROUP_DIGITS = 2
+
+
+def _rupees(paise: object) -> str | None:
+    """Paise as a sentence would say it, or None when there is no honest number to say.
+
+    Notification copy is prose, so this is the one place money becomes a string rather than the
+    structured `{amount_paise, currency}` every API response publishes. Whole rupees only: a
+    notice reading "settled at ₹4,000.00" is a receipt, and the receipt is a screen away.
+    """
+
+    if not isinstance(paise, int) or isinstance(paise, bool):
+        return None
+    whole, remainder = divmod(abs(paise), 100)
+    # Indian grouping — 12,34,567 rather than 1,234,567 — because the reader is in India and the
+    # western grouping is the tell that nobody looked.
+    text = str(whole)
+    if len(text) > _LAST_GROUP_DIGITS:
+        head, tail = text[:-_LAST_GROUP_DIGITS], text[-_LAST_GROUP_DIGITS:]
+        groups: list[str] = []
+        while len(head) > _LEADING_GROUP_DIGITS:
+            head, group = head[:-_LEADING_GROUP_DIGITS], head[-_LEADING_GROUP_DIGITS:]
+            groups.insert(0, group)
+        if head:
+            groups.insert(0, head)
+        text = ",".join([*groups, tail])
+    sign = "-" if paise < 0 else ""
+    suffix = f".{remainder:02d}" if remainder else ""
+    return f"{sign}₹{text}{suffix}"
+
+
+def _plural(count: object, singular: str, plural: str) -> str | None:
+    """`3` → "3 deliverables". None when the payload did not carry a usable count."""
+
+    if not isinstance(count, int) or isinstance(count, bool):
+        return None
+    return f"{count} {singular if count == 1 else plural}"
+
+
+#: Payload keys a template may name, and the fallback used when the event did not carry one.
+#:
+#: Every key here is `setdefault` into context unconditionally, because `render_notification`
+#: raises `KeyError` on a missing one — deliberately, so a broken template fails at the write
+#: rather than in front of the person reading their feed. A fallback is therefore not politeness;
+#: it is what stops one thin payload from turning a notice into an exception.
+#:
+#: The fallbacks are written to read as English in place. "Fewer workers arrived than agreed —
+#: some of the agreed number turned up" is clumsy, but it is true, and it is what a reader gets
+#: instead of nothing.
+_DETAIL_FALLBACKS: dict[str, str] = {
+    "amount": "the agreed amount",
+    "shift_date": "the scheduled day",
+    "crew_size": "the crew",
+    "workers_present": "fewer",
+    "workers_expected": "the agreed number",
+    "extension_days": "more",
+    "deliverables": "their work",
+}
+
+
+def _add_payload_details(context: dict[str, Any], payload: dict[str, Any]) -> None:
+    """Copy the scalars templates are allowed to quote, formatted for prose.
+
+    A whitelist rather than `context.update(payload)`. Payloads carry partner ids, reason codes
+    and internal aggregate ids, and merging them wholesale would put both a rendering hazard and
+    somebody else's identifiers into a row that is read back into a person's feed.
+    """
+
+    amount = _rupees(payload.get("amount_paise"))
+    if amount is not None:
+        context.setdefault("amount", amount)
+
+    shift_date = payload.get("shift_date")
+    if isinstance(shift_date, str) and shift_date:
+        context.setdefault("shift_date", shift_date)
+
+    crew_size = _plural(payload.get("crew_size"), "worker", "workers")
+    if crew_size is not None:
+        context.setdefault("crew_size", crew_size)
+
+    deliverables = _plural(payload.get("deliverables"), "deliverable", "deliverables")
+    if deliverables is not None:
+        context.setdefault("deliverables", deliverables)
+
+    for key in ("workers_present", "workers_expected", "extension_days"):
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            context.setdefault(key, str(value))
+
+    for key, fallback in _DETAIL_FALLBACKS.items():
+        context.setdefault(key, fallback)
+
+
+#: Routes whose notice is about the Customer's **quotes**, not their request in general.
+#:
+#: Both of these ask for money or report that money was taken, and the screen that answers them is
+#: `/requests/{id}/quotes` rather than the request page. Without an explicit target the serializer
+#: falls back to `requirement_id` → `REQUIREMENT`, and "unlock to read the full quote" would open
+#: a page with no quotes on it — a notice that is correct and still useless.
+_QUOTES_TARGET_EVENTS = frozenset({"m2.proposal.submitted", "m2.unlock.activated"})
+
+
+def _context_for_route(route: NotificationRoute, context: dict[str, Any]) -> dict[str, Any]:
+    """Add route-specific link targets without making every notice prefer invitations.
+
+    A crew-offer notice may carry a `vendor_invitation_id` purely to name the lead in the body; a
+    Customer cannot open that Partner invitation. Only the invitation-received route is itself
+    about the Partner's enquiry door, so it gets an explicit target.
+
+    The default — no explicit target, and the serializer picking the most specific id in context —
+    stays right for most routes. This function exists for the ones where the most specific id and
+    the most *useful* destination are different things.
+    """
+
+    if route.event_type in _QUOTES_TARGET_EVENTS:
+        requirement_id = context.get("requirement_id")
+        if isinstance(requirement_id, str) and requirement_id:
+            return {
+                **context,
+                "target_kind": "REQUIREMENT_QUOTES",
+                "target_id": requirement_id,
+            }
+        return context
+
+    if route.event_type != "m2.invitation.received":
+        return context
+
+    invitation_id = context.get("invitation_id")
+    if not isinstance(invitation_id, str) or not invitation_id:
+        return context
+
+    archetype = context.get("archetype")
+    target_kind = (
+        "PROJECT_INVITATION"
+        if archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
+        else "WORKFORCE_INVITATION"
+    )
+    return {**context, "target_kind": target_kind, "target_id": invitation_id}
 
 
 def _notify(
@@ -307,7 +622,7 @@ def notify_for_outbox_event(event: OutboxEvent) -> list[NotificationIntent]:
                 route=route,
                 template_code=route.customer_template,
                 event=event,
-                context=recipients.context,
+                context=_context_for_route(route, recipients.context),
             )
         )
 
@@ -319,7 +634,7 @@ def notify_for_outbox_event(event: OutboxEvent) -> list[NotificationIntent]:
                 route=route,
                 template_code=route.partner_template,
                 event=event,
-                context=recipients.context,
+                context=_context_for_route(route, recipients.context),
             )
         )
 

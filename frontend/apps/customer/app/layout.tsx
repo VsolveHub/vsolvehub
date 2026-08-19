@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { QueryProvider, SessionSync } from "@vsolve/query";
 
-import { SiteHeader } from "@/features/session/view/site-header";
+import { AppChrome } from "@/features/session/view/app-chrome";
 import "./globals.css";
 
 const appFont = Plus_Jakarta_Sans({
@@ -39,6 +39,11 @@ export const viewport = {
  * concern and because until it existed nothing in this app linked to
  * `/bookings` at all.
  *
+ * It is rendered through `AppChrome` rather than directly, because a few screens
+ * are not pages inside an app — on a phone the booking flow *is* the app while
+ * it is open, with its own header, scroll region and docked action. Those screens
+ * claim the viewport and the navigation steps aside; see `lib/focus-mode`.
+ *
  * It is *not* an auth gate. Catalog, `/book/[service]` and `/cart` are usable
  * signed out — the anonymous cart is a deliberate product surface — so the
  * header reads the session to decide what to show and never to decide who may
@@ -52,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <QueryProvider>
           <SessionSync />
-          <SiteHeader />
+          <AppChrome />
           {children}
         </QueryProvider>
       </body>

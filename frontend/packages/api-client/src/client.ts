@@ -4,6 +4,7 @@ import {
   ApiContractError,
   ApiNetworkError,
   ApiRequestError,
+  isApiClientError,
   parseErrorEnvelope,
 } from "./errors";
 import { createCsrfStore, type CsrfStore } from "./csrf";
@@ -32,7 +33,46 @@ export interface CreateApiClientOptions {
    * only for tests and for a host that already holds a valid token.
    */
   getCsrfToken?: () => string | undefined;
+  /**
+   * How long any single request may take before it is abandoned.
+   *
+   * `0` disables the deadline. See {@link DEFAULT_REQUEST_TIMEOUT_MS} for why
+   * there is one at all.
+   */
+  timeoutMs?: number;
 }
+
+/**
+ * The deadline on every request.
+ *
+ * ## Why this exists
+ *
+ * `fetch` has no default timeout. A request whose connection is severed without
+ * a close — a dev server restarting, a proxy dropping a socket, a phone moving
+ * between cell and wifi — leaves a promise that never settles and never
+ * rejects. Nothing downstream can recover from that: a TanStack mutation stays
+ * `isPending` forever, so the button that fired it spins forever, shows no
+ * error, and offers no retry. The person is left looking at a spinner for a
+ * request that is not merely slow but *gone*.
+ *
+ * That is not a hypothetical. It is the failure that produced a "Review and
+ * send" button spinning with zero requests in flight, and it would have
+ * happened on any screen in any of the three apps, because they all send
+ * through this one client.
+ *
+ * ## Why thirty seconds
+ *
+ * Long enough that a slow request on a mid-range Android over a poor Indian
+ * mobile network still completes — the environment this product actually runs
+ * in — and short enough that a person is told something went wrong while they
+ * are still looking at the screen. Django's own slowest published path answers
+ * well inside it.
+ *
+ * A timeout is reported as a network failure rather than as a cancellation, so
+ * it reaches the screen as "could not reach us, nothing was submitted" with a
+ * retry, which is both true and actionable.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 /** Local send/receive timestamps, retained so callers can calibrate precisely. */
 interface RequestTiming {
@@ -107,6 +147,82 @@ export async function isSessionLost(response: Response): Promise<boolean> {
 }
 
 /**
+ * Wraps a fetch so no request can outlive its deadline.
+ *
+ * ## Why the timeout is distinguished from a cancellation
+ *
+ * `request` below deliberately re-throws `AbortError` untouched, because an
+ * abort normally means the *caller* walked away — a component unmounted, a
+ * query was superseded — and reporting that as a network failure would put an
+ * error on a screen nobody is looking at any more. A deadline is the opposite:
+ * nobody walked away, the request died, and the person is still waiting. So the
+ * timeout is converted here, before it can be mistaken for the other thing.
+ *
+ * A caller's own signal is still honoured — aborting theirs aborts ours — and
+ * that path stays a cancellation, exactly as it was.
+ */
+function withDeadline(
+  send: (request: Request) => Promise<Response>,
+  timeoutMs: number,
+): (request: Request) => Promise<Response> {
+  if (timeoutMs <= 0) return send;
+
+  return async (request: Request): Promise<Response> => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const callerSignal = request.signal;
+    const onCallerAbort = () => controller.abort();
+    callerSignal?.addEventListener("abort", onCallerAbort);
+
+    // Cloned before rebuilding: `new Request(input, init)` reads the input's
+    // body, and the CSRF path re-clones the original to retry a rotated token.
+    // Consuming it here would leave that retry with nothing to send.
+    const attempt = send(new Request(request.clone(), { signal: controller.signal }));
+
+    // Raced, not merely aborted.
+    //
+    // Signalling the abort is what frees the socket, but it is not what makes
+    // the caller safe: a transport that ignores its signal would leave `attempt`
+    // pending forever, which is precisely the failure this function exists to
+    // end. The race guarantees the deadline is honoured whatever the transport
+    // beneath it chooses to do.
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        // Reject *before* aborting, and the order is load-bearing. `abort()`
+        // makes the transport reject its own promise immediately, so aborting
+        // first lets a bare `AbortError` win the race — which `request` below
+        // then re-throws untouched as a cancellation, leaving the caller with
+        // the raw DOMException instead of a diagnosis. Settling the deadline
+        // first is what guarantees the timeout is the answer the caller sees.
+        reject(
+          new ApiNetworkError(
+            "Vsolve Hub took too long to answer. Nothing was submitted — try again.",
+            // No underlying cause: nothing failed, the answer simply never came.
+            // Passing the eventual `AbortError` would attribute the timeout to
+            // the cancellation this function performs to clean up after it.
+            null,
+          ),
+        );
+        controller.abort();
+      }, timeoutMs);
+    });
+
+    // The loser of the race still settles later. Left alone its rejection is an
+    // unhandled promise, which in a browser is a console error nobody can act on
+    // and in Node can take a process down.
+    attempt.catch(() => undefined);
+
+    try {
+      return await Promise.race([attempt, deadline]);
+    } finally {
+      clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", onCallerAbort);
+    }
+  };
+}
+
+/**
  * Creates the typed API client.
  *
  * Responsibilities kept here rather than at call sites, so no screen can
@@ -121,7 +237,8 @@ export async function isSessionLost(response: Response): Promise<boolean> {
  */
 export function createApiClient(options: CreateApiClientOptions): ApiClient {
   const { baseUrl, fetch: customFetch, onUnauthorized, getCsrfToken } = options;
-  const fetchImpl = customFetch ?? ((request: Request) => fetch(request));
+  const send = customFetch ?? ((request: Request) => fetch(request));
+  const fetchImpl = withDeadline(send, options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
 
   /**
    * Fetches a token directly rather than through the client.
@@ -341,6 +458,10 @@ export async function request<TData>(
     result = await operation();
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+    // Already one of ours — the deadline's timeout, most often. Re-wrapping it
+    // would flatten a precise diagnosis into the generic one below and tell
+    // somebody to check a connection that is working fine.
+    if (isApiClientError(cause)) throw cause;
     throw new ApiNetworkError(
       "Could not reach Vsolve Hub. Check your connection and try again. " +
         "Nothing was submitted.",

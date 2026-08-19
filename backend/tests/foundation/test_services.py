@@ -92,3 +92,27 @@ def test_outbox_event_is_idempotent_and_queued_only_after_commit(
     assert first.id == second.id
     assert OutboxEvent.objects.count() == 1
     assert queued == [str(first.id)]
+
+
+def test_outbox_broker_failure_does_not_break_committed_command(
+    django_capture_on_commit_callbacks: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unavailable(_event_id: str) -> None:
+        raise OSError("broker unavailable")
+
+    monkeypatch.setattr("apps.foundation.services.dispatch_outbox_event.delay", unavailable)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        event = enqueue_outbox_event(
+            aggregate_type="payment_attempt",
+            aggregate_id=uuid4(),
+            event_type="m2.visit_plan.charged",
+            idempotency_key="visit-plan-charged:broker-down",
+            payload={"requirement_id": str(uuid4())},
+        )
+
+    event.refresh_from_db()
+    assert event.status == OutboxEvent.Status.PENDING
+    assert event.attempts == 0
+    assert event.published_at is None

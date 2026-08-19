@@ -72,16 +72,51 @@ TRANSACTIONAL_PURPOSES = frozenset(
         # cancellation that goes ahead because the counterparty's window closed in silence. A
         # preference screen that could switch these off would be a preference screen that breaks
         # the product's promises — the same sentence this frozenset already existed to enforce.
+        "m2.invitation.received",
         "m2.crew_offer.accepted",
         "m2.booking_fee.charged",
         "m2.crew.vendor_no_show",
+        "m2.rate_card.fell_back",
         "m2.visit_plan.charged",
+        # No longer written: a selection opens the engagement directly and there is no
+        # reconfirmation to summon anybody to. Kept because intents carrying this purpose
+        # are still in the database, and the rule that they could never be muted has to keep
+        # answering for them.
         "m2.selection.reconfirm_required",
+        "m2.proposal.rejected",
         "m2.engagement.opened",
         "m2.stage.review_required",
         "m2.stage.disputed",
         "m2.amendment.authorized",
         "m2.cancellation.evaluated",
+        "m2.requirement.closed",
+        # The customer spine added with the notification audit. Same test as everything above it:
+        # can a person who muted this be worse off than a person who never had it? Each of these
+        # is money moving, a decision being asked for, or a window that closes on its own.
+        #
+        # Deliberately *absent*, and therefore mutable: `m2.requirement.submitted`,
+        # `m2.invitation.accepted`, `m2.shift.crew_assigned` and `m2.shift.arrival_confirmed`.
+        # All four are reassurance — a confirmation of something the reader just did, or progress
+        # they can see on the job page anyway — and a Customer running ten crews who wants a
+        # quieter feed should be allowed to have one. Nothing lapses because they were not read.
+        "m2.proposal.submitted",
+        "m2.unlock.activated",
+        "m2.requirement.reclassified",
+        "m2.booking_fee.waived",
+        "m2.proposal.revalidation_requested",
+        "m2.shift.shortfall",
+        "m2.shift.day_settled",
+        "m2.project.handover_submitted",
+        "m2.project.delay_claimed",
+        "m2.project.transfer_proposed",
+        "m2.project.transferred",
+        "m2.project.terminated",
+        "m2.cancellation.executed",
+        "m2.cancellation.disputed",
+        "m2.engagement.completing",
+        "m2.engagement.redispatched",
+        "m2.engagement.capability_suspended",
+        "m2.safety.incident_reported",
     }
 )
 

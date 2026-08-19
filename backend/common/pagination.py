@@ -51,7 +51,33 @@ def reject_invalid_cursor_query(request: Request) -> None:
 
 
 class StrictCursorPagination(CursorPagination):
-    """DRF cursor pagination that maps only cursor failures to `cursor_invalid`."""
+    """DRF cursor pagination that maps only cursor failures to `cursor_invalid`.
+
+    ## Every subclass must name its own `ordering`
+
+    DRF defaults `CursorPagination.ordering` to `"-created"`, and **no model in this project has
+    a `created` column** — they all use `created_at`. A subclass that forgets one therefore looks
+    completely fine at import, passes every check, and raises `FieldError` on the first request
+    that reaches it. `EngagementCursorPagination` shipped that way and turned every read of
+    `/api/v1/engagements/` into a 500.
+
+    A default that is wrong for every caller is worse than no default, so this refuses one at
+    class-definition time. It fails on `manage.py check`, which is where a missing ordering is
+    cheap to notice rather than expensive.
+
+    The ordering must also be **unique and stable** — cursor pagination pages by position, so a
+    non-unique key silently skips or repeats rows. That is why the ones here all end in `id`.
+    """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if cls.ordering == CursorPagination.ordering:
+            raise TypeError(
+                f"{cls.__name__} must set its own `ordering`. DRF's default is '-created', "
+                "which no model in this project has, so inheriting it raises FieldError at "
+                "request time. Name the sort explicitly and end it with a unique tiebreak, "
+                'for example ("-created_at", "id").'
+            )
 
     def paginate_queryset(
         self, queryset: Any, request: Request, view: Any = None

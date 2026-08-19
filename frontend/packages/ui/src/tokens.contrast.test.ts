@@ -212,6 +212,29 @@ describe("non-text UI", () => {
   it("makes a selected state distinguishable from an unselected one", () => {
     expectContrast("--color-selected", "--color-selected-surface", LARGE_TEXT);
     expectContrast("--color-selected", "--color-surface", NON_TEXT);
+    // The border half of the same cue. A selected choice card carries a filled
+    // radio, a label *and* this edge, so the edge has to actually be visible.
+    expectContrast("--color-selected-line", "--color-selected-surface", 1.2);
+  });
+
+  it("keeps the emphasised action plate readable", () => {
+    // The promoted row on the crew booking form — the one input that opens a
+    // dialog — and the chosen visit tier. Body copy sits on it, so it is held to
+    // the body threshold rather than to the large-text one.
+    expectContrast("--color-text", "--color-action-surface", BODY_TEXT);
+    expectContrast("--color-text-secondary", "--color-action-surface", BODY_TEXT);
+    expectContrast("--color-action-line", "--color-action-surface", 1.2);
+  });
+
+  it("gives the price rail a focus ring that survives a navy ground", () => {
+    // `focus-ring` is tuned for light surfaces and measures far under 3:1 on
+    // navy-900, so the rail switches rings rather than losing the indicator.
+    // Both halves asserted: the inverse ring works on the rail, and the default
+    // one demonstrably does not — which is why the switch exists.
+    expectContrast("--color-focus-ring-inverse", "--color-navy-900", NON_TEXT);
+    expect(
+      contrastRatio(resolve("--color-focus-ring"), resolve("--color-navy-900")),
+    ).toBeLessThan(NON_TEXT);
   });
 
   it("separates the canvas from cards sitting on it", () => {

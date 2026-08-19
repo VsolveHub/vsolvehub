@@ -22,6 +22,25 @@ from apps.locations.models import ServiceArea
 
 
 class PartnerProfile(models.Model):
+    class PhotoStatus(models.TextChoices):
+        """Where a partner's photograph is in review.
+
+        A photograph is the one field on this model a Customer sees *before* meeting the person,
+        on the screen that tells them who is about to enter their home. Left unreviewed, whatever
+        somebody uploads is what a Customer sees — so the field is not "is there a photo" but
+        "has somebody looked at it", and only `APPROVED` is ever published.
+
+        `NONE` and `REJECTED` are deliberately distinct even though both publish nothing. One is a
+        partner who has not got round to it; the other is a partner who has been told why. The
+        partner app shows different things for each, and an operator reviewing a queue needs to
+        tell "not submitted" from "refused".
+        """
+
+        NONE = "NONE", "No photograph"
+        PENDING = "PENDING", "Awaiting review"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -31,14 +50,54 @@ class PartnerProfile(models.Model):
     display_name = models.CharField(max_length=120)
     biography = models.TextField(blank=True)
     experience_years = models.PositiveSmallIntegerField(default=0)
+    #: The object key in private storage, not a URL. A stored URL is a stored expiry, and the
+    #: signed links this bucket issues are short-lived by design — the same reason
+    #: `PartnerDocument` stores a key and signs on read.
+    photo_object_key = models.CharField(max_length=500, blank=True)
+    photo_status = models.CharField(
+        max_length=12,
+        choices=PhotoStatus.choices,
+        default=PhotoStatus.NONE,
+    )
+    photo_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="partner_photos_reviewed",
+    )
+    photo_reviewed_at = models.DateTimeField(null=True, blank=True)
+    #: Required by the review command when refusing, so a partner is told what to change rather
+    #: than left guessing at a rejected upload.
+    photo_review_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("display_name", "id")
+        constraints = [
+            #: An approved or pending photograph must actually have an object behind it. Without
+            #: this, clearing the key while leaving the status behind publishes a partner as
+            #: photographed and then signs a URL for nothing.
+            models.CheckConstraint(
+                condition=models.Q(photo_status__in=("NONE", "REJECTED"))
+                | ~models.Q(photo_object_key=""),
+                name="partners_photo_key_present_when_live",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.display_name
+
+    @property
+    def has_publishable_photo(self) -> bool:
+        """Whether a Customer may be shown this photograph.
+
+        The single place the rule lives. Every read path asks this rather than comparing the
+        status itself, so "approved" can never come to mean two different things on two screens.
+        """
+
+        return bool(self.photo_object_key) and self.photo_status == self.PhotoStatus.APPROVED
 
 
 class PartnerApplication(models.Model):

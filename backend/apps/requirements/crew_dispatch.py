@@ -47,6 +47,7 @@ from apps.requirements import matching, purchase_gates, rate_cards, services
 from apps.requirements.exceptions import (
     InvitationTransitionError,
     LifecycleNotSupportedError,
+    PolicyUnavailableError,
     RateCardUnavailableError,
     RequirementTransitionError,
     RosterInsufficientError,
@@ -212,15 +213,38 @@ class RatePreview:
     overtime_hourly_paise: int
 
 
-def preview_published_rate(requirement: CustomerRequirement) -> RatePreview:
+def preview_published_rate(
+    requirement: CustomerRequirement,
+    *,
+    headcount: int | None = None,
+    days: int | None = None,
+) -> RatePreview:
     """What instant booking would cost, before anybody commits to anything.
 
     Raises the same refusals the command does, deliberately. A preview that quietly answered
     "unavailable" where the command would refuse for a different reason is how a screen ends up
     offering a button that cannot work.
+
+    ## Why a size may be passed in
+
+    The A3 booking screen puts the price beside the form and recalculates it as the Customer
+    changes how many people they need. Pricing only the *saved* draft would mean a write on every
+    press of a stepper, and — worse — a client that wanted to avoid those writes would have to
+    multiply a day rate by a headcount in the browser to keep up. That is the one thing the rate
+    disclosure may never do, because a figure this platform did not calculate is a figure it
+    cannot stand behind.
+
+    So the size is an argument. Both parts or neither: a headcount without days is not a job, and
+    silently pairing one supplied number with one stored one would price something the Customer
+    never described. Absent both, the saved preset answers, exactly as before.
+
+    **This prices; it does not book.** `book_at_published_rate` still reads
+    `rate_cards.preset_size` from the stored draft, so a size previewed here and never saved can
+    never become a purchase.
     """
     card = rate_cards.rate_card_for_requirement(requirement)
-    headcount, days = rate_cards.preset_size(requirement)
+    if headcount is None or days is None:
+        headcount, days = rate_cards.preset_size(requirement)
     return RatePreview(
         card=card,
         quote=rate_cards.quote_at_published_rate(card=card, headcount=headcount, days=days),
@@ -294,6 +318,70 @@ def _invite_crew_wave(
     booking.wave = wave
     booking.save(update_fields=("wave", "updated_at"))
     return invitations
+
+
+@dataclass(frozen=True, slots=True)
+class CascadeProgress:
+    """How far the search has got, for the Customer who is watching it.
+
+    The waiting screen used to be able to say only "we have widened the search", because `wave` was
+    the single number published and a wave count on its own answers neither of the two questions
+    somebody staring at that screen actually has: *is anything happening*, and *how long does this
+    go on for*. Both are knowable — the cascade's shape is owner configuration and the offers are
+    rows — and neither was ever put on the wire.
+
+    So: how many leads are holding this offer right now, how many waves there are in total, and
+    when the current one times out. That last is the honest version of "we widen the search on our
+    own": the next wave fires when the current offers expire, and the Customer can see when.
+
+    **It is deliberately not on `RateCardBooking`.** That serializer is the purchase snapshot,
+    frozen at the rate it was made at; this changes every time an offer is sent or lapses, and
+    mixing live dispatch state into a frozen record is how a screen starts showing one as the
+    other.
+    """
+
+    #: The wave that is out now. 1 is the first, smallest one.
+    wave: int
+    #: How many waves run before the request falls back to quotes.
+    total_waves: int
+    #: Leads holding an offer in the current wave — "12 supervisors have this job".
+    offers_out: int
+    #: When the current wave's offers expire, which is when the next one goes out. `None` once
+    #: the last wave is out, because there is no next one to name.
+    next_wave_at: datetime | None
+
+
+def cascade_progress(booking: RateCardBooking) -> CascadeProgress | None:
+    """The live cascade, or `None` when there is no live cascade to describe.
+
+    `None` in three cases that are one fact to the reader: the booking is not out to the market
+    (it is held, confirmed, cancelled or fell back), the variant's cascade policy is unset — in
+    which case the instant path is not open at all and this refuses rather than inventing a wave
+    count — or the wave has gone out but its invitations are not visible for some reason.
+    """
+    if booking.status != RateCardBooking.Status.MATCHING:
+        return None
+    try:
+        policy = rate_cards.cascade_policy(booking.requirement)
+    except PolicyUnavailableError:
+        # Fail closed, exactly as every other reader of this configuration does. A wave count
+        # guessed from a default would describe a cascade nobody configured.
+        return None
+
+    current = VendorInvitation.objects.filter(
+        requirement_id=booking.requirement_id,
+        wave=booking.wave,
+    )
+    # The wave's deadline is the latest of its own offers': they are all created together with the
+    # same `responds_by`, and taking the maximum survives a wave that was topped up.
+    deadline = current.aggregate(models.Max("responds_by"))["responds_by__max"]
+
+    return CascadeProgress(
+        wave=booking.wave,
+        total_waves=policy.max_waves,
+        offers_out=current.filter(status=VendorInvitation.Status.INVITED).count(),
+        next_wave_at=deadline if booking.wave < policy.max_waves else None,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,16 +600,98 @@ def advance_cascade(*, requirement_id: uuid.UUID) -> list[VendorInvitation]:
         return []
 
     policy = rate_cards.cascade_policy(requirement)
-    if booking.wave >= policy.max_waves:
-        fall_back_to_quote_flow(requirement_id=requirement.id, reason_code="cascade_exhausted")
+    if booking.wave >= _wave_ceiling(booking=booking, policy=policy):
+        exhaust_cascade(requirement_id=requirement.id, reason_code="cascade_exhausted")
         return []
     invitations = _invite_crew_wave(booking=booking, policy=policy)
     if not invitations:
         # The pool is empty at this width. Widening again would offer the job to nobody a second
-        # time, so the honest move is the fallback — the Customer waits for quotes rather than
-        # watching a holding state that will never resolve.
-        fall_back_to_quote_flow(requirement_id=requirement.id, reason_code="no_eligible_leads")
+        # time, so the honest move is to stop and say so — the Customer decides what happens to
+        # their request rather than watching a holding state that will never resolve.
+        exhaust_cascade(requirement_id=requirement.id, reason_code="no_eligible_leads")
     return invitations
+
+
+def _wave_ceiling(*, booking: RateCardBooking, policy: rate_cards.CascadePolicy) -> int:
+    """How far this booking may widen before it parks.
+
+    Each retry buys another `max_waves` of reach **on top of** the waves already spent, rather than
+    resetting the counter. That is what makes "search wider" mean something: a retry that started
+    again from wave one would re-offer the job to the same nearest leads who already passed on it.
+    """
+    return policy.max_waves * (booking.retry_count + 1)
+
+
+@transaction.atomic
+def exhaust_cascade(*, requirement_id: uuid.UUID, reason_code: str) -> RateCardBooking:
+    """The cascade ran out of reach. Park the booking and ask the Customer what next.
+
+    **Nothing is decided here beyond stopping.** This used to be `fall_back_to_quote_flow`, which
+    moved the Customer onto a different product — quotes, on a business-hours clock, from vendors
+    naming their own prices — without asking whether that was what they wanted. The three ways out
+    (`retry_cascade`, `choose_quote_flow`, `cancel_rate_card_booking`) are theirs to pick.
+
+    Outstanding offers are **withdrawn**, not left to lapse. An offer for a job that is no longer
+    being dispatched is an offer a lead can still open and press accept on, and the refusal they
+    would get describes a race that did not happen. Withdrawing also empties the inbox of a job
+    nobody took, which is what a lead expects to see.
+
+    Free by construction: there is no money on a rate-card booking before `OFFER_HELD`, and this
+    only runs while the booking is still `MATCHING`.
+    """
+    booking = (
+        RateCardBooking.objects.select_for_update(of=("self",))
+        .filter(requirement_id=requirement_id)
+        .first()
+    )
+    if booking is None:
+        raise RateCardUnavailableError("This request was not booked at a published rate.")
+    if booking.status != RateCardBooking.Status.MATCHING:
+        return booking
+
+    booking.status = RateCardBooking.Status.EXHAUSTED
+    booking.exhaustion_reason_code = reason_code
+    booking.exhausted_at = timezone.now()
+    booking.save(update_fields=("status", "exhaustion_reason_code", "exhausted_at", "updated_at"))
+    _withdraw_outstanding_offers(requirement_id=requirement_id)
+    requirement = CustomerRequirement.objects.get(pk=requirement_id)
+    services.record_transition(
+        requirement=requirement,
+        from_status=requirement.status,
+        to_status=requirement.status,
+        actor=None,
+        reason_code="rate_card_cascade_exhausted",
+        reason=f"rate_card_booking:{booking.id} reason:{reason_code}; nothing was charged",
+    )
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.rate_card.exhausted",
+        idempotency_key=f"rate-card-exhausted:{booking.id}:{booking.retry_count}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "rate_card_booking_id": str(booking.id),
+            "reason_code": reason_code,
+        },
+    )
+    return booking
+
+
+def _withdraw_outstanding_offers(*, requirement_id: uuid.UUID) -> int:
+    """Take every unanswered offer off the leads' inboxes.
+
+    `expire_invitation` rather than a bare status write, so the invitation's own record says what
+    happened to it and the decline-rate reading is not polluted by offers nobody was given a fair
+    chance to answer.
+    """
+    outstanding = list(
+        VendorInvitation.objects.select_for_update()
+        .filter(requirement_id=requirement_id, status=VendorInvitation.Status.INVITED)
+        .values_list("id", flat=True)
+    )
+    for invitation_id in outstanding:
+        matching.expire_invitation(invitation_id=invitation_id)
+    return len(outstanding)
 
 
 @transaction.atomic
@@ -535,6 +705,11 @@ def fall_back_to_quote_flow(*, requirement_id: uuid.UUID, reason_code: str) -> R
     `MATCHING → MATCHING (quote mode)` — so the Customer's request stays live and simply starts
     collecting quotes. `matching.invite_wave` takes over from here on the ordinary business-hours
     clock, which is the right clock for a quote and the wrong one for a crew.
+
+    Reachable from `EXHAUSTED` as well as `MATCHING` since this stopped being automatic: it is now
+    what the Customer picks when they would rather have quotes than keep looking for a crew. Any
+    offer still outstanding is withdrawn first, because a crew offer and a quote request are two
+    different products and a lead must not be able to accept the one the Customer just left.
     """
     booking = (
         RateCardBooking.objects.select_for_update(of=("self",))
@@ -543,8 +718,12 @@ def fall_back_to_quote_flow(*, requirement_id: uuid.UUID, reason_code: str) -> R
     )
     if booking is None:
         raise RateCardUnavailableError("This request was not booked at a published rate.")
-    if booking.status != RateCardBooking.Status.MATCHING:
+    if booking.status not in (
+        RateCardBooking.Status.MATCHING,
+        RateCardBooking.Status.EXHAUSTED,
+    ):
         return booking
+    _withdraw_outstanding_offers(requirement_id=requirement_id)
 
     booking.status = RateCardBooking.Status.FELL_BACK
     booking.fallback_reason_code = reason_code
@@ -572,6 +751,128 @@ def fall_back_to_quote_flow(*, requirement_id: uuid.UUID, reason_code: str) -> R
     )
     if requirement.status in CustomerRequirement.LIVE_STATUSES:
         matching.invite_wave(requirement_id=requirement.id)
+    return booking
+
+
+# ---------------------------------------------------------------------------
+# The Customer's three ways out of `EXHAUSTED`
+# ---------------------------------------------------------------------------
+#
+# One shape for all three: lock the booking, refuse anything that is not parked, act, record. They
+# are deliberately separate commands rather than one with a mode, because they are three different
+# decisions with three different consequences and a single endpoint taking an action string would
+# make "cancel" one typo away from "keep looking".
+
+
+@transaction.atomic
+def retry_cascade(*, requirement_id: uuid.UUID, actor: User) -> RateCardBooking:
+    """Search wider at the same published rate.
+
+    **The price does not move, and that is the design** (ADR-0009). The customer rate is an
+    ops-published card sitting above a statutory wage floor, and the wage half of it is paid to the
+    crew directly in cash at day end — money this platform never holds. A "pay more to get someone"
+    button would therefore advertise a rate nobody could enforce, on top of §7's rule that a partner
+    may never charge above the card. Thin supply is met by reaching further, which is what it
+    usually needs.
+
+    The wave counter is **not** reset. Restarting at wave one would re-offer the job to the same
+    nearest leads who already passed on it, which is the one thing "try again" must not mean.
+    """
+    booking = _locked_recoverable_booking(requirement_id=requirement_id)
+    policy = rate_cards.cascade_policy(booking.requirement)
+    booking.retry_count += 1
+    booking.status = RateCardBooking.Status.MATCHING
+    booking.exhausted_at = None
+    booking.exhaustion_reason_code = ""
+    booking.save(
+        update_fields=(
+            "retry_count",
+            "status",
+            "exhausted_at",
+            "exhaustion_reason_code",
+            "updated_at",
+        )
+    )
+    services.record_transition(
+        requirement=booking.requirement,
+        from_status=booking.requirement.status,
+        to_status=booking.requirement.status,
+        actor=actor,
+        reason_code="rate_card_search_widened",
+        reason=f"rate_card_booking:{booking.id} retry:{booking.retry_count} at the published rate",
+    )
+    invitations = _invite_crew_wave(booking=booking, policy=policy)
+    if not invitations:
+        # Still nobody in reach even one step wider. Park it again rather than leave the Customer
+        # watching a cascade that has already run out — and say so through the same event, whose
+        # idempotency key carries `retry_count` so this second parking is its own notification.
+        return exhaust_cascade(requirement_id=requirement_id, reason_code="no_eligible_leads")
+    return booking
+
+
+@transaction.atomic
+def choose_quote_flow(*, requirement_id: uuid.UUID, actor: User) -> RateCardBooking:
+    """Take quotes instead of waiting for a crew. The Customer's own choice, now.
+
+    A thin wrapper over `fall_back_to_quote_flow` rather than a second implementation: what happens
+    is identical, and only *who decided* has changed. The reason code says which, so the two are
+    distinguishable for the rest of the booking's life.
+    """
+    _locked_recoverable_booking(requirement_id=requirement_id)
+    booking = fall_back_to_quote_flow(
+        requirement_id=requirement_id, reason_code="customer_chose_quotes"
+    )
+    services.record_transition(
+        requirement=booking.requirement,
+        from_status=booking.requirement.status,
+        to_status=booking.requirement.status,
+        actor=actor,
+        reason_code="rate_card_customer_chose_quotes",
+        reason=f"rate_card_booking:{booking.id}; nothing was charged",
+    )
+    return booking
+
+
+@transaction.atomic
+def cancel_rate_card_booking(*, requirement_id: uuid.UUID, actor: User) -> RateCardBooking:
+    """Stop looking altogether and close the request.
+
+    Free, and provably so rather than by policy: `booking_fees` only ever writes a fee from
+    `accept_crew_offer` onwards, and this refuses any status but `EXHAUSTED` — where, by
+    definition, no lead ever accepted. A cancellation from `OFFER_HELD` is a different command with
+    a real fee behind it (`booking_fees.cancel_booking`) and is deliberately not reachable here.
+    """
+    booking = _locked_recoverable_booking(requirement_id=requirement_id)
+    booking.status = RateCardBooking.Status.CANCELLED
+    booking.save(update_fields=("status", "updated_at"))
+    _withdraw_outstanding_offers(requirement_id=requirement_id)
+    # Through `close_requirement` rather than a status write: it stamps `closed_at` and
+    # `closed_reason_code` together, which the closed-has-a-timestamp constraint requires, and
+    # emits `m2.requirement.closed` so everything downstream of a closed request hears about it.
+    services.close_requirement(
+        requirement_id=requirement_id,
+        status=CustomerRequirement.Status.CLOSED_CANCELLED,
+        reason_code="rate_card_cancelled_by_customer",
+        actor=actor,
+    )
+    return booking
+
+
+def _locked_recoverable_booking(*, requirement_id: uuid.UUID) -> RateCardBooking:
+    """The booking under its own lock, or the refusal that says why it cannot be recovered."""
+    booking = (
+        RateCardBooking.objects.select_for_update(of=("self",))
+        .select_related("requirement")
+        .filter(requirement_id=requirement_id)
+        .first()
+    )
+    if booking is None:
+        raise RateCardUnavailableError("This request was not booked at a published rate.")
+    if booking.status not in RateCardBooking.RECOVERABLE_STATUSES:
+        raise RequirementTransitionError(
+            "This request is not waiting on you — it is still looking for a crew, or a crew "
+            "already took it.",
+        )
     return booking
 
 

@@ -308,7 +308,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.34.0",
+    "VERSION": "1.39.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -654,6 +654,20 @@ PARTNER_LOCATION_STALE_SECONDS = env.int(
     default=30 * 60,
 )
 
+# Wave: the A5 arrival code.
+#
+# Longer than M1's five-minute start OTP (`M1_START_OTP_TTL_SECONDS`) and deliberately so. That
+# code is sent when a Partner is already at the door; this one is shown to a Customer against a
+# booked *window* — a visit scheduled for "2 to 3pm" is a code that has to survive somebody
+# arriving at ten past. Two hours covers a window plus the lateness a real site produces, and
+# still expires the same day.
+M2_VISIT_ARRIVAL_CODE_TTL_SECONDS = env.int(
+    "M2_VISIT_ARRIVAL_CODE_TTL_SECONDS", default=2 * 60 * 60
+)
+# Same budget as every other OTP here. Five wrong entries is a vendor who has misread the digits,
+# not one who is guessing at a six-digit space.
+M2_VISIT_ARRIVAL_CODE_MAX_ATTEMPTS = env.int("M2_VISIT_ARRIVAL_CODE_MAX_ATTEMPTS", default=5)
+
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://127.0.0.1:56379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://127.0.0.1:56379/2")
 CELERY_TASK_SERIALIZER = "json"
@@ -983,9 +997,20 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SAMESITE = "Lax"
+# `Lax` everywhere it can be, which is everywhere the app and the API share a site.
+#
+# It is configurable for one case and it is worth naming, because getting it wrong looks like a
+# bug in the login rather than a cookie policy: when the two are served from *different* hosts —
+# a developer tunnelling the frontend and the backend separately to test on a phone — the API call
+# is cross-site, and a `Lax` cookie is simply not sent. The session appears to work and then every
+# authenticated read comes back 403.
+#
+# `None` is the only value that fixes it, and browsers reject `SameSite=None` without `Secure`, so
+# the two move together. Never set this in production: the deployed apps are same-site, and
+# `SameSite=None` there would hand back the CSRF protection this pairing exists to provide.
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", default="Lax")
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", default="Lax")
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"

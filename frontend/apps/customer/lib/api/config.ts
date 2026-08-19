@@ -25,8 +25,20 @@ export const SERVER_API_BASE_URL = process.env.API_BASE_URL ?? PUBLIC_API_BASE_U
  * price-authoritative is cached longer than this, and anything tied to capacity,
  * a quote or a session is never cached at all — a cached availability answer is
  * a fabricated capacity claim.
+ *
+ * ## Zero in development, and it is not a micro-optimisation
+ *
+ * The catalogue is what the requirement flow renders its questions from. With a
+ * five-minute cache, editing the catalogue — running the seed, deactivating a
+ * question, renaming an option — changes nothing on screen for five minutes,
+ * and a reload does not help because the reload is served from the same cache.
+ *
+ * That is indistinguishable from the change not working. It cost real time
+ * chasing a question that had already been removed from the database and was
+ * still being served from here.
  */
-export const CATALOG_REVALIDATE_SECONDS = 300;
+export const CATALOG_REVALIDATE_SECONDS =
+  process.env.NODE_ENV === "production" ? 300 : 0;
 
 /** Cache tags, so a catalog publish can invalidate precisely. */
 export const CACHE_TAGS = {

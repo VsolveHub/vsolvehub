@@ -3,10 +3,9 @@ import type { Schemas } from "@vsolve/api-client";
 import { describe, expect, it } from "vitest";
 
 import {
-  FLEXIBLE_WINDOW_DAYS,
-  flexibilityDaysFor,
   toDraftIntent,
   toLifecycleVerdict,
+  selectionOnlyQuestionSet,
   toQuestionSet,
   toServerAttachmentItems,
 } from "./index";
@@ -54,25 +53,21 @@ function draft(overrides: Partial<RequirementDraft> = {}): RequirementDraft {
   };
 }
 
-describe("flexibility — an integer on the wire, a checkbox on the screen", () => {
-  it("reads the server's own boolean rather than re-deriving it from the integer", () => {
-    // `is_date_flexible` is `flexibility_days > 0`, computed by the serializer.
-    // Re-deriving it here is how two clients end up disagreeing about what zero
-    // days means.
-    expect(toDraftIntent(draft({ flexibility_days: 0, is_date_flexible: false })).isDateFlexible)
-      .toBe(false);
-    expect(toDraftIntent(draft()).isDateFlexible).toBe(true);
+describe("flexibility — an integer, all the way through", () => {
+  it("reads the day count rather than the server's derived boolean", () => {
+    // `is_date_flexible` is `flexibility_days > 0`, computed by the serializer,
+    // and it carries strictly less: it cannot say *how* flexible. The capture
+    // screen asks in bands, so the integer is what has to survive a round trip.
+    expect(toDraftIntent(draft({ flexibility_days: 0 })).flexibilityDays).toBe(0);
+    expect(toDraftIntent(draft({ flexibility_days: 7 })).flexibilityDays).toBe(7);
+    expect(toDraftIntent(draft({ flexibility_days: 30 })).flexibilityDays).toBe(30);
   });
 
-  it("writes a named window rather than a number nobody can find later", () => {
-    expect(flexibilityDaysFor(true)).toBe(FLEXIBLE_WINDOW_DAYS);
-    expect(flexibilityDaysFor(false)).toBe(0);
-  });
-
-  it("writes zero for an unticked box, not an absent field", () => {
-    // Absent would leave a previously-set window in place, so unticking the box
-    // would silently do nothing.
-    expect(flexibilityDaysFor(false)).toBe(0);
+  it("keeps zero as a real answer rather than an absent one", () => {
+    // "Exact" is a choice the Customer made. Restoring it as absent would leave
+    // a previously-set window in place, so choosing Exact would silently do
+    // nothing.
+    expect(toDraftIntent(draft({ flexibility_days: 0 })).flexibilityDays).toBe(0);
   });
 });
 
@@ -246,7 +241,7 @@ describe("screen 1's questions", () => {
         question({
           kind: "SINGLE_CHOICE",
           options: [
-            { id: "o-1", code: "day", label: "Daytime", description: "" },
+            { id: "o-1", code: "day", label: "Daytime", description: "Bright working hours" },
             { id: "o-2", code: "night", label: "Night", description: "" },
           ],
         }),
@@ -254,8 +249,43 @@ describe("screen 1's questions", () => {
     );
 
     expect(set.questions[0]?.options).toEqual([
-      { value: "day", label: "Daytime" },
-      { value: "night", label: "Night" },
+      { value: "day", label: "Daytime", description: "Bright working hours" },
+      { value: "night", label: "Night", description: undefined },
+    ]);
+  });
+
+  it("turns the old interior fit-out text question into one selection question", () => {
+    const set = selectionOnlyQuestionSet(
+      "interior-fit-out-project",
+      toQuestionSet(
+        variant([
+          question({
+            code: "deliverable",
+            prompt: "What should be finished at the end?",
+            kind: "TEXT",
+          }),
+          question({
+            code: "site_ready",
+            prompt: "Is the site empty and ready?",
+            kind: "BOOLEAN",
+            is_required: false,
+          }),
+        ]),
+      ),
+    );
+
+    expect(set.questions).toHaveLength(1);
+    expect(set.questions[0]).toMatchObject({
+      code: "deliverable",
+      label: "What kind of fit-out do you need?",
+      kind: "choice",
+      required: true,
+    });
+    expect(set.questions[0]?.options?.map((option) => option.value)).toEqual([
+      "office-fit-out",
+      "retail-fit-out",
+      "hospitality-fit-out",
+      "shell-core-completion",
     ]);
   });
 });

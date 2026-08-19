@@ -100,6 +100,11 @@ class NotificationSerializer(serializers.ModelSerializer[NotificationIntent]):
         should lead nowhere rather than to a 404 — so the clients must handle it.
         """
 
+        explicit_kind = obj.context.get("target_kind")
+        explicit_id = obj.context.get("target_id")
+        if isinstance(explicit_kind, str) and explicit_kind and isinstance(explicit_id, str):
+            return {"kind": explicit_kind, "id": explicit_id}
+
         for key, kind in _TARGET_KEYS:
             value = obj.context.get(key)
             if isinstance(value, str) and value:

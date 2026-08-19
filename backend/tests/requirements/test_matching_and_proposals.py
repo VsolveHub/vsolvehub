@@ -13,6 +13,7 @@ from apps.catalog.models import (
     ServiceVariant,
     Subcategory,
 )
+from apps.foundation.models import OutboxEvent
 from apps.identity.models import User
 from apps.locations.models import (
     Address,
@@ -315,6 +316,29 @@ def test_the_decision_is_recorded_so_operations_can_explain_it() -> None:
     assert provenance["pool"]["considered"] >= 1
     assert "ranked" in provenance
     assert "excluded" in provenance
+
+
+def test_an_invitation_emits_the_partner_notification_event() -> None:
+    variant = _variant(ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT, code="project")
+    area = _area()
+    customer = _customer()
+    _vendor(area=area, variant=variant, phone="+919000000010", name="Projects Co")
+    requirement = _matching_requirement(
+        variant=variant,
+        area=area,
+        customer=customer,
+        archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+    )
+
+    [invitation] = matching.invite_wave(requirement_id=requirement.id)
+
+    event = OutboxEvent.objects.get(event_type="m2.invitation.received")
+    assert event.aggregate_type == "vendor_invitation"
+    assert event.aggregate_id == invitation.id
+    assert event.idempotency_key == f"m2-invitation-received:{invitation.id}"
+    assert event.payload["requirement_id"] == str(requirement.id)
+    assert event.payload["vendor_invitation_id"] == str(invitation.id)
+    assert event.payload["archetype"] == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
 
 
 # ---------------------------------------------------------------------------

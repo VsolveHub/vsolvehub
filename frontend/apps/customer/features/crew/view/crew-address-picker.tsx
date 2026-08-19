@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import type { Schemas } from "@vsolve/api-client";
+import { describeError } from "@vsolve/query";
+import { useEffect, useRef, useState } from "react";
 
 import {
   useAddresses,
@@ -35,16 +37,35 @@ import { AddressStage } from "@/features/booking/view/address-stage";
  * server verdict about price rather than a client lookup about coverage.
  */
 
+type Address = Schemas["Address"];
+
 export interface CrewAddressPickerProps {
   variantId: string;
   selectedAddressId: string | null;
   onSelect: (addressId: string) => void;
+  /** See `AddressStage`'s own prop. The booking form uses the promoted row. */
+  presentation?: "card" | "row" | "none";
+  /** Opens the dialog from outside, for a caller with its own trigger row. */
+  openSignal?: number;
+  /**
+   * Called whenever the resolved address changes, including on first load.
+   *
+   * The booking screen needs the address itself, not just its id — the rate
+   * rail names the city the card is published for, and the city is the
+   * Customer's own answer rather than a field `RatePreview` carries. Passing the
+   * record up beats making the screen mount `useAddresses` a second time to look
+   * up an id it already handed down.
+   */
+  onResolved?: (address: Address | null) => void;
 }
 
 export function CrewAddressPicker({
   variantId,
   selectedAddressId,
   onSelect,
+  presentation = "card",
+  openSignal,
+  onResolved,
 }: CrewAddressPickerProps) {
   const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -61,7 +82,48 @@ export function CrewAddressPicker({
     serviceVariantId: variantId,
   });
 
-  async function handleUseCurrentLocation() {
+  /**
+   * Coverage for the pincode being *typed*, which is a different question from
+   * coverage for the address already chosen.
+   *
+   * A second query rather than a shared one: they answer about different
+   * postcodes at the same time, and collapsing them would make the add form's
+   * verdict flicker to the selected address's answer every time the draft
+   * cleared. Six characters or nothing, so a half-typed pincode does not send a
+   * request per keystroke.
+   */
+  const [draftPostalCode, setDraftPostalCode] = useState("");
+  const draftServiceabilityQuery = useServiceability({
+    postalCode: draftPostalCode.trim().length === 6 ? draftPostalCode.trim() : null,
+    serviceVariantId: variantId,
+  });
+
+  // Reported from an effect rather than from `onSelect`, because the address
+  // list arrives asynchronously: a Customer returning to a screen that already
+  // holds an id would otherwise never see the record resolve, since nothing
+  // called `onSelect` on that path. Keyed on the id so a refetch that returns an
+  // equal-but-new object does not re-notify on every poll.
+  const reportedId = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (onResolved === undefined) return;
+    const resolvedId = selected?.id ?? null;
+    if (reportedId.current === resolvedId) return;
+    reportedId.current = resolvedId;
+    onResolved(selected);
+  }, [onResolved, selected]);
+
+  /**
+   * The device's position, resolved into address fields. **Saves nothing.**
+   *
+   * This used to reverse-geocode and immediately `POST /addresses/`, so the
+   * Customer's address book filled up with records labelled "Saved address"
+   * carrying whatever first line the geocoder guessed — and no screen ever
+   * offered them the chance to correct it. Now it returns the fields and the
+   * form in the dialog is where they are checked, which is also what makes
+   * `latitude`/`longitude` obtainable at all: they are required on
+   * `AddressRequest` and there is no forward geocoder.
+   */
+  async function locate(): Promise<Schemas["ReverseGeocodeResponse"] | null> {
     setLocationError(null);
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -75,29 +137,35 @@ export function CrewAddressPicker({
           timeout: 12_000,
         });
       });
-      const resolved = await reverseGeocode.mutateAsync({
+      return await reverseGeocode.mutateAsync({
         latitude: position.coords.latitude.toFixed(6),
         longitude: position.coords.longitude.toFixed(6),
       });
-      const created = await createAddress.mutateAsync({
-        label: addresses.length === 0 ? "Home" : "Saved address",
-        line1: resolved.line1,
-        locality: resolved.locality,
-        city: resolved.city,
-        state: resolved.state,
-        postal_code: resolved.postal_code,
-        country_code: resolved.country_code,
-        latitude: resolved.latitude,
-        longitude: resolved.longitude,
-        source: "REVERSE_GEOCODED",
-        is_default: addresses.length === 0,
-      });
-      onSelect(created.id);
     } catch {
       // Denied permission, a timeout and an unreachable geocoder all mean the
-      // same thing to the Customer: type it instead. The form is already on
-      // screen, so this is a notice rather than a recovery path.
-      setLocationError("We could not find you. Please choose or add an address below.");
+      // same thing to the Customer: the pin is not coming from here. The
+      // message renders inside the dialog, next to the control they pressed.
+      setLocationError(
+        "We could not find you. Check location permission for this site and try again.",
+      );
+      return null;
+    }
+  }
+
+  /** Writes the address the Customer checked. Returns null so the form can stay open. */
+  async function create(
+    request: Schemas["AddressRequest"],
+  ): Promise<Schemas["Address"] | null> {
+    try {
+      return await createAddress.mutateAsync({
+        ...request,
+        // The first address a Customer saves becomes their default. Deciding it
+        // here rather than offering a checkbox: nobody's first address is not
+        // their default, and a second one should not silently steal the flag.
+        is_default: addresses.length === 0,
+      });
+    } catch {
+      return null; // `createError` renders inside the form.
     }
   }
 
@@ -109,11 +177,29 @@ export function CrewAddressPicker({
       isCheckingServiceability={serviceabilityQuery.isFetching}
       selectedAddressId={selectedAddressId}
       onSelect={(address) => onSelect(address.id)}
-      onUseCurrentLocation={() => void handleUseCurrentLocation()}
-      isUsingCurrentLocation={reverseGeocode.isPending || createAddress.isPending}
+      // Retained for the empty-state path in callers that have not adopted the
+      // form. With `addNew` supplied the dialog offers the form instead.
+      onUseCurrentLocation={() => void locate()}
+      isUsingCurrentLocation={reverseGeocode.isPending}
       locationError={locationError}
       onUpdateAddress={(id, patch) => updateAddress.mutate({ addressId: id, patch })}
       isUpdatingAddress={updateAddress.isPending}
+      presentation={presentation}
+      openSignal={openSignal}
+      addNew={{
+        onLocate: locate,
+        isLocating: reverseGeocode.isPending,
+        locateError: locationError,
+        onCreate: create,
+        isCreating: createAddress.isPending,
+        createError:
+          createAddress.error === null
+            ? null
+            : describeError(createAddress.error, "mutation").message,
+        onPostalCodeChange: setDraftPostalCode,
+        draftServiceability: draftServiceabilityQuery.data ?? null,
+        isCheckingDraftServiceability: draftServiceabilityQuery.isFetching,
+      }}
     />
   );
 }

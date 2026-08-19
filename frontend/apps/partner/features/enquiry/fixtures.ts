@@ -85,6 +85,12 @@ export function siteVisit(overrides: Partial<Schemas["SiteVisit"]> = {}): Schema
     // Required since 1.26.0. A visit time without its zone is a time nobody
     // can act on: the vendor travels in the area's zone, not the browser's.
     timezone: "Asia/Kolkata",
+    // Required since 1.39.0, and null is the honest default for a fixture whose
+    // base state is `REQUESTED`: the server discloses the vendor from `SCHEDULED`
+    // onward, so a visit nobody has confirmed names nobody. A fixture that
+    // carried an identity here would let a test assert a reveal the real read
+    // would refuse.
+    vendor: null,
     fee_paise: 50_000,
     adjusts_against_final_price: true,
     scheduled_for: null,

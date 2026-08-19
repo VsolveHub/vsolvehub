@@ -247,13 +247,24 @@ class RateCardBooking(models.Model):
         #: A lead accepted and is holding the job while the Customer pays the booking fee.
         OFFER_HELD = "OFFER_HELD", "A lead is holding this job"
         CONFIRMED = "CONFIRMED", "Crew confirmed and the booking fee is paid"
-        #: The cascade exhausted its widening steps. The requirement is back on the quote flow and
-        #: nothing was charged.
+        #: The cascade ran out of reach and **is waiting for the Customer to say what next**.
+        #: Distinct from `FELL_BACK` on purpose: this state changes nothing about the request, and
+        #: the three ways out of it — search wider, take quotes instead, cancel — are the
+        #: Customer's to choose. Nothing was charged, because on this path nothing can be before
+        #: `OFFER_HELD`.
+        EXHAUSTED = "EXHAUSTED", "No crew accepted"
+        #: The requirement is now on the quote flow and nothing was charged. Reached by the
+        #: Customer choosing it from `EXHAUSTED`, no longer automatically.
         FELL_BACK = "FELL_BACK", "Fell back to the quote flow"
         CANCELLED = "CANCELLED", "Cancelled"
 
-    #: Statuses in which the cascade may still send offers.
+    #: Statuses in which the cascade may still send offers. `EXHAUSTED` is deliberately absent: a
+    #: parked booking must not widen on its own, and slot accounting reverts to the quote flow's
+    #: rules the moment it stops being a live crew job (`matching._slot_holding_statuses`).
     DISPATCHABLE_STATUSES = (Status.MATCHING, Status.OFFER_HELD)
+
+    #: Statuses from which the Customer's three recovery commands may run.
+    RECOVERABLE_STATUSES = (Status.EXHAUSTED,)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.OneToOneField(
@@ -299,6 +310,21 @@ class RateCardBooking(models.Model):
     fallback_reason_code = models.SlugField(max_length=80, blank=True)
     fell_back_at = models.DateTimeField(null=True, blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    # --- Exhaustion and the Customer's recovery. -----------------------------------------------
+    #
+    # The cascade used to hand an unmet job straight to the quote flow, which changed what the
+    # Customer had bought into without asking them. It now parks here and waits.
+
+    #: When the cascade ran out of reach. Null on a booking that has never been parked — including
+    #: one parked and then retried, which clears it, because it is a live cascade again.
+    exhausted_at = models.DateTimeField(null=True, blank=True)
+    #: Why it ran out: `cascade_exhausted` (the widening steps are spent) or `no_eligible_leads`
+    #: (nobody in reach at this width). Two different conversations for support to have.
+    exhaustion_reason_code = models.SlugField(max_length=80, blank=True)
+    #: How many times the Customer has asked for a wider search. Bounds the retry so a request
+    #: cannot loop the cascade forever, and records that they kept trying.
+    retry_count = models.PositiveSmallIntegerField(default=0)
 
     # --- Wave C6 (`M2-BE-719`): the free re-dispatch entitlement. ------------------------------
     #

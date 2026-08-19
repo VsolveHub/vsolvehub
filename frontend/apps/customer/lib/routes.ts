@@ -39,6 +39,30 @@ export function requestHref(requirementId: string): string {
   return `/requests/${requirementId}`;
 }
 
+/**
+ * The quotes on one requirement — the screen that answers "what did they say".
+ *
+ * Separate from `requestHref` because a notice about a quote and a notice about
+ * a request want different destinations. "Unlock to read the full quote" landing
+ * on the request page is a link that is technically correct and practically a
+ * dead end: the reader has to find the quotes themselves, on the one screen
+ * whose whole purpose was to be found.
+ */
+export function requestQuotesHref(requirementId: string): string {
+  return `/requests/${requirementId}/quotes`;
+}
+
+/**
+ * One site visit's own page: who is coming, the arrival code, what happens next.
+ *
+ * Nested under the requirement rather than living at `/visits/{id}` because a
+ * visit has no meaning without the request it belongs to — the breadcrumb, the
+ * plan it is a share of, and the estimate it is owed are all read from there.
+ */
+export function visitHref(requirementId: string, siteVisitId: string): string {
+  return `/requests/${requirementId}/visits/${siteVisitId}`;
+}
+
 /** The Customer's list of requests. Where a failed record read falls back to. */
 export const REQUESTS_HREF = "/requests";
 
@@ -73,6 +97,17 @@ export function bookCrewFeeHref(requirementId: string): string {
 /** One agreement, keyed by the engagement so a months-old notification resolves. */
 export function engagementHref(engagementId: string): string {
   return `/engagements/${engagementId}`;
+}
+
+/**
+ * The receipt for the fee Vsolve collected on one engagement.
+ *
+ * Its own route rather than a modal, for the reason `book-visits` is one: a
+ * receipt is a record somebody comes back to, forwards to whoever keeps their
+ * books, and expects to find at a URL. A dialog cannot be any of those.
+ */
+export function receiptHref(engagementId: string): string {
+  return `/engagements/${engagementId}/receipt`;
 }
 
 /** One stage's own review route — the money screen, reachable from a notification. */

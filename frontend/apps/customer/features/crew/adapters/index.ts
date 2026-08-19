@@ -1,3 +1,4 @@
+import type { Schemas } from "@vsolve/api-client";
 import type {
   BookingFee,
   RateCardBooking,
@@ -102,6 +103,14 @@ export interface RateDisclosureView {
   totalLabel: string;
   /** Paid direct to the lead at day end. Vsolve never holds it. */
   leadReceiptLabel: string;
+  /**
+   * The same cash for **one** day — what to have ready at the end of each shift.
+   *
+   * Read from the server rather than divided out of `leadReceiptLabel`, which
+   * would be arithmetic on a formatted string and, worse, arithmetic on the one
+   * disclosure that may not contain a number this client produced.
+   */
+  leadDayReceiptLabel: string;
   /** The one online charge, and the only money Vsolve collects on this path. */
   bookingFeeLabel: string;
   /** What counts as a day. */
@@ -122,6 +131,7 @@ export function toRateDisclosureView(preview: RatePreview): RateDisclosureView |
     preview.day_rate_paise === null ||
     preview.total_customer_paise === null ||
     preview.lead_receipt_paise === null ||
+    preview.lead_day_receipt_paise === null ||
     preview.booking_fee_paise === null ||
     preview.standard_day_hours === null ||
     preview.overtime_hourly_paise === null
@@ -134,6 +144,7 @@ export function toRateDisclosureView(preview: RatePreview): RateDisclosureView |
     dayRateLabel: formatMoney(preview.day_rate_paise),
     totalLabel: formatMoney(preview.total_customer_paise),
     leadReceiptLabel: formatMoney(preview.lead_receipt_paise),
+    leadDayReceiptLabel: formatMoney(preview.lead_day_receipt_paise),
     bookingFeeLabel: formatMoney(preview.booking_fee_paise),
     standardDayHours: preview.standard_day_hours,
     overtimeHourlyLabel: formatMoney(preview.overtime_hourly_paise),
@@ -186,6 +197,8 @@ export interface BookingView {
   dayRateLabel: string;
   totalLabel: string;
   leadReceiptLabel: string;
+  /** The whole crew's cash for one day, frozen at the booking's own components. */
+  leadDayReceiptLabel: string;
   bookingFeeLabel: string;
   standardDayHours: number;
   overtimeHourlyLabel: string;
@@ -208,6 +221,7 @@ export function toBookingView(booking: RateCardBooking): BookingView {
     dayRateLabel: formatMoney(booking.day_rate_paise),
     totalLabel: formatMoney(booking.total_customer_paise),
     leadReceiptLabel: formatMoney(booking.lead_receipt_paise),
+    leadDayReceiptLabel: formatMoney(booking.lead_day_receipt_paise),
     bookingFeeLabel: formatMoney(booking.booking_fee_paise),
     standardDayHours: booking.standard_day_hours,
     overtimeHourlyLabel: formatMoney(booking.overtime_hourly_paise),
@@ -218,6 +232,90 @@ export function toBookingView(booking: RateCardBooking): BookingView {
     fallbackReasonCode: booking.fallback_reason_code,
     fellBackAt: booking.fell_back_at,
     confirmedAt: booking.confirmed_at,
+  };
+}
+
+/* --------------------------------------------------------------------------
+   The live search — `M2-FE-427`
+   -------------------------------------------------------------------------- */
+
+type CascadeProgress = Schemas["CascadeProgress"];
+
+/** One column of the waiting screen's progress strip. */
+export interface CascadeWaveView {
+  /** 1-based. Matches the server's own wave numbering. */
+  number: number;
+  state: "done" | "current" | "upcoming";
+  /**
+   * What is known about this wave, in the server's own facts.
+   *
+   * The current wave says how many leads are holding its offer. The **next** one
+   * says when it fires, because that is the only future wave whose timing the
+   * server knows — the ones after it depend on offers that have not been sent.
+   * Everything later says nothing at all rather than a projected time, which
+   * would be this client inventing a schedule.
+   */
+  detail: string | null;
+  /** The ISO instant this wave fires, for the one wave that has one. */
+  firesAt: string | null;
+}
+
+export interface CascadeView {
+  waves: readonly CascadeWaveView[];
+  offersOut: number;
+  /** True while at least one lead is holding an offer. */
+  hasOffersOut: boolean;
+}
+
+/**
+ * The cascade as a strip of waves.
+ *
+ * The mobile design had one bar and one sentence; a wide screen can show the
+ * whole shape of the search at once, which is the honest answer to "is anything
+ * happening" — a Customer can see that there are four waves, which one is out,
+ * and when it widens.
+ *
+ * `null` when no search is running. The waiting screen is the only caller and it
+ * renders nothing rather than an empty strip: a progress bar for a search that
+ * has stopped is worse than no progress bar.
+ */
+export function toCascadeView(cascade: CascadeProgress | null): CascadeView | null {
+  if (cascade === null || cascade.total_waves < 1) return null;
+
+  const waves = Array.from({ length: cascade.total_waves }, (_, index) => {
+    const number = index + 1;
+    const state: CascadeWaveView["state"] =
+      number < cascade.wave ? "done" : number === cascade.wave ? "current" : "upcoming";
+
+    if (state === "current") {
+      return {
+        number,
+        state,
+        detail:
+          cascade.offers_out === 0
+            ? "Sending now"
+            : `${cascade.offers_out} ${cascade.offers_out === 1 ? "supervisor" : "supervisors"}`,
+        firesAt: null,
+      };
+    }
+    if (state === "done") {
+      return { number, state, detail: "No takers", firesAt: null };
+    }
+    // Only the wave immediately after the current one has a known time, and only
+    // while the server published one.
+    const isNext = number === cascade.wave + 1;
+    return {
+      number,
+      state,
+      detail: isNext && cascade.next_wave_at !== null ? null : "If needed",
+      firesAt: isNext ? cascade.next_wave_at : null,
+    };
+  });
+
+  return {
+    waves,
+    offersOut: cascade.offers_out,
+    hasOffersOut: cascade.offers_out > 0,
   };
 }
 

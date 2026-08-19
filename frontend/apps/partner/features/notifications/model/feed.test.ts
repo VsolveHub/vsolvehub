@@ -123,6 +123,21 @@ describe("where a notice leads", () => {
     }
   });
 
+  it("opens invitation notices on the enquiry they actually refer to", () => {
+    expect(
+      targetHref({ kind: "PROJECT_INVITATION", id: "invite-1" }, [
+        WORKFORCE_WORKSPACE,
+        PROJECT_WORKSPACE,
+      ]),
+    ).toBe("/projects/enquiries/invite-1");
+    expect(
+      targetHref({ kind: "WORKFORCE_INVITATION", id: "invite-2" }, [
+        WORKFORCE_WORKSPACE,
+        PROJECT_WORKSPACE,
+      ]),
+    ).toBe("/workforce/enquiries/invite-2");
+  });
+
   it("leads nowhere for a kind this build has never heard of", () => {
     // `kind` is published as a bare string, so a future target type reaches this
     // bundle as an unknown word. Nothing is the honest rendering.

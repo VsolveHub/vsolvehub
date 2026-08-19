@@ -108,6 +108,9 @@ from .enquiries import (
     SiteVisitSerializer,
     VendorAttachmentListSerializer,
     VendorAttachmentSerializer,
+    VisitArrivalCodeEntrySerializer,
+    VisitArrivalCodeSerializer,
+    VisitVendorSerializer,
 )
 from .operations import (
     AssistedClarificationSerializer,
@@ -373,6 +376,8 @@ __all__ = [
     "VendorAttachmentSerializer",
     "VendorCardListSerializer",
     "VendorCardSerializer",
+    "VisitArrivalCodeEntrySerializer",
+    "VisitArrivalCodeSerializer",
     "VisitArrivalSerializer",
     "VisitNoShowSerializer",
     "VisitPlanChooseSerializer",
@@ -385,6 +390,7 @@ __all__ = [
     "VisitSlotDaySerializer",
     "VisitSlotGridSerializer",
     "VisitSlotSerializer",
+    "VisitVendorSerializer",
     "WarrantyClaimSerializer",
     "WorkspaceGrantListSerializer",
     "WorkspaceGrantSerializer",

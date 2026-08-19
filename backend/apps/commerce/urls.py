@@ -12,6 +12,7 @@ from apps.commerce.views import (
     RefundDetailView,
     SimulatedCaptureView,
     TaxDocumentDetailView,
+    TaxDocumentDownloadView,
 )
 
 urlpatterns = [
@@ -32,4 +33,8 @@ urlpatterns = [
     path("refunds/<uuid:refund_id>/", RefundDetailView.as_view()),
     path("orders/<uuid:order_id>/", OrderDetailView.as_view()),
     path("tax-documents/<uuid:document_id>/", TaxDocumentDetailView.as_view()),
+    path(
+        "tax-documents/<uuid:document_id>/download/",
+        TaxDocumentDownloadView.as_view(),
+    ),
 ]

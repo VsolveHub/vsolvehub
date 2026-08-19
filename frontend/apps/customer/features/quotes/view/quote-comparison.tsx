@@ -1,8 +1,14 @@
 "use client";
 
-import { Badge } from "@vsolve/ui";
+import { Badge, Button, buttonStyles } from "@vsolve/ui";
+import Link from "next/link";
 
-import { cheapestIndex, toComparisonRows, type QuoteCardView } from "../adapters";
+import {
+  cheapestIndex,
+  savingsAgainstDearest,
+  toComparisonRows,
+  type QuoteCardView,
+} from "../adapters";
 
 /**
  * Side by side, on one tax basis — `M2-FE-408`.
@@ -45,25 +51,50 @@ export interface QuoteComparisonProps {
    * are not comparable as though they were.
    */
   isComparableOnOneBasis: boolean;
+  /**
+   * Where the full estimate is read. One href per card, by proposal id.
+   *
+   * The table compares; it does not reproduce an estimate. Scope detail, stage
+   * text and the vendor's own wording stay behind this link, because a table
+   * that tried to hold them would stop being scannable — which is the only
+   * reason to build a table.
+   */
+  detailHrefFor?: (proposalId: string) => string;
+  /** Choosing from the table. Omit and the column footers render no action. */
+  onChoose?: (proposalId: string) => void;
+  isChoosing?: boolean;
 }
 
-export function QuoteComparison({ cards, isComparableOnOneBasis }: QuoteComparisonProps) {
-  if (cards.length < 2) return null;
+export function QuoteComparison({
+  cards,
+  isComparableOnOneBasis,
+  detailHrefFor,
+  onChoose,
+  isChoosing = false,
+}: QuoteComparisonProps) {
+  // One estimate is still worth a table: the rows are the questions somebody
+  // should ask about *any* estimate, and answering them in a fixed order is
+  // useful even with nothing to compare against. Zero is not — an empty table is
+  // a header row and a promise.
+  if (cards.length === 0) return null;
 
   const rows = toComparisonRows(cards);
   const equivalent = rows.filter((row) => row.equivalent);
   const assumptions = rows.filter((row) => !row.equivalent);
   const cheapest = isComparableOnOneBasis ? cheapestIndex(cards) : null;
+  const savings = savingsAgainstDearest(cards, isComparableOnOneBasis);
 
   return (
     <section aria-labelledby="comparison-heading" className="mt-6">
       <h2 id="comparison-heading" className="text-lg font-semibold text-text">
-        Side by side
+        {cards.length === 1 ? "The estimate" : "Side by side"}
       </h2>
       <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        {isComparableOnOneBasis
-          ? "Every professional here quoted tax the same way, so the totals below are the amount you would actually pay."
-          : "These quotes state tax differently, so we are not ranking them. Read the totals with that in mind."}
+        {cards.length === 1
+          ? "Priced after seeing the site. Nothing is charged until you choose it."
+          : isComparableOnOneBasis
+            ? "Every professional here quoted tax the same way, so the totals below are the amount you would actually pay. Nothing is charged until you choose one."
+            : "These quotes state tax differently, so we are not ranking them. Read the totals with that in mind."}
       </p>
 
       {/* Wide content scrolls inside its own container rather than making the
@@ -105,7 +136,7 @@ export function QuoteComparison({ cards, isComparableOnOneBasis }: QuoteComparis
           </thead>
 
           <tbody>
-            {equivalent.map((row) => (
+            {equivalent.map((row, rowIndex) => (
               <tr key={row.label}>
                 <th
                   scope="row"
@@ -119,6 +150,14 @@ export function QuoteComparison({ cards, isComparableOnOneBasis }: QuoteComparis
                     className="border-b border-line p-3 align-top text-text"
                   >
                     {value ?? <span className="text-text-secondary">Not stated</span>}
+                    {/* The delta rides on the totals row only, under the figure
+                        it is about. It does the subtraction nobody wants to do
+                        against two six-digit amounts. */}
+                    {rowIndex === 0 && savings[index] != null ? (
+                      <span className="mt-0.5 block text-sm font-semibold text-success-text">
+                        {savings[index]} lower
+                      </span>
+                    ) : null}
                   </td>
                 ))}
               </tr>
@@ -161,8 +200,61 @@ export function QuoteComparison({ cards, isComparableOnOneBasis }: QuoteComparis
               ))}
             </tbody>
           ) : null}
+
+          {/* The actions, as the table's own footer rather than a row of buttons
+              floating under it — so each control stays in the column it belongs
+              to, and a screen reader still hears the vendor's name as the
+              column header when it reaches one. */}
+          {detailHrefFor !== undefined || onChoose !== undefined ? (
+            <tfoot>
+              <tr>
+                <th scope="row" className="p-3 text-left">
+                  <span className="sr-only">Actions</span>
+                </th>
+                {cards.map((card) => (
+                  <td key={`actions-${card.proposalId}`} className="p-3 align-top">
+                    <div className="flex flex-wrap gap-2">
+                      {detailHrefFor !== undefined ? (
+                        <Link
+                          href={detailHrefFor(card.proposalId)}
+                          className={buttonStyles({ variant: "outline", size: "sm" })}
+                        >
+                          Read it
+                          <span className="sr-only">
+                            {` — ${card.vendorName ?? "this estimate"}`}
+                          </span>
+                        </Link>
+                      ) : null}
+                      {onChoose !== undefined ? (
+                        <Button
+                          size="sm"
+                          // The server decides whether an estimate can still be
+                          // chosen — expired, withdrawn, already superseded — and
+                          // the card carries its answer. Offering a control the
+                          // command would refuse is how a Customer meets a 409
+                          // after making a decision.
+                          disabled={!card.isSelectable || isChoosing}
+                          onClick={() => onChoose(card.proposalId)}
+                        >
+                          Choose
+                          <span className="sr-only">
+                            {` ${card.vendorName ?? "this estimate"}`}
+                          </span>
+                        </Button>
+                      ) : null}
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
+
+      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
+        Prices are the professionals&rsquo; own. We do not mark them up, and
+        nothing is charged until you choose one.
+      </p>
     </section>
   );
 }

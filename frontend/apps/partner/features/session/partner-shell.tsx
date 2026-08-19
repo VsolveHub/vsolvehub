@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
+import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
 import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import {
   activeWorkspace,
@@ -302,6 +303,24 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
 
       {/* ---- Bottom tab bar ---- */}
       <BottomTabBar items={navItems} />
+
+      {/*
+        A live crew offer, on whatever screen the lead is looking at.
+
+        Mounted in the shell rather than on `/offers` because an A3 offer expires
+        in about two minutes and the cascade pushes it — a lead reading their
+        earnings when one lands would otherwise never see it, and a wave would
+        widen for no reason. The sheet suppresses itself on `/offers`, where the
+        list is already on screen.
+
+        Gated on the grant, not merely on the session. This shell also renders
+        for `/apply`, where `requirePartnerRole` is deliberately off because
+        Django grants `partner` when an application is *created* — so without
+        this check the crew-offer endpoint would answer `403` to every person who
+        has not applied yet. It shares one polled query with the offers page, so
+        mounting it here costs no extra requests.
+      */}
+      {hasRole(guard.user, PARTNER_ROLE) ? <LiveOfferSheet /> : null}
     </div>
   );
 }

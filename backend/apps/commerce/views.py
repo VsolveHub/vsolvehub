@@ -8,6 +8,7 @@ from uuid import UUID
 from django.conf import settings
 from django.db.models import Prefetch
 from django.db.models.query import QuerySet
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -18,6 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.commerce.documents import order_invoice_spec, render_pdf
 from apps.commerce.exceptions import PaymentConflictError, PaymentProviderUnavailableError
 from apps.commerce.models import Order, PaymentAttempt, Refund, TaxDocument
 from apps.commerce.providers import PaymentProviderError, get_payment_provider
@@ -453,3 +455,57 @@ class TaxDocumentDetailView(APIView):
             order__customer=user,
         )
         return Response(TaxDocumentSerializer(document).data)
+
+
+class TaxDocumentDownloadView(APIView):
+    """The M1 invoice as a PDF the Customer can keep.
+
+    Rendered on demand rather than stored: the `TaxDocument` and its lines are the record, the PDF
+    is a view of them, and a stored file is a second copy that can disagree with the first after a
+    credit note. Rendering is cheap and the numbers are already final — `_issue_document` allocated
+    them at capture — so a re-download can never mint a second number.
+
+    Resolved through `order__customer`, the same ownership path the JSON detail uses. Existence is
+    private: somebody else's invoice answers `404`, not `403`.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        tags=["Orders"],
+        operation_id="tax_document_download",
+        description=(
+            "Download this invoice as a PDF. `Content-Disposition: attachment`, so a browser saves "
+            "it rather than rendering it in a tab.\n\n"
+            "A document flagged `is_test` renders with a **TEST DOCUMENT** watermark across the "
+            "page — a test invoice that printed like a real one is a test invoice somebody files "
+            "with their accounts."
+        ),
+        responses={
+            (200, "application/pdf"): OpenApiTypes.BINARY,
+            404: ApiErrorSerializer,
+        },
+    )
+    def get(self, request: Request, document_id: UUID) -> HttpResponse:
+        user = cast(User, request.user)
+        document = get_object_or_404(
+            TaxDocument.objects.prefetch_related("lines").select_related("order__customer"),
+            id=document_id,
+            order__customer=user,
+        )
+        pdf = render_pdf(order_invoice_spec(document))
+        return _pdf_response(pdf, filename=f"invoice-{document}.pdf")
+
+
+def _pdf_response(pdf: bytes, *, filename: str) -> HttpResponse:
+    """A downloaded document, with the headers that make a browser save it.
+
+    `Content-Length` is set explicitly so a client can show real progress, and the filename is
+    quoted because a document number contains characters a bare header value would break on.
+    """
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Content-Length"] = str(len(pdf))
+    # A financial document is per-Customer and must never be held by a shared cache.
+    response["Cache-Control"] = "private, no-store"
+    return response

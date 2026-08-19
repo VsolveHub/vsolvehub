@@ -118,6 +118,16 @@ export const m2AccessKeys = {
   /** `GET /requirements/{id}/selection/` — the live selection, or none. */
   selection: (requirementId: string) =>
     [...m2QueryKeys.requirements.detail(requirementId), "selection"] as const,
+  /**
+   * `GET /site-visits/{id}/arrival-code/` — the code the Customer reads out.
+   *
+   * Keyed on the visit rather than under the plan, because it is the one read on
+   * these screens that is not derived from the plan: it expires on its own
+   * clock, it is issued and re-issued independently, and folding it into the
+   * plan key would make every plan refetch pull a code nobody is looking at.
+   */
+  visitArrivalCode: (siteVisitId: string) =>
+    [...m2QueryKeys.visits.all, "arrival-code", siteVisitId] as const,
 } as const;
 
 /* --------------------------------------------------------------------------
@@ -369,9 +379,17 @@ export function visitPlanPhase(state: VisitPlanState): VisitPlanPhase {
   }
 }
 
-/** Poll only while the plan charge is in flight. See `isUnlockSettled`. */
+/**
+ * Poll while the visit plan can still move because somebody else acts.
+ *
+ * `PENDING` is the payment callback window. `CHOSEN` is the matching window:
+ * no money has moved, but a Partner can confirm a visit slot from another
+ * session and flip `checkout_available` plus the visit rows while the Customer
+ * is staring at the request. Stopping here leaves the tracker saying "Waiting
+ * for a professional" until a manual refresh.
+ */
 export function isVisitPlanSettled(state: VisitPlanState): boolean {
-  return state.plan === null || state.plan.status !== "PENDING";
+  return state.plan === null || !["CHOSEN", "PENDING"].includes(state.plan.status);
 }
 
 /**
@@ -711,6 +729,29 @@ export type CrewNoShowParty = Schemas["CrewNoShowRequest"]["party"];
 export const m2RateCardKeys = {
   state: (requirementId: string) =>
     [...m2QueryKeys.requirements.detail(requirementId), "rate-card"] as const,
+  /**
+   * The same read, priced at a size the draft has not been saved at.
+   *
+   * The booking screen puts the rate beside the form and keeps it correct as the
+   * Customer changes how many people they need, so it asks the server for a
+   * price per size rather than writing a draft on every press of a stepper.
+   *
+   * **Nested under `state`, which is the load-bearing part.** Every existing
+   * invalidation of `state(id)` matches this as a prefix, so a booking, a cancel
+   * or a no-show clears the sized previews too — without which the rail could go
+   * on quoting a rate card that has since been superseded. It is a separate
+   * entry rather than the same one because `setQueryData(state(id), ...)` in the
+   * book mutation writes a *booked* state, and that must not land in a cache
+   * slot the form is reading a price out of.
+   */
+  preview: (requirementId: string, headcount: number, days: number) =>
+    [
+      ...m2QueryKeys.requirements.detail(requirementId),
+      "rate-card",
+      "preview",
+      headcount,
+      days,
+    ] as const,
 } as const;
 
 /* --------------------------------------------------------------------------
@@ -829,6 +870,18 @@ export type RateCardBookingPhase =
   | "matching"
   | "offer_held"
   | "confirmed"
+  /**
+   * Nobody accepted, and the request is **waiting on the Customer**.
+   *
+   * Distinct from `fell_back` on purpose. The cascade used to hand an unmet job
+   * to the quote flow by itself, which changed the product the Customer had
+   * asked for without asking them. It now stops here, changes nothing, and
+   * offers three ways out — search wider, take quotes instead, or cancel.
+   *
+   * This is the only crew phase with anything to press, which is why it is the
+   * only one that can be reached and then left in more than one direction.
+   */
+  | "exhausted"
   | "fell_back"
   | "cancelled";
 
@@ -842,6 +895,8 @@ export function bookingPhase(state: RateCardState): RateCardBookingPhase {
       return "offer_held";
     case "CONFIRMED":
       return "confirmed";
+    case "EXHAUSTED":
+      return "exhausted";
     case "FELL_BACK":
       return "fell_back";
     case "CANCELLED":

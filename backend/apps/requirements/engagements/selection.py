@@ -1,13 +1,28 @@
-"""The Customer chooses one vendor, and the clock that gives the vendor the last word.
+"""The Customer chooses one vendor, and the job opens.
 
-Everything between "this quote, please" and the moment the vendor either commits or loses the
-chance: the paywall applied where it decides something, the single-live-selection guard, the
-decline and expiry paths that hand the requirement back with its entitlement untouched, and the
-reconfirmation that re-runs every check from quoting time before it lets the vendor in.
+## The handshake that used to be here, and why it is gone
+
+A selection used to sit in `PENDING_RECONFIRMATION` until the vendor pressed a second button. It
+existed for a good reason — a vendor whose approval or diary had changed since quoting must not end
+up holding authorized money against unauthorized work — but it bought that with a whole extra step,
+a deadline, an expiry sweep and a state in which the Customer had chosen somebody who had not yet
+agreed to be chosen. In practice a vendor who has quoted and been picked wants the job; asking them
+to confirm that they still want it is friction charged to both sides for a rare case.
+
+**The checks did not go with it.** Everything reconfirmation re-ran — capability against this area
+and start date, the vendor's own diary, the quote's validity — now runs inside `select_proposal`,
+before the selection is created. So the guarantee is unchanged and the *timing* moved: a vendor who
+cannot take the job is one the Customer is refused at the moment they choose, rather than one who
+declines a day later. That is the better place for it, because it is the only place where the
+Customer can still choose somebody else.
+
+The one capability genuinely lost is a vendor's ability to say no *after* being picked. That is
+deliberate, and cancellation remains the path for it — with its own remedies, which a silent
+decline never had.
 
 The boundary: this module decides *whether* an engagement may open. What the engagement then **is**
 — frozen terms, stage layout, the A3/A5 divergence — is `opening`, which this module calls at the
-end of `reconfirm_selection` and which never calls back.
+end of `select_proposal` and which never calls back.
 """
 
 import uuid
@@ -16,10 +31,9 @@ from datetime import datetime
 from django.db import transaction
 from django.utils import timezone
 
-from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_capability_active
-from apps.requirements import access, matching, pricing
+from apps.requirements import access, matching
 from apps.requirements.exceptions import (
     CapacityUnavailableError,
     ProposalNotSelectableError,
@@ -98,13 +112,22 @@ def select_proposal(
     if requirement.archetype == A5 and proposal.site_visit_id is None:
         raise ProposalNotSelectableError("An estimate must come from a completed site visit.")
 
+    # Everything the vendor's reconfirmation used to re-run, run here instead. A capability or a
+    # diary can move between quoting and choosing, and a vendor who cannot take the job must not be
+    # selectable — this is the last moment the Customer can still pick somebody else.
+    _assert_vendor_can_still_take_it(requirement=requirement, proposal=proposal)
+
     selection = ProposalSelection.objects.create(
         requirement=requirement,
         proposal=proposal,
         partner=proposal.partner,
-        reconfirm_by=pricing.reconfirmation_deadline(requirement),
+        # Confirmed on creation. Nothing writes `PENDING_RECONFIRMATION` any more; the status
+        # survives on the model for rows written before this changed, and `expire_selection` still
+        # answers for them.
+        status=ProposalSelection.Status.CONFIRMED,
+        decided_at=timezone.now(),
     )
-    proposal.status = Proposal.Status.SELECTED
+    proposal.status = Proposal.Status.ACCEPTED
     proposal.save(update_fields=("status", "updated_at"))
     from_status = requirement.status
     requirement.status = CustomerRequirement.Status.SELECTED
@@ -121,18 +144,52 @@ def select_proposal(
         reason_code="proposal_selected",
         reason=f"proposal:{proposal.id} partner:{proposal.partner_id}",
     )
-    enqueue_outbox_event(
-        aggregate_type="requirement",
-        aggregate_id=requirement.id,
-        event_type="m2.proposal.selected",
-        idempotency_key=f"proposal-selected:{selection.id}",
-        payload={
-            "requirement_id": str(requirement.id),
-            "selection_id": str(selection.id),
-            "proposal_id": str(proposal.id),
-        },
-    )
+    # No `m2.proposal.selected` event any more.
+    #
+    # It existed to summon the vendor to reconfirm, and there is nothing left to summon them to.
+    # The moment is now `m2.engagement.opened`, which `_open_engagement` emits and which already
+    # notifies both sides — so the vendor still hears, in one notice rather than two seconds apart.
+    # Emitting it with no consumer would dead-letter, and routing it to a second notification would
+    # tell the vendor the same thing twice.
+    _open_engagement(requirement=requirement, selection=selection, proposal=proposal)
     return selection
+
+
+def _assert_vendor_can_still_take_it(
+    *,
+    requirement: CustomerRequirement,
+    proposal: Proposal,
+) -> None:
+    """Re-run, at selection, every check the vendor's reconfirmation used to run.
+
+    Not a duplicate of the checks made when they accepted the enquiry: months of calendar and
+    coverage changes can sit between quoting and being chosen, and a vendor whose approval lapsed
+    in that window must not end up holding authorized money against unauthorized work.
+    """
+
+    if proposal.valid_until is not None and proposal.valid_until <= timezone.now():
+        raise ProposalNotSelectableError("This quote's validity has passed.")
+
+    assert_capability_active(
+        partner=proposal.partner,
+        variant=requirement.variant,
+        service_area=requirement.service_area,
+        on_day=(
+            requirement.requested_start.date() if requirement.requested_start is not None else None
+        ),
+    )
+    # The vendor's own diary. `committed_capacity_partner_ids` reads both notions of busy — M2
+    # holds from other enquiries and A1 bookings on the shared grid — and this vendor's own hold
+    # for *this* requirement is what `_hold_belongs_to_this_requirement` excludes, so the guard
+    # does not fire on its own footprint.
+    conflicting = matching.committed_capacity_partner_ids(
+        requirement=requirement,
+        partner_ids=[proposal.partner_id],
+    )
+    if proposal.partner_id in conflicting and not _hold_belongs_to_this_requirement(
+        requirement=requirement, partner_id=proposal.partner_id
+    ):
+        raise CapacityUnavailableError()
 
 
 def _restore_after_failed_selection(requirement: CustomerRequirement) -> None:

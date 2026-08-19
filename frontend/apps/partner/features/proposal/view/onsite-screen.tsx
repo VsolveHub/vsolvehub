@@ -13,7 +13,7 @@ import { PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
 import { traceForInvitation, type Proposal } from "../model/proposal-state";
 import { useMyProposals } from "../queries";
-import { OnsiteComposer } from "./onsite-composer";
+import { TapEstimateComposer } from "./tap-estimate-composer";
 
 /**
  * The route half of the on-site estimate (`M2-FE-315`).
@@ -122,9 +122,7 @@ function OnsiteEstimate({
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-text">{enquiry.serviceName}</h1>
         <p className="text-sm leading-6 text-text-secondary">
-          {enquiry.additionalDetails.trim() === ""
-            ? "Write what you found on site and what it will take."
-            : enquiry.additionalDetails}
+          Tap what the job needs and put a price on each one.
         </p>
       </header>
 
@@ -189,7 +187,7 @@ function OnsiteComposerWithRevision({
   });
 
   return (
-    <OnsiteComposer
+    <TapEstimateComposer
       enquiry={enquiry}
       visit={planVisitOf(enquiry.siteVisits)}
       enquiryHref={enquiryHref}

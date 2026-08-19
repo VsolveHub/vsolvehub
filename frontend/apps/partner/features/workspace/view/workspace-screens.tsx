@@ -1,5 +1,7 @@
 "use client";
 
+import { ProjectInvitationBanner } from "@/features/notifications/view/project-invitation-banner";
+
 import { WorkspaceHome } from "./workspace-home";
 import { WorkspacePending } from "./workspace-pending";
 import { WorkspaceRoute } from "./workspace-route";
@@ -32,7 +34,12 @@ export interface WorkspaceHomeScreenProps {
 export function WorkspaceHomeScreen({ workspaceKey }: WorkspaceHomeScreenProps) {
   return (
     <WorkspaceRoute workspaceKey={workspaceKey}>
-      {(workspace) => <WorkspaceHome workspace={workspace} />}
+      {(workspace) => (
+        <>
+          <ProjectInvitationBanner workspace={workspace} />
+          <WorkspaceHome workspace={workspace} />
+        </>
+      )}
     </WorkspaceRoute>
   );
 }

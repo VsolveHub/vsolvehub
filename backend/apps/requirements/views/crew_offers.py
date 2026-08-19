@@ -27,7 +27,7 @@ from apps.partners.models import Skill
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.requirements import crew_dispatch, rate_cards
 from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
-from apps.requirements.models import VendorInvitation
+from apps.requirements.models import RateCardBooking, VendorInvitation
 from apps.requirements.selectors import invitation_for_partner
 from apps.requirements.serializers import (
     CrewOfferAcceptedSerializer,
@@ -90,11 +90,23 @@ class PartnerCrewOfferListView(APIView):
     )
     def get(self, request: Request) -> Response:
         profile = _partner_profile(request)
+        now = timezone.now()
         invitations = (
             VendorInvitation.objects.filter(
                 partner=profile,
                 status=VendorInvitation.Status.INVITED,
                 requirement__rate_card_booking__isnull=False,
+                # Answerable **now**, not merely un-swept. `INVITED` alone is a status the sweep
+                # has not caught up with yet: the offer timeout is wall-clock minutes and the beat
+                # runs on its own schedule, so between the two there is a window in which a lapsed
+                # offer still reads as live. A lead who opens one in that window is told a race
+                # happened. Filtering on the deadline itself closes the window at the source
+                # rather than asking every client to remember.
+                responds_by__gt=now,
+                # And the job must still be one the cascade is dispatching. Exhaust and cancel
+                # withdraw outstanding offers, but this makes a missed withdrawal invisible rather
+                # than answerable.
+                requirement__rate_card_booking__status__in=(RateCardBooking.DISPATCHABLE_STATUSES),
             )
             .select_related("requirement__service_area", "partner")
             .order_by("responds_by", "created_at")

@@ -6,6 +6,7 @@ import { buttonStyles, formatMoney } from "@vsolve/ui";
 import { getCategory, getService } from "@/features/catalog/queries";
 import { bookCrewHref } from "@/lib/routes";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
+import { FitOutServicePicker } from "@/features/catalog/components/fit-out-service-picker";
 import { ServiceJsonLd } from "@/features/catalog/components/service-json-ld";
 import { VariantList } from "@/features/catalog/components/variant-list";
 import { PolicyList } from "@/features/catalog/components/policy-list";
@@ -18,6 +19,7 @@ export const revalidate = 300;
 
 /** The archetype that can be booked at a published day rate. Never rendered. */
 const A3_TIME_BLOCK = "A3_TIME_BLOCK";
+const FIT_OUT_PICKER_SERVICE = "interior-fit-out-project";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category, service: slug } = await params;
@@ -130,32 +132,36 @@ export default async function ServiceDetailPage({ params }: PageProps) {
         card for a defined outcome, and offering one would be a price for work
         nobody has seen.
       */}
-      <div className="flex flex-wrap items-center gap-3 pb-8">
-        {service.request_archetypes.includes(A3_TIME_BLOCK) ? (
-          <>
-            <Link
-              href={bookCrewHref(service.slug)}
-              className={buttonStyles({ size: "lg" })}
-            >
-              Book a crew
+      {service.slug === FIT_OUT_PICKER_SERVICE ? (
+        <FitOutServicePicker serviceSlug={service.slug} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-3 pb-8">
+          {service.request_archetypes.includes(A3_TIME_BLOCK) ? (
+            <>
+              <Link
+                href={bookCrewHref(service.slug)}
+                className={buttonStyles({ size: "lg" })}
+              >
+                Book a crew
+              </Link>
+              <Link
+                href={`/requests/new/${service.slug}`}
+                className={buttonStyles({ size: "lg", variant: "outline" })}
+              >
+                Get quotes instead
+              </Link>
+            </>
+          ) : service.request_archetypes.length > 0 ? (
+            <Link href={`/requests/new/${service.slug}`} className={buttonStyles({ size: "lg" })}>
+              Tell us what you need
             </Link>
-            <Link
-              href={`/requests/new/${service.slug}`}
-              className={buttonStyles({ size: "lg", variant: "outline" })}
-            >
-              Get quotes instead
+          ) : (
+            <Link href={`/book/${service.slug}`} className={buttonStyles({ size: "lg" })}>
+              Check price and availability
             </Link>
-          </>
-        ) : service.request_archetypes.length > 0 ? (
-          <Link href={`/requests/new/${service.slug}`} className={buttonStyles({ size: "lg" })}>
-            Tell us what you need
-          </Link>
-        ) : (
-          <Link href={`/book/${service.slug}`} className={buttonStyles({ size: "lg" })}>
-            Check price and availability
-          </Link>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {service.description ? (
         <section className="border-t border-line py-6">

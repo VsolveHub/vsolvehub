@@ -244,12 +244,79 @@ function joinOrNull(lines: readonly string[]): string | null {
  * across three workforce quotes is noise that makes the two rows that matter
  * harder to find.
  */
+/**
+ * How much cheaper each estimate is than the dearest one, in the same words.
+ *
+ * The one number on the comparison screen that is neither a price nor a total,
+ * and the only arithmetic this feature performs besides `comparableTotalPaise`.
+ * It is a **difference between two server figures**, both already normalised
+ * onto one tax basis, and it exists because the alternative is every Customer
+ * doing the same subtraction in their head against two six-digit rupee amounts.
+ *
+ * `null` for the dearest estimate and for every entry when they tie, because
+ * "₹0 lower" is not a fact anybody needs and marking a tie would be picking a
+ * winner arbitrarily. Also `null` throughout when the totals are not comparable
+ * — the caller passes `false` and no delta is claimed at all.
+ */
+export function savingsAgainstDearest(
+  cards: readonly QuoteCardView[],
+  isComparableOnOneBasis: boolean,
+): readonly (string | null)[] {
+  if (!isComparableOnOneBasis || cards.length < 2) return cards.map(() => null);
+  const dearest = Math.max(...cards.map((card) => card.payablePaise));
+  return cards.map((card) =>
+    card.payablePaise < dearest ? formatMoney(dearest - card.payablePaise) : null,
+  );
+}
+
+/**
+ * The first stage a Customer would have to fund, and what it buys.
+ *
+ * Read straight off `stages[0]` — its own `amount_paise` and its own title — so
+ * nothing here decides what "first" means or what it costs. `null` on an A3
+ * quote, which has no stages, and on an estimate whose vendor published none.
+ *
+ * It earns a row of its own because the headline total is not what somebody
+ * actually pays first. Two estimates within a few thousand rupees of each other
+ * can ask for very different amounts up front, and that difference is invisible
+ * on the totals alone.
+ */
+export function firstStageOf(
+  card: QuoteCardView,
+): { amountLabel: string; title: string } | null {
+  const stage = card.stages[0];
+  if (stage === undefined) return null;
+  return {
+    amountLabel: stage.amountLabel,
+    title: stage.title === "" ? "First stage" : stage.title,
+  };
+}
+
 export function toComparisonRows(cards: readonly QuoteCardView[]): readonly ComparisonRow[] {
   const rows: ComparisonRow[] = [
     {
       label: "What you pay",
       equivalent: true,
       values: cards.map((card) => card.payableLabel),
+    },
+    {
+      label: "First stage to fund",
+      equivalent: true,
+      values: cards.map((card) => {
+        const first = firstStageOf(card);
+        return first === null ? null : `${first.amountLabel} — ${first.title}`;
+      }),
+    },
+    {
+      label: "Timeline",
+      equivalent: true,
+      // The last stage's own end date, not a computed week count. A duration
+      // needs a start, and nothing published says when the work would begin —
+      // the vendor dated their stages and this reads the last of them.
+      values: cards.map((card) => {
+        const last = card.stages[card.stages.length - 1];
+        return last?.endsOn == null ? null : `Ends ${last.endsOn}`;
+      }),
     },
     {
       label: "How tax is stated",

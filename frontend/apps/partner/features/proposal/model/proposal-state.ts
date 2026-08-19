@@ -37,7 +37,9 @@ import type { EnquiryStatus } from "@/features/enquiry/model/enquiry-state";
  *   The contract is explicit that a lapse is never written as a rejection,
  *   because a vendor reading "the customer rejected you" against their own
  *   timeout is told the wrong story about their own standing.
- * - **`ACCEPTED`** is the vendor reconfirming after selection: price, date and
+ * - **`ACCEPTED`** is the customer's choice landing. It used to mean the
+ *   vendor had reconfirmed after being selected; there is no second step now,
+ *   so the job is open the moment it reaches this. Price, date and
  *   capacity all re-checked and agreed. It is the state the engagement opens
  *   from, and it is the only genuinely won one.
  */

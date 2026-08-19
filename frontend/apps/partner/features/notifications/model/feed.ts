@@ -132,12 +132,18 @@ const ENGAGEMENT_ROUTES: ReadonlyArray<readonly [workspaceKey: string, basePath:
  * The two requirement-scoped notices a Partner can receive
  * (`m2_proposal_selected`, `m2_proposal_rejected`) both carry their own answer in
  * the body, and the Enquiries tab is where the follow-up lives.
+ *
+ * Invitation notices are different: Django publishes an explicit
+ * `PROJECT_INVITATION` or `WORKFORCE_INVITATION`, because that id is the
+ * Partner's actual route into the customer's request.
  */
 export function targetHref(
   target: NotificationTarget | null,
   workspaceKeys: readonly string[] = [],
 ): string | null {
   if (target === null) return null;
+  if (target.kind === "PROJECT_INVITATION") return `/projects/enquiries/${target.id}`;
+  if (target.kind === "WORKFORCE_INVITATION") return `/workforce/enquiries/${target.id}`;
   if (target.kind !== "ENGAGEMENT") return null;
 
   const held = ENGAGEMENT_ROUTES.filter(([key]) => workspaceKeys.includes(key));

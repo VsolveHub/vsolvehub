@@ -36,10 +36,6 @@ export default function WorkforceBookingsPage() {
     <main>
       <EngagementListScreen
         mode="lead_only"
-        engagementHrefFor={(engagementId) => `/engagements/${engagementId}`}
-        stageHrefFor={(engagementId, stageId) =>
-          `/engagements/${engagementId}/stages/${stageId}`
-        }
         newRequestHref="/requests/new"
         requestsHref="/requests"
       />

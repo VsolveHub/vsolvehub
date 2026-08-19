@@ -4,6 +4,7 @@ import { describeError } from "@vsolve/query";
 import { Badge, Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
+import { engagementHref, stageHref } from "@/lib/routes";
 import { toEngagementLists, type EngagementRowView } from "../adapters";
 import { useEngagements } from "../queries";
 import {
@@ -44,17 +45,24 @@ import {
 export interface EngagementListScreenProps {
   /** Which half of the one list this screen is. */
   mode: "lead_only" | "managed";
-  engagementHrefFor: (engagementId: string) => string;
-  stageHrefFor: (engagementId: string, stageId: string) => string;
   /** Where a Customer with nothing here goes to start one. */
   newRequestHref: string;
   requestsHref: string;
 }
 
+/**
+ * `engagementHref` and `stageHref` are **imported, not taken as props**.
+ *
+ * They used to be `engagementHrefFor` / `stageHrefFor`, supplied by the page, so
+ * that this feature owned no route. The principle survives — the literals still
+ * live in one module — but the mechanism could not: the pages are Server
+ * Components, this is a Client Component, and React cannot serialize a function
+ * across that boundary. It threw on every render of `/bookings/workforce`,
+ * `/projects` and the quotes screen. `lib/routes.ts` exists for exactly this and
+ * says so in its own header.
+ */
 export function EngagementListScreen({
   mode,
-  engagementHrefFor,
-  stageHrefFor,
   newRequestHref,
   requestsHref,
 }: EngagementListScreenProps) {
@@ -119,11 +127,11 @@ export function EngagementListScreen({
               key={row.engagementId}
               row={row}
               nouns={nouns}
-              engagementHref={engagementHrefFor(row.engagementId)}
+              engagementHref={engagementHref(row.engagementId)}
               actionHref={
                 row.actionStageId === null
                   ? null
-                  : stageHrefFor(row.engagementId, row.actionStageId)
+                  : stageHref(row.engagementId, row.actionStageId)
               }
             />
           ))}

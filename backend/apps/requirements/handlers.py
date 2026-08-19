@@ -42,6 +42,15 @@ def handle_requirement_submitted(event: OutboxEvent) -> None:
     if not isinstance(requirement_id, str):
         raise ValueError("m2.requirement.submitted requires requirement_id.")
     open_matching_on_submission(requirement_id=UUID(requirement_id))
+    # And tell the Customer their request went out.
+    #
+    # This is the second effect `_register_notification_consumers` describes and refuses to add
+    # as a rival handler: the outbox permits exactly one consumer per event type, so a route in
+    # `NOTIFICATION_ROUTES` for an event that already has a dedicated handler has to be honoured
+    # *here*. Ordered after matching deliberately — the notice says the request is on its way to
+    # professionals, and saying so before the invitations are written would be a promise made
+    # ahead of the fact. Both writes share this handler's transaction, so neither lands alone.
+    notify_for_outbox_event(event)
 
 
 @register_outbox_handler(event_type="m2.capability.suspended")
@@ -82,6 +91,15 @@ def handle_capability_approved(event: OutboxEvent) -> None:
     record_acceptances_for_approved_capability(capability_id=UUID(capability_id))
 
 
+#: Routed events whose consumer is written by hand above, because they already had one.
+#:
+#: An entry here is a promise that the named handler calls `notify_for_outbox_event` itself —
+#: `tests/requirements/test_notification_handlers.py` holds that promise to account, because the
+#: failure mode is silent: the event settles, the domain effect happens, and the notice that was
+#: added to the routing table is simply never written.
+_ROUTED_BY_A_DEDICATED_HANDLER = frozenset({"m2.requirement.submitted"})
+
+
 def _consume_notification_event(event: OutboxEvent) -> None:
     """Adapt the domain command to the registry's shape.
 
@@ -109,9 +127,15 @@ def _register_notification_consumers() -> None:
     Registering here means those events now settle instead of dead-lettering. If one later needs a
     second effect, it belongs inside that event's own domain command, not in a rival handler —
     `register_outbox_handler` permits exactly one consumer per event type.
+
+    `_ROUTED_BY_A_DEDICATED_HANDLER` is that rule applied to itself. Skipping silently would let a
+    genuine double-registration hide as a skip, so the set is named, and the handler each entry
+    points at calls `notify_for_outbox_event` itself.
     """
 
     for event_type in notified_event_types():
+        if event_type in _ROUTED_BY_A_DEDICATED_HANDLER:
+            continue
         register_outbox_handler(event_type=event_type)(_consume_notification_event)
 
 

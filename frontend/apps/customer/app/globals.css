@@ -12,3 +12,36 @@ body {
   background: var(--color-surface-muted);
   color: var(--color-ink-900);
 }
+
+/*
+ * Printing.
+ *
+ * The M1 order receipt has offered a Print button since Milestone 1 and marks
+ * its own controls `print:hidden`. That variant works — Tailwind generates the
+ * `@media print` rule for it — but nothing ever hid the *application* around the
+ * document, so pressing Print produced the header, the navigation and the page
+ * chrome wrapped around the receipt. The button was there; the stylesheet it
+ * assumed was not.
+ *
+ * Hiding semantic landmarks rather than a component's class names, so this keeps
+ * working when the shell is rebuilt: anything that is a banner, a navigation
+ * region or a footer is furniture, and furniture does not belong on paper.
+ */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: white;
+  }
+
+  header,
+  nav,
+  footer,
+  [role="banner"],
+  [role="navigation"],
+  [role="contentinfo"] {
+    display: none !important;
+  }
+}

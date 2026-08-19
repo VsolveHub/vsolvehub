@@ -3,6 +3,8 @@
 import { Field, Input } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
+import { Segmented } from "@/features/booking/view/parts/segmented";
+import { FLEXIBILITY_OPTIONS } from "@/features/project-request/view/where-when-screen";
 import { useRequirement } from "./requirement-context";
 
 /**
@@ -33,6 +35,20 @@ import { useRequirement } from "./requirement-context";
  * It is asked as a **day**; the wire's field is a date-time, and the time
  * component is supplied at the adapter seam rather than by asking a Customer to
  * name a minute for a job that has not been scoped.
+ *
+ * ## There is deliberately only one date here
+ *
+ * "Needed by" used to sit directly below this one, required, asking the Customer
+ * to "pick the date the job stops being useful, not your ideal date". That is a
+ * hard question about their own patience, placed one field under a date that
+ * already answers it — two inputs for one intention, on the last screen before
+ * submitting.
+ *
+ * The server derives it now: a request stops being useful when the day the work
+ * was meant to begin passes with nobody found. `services._closing_date` holds
+ * that rule, the column it fills still drives the expiry sweep, and this
+ * description states the consequence rather than asking for it again. Do not
+ * re-add the field — the answer is already on the screen.
  */
 
 export interface WhereWhenScreenProps {
@@ -47,16 +63,30 @@ export interface WhereWhenScreenProps {
   addressPicker: ReactNode;
   /** Earliest date the control will accept. Today, from the container. */
   minDate: string;
+  /**
+   * Suppresses this screen's own heading.
+   *
+   * The one-page brief wraps each capture screen in a numbered section that
+   * supplies the heading, and two headings for one section is a broken document
+   * outline rather than a cosmetic duplicate.
+   */
+  hideHeading?: boolean;
 }
 
-export function WhereWhenScreen({ addressPicker, minDate }: WhereWhenScreenProps) {
+export function WhereWhenScreen({
+  addressPicker,
+  minDate,
+  hideHeading = false,
+}: WhereWhenScreenProps) {
   const { state, dispatch } = useRequirement();
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text">Where and when</h2>
+      {hideHeading ? null : (
+        <h2 className="text-lg font-semibold text-text">Where and when</h2>
+      )}
 
-      <div className="mt-5">
+      <div className={hideHeading ? "" : "mt-5"}>
         <p className="text-sm font-semibold text-text">Where is the work?</p>
         <div className="mt-2">{addressPicker}</div>
       </div>
@@ -64,7 +94,7 @@ export function WhereWhenScreen({ addressPicker, minDate }: WhereWhenScreenProps
       <div className="mt-6 flex flex-col gap-5">
         <Field
           label="Start from"
-          description="The day the work should begin. Professionals quote against this, and it is what we check when we look for a request you may already have open."
+          description="The day the work should begin. Professionals quote against this, and if nobody has taken it by then we close the request and keep nothing."
           required
         >
           <Input
@@ -80,42 +110,24 @@ export function WhereWhenScreen({ addressPicker, minDate }: WhereWhenScreenProps
           />
         </Field>
 
+        {/* Three bands rather than the checkbox this was. The wire has always
+            taken `flexibility_days` as a number, and yes-or-no could say the
+            dates were movable without saying how far — which is the difference
+            between a vendor offering next Tuesday and not bothering. */}
         <Field
-          label="Needed by"
-          description="After this date we stop looking and close the request. Nothing you have paid is kept — pick the date the job stops being useful to you, not your ideal date."
-          required
+          label="How firm is that date?"
+          description="More professionals can quote when the dates can move. This does not change the date above."
         >
-          <Input
-            type="date"
-            min={minDate}
-            value={state.serviceBy ?? ""}
-            onChange={(event) =>
-              dispatch({
-                type: "SET_SERVICE_BY",
-                serviceBy: event.target.value === "" ? null : event.target.value,
-              })
+          <Segmented
+            label="How firm is that date?"
+            name="flexibility"
+            options={[...FLEXIBILITY_OPTIONS]}
+            value={String(state.flexibilityDays)}
+            onChange={(days) =>
+              dispatch({ type: "SET_FLEXIBILITY_DAYS", days: Number(days) })
             }
           />
         </Field>
-
-        <div className="flex items-start gap-3">
-          <input
-            id="date-flexible"
-            type="checkbox"
-            checked={state.isDateFlexible}
-            onChange={(event) =>
-              dispatch({ type: "SET_DATE_FLEXIBLE", isFlexible: event.target.checked })
-            }
-            className="mt-1 size-5 rounded border-line text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          />
-          <label htmlFor="date-flexible" className="text-sm leading-6 text-text">
-            I can be flexible by a few days
-            <span className="mt-0.5 block text-text-secondary">
-              More professionals can quote when the dates can move. This does not
-              change the date above.
-            </span>
-          </label>
-        </div>
       </div>
     </div>
   );

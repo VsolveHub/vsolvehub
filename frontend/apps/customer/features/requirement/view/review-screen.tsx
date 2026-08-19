@@ -116,7 +116,11 @@ export function ReviewScreen({
   visitPlanChooser,
   submitBlockedReason = null,
 }: ReviewScreenProps) {
-  const { state, goTo, blocked } = useRequirement();
+  // `open`, not `goTo`. Every control below sends somebody back into a section
+  // to change it, and `goTo` refuses any screen not already in `visited` —
+  // which on a brief reached through the rail is most of them. An "Edit"
+  // link that silently does nothing is the same defect the rail had.
+  const { state, open, blocked } = useRequirement();
   const [openExtra, setOpenExtra] = useState<string | null>(null);
 
   // The schedule gets the shared `ScheduleSummary` rather than a row of its own,
@@ -149,7 +153,7 @@ export function ReviewScreen({
           <p className="font-semibold text-text">{categoryName}</p>
           <button
             type="button"
-            onClick={() => goTo("what")}
+            onClick={() => open("what")}
             className="mt-2 min-h-11 rounded-control font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             Change
@@ -162,7 +166,7 @@ export function ReviewScreen({
             <AddressSummary lines={addressLines} />
             <button
               type="button"
-              onClick={() => goTo("where_when")}
+              onClick={() => open("where_when")}
               className="min-h-11 shrink-0 rounded-control px-3 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
             >
               Change
@@ -182,12 +186,11 @@ export function ReviewScreen({
                 ? "No start date chosen"
                 : `From ${state.requestedStart}`
             }
-            serviceBy={state.serviceBy ?? undefined}
-            flexible={state.isDateFlexible}
+            flexible={state.flexibilityDays > 0}
           />
           <button
             type="button"
-            onClick={() => goTo("where_when")}
+            onClick={() => open("where_when")}
             className="min-h-11 shrink-0 rounded-control px-3 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             Change
@@ -207,7 +210,7 @@ export function ReviewScreen({
               </div>
               <button
                 type="button"
-                onClick={() => goTo(row.screen)}
+                onClick={() => open(row.screen)}
                 className="min-h-11 shrink-0 rounded-control px-3 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
                 Change

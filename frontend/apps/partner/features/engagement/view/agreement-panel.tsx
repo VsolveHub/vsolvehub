@@ -68,7 +68,7 @@ export function AgreementPanel({ engagement, wording }: AgreementPanelProps) {
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-semibold text-text">What you agreed to</h2>
           <p className="text-sm leading-6 text-text-secondary">
-            These terms were frozen when you reconfirmed and cannot be edited by anyone —
+            These terms were frozen when the customer chose your quote and cannot be edited by anyone —
             including Vsolve. A change to the work is a separate change request that you propose
             and the customer accepts.
           </p>

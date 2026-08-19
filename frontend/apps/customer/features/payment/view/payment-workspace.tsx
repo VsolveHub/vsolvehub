@@ -9,14 +9,15 @@ import { useBookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/checkout/view/money";
 
 import { paymentPhase, canReconcile, type PaymentAttempt } from "../model/outcome";
-import { SimulatedCapture } from "./simulated-capture";
 import { handoffTarget, openProviderCheckout } from "../model/provider-handoff";
 import {
   isNoAttemptStarted,
   isProviderUnreachable,
+  isSimulatedCaptureUnavailable,
   serverNow,
   useCheckoutPayment,
   useReconcilePayment,
+  useSimulateCapture,
   useStartPayment,
 } from "../queries";
 
@@ -78,6 +79,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
   const attemptQuery = useCheckoutPayment(checkoutId);
   const startPayment = useStartPayment();
   const reconcile = useReconcilePayment();
+  const simulateCapture = useSimulateCapture();
 
   /**
    * The widget is open. Tracked so the page cannot offer a second handoff over
@@ -113,6 +115,19 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
   }, [refreshAttempt]);
 
   async function handlePay(current: PaymentAttempt) {
+    if (
+      current.simulated_capture_available &&
+      !isSimulatedCaptureUnavailable(simulateCapture.error)
+    ) {
+      setHandoffError(null);
+      try {
+        await simulateCapture.mutateAsync(current.id);
+      } catch {
+        // The mutation owns the visible error while the screen stays retryable.
+      }
+      return;
+    }
+
     const target = handoffTarget(current);
     if (target === null) {
       setHandoffError(
@@ -136,6 +151,27 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
       // Unconditional, on both the success and the dismiss path. Django is the
       // only thing that knows what happened, and it knows it either way.
       refreshAttempt();
+    }
+  }
+
+  async function handleStartPayment() {
+    if (group === null || checkoutId === null || group.checkout_version === null) return;
+
+    setHandoffError(null);
+    try {
+      const created = await startPayment.mutateAsync({
+        checkoutId,
+        expectedCheckoutVersion: group.checkout_version,
+        groupId: group.id,
+      });
+      if (
+        created.simulated_capture_available &&
+        !isSimulatedCaptureUnavailable(simulateCapture.error)
+      ) {
+        await simulateCapture.mutateAsync(created.id);
+      }
+    } catch {
+      // The relevant mutation owns the visible error while the screen stays retryable.
     }
   }
 
@@ -216,18 +252,17 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
             {describeError(startPayment.error, "mutation").message}
           </p>
         ) : null}
+        {simulateCapture.isError && !isSimulatedCaptureUnavailable(simulateCapture.error) ? (
+          <p className="mt-4 text-sm text-critical" role="alert">
+            {describeError(simulateCapture.error, "mutation").message}
+          </p>
+        ) : null}
 
         <div className="mt-5">
           <Button
-            loading={startPayment.isPending}
-            loadingLabel="Opening payment"
-            onClick={() =>
-              startPayment.mutate({
-                checkoutId,
-                expectedCheckoutVersion: group.checkout_version!,
-                groupId: group.id,
-              })
-            }
+            loading={startPayment.isPending || simulateCapture.isPending}
+            loadingLabel={simulateCapture.isPending ? "Marking as paid" : "Opening payment"}
+            onClick={() => void handleStartPayment()}
           >
             Continue to payment
           </Button>
@@ -348,7 +383,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
         </p>
       ) : null}
 
-      {phase === "awaiting-provider" ? (
+      {phase === "awaiting-provider" && !attempt.simulated_capture_available ? (
         <p className="mt-4 text-sm text-text-secondary">
           This payment cannot be completed in the browser on this environment.
         </p>
@@ -360,33 +395,31 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
         </p>
       ) : null}
 
-      {phase === "awaiting-customer" || phase === "not-charged" ? (
-        <div className="mt-5">
-          <Button
-            loading={isHandingOff}
-            loadingLabel="Opening payment"
-            onClick={() => void handlePay(attempt)}
-          >
-            {phase === "not-charged" ? "Try payment again" : "Continue to payment"}
-          </Button>
-        </div>
+      {simulateCapture.isError && !isSimulatedCaptureUnavailable(simulateCapture.error) ? (
+        <p className="mt-4 text-sm text-critical" role="alert">
+          {describeError(simulateCapture.error, "mutation").message}
+        </p>
       ) : null}
 
-      {/* Every phase where money is still owed — including `awaiting-provider`,
-          which is exactly the state a fake provider produces and the one this
-          control exists for. Gating it on `awaiting-customer` was backwards:
-          `canHandOff` requires `provider_public_key`, the fake provider has
-          none, so the button was hidden precisely when nothing else could
-          complete the payment.
-
-          `paid` and `ambiguous` are excluded because there is nothing to
-          capture; `expired` because the reservation is already gone and
-          capturing would land in `capture_without_capacity` compensation. */}
-      {phase === "preparing" ||
+      {(attempt.simulated_capture_available && phase === "preparing") ||
       phase === "awaiting-customer" ||
       phase === "awaiting-provider" ||
       phase === "not-charged" ? (
-        <SimulatedCapture attempt={attempt} />
+        <div className="mt-5">
+          <Button
+            loading={isHandingOff || simulateCapture.isPending}
+            loadingLabel={
+              attempt.simulated_capture_available ? "Marking as paid" : "Opening payment"
+            }
+            onClick={() => void handlePay(attempt)}
+          >
+            {attempt.simulated_capture_available
+              ? "Mark as paid"
+              : phase === "not-charged"
+                ? "Try payment again"
+                : "Continue to payment"}
+          </Button>
+        </div>
       ) : null}
 
       <p className="mt-4 text-sm text-text-secondary">

@@ -21,6 +21,36 @@ import type { ServiceCard as ServiceCardData } from "../queries";
  * a price of its own, which is what keeps the catalogue and the quote in
  * agreement (B2 acceptance).
  */
+/**
+ * Where tapping this card goes.
+ *
+ * ## Why the guided lifecycles skip the service page
+ *
+ * An A1 service genuinely needs its own page: there are tasks to pick, a price
+ * that depends on which, and availability to check. A guided requirement has
+ * none of that. Its service page carried a paragraph and a single button whose
+ * only job was to say "continue" — an interstitial between the customer choosing
+ * a service and the screen that asks about it, which on a phone is a whole
+ * screen spent on a tap.
+ *
+ * So A3 goes straight to the crew form and A5 straight to the brief. The service
+ * page still exists and still works for anyone who deep-links to it; it simply
+ * stops being on the path.
+ *
+ * `request_archetypes` is the server's own list, which is what makes this a
+ * routing decision rather than a guess: `bookable_variant_id` marks the A1 path
+ * and nothing marked the others until this field was published.
+ */
+const A3_TIME_BLOCK = "A3_TIME_BLOCK";
+
+export function serviceHref(service: ServiceCardData, categorySlug: string): string {
+  if (service.request_archetypes.includes(A3_TIME_BLOCK)) {
+    return `/requests/book/${service.slug}`;
+  }
+  if (service.request_archetypes.length > 0) return `/requests/new/${service.slug}`;
+  return `/catalog/${categorySlug}/${service.slug}`;
+}
+
 export function ServiceCard({
   service,
   categorySlug,
@@ -30,7 +60,7 @@ export function ServiceCard({
 }) {
   return (
     <Link
-      href={`/catalog/${categorySlug}/${service.slug}`}
+      href={serviceHref(service, categorySlug)}
       className="group flex flex-col rounded-card border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-hover"
     >
       {/* Most of the catalogue has no cover art. A grey placeholder box would

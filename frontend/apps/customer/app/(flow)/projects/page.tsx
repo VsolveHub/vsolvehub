@@ -29,10 +29,6 @@ export default function ProjectsPage() {
     <main>
       <EngagementListScreen
         mode="managed"
-        engagementHrefFor={(engagementId) => `/engagements/${engagementId}`}
-        stageHrefFor={(engagementId, stageId) =>
-          `/engagements/${engagementId}/stages/${stageId}`
-        }
         newRequestHref="/requests/new"
         requestsHref="/requests"
       />

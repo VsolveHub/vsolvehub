@@ -31,7 +31,6 @@ export default async function RequestQuotesPage({
       <QuotesScreen
         requirementId={requirementId}
         requestHref={`/requests/${requirementId}`}
-        engagementHrefFor={(engagementId) => `/engagements/${engagementId}`}
       />
     </main>
   );

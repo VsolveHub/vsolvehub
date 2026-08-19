@@ -1,4 +1,4 @@
-import { type Screen } from "./screens";
+import { SCREENS, screenIndex, type Screen } from "./screens";
 import {
   type DraftAttachment,
   type LifecycleVerdict,
@@ -71,8 +71,19 @@ export type RequirementAction =
   | { type: "APPLY_VERDICT"; verdict: LifecycleVerdict | null; requirementId: string }
   | { type: "SET_ADDRESS"; addressId: string }
   | { type: "SET_REQUESTED_START"; requestedStart: string | null }
+  /**
+   * The hard deadline, which is optional and usually absent.
+   *
+   * `service_by` used to be a required second date on the capture screen with a
+   * paragraph explaining that it closes the request from any state when it
+   * passes. The server derives a closing date from the start day now, so this
+   * exists only for the Customers who genuinely have a deadline — and `null` is
+   * how they take it back off.
+   */
   | { type: "SET_SERVICE_BY"; serviceBy: string | null }
-  | { type: "SET_DATE_FLEXIBLE"; isFlexible: boolean }
+  /** Where the Customer was, from the URL, after a reload. See the reducer case. */
+  | { type: "RESTORE_SCREEN"; screen: Screen }
+  | { type: "SET_FLEXIBILITY_DAYS"; days: number }
   | { type: "ADD_ATTACHMENT"; attachment: DraftAttachment }
   | { type: "UPDATE_ATTACHMENT"; id: string; patch: Partial<DraftAttachment> }
   | { type: "REMOVE_ATTACHMENT"; id: string }
@@ -114,8 +125,7 @@ export type RequirementAction =
       answers: Readonly<Record<string, unknown>>;
       addressId: string | null;
       requestedStart: string | null;
-      serviceBy: string | null;
-      isDateFlexible: boolean;
+      flexibilityDays: number;
       additionalDetails: string;
       language: string | null;
       /**
@@ -129,6 +139,7 @@ export type RequirementAction =
       optionalDetails: Readonly<Record<string, unknown>>;
     }
   | { type: "GO_TO"; screen: Screen }
+  | { type: "OPEN"; screen: Screen }
   | { type: "ADVANCE" }
   | { type: "BACK" };
 
@@ -251,10 +262,12 @@ export function requirementReducer(
       return { ...state, requestedStart: action.requestedStart };
 
     case "SET_SERVICE_BY":
+      // Same reasoning as the start date: when the work must finish does not
+      // change what kind of work it is, so the verdict survives.
       return { ...state, serviceBy: action.serviceBy };
 
-    case "SET_DATE_FLEXIBLE":
-      return { ...state, isDateFlexible: action.isFlexible };
+    case "SET_FLEXIBILITY_DAYS":
+      return { ...state, flexibilityDays: action.days };
 
     case "ADD_ATTACHMENT":
       return { ...state, attachments: [...state.attachments, action.attachment] };
@@ -299,15 +312,63 @@ export function requirementReducer(
         answers: action.answers,
         addressId: action.addressId,
         requestedStart: action.requestedStart,
-        serviceBy: action.serviceBy,
-        isDateFlexible: action.isDateFlexible,
+        flexibilityDays: action.flexibilityDays,
         additionalDetails: action.additionalDetails,
         language: action.language,
         optionalDetails: action.optionalDetails,
       });
 
+    case "RESTORE_SCREEN": {
+      // Where the Customer was, from the URL, after a reload.
+      //
+      // **Not `GO_TO`.** That refuses any screen not already in `visited`, and
+      // `visited` starts empty on a fresh reducer and is deliberately not
+      // persisted — so a restore through `GO_TO` could never reach anything past
+      // the first screen, which is exactly the bug this replaces.
+      //
+      // Restoring a position implies the screens before it were visited: that is
+      // what makes Back work immediately after a reload instead of dead-ending.
+      // The per-screen guards are untouched, so landing here does not let anybody
+      // past a rule — a restored `review` still cannot submit without an address.
+      const index = screenIndex(action.screen);
+      if (index === -1) return state;
+      return {
+        ...state,
+        screen: action.screen,
+        visited: SCREENS.slice(0, index),
+      };
+    }
+
     case "GO_TO":
       return canNavigateTo(state, action.screen) ? { ...state, screen: action.screen } : state;
+
+    case "OPEN": {
+      // Navigation that does **not** require the target to have been visited.
+      //
+      // `GO_TO` refuses any forward move, which is right for the phone wizard: a
+      // stepper whose steps can be skipped is not a stepper. It is wrong for the
+      // desktop brief, where the rail is the navigation and every section is a
+      // button — there, `GO_TO` silently refused every forward click and every
+      // `goTo("review")` at the end of a successful send, so the CTA ran three
+      // writes and then appeared to do nothing at all.
+      //
+      // The guard is not lost, it moves: exactly as `ADVANCE` documents below,
+      // it lives in the container, which knows today's date and whether a
+      // duplicate is unresolved. `handleReviewAndSend` checks it before writing
+      // anything, and every per-screen rule still applies on the screen it
+      // belongs to. Reaching `review` has never been what lets somebody submit.
+      //
+      // The screen being left is recorded as visited, so `BACK` works from
+      // wherever this lands.
+      if (screenIndex(action.screen) === -1) return state;
+      return {
+        ...state,
+        screen: action.screen,
+        visited: state.visited.includes(state.screen)
+          ? state.visited
+          : [...state.visited, state.screen],
+      };
+    }
 
     case "ADVANCE":
       // The guard lives in the container, which knows today's date and whether a

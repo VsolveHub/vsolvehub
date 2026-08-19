@@ -280,13 +280,28 @@ export function toStandaloneStageView(stage: EngagementStage): StageView {
 export interface AccessReceiptView {
   /** The `M2A-` number, exactly as the server formatted it. */
   number: string;
-  /** What was paid for: the A3 unlock or the A5 visit plan. */
+  /** What was paid for: the booking fee, the A3 unlock, or the A5 visit plan. */
   purpose: string;
   amountLabel: string;
+  /**
+   * When the payment was verified, already formatted. Null on a row that
+   * predates the stamp — rendered conditionally rather than defaulted, because a
+   * receipt carrying today's date for a payment made last month is worse than a
+   * receipt carrying none.
+   */
+  paidOn: string | null;
 }
 
-/** `A3_QUOTE_UNLOCK` / `A5_VISIT_PLAN` — the two the server can produce. */
+/**
+ * The three kinds the server can produce.
+ *
+ * `A3_BOOKING_FEE` was missing here while the server had been publishing it
+ * since revision 4, so every A3 crew booking rendered its receipt through the
+ * de-slug fallback — "A3 booking fee", the wire's own constant, on the one line
+ * of the receipt meant to say in plain words what the money bought.
+ */
 const ACCESS_RECEIPT_PURPOSE: Record<string, string> = {
+  A3_BOOKING_FEE: "Booking your crew",
   A3_QUOTE_UNLOCK: "Seeing your quotes in full",
   A5_VISIT_PLAN: "Your site visits",
 };
@@ -302,6 +317,7 @@ function toAccessReceiptView(engagement: Engagement): AccessReceiptView | null {
     // server's own word for it.
     purpose: ACCESS_RECEIPT_PURPOSE[receipt.kind] ?? deSlug(receipt.kind),
     amountLabel: formatMoney(receipt.amount_paise),
+    paidOn: formatInstant(receipt.paid_at ?? null),
   };
 }
 

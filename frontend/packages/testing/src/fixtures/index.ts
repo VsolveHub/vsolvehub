@@ -246,6 +246,54 @@ export function serviceQuestion(
   };
 }
 
+export function fitOutQuestionOption(
+  overrides: Partial<Schemas["ServiceQuestionOption"]> = {},
+): Schemas["ServiceQuestionOption"] {
+  return {
+    id: "88888888-8888-4888-8888-888888888881",
+    code: "office-fit-out",
+    label: "Office fit-out",
+    description: "Open desks, meeting rooms, power and data, with a tidy move-in finish.",
+    ...overrides,
+  };
+}
+
+export function fitOutQuestion(
+  overrides: Partial<Schemas["ServiceQuestion"]> = {},
+): Schemas["ServiceQuestion"] {
+  return {
+    id: "99999999-9999-4999-8999-999999999998",
+    code: "fit_out_style",
+    prompt: "What kind of fit-out do you need?",
+    help_text: "Pick the closest match. We fill in the rest from the option you choose.",
+    kind: "SINGLE_CHOICE",
+    is_required: true,
+    validation_rules: null,
+    options: [
+      fitOutQuestionOption(),
+      fitOutQuestionOption({
+        id: "88888888-8888-4888-8888-888888888882",
+        code: "retail-fit-out",
+        label: "Retail fit-out",
+        description: "Shopfronts, display walls, lighting and customer flow.",
+      }),
+      fitOutQuestionOption({
+        id: "88888888-8888-4888-8888-888888888883",
+        code: "hospitality-fit-out",
+        label: "Hospitality fit-out",
+        description: "Counters, seating zones and durable guest-facing finishes.",
+      }),
+      fitOutQuestionOption({
+        id: "88888888-8888-4888-8888-888888888884",
+        code: "shell-core-completion",
+        label: "Shell and core completion",
+        description: "Partitions, ceilings, flooring and services brought together for a bare shell.",
+      }),
+    ],
+    ...overrides,
+  };
+}
+
 export function serviceVariantConfiguration(
   overrides: Partial<Schemas["ServiceVariantConfiguration"]> = {},
 ): Schemas["ServiceVariantConfiguration"] {
@@ -319,7 +367,7 @@ export function requirementServiceDetail(
         name: "Construction helpers",
         description: "",
         fulfilment_archetype: "A3_TIME_BLOCK",
-        questions: [],
+        questions: [fitOutQuestion()],
       },
     ],
     ...overrides,

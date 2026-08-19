@@ -28,6 +28,7 @@ from apps.carts.availability import (
     usable_location_fix,
 )
 from apps.catalog.models import ServiceVariant
+from apps.foundation.services import enqueue_outbox_event
 from apps.partners.capabilities import (
     capability_serves_area,
     clustered_partner_ids,
@@ -611,6 +612,34 @@ def live_slot_count(requirement: CustomerRequirement) -> int:
     ).count()
 
 
+def _slot_holding_statuses(requirement: CustomerRequirement) -> tuple[str, ...]:
+    """Which invitation statuses count against `_max_slots`.
+
+    **On the rate-card path an offer is a broadcast, not a claim.** The A3 cascade deliberately
+    invites `wave_size` leads at once and lets the first answer win, so counting `INVITED` against
+    a ceiling of one made every lead in a wave refuse the job with `m2_invitation_slots_exhausted`
+    — "another lead answered first" when nobody had answered at all. A wave of three could never
+    be accepted by anyone.
+
+    Nothing is weakened by narrowing it. First-accept-wins on this path is enforced by
+    `crew_dispatch.accept_crew_offer`, which locks the `RateCardBooking` and refuses a second
+    accept once the status is `OFFER_HELD` — and does it with the message that is actually true.
+
+    Kept immediately beside `_max_slots` and branching on the same condition on purpose: the two
+    answer one question between them ("who is holding a slot, and how many are there"), and the
+    bug above was the two halves disagreeing.
+
+    `live_slot_count` deliberately keeps the broad tuple. Its only caller is the quote flow's
+    `invite_wave`, where an invited vendor genuinely does occupy one of `max_quotes` working slots.
+    """
+    if RateCardBooking.objects.filter(
+        requirement=requirement,
+        status__in=RateCardBooking.DISPATCHABLE_STATUSES,
+    ).exists():
+        return (VendorInvitation.Status.ACCEPTED, VendorInvitation.Status.QUOTED)
+    return VendorInvitation.SLOT_HOLDING_STATUSES
+
+
 def _max_slots(requirement: CustomerRequirement) -> int:
     """How many vendors may hold a slot on this requirement at once.
 
@@ -687,8 +716,9 @@ def invite_wave(
         if len(chosen) >= min(size, free_slots):
             break
 
-    return [
-        VendorInvitation.objects.create(
+    invitations: list[VendorInvitation] = []
+    for partner in chosen:
+        invitation = VendorInvitation.objects.create(
             requirement=requirement,
             partner=partner,
             snapshot=snapshot,
@@ -697,8 +727,23 @@ def invite_wave(
             responds_by=responds_by,
             ranking_provenance=provenance,
         )
-        for partner in chosen
-    ]
+        enqueue_outbox_event(
+            aggregate_type="vendor_invitation",
+            aggregate_id=invitation.id,
+            event_type="m2.invitation.received",
+            idempotency_key=f"m2-invitation-received:{invitation.id}",
+            payload={
+                "requirement_id": str(requirement.id),
+                "vendor_invitation_id": str(invitation.id),
+                "partner_id": str(partner.id),
+                "archetype": requirement.archetype,
+                "wave": wave,
+                "responds_by": responds_by.isoformat() if responds_by is not None else None,
+            },
+        )
+        invitations.append(invitation)
+
+    return invitations
 
 
 def _invitation_deadline(requirement: CustomerRequirement) -> datetime | None:
@@ -740,11 +785,12 @@ def accept_invitation(*, invitation_id: uuid.UUID) -> VendorInvitation:
         raise InvitationTransitionError("This request is closed.")
 
     # Slot accounting is checked under the row lock, so two vendors racing for the last slot
-    # cannot both win it.
+    # cannot both win it. Which statuses count is requirement-dependent — see
+    # `_slot_holding_statuses`, which is why a broadcast crew offer is not a claim.
     others = (
         VendorInvitation.objects.filter(
             requirement=requirement,
-            status__in=VendorInvitation.SLOT_HOLDING_STATUSES,
+            status__in=_slot_holding_statuses(requirement),
         )
         .exclude(pk=invitation.pk)
         .count()
@@ -792,6 +838,27 @@ def accept_invitation(*, invitation_id: uuid.UUID) -> VendorInvitation:
             "crew_size": int(requirement.answers.get("worker_count") or 1),
             "strength": CapacityHold.Strength.SOFT,
             "status": CapacityHold.Status.ACTIVE,
+        },
+    )
+    # The Customer's first sign that anything happened at all.
+    #
+    # Until this event existed, a vendor accepting an enquiry changed a status column, wrote a
+    # capacity hold and told nobody: three vendors could accept the same request inside a minute
+    # and the Customer's feed stayed empty, because there was no event for the routing table to
+    # route. That is not a delivery failure — the notice was never requested.
+    #
+    # Keyed on the invitation rather than the requirement, deliberately. One notice per vendor is
+    # what the Customer is actually waiting to hear ("who said yes"), and a requirement-keyed
+    # event would announce the first acceptance and silently swallow the rest.
+    enqueue_outbox_event(
+        aggregate_type="requirement",
+        aggregate_id=requirement.id,
+        event_type="m2.invitation.accepted",
+        idempotency_key=f"invitation-accepted:{invitation.id}",
+        payload={
+            "requirement_id": str(requirement.id),
+            "vendor_invitation_id": str(invitation.id),
+            "archetype": requirement.archetype,
         },
     )
     return invitation

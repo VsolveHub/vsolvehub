@@ -2,6 +2,8 @@
 
 import { Badge, Button, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
+
+import { engagementHref } from "@/lib/routes";
 import type { ReactNode } from "react";
 
 import type { SelectionView } from "../adapters";
@@ -9,16 +11,21 @@ import type { SelectionView } from "../adapters";
 /**
  * Where a chosen vendor stands — `M2-FE-411`, `M2-FE-412`, `M2-FE-414`.
  *
- * ## The one thing this component exists to prevent
+ * ## Choosing is now booking
  *
- * **A selection read as a booking.** Choosing starts the vendor's
- * reconfirmation clock and nothing more; the engagement opens only when they
- * commit — A3 on their reconfirmation, A5 when the first stage is funded. A
- * Customer who reads `PENDING_RECONFIRMATION` as confirmed clears their Saturday
- * and stays in for a professional who never agreed to come.
+ * This component used to exist to prevent one thing: a selection read as a
+ * booking. Choosing started a reconfirmation clock, and a Customer who read
+ * `PENDING_RECONFIRMATION` as confirmed cleared their Saturday for a
+ * professional who had never agreed to come.
  *
- * So the pending state is a warning tone with the word "not" in it, the badge
- * says "Waiting", and there is no green anywhere on it.
+ * The vendor's second step is gone — every check it made now runs at selection,
+ * so a vendor who cannot take the job cannot be chosen — and choosing opens the
+ * engagement in the same command. The warning this component was built around no
+ * longer describes anything.
+ *
+ * `PENDING_RECONFIRMATION` is kept, unchanged, for the selections written before
+ * that. They are real rows a real Customer can still open, and the warning is
+ * still the truthful thing to show them.
  *
  * ## Decline and timeout are one state here and two on the server
  *
@@ -36,10 +43,14 @@ import type { SelectionView } from "../adapters";
 export interface SelectionStatusProps {
   selection: SelectionView;
   vendorName: string | null;
-  /** From `useServerCountdown` on `reconfirmBy`. Null when there is no clock. */
+  /**
+   * From `useServerCountdown` on `reconfirmBy`. Null when there is no clock.
+   *
+   * Only ever set for a selection written before choosing opened the engagement.
+   * Nothing creates a reconfirmation deadline any more.
+   */
   reconfirmRemaining: string | null;
   /** Where the engagement is read, once one exists. */
-  engagementHrefFor: (engagementId: string) => string;
   /** Offered on a decline or timeout: go back and pick another. */
   onChooseAnother?: () => void;
   supportAction?: ReactNode;
@@ -49,13 +60,14 @@ export function SelectionStatus({
   selection,
   vendorName,
   reconfirmRemaining,
-  engagementHrefFor,
   onChooseAnother,
   supportAction,
 }: SelectionStatusProps) {
   const who = vendorName ?? "the professional you chose";
 
   switch (selection.status) {
+    // Legacy only — see the note above. No selection made after the handshake was
+    // removed can reach this branch.
     case "PENDING_RECONFIRMATION":
       return (
         <Panel tone="warning" badge={<Badge tone="warning" dot>Waiting</Badge>} title={`${who} has not confirmed yet`}>
@@ -115,15 +127,16 @@ export function SelectionStatus({
 
     case "CONFIRMED":
       return (
-        <Panel tone="success" badge={<Badge tone="success">Confirmed</Badge>} title={`${who} confirmed`}>
+        <Panel tone="success" badge={<Badge tone="success">Booked</Badge>} title={`${who} is booked`}>
           <p className="max-w-prose text-sm leading-6 text-text">
-            They have agreed the price, the date and that they have the people
-            free.
+            <strong className="font-semibold">This is booked.</strong> We checked
+            they are approved for this work and free on your dates before letting
+            you choose them, so there is nothing left for them to confirm.
           </p>
           {selection.engagementId !== null ? (
             <div className="mt-3">
               <Link
-                href={engagementHrefFor(selection.engagementId)}
+                href={engagementHref(selection.engagementId)}
                 className={buttonStyles({ variant: "primary" })}
               >
                 See what happens next

@@ -2,22 +2,36 @@
 
 import { describeError, isLifecycleUnsupported } from "@vsolve/query";
 
+import type { Schemas } from "@vsolve/api-client";
 import { BROWSE_HREF, requestHref } from "@/lib/routes";
-import { ErrorState } from "@vsolve/ui";
-import { useEffect, useState } from "react";
+import { ErrorState, useIsWideScreen } from "@vsolve/ui";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+import { useAddresses } from "@/features/addresses/queries";
+import { DetailsScreen as MobileDetailsScreen } from "@/features/project-request/view/details-screen";
+import { ReviewScreen as MobileReviewScreen } from "@/features/project-request/view/review-screen";
+import { WhatScreen as MobileWhatScreen } from "@/features/project-request/view/what-screen";
+import { WhereWhenScreen as MobileWhereWhenScreen } from "@/features/project-request/view/where-when-screen";
+import { WizardShell } from "@/features/project-request/view/wizard-shell";
 
 import { toPlanTierViews } from "@/features/access/adapters";
 import { useChooseVisitPlan, useVisitPlan } from "@/features/access/queries";
 import { VisitPlanChooser } from "@/features/access/view/visit-plan-chooser";
 import {
-  flexibilityDaysFor,
+  selectionOnlyQuestionSet,
   toDuplicateView,
   toLifecycleVerdict,
+  toAttachmentRows,
   toQuestionSet,
   toServerAttachments,
+  type RequirementQuestionView,
   type RequirementService,
   type RequirementVariant,
 } from "../adapters";
+import { SCREENS, screenIndex } from "../model/screens";
+import type { DraftAttachment } from "../model/state";
+import { MAXIMUM_ATTACHMENTS } from "../model/upload";
 import { clearPersistedRequirement, RequirementProvider, useRequirement } from "./requirement-context";
 import {
   useCreateRequirement,
@@ -29,10 +43,14 @@ import {
   isSubmitInProgress,
 } from "../queries";
 import { useAttachments } from "../use-attachments";
+import type { Screen } from "../model/screens";
+import { briefSectionBlocks } from "../model/state";
 import { DetailsScreen } from "./details-screen";
+import { ProjectBriefScreen } from "./project-brief-screen";
 import { DuplicateNotice } from "./duplicate-notice";
 import { RequirementAddressPicker } from "./requirement-address-picker";
 import { RequirementSent } from "./requirement-sent";
+import { VoiceNoteRecorder } from "./voice-note-recorder";
 import { RequirementWorkspace } from "./requirement-workspace";
 import { ReviewScreen } from "./review-screen";
 import { WhatScreen } from "./what-screen";
@@ -78,6 +96,8 @@ export interface RequirementFlowProps {
   service: RequirementService;
   /** The A3/A5 variant chosen by the route. Carries screen 1's questions. */
   variant: RequirementVariant;
+  /** Optional catalog choice to save before dropping the Customer on Where/When. */
+  initialSelection?: string | null;
 }
 
 export function RequirementFlow(props: RequirementFlowProps) {
@@ -98,6 +118,9 @@ interface FlowBodyProps extends RequirementFlowProps {
   onDuplicatesChange: (hasDuplicate: boolean) => void;
 }
 
+/** The query parameter carrying the chosen service. Also read on the way in. */
+const SELECTED_SERVICE_PARAM = "selected_service";
+
 /**
  * Midnight local, as an ISO date-time.
  *
@@ -113,14 +136,99 @@ function startOfLocalDay(isoDate: string): string {
   return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 0, 0, 0, 0).toISOString();
 }
 
-function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
-  const { state, dispatch, today, advance, canContinue } = useRequirement();
+export function isWorkspaceAdvancingForScreen({
+  screen,
+  isCreatingRequirement,
+  isSavingRequirement,
+}: {
+  screen: Screen;
+  isCreatingRequirement: boolean;
+  isSavingRequirement: boolean;
+}): boolean {
+  if (screen === "what") return isCreatingRequirement || isSavingRequirement;
+  if (screen === "where_when" || screen === "details") return isSavingRequirement;
+  return false;
+}
+
+function FlowBody({
+  service,
+  variant,
+  initialSelection = null,
+  onDuplicatesChange,
+}: FlowBodyProps) {
+  const { state, dispatch, today, advance, back, open, canContinue } = useRequirement();
+  const initialSelectionApplied = useRef(false);
+  // Above every early return, because hooks are. `useIsWideScreen` decides
+  // between the phone wizard and the desktop brief — see its own note on why
+  // that cannot be a CSS branch when both layouts hold the same form controls.
+  const isWide = useIsWideScreen();
+  const router = useRouter();
+  /** Incremented to ask the address dialog to open. See `AddressStage`. */
+  const [addressSignal, setAddressSignal] = useState(0);
+  const addresses = useAddresses();
+  /**
+   * The tier the Customer just pressed, before the server has agreed.
+   *
+   * Choosing a plan is a write, and rendering the selection from the server's
+   * answer meant the highlight did not move until the round trip finished — so
+   * switching between one professional and two felt like the screen reloading
+   * rather than like pressing a radio button.
+   *
+   * This is **intent, not data**. It moves the highlight and nothing else: the
+   * price beside each tier is still Operations' published figure, and the plan
+   * the request is actually sent with is whatever the server recorded. If the
+   * write fails, the server's answer wins on the next render and the highlight
+   * goes back — which is the honest outcome, and why this is not written into
+   * the query cache as though it were a fact.
+   */
+  const [pendingPlanSize, setPendingPlanSize] = useState<number | null>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const createRequirement = useCreateRequirement();
   const saveRequirement = useSaveRequirement();
   const submitRequirement = useSubmitRequirement();
 
-  const questionSet = toQuestionSet(variant);
+  const questionSet = selectionOnlyQuestionSet(service.slug, toQuestionSet(variant));
+  const isSelectionOnlyWhatScreen =
+    state.screen === "what" &&
+    service.slug === "interior-fit-out-project" &&
+    questionSet.questions.length === 1 &&
+    questionSet.questions[0]?.kind === "choice";
+
+  /**
+   * The chosen service, mirrored into the URL beside the step.
+   *
+   * `?selected_service=` was already an *inbound* parameter — the catalogue's
+   * picker built links with it — but nothing ever wrote it back, so a brief in
+   * progress could not be linked to or restored with its service intact.
+   *
+   * ## Why this parameter and not the rest of the answers
+   *
+   * A URL gets pasted into chat, logged by proxies and left in history. The
+   * service is a catalogue code — public, already in the link that reached this
+   * page, and the one answer that changes what the rest of the form asks. The
+   * address, the dates, the budget and the free text are the Customer's own
+   * circumstances, and they belong in the session entry that never leaves the
+   * browser. "Detailed" is not the same as "all of it".
+   */
+  const serviceQuestion = questionSet.questions.find((question) => question.kind === "choice");
+  const chosenService =
+    serviceQuestion === undefined
+      ? null
+      : typeof state.answers[serviceQuestion.code] === "string"
+        ? (state.answers[serviceQuestion.code] as string)
+        : null;
+
+  useEffect(() => {
+    if (chosenService === null) return;
+    if (searchParams.get(SELECTED_SERVICE_PARAM) === chosenService) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set(SELECTED_SERVICE_PARAM, chosenService);
+    // `replace`, like the step: choosing a service is not a navigation, and a
+    // history entry per answer would make Back mean "undo one field".
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [chosenService, pathname, router, searchParams]);
 
   const duplicatesQuery = useProbableDuplicates(
     state.addressId !== null && state.requestedStart !== null
@@ -183,9 +291,28 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
   const planQuery = useVisitPlan(state.requirementId, isA5);
   const choosePlan = useChooseVisitPlan();
   const planState = planQuery.data ?? null;
-  const chosenPlanSize = planState?.plan?.plan_size ?? null;
+  const savedPlanSize = planState?.plan?.plan_size ?? null;
+  /**
+   * What the chooser shows: the press if one is outstanding, the record
+   * otherwise.
+   *
+   * The pending value is dropped as soon as the server agrees, so a failed write
+   * falls back to the truth rather than leaving a highlight nothing stands
+   * behind.
+   */
+  const chosenPlanSize =
+    pendingPlanSize !== null && pendingPlanSize !== savedPlanSize
+      ? pendingPlanSize
+      : savedPlanSize;
 
   const submitted = submitRequirement.data;
+  const writeError = createRequirement.error ?? saveRequirement.error ?? null;
+  const isWriting = createRequirement.isPending || saveRequirement.isPending;
+  const isAdvancingCurrentScreen = isWorkspaceAdvancingForScreen({
+    screen: state.screen,
+    isCreatingRequirement: createRequirement.isPending,
+    isSavingRequirement: saveRequirement.isPending,
+  });
 
   useEffect(() => {
     // The draft has left the browser and lives on the server now. Leaving the
@@ -193,6 +320,61 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
     // already gone out the next time this service is opened.
     if (submitted !== undefined) clearPersistedRequirement(service.slug);
   }, [submitted, service.slug]);
+
+  useEffect(() => {
+    if (initialSelectionApplied.current) return;
+    if (isWriting) return;
+
+    if (initialSelection === null || initialSelection === undefined) return;
+
+    // The first choice question, whether or not it is the only one. This used to
+    // require the selection-only shape, which stopped being true the moment the
+    // catalogue published a fuller brief — so a link carrying a chosen service
+    // silently did nothing.
+    const question = questionSet.questions.find((candidate) => candidate.kind === "choice");
+    if (question === undefined) return;
+    if (!(question.options ?? []).some((option) => option.value === initialSelection)) return;
+
+    initialSelectionApplied.current = true;
+    dispatch({ type: "ANSWER", questionCode: question.code, value: initialSelection });
+    void (async () => {
+      const answers = { ...state.answers, [question.code]: initialSelection };
+      try {
+        const draft =
+          state.requirementId === null
+            ? await createRequirement.mutateAsync({
+                variantId: variant.id,
+                answers,
+                language: state.language ?? "en-IN",
+              })
+            : await saveRequirement.mutateAsync({
+                requirementId: state.requirementId,
+                answers,
+              });
+        dispatch({
+          type: "APPLY_VERDICT",
+          verdict: toLifecycleVerdict(draft),
+          requirementId: draft.id,
+        });
+        advance();
+      } catch {
+        // The mutation error renders in `FlowNotices` on the same screen.
+      }
+    })();
+  }, [
+    advance,
+    createRequirement,
+    dispatch,
+    initialSelection,
+    isSelectionOnlyWhatScreen,
+    isWriting,
+    questionSet.questions,
+    saveRequirement,
+    state.answers,
+    state.language,
+    state.requirementId,
+    variant.id,
+  ]);
 
   if (submitted !== undefined) {
     return (
@@ -206,14 +388,23 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
     );
   }
 
-  /** The verdict, the id, or a refusal the Customer has to read. */
-  async function saveAnswers(): Promise<boolean> {
+  /**
+   * The verdict, and **the requirement id**, or null for a refusal to read.
+   *
+   * Returns the id rather than a boolean because the two writes that follow it
+   * need it and cannot read it from `state`. `dispatch` does not mutate the
+   * `state` this render closed over, so a caller that ran this and then looked
+   * at `state.requirementId` saw the value from *before* the draft was created —
+   * `null` on a first send — and bailed silently. That is the whole of why
+   * "Review and send" ran three writes and appeared to do nothing.
+   */
+  async function saveAnswers(answers = state.answers): Promise<string | null> {
     try {
       const draft =
         state.requirementId === null
           ? await createRequirement.mutateAsync({
               variantId: variant.id,
-              answers: state.answers,
+              answers,
               // The server defaults this too. Sent explicitly because the
               // generated request type requires it, and because once the voice
               // note lands the language is the Customer's, not a default.
@@ -221,33 +412,63 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
             })
           : await saveRequirement.mutateAsync({
               requirementId: state.requirementId,
-              answers: state.answers,
+              answers,
             });
       dispatch({
         type: "APPLY_VERDICT",
         verdict: toLifecycleVerdict(draft),
         requirementId: draft.id,
       });
-      return true;
+      return draft.id;
     } catch {
       // Rendered from the mutation's own error below, next to the fields it is
       // about. Swallowed here so a rejected promise does not reach the console
       // as an unhandled rejection on a path that is already handled.
-      return false;
+      return null;
     }
   }
 
-  async function savePlaceAndDates(): Promise<boolean> {
-    if (state.requirementId === null || state.addressId === null || state.requestedStart === null) {
+  /**
+   * Persists a picked service card immediately, and **does not advance**.
+   *
+   * It used to advance, because the fit-out picker was a screen whose only job
+   * was that one choice and moving on was the whole interaction. On the one-page
+   * brief there is nowhere to move on *to*: the next section is already on
+   * screen, and advancing would slide `state.screen` from `what` to `where_when`
+   * under a form that renders both — hidden state whose only effect is to make
+   * every later read of `state.screen` mean something different from what it
+   * looks like.
+   *
+   * The save stays. The choice is what the lifecycle verdict is inferred from,
+   * and having it on the server before the Customer reaches section 2 is what
+   * lets the verdict be right when they get there.
+   */
+  async function saveSelectedChoice(questionCode: string, value: string) {
+    if (!isSelectionOnlyWhatScreen || isWriting) return;
+    await saveAnswers({ ...state.answers, [questionCode]: value });
+  }
+
+  async function handleChoiceSelect(questionCode: string, value: string) {
+    await saveSelectedChoice(questionCode, value);
+  }
+
+  /**
+   * `requirementId` is a parameter, not a read of `state`.
+   *
+   * The caller may have created the draft moments ago in the same event, and the
+   * `state` this closure captured still says `null`. Passing it in is what makes
+   * the three-write chain work on a first send.
+   */
+  async function savePlaceAndDates(requirementId: string): Promise<boolean> {
+    if (state.addressId === null || state.requestedStart === null) {
       return false;
     }
     try {
       await saveRequirement.mutateAsync({
-        requirementId: state.requirementId,
+        requirementId,
         addressId: state.addressId,
         requestedStart: startOfLocalDay(state.requestedStart),
-        serviceBy: state.serviceBy,
-        flexibilityDays: flexibilityDaysFor(state.isDateFlexible),
+        flexibilityDays: state.flexibilityDays,
       });
       return true;
     } catch {
@@ -255,11 +476,11 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
     }
   }
 
-  async function saveDetails(): Promise<boolean> {
-    if (state.requirementId === null) return false;
+  /** Same reason as `savePlaceAndDates`: the id is given, never re-read. */
+  async function saveDetails(requirementId: string): Promise<boolean> {
     try {
       await saveRequirement.mutateAsync({
-        requirementId: state.requirementId,
+        requirementId,
         additionalDetails: state.additionalDetails,
         ...(state.language === null ? {} : { language: state.language }),
       });
@@ -271,14 +492,113 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
 
   async function handleAdvance() {
     if (!canContinue) return;
+    if (state.screen === "what") {
+      if ((await saveAnswers()) === null) return;
+      advance();
+      return;
+    }
+    // Past screen one the draft exists — `what` is the only screen that can
+    // create it, and its guard is what stops anybody reaching here without one.
+    // Bailing rather than asserting: a null here is a bug, not a Customer error,
+    // and the honest response is to leave them on a screen that still works.
+    const requirementId = state.requirementId;
+    if (requirementId === null) return;
     const saved =
-      state.screen === "what"
-        ? await saveAnswers()
-        : state.screen === "where_when"
-          ? await savePlaceAndDates()
-          : await saveDetails();
+      state.screen === "where_when"
+        ? await savePlaceAndDates(requirementId)
+        : await saveDetails(requirementId);
     if (saved) advance();
   }
+
+  /**
+   * The one-page brief's single forward control.
+   *
+   * Runs the same three writes the wizard ran, **in the same order and stopping
+   * at the first failure**. The order is not cosmetic: `saveAnswers` is what
+   * creates the draft and returns its id, and the other two need that id —
+   * *passed in*, because `state` in this closure still holds the value from
+   * before the create. A parallel send would race the create and lose two of
+   * the three.
+   *
+   * Stopping early is what leaves the Customer looking at the section that
+   * failed, with the error beside it, rather than on a review screen describing
+   * a draft the server never received.
+   */
+  async function handleReviewAndSend() {
+    if (!canSendBrief) return;
+    const requirementId = await saveAnswers();
+    if (requirementId === null) return;
+    if (!(await savePlaceAndDates(requirementId))) {
+      // The only way this fails without an error of its own is a missing address
+      // or start date, which belongs to section 2. Landing there beats a CTA
+      // that silently does nothing — the failure this whole handler was
+      // reported for.
+      open("where_when");
+      return;
+    }
+    if (!(await saveDetails(requirementId))) return;
+    // `open`, not `goTo`. `review` is never in `visited` from the brief, so
+    // `goTo` refused it and the send ended in silence after three good writes.
+    open("review");
+  }
+
+  /**
+   * The brief is every screen that is not `review`.
+   *
+   * Derived from the reducer rather than held separately, so `back` from review
+   * lands on the page without a second source of truth about where somebody is.
+   */
+  const isBrief = state.screen !== "review";
+  const addressLine = addressSummaryLine(addresses.data ?? [], state.addressId);
+  const planTiers = toPlanTierViews(planState?.available_tiers ?? []);
+  const chosenPlanPrice =
+    planTiers.find((tier) => tier.planSize === chosenPlanSize)?.priceLabel ?? null;
+  /**
+   * Submitting needs the plan as well as the guard.
+   *
+   * `_assert_visit_plan_chosen` refuses an A5 submit without one, so the control
+   * is disabled here rather than the refusal met after the tap — the one place a
+   * Customer would read a `409` for something that was on the screen in front of
+   * them.
+   */
+  const canSubmit = canContinue && (!isA5 || chosenPlanSize !== null);
+
+  /**
+   * The three-row recap on review, each row returning to the step that owns it.
+   *
+   * `open` rather than `goTo` for the same reason the rail uses it: these send
+   * somebody *back into* a section to change it, and `goTo` refuses any screen
+   * not already in `visited`.
+   */
+  const reviewRows = [
+    {
+      label: "Work",
+      value: summariseAnswers(questionSet.questions, state.answers),
+      onEdit: () => open("what"),
+    },
+    {
+      label: "Where and when",
+      value: [addressLine, state.requestedStart].filter(Boolean).join(" · ") || null,
+      onEdit: () => open("where_when"),
+    },
+    {
+      label: "Attached",
+      value: summariseAttachments(state.attachments),
+      onEdit: () => open("details"),
+    },
+  ];
+  const sectionBlocks = briefSectionBlocks(state, today, duplicates.length > 0);
+  /**
+   * What is stopping the send, in the order the page reads.
+   *
+   * `details` is optional and never blocks — except when an attachment is
+   * mid-flight or came back rejected, which is what its guard actually checks.
+   * So it is included, and "optional" describes the section rather than the
+   * rule.
+   */
+  const briefBlocked =
+    sectionBlocks.what ?? sectionBlocks.where_when ?? sectionBlocks.details ?? null;
+  const canSendBrief = briefBlocked === null;
 
   function handleSubmit() {
     if (state.requirementId === null) return;
@@ -291,56 +611,246 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
     });
   }
 
-  const writeError = createRequirement.error ?? saveRequirement.error ?? null;
-  const isWriting = createRequirement.isPending || saveRequirement.isPending;
+  const notices = (
+    <FlowNotices
+      writeError={writeError}
+      duplicates={duplicates.map((duplicate) =>
+        toDuplicateView(
+          duplicate,
+          new Date(duplicate.created_at).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+          }),
+        ),
+      )}
+      duplicateHrefFor={requestHref}
+    />
+  );
+
+  // The brief is its own page and does not live inside the wizard shell — that
+  // shell is a stepper and a Next button, and the whole point of the page is
+  // that it has neither. `review` keeps the shell, because going back from it is
+  // a real navigation and the stepper is what says where "back" goes.
+  /**
+   * The phone flow: the same four screens, one at a time, in their own shell.
+   *
+   * Same reducer, same guards, same writes — `handleAdvance` is the wizard's own
+   * forward step and it is what the desktop brief's single CTA calls three times
+   * in a row. So going back preserves answers and a reload restores the draft,
+   * because both are the reducer's, not this branch's.
+   *
+   * `canContinue` is the reducer's answer **for the current screen**, which is
+   * the rule the brief asked for: a wizard that disables step 2 because step 4 is
+   * empty cannot be finished and cannot explain why.
+   */
+  if (!isWide) {
+    const stepFor: Record<Screen, number> = {
+      what: 1,
+      where_when: 2,
+      details: 3,
+      review: 4,
+    };
+
+    return (
+      <WizardShell
+        title={service.name}
+        step={stepFor[state.screen]}
+        onBack={() => (state.screen === "what" ? router.back() : back())}
+        onContinue={() =>
+          state.screen === "review" ? handleSubmit() : void handleAdvance()
+        }
+        canContinue={state.screen === "review" ? canSubmit : canContinue}
+        isSaving={isWriting || submitRequirement.isPending}
+        continueLabel={state.screen === "review" ? "Send this request" : "Continue"}
+        reassurance={
+          state.screen === "review"
+            ? chosenPlanPrice === null
+              ? "Free to send. Nothing is booked yet."
+              : `Free to send. ${chosenPlanPrice} only when a pro confirms a time.`
+            : state.screen === "details"
+              ? undefined
+              : undefined
+        }
+        headerAction={
+          // Step 3 is entirely optional, so the header says so rather than
+          // showing a position the meter under it is already showing.
+          state.screen === "details" ? (
+            <button
+              type="button"
+              onClick={() => void handleAdvance()}
+              className="px-2 py-1 text-[13px] font-semibold text-text-link"
+            >
+              Skip
+            </button>
+          ) : undefined
+        }
+      >
+        {notices}
+
+        {state.screen === "what" ? (
+          <MobileWhatScreen
+            questions={questionSet.questions}
+            answers={state.answers}
+            onAnswer={(code, value) => dispatch({ type: "ANSWER", questionCode: code, value })}
+          />
+        ) : state.screen === "where_when" ? (
+          <MobileWhereWhenScreen
+            addressLine={addressLine}
+            onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
+            addressPicker={
+              <RequirementAddressPicker
+                variantId={variant.id}
+                presentation="none"
+                openSignal={addressSignal}
+              />
+            }
+            requestedStart={state.requestedStart}
+            onRequestedStart={(isoDate) =>
+              dispatch({ type: "SET_REQUESTED_START", requestedStart: isoDate })
+            }
+            flexibilityDays={state.flexibilityDays}
+            onFlexibilityDays={(days) => dispatch({ type: "SET_FLEXIBILITY_DAYS", days })}
+            serviceBy={state.serviceBy}
+            onServiceBy={(isoDate) => dispatch({ type: "SET_SERVICE_BY", serviceBy: isoDate })}
+          />
+        ) : state.screen === "details" ? (
+          <MobileDetailsScreen
+            rows={toAttachmentRows(state.attachments)}
+            previewUrlFor={attachments.previewUrlFor}
+            onAttach={attachments.attachFiles}
+            onRemove={attachments.remove}
+            voiceRecorder={
+              <VoiceNoteRecorder
+                onRecorded={attachments.attachRecording}
+                language={state.language}
+                onLanguageChange={(language) =>
+                  dispatch({ type: "SET_LANGUAGE", language })
+                }
+                enabled={state.requirementId !== null}
+                compact
+              />
+            }
+            canAttach={state.requirementId !== null}
+            remaining={MAXIMUM_ATTACHMENTS - state.attachments.length}
+            additionalDetails={state.additionalDetails}
+            onAdditionalDetails={(value) =>
+              dispatch({ type: "SET_ADDITIONAL_DETAILS", text: value })
+            }
+          />
+        ) : (
+          <MobileReviewScreen
+            rows={reviewRows}
+            tiers={planTiers}
+            planSize={chosenPlanSize}
+            onPlanSize={(planSize) => {
+              if (state.requirementId === null) return;
+              // The highlight moves now; the write settles behind it. Nothing is
+              // charged by choosing — it bounds the invitation wave and snapshots
+              // the price — so there is no risk in showing the press first.
+              setPendingPlanSize(planSize);
+              choosePlan.mutate({ requirementId: state.requirementId, planSize });
+            }}
+            isLoadingTiers={planQuery.isPending}
+            notice={
+              submitFailureCopy(submitRequirement.error) === null ? undefined : (
+                <ErrorState
+                  title="We could not send that"
+                  message={submitFailureCopy(submitRequirement.error)!}
+                  severity="error"
+                  inline
+                />
+              )
+            }
+          />
+        )}
+      </WizardShell>
+    );
+  }
+
+  if (isBrief) {
+    return (
+      <ProjectBriefScreen
+        notice={notices}
+        heading={`Tell us about ${service.name.toLowerCase()}`}
+          intro="Nobody prices work like this without seeing it, so this is a brief — not a checkout."
+          // The rail navigates now, and it navigates the *reducer* — the same
+          // `state.screen` the phone wizard runs on and the same value mirrored
+          // into `?step=`. So a link into a section, a reload and a back button
+          // all land where they should, and the desktop and phone flows cannot
+          // drift into two ideas of where somebody is.
+          activeIndex={screenIndex(state.screen)}
+          onSelectSection={(index) => {
+            const screen = SCREENS[index];
+            // `open` rather than `goTo`: the rail is navigation, and `goTo`
+            // refuses any section the Customer has not already been to — which
+            // made every forward click on this rail do nothing at all.
+            if (screen !== undefined) open(screen);
+          }}
+          onReviewAndSend={() => void handleReviewAndSend()}
+          isSaving={isWriting}
+          blocked={briefBlocked}
+          sections={[
+            {
+              title: "What needs doing",
+              blocked: sectionBlocks.what,
+              children: (
+                <WhatScreen
+                  categoryName={service.name}
+                  questions={questionSet.questions}
+                  isChoosing={isWriting}
+                  onChoiceSelect={(questionCode, value) =>
+                    void handleChoiceSelect(questionCode, value)
+                  }
+                  unsupportedQuestions={questionSet.unsupported}
+                  hideHeading
+                />
+              ),
+            },
+            {
+              title: "Where and when",
+              blocked: sectionBlocks.where_when,
+              children: (
+                <WhereWhenScreen
+                  addressPicker={<RequirementAddressPicker variantId={variant.id} />}
+                  minDate={today}
+                  hideHeading
+                />
+              ),
+            },
+            {
+              title: "Show us the space",
+              hint: "Optional · sharper estimates",
+              optional: true,
+              blocked: sectionBlocks.details,
+              children: (
+                <DetailsScreen
+                  onAttachFiles={attachments.attachFiles}
+                  onRecordVoice={attachments.attachRecording}
+                  onRemoveAttachment={attachments.remove}
+                  onRetryAttachment={attachments.retry}
+                  previewUrlFor={attachments.previewUrlFor}
+                  // An attachment hangs off a requirement, so the draft has to
+                  // exist first. It does once anything in section 1 is saved;
+                  // this is the honest state before that.
+                  canAttach={state.requirementId !== null}
+                  isBusy={attachments.isRemoving}
+                  hideHeading
+                />
+              ),
+            },
+        ]}
+      />
+    );
+  }
 
   return (
     <RequirementWorkspace
-      isAdvancing={isWriting}
+      isAdvancing={isAdvancingCurrentScreen}
+      hideForwardControl={isSelectionOnlyWhatScreen}
       onAdvance={() => void handleAdvance()}
-      notice={
-        <FlowNotices
-          writeError={writeError}
-          duplicates={duplicates.map((duplicate) =>
-            toDuplicateView(
-              duplicate,
-              new Date(duplicate.created_at).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-              }),
-            ),
-          )}
-          duplicateHrefFor={requestHref}
-        />
-      }
+      notice={notices}
     >
-      {state.screen === "what" ? (
-        <WhatScreen
-          categoryName={service.name}
-          questions={questionSet.questions}
-          unsupportedQuestions={questionSet.unsupported}
-        />
-      ) : state.screen === "where_when" ? (
-        <WhereWhenScreen
-          addressPicker={<RequirementAddressPicker variantId={variant.id} />}
-          minDate={today}
-        />
-      ) : state.screen === "details" ? (
-        <DetailsScreen
-          onAttachFiles={attachments.attachFiles}
-          onRecordVoice={attachments.attachRecording}
-          onRemoveAttachment={attachments.remove}
-          onRetryAttachment={attachments.retry}
-          previewUrlFor={attachments.previewUrlFor}
-          // An attachment hangs off a requirement, so the draft has to exist
-          // first. Screens 1 and 2 have already created it in every ordinary
-          // path; this is the honest state for someone who reached screen 3
-          // without a saved answer.
-          canAttach={state.requirementId !== null}
-          isBusy={attachments.isRemoving}
-        />
-      ) : (
-        <ReviewScreen
+      <ReviewScreen
           categoryName={service.name}
           addressLines={null}
           // Nothing published says the requirement is free until the server
@@ -362,9 +872,10 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
                 isLoading={planQuery.isPending}
                 readError={planQuery.error}
                 onRetryRead={() => void planQuery.refetch()}
-                onChoose={(planSize) =>
-                  choosePlan.mutate({ requirementId: state.requirementId!, planSize })
-                }
+                onChoose={(planSize) => {
+                  setPendingPlanSize(planSize);
+                  choosePlan.mutate({ requirementId: state.requirementId!, planSize });
+                }}
                 isChoosing={choosePlan.isPending}
                 chooseError={choosePlan.error}
               />
@@ -379,9 +890,62 @@ function FlowBody({ service, variant, onDuplicatesChange }: FlowBodyProps) {
               : null
           }
         />
-      )}
     </RequirementWorkspace>
   );
+}
+
+/** "Full fit-out · office · 1,250 sq ft" — the answers, in the catalogue's order. */
+function summariseAnswers(
+  questions: readonly RequirementQuestionView[],
+  answers: Readonly<Record<string, unknown>>,
+): string | null {
+  const parts = questions
+    .map((question) => {
+      const value = answers[question.code];
+      if (value === undefined || value === null || value === "") return null;
+      if (question.kind === "choice") {
+        // The option's own label, never the stored code — the catalogue owns
+        // both and only one of them is English.
+        return question.options?.find((option) => option.value === value)?.label ?? null;
+      }
+      if (question.kind === "number") return `${String(value)}${unitSuffix(question)}`;
+      if (question.kind === "boolean") return value === true ? question.label : null;
+      return null;
+    })
+    .filter(Boolean);
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
+/** The one unit this app names. See `features/project-request/model/questions`. */
+function unitSuffix(question: RequirementQuestionView): string {
+  return question.code === "floor_area_sqft" ? " sq ft" : "";
+}
+
+/** "2 photos · 1 voice note", counting only what actually attached. */
+function summariseAttachments(attachments: readonly DraftAttachment[]): string | null {
+  const attached = attachments.filter((item) => item.state === "attached");
+  if (attached.length === 0) return null;
+  const photos = attached.filter((item) => item.kind === "IMAGE").length;
+  const notes = attached.filter(
+    (item) => item.kind === "AUDIO" || item.kind === "VOICE_NOTE",
+  ).length;
+  const parts = [
+    photos === 0 ? null : `${photos} ${photos === 1 ? "photo" : "photos"}`,
+    notes === 0 ? null : `${notes} ${notes === 1 ? "voice note" : "voice notes"}`,
+  ].filter(Boolean);
+  return parts.length === 0 ? `${attached.length} attached` : parts.join(" · ");
+}
+
+/** Locality and pincode. A full address truncates to the part that identifies nothing. */
+function addressSummaryLine(
+  addresses: readonly Schemas["Address"][],
+  addressId: string | null,
+): string | null {
+  if (addressId === null) return null;
+  const address = addresses.find((candidate) => candidate.id === addressId);
+  if (address === undefined) return null;
+  const locality = address.locality || address.city;
+  return locality === "" ? address.postal_code : `${locality} — ${address.postal_code}`;
 }
 
 /**

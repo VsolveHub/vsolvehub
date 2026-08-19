@@ -1,6 +1,6 @@
 import type { Schemas } from "@vsolve/api-client";
 
-import { engagementHref, requestHref } from "@/lib/routes";
+import { engagementHref, requestHref, requestQuotesHref } from "@/lib/routes";
 
 /**
  * What a notice is called, and where it leads — contract 1.34.0.
@@ -48,6 +48,13 @@ export type NotificationTarget = Schemas["NotificationTarget"];
 const HREF_BY_KIND: Record<string, (id: string) => string> = {
   ENGAGEMENT: engagementHref,
   REQUIREMENT: requestHref,
+  // Both ids here are requirement ids; the kinds differ only in where the notice
+  // wants to land. The server chooses `REQUIREMENT_QUOTES` for the two notices
+  // that are about quotes rather than about the request — a vendor's quote
+  // arriving, and the unlock that was paid to read it — because "unlock to read
+  // the full quote" pointing at the request page is a link the reader still has
+  // to navigate from.
+  REQUIREMENT_QUOTES: requestQuotesHref,
 };
 
 /**

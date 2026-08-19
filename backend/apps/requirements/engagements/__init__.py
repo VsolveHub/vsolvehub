@@ -1,4 +1,4 @@
-"""Selection, vendor reconfirmation and the engagement both archetypes run on.
+"""Selection and the engagement both archetypes run on.
 
 **Selection is not a booking.** A Customer choosing a proposal starts a clock, not a job: the
 vendor has to reconfirm price, date and capacity, and the checks that ran when they quoted are run
@@ -30,7 +30,9 @@ still resolves:
 
 * `base` — the two archetype aliases and `shift_dates`, the writer for `scheduled_on` on the
   workforce path. Imports no sibling, so it is the bottom of the package's dependency arrow.
-* `selection` — the Customer's choice, the reconfirmation clock, decline and expiry.
+* `selection` — the Customer's choice, which now opens the engagement in the same command.
+  The reconfirmation clock, decline and expiry survive only for selections written before
+  that; see the module's own note for what replaced them and where the checks went.
 * `opening` — what an accepted quote becomes: frozen terms and the stage ledger.
 * `rate_card` — the A3 engagement a verified booking fee opens, and its free re-dispatch.
 * `funding` — A5 stage checkouts and the verified callback that starts the project.

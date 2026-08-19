@@ -1,6 +1,6 @@
 """Turning an accepted quote into an engagement: frozen terms and a stage ledger.
 
-The other half of the reconfirmation handshake. `selection.reconfirm_selection` decides *whether*
+The other half of choosing a vendor. `selection.select_proposal` decides *whether*
 the vendor may commit; this module decides *what the agreement is* once they have — the terms
 snapshot a dispute reads years later, the stage rows the money hangs off, and the one place the two
 commercial modes visibly diverge (A3 releases contact immediately, A5 releases nothing until the
@@ -229,7 +229,10 @@ def _open_engagement(
         from_status=from_status,
         to_status=requirement.status,
         actor=None,
-        reason_code="vendor_reconfirmed",
+        # Renamed with the handshake it described. A timeline reading "vendor
+        # reconfirmed" against a job no vendor confirmed is a record that lies
+        # about who did what — and the timeline is what a dispute reads.
+        reason_code="selection_confirmed",
         reason=f"engagement:{engagement.id} mode:{engagement.commercial_mode}",
     )
     if is_lead_only:

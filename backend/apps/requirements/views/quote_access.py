@@ -180,7 +180,12 @@ class RequirementVisitPlanView(ThrottledWriteMixin, APIView):
         except RequirementDomainError as exc:
             _raise_api_error(exc)
 
-        plan = VisitPlan.objects.filter(requirement=requirement).prefetch_related("shares").first()
+        plan = (
+            VisitPlan.objects.select_related("payment_attempt")
+            .filter(requirement=requirement)
+            .prefetch_related("shares")
+            .first()
+        )
         # `M2-BE-810`. `choose_visit_plan` is one of the three gated doors, so while a pause is
         # engaged the chooser offers nothing rather than offering tiers the next tap will refuse.
         # An empty `available_tiers` is already the published honest answer for "no tier is priced

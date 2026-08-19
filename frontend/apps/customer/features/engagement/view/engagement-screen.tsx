@@ -18,6 +18,9 @@ import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/proje
 import { CashDemandReport } from "@/features/shift-day/view/cash-demand-report";
 import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
 import { useEngagement, useEngagementAmendments, useFundStage } from "../queries";
+import { CrewBookingSummary } from "./crew-booking-summary";
+import { CrewDayPanel } from "./crew-day-panel";
+import { PaymentReceipt } from "./payment-receipt";
 import { AgreedWorkPanel } from "./agreed-work-panel";
 import { AgreementHistory } from "./agreement-history";
 import { AmendmentPanel } from "./amendment-panel";
@@ -181,6 +184,24 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         ) : null}
       </header>
 
+      {/* A3 opens as a receipt: which days, how much cash, who is coming. The
+          rest of this screen — progress, agreed work, stages, disputes — sits
+          below it unchanged, because a Customer who came back to check a
+          settlement still needs all of it. */}
+      {view.mode === "lead_only" ? (
+        <div className="mt-4">
+          <CrewBookingSummary
+            view={view}
+            receiptHref={`/engagements/${view.engagementId}/receipt`}
+            detailAnchor="#engagement-detail"
+          >
+            <CrewDayPanel requirementId={view.requirementId} />
+          </CrewBookingSummary>
+        </div>
+      ) : null}
+
+      <div id="engagement-detail" />
+
       <ModePanel view={view} />
 
       {/* `M2-FE-608`: progress, active stage and next action, at the top, from
@@ -330,7 +351,15 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
           you.
         </p>
 
-        <AccessReceiptPanel view={view} />
+        {/* A3 only: the day the crew is due is the one day this booking needs an
+            answer from the Customer. Silent on every other day. */}
+        {/* `CrewDayPanel` used to be mounted here as well. It now sits in the
+            confirmation summary's rail at the top, which is where somebody
+            opening this screen on the morning of a shift is looking — and two
+            mounts meant two copies of the same two buttons, either of which
+            could be pressed. */}
+
+        <PaymentReceipt view={view} />
 
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href={requestLink} className={buttonStyles({ variant: "outline" })}>
@@ -347,8 +376,17 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
   );
 }
 
+/**
+ * Wide enough for the A3 confirmation's rail, with everything else held to a
+ * reading width by its own containers. A stage list stretched to 1100px is
+ * harder to scan, not easier.
+ */
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-6">{children}</div>;
+  return (
+    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 pb-16 pt-6 sm:px-6">
+      {children}
+    </div>
+  );
 }
 
 function BackLink({ href, label }: { href: string; label: string }) {
@@ -366,52 +404,6 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
     <div className="flex items-baseline justify-between gap-3 border-b border-line p-4 last:border-0">
       <dt className="text-sm text-text-secondary">{label}</dt>
       <dd className={strong ? "text-lg font-semibold text-text" : "text-text"}>{value}</dd>
-    </div>
-  );
-}
-
-/**
- * The access fee's receipt — `M2-FE-418`, closed by 1.26.0.
- *
- * **A number, not a link, and deliberately not called an invoice.**
- * `AccessReceipt` carries `{kind, number, series, sequence, amount_paise}` and
- * no document id: `TaxDocument.order` is not nullable and an access fee has no
- * `Order`, so there is nothing to download. The number is allocated from the
- * same gapless `commerce.DocumentSequence` under an `M2A-` series, which makes
- * it exactly what it is presented as — the durable reference a Customer quotes
- * to support. GST treatment of both access fees is an open owner decision, so
- * this screen does not use the word "invoice" or imply a tax document exists.
- *
- * `null` means one of three things — no fee charged yet, a plan covered entirely
- * by a reclassification credit, or a row that predates receipt numbering — and
- * none of them is an error. The panel says there is no number rather than
- * asserting nothing was ever paid, because it cannot tell the three apart.
- */
-function AccessReceiptPanel({ view }: { view: EngagementView }) {
-  const receipt = view.accessReceipt;
-
-  if (receipt === null) {
-    return (
-      <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
-        There is no access-fee receipt number on this agreement. That is normal
-        if nothing was charged to reach it. If you paid one and it is not here,
-        contact support with the date and we will find it.
-      </p>
-    );
-  }
-
-  return (
-    <div className="mt-3 rounded-card border border-line bg-surface-sunken p-4">
-      <h3 className="text-sm font-semibold text-text">Your receipt number</h3>
-      <p className="mt-1 font-mono text-base text-text">{receipt.number}</p>
-      <p className="mt-1 text-sm text-text-secondary">
-        {receipt.purpose} · {receipt.amountLabel}
-      </p>
-      <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-        Quote this number to support and they can find the payment. It is a
-        receipt reference for the fee you paid us — not a tax invoice, and not
-        the money you pay the professional for the work itself.
-      </p>
     </div>
   );
 }

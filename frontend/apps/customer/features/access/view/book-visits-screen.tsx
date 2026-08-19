@@ -7,10 +7,17 @@ import {
 } from "@vsolve/query";
 import { Button, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
+import { useState } from "react";
 
 import { formatVisitSlot, toPlanCheckoutView, toVisitTrackerView } from "../adapters";
-import { useStartVisitPlanCheckout, useVisitPlan } from "../queries";
+import {
+  canSimulateAccessCheckout,
+  useSimulateVisitPlanCapture,
+  useStartVisitPlanCheckout,
+  useVisitPlan,
+} from "../queries";
 import { AccessRefusal } from "./access-refusal";
+import { VisitPaymentDialog } from "./visit-payment-dialog";
 
 /**
  * The visit-plan checkout — `M2-FE-420`.
@@ -46,12 +53,43 @@ export interface BookVisitsScreenProps {
 export function BookVisitsScreen({ requirementId, requestHref }: BookVisitsScreenProps) {
   const planQuery = useVisitPlan(requirementId);
   const checkout = useStartVisitPlanCheckout();
+  const simulateCapture = useSimulateVisitPlanCapture();
+  const [paying, setPaying] = useState(false);
 
   const state = planQuery.data ?? null;
   const phase: VisitPlanPhase | null = state === null ? null : visitPlanPhase(state);
   const view = state === null ? null : toPlanCheckoutView(state);
   const tracker = state === null ? null : toVisitTrackerView(state);
   const heldSlot = tracker?.rows.find((row) => row.state === "held") ?? null;
+  const pendingPaymentAttemptId = state?.plan?.payment_attempt_id ?? null;
+  const canSimulatePendingCapture =
+    state?.plan?.simulated_capture_available === true && pendingPaymentAttemptId !== null;
+
+  function markVisitPlanPaid(paymentAttemptId: string) {
+    simulateCapture.mutate({ requirementId, paymentAttemptId });
+  }
+
+  function startCheckout() {
+    if (view === null || phase === null) return;
+    checkout.mutate(
+      {
+        requirementId,
+        planId: view.planId,
+        isRetryAfterFailure: phase === "failed",
+      },
+      {
+        onSuccess: (started) => {
+          if (canSimulateAccessCheckout(started)) {
+            markVisitPlanPaid(started.payment_attempt_id);
+          }
+        },
+        // Closed either way. A `201` hands off to the provider and this screen
+        // takes over the pending state; a refusal is rendered here too, because
+        // the dialog is about to be replaced by whatever the server now says.
+        onSettled: () => setPaying(false),
+      },
+    );
+  }
 
   if (planQuery.isPending) {
     return (
@@ -111,23 +149,40 @@ export function BookVisitsScreen({ requirementId, requestHref }: BookVisitsScree
           phase={phase}
           canCheckOut={canCheckOutVisitPlan(state)}
           chargeableLabel={view.chargeableLabel}
-          isPending={checkout.isPending}
-          onStart={() =>
-            checkout.mutate({
-              requirementId,
-              planId: view.planId,
-              isRetryAfterFailure: phase === "failed",
-            })
-          }
+          isPending={checkout.isPending || simulateCapture.isPending}
+          canSimulatePendingCapture={canSimulatePendingCapture}
+          // Opens the confirm dialog rather than charging. The split it shows —
+          // which slot each half of the money is for — is the question somebody
+          // paying for two visits with only one time confirmed actually has.
+          onStart={() => setPaying(true)}
+          onSimulateCapture={() => {
+            if (pendingPaymentAttemptId !== null) {
+              markVisitPlanPaid(pendingPaymentAttemptId);
+            }
+          }}
           requestHref={requestHref}
         />
       </div>
 
       <div className="mt-4">
-        <AccessRefusal error={checkout.error} attempting="pay for these visits" />
+        <AccessRefusal
+          error={checkout.error ?? simulateCapture.error}
+          attempting="pay for these visits"
+        />
       </div>
 
       <BackLink href={requestHref} />
+
+      <VisitPaymentDialog
+        open={paying}
+        onOpenChange={setPaying}
+        planSize={view.planSize}
+        chargeableLabel={view.chargeableLabel}
+        creditLabel={view.creditLabel}
+        rows={tracker?.rows ?? []}
+        isPending={checkout.isPending || simulateCapture.isPending}
+        onConfirm={startCheckout}
+      />
     </Wrapper>
   );
 }
@@ -192,14 +247,18 @@ function CheckoutAction({
   canCheckOut,
   chargeableLabel,
   isPending,
+  canSimulatePendingCapture,
   onStart,
+  onSimulateCapture,
   requestHref,
 }: {
   phase: VisitPlanPhase;
   canCheckOut: boolean;
   chargeableLabel: string;
   isPending: boolean;
+  canSimulatePendingCapture: boolean;
   onStart: () => void;
+  onSimulateCapture: () => void;
   requestHref: string;
 }) {
   switch (phase) {
@@ -213,6 +272,17 @@ function CheckoutAction({
             if the first payment lands afterwards you would have paid for the
             plan twice.
           </p>
+          {canSimulatePendingCapture ? (
+            <div className="mt-3">
+              <Button
+                onClick={onSimulateCapture}
+                loading={isPending}
+                loadingLabel="Marking as paid"
+              >
+                Mark as paid
+              </Button>
+            </div>
+          ) : null}
         </div>
       );
 
@@ -276,8 +346,8 @@ function CheckoutAction({
         );
       }
       return (
-        <Button onClick={onStart} loading={isPending} loadingLabel="Starting your payment">
-          Pay {chargeableLabel} for the plan
+        <Button block size="lg" onClick={onStart} loading={isPending}>
+          Pay {chargeableLabel} and lock the visits
         </Button>
       );
 

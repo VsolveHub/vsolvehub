@@ -179,6 +179,62 @@ function applyVisitToEnquiry(
  * party may confirm, so a second confirmation from the customer is not a
  * conflict.
  */
+/**
+ * Arrival proved by the code the customer is holding — contract 1.39.0.
+ *
+ * The strong path, and a separate route from `useConfirmVisitArrival` rather than
+ * an optional field on it. That one is the audited fallback either party may use
+ * when a phone is dead or a basement has no signal; folding the code into it as
+ * optional would make the proof opt-in on a request body, which is to say not a
+ * requirement at all. The server records which of the two proved each visit and
+ * that record is permanent.
+ *
+ * ## Why a stable idempotency key is safe here
+ *
+ * Double-tapping "start the visit" must not be two commands. A wrong code raises,
+ * and the raise rolls the idempotency record back with it, so a corrected retry
+ * is a fresh command rather than a replay of the refusal. The server's fingerprint
+ * covers the visit and deliberately *not* the code, which is what stops a
+ * corrected retry being rejected as key reuse.
+ */
+export function useConfirmVisitArrivalWithCode(invitationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { readonly siteVisitId: string; readonly code: string }) =>
+      request(() =>
+        getApiClient().POST("/api/v1/partner/site-visits/{site_visit_id}/arrival/", {
+          params: {
+            path: { site_visit_id: input.siteVisitId },
+            header: {
+              "Idempotency-Key": getStableIdempotencyKey(
+                `m2-visit-arrival-code:${input.siteVisitId}`,
+              ),
+            },
+          },
+          body: { code: input.code },
+        }),
+      ),
+    onSuccess: async (visit, input) => {
+      applyVisitToEnquiry(queryClient, invitationId, visit);
+      clearIdempotencyKey(`m2-visit-arrival-code:${input.siteVisitId}`);
+      await invalidateForM2Command(queryClient, "confirm_visit_arrival", {
+        siteVisitId: input.siteVisitId,
+      });
+    },
+    onError: () => {
+      // A wrong code is the ordinary case here, not an outage, and the challenge
+      // it just spent an attempt on lives server-side. Re-reading the enquiry is
+      // what keeps the panel honest if the customer confirmed from their side
+      // while the vendor was typing.
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.invitations.detail(invitationId),
+      });
+    },
+    retry: false,
+  });
+}
+
 export function useConfirmVisitArrival(invitationId: string) {
   const queryClient = useQueryClient();
 

@@ -596,3 +596,90 @@ describe("session-loss recovery", () => {
     expect(recovered).toBe(0);
   });
 });
+
+/**
+ * The deadline on every request.
+ *
+ * `fetch` has no timeout of its own, so a connection that dies without closing
+ * leaves a promise that never settles. Nothing downstream can recover: the
+ * mutation stays pending, and the button that fired it spins forever with no
+ * error and no retry. These assert the deadline exists, that it reads as a
+ * network failure rather than a cancellation, and that it does not fire on a
+ * request that simply completes.
+ */
+describe("request deadline", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("gives up on a request that never answers", async () => {
+    // A fetch that resolves only when its own signal aborts is exactly what a
+    // severed connection looks like from the caller's side.
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      timeoutMs: 1_000,
+      fetch: (input) =>
+        new Promise<Response>((_resolve, reject) => {
+          input.signal.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    });
+
+    // The assertion is attached *before* the clock moves. Attaching it after
+    // leaves the rejection briefly unhandled, which Node reports as an unhandled
+    // rejection and Vitest counts as an error even though the test passes.
+    const pending = request(() => api.GET("/api/v1/categories/"));
+    const settled = expect(pending).rejects.toBeInstanceOf(ApiNetworkError);
+    await vi.advanceTimersByTimeAsync(1_200);
+
+    await settled;
+  });
+
+  it("says nothing was submitted, because nothing was", async () => {
+    const api = createApiClient({
+      baseUrl: BASE_URL,
+      timeoutMs: 1_000,
+      fetch: (input) =>
+        new Promise<Response>((_resolve, reject) => {
+          input.signal.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    });
+
+    const pending = request(() => api.GET("/api/v1/categories/"));
+    const settled = expect(pending).rejects.toThrow(/took too long/i);
+    await vi.advanceTimersByTimeAsync(1_200);
+
+    await settled;
+  });
+
+  it("leaves a request that answers in time alone", async () => {
+    const { fetchImpl } = stubFetch(() => jsonResponse({ results: [] }));
+    const api = createApiClient({ baseUrl: BASE_URL, timeoutMs: 1_000, fetch: fetchImpl });
+
+    await expect(request(() => api.GET("/api/v1/categories/"))).resolves.toBeDefined();
+  });
+
+  it("still carries the headers the CSRF layer attached", async () => {
+    // The deadline rebuilds the `Request` to attach its signal. If that rebuild
+    // dropped headers, every unsafe method would start failing CSRF — a far
+    // worse bug than the one the deadline fixes.
+    const { fetchImpl, calls } = stubFetch((call) =>
+      call.url.endsWith("/api/v1/auth/csrf/")
+        ? jsonResponse({ csrf_token: "token-1" })
+        : jsonResponse({}),
+    );
+    const api = createApiClient({ baseUrl: BASE_URL, timeoutMs: 1_000, fetch: fetchImpl });
+
+    await request(() => api.POST("/api/v1/auth/logout/", {}));
+
+    const unsafe = calls.find((call) => call.method === "POST" && !call.url.includes("csrf"));
+    expect(unsafe?.headers.get("X-CSRFToken")).toBe("token-1");
+  });
+});

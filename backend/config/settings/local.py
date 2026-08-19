@@ -32,6 +32,13 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
     "rest_framework.renderers.BrowsableAPIRenderer",
 ]
 
+# Off by default, because local development is plain HTTP and a `Secure` cookie would never be
+# stored at all. They exist as switches for the tunnelled-phone case: a cross-site session needs
+# `SameSite=None`, browsers refuse `None` without `Secure`, and a tunnel is HTTPS anyway. Set all
+# four together or none of them — see the note on `SESSION_COOKIE_SAMESITE` in base settings.
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=False)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=False)
+
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 MESSAGE_TRANSPORT = env("MESSAGE_TRANSPORT", default="fake")

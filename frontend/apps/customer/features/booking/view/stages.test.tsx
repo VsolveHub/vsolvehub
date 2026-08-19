@@ -112,6 +112,8 @@ describe("address stage", () => {
       <AddressStageHarness addresses={[]} onUseCurrentLocation={onUseCurrentLocation} />,
     );
 
+    expect(screen.queryByRole("button", { name: /use my current location/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
     fireEvent.click(screen.getByRole("button", { name: /use my current location/i }));
     expect(onUseCurrentLocation).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/server reverse-geocodes/i)).toBeInTheDocument();
@@ -120,18 +122,52 @@ describe("address stage", () => {
   it("selects a saved address and checks serviceability separately", () => {
     renderInWorkspace(<AddressStageHarness addresses={[ADDRESS]} />);
 
+    expect(screen.queryByRole("radio", { name: /home/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
     fireEvent.click(screen.getByRole("radio", { name: /home/i }));
-    expect(screen.getByRole("radio", { name: /home/i })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /use this address/i }));
+
+    expect(screen.getByText(/selected address/i)).toBeInTheDocument();
+    expect(screen.getByText(/flat 402/i)).toBeInTheDocument();
     expect(screen.queryByText(/we cover this area/i)).not.toBeInTheDocument();
   });
 
-  it("edits the selected address without changing its pin", () => {
+  it("commits only on confirm — highlighting a row is not an answer", () => {
+    renderInWorkspace(<AddressStageHarness addresses={[ADDRESS]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
+
+    // The row is staged, and the dialog says so — but nothing outside it has
+    // moved. This is the regression that made Escape a commit.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByText(/selected address/i)).toBeNull();
+  });
+
+  it("cancels without committing when the dialog is dismissed", () => {
+    renderInWorkspace(<AddressStageHarness addresses={[ADDRESS]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    // Still nothing chosen, and reopening starts from the committed answer
+    // rather than remembering the abandoned row.
+    expect(screen.queryByText(/selected address/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
+    expect(screen.getByRole("radio", { name: /home/i })).not.toBeChecked();
+  });
+
+  it("edits an address without changing its pin", () => {
     const onUpdateAddress = vi.fn();
     renderInWorkspace(
       <AddressStageHarness addresses={[ADDRESS]} onUpdateAddress={onUpdateAddress} />,
     );
 
-    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
+    // Edit is a control on the row itself, beside the radio rather than inside
+    // its label — so reaching it does not select the row.
+    fireEvent.click(screen.getByRole("button", { name: /edit home/i }));
     fireEvent.change(screen.getByLabelText(/house, flat or building/i), {
       target: { value: "Flat 501" },
     });
@@ -143,7 +179,7 @@ describe("address stage", () => {
     );
   });
 
-  it("shows address mutation errors beside the relevant action", () => {
+  it("shows address mutation errors inside the dialog, beside the action", () => {
     renderInWorkspace(
       <AddressStageHarness
         addresses={[ADDRESS]}
@@ -152,9 +188,135 @@ describe("address stage", () => {
       />,
     );
 
-    expect(screen.getByText(/location permission was denied/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: /home/i }));
-    expect(screen.getByText(/this pin code is invalid/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /add address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit home/i }));
+
+    // Inside the open dialog, not on the page behind it — an error rendered
+    // behind a modal is an error nobody can read.
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/this pin code is invalid/i)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The add-new mode, which exists only when a caller supplies `addNew`.
+ *
+ * The checkout workspace deliberately does not, so these also document the
+ * boundary: the same dialog, one more door, and nothing changes for the caller
+ * that has not opened it.
+ */
+function AddNewHarness({
+  onCreate = () => Promise.resolve(ADDRESS),
+  onLocate = () =>
+    Promise.resolve({
+      formatted_address: "Flat 402, Kukatpally, Hyderabad",
+      line1: "Flat 402",
+      locality: "Kukatpally",
+      city: "Hyderabad",
+      state: "Telangana",
+      postal_code: "500072",
+      country_code: "IN",
+      latitude: "17.494700",
+      longitude: "78.399500",
+      provider: "test",
+    } as Schemas["ReverseGeocodeResponse"]),
+  createError = null,
+}: {
+  onCreate?: (draft: Schemas["AddressRequest"]) => Promise<Schemas["Address"] | null>;
+  onLocate?: () => Promise<Schemas["ReverseGeocodeResponse"] | null>;
+  createError?: string | null;
+}) {
+  const { state, dispatch } = useWorkspace();
+
+  return (
+    <AddressStage
+      addresses={[]}
+      selectedAddressId={state.address?.id ?? null}
+      isLoading={false}
+      serviceability={null}
+      isCheckingServiceability={false}
+      onSelect={(address) =>
+        dispatch({
+          type: "SET_ADDRESS",
+          address: {
+            id: address.id,
+            postalCode: address.postal_code,
+            isGeocoded: isGeocoded(address),
+            isServiceable: false,
+          },
+        })
+      }
+      onUseCurrentLocation={() => undefined}
+      isUsingCurrentLocation={false}
+      onUpdateAddress={() => undefined}
+      isUpdatingAddress={false}
+      addNew={{
+        onLocate,
+        isLocating: false,
+        locateError: null,
+        onCreate,
+        isCreating: false,
+        createError,
+        onPostalCodeChange: () => undefined,
+        draftServiceability: { is_serviceable: true } as Schemas["ServiceabilityResponse"],
+        isCheckingDraftServiceability: false,
+      }}
+    />
+  );
+}
+
+describe("address stage — adding a new address", () => {
+  it("will not save until the location is pinned", () => {
+    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
+    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+
+    // `latitude`/`longitude` are required on `AddressRequest` and there is no
+    // forward geocoder, so the pin is a real precondition — and it is stated up
+    // front rather than sprung as a validation message on submit.
+    expect(screen.getByText(/pin the location first/i)).toBeInTheDocument();
+    fireEvent.submit(screen.getByRole("button", { name: /save and use/i }));
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it("fills the form from the device and lets the customer correct it", async () => {
+    const onCreate = vi.fn(() => Promise.resolve(ADDRESS));
+    renderInWorkspace(<AddNewHarness onCreate={onCreate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
+
+    expect(await screen.findByText(/location pinned/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/flat, plot or building/i)).toHaveValue("Flat 402");
+
+    // The correction that the old save-immediately flow made impossible.
+    fireEvent.change(screen.getByLabelText(/flat, plot or building/i), {
+      target: { value: "Flat 903, B block" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: "Site" }));
+    fireEvent.click(screen.getByRole("button", { name: /save and use/i }));
+
+    await screen.findByText(/selected address/i);
+    expect(onCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        line1: "Flat 903, B block",
+        label: "Site",
+        latitude: "17.494700",
+        longitude: "78.399500",
+      }),
+    );
+  });
+
+  it("keeps a failed save inside the dialog", () => {
+    renderInWorkspace(<AddNewHarness createError="That pincode is not valid." />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add a new address/i }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/that pincode is not valid/i)).toBeInTheDocument();
+    // And the close affordance is never taken away, including mid-request.
+    expect(within(dialog).getByRole("button", { name: /close/i })).toBeEnabled();
   });
 });
 

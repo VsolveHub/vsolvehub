@@ -206,14 +206,18 @@ def _assert_submittable(requirement: CustomerRequirement) -> ServiceArea:
         missing.append("a serviceable area")
     if requirement.requested_start is None:
         missing.append("when it should start")
-    if requirement.service_by is None:
-        missing.append("the date you need it by")
+    # `service_by` is deliberately absent from this list. It is derived from the start date rather
+    # than asked for (`_closing_date`), so a missing one means a missing *start* date — already
+    # reported above, and in the Customer's own terms. Listing it here asked them to add a field
+    # no screen shows, which is the refusal this note exists to stop coming back.
     if missing:
         raise RequirementIncompleteError("Add " + ", ".join(missing) + ".")
 
     if requirement.service_by is not None and requirement.service_by < timezone.localdate():
+        # Reworded with the field. Now that the closing date *is* the start date, "the date you
+        # need this by has already passed" described something the Customer never picked.
         raise RequirementIncompleteError(
-            "The date you need this by has already passed. Pick a later date.",
+            "The day you asked us to start has already passed. Pick a later date.",
         )
 
     area = requirement.service_area
@@ -241,6 +245,44 @@ def _assert_visit_plan_chosen(requirement: CustomerRequirement) -> None:
 
 
 @transaction.atomic
+def _closing_date(requirement: CustomerRequirement) -> date | None:
+    """When we stop looking, derived rather than asked for.
+
+    ## Why the Customer is no longer asked
+
+    `service_by` used to be a required field on both capture flows, phrased as "pick the date the
+    job stops being useful, not your ideal date". It is a genuinely hard question — it asks
+    somebody to predict their own patience — and it sat one field below a start date that already
+    answers it. Two dates for one intention is friction that loses requests at the last screen.
+
+    A request stops being useful when the day the work was meant to begin passes with nobody
+    found: the booking as described can no longer be delivered. So the start date **is** the
+    closing date, and the sweep's `service_by__lt` gives the Customer the whole of that day before
+    anything closes.
+
+    ## Why the column stays
+
+    This is the only deadline closing depends on. `expired_requirement_ids` sweeps on it,
+    `operations.extend_deadline` moves it for a request worth keeping alive, and the vendor-facing
+    snapshot publishes it. Dropping the column would leave an unmet request open forever.
+
+    ## Why an explicit value still wins
+
+    Operations can extend a deadline before submission, and a client may legitimately send one.
+    Deriving only when it is absent keeps this a default rather than an override — the same
+    relationship `quote_deadlines` has to a configured SLA.
+
+    `None` when there is no start date either. An honest gap, not an invented date: the expiry
+    sweep already filters `service_by__isnull=False`, so such a request simply never expires on
+    this clock, which is what "we were never told when it mattered" should mean.
+    """
+    if requirement.service_by is not None:
+        return requirement.service_by
+    if requirement.requested_start is None:
+        return None
+    return timezone.localtime(requirement.requested_start).date()
+
+
 def submit_requirement(
     *,
     requirement: CustomerRequirement,
@@ -256,6 +298,10 @@ def submit_requirement(
     if requirement.status != CustomerRequirement.Status.DRAFT:
         raise RequirementTransitionError("This request has already been sent to vendors.")
 
+    # Derived first, so the completeness check and the past-date check below both read the value
+    # that will actually be stored. Deriving after them would leave `_assert_submittable` judging a
+    # requirement by a field the Customer was never shown and the server had not filled in yet.
+    requirement.service_by = _closing_date(requirement)
     service_area = _assert_submittable(requirement)
     _assert_visit_plan_chosen(requirement)
     configuration = requirement.configuration or active_configuration(requirement.variant)
@@ -302,6 +348,7 @@ def submit_requirement(
             "submitted_at",
             "first_quote_due_at",
             "quotes_due_at",
+            "service_by",
             "updated_at",
         )
     )
