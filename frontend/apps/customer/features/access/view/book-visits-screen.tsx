@@ -5,11 +5,19 @@ import {
   visitPlanPhase,
   type VisitPlanPhase,
 } from "@vsolve/query";
-import { Button, Skeleton, buttonStyles } from "@vsolve/ui";
+import { Badge, Button, Skeleton, buttonStyles, cn } from "@vsolve/ui";
 import Link from "next/link";
 import { useState } from "react";
 
-import { formatVisitSlot, toPlanCheckoutView, toVisitTrackerView } from "../adapters";
+import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
+
+import {
+  calendarDay,
+  formatVisitSlot,
+  toPlanCheckoutView,
+  toVisitTrackerView,
+  type VisitSlotRow,
+} from "../adapters";
 import {
   canSimulateAccessCheckout,
   useSimulateVisitPlanCapture,
@@ -51,6 +59,7 @@ export interface BookVisitsScreenProps {
 }
 
 export function BookVisitsScreen({ requirementId, requestHref }: BookVisitsScreenProps) {
+  const profileGate = useProfileCompletionGate("payment");
   const planQuery = useVisitPlan(requirementId);
   const checkout = useStartVisitPlanCheckout();
   const simulateCapture = useSimulateVisitPlanCapture();
@@ -118,57 +127,56 @@ export function BookVisitsScreen({ requirementId, requestHref }: BookVisitsScree
 
   return (
     <Wrapper>
-      <h1 className="text-xl font-semibold text-text">Book your visits</h1>
-
-      {heldSlot !== null ? (
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          {heldSlot.vendorName ?? "A professional"} has confirmed{" "}
-          <strong className="font-semibold text-text">
-            {formatVisitSlot(heldSlot.scheduledFor, heldSlot.timeZone) ?? "a time"}
-          </strong>{" "}
-          and is holding it while you finish this.
+      <header className="max-w-2xl">
+        <Badge tone={phase === "active" || phase === "settled" ? "success" : "info"}>
+          {phase === "active" || phase === "settled" ? "Visits locked" : "Ready to book"}
+        </Badge>
+        <h1 className="mt-3 text-3xl font-extrabold leading-tight text-text sm:text-4xl">
+          Lock your on-site estimates
+        </h1>
+        <p className="mt-2 text-sm font-medium leading-6 text-text-secondary sm:text-base">
+          One payment covers the complete visit plan. The project itself is priced later.
         </p>
-      ) : null}
+      </header>
 
-      <PlanSummary
-        planSize={view.planSize}
-        priceLabel={view.priceLabel}
-        creditLabel={view.creditLabel}
-        chargeableLabel={view.chargeableLabel}
-      />
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-5">
+          <HeldVisitVisual heldSlot={heldSlot} planSize={view.planSize} openSlots={view.openSlots} />
+          <PaymentBenefits />
+        </div>
 
-      <p className="mt-4 max-w-prose text-sm leading-6 text-text-secondary">
-        This is <strong className="font-semibold text-text">one payment for the whole plan</strong>,
-        not one per visit. Any visit that never happens{" "}
-        <strong className="font-semibold text-text">refunds its share on its own</strong> — you
-        do not have to ask us, and you do not have to notice.
-      </p>
+        <aside className="rounded-[10px] border border-line bg-surface p-5 shadow-card lg:sticky lg:top-24">
+          <PlanSummary
+            planSize={view.planSize}
+            priceLabel={view.priceLabel}
+            creditLabel={view.creditLabel}
+            chargeableLabel={view.chargeableLabel}
+          />
 
-      <div className="mt-6">
-        <CheckoutAction
-          phase={phase}
-          canCheckOut={canCheckOutVisitPlan(state)}
-          chargeableLabel={view.chargeableLabel}
-          isPending={checkout.isPending || simulateCapture.isPending}
-          canSimulatePendingCapture={canSimulatePendingCapture}
-          // Opens the confirm dialog rather than charging. The split it shows —
-          // which slot each half of the money is for — is the question somebody
-          // paying for two visits with only one time confirmed actually has.
-          onStart={() => setPaying(true)}
-          onSimulateCapture={() => {
-            if (pendingPaymentAttemptId !== null) {
-              markVisitPlanPaid(pendingPaymentAttemptId);
-            }
-          }}
-          requestHref={requestHref}
-        />
-      </div>
+          <div className="mt-5 border-t border-line pt-5">
+            <CheckoutAction
+              phase={phase}
+              canCheckOut={canCheckOutVisitPlan(state)}
+              chargeableLabel={view.chargeableLabel}
+              isPending={checkout.isPending || simulateCapture.isPending}
+              canSimulatePendingCapture={canSimulatePendingCapture}
+              onStart={() => setPaying(true)}
+              onSimulateCapture={() => {
+                if (pendingPaymentAttemptId !== null) {
+                  profileGate.run(() => markVisitPlanPaid(pendingPaymentAttemptId));
+                }
+              }}
+              requestHref={requestHref}
+            />
+          </div>
 
-      <div className="mt-4">
-        <AccessRefusal
-          error={checkout.error ?? simulateCapture.error}
-          attempting="pay for these visits"
-        />
+          <div className="mt-4">
+            <AccessRefusal
+              error={checkout.error ?? simulateCapture.error}
+              attempting="pay for these visits"
+            />
+          </div>
+        </aside>
       </div>
 
       <BackLink href={requestHref} />
@@ -181,14 +189,22 @@ export function BookVisitsScreen({ requirementId, requestHref }: BookVisitsScree
         creditLabel={view.creditLabel}
         rows={tracker?.rows ?? []}
         isPending={checkout.isPending || simulateCapture.isPending}
-        onConfirm={startCheckout}
+        onConfirm={() => {
+          setPaying(false);
+          profileGate.run(startCheckout);
+        }}
       />
+      {profileGate.dialog}
     </Wrapper>
   );
 }
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-2xl flex-col px-4 py-6">{children}</div>;
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-6 sm:px-6 lg:py-10">
+      {children}
+    </div>
+  );
 }
 
 function BackLink({ href }: { href: string }) {
@@ -221,24 +237,145 @@ function PlanSummary({
   chargeableLabel: string;
 }) {
   return (
-    <dl className="mt-4 rounded-card border border-line bg-surface">
-      <div className="flex items-baseline justify-between gap-3 border-b border-line p-4">
+    <dl>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <dt className="text-[0.6875rem] font-extrabold uppercase text-text-muted">
+            Pay once
+          </dt>
+          <dd data-numeric className="mt-1 text-3xl font-extrabold leading-none text-text">
+            {chargeableLabel}
+          </dd>
+        </div>
+        <span aria-hidden className="grid size-11 place-items-center rounded-full bg-action-surface text-action-active ring-1 ring-action-line">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-5">
+            <rect x="3" y="6" width="18" height="13" rx="2" />
+            <path d="M3 10h18m-5 5h2" />
+          </svg>
+        </span>
+      </div>
+      <div className="mt-5 flex items-baseline justify-between gap-3 border-t border-line pt-4">
         <dt className="text-sm text-text-secondary">
-          {planSize === 1 ? "One professional visits" : `${planSize} professionals visit`}
+          {planSize === 1 ? "1 visit + written estimate" : `${planSize} visits + written estimates`}
         </dt>
-        <dd className="font-medium text-text">{priceLabel}</dd>
+        <dd className="text-sm font-bold text-text">{priceLabel}</dd>
       </div>
       {creditLabel !== null ? (
-        <div className="flex items-baseline justify-between gap-3 border-b border-line p-4">
+        <div className="mt-3 flex items-baseline justify-between gap-3">
           <dt className="text-sm text-text-secondary">Already paid on this request</dt>
           <dd className="font-medium text-text">−{creditLabel}</dd>
         </div>
       ) : null}
-      <div className="flex items-baseline justify-between gap-3 p-4">
-        <dt className="font-semibold text-text">To pay now</dt>
-        <dd className="text-lg font-semibold text-text">{chargeableLabel}</dd>
-      </div>
     </dl>
+  );
+}
+
+function HeldVisitVisual({
+  heldSlot,
+  planSize,
+  openSlots,
+}: {
+  heldSlot: VisitSlotRow | null;
+  planSize: number;
+  openSlots: number;
+}) {
+  const day = calendarDay(heldSlot?.scheduledFor ?? null, heldSlot?.timeZone ?? null);
+  const when = formatVisitSlot(heldSlot?.scheduledFor ?? null, heldSlot?.timeZone ?? null);
+
+  return (
+    <section className="overflow-hidden rounded-[10px] border border-action-line bg-selected-surface shadow-card">
+      <div className="grid gap-5 p-5 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center sm:p-6">
+        <div className="mx-auto grid size-28 place-items-center rounded-full bg-surface shadow-raised ring-1 ring-action-line sm:mx-0">
+          {day === null ? (
+            <span className="relative grid size-14 place-items-center rounded-full bg-action-surface text-action-active">
+              <span className="absolute inset-0 animate-ping rounded-full bg-action opacity-15 motion-reduce:animate-none" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="relative size-6"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+            </span>
+          ) : (
+            <span className="flex flex-col items-center text-center">
+              <span className="text-xs font-extrabold uppercase text-text-muted">{day.weekday}</span>
+              <span className="text-4xl font-extrabold leading-none text-text">{day.dayOfMonth}</span>
+              <span className="mt-1 text-xs font-bold uppercase text-text-secondary">{day.month}</span>
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 text-center sm:text-left">
+          <Badge tone={heldSlot === null ? "info" : "warning"} dot>
+            {heldSlot === null ? "Finding a time" : "Held for you"}
+          </Badge>
+          <h2 className="mt-3 text-2xl font-extrabold leading-tight text-text">
+            {heldSlot?.vendorName ?? "Your first professional"}
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-text-secondary">
+            {when ?? "We will show the visit time as soon as a professional accepts."}
+          </p>
+        </div>
+      </div>
+
+      <div className="border-t border-action-line bg-surface/70 px-5 py-4 sm:px-6">
+        <ol className="grid" style={{ gridTemplateColumns: `repeat(${planSize}, minmax(0, 1fr))` }} aria-label="Visits included">
+          {Array.from({ length: planSize }, (_, index) => {
+            const isHeld = heldSlot !== null && index + 1 === heldSlot.position;
+            return (
+              <li key={index} className="relative flex flex-col items-center text-center before:absolute before:left-0 before:right-0 before:top-3 before:h-px before:bg-line first:before:left-1/2 last:before:right-1/2">
+                <span aria-hidden className={isHeld ? "relative z-10 grid size-6 place-items-center rounded-full bg-action text-action-text ring-4 ring-surface" : "relative z-10 grid size-6 place-items-center rounded-full bg-surface-sunken text-text-muted ring-4 ring-surface"}>
+                  {isHeld ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="size-3"><path d="m5 12 4 4 10-10" /></svg> : <span className="size-1.5 rounded-full bg-current" />}
+                </span>
+                <span className="mt-2 text-[0.6875rem] font-bold text-text-secondary">Visit {index + 1}</span>
+                <span className="text-xs font-extrabold text-text">{isHeld ? "Held" : "Auto-matched"}</span>
+              </li>
+            );
+          })}
+        </ol>
+        {openSlots > 0 ? (
+          <p className="mt-4 text-center text-xs font-medium text-text-secondary">
+            Unfilled visits refund automatically.
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PaymentBenefits() {
+  const benefits = [
+    { title: "Visits reserved", detail: "Accepted times become confirmed", icon: "calendar" as const },
+    { title: "Written estimates", detail: "Keep every estimate you receive", icon: "document" as const },
+    { title: "Automatic refunds", detail: "Unfilled visits return their share", icon: "refund" as const },
+  ];
+
+  return (
+    <section aria-labelledby="payment-benefits-heading">
+      <h2 id="payment-benefits-heading" className="text-sm font-extrabold uppercase text-text-muted">
+        What this payment unlocks
+      </h2>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        {benefits.map((benefit) => (
+          <div key={benefit.title} className="flex items-center gap-3 rounded-[10px] border border-line bg-surface p-4 shadow-card sm:flex-col sm:items-start">
+            <BenefitIcon kind={benefit.icon} />
+            <div>
+              <h3 className="text-sm font-extrabold text-text">{benefit.title}</h3>
+              <p className="mt-0.5 text-xs font-medium leading-5 text-text-secondary">{benefit.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BenefitIcon({ kind }: { kind: "calendar" | "document" | "refund" }) {
+  const path = {
+    calendar: "M7 3v3m10-3v3M5 9h14M6 5h12a1 1 0 0 1 1 1v13H5V6a1 1 0 0 1 1-1Z",
+    document: "M7 3h7l4 4v14H7V3Zm7 0v5h5M10 13h5m-5 4h5",
+    refund: "M4 8h11a5 5 0 1 1 0 10H9m-5-10 4-4m-4 4 4 4",
+  }[kind];
+
+  return (
+    <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-sunken text-action-active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-4.5"><path d={path} /></svg>
+    </span>
   );
 }
 
@@ -265,13 +402,11 @@ function CheckoutAction({
     case "pending":
       return (
         <div role="status">
-          <p className="font-medium text-text">We are confirming your payment</p>
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            Your bank or UPI app tells us the outcome, and that can take a few
-            minutes. This page updates itself when it arrives. Do not pay again —
-            if the first payment lands afterwards you would have paid for the
-            plan twice.
-          </p>
+          <CheckoutNotice
+            tone="info"
+            title="Confirming payment"
+            body="This page updates automatically. Do not pay again while your bank responds."
+          />
           {canSimulatePendingCapture ? (
             <div className="mt-3">
               <Button
@@ -290,11 +425,11 @@ function CheckoutAction({
     case "settled":
       return (
         <div>
-          <p className="font-medium text-text">These visits are paid for</p>
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            Nothing more to do here. Every confirmed time, and every share that
-            comes back to you, is on the request itself.
-          </p>
+          <CheckoutNotice
+            tone="success"
+            title="Visits locked"
+            body="Confirmed times and any automatic refunds appear on your request."
+          />
           <div className="mt-3">
             <Link href={requestHref} className="inline-block">
               <Button>Back to this request</Button>
@@ -306,11 +441,11 @@ function CheckoutAction({
     case "failed":
       return (
         <div>
-          <p className="font-medium text-text">That payment did not go through</p>
-          <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-            You have not been charged. If the professional is still holding the
-            time, paying now keeps it.
-          </p>
+          <CheckoutNotice
+            tone="danger"
+            title="Payment did not go through"
+            body="Nothing was charged. Try again while the professional is still holding the time."
+          />
           <div className="mt-3">
             <Button onClick={onStart} loading={isPending} loadingLabel="Starting your payment">
               Try again — {chargeableLabel}
@@ -321,28 +456,31 @@ function CheckoutAction({
 
     case "void":
       return (
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          This request closed before any professional confirmed a visit, so there
-          is nothing to pay for. Nothing was charged.
-        </p>
+        <CheckoutNotice
+          tone="neutral"
+          title="No payment needed"
+          body="The request closed before a visit was confirmed. Nothing was charged."
+        />
       );
 
     case "unpriced":
     case "choosing":
       return (
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          There is no visit plan on this request yet, so there is nothing to pay
-          for.
-        </p>
+        <CheckoutNotice
+          tone="neutral"
+          title="Plan not ready"
+          body="Choose a visit plan before payment can open."
+        />
       );
 
     case "chosen":
       if (!canCheckOut) {
         return (
-          <p className="max-w-prose text-sm leading-6 text-text-secondary">
-            No professional is holding a time for you right now, so there is
-            nothing to pay for yet. We will ask you the moment one confirms.
-          </p>
+          <CheckoutNotice
+            tone="info"
+            title="Waiting for a professional"
+            body="Payment opens only after someone accepts a time."
+          />
         );
       }
       return (
@@ -353,10 +491,56 @@ function CheckoutAction({
 
     default:
       return (
-        <p className="max-w-prose text-sm leading-6 text-text-secondary">
-          We cannot describe where this plan stands right now. Nothing has been
-          charged.
-        </p>
+        <CheckoutNotice
+          tone="neutral"
+          title="Payment unavailable"
+          body="Nothing has been charged. Return to the request for the latest update."
+        />
       );
   }
+}
+
+function CheckoutNotice({
+  tone,
+  title,
+  body,
+}: {
+  tone: "info" | "success" | "danger" | "neutral";
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        aria-hidden
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-full",
+          tone === "info" ? "bg-info-surface text-info-text" : null,
+          tone === "success" ? "bg-success-surface text-success-text" : null,
+          tone === "danger" ? "bg-danger-surface text-danger-text" : null,
+          tone === "neutral" ? "bg-surface-sunken text-text-muted" : null,
+        )}
+      >
+        {tone === "success" ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+            <path d="m5 12 4 4 10-10" />
+          </svg>
+        ) : tone === "danger" ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+            <circle cx="12" cy="12" r="9" />
+            <path d="m9 9 6 6m0-6-6 6" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 8v4m0 4h.01" />
+          </svg>
+        )}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-extrabold text-text">{title}</p>
+        <p className="mt-0.5 text-xs font-medium leading-5 text-text-secondary">{body}</p>
+      </div>
+    </div>
+  );
 }

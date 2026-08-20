@@ -11,12 +11,22 @@ import {
   useServerCountdown,
   type RejectionReason,
 } from "@vsolve/query";
-import { EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  SegmentedTrack,
+  Skeleton,
+  buttonStyles,
+  segmentStyles,
+} from "@vsolve/ui";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { useUnlockState, useVisitPlan } from "@/features/access/queries";
+import { useRequirement } from "@/features/requirement/queries";
+import { titleForSlug } from "@/features/requirement/view/my-requests-screen";
 import { toQuoteListView, toSelectionView } from "../adapters";
 import {
   useCustomerQuotes,
@@ -71,12 +81,41 @@ export interface QuotesScreenProps {
   requestHref: string;
 }
 
+function QuoteBreadcrumb({ requestLabel }: { requestLabel: string }) {
+  return (
+    <nav aria-label="Breadcrumb" className="text-sm font-semibold text-text-muted">
+      <ol className="flex flex-wrap items-center gap-2">
+        <li>
+          <Link href="/activity" className="hover:text-text">
+            Activity
+          </Link>
+        </li>
+        <li aria-hidden className="text-warm-400">
+          ›
+        </li>
+        <li>
+          <Link href="/requests" className="hover:text-text">
+            {requestLabel}
+          </Link>
+        </li>
+        <li aria-hidden className="text-warm-400">
+          ›
+        </li>
+        <li className="font-extrabold text-text" aria-current="page">
+          Quotes
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
 export function QuotesScreen({
   requirementId,
   requestHref,
 }: QuotesScreenProps) {
   const unlockQuery = useUnlockState(requirementId);
   const planQuery = useVisitPlan(requirementId);
+  const requirementQuery = useRequirement(requirementId);
 
   const unlockState = unlockQuery.data ?? null;
   const planState = planQuery.data ?? null;
@@ -98,6 +137,18 @@ export function QuotesScreen({
   const revalidate = useRevalidateQuote();
 
   const [rejecting, setRejecting] = useState<string | null>(null);
+  /**
+   * Which quote the Customer is leaning towards, and which half of the screen
+   * they are reading.
+   *
+   * `picked` is local and free — see `QuoteCard`. It is deliberately *not*
+   * seeded from `selection`: a real selection removes the ability to pick at
+   * all, so the two can never be on screen together and pre-filling one from
+   * the other would only make the docked bar offer a choice that is already
+   * made.
+   */
+  const [picked, setPicked] = useState<string | null>(null);
+  const [view, setView] = useState<"quotes" | "compare">("quotes");
 
   const list = quotesQuery.data === undefined ? null : toQuoteListView(quotesQuery.data);
   const selection =
@@ -117,6 +168,15 @@ export function QuotesScreen({
   // server refuses anyway with `m2_selection_conflict`; this is what stops the
   // Customer meeting that refusal in the first place.
   const canChoose = !blocksNewSelection(selectionQuery.data ?? null);
+  const defaultPicked =
+    canChoose && list !== null
+      ? (list.cards[1]?.isSelectable === true && !list.cards[1].isExpired
+        ? list.cards[1].proposalId
+        : null) ??
+        list.cards.find((card) => card.isSelectable && !card.isExpired)?.proposalId ??
+        null
+      : null;
+  const pickedId = picked ?? defaultPicked;
 
   const supportAction = (
     <Link href="/account/messages" className={buttonStyles({ variant: "outline" })}>
@@ -125,21 +185,24 @@ export function QuotesScreen({
   );
 
   const accessPending = unlockQuery.isPending && planQuery.isPending;
+  const requestLabel =
+    requirementQuery.data === undefined
+      ? "This request"
+      : titleForSlug(requirementQuery.data.category_slug);
 
   return (
     // Wider than a reading column, because a three-estimate comparison needs the
     // room — the table has a label column plus one per estimate, and squeezing it
     // into 48rem turns the thing that makes this screen worth building into a
     // horizontal scroll. The prose inside still holds itself to `max-w-prose`.
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-0">
+      <QuoteBreadcrumb requestLabel={requestLabel} />
       <header>
-        <h1 className="text-xl font-semibold text-text">
-          {isA5 ? "Your estimates" : "Your quotes"}
+        <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight text-text sm:text-[1.875rem]">
+          {isA5 ? "Three estimates, side by side" : "Three quotes, side by side"}
         </h1>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          {isA5
-            ? "Each professional who visited has written down what the job takes and what it costs. Read them in full — you have already paid for these."
-            : "The full scope, price and terms of every quote you unlocked. Compare them and choose one."}
+        <p className="mt-1 max-w-3xl text-sm font-medium leading-6 text-text-secondary">
+          Full scope, price and terms. You have already unlocked these - nothing here is hidden.
         </p>
       </header>
 
@@ -182,23 +245,58 @@ export function QuotesScreen({
         onRetryQuotes={() => void quotesQuery.refetch()}
         list={list}
         canChoose={canChoose}
-        isSelecting={select.isPending}
+        view={view}
+        onViewChange={setView}
+        picked={pickedId}
+        onPick={setPicked}
         isRevalidating={revalidate.isPending}
-        onSelect={(proposalId) => select.mutate({ requirementId, proposalId })}
         onReject={setRejecting}
         onRevalidate={(proposalId) => revalidate.mutate({ requirementId, proposalId })}
         requestHref={requestHref}
       />
 
-      <p className="max-w-prose text-sm leading-6 text-text-secondary">
-        You cannot change a price here, and neither can we — only the
-        professional who wrote it can. If one of them has asked you something, it
-        is on{" "}
-        <Link href={requestHref} className="font-medium text-info-text underline-offset-4 hover:underline">
-          your request
-        </Link>
-        , with the rest of what has happened.
-      </p>
+      {/* The commitment, made once, with its consequence beside it.
+       *
+       * Docked rather than inline because a quote card is often a screen tall:
+       * an inline control means the price you are agreeing to has scrolled away
+       * by the time you reach the button. The sentence under it is `M2-FE-411`
+       * verbatim in shorter words, and it is here rather than in a dialog
+       * because a Customer must read it *before* pressing, not after.
+       *
+       * Above the phone tab bar, not over it. */}
+      {pickedId !== null && canChoose ? (
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-2 grid gap-3 border-t border-line bg-surface px-4 py-3 shadow-raised sm:-mx-6 sm:px-6 md:bottom-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center lg:-mx-[calc((100vw-1180px)/2)] lg:px-[calc((100vw-1180px)/2)]">
+          <div>
+            <p className="text-sm font-extrabold tracking-tight text-text">
+              {list?.cards.find((card) => card.proposalId === pickedId)?.vendorName ??
+                "This professional"}
+              {" · "}
+              {list?.cards.find((card) => card.proposalId === pickedId)?.payableLabel}
+            </p>
+            <p className="mt-0.5 text-xs font-medium leading-5 text-text-secondary">
+              Not a booking until they confirm. Nothing is charged now.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button variant="outline" className="min-w-[164px]" onClick={() => setRejecting(pickedId)}>
+              Turn this one down
+            </Button>
+            <Button
+              className="min-w-[198px] justify-between gap-4 px-7"
+              onClick={() => select.mutate({ requirementId, proposalId: pickedId })}
+              loading={select.isPending}
+              loadingLabel="Choosing"
+            >
+              Choose{" "}
+              {list?.cards.find((card) => card.proposalId === pickedId)?.vendorName ??
+                "this professional"}
+              <span aria-hidden className="text-xl leading-none">
+                ›
+              </span>
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <RejectQuoteDialog
         open={rejecting !== null}
@@ -230,9 +328,11 @@ function QuoteBody({
   onRetryQuotes,
   list,
   canChoose,
-  isSelecting,
+  view,
+  onViewChange,
+  picked,
+  onPick,
   isRevalidating,
-  onSelect,
   onReject,
   onRevalidate,
   requestHref,
@@ -245,9 +345,11 @@ function QuoteBody({
   onRetryQuotes: () => void;
   list: ReturnType<typeof toQuoteListView> | null;
   canChoose: boolean;
-  isSelecting: boolean;
+  view: "quotes" | "compare";
+  onViewChange: (view: "quotes" | "compare") => void;
+  picked: string | null;
+  onPick: (proposalId: string) => void;
   isRevalidating: boolean;
-  onSelect: (proposalId: string) => void;
   onReject: (proposalId: string) => void;
   onRevalidate: (proposalId: string) => void;
   requestHref: string;
@@ -322,37 +424,101 @@ function QuoteBody({
     );
   }
 
+  // Comparing one thing is not comparing. With a single quote the control would
+  // offer a view that is identical to the one already open.
+  const canCompare = list.cards.length > 1;
+
+  if (!canCompare) {
+    const card = list.cards[0]!;
+    return (
+      <SingleQuoteExperience
+        card={card}
+        isA5={isA5}
+        canChoose={canChoose}
+        picked={picked}
+        onPick={onPick}
+        onReject={onReject}
+        onRevalidate={onRevalidate}
+        isRevalidating={isRevalidating}
+      />
+    );
+  }
+
   return (
     <>
-      {/* The table is the reason this screen is worth building on a wide
-          display: aligned rows let somebody read across totals, first stages and
-          exclusions instead of comparing two stacked cards from memory. It is
-          unusable on a phone, so it is not rendered there — `hidden` is
-          `display:none`, which takes it out of the accessibility tree too rather
-          than leaving a screen reader to walk a table nobody can see.
+      {/* The segment is a phone affordance only.
+          Above `lg` the table and the cards are not two views of one screen —
+          the table *is* the screen, at the width it was designed for, and the
+          cards are how the same three quotes render when there is no room for
+          columns. Offering a toggle there would be offering a choice between a
+          layout and a worse version of itself. */}
+      {canCompare ? (
+        <SegmentedTrack label="How to read these" className="sm:max-w-sm lg:hidden">
+          {(
+            [
+              { value: "quotes", label: isA5 ? "Estimates" : "Quotes" },
+              { value: "compare", label: "Compare" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              // `aria-pressed` rather than `role="tab"`: there is no tabpanel
+              // relationship here, and claiming one promises navigation
+              // semantics this control does not have.
+              aria-pressed={view === option.value}
+              onClick={() => onViewChange(option.value)}
+              className={segmentStyles({ selected: view === option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </SegmentedTrack>
+      ) : null}
 
-          **It compares and it does not decide.** Choosing stays on the cards
-          below, which render at every size. Putting a Choose control in the
-          table as well would give one estimate two of them — two places a
-          selection can be made, two places a refusal has to be rendered, and two
-          things to keep in step with `canChoose`. "Read it" links each column to
-          the card that holds the vendor's own words. */}
-      <div className="hidden lg:block">
+      {/* The table is the reason this screen is worth building: aligned rows let
+          somebody read across totals, first stages and exclusions instead of
+          comparing two stacked cards from memory.
+
+          It used to be `hidden lg:block` — desktop only, on the grounds that it
+          is unusable on a phone. It is not: it already carries `overflow-x-auto`
+          and a `min-w`, so it scrolls sideways, and a phone is where most of
+          this product is read. What made it unusable was being rendered *at the
+          same time* as the cards, so a phone got the whole comparison and the
+          whole of every card in one column. Behind a segment it is a view the
+          Customer asks for, at any width.
+
+          **It compares and it does not decide.** Picking stays on the cards, and
+          committing stays in the docked bar. A Choose control in the table as
+          well would give one estimate two of them — two places a selection can
+          be made, two places a refusal has to be rendered, and two things to
+          keep in step with `canChoose`. "Read it" links each column to the card
+          that holds the vendor's own words. */}
+      {/* Always at `lg`, and below it only when asked for. */}
+      <div className={canCompare && view === "compare" ? "" : "hidden lg:block"}>
         <QuoteComparison
           cards={list.cards}
           isComparableOnOneBasis={list.isComparableOnOneBasis}
           detailHrefFor={(proposalId) => `#estimate-${proposalId}`}
+          pickedId={picked}
+          onPick={canChoose ? onPick : undefined}
         />
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div
+        className={
+          canCompare && view === "compare"
+            ? "hidden"
+            : "flex flex-col gap-4 lg:hidden"
+        }
+      >
         {list.cards.map((card, index) => (
           <QuoteCard
             key={card.proposalId}
             card={card}
             index={index}
-            onSelect={canChoose ? onSelect : undefined}
-            isSelecting={isSelecting}
+            onPick={canChoose ? onPick : undefined}
+            isPicked={picked === card.proposalId}
             onReject={canChoose ? onReject : undefined}
             onRevalidate={onRevalidate}
             isRevalidating={isRevalidating}
@@ -368,5 +534,93 @@ function QuoteBody({
         </p>
       ) : null}
     </>
+  );
+}
+
+function SingleQuoteExperience({
+  card,
+  isA5,
+  canChoose,
+  picked,
+  onPick,
+  onReject,
+  onRevalidate,
+  isRevalidating,
+}: {
+  card: ReturnType<typeof toQuoteListView>["cards"][number];
+  isA5: boolean;
+  canChoose: boolean;
+  picked: string | null;
+  onPick: (proposalId: string) => void;
+  onReject: (proposalId: string) => void;
+  onRevalidate: (proposalId: string) => void;
+  isRevalidating: boolean;
+}) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+      <div className="min-w-0">
+        <QuoteCard
+          card={card}
+          index={0}
+          onPick={canChoose ? onPick : undefined}
+          isPicked={picked === card.proposalId}
+          onReject={canChoose ? onReject : undefined}
+          onRevalidate={onRevalidate}
+          isRevalidating={isRevalidating}
+        />
+      </div>
+
+      <aside className="rounded-[10px] border border-line bg-surface p-5 shadow-card">
+        <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">
+          More choice
+        </p>
+        <h2 className="mt-2 text-xl font-extrabold leading-tight tracking-tight text-text">
+          Want more {isA5 ? "estimates" : "quotes"} before choosing?
+        </h2>
+        <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">
+          You can keep this one visible and ask us to look for another professional
+          if the price, timing or scope does not feel right.
+        </p>
+
+        <div className="mt-4 rounded-[8px] border border-action-line bg-action-surface p-4">
+          <p className="text-sm font-extrabold text-text">Best when you want to compare</p>
+          <ul className="mt-3 flex list-none flex-col gap-2 p-0">
+            <PromptLine>Another professional may include different scope.</PromptLine>
+            <PromptLine>You can compare price, warranty and exclusions.</PromptLine>
+            <PromptLine>Nothing is booked until one confirms.</PromptLine>
+          </ul>
+        </div>
+
+        {canChoose ? (
+          <Button
+            variant="outline"
+            className="mt-4 w-full"
+            onClick={() => onReject(card.proposalId)}
+          >
+            Ask for another option
+          </Button>
+        ) : null}
+      </aside>
+    </div>
+  );
+}
+
+function PromptLine({ children }: { children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-2 text-sm font-semibold leading-5 text-text-secondary">
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="mt-1 size-3.5 shrink-0 text-success-text"
+      >
+        <path d="m5 12 5 5 9-10" />
+      </svg>
+      <span>{children}</span>
+    </li>
   );
 }

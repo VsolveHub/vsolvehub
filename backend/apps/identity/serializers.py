@@ -103,11 +103,24 @@ class OtpVerifySerializer(serializers.Serializer[dict[str, object]]):
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
+    display_name = serializers.CharField(
+        source="customer_profile.display_name",
+        read_only=True,
+        default="",
+    )
     roles = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ("id", "phone_number", "full_name", "email", "roles")
+        fields = (
+            "id",
+            "phone_number",
+            "display_name",
+            "full_name",
+            "email",
+            "date_joined",
+            "roles",
+        )
         read_only_fields = fields
 
     def get_roles(self, user: User) -> list[str]:
@@ -116,6 +129,28 @@ class UserSerializer(serializers.ModelSerializer[User]):
             .order_by("role__code")
             .values_list("role__code", flat=True),
         )
+
+
+class CustomerProfileUpdateSerializer(serializers.Serializer[dict[str, object]]):
+    """The customer-owned personal fields that may change independently of login."""
+
+    display_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=100,
+        trim_whitespace=True,
+    )
+    full_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=150,
+        trim_whitespace=True,
+    )
+    email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        max_length=254,
+    )
 
 
 @extend_schema_serializer(
@@ -132,8 +167,10 @@ class UserSerializer(serializers.ModelSerializer[User]):
                 "user": {
                     "id": "f26419bd-c768-4ddb-bff3-4cc405fdbf52",
                     "phone_number": "+919876543210",
+                    "display_name": "Gopal Rao",
                     "full_name": "",
                     "email": "",
+                    "date_joined": "2026-08-19T12:00:00Z",
                     "roles": ["customer"],
                 },
                 "active_role": "customer",
@@ -158,8 +195,10 @@ class SessionStateSerializer(serializers.Serializer[dict[str, object]]):
                 "user": {
                     "id": "f26419bd-c768-4ddb-bff3-4cc405fdbf52",
                     "phone_number": "+919876543210",
+                    "display_name": "Gopal Rao",
                     "full_name": "",
                     "email": "",
+                    "date_joined": "2026-08-19T12:00:00Z",
                     "roles": ["customer"],
                 },
                 "active_role": "customer",

@@ -52,8 +52,10 @@ export function sessionState(
     user: {
       id: OPERATOR_ID,
       phone_number: "+919000000001",
+      display_name: "Ops Reviewer",
       full_name: "Ops Reviewer",
       email: "ops@example.test",
+      date_joined: "2026-01-12T08:30:00Z",
       roles: ["operations"],
     },
     active_role: "operations",

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,13 +28,23 @@ const session = vi.hoisted(() => ({
 }));
 
 const route = vi.hoisted(() => ({ pathname: "/catalog" }));
+const router = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
+const logout = vi.hoisted(() => ({
+  mutate: vi.fn((_input: undefined, options?: { onSuccess?: () => void }) => {
+    options?.onSuccess?.();
+  }),
+  isPending: false,
+}));
 
 vi.mock("../queries", () => ({ useCustomerSession: () => session.value }));
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => ({}) }));
-vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => route.pathname,
+  useRouter: () => router,
+}));
 vi.mock("@vsolve/query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@vsolve/query")>()),
-  useLogout: () => ({ mutate: vi.fn(), isPending: false }),
+  useLogout: () => logout,
 }));
 
 /**
@@ -93,18 +103,35 @@ describe("SiteHeader", () => {
   it("does not offer a signed-out visitor a link that would bounce them", () => {
     render(<SiteHeader />, { wrapper });
 
-    expect(screen.queryByRole("link", { name: "My bookings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Activity" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Log in" })).toBeInTheDocument();
   });
 
-  it("offers bookings and sign out once there is a session", () => {
+  it("offers activity and sign out once there is a session", () => {
     setSession({ isAuthenticated: true, isAnonymous: false, phoneNumber: "+919876500011" });
 
     render(<SiteHeader />, { wrapper });
 
-    expect(screen.getByRole("link", { name: "My bookings" })).toBeInTheDocument();
+    // The three private destinations became one. What is being asserted is not
+    // the rename but the gate: `Activity` is only offered to someone it will
+    // not bounce.
+    expect(screen.getByRole("link", { name: "Activity" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open profile" })).toHaveAttribute(
+      "href",
+      "/account",
+    );
     expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
+  });
+
+  it("replaces the current page with login after sign out succeeds", () => {
+    setSession({ isAuthenticated: true, isAnonymous: false });
+    render(<SiteHeader />, { wrapper });
+
+    fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    expect(router.replace).toHaveBeenCalledWith("/login");
+    expect(router.refresh).toHaveBeenCalledOnce();
   });
 
   it("claims nothing while the session is still resolving", () => {
@@ -136,12 +163,34 @@ describe("SiteHeader", () => {
     render(<SiteHeader />, { wrapper });
 
     // An exact match would leave the entire payment and receipt tree with no
-    // indication of where the customer is.
-    expect(screen.getByRole("link", { name: "My bookings" })).toHaveAttribute(
+    // indication of where the customer is. Activity now owns that tree: the
+    // record routes did not move when the nav item did, so `/bookings/…`,
+    // `/requests/…`, `/projects` and `/engagements/…` all resolve to it.
+    expect(screen.getByRole("link", { name: "Activity" })).toHaveAttribute(
       "aria-current",
       "page",
     );
     expect(screen.getByRole("link", { name: "Services" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks Activity current from every record tree it now owns", () => {
+    setSession({ isAuthenticated: true, isAnonymous: false });
+
+    for (const pathname of [
+      "/activity",
+      "/requests/abc",
+      "/requests/abc/quotes",
+      "/projects",
+      "/engagements/abc/receipt",
+    ]) {
+      route.pathname = pathname;
+      const { unmount } = render(<SiteHeader />, { wrapper });
+      expect(screen.getByRole("link", { name: "Activity" })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      unmount();
+    }
   });
 
   it("mounts the notification bell once there is a session", () => {

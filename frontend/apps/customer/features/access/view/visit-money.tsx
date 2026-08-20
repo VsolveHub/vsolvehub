@@ -59,3 +59,39 @@ export function SlotMoneyLine({ row }: { row: VisitSlotRow }) {
       return null;
   }
 }
+
+/**
+ * The same fact in a handful of words, for the row above the sentence.
+ *
+ * ## Why a second rendering of one fact is safe here, and only here
+ *
+ * The rule this file opens with still holds: **nothing here adds anything up.**
+ * Every figure below is the same server-published label `SlotMoneyLine` prints,
+ * reused verbatim — the summary can be shorter than the sentence but it can
+ * never be a different number, because there is no arithmetic in either.
+ *
+ * What the summary drops is the *explanation*, never a figure. "₹499 held" and
+ * "released after the estimate" are both in the sentence underneath, one tap
+ * away, and the tap is what the row exists to offer: a Customer checking where
+ * their money is gets the answer in a glance, and a Customer asking why gets
+ * the full account without having read it first.
+ */
+export function slotMoneySummary(row: VisitSlotRow): string {
+  switch (row.money.kind) {
+    case "unspent":
+      return `${row.money.amountLabel} set aside · comes back if nobody takes it`;
+    case "committed":
+      return `${row.money.amountLabel} held · released after the estimate`;
+    case "earned":
+      return `${row.money.vendorPayoutLabel ?? row.money.amountLabel} paid to the professional`;
+    case "refunded":
+      return `${row.money.amountLabel} refunded to you`;
+    case "replaced":
+      return "A replacement visit is owed to you, free";
+    default:
+      // A share status this build does not recognise. The sentence below says
+      // nothing for it either, and a summary that guessed would be worse than a
+      // row that admits it has nothing to add.
+      return "See below";
+  }
+}

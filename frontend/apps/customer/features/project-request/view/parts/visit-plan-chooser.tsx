@@ -54,15 +54,15 @@ export function VisitPlanChooser({
 
   return (
     <section
+      data-visit-plan-chooser
       aria-labelledby={labelId}
-      className="rounded-2xl border border-info-line bg-info-surface px-3.5 py-[15px]"
+      className="rounded-card border border-info-line bg-info-surface px-3.5 py-4"
     >
-      <h2 id={labelId} className="text-[15px] font-bold text-text">
-        How many pros should visit?
+      <h2 id={labelId} className="text-base font-extrabold text-text">
+        How many estimates do you want?
       </h2>
-      <p className="mt-1 text-[13px] leading-5 text-navy-800">
-        They measure, then price it in writing. You pay once, when the first one
-        confirms a time.
+      <p className="mt-1 text-sm leading-5 text-navy-800">
+        Each professional measures the site and prices it in writing.
       </p>
 
       <div className="mt-3">
@@ -70,7 +70,7 @@ export function VisitPlanChooser({
           <div className="flex flex-col gap-2" aria-busy="true">
             <span className="sr-only">Loading the visit plans</span>
             {[0, 1, 2].map((row) => (
-              <Skeleton key={row} className="h-[58px] w-full rounded-xl" />
+              <Skeleton key={row} className="h-[58px] w-full rounded-card" />
             ))}
           </div>
         ) : tiers.length === 0 ? (
@@ -89,7 +89,7 @@ export function VisitPlanChooser({
                 <label
                   key={tier.planSize}
                   className={cn(
-                    "flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-surface",
+                    "flex cursor-pointer items-center justify-between gap-3 rounded-card bg-surface",
                     "transition-colors duration-fast",
                     "has-[:focus-visible]:outline has-[:focus-visible]:outline-2",
                     "has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",

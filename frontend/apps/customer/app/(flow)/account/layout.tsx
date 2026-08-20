@@ -21,9 +21,9 @@ export default function AccountLayout({ children }: { children: ReactNode }) {
   return (
     <CustomerShell>
       <div className="mx-auto w-full max-w-4xl px-4 pb-16 pt-6">
-        <h1 className="text-xl font-bold text-text">Your account</h1>
+        <h1 className="text-xl font-bold text-text">Your profile</h1>
         <p className="mt-1 max-w-prose text-sm text-text-secondary">
-          What we hold about you, and who can act on it.
+          Your details, preferences and signed-in devices.
         </p>
 
         <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:gap-10">

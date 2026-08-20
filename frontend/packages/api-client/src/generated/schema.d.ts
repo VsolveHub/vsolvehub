@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.39.0)
- * Checksum: 030ab98b1337ba8e
+ * Checksum: 9feda31f1a6f6b82
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -165,6 +165,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/profile/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_profile_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["auth_profile_partial_update"];
         trace?: never;
     };
     "/api/v1/auth/roles/switch/": {
@@ -8406,6 +8422,13 @@ export interface components {
             skill_codes?: string[];
             is_supervisor?: boolean;
         };
+        /** @description The customer-owned personal fields that may change independently of login. */
+        PatchedCustomerProfileUpdateRequest: {
+            display_name?: string;
+            full_name?: string;
+            /** Format: email */
+            email?: string;
+        };
         PatchedPartnerApplicationUpdateRequest: {
             expected_version?: number;
             display_name?: string;
@@ -10761,9 +10784,13 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             readonly phone_number: string;
+            /** @default  */
+            readonly display_name: string;
             readonly full_name: string;
             /** Format: email */
             readonly email: string;
+            /** Format: date-time */
+            readonly date_joined: string;
             readonly roles: string[];
         };
         UserSession: {
@@ -11614,6 +11641,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrivacyRequest"];
+                };
+            };
+        };
+    };
+    auth_profile_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    auth_profile_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedCustomerProfileUpdateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedCustomerProfileUpdateRequest"];
+                "multipart/form-data": components["schemas"]["PatchedCustomerProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

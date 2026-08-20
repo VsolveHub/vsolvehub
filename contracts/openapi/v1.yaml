@@ -300,8 +300,10 @@ paths:
                     user:
                       id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
                       phone_number: '+919876543210'
+                      display_name: Gopal Rao
                       full_name: ''
                       email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
                       roles:
                       - customer
                     active_role: customer
@@ -422,6 +424,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrivacyRequest'
           description: ''
+  /api/v1/auth/profile/:
+    get:
+      operationId: auth_profile_retrieve
+      tags:
+      - Authentication
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    patch:
+      operationId: auth_profile_partial_update
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerProfileUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/auth/roles/switch/:
     post:
       operationId: auth_roles_switch_create
@@ -474,8 +520,10 @@ paths:
                     user:
                       id: f26419bd-c768-4ddb-bff3-4cc405fdbf52
                       phone_number: '+919876543210'
+                      display_name: Gopal Rao
                       full_name: ''
                       email: ''
+                      date_joined: '2026-08-19T12:00:00Z'
                       roles:
                       - customer
                     active_role: customer
@@ -21902,6 +21950,21 @@ components:
             pattern: ^[-a-zA-Z0-9_]+$
         is_supervisor:
           type: boolean
+    PatchedCustomerProfileUpdateRequest:
+      type: object
+      description: The customer-owned personal fields that may change independently
+        of login.
+      properties:
+        display_name:
+          type: string
+          maxLength: 100
+        full_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
     PatchedPartnerApplicationUpdateRequest:
       type: object
       properties:
@@ -27521,6 +27584,10 @@ components:
         phone_number:
           type: string
           readOnly: true
+        display_name:
+          type: string
+          readOnly: true
+          default: ''
         full_name:
           type: string
           readOnly: true
@@ -27528,12 +27595,18 @@ components:
           type: string
           format: email
           readOnly: true
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
         roles:
           type: array
           items:
             type: string
           readOnly: true
       required:
+      - date_joined
+      - display_name
       - email
       - full_name
       - id

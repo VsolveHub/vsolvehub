@@ -3,14 +3,19 @@
 import {
   bookingPhase,
   canCheckOutVisitPlan,
+  canReadFullQuotes,
   canReadFullEstimates,
   unlockPhase,
   visitPlanPhase,
 } from "@vsolve/query";
+import { buttonStyles, formatMoney } from "@vsolve/ui";
 import type { ReactNode } from "react";
+import Link from "next/link";
 
+import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useRateCardState } from "@/features/crew/queries";
 import { CrewDispatchPanel } from "@/features/crew/view/crew-dispatch-panel";
+import { toQuoteListView } from "@/features/quotes/adapters";
 import { useCustomerQuotes } from "@/features/quotes/queries";
 import type { RequirementArchetype } from "@/features/requirement/adapters";
 import {
@@ -65,12 +70,93 @@ export interface RequestAccessPanelProps {
   serviceName?: string;
   /** Forwarded to the A3 waiting screen's rail. See `CrewDispatchPanel`. */
   requestFacts?: { addressLine: string | null; startsOn: string | null };
+  /**
+   * Which half of the money surface to draw — see `VisitTracker`'s own note.
+   *
+   * The request detail owns a rail, so it renders this twice: once for the
+   * reading column and once for the rail. A3 draws nothing in the rail today;
+   * its two doors carry their own layout and are left alone until they get the
+   * same treatment, which is a smaller change than half-doing it here.
+   */
+  slot?: "both" | "main" | "rail";
 }
 
 export function RequestAccessPanel(props: RequestAccessPanelProps) {
-  if (props.archetype === "A3_TIME_BLOCK") return <A3Access {...props} />;
+  if (props.archetype === "A3_TIME_BLOCK") {
+    return props.slot === "rail" ? <A3QuoteRail {...props} /> : <A3Access {...props} />;
+  }
   if (props.archetype === "A5_CUSTOM_PROJECT") return <A5Access {...props} />;
   return null;
+}
+
+function A3QuoteRail({ requirementId, quotesHref }: RequestAccessPanelProps) {
+  const teasersQuery = useQuoteTeasers(requirementId);
+  const unlockQuery = useUnlockState(requirementId);
+  const unlock = unlockQuery.data ?? null;
+  const mayReadFullQuotes = unlock !== null && canReadFullQuotes(unlock);
+  const quotesQuery = useCustomerQuotes(requirementId, mayReadFullQuotes);
+
+  const quoteCards =
+    quotesQuery.data === undefined ? [] : toQuoteListView(quotesQuery.data).cards;
+  const teaserCount = teasersQuery.data?.usable_quote_count ?? 0;
+  const quoteCount = quoteCards.length > 0 ? quoteCards.length : teaserCount;
+
+  if (unlockQuery.isPending || teasersQuery.isPending || (mayReadFullQuotes && quotesQuery.isPending)) {
+    return (
+      <div aria-busy="true" aria-live="polite" className="rounded-[10px] border border-line bg-surface p-4 shadow-card">
+        <span className="sr-only">Loading quote range</span>
+        <div className="h-24 animate-pulse rounded-[8px] bg-surface-sunken" />
+      </div>
+    );
+  }
+
+  if (quoteCount === 0) return null;
+
+  const totals = quoteCards.map((card) => card.payablePaise);
+  const low = totals.length > 0 ? Math.min(...totals) : null;
+  const high = totals.length > 0 ? Math.max(...totals) : null;
+  const rangeLabel = low === null ? "Quotes arrived" : formatMoney(low);
+  const rangeHint =
+    low === null || high === null
+      ? `${quoteCount} ${quoteCount === 1 ? "quote" : "quotes"} ready`
+      : `Lowest of ${countWord(quoteCount)} · highest ${formatMoney(high)}`;
+
+  return (
+    <section
+      aria-label="Quote range"
+      className="rounded-[10px] border border-line bg-surface p-4 shadow-card"
+    >
+      <div className="border border-signal-300 border-l-[4px] px-5 py-3.5">
+        <p className="text-[0.6875rem] font-extrabold uppercase tracking-[0.14em] text-text-muted">
+          Quotes range from
+        </p>
+        <p className="mt-0.5 text-[2rem] font-extrabold leading-none tracking-tight text-text">
+          {rangeLabel}
+        </p>
+        <p className="mt-1.5 text-sm font-medium text-text-secondary">{rangeHint}</p>
+      </div>
+
+      <Link
+        href={quotesHref}
+        className={buttonStyles({
+          block: true,
+          className: "mt-3 gap-2 text-[0.9375rem] font-extrabold",
+        })}
+      >
+        Compare {quoteCount} {quoteCount === 1 ? "quote" : "quotes"}
+        <span aria-hidden className="text-xl leading-none">
+          ›
+        </span>
+      </Link>
+    </section>
+  );
+}
+
+function countWord(count: number): string {
+  if (count === 1) return "one";
+  if (count === 2) return "two";
+  if (count === 3) return "three";
+  return String(count);
 }
 
 /**
@@ -149,6 +235,7 @@ function A3QuoteAccess({
   isResolvingDoor: boolean;
   supportAction?: ReactNode;
 }) {
+  const profileGate = useProfileCompletionGate("payment");
   const teasersQuery = useQuoteTeasers(requirementId);
   const unlockQuery = useUnlockState(requirementId);
   const checkout = useStartUnlockCheckout();
@@ -158,29 +245,34 @@ function A3QuoteAccess({
   const phase = unlock === null ? null : unlockPhase(unlock);
 
   return (
-    <UnlockPanel
-      phase={phase ?? "not_yet"}
-      priceLabel={unlockPriceLabel(unlock?.price_paise ?? null)}
-      usableQuoteCount={unlock?.usable_quote_count ?? teasers?.usableQuoteCount ?? 0}
-      teasers={teasers?.teasers ?? []}
-      isLoading={isResolvingDoor || unlockQuery.isPending || teasersQuery.isPending}
+    <>
+      <UnlockPanel
+        phase={phase ?? "not_yet"}
+        priceLabel={unlockPriceLabel(unlock?.price_paise ?? null)}
+        usableQuoteCount={unlock?.usable_quote_count ?? teasers?.usableQuoteCount ?? 0}
+        teasers={teasers?.teasers ?? []}
+        isLoading={isResolvingDoor || unlockQuery.isPending || teasersQuery.isPending}
       // The unlock read is the one that decides what may be offered, so its
       // failure is the one that must stop the panel. A teaser read that fails
       // leaves an empty list, which reads as "no quotes yet" — and that is why
       // its error is surfaced too rather than swallowed.
-      readError={unlockQuery.error ?? teasersQuery.error}
-      onRetryRead={() => {
-        void unlockQuery.refetch();
-        void teasersQuery.refetch();
-      }}
-      onStartCheckout={() =>
-        checkout.mutate({ requirementId, isRetryAfterFailure: phase === "failed" })
-      }
-      isStartingCheckout={checkout.isPending}
-      checkoutError={checkout.error}
-      quotesHref={quotesHref}
-      supportAction={supportAction}
-    />
+        readError={unlockQuery.error ?? teasersQuery.error}
+        onRetryRead={() => {
+          void unlockQuery.refetch();
+          void teasersQuery.refetch();
+        }}
+        onStartCheckout={() =>
+          profileGate.run(() =>
+            checkout.mutate({ requirementId, isRetryAfterFailure: phase === "failed" }),
+          )
+        }
+        isStartingCheckout={checkout.isPending}
+        checkoutError={checkout.error}
+        quotesHref={quotesHref}
+        supportAction={supportAction}
+      />
+      {profileGate.dialog}
+    </>
   );
 }
 
@@ -189,6 +281,7 @@ function A5Access({
   quotesHref,
   bookVisitsHref,
   supportAction,
+  slot = "both",
 }: RequestAccessPanelProps) {
   const planQuery = useVisitPlan(requirementId);
 
@@ -214,8 +307,27 @@ function A5Access({
 
   const tracker = state === null ? null : toVisitTrackerView(state, vendorNames);
 
+  /**
+   * The delivered estimates, as a price list.
+   *
+   * Read from the query this component already makes — the same one that names
+   * a vendor on a confirmed slot — so the list costs nothing extra and is
+   * gated by the same server entitlement. What each professional wrote is a
+   * page of its own; what belongs on the request is the number and the way in.
+   */
+  const estimates =
+    quotesQuery.data === undefined
+      ? []
+      : toQuoteListView(quotesQuery.data).cards.map((card) => ({
+          proposalId: card.proposalId,
+          vendorName: card.vendorName,
+          priceLabel: card.payableLabel,
+        }));
+
   return (
     <VisitTracker
+      slot={slot}
+      estimates={estimates}
       phase={state === null ? "choosing" : visitPlanPhase(state)}
       tracker={tracker}
       isLoading={planQuery.isPending}

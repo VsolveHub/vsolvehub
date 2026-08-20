@@ -27,6 +27,11 @@ def test_browser_session_and_idempotency_contract_is_published() -> None:
     # schema against the committed `contracts/openapi/v1.yaml`. What this catches is the schema
     # and the settings disagreeing, which no other check would notice.
     assert schema["info"]["version"] == settings.SPECTACULAR_SETTINGS["VERSION"]
+    session_user = schema["components"]["schemas"]["User"]["properties"]
+    assert {"display_name", "full_name", "email", "phone_number", "date_joined"}.issubset(
+        session_user
+    )
+    assert session_user["date_joined"]["format"] == "date-time"
     csrf = _operation(schema, "/api/v1/auth/csrf/", "get")
     assert csrf["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/CsrfToken"
@@ -48,6 +53,16 @@ def test_browser_session_and_idempotency_contract_is_published() -> None:
     assert session["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/SessionState"
     }
+    profile_read = _operation(schema, "/api/v1/auth/profile/", "get")
+    assert profile_read["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/User"
+    }
+    profile_update = _operation(schema, "/api/v1/auth/profile/", "patch")
+    profile_request = profile_update["requestBody"]["content"]["application/json"]["schema"]
+    profile_component_name = profile_request["$ref"].rsplit("/", maxsplit=1)[-1]
+    profile_component = schema["components"]["schemas"][profile_component_name]
+    assert set(profile_component["properties"]) == {"display_name", "full_name", "email"}
+    assert "required" not in profile_component
 
     _operation(schema, "/api/v1/service-areas/", "get")
     _operation(schema, "/api/v1/partner/skills/", "get")

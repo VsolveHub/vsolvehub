@@ -1,10 +1,41 @@
 "use client";
 
 import { request, type Schemas } from "@vsolve/api-client";
-import { SESSION_STATE, queryKeys } from "@vsolve/query";
+import { SESSION_STATE, publishToTabs, queryKeys } from "@vsolve/query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "@/lib/api/browser";
+
+export type CustomerProfile = Schemas["User"];
+export type CustomerProfileUpdate = Schemas["PatchedCustomerProfileUpdateRequest"];
+
+export function useCustomerProfile(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.session.profile(),
+    queryFn: () => request(() => getApiClient().GET("/api/v1/auth/profile/")),
+    enabled,
+    ...SESSION_STATE,
+  });
+}
+
+/**
+ * Saves only customer-owned personal fields. The phone number remains the
+ * verified sign-in identity and is deliberately absent from the command.
+ */
+export function useUpdateCustomerProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (profile: CustomerProfileUpdate) =>
+      request(() => getApiClient().PATCH("/api/v1/auth/profile/", { body: profile })),
+    onSuccess: (profile) => {
+      queryClient.setQueryData<CustomerProfile>(queryKeys.session.profile(), profile);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session.current() });
+      publishToTabs({ type: "cache.invalidate", queryKey: queryKeys.session.all });
+    },
+    retry: false,
+  });
+}
 
 /**
  * The privacy record: what we may send, what was agreed to, what was asked for.

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { useBookingGroup } from "@/features/bookings/queries";
+import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { Money } from "@/features/checkout/view/money";
 
 import { paymentPhase, canReconcile, type PaymentAttempt } from "../model/outcome";
@@ -72,6 +73,7 @@ function AllocationList({ attempt }: { attempt: PaymentAttempt }) {
 }
 
 export function PaymentWorkspace({ groupId }: { groupId: string }) {
+  const profileGate = useProfileCompletionGate("payment");
   const groupQuery = useBookingGroup(groupId);
   const group = groupQuery.data ?? null;
   const checkoutId = group?.checkout_id ?? null;
@@ -262,11 +264,12 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
           <Button
             loading={startPayment.isPending || simulateCapture.isPending}
             loadingLabel={simulateCapture.isPending ? "Marking as paid" : "Opening payment"}
-            onClick={() => void handleStartPayment()}
+            onClick={() => profileGate.run(() => void handleStartPayment())}
           >
             Continue to payment
           </Button>
         </div>
+        {profileGate.dialog}
       </div>
     );
   }
@@ -411,7 +414,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
             loadingLabel={
               attempt.simulated_capture_available ? "Marking as paid" : "Opening payment"
             }
-            onClick={() => void handlePay(attempt)}
+            onClick={() => profileGate.run(() => void handlePay(attempt))}
           >
             {attempt.simulated_capture_available
               ? "Mark as paid"
@@ -425,6 +428,7 @@ export function PaymentWorkspace({ groupId }: { groupId: string }) {
       <p className="mt-4 text-sm text-text-secondary">
         Reference <span className="font-mono tabular-nums">{group.id}</span>
       </p>
+      {profileGate.dialog}
     </div>
   );
 }

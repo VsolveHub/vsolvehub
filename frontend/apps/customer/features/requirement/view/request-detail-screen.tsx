@@ -1,14 +1,15 @@
 "use client";
 
 import type { Schemas } from "@vsolve/api-client";
-import { isFreelyEditable, isVendorVisible } from "@vsolve/query";
-import { buttonStyles } from "@vsolve/ui";
+import { isFreelyEditable } from "@vsolve/query";
+import { buttonStyles, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { RequestAccessPanel } from "@/features/access/view/request-access-panel";
 import { useAddresses } from "@/features/addresses/queries";
-import { bookCrewFeeHref } from "@/lib/routes";
+import { useEngagements } from "@/features/engagement/queries";
+import { toEngagementLists } from "@/features/engagement/adapters";
+import { bookCrewFeeHref, engagementHref, engagementReceiptHref } from "@/lib/routes";
 import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
 import {
   isAlreadyRemoved,
@@ -16,7 +17,8 @@ import {
   useRequirement,
   useRequirementTimeline,
 } from "../queries";
-import { MaterialEditNotice, type MaterialEditStance } from "./material-edit-notice";
+import { TapRow, TapRowGroup } from "@/components/patterns";
+
 import { RequestAttachments } from "./request-attachments";
 import { RequestDetail } from "./request-detail";
 import { titleForSlug } from "./my-requests-screen";
@@ -60,7 +62,8 @@ function addressSummary(
   const address = addresses.find((candidate) => candidate.id === addressId);
   if (address === undefined) return null;
   const locality = address.locality || address.city;
-  return locality === "" ? address.postal_code : `${locality} — ${address.postal_code}`;
+  const place = [address.line1, locality].filter((part) => part.trim() !== "").join(", ");
+  return place === "" ? address.postal_code : `${place} - ${address.postal_code}`;
 }
 
 /**
@@ -75,29 +78,53 @@ function formatStartDay(iso: string | null): string | null {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("en-IN", {
-    weekday: "short",
+    weekday: "long",
     day: "numeric",
     month: "short",
   }).format(date);
 }
 
-function stanceFor(status: string): MaterialEditStance {
-  if (isFreelyEditable(status)) return "free";
-  if (isVendorVisible(status)) return "vendor_visible";
-  // Closed, or a status this build does not know. Both mean the same thing for
-  // this notice: there is nothing useful to say about editing it, so it says
-  // nothing rather than guessing which of the two it is.
-  return "closed";
+function formatSentDay(iso: string | null): string | null {
+  if (iso === null) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+}
+
+function budgetLabel(minPaise: number | null, maxPaise: number | null): string | null {
+  if (minPaise === null && maxPaise === null) return null;
+  if (minPaise === null && maxPaise !== null) return `Up to ${formatMoney(maxPaise)}`;
+  if (minPaise !== null && maxPaise === null) return `From ${formatMoney(minPaise)}`;
+  if (minPaise === maxPaise) return formatMoney(minPaise!);
+  return `${formatMoney(minPaise!)} - ${formatMoney(maxPaise!)}`;
+}
+
+/**
+ * Whether two labels are the same words, ignoring case, hyphens and spacing.
+ *
+ * The heading and the service name come from different fields that describe one
+ * thing, and they agree far more often than they differ — `category_slug`
+ * de-slugged is usually the service name with the hyphens turned into spaces.
+ * Comparing the letters is what lets the subtitle carry the service only when it
+ * is genuinely telling the reader something the heading did not.
+ */
+function isSameWords(a: string, b: string): boolean {
+  const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalise(a) === normalise(b);
 }
 
 export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps) {
-  const router = useRouter();
   const requirementQuery = useRequirement(requirementId);
   const timelineQuery = useRequirementTimeline(requirementId);
   const removeAttachment = useRemoveAttachment();
 
   const draft = requirementQuery.data ?? null;
   const timeline = timelineQuery.data;
+  const timelineEvents = timeline === undefined ? [] : toTimelineEvents(timeline);
 
   // `toRequestHeader` rather than `toRequestRow`: the detail endpoint answers
   // with the record, not the tracking projection, so the deadline and the quote
@@ -123,15 +150,149 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
   const addresses = useAddresses(draft !== null);
   const requestFacts = {
     addressLine: addressSummary(addresses.data ?? [], draft?.address_id ?? null),
-    startsOn: formatStartDay(draft?.requested_start ?? null),
+    startsOn: formatStartDay(draft?.service_by ?? null),
   };
+  const budget = budgetLabel(draft?.budget_min_paise ?? null, draft?.budget_max_paise ?? null);
+  const submittedAt =
+    timelineEvents.find((event) => event.type === "REQUIREMENT_SUBMITTED")?.at ?? null;
+  const sentDay = formatSentDay(submittedAt);
+
+  /**
+   * The line under the heading.
+   *
+   * Assembled here because this is the only layer holding the requirement
+   * record — `RequestRowView` is the tracking projection and carries neither the
+   * service name nor the address. Parts that are absent are dropped rather than
+   * defaulted: a subtitle reading "· — ·" says less than a shorter one.
+   */
+  const subtitle =
+    draft === null
+      ? null
+      : [
+          // The heading is `titleForSlug(category_slug)` and the service name is
+          // the same words with different punctuation — "Interior fit out
+          // project" over "Interior fit-out project". Printing both put the
+          // title twice, once as a heading and once as its own subtitle, so the
+          // service name is dropped when it adds nothing.
+          isSameWords(draft.service_name, titleForSlug(draft.category_slug))
+            ? null
+            : draft.service_name,
+          sentDay === null ? null : `sent ${sentDay}`,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null;
+
+  /**
+   * The facts, as rows.
+   *
+   * Only two, and both are real: where the work is, and the day it was asked
+   * for. There is deliberately no budget row — `Requirement` publishes no budget
+   * field, and a row reading "Not set" for something the Customer was never
+   * asked would be an invented fact dressed as a missing one. Attachments are
+   * not a row either; `RequestAttachments` below renders them properly, and a
+   * count above it would be the same fact said twice.
+   */
+  const facts =
+    draft === null
+      ? []
+      : [
+          requestFacts.addressLine === null
+            ? null
+            : { label: "Where", value: requestFacts.addressLine },
+          requestFacts.startsOn === null
+            ? null
+            : { label: "Needed by", value: requestFacts.startsOn },
+          budget === null ? null : { label: "Budget you gave", value: budget },
+        ].filter((fact): fact is { label: string; value: string } => fact !== null);
+
+  /**
+   * The rail's rows: the two things a Customer opens rather than reads.
+   *
+   * "Change or cancel" appears only while the requirement is genuinely
+   * editable. `PATCH` refuses one that has left DRAFT with
+   * `m2_requirement_locked`, so offering the row afterwards would be offering a
+   * door that answers 409 instead of a useful action.
+   */
+  const railRows =
+    draft === null
+      ? []
+      : [
+          requestFacts.addressLine === null
+            ? null
+            : {
+                label: "Where the work is",
+                value: requestFacts.addressLine,
+                href: "/account/addresses",
+              },
+          requestFacts.startsOn === null
+            ? null
+            : { label: "When you need it", value: `By ${requestFacts.startsOn}` },
+          isFreelyEditable(draft.status)
+            ? {
+                label: "Change or cancel this",
+                value: "Sending is free — nothing charged yet",
+                href: `/requests/new/${draft.category_slug}`,
+              }
+            : null,
+        ].filter(
+          (row): row is { label: string; value: string; href?: string } => row !== null,
+        );
 
   return (
       <RequestDetail
+        visualLifecycle={
+          draft !== null &&
+          draft.status !== "DRAFT" &&
+          toArchetype(draft) === "A5_CUSTOM_PROJECT"
+        }
+        railTop={
+          draft === null ? null : (
+          <RequestAccessPanel
+            slot="rail"
+            requirementId={requirementId}
+            archetype={toArchetype(draft)}
+            quotesHref={`/requests/${requirementId}/quotes`}
+            bookVisitsHref={`/requests/${requirementId}/book-visits`}
+            bookCrewFeeHref={bookCrewFeeHref(requirementId)}
+            supportAction={supportAction}
+            requestFacts={requestFacts}
+            serviceName={draft.service_name}
+          />
+          )
+        }
+        railRecords={<BookingRecords requirementId={requirementId} />}
         request={request}
+        subtitle={subtitle}
+        facts={facts}
+        railRows={railRows}
+        attachments={
+          draft === null ? null : (
+            <div className="flex flex-col gap-6">
+              {/* The removal affordance the server keeps open in every status,
+                  for the one case it keeps it open for: a file the malware scan
+                  rejected. See `RequestAttachments`. */}
+              <RequestAttachments
+                rows={toServerAttachmentRows(draft.attachments)}
+                isDraft={isFreelyEditable(draft.status)}
+                onRemove={(attachmentId) =>
+                  removeAttachment.mutate({ requirementId, attachmentId })
+                }
+                isRemoving={removeAttachment.isPending}
+                // Already gone is the outcome that was asked for, so it is not
+                // shown as a failure — the refetch that follows drops the row.
+                removeError={
+                  removeAttachment.error !== null && !isAlreadyRemoved(removeAttachment.error)
+                    ? removeAttachment.error
+                    : null
+                }
+              />
+
+            </div>
+          )
+        }
         isRequestPending={requirementQuery.isPending}
         requestError={requirementQuery.error}
-        events={timeline === undefined ? [] : toTimelineEvents(timeline)}
+        events={timelineEvents}
         isTimelinePending={timelineQuery.isPending}
         timelineError={timelineQuery.error}
         onRetryRequest={() => void requirementQuery.refetch()}
@@ -139,67 +300,98 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
         supportAction={supportAction}
       >
       {draft !== null ? (
-        // Inside the record's own container now, so the page is one width from
-        // top to bottom. The money surface takes the full width because it puts
-        // a rail beside itself; everything after it keeps a reading column,
-        // because a timeline stretched to 1100px is harder to read, not easier.
-        <div className="flex w-full flex-col">
-          {/* Wave A2, extended by A2R. The A3 money surface — the rate-card crew
-              panel or its quote-flow fallback — or the A5 visit tracker, chosen
-              from the server's inferred archetype, and nothing at all for a
-              lifecycle this build has no screens for. It sits directly under the
-              state notice because "what is happening" and "what it costs" are
-              the same question to somebody who just opened this page. */}
-          <div className="mb-6">
-            <RequestAccessPanel
-              requirementId={requirementId}
-              archetype={toArchetype(draft)}
-              quotesHref={`/requests/${requirementId}/quotes`}
-              bookVisitsHref={`/requests/${requirementId}/book-visits`}
-              bookCrewFeeHref={bookCrewFeeHref(requirementId)}
-              supportAction={supportAction}
-              requestFacts={requestFacts}
-              serviceName={draft.service_name}
-            />
-          </div>
-
-          <div className="flex max-w-2xl flex-col gap-6">
-          {/* The removal affordance the server keeps open in every status, for
-              the one case it keeps it open for: a file the malware scan
-              rejected. See `RequestAttachments`. */}
-          <RequestAttachments
-            rows={toServerAttachmentRows(draft.attachments)}
-            isDraft={isFreelyEditable(draft.status)}
-            onRemove={(attachmentId) =>
-              removeAttachment.mutate({ requirementId, attachmentId })
-            }
-            isRemoving={removeAttachment.isPending}
-            // Already gone is the outcome that was asked for, so it is not shown
-            // as a failure — the refetch that follows drops the row.
-            removeError={
-              removeAttachment.error !== null && !isAlreadyRemoved(removeAttachment.error)
-                ? removeAttachment.error
-                : null
-            }
-          />
-
-          <MaterialEditNotice
-            stance={stanceFor(draft.status)}
-            // Only the free path has a command behind it. `PATCH` refuses a
-            // requirement that has left DRAFT with `m2_requirement_locked`, so
-            // `onConfirmEdit` is deliberately not supplied and the notice
-            // renders its explanation and the support route instead of a
-            // confirmation that would collect an answer and then fail.
-            onEditFreely={
-              isFreelyEditable(draft.status)
-                ? () => router.push(`/requests/new/${draft.category_slug}`)
-                : undefined
-            }
-            supportAction={supportAction}
-          />
-          </div>
-        </div>
+        // Wave A2, extended by A2R. The A3 money surface — the rate-card crew
+        // panel or its quote-flow fallback — or the A5 visit tracker, chosen
+        // from the server's inferred archetype, and nothing at all for a
+        // lifecycle this build has no screens for.
+        <RequestAccessPanel
+          slot="main"
+          requirementId={requirementId}
+          archetype={toArchetype(draft)}
+          quotesHref={`/requests/${requirementId}/quotes`}
+          bookVisitsHref={`/requests/${requirementId}/book-visits`}
+          bookCrewFeeHref={bookCrewFeeHref(requirementId)}
+          supportAction={supportAction}
+          requestFacts={requestFacts}
+          serviceName={draft.service_name}
+        />
       ) : null}
       </RequestDetail>
+  );
+}
+
+/**
+ * What this request has turned into, and where the money record lives.
+ *
+ * ## Why it is here at all
+ *
+ * A request that has been accepted stops being only a request: there is an
+ * engagement with stages and a funded total, and there is a receipt for what
+ * was charged to reach it. Both had addresses and neither had a way in from the
+ * one page a Customer actually opens — you got to your own receipt by knowing
+ * the URL. This is that way in.
+ *
+ * ## Why it reads the list rather than the record
+ *
+ * `GET /engagements/` is one page the Customer has usually already loaded — the
+ * Activity hub reads it — so finding this request's engagement in it costs a
+ * cache hit rather than a request. The alternative would be a lookup endpoint
+ * keyed on the requirement, which does not exist and would not be worth asking
+ * for to render two links.
+ *
+ * ## Why the receipt link is not conditional
+ *
+ * Whether a receipt exists is on the engagement *detail*, not on the list row,
+ * and fetching every engagement's detail to decide whether to show a link would
+ * be a request per row to hide one. The receipt page answers honestly when there
+ * is nothing yet — "no receipt on this booking, that is normal if nothing has
+ * been charged" — which is a better answer than a link that silently is not
+ * there.
+ */
+function BookingRecords({ requirementId }: { requirementId: string }) {
+  const query = useEngagements();
+
+  const engagements = (query.data?.pages ?? []).flatMap((page) => page.results);
+  const lists = toEngagementLists(engagements);
+  const row =
+    [...lists.workforce, ...lists.projects].find(
+      (candidate) => candidate.requirementId === requirementId,
+    ) ?? null;
+
+  // Nothing has been commissioned from this request yet. A card headed "this
+  // booking" over an empty state would be describing something that does not
+  // exist.
+  if (row === null) return null;
+
+  const isProject = row.mode === "managed";
+
+  return (
+    <TapRowGroup>
+      <TapRow
+        label={isProject ? "Your project" : "Your booking"}
+        value={
+          row.progress.total > 0
+            ? `${row.progress.done} of ${row.progress.total} ${isProject ? "stages" : "days"} done`
+            : "Open the workspace"
+        }
+        href={engagementHref(row.engagementId)}
+      />
+      {/* The funded total is an A5 fact. On `LEAD_ONLY` the answer is always
+          zero because V Solve Hub holds nothing, and "Funded ₹0" beside a job
+          in progress reads as a failure rather than as the design. */}
+      {isProject ? (
+        <TapRow
+          label="Funded so far"
+          value={`${row.fundedTotalLabel} of ${row.stagedTotalLabel}`}
+          href={engagementHref(row.engagementId)}
+        />
+      ) : null}
+      <TapRow
+        label="Payment receipt"
+        value="What you have been charged"
+        href={engagementReceiptHref(row.engagementId)}
+        isLast
+      />
+    </TapRowGroup>
   );
 }

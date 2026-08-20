@@ -36,19 +36,25 @@
  * it with the work means it is always there and always in the same words, which
  * is also the first time two vendors' stages have been comparable.
  *
- * ## Why the glyphs are emoji
+ * ## Why these are pictograms, not emoji
  *
- * This app ships no icon set, and a glyph that renders on every Android in the
- * field beats an SVG sprite nobody has drawn yet. They are decorative in the
- * accessibility sense — the caption is the accessible name — so a device that
- * renders one as a box loses nothing but decoration.
+ * They used to be emoji, for exactly the reason emoji get picked: this app
+ * shipped no icon set, and a glyph that renders on every Android in the field
+ * beat an SVG sprite nobody had drawn yet. That sprite now exists —
+ * `@/components/pictogram`, transcribed from the approved design canvas — so
+ * every entry below names one of its icons instead. They stay decorative in
+ * the accessibility sense — the caption is still the accessible name — so a
+ * pictogram that fails to render loses nothing but decoration, same as an
+ * emoji box would have.
  */
+
+import type { PictogramName } from "@/components/pictogram";
 
 /** One piece of work a vendor can tap instead of naming. */
 export interface WorkPreset {
   /** Stable across renders and stored in the draft. Never shown. */
   readonly code: string;
-  readonly glyph: string;
+  readonly icon: PictogramName;
   /** The caption, and the `title` that goes on the wire. */
   readonly label: string;
   /** Sent as the stage's `deliverable`. See the note above on why it is here. */
@@ -58,7 +64,7 @@ export interface WorkPreset {
 /** One material a vendor can tap, with the unit it is normally counted in. */
 export interface MaterialPreset {
   readonly code: string;
-  readonly glyph: string;
+  readonly icon: PictogramName;
   /** The caption, and the material line's `title`. */
   readonly label: string;
   /** Bags, sheets, metres. Sent as `unit`, so the customer can compare quantities. */
@@ -68,67 +74,67 @@ export interface MaterialPreset {
 const FIT_OUT_WORK: readonly WorkPreset[] = [
   {
     code: "strip_out",
-    glyph: "🪣",
+    icon: "clean",
     label: "Strip out",
     deliverable: "Existing fittings removed and the space cleared for new work.",
   },
   {
     code: "civil",
-    glyph: "🧱",
+    icon: "walls",
     label: "Walls",
     deliverable: "Walls built, moved or made good as agreed on site.",
   },
   {
     code: "wiring",
-    glyph: "⚡",
+    icon: "wiring",
     label: "Wiring",
     deliverable: "Power and lighting circuits run, tested and working.",
   },
   {
     code: "plumbing",
-    glyph: "🚿",
+    icon: "water",
     label: "Plumbing",
     deliverable: "Water and drainage lines run, connected and tested.",
   },
   {
     code: "plaster",
-    glyph: "🧽",
+    icon: "clean",
     label: "Plaster",
     deliverable: "Surfaces plastered and left smooth and ready to finish.",
   },
   {
     code: "flooring",
-    glyph: "🟫",
+    icon: "floor",
     label: "Flooring",
     deliverable: "Floor laid, levelled and finished.",
   },
   {
     code: "paint",
-    glyph: "🎨",
+    icon: "paint",
     label: "Paint",
     deliverable: "Surfaces prepared and painted to the agreed finish.",
   },
   {
     code: "fit_out",
-    glyph: "🛠️",
+    icon: "fit-out",
     label: "Fit out",
     deliverable: "Counters, shelving and fixtures installed and secured.",
   },
   {
     code: "snagging",
-    glyph: "✅",
+    icon: "done",
     label: "Finishing",
     deliverable: "Snags corrected, site cleaned and the space handed over.",
   },
 ];
 
 const FIT_OUT_MATERIALS: readonly MaterialPreset[] = [
-  { code: "cement", glyph: "🧱", label: "Cement", unit: "bags" },
-  { code: "tiles", glyph: "🔲", label: "Tiles", unit: "boxes" },
-  { code: "paint", glyph: "🪣", label: "Paint", unit: "cans" },
-  { code: "wiring", glyph: "🔌", label: "Cable", unit: "coils" },
-  { code: "timber", glyph: "🪵", label: "Timber", unit: "sheets" },
-  { code: "fittings", glyph: "🔩", label: "Fittings", unit: "sets" },
+  { code: "cement", icon: "walls", label: "Cement", unit: "bags" },
+  { code: "tiles", icon: "floor", label: "Tiles", unit: "boxes" },
+  { code: "paint", icon: "paint", label: "Paint", unit: "cans" },
+  { code: "wiring", icon: "wiring", label: "Cable", unit: "coils" },
+  { code: "timber", icon: "wood", label: "Timber", unit: "sheets" },
+  { code: "fittings", icon: "machine", label: "Fittings", unit: "sets" },
 ];
 
 /**
@@ -144,28 +150,28 @@ const FIT_OUT_MATERIALS: readonly MaterialPreset[] = [
  */
 export interface WarrantyChoice {
   readonly code: string;
-  readonly glyph: string;
+  readonly icon: PictogramName;
   readonly label: string;
   readonly terms: string;
 }
 
 export const WARRANTY_CHOICES: readonly WarrantyChoice[] = [
-  { code: "none", glyph: "—", label: "None", terms: "" },
+  { code: "none", icon: "no", label: "None", terms: "" },
   {
     code: "3m",
-    glyph: "🗓️",
+    icon: "date",
     label: "3 months",
     terms: "Three months on workmanship from handover.",
   },
   {
     code: "6m",
-    glyph: "🗓️",
+    icon: "date",
     label: "6 months",
     terms: "Six months on workmanship from handover.",
   },
   {
     code: "12m",
-    glyph: "🏅",
+    icon: "warranty",
     label: "12 months",
     terms: "Twelve months on workmanship from handover.",
   },
@@ -182,7 +188,7 @@ export const WARRANTY_CHOICES: readonly WarrantyChoice[] = [
  */
 export interface ExclusionChoice {
   readonly code: string;
-  readonly glyph: string;
+  readonly icon: PictogramName;
   readonly label: string;
   readonly sentence: string;
 }
@@ -190,31 +196,31 @@ export interface ExclusionChoice {
 export const EXCLUSION_CHOICES: readonly ExclusionChoice[] = [
   {
     code: "permits",
-    glyph: "📄",
+    icon: "papers",
     label: "Permits",
     sentence: "Statutory permits and society approvals are not included.",
   },
   {
     code: "debris",
-    glyph: "🗑️",
+    icon: "clean",
     label: "Debris removal",
     sentence: "Removing debris from the building is not included.",
   },
   {
     code: "furniture",
-    glyph: "🪑",
+    icon: "home",
     label: "Furniture",
     sentence: "Loose furniture and equipment are not included.",
   },
   {
     code: "structural",
-    glyph: "🏗️",
+    icon: "walls",
     label: "Structural work",
     sentence: "Structural or load-bearing changes are not included.",
   },
   {
     code: "after_hours",
-    glyph: "🌙",
+    icon: "time",
     label: "Night work",
     sentence: "Work outside normal site hours is not included.",
   },

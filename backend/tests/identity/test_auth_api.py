@@ -7,7 +7,7 @@ from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APIClient
 
-from apps.identity.models import OtpChallenge, User, UserSession
+from apps.identity.models import AccessAuditEvent, OtpChallenge, User, UserSession
 
 pytestmark = pytest.mark.django_db
 
@@ -48,15 +48,28 @@ def test_customer_can_request_verify_and_revoke_session() -> None:
 
     assert verify_response.status_code == HTTPStatus.OK
     assert verify_response.json()["user"]["phone_number"] == "+919876543210"
+    assert verify_response.json()["user"]["display_name"] == ""
+    assert verify_response.json()["user"]["date_joined"]
     assert verify_response.json()["user"]["roles"] == ["customer"]
     assert verify_response.json()["active_role"] == "customer"
     assert verify_response.json()["session_expires_at"]
     assert User.objects.filter(phone_number="+919876543210").exists()
     assert UserSession.objects.filter(revoked_at__isnull=True).count() == 1
 
+    user = User.objects.get(phone_number="+919876543210")
+    user.full_name = "Gopal Rao"
+    user.email = "gopal@example.test"
+    user.save(update_fields=("full_name", "email", "updated_at"))
+    user.customer_profile.display_name = "Gopal"
+    user.customer_profile.save(update_fields=("display_name", "updated_at"))
+
     session_response = client.get("/api/v1/auth/session/")
     assert session_response.status_code == HTTPStatus.OK
     assert session_response.json()["user"]["phone_number"] == "+919876543210"
+    assert session_response.json()["user"]["display_name"] == "Gopal"
+    assert session_response.json()["user"]["full_name"] == "Gopal Rao"
+    assert session_response.json()["user"]["email"] == "gopal@example.test"
+    assert session_response.json()["user"]["date_joined"]
     assert session_response.json()["active_role"] == "customer"
     assert session_response.json()["session_expires_at"]
 
@@ -91,6 +104,51 @@ def test_anonymous_session_read_is_explicit_and_side_effect_free() -> None:
         "active_role": None,
         "session_expires_at": None,
     }
+
+
+def test_customer_can_read_and_update_personal_profile() -> None:
+    client = APIClient()
+    issued = _issue_otp(client)
+    verified = client.post(
+        "/api/v1/auth/otp/verify/",
+        {
+            "challenge_id": issued["challenge_id"],
+            "phone_number": "+919876543210",
+            "code": issued["development_code"],
+        },
+        format="json",
+    )
+    assert verified.status_code == HTTPStatus.OK
+
+    empty_profile = client.get("/api/v1/auth/profile/")
+    assert empty_profile.status_code == HTTPStatus.OK
+    assert empty_profile.json()["display_name"] == ""
+    assert empty_profile.json()["full_name"] == ""
+
+    updated = client.patch(
+        "/api/v1/auth/profile/",
+        {
+            "display_name": "  Gopal  ",
+            "full_name": "  Gopal   Rao  ",
+            "email": "gopal@example.test",
+        },
+        format="json",
+    )
+    assert updated.status_code == HTTPStatus.OK
+    assert updated.json()["display_name"] == "Gopal"
+    assert updated.json()["full_name"] == "Gopal Rao"
+    assert updated.json()["email"] == "gopal@example.test"
+    assert updated.json()["phone_number"] == "+919876543210"
+
+    event = AccessAuditEvent.objects.get(action="identity.customer_profile_updated")
+    assert event.metadata == {"fields": ["display_name", "full_name", "email"]}
+    assert "Gopal" not in str(event.metadata)
+
+
+def test_anonymous_customer_profile_is_not_disclosed() -> None:
+    response = APIClient().get("/api/v1/auth/profile/")
+
+    assert response.status_code in {HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED}
 
 
 def test_wrong_code_increments_attempts_and_does_not_create_user() -> None:

@@ -152,6 +152,10 @@
   --color-success-surface: #e8f6ed;
   --color-success-line: #a8ddbc;
   --color-success-text: #0e7c3a;
+  /* Pressed-state shadow for a green confirm/done control, e.g. the tap-
+     estimate "send" button and every job-progress confirm button in the
+     tap-first redesign. Same darken-on-press pattern as --color-action-active. */
+  --color-success-active: #0a5c2b;
 
   --color-warning-surface: var(--color-signal-50);
   --color-warning-line: var(--color-signal-200);

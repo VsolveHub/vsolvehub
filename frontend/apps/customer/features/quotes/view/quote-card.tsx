@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button } from "@vsolve/ui";
+import { Badge, Button, Disclosure, cn } from "@vsolve/ui";
 
 import type { QuoteCardView } from "../adapters";
 
@@ -32,9 +32,17 @@ export interface QuoteCardProps {
   /** Position in the list, for the accessible heading. */
   index: number;
 
-  /** Hidden entirely once anything is selected. See `SelectionStatus`. */
-  onSelect?: (proposalId: string) => void;
-  isSelecting: boolean;
+  /**
+   * Marks this card as the one the Customer is leaning towards.
+   *
+   * Picking is **not** choosing. It sets no server state and costs nothing; the
+   * commitment is made once, in the docked bar, where the consequence — that
+   * this is not a booking until the professional confirms — is stated next to
+   * the button that does it. Withheld entirely once a real selection exists, so
+   * a stale render cannot start a second one.
+   */
+  onPick?: (proposalId: string) => void;
+  isPicked: boolean;
 
   onReject?: (proposalId: string) => void;
   /** `M2-FE-413` — offered only on an expired quote, and it charges nothing. */
@@ -45,13 +53,14 @@ export interface QuoteCardProps {
 export function QuoteCard({
   card,
   index,
-  onSelect,
-  isSelecting,
+  onPick,
+  isPicked,
   onReject,
   onRevalidate,
   isRevalidating,
 }: QuoteCardProps) {
   const headingId = `quote-${card.proposalId}`;
+  const pickable = onPick !== undefined && card.isSelectable && !card.isExpired;
 
   return (
     <article
@@ -59,8 +68,46 @@ export function QuoteCard({
       // heading clear of the sticky page chrome when it does.
       id={`estimate-${card.proposalId}`}
       aria-labelledby={headingId}
-      className="scroll-mt-6 rounded-card border border-line bg-surface p-4"
+      className={cn(
+        "scroll-mt-6 overflow-hidden rounded-card bg-surface",
+        isPicked
+          ? "shadow-raised ring-2 ring-selected"
+          : "border border-line shadow-card",
+      )}
     >
+      {/* ## Why the whole card is one label
+       *
+       * Choosing between quotes is a radio-group decision, and the target for
+       * it was a `Choose this one` button at the bottom of a card that is
+       * frequently a full screen tall — so picking meant scrolling past the
+       * thing you were judging to reach the control. Wrapping the summary in a
+       * `<label>` over a real radio makes the price, the name and the badges —
+       * everything you actually decide on — the tap target, and costs nothing
+       * semantically: it is still a radio group, still keyboard-navigable with
+       * arrows, still announced as "1 of 3".
+       *
+       * The secondary controls live **below** this label, not inside it. A
+       * button nested in a label is activated by the label's own click handler
+       * as well as its own, which is how "Not this one" would quietly select
+       * the quote it was rejecting.
+       */}
+      <label
+        className={cn(
+          "block p-4",
+          pickable ? "cursor-pointer" : null,
+          isPicked ? "bg-selected-surface" : null,
+        )}
+      >
+        <input
+          type="radio"
+          // One group per screen: choosing is choosing *between* these.
+          name="quote-choice"
+          value={card.proposalId}
+          checked={isPicked}
+          disabled={!pickable}
+          onChange={() => onPick?.(card.proposalId)}
+          className="sr-only"
+        />
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 id={headingId} className="font-semibold text-text">
@@ -76,6 +123,31 @@ export function QuoteCard({
           {card.isVerified ? <Badge tone="success">Verified</Badge> : null}
           {card.isOutOfBudget ? <Badge tone="warning">Over budget</Badge> : null}
           {card.isExpired ? <Badge tone="neutral">Price expired</Badge> : null}
+          {pickable ? (
+            // The radio itself is `sr-only`, so this is its visible face. Shape
+            // and fill, never colour alone.
+            <span
+              aria-hidden
+              className={cn(
+                "mt-1 flex size-6 items-center justify-center rounded-full",
+                isPicked ? "bg-selected" : "ring-2 ring-inset ring-warm-300",
+              )}
+            >
+              {isPicked ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-3 text-text-inverse"
+                >
+                  <path d="m5 12 5 5 9-10" />
+                </svg>
+              ) : null}
+            </span>
+          ) : null}
         </div>
       </header>
 
@@ -117,7 +189,24 @@ export function QuoteCard({
           />
         </dl>
       ) : null}
+      </label>
 
+      {/* Everything the vendor wrote, one tap away.
+       *
+       * Not one line of it is cut — the staging, the inclusions, the
+       * exclusions and the warranty are the whole reason an unlocked quote is
+       * worth what it cost, and `M2-FE-423` forbids gating any of it. What
+       * changes is that three quotes no longer arrive as three screens of
+       * prose stacked end to end, with the price of the second one somewhere
+       * below the exclusions of the first. Open is a choice per quote, and the
+       * decision the screen is for — which price, from whom — is legible
+       * without making it. */}
+      <div className="border-t border-line px-4 pb-4 pt-3">
+        <Disclosure
+          summary="Read the full scope"
+          hint={card.exclusions.length > 0 ? "Includes exclusions" : undefined}
+        >
+          <div className="text-text">
       {card.stages.length > 0 ? (
         <section className="mt-4">
           <h4 className="text-sm font-semibold text-text">How the work is staged</h4>
@@ -170,10 +259,12 @@ export function QuoteCard({
         />
       </dl>
 
+          </div>
+        </Disclosure>
+      </div>
+
       <QuoteActions
         card={card}
-        onSelect={onSelect}
-        isSelecting={isSelecting}
         onReject={onReject}
         onRevalidate={onRevalidate}
         isRevalidating={isRevalidating}
@@ -231,10 +322,12 @@ function LineSection({
 /**
  * What can be done with this quote right now.
  *
- * Three controls and each has one condition. **Choose** appears only on a
- * `SUBMITTED` quote — the state machine's only selectable status — and the
- * caller withholds `onSelect` entirely once anything is selected, so a second
- * selection cannot be started from a stale render.
+ * Choosing is **not** here any more. It happens once, in the screen's docked
+ * bar, beside the sentence saying what choosing does and does not mean — a
+ * control repeated on every card is a commitment a Customer can make three
+ * times before reading the consequence once. What is left are the two actions
+ * that belong to one quote and only one: turning it down, and asking an expired
+ * price to be confirmed.
  *
  * **Ask for a fresh price** is the whole of `M2-FE-413`: it reuses the unlock or
  * plan already paid for and charges nothing, and the copy says so because a
@@ -244,22 +337,18 @@ function LineSection({
  */
 function QuoteActions({
   card,
-  onSelect,
-  isSelecting,
   onReject,
   onRevalidate,
   isRevalidating,
 }: {
   card: QuoteCardView;
-  onSelect?: (proposalId: string) => void;
-  isSelecting: boolean;
   onReject?: (proposalId: string) => void;
   onRevalidate?: (proposalId: string) => void;
   isRevalidating: boolean;
 }) {
   if (card.isExpired) {
     return (
-      <div className="mt-5 border-t border-line pt-4">
+      <div className="border-t border-line p-4">
         <p className="max-w-prose text-sm leading-6 text-text-secondary">
           This price has run out. You can ask the professional to confirm it
           again — <strong className="font-semibold text-text">that costs nothing</strong> and
@@ -288,7 +377,7 @@ function QuoteActions({
 
   if (!card.isSelectable) {
     return (
-      <div className="mt-5 border-t border-line pt-4">
+      <div className="border-t border-line p-4">
         <p className="max-w-prose text-sm leading-6 text-text-secondary">
           This one can no longer be chosen. It stays here so you can see what was
           offered and when.
@@ -297,22 +386,13 @@ function QuoteActions({
     );
   }
 
+  if (onReject === undefined) return null;
+
   return (
-    <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
-      {onSelect !== undefined ? (
-        <Button
-          onClick={() => onSelect(card.proposalId)}
-          loading={isSelecting}
-          loadingLabel="Choosing"
-        >
-          Choose this one
-        </Button>
-      ) : null}
-      {onReject !== undefined ? (
-        <Button variant="ghost" onClick={() => onReject(card.proposalId)}>
-          Not this one
-        </Button>
-      ) : null}
+    <div className="flex flex-wrap gap-2 border-t border-line p-4 pt-3">
+      <Button variant="ghost" onClick={() => onReject(card.proposalId)}>
+        Not this one
+      </Button>
     </div>
   );
 }

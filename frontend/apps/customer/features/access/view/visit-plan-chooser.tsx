@@ -1,62 +1,21 @@
 "use client";
 
-import { Button, Skeleton } from "@vsolve/ui";
+import { Skeleton, cn } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 import type { PlanTierView } from "../adapters";
 import { AccessRefusal } from "./access-refusal";
 
-/**
- * The A5 visit-plan chooser — `M2-FE-216`.
- *
- * **A control on the review screen. Never a fifth screen.** The requirement flow
- * is budgeted at four screens and `features/requirement/boundary.test.ts`
- * asserts `SCREENS.length === 4`, so this renders inside review beside the
- * optional extras — a decision the Customer makes while looking at what they are
- * about to send, not a step they walk through.
- *
- * It also never renders for A3. A3 sells remote quotes through the unlock; there
- * are no visits to plan, and `POST .../visit-plan/` answers `400
- * m2_lifecycle_not_supported` to prove it. The caller decides from the server's
- * inferred lifecycle and simply does not mount this.
- *
- * ## Choosing charges nothing, and the screen says so in those words
- *
- * It bounds the invitation wave and snapshots the price the Customer was shown,
- * so a price loaded between choosing and the first vendor confirming cannot
- * silently become what they pay. The money is taken later, once — when the first
- * professional confirms a time.
- *
- * ## An empty tier list is the honest answer, not a loading state
- *
- * `available_tiers: []` means the owner has priced no tier and **nothing can be
- * sold**. The panel says we cannot offer visits here yet. It does not render
- * 49/99/199: those are proposed figures in a planning document, and a screen
- * that prints them would be quoting a price nobody approved.
- */
-
 export interface VisitPlanChooserProps {
   tiers: readonly PlanTierView[];
-  /** The size already chosen, or null. Re-choosing is allowed until a vendor commits. */
   chosenPlanSize: number | null;
-  /**
-   * True once a professional has committed to a slot.
-   *
-   * `POST .../visit-plan/` then answers `409
-   * m2_requirement_transition_not_allowed`, because resizing a plan somebody is
-   * already travelling for is not a choice. The control disappears rather than
-   * refusing on press.
-   */
   locked: boolean;
-
   isLoading: boolean;
   readError: unknown;
   onRetryRead: () => void;
-
   onChoose: (planSize: number) => void;
   isChoosing: boolean;
   chooseError: unknown;
-
   supportAction?: ReactNode;
 }
 
@@ -73,92 +32,176 @@ export function VisitPlanChooser({
   supportAction,
 }: VisitPlanChooserProps) {
   return (
-    <section className="mt-6 rounded-card border border-line bg-surface p-4" aria-labelledby="plan-heading">
-      <h3 id="plan-heading" className="text-sm font-semibold text-text">
-        How many professionals should visit?
-      </h3>
-      <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        For work like this, nobody can price it properly without seeing it. Pick
-        how many verified professionals come and give you a written estimate on
-        site. <strong className="font-semibold text-text">Choosing costs nothing now</strong> —
-        you pay once, when the first one confirms a time.
-      </p>
-
-      {isLoading ? (
-        <div className="mt-3" aria-busy="true" aria-live="polite">
-          <span className="sr-only">Loading visit options</span>
-          <Skeleton className="h-24 w-full" />
+    <section
+      data-visit-plan-chooser
+      className="overflow-hidden rounded-card border border-line bg-surface shadow-card"
+      aria-labelledby="plan-heading"
+    >
+      <div className="bg-action-surface px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-4">
+          <VisitSignal count={chosenPlanSize} active={isChoosing} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-bold uppercase text-action-active">Site visits</p>
+              <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-bold text-success-text">
+                No payment now
+              </span>
+            </div>
+            <h3 id="plan-heading" className="mt-1 text-lg font-extrabold text-text">
+              How many estimates do you want?
+            </h3>
+            <p className="mt-1 text-sm font-medium leading-5 text-text-secondary">
+              Each professional measures the site and prices it in writing.
+            </p>
+          </div>
         </div>
-      ) : readError !== null && readError !== undefined ? (
-        <div className="mt-3">
+      </div>
+
+      <div className="p-4 sm:p-5">
+        {isLoading ? (
+          <div className="grid gap-2 sm:grid-cols-3" aria-busy="true" aria-live="polite">
+            <span className="sr-only">Loading visit options</span>
+            {[0, 1, 2].map((row) => (
+              <Skeleton key={row} className="h-32 w-full" />
+            ))}
+          </div>
+        ) : readError !== null && readError !== undefined ? (
           <AccessRefusal
             error={readError}
             attempting="choose how many professionals visit"
             supportAction={supportAction}
             onRetry={onRetryRead}
           />
-        </div>
-      ) : tiers.length === 0 ? (
-        <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
-          We cannot offer site visits for this yet. We have not set a price for
-          them, so there is nothing to choose here and nothing to pay. Talk to us
-          and we will tell you where this stands.
-        </p>
-      ) : locked ? (
-        <p className="mt-3 max-w-prose text-sm leading-6 text-text">
-          A professional has already committed to a time, so the number of visits
-          is fixed at {chosenPlanSize ?? tiers[0]?.planSize}. Changing it now
-          would cancel a journey somebody has already planned.
-        </p>
-      ) : (
-        <ul className="mt-3 flex list-none flex-col gap-2 p-0">
-          {tiers.map((tier) => {
-            const isChosen = chosenPlanSize === tier.planSize;
-            return (
-              <li
-                key={tier.planSize}
-                className={`flex items-center justify-between gap-4 rounded-card border p-3 ${
-                  isChosen ? "border-action-line bg-action-surface" : "border-line"
-                }`}
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-text">{tier.headline}</p>
-                  <p className="mt-0.5 text-sm text-text-secondary">
-                    {tier.priceLabel} for the whole plan
-                    {tier.planSize > 1
-                      ? ` — every visit that does not happen refunds its share of that.`
-                      : ` — refunded in full if the visit never happens.`}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant={isChosen ? "outline" : "primary"}
+        ) : tiers.length === 0 ? (
+          <div className="text-sm leading-6 text-text-secondary">
+            <p>No priced site-visit plans are available for this request yet.</p>
+            {supportAction ? <div className="mt-3">{supportAction}</div> : null}
+          </div>
+        ) : locked ? (
+          <div className="flex items-center gap-3 rounded-card border border-success-line bg-success-surface px-4 py-3">
+            <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-success-text">
+              <CheckIcon />
+            </span>
+            <div>
+              <p className="text-sm font-extrabold text-text">
+                {chosenPlanSize ?? tiers[0]?.planSize} visit{(chosenPlanSize ?? tiers[0]?.planSize) === 1 ? "" : "s"} confirmed
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-text-secondary">
+                A professional has committed, so this plan is now fixed.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="grid gap-2 sm:grid-cols-3"
+            role="radiogroup"
+            aria-labelledby="plan-heading"
+            aria-busy={isChoosing}
+          >
+            {tiers.map((tier) => {
+              const isChosen = chosenPlanSize === tier.planSize;
+              return (
+                <button
+                  key={tier.planSize}
+                  type="button"
+                  role="radio"
+                  aria-checked={isChosen}
+                  disabled={isChoosing}
                   onClick={() => onChoose(tier.planSize)}
-                  loading={isChoosing}
-                  loadingLabel="Saving your choice"
-                  aria-pressed={isChosen}
+                  className={cn(
+                    "relative flex min-h-32 cursor-pointer flex-col items-start rounded-card border px-3 py-3 text-left",
+                    "transition-colors duration-fast focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+                    "disabled:cursor-wait disabled:opacity-70",
+                    isChosen
+                      ? "border-action-line bg-action-surface"
+                      : "border-line bg-surface hover:border-line-strong hover:bg-surface-hover",
+                  )}
                 >
-                  {isChosen ? "Chosen" : "Choose"}
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  <span className="flex w-full items-start justify-between gap-2">
+                    <span data-numeric className="text-2xl font-extrabold text-text">
+                      {tier.planSize}
+                    </span>
+                    {isChosen ? (
+                      <span className="grid size-6 place-items-center rounded-full bg-action text-action-text">
+                        {isChoosing ? <LoadingIcon /> : <CheckIcon />}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 text-sm font-extrabold text-text">
+                    {tier.planSize === 1 ? "professional" : "professionals"}
+                  </span>
+                  <span data-numeric className="mt-auto pt-3 text-sm font-bold text-text">
+                    {tier.priceLabel}
+                  </span>
+                  <span className="mt-0.5 text-xs font-medium text-text-muted">
+                    {tier.planSize > 1 ? "Unused visits refunded" : "Refunded if it never happens"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-      {chosenPlanSize !== null && !locked && tiers.length > 0 ? (
-        <p className="mt-3 text-sm text-text-secondary" role="status">
-          You can change this until the first professional confirms a time.
-        </p>
-      ) : null}
+        {chosenPlanSize !== null && !locked && tiers.length > 0 ? (
+          <p className="mt-3 text-xs font-medium text-text-secondary" role="status">
+            Change this until the first professional confirms a time.
+          </p>
+        ) : null}
 
-      <div className="mt-3">
-        <AccessRefusal
-          error={chooseError}
-          attempting="choose how many professionals visit"
-          supportAction={supportAction}
-        />
+        <div className="mt-3">
+          <AccessRefusal
+            error={chooseError}
+            attempting="choose how many professionals visit"
+            supportAction={supportAction}
+          />
+        </div>
       </div>
     </section>
+  );
+}
+
+function VisitSignal({ count, active }: { count: number | null; active: boolean }) {
+  const visible = Math.min(Math.max(count ?? 3, 1), 3);
+
+  return (
+    <span
+      aria-hidden
+      className="relative grid size-16 shrink-0 place-items-center rounded-full border border-action-line bg-surface"
+    >
+      <span
+        className={cn(
+          "absolute inset-2 rounded-full border border-action-line",
+          active ? "animate-ping opacity-40 motion-reduce:animate-none" : null,
+        )}
+      />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-6 text-action-active">
+        <path d="M5 20v-7l7-5 7 5v7M9 20v-4h6v4M8 7V4h8v3" />
+      </svg>
+      {Array.from({ length: visible }, (_, index) => (
+        <span
+          key={index}
+          className={cn(
+            "absolute size-2 rounded-full bg-action",
+            index === 0 ? "left-1 top-7" : index === 1 ? "right-1 top-7" : "left-7 top-1",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+      <path d="m5 12 4 4 10-10" />
+    </svg>
+  );
+}
+
+function LoadingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="size-4 animate-spin motion-reduce:animate-none">
+      <path d="M20 12a8 8 0 1 1-3-6.2" />
+    </svg>
   );
 }

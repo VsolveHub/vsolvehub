@@ -495,3 +495,44 @@ export function unlockPriceLabel(pricePaise: number | null): string | null {
 export function proposalIsOutOfBudget(proposal: CustomerProposal): boolean {
   return isOutOfBudget(proposal);
 }
+
+/**
+ * The visit day split into the three parts a calendar tile shows.
+ *
+ * Formatted in the *service area's* zone, not the device's, for the same reason
+ * `formatVisitSlot` is: a Customer travelling has not moved their bathroom, and
+ * a tile reading Friday for a Saturday visit is the kind of error nobody
+ * double-checks. Null all the way through when there is no confirmed time or
+ * the zone the server sent is one this device does not know — the tile is then
+ * simply absent, and the line beside it still says so in words.
+ */
+export function calendarDay(
+  scheduledFor: string | null,
+  timeZone: string | null,
+): { weekday: string; dayOfMonth: string; month: string } | null {
+  if (scheduledFor === null) return null;
+  const at = new Date(scheduledFor);
+  if (Number.isNaN(at.getTime())) return null;
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      ...(timeZone === null ? {} : { timeZone }),
+    }).formatToParts(at);
+
+    const find = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value ?? null;
+
+    const weekday = find("weekday");
+    const dayOfMonth = find("day");
+    const month = find("month");
+    if (weekday === null || dayOfMonth === null || month === null) return null;
+    return { weekday, dayOfMonth, month };
+  } catch {
+    // An unknown IANA zone throws rather than falling back, and a thrown format
+    // must not take the whole visit page down with it.
+    return null;
+  }
+}

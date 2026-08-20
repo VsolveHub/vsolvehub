@@ -17,6 +17,7 @@ import { usePathname } from "next/navigation";
  */
 
 const SECTIONS = [
+  { href: "/account", label: "Profile", hint: "Your personal details" },
   { href: "/account/addresses", label: "Addresses", hint: "Where we send someone" },
   { href: "/account/messages", label: "Messages", hint: "What we send you" },
   { href: "/account/privacy", label: "Privacy", hint: "Your data and consents" },
@@ -35,7 +36,9 @@ export function AccountNav() {
         )}
       >
         {SECTIONS.map((section) => {
-          const isCurrent = pathname === section.href;
+          const isCurrent =
+            pathname === section.href ||
+            (section.href === "/account" && pathname.startsWith("/account/edit"));
 
           return (
             <li key={section.href} className="shrink-0 lg:shrink">

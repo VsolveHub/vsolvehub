@@ -1,12 +1,13 @@
 "use client";
 
-import { Button, Skeleton, buttonStyles } from "@vsolve/ui";
+import { Button, Logo, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { toBookingView } from "@/features/crew/adapters";
 import { useRateCardState } from "@/features/crew/queries";
+import { useCustomerSession } from "@/features/session/queries";
 import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 import { engagementHref } from "@/lib/routes";
 
@@ -30,9 +31,27 @@ import { useEngagement } from "../queries";
  * treatment of these fees is an open owner decision — so a document that looked
  * like a tax invoice would be a document making a claim nobody has approved.
  *
- * What it *is* is a complete record of one payment: who paid, who was paid, what
- * for, how much, when it cleared, and the gapless `M2A-` reference that ties it
- * to the ledger.
+ * ## What it now looks like, and what it still cannot say
+ *
+ * It used to be three rows in a `<dl>` — paid to, what for, how much — with no
+ * mark, no reference to the booking it belonged to, and nothing identifying the
+ * payer. Forwarded to an accountant it was unattributable. It is now laid out as
+ * a document: a masthead carrying the brand, a reference strip, both parties,
+ * the amount, and a footer that says what the paper is and is not.
+ *
+ * Four things a complete receipt would carry are **absent rather than
+ * invented**, because the server publishes none of them — `AccessReceipt` is
+ * `{number, kind, amount_paise, paid_at}` and nothing else:
+ *
+ *   - the tax split (a rate and a base) — GST treatment is undecided, and a
+ *     receipt asserting 18% would be asserting the open decision
+ *   - the payment method and the gateway's own reference
+ *   - V Solve Hub's registered address, GSTIN and CIN
+ *   - the payer's name — the session carries a phone number and no name
+ *
+ * A placeholder for any of them would read as a fact to whoever received the
+ * document. They are requested in `contracts/proposals/0014-access-receipt-document-fields.md`;
+ * until the contract carries them, the receipt says less and stays true.
  *
  * ## The crew money is shown, and labelled as not ours
  *
@@ -50,6 +69,7 @@ export function ReceiptDocument({ engagementId }: ReceiptDocumentProps) {
   const engagementQuery = useEngagement(engagementId);
   const engagement = engagementQuery.data ?? null;
   const view = engagement === null ? null : toEngagementView(engagement);
+  const session = useCustomerSession();
 
   const rateQuery = useRateCardState(view?.requirementId ?? null, view !== null);
   const booking =
@@ -97,39 +117,111 @@ export function ReceiptDocument({ engagementId }: ReceiptDocumentProps) {
 
   return (
     <Wrapper>
-      <article className="rounded-card border border-line bg-surface">
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line p-5">
-          <div>
-            <h1 className="text-lg font-semibold text-text">Payment receipt</h1>
-            <p className="mt-0.5 text-sm text-text-secondary">
-              Not a tax invoice — see the note below
+      {/* Screen controls, above the paper and off it. `print:hidden` plus the
+          landmark rules in `globals.css` are what make Print produce the
+          document rather than the application around it. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+        <DownloadButton engagementId={engagementId} number={receipt.number} />
+        <Button variant="outline" onClick={() => window.print()}>
+          Print
+        </Button>
+      </div>
+
+      <article className="rounded-card border border-line bg-surface print:rounded-none print:border-0">
+        {/* Masthead. The mark is the first thing on the page for the same reason
+            it is on a paper receipt: whoever opens this in three months, or
+            receives it forwarded, has to know in one glance who took the money. */}
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-action-secondary p-5">
+          <Logo className="h-9 w-auto" />
+          <div className="flex flex-col items-end gap-1.5">
+            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-text-secondary">
+              Payment receipt
             </p>
-          </div>
-          <div className="text-right">
-            <p data-numeric className="font-mono text-sm text-text">
-              {receipt.number}
-            </p>
-            {receipt.paidOn !== null ? (
-              <p className="mt-0.5 text-sm text-text-secondary">{receipt.paidOn}</p>
-            ) : null}
-            <div className="mt-2">
-              <DownloadButton engagementId={engagementId} number={receipt.number} />
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success-surface px-2.5 py-1 text-xs font-extrabold text-success-text ring-1 ring-inset ring-success-line">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-2.5"
+              >
+                <path d="m5 12 5 5 9-10" />
+              </svg>
+              Paid in full
+            </span>
           </div>
         </header>
 
-        <dl className="divide-y divide-line">
-          <Line label="Paid to" value="V Solve Hub" />
-          <Line label="What this paid for" value={receipt.purpose} />
-          <Line label="Amount paid" value={receipt.amountLabel} numeric emphasis />
+        {/* The reference strip: the three values somebody quotes when they ring
+            up about this payment. */}
+        <dl className="grid grid-cols-1 gap-px border-b border-line bg-line sm:grid-cols-3">
+          <Reference label="Receipt number" value={receipt.number} numeric />
+          {receipt.paidOn === null ? null : (
+            <Reference label="Date of payment" value={receipt.paidOn} />
+          )}
+          <Reference label="Booking reference" value={bookingReference(engagementId)} numeric />
         </dl>
+
+        <div className="grid grid-cols-1 gap-6 border-b border-line p-5 sm:grid-cols-2">
+          <Party label="Received from">
+            {/* The session carries a phone number and no name. Printing the
+                number is identifying the payer with what we actually hold;
+                printing "Customer" would identify nobody. */}
+            {session.phoneNumber === null ? (
+              <p className="text-sm text-text-secondary">
+                Signed in as the account that made this payment.
+              </p>
+            ) : (
+              <p data-numeric className="text-sm font-semibold text-text">
+                {session.phoneNumber}
+              </p>
+            )}
+          </Party>
+
+          <Party label="Received by">
+            <p className="text-sm font-semibold text-text">V Solve Hub</p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Verified professionals for home, trade and site work
+            </p>
+          </Party>
+        </div>
+
+        {/* The amount. One line item, because one is what was charged: an access
+            fee is a single indivisible payment, and a table with a subtotal
+            would imply components the server does not publish. */}
+        <div className="flex flex-wrap items-end justify-between gap-4 p-5">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold uppercase tracking-[0.09em] text-text-secondary">
+              What this paid for
+            </p>
+            <p className="mt-1 text-base font-bold tracking-tight text-text">{receipt.purpose}</p>
+          </div>
+          <div className="relative overflow-hidden rounded-plate border border-action-line bg-surface py-3 pl-5 pr-4">
+            {/* The system's readout rule. Money, timers and door codes share one
+                shape across both apps; a receipt total is the most consequential
+                number in the product and should not be the one that opts out. */}
+            <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-action" />
+            <p className="text-xs font-extrabold uppercase tracking-[0.09em] text-text-secondary">
+              Total paid to V Solve Hub
+            </p>
+            <p
+              data-numeric
+              className="mt-0.5 text-3xl font-extrabold leading-none tracking-tight text-text"
+            >
+              {receipt.amountLabel}
+            </p>
+          </div>
+        </div>
 
         {booking !== null ? (
           <div className="border-t border-line p-5">
-            <h2 className="text-sm font-semibold text-text">
+            <h2 className="text-xs font-extrabold uppercase tracking-[0.09em] text-text-secondary">
               The rest of this booking, for context
             </h2>
-            <p className="mt-1 max-w-prose text-xs leading-5 text-text-secondary">
+            <p className="mt-1.5 max-w-prose text-sm leading-6 text-text-secondary">
               Not collected by V Solve Hub and not covered by this receipt. You pay
               it to the crew directly, at the end of each day.
             </p>
@@ -146,9 +238,11 @@ export function ReceiptDocument({ engagementId }: ReceiptDocumentProps) {
 
         <footer className="border-t border-line p-5">
           <p className="max-w-prose text-xs leading-5 text-text-secondary">
-            This is a receipt for money V Solve Hub received. It is not a tax
-            invoice. Quote{" "}
-            <span data-numeric className="font-mono">
+            <strong className="font-bold text-text">
+              This is a receipt, not a tax invoice.
+            </strong>{" "}
+            It records money V Solve Hub received from you. Quote{" "}
+            <span data-numeric className="font-mono font-semibold text-text">
               {receipt.number}
             </span>{" "}
             if you contact us about this payment.
@@ -161,16 +255,68 @@ export function ReceiptDocument({ engagementId }: ReceiptDocumentProps) {
   );
 }
 
+/**
+ * The booking's own id, in a form somebody can read down a phone.
+ *
+ * A UUID is unquotable — thirty-two characters nobody transcribes correctly. The
+ * first block is what support needs to find the record and is short enough to
+ * say out loud; the full id is still in the page's URL for anything that needs
+ * it exactly. Prefixed so it is recognisable as ours rather than as a fragment
+ * of something.
+ *
+ * Not an invention: it is a rendering of a real identifier, the same way
+ * `vendorInitials` renders a real name.
+ */
+function bookingReference(engagementId: string): string {
+  const head = engagementId.split("-")[0] ?? engagementId;
+  return `VSH-${head.toUpperCase()}`;
+}
+
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-xl flex-col px-4 pb-16 pt-6">{children}</div>;
+  return <div className="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-6">{children}</div>;
 }
 
 function BackLink({ engagementId }: { engagementId: string }) {
   return (
-    <div className="mt-6">
+    <div className="mt-6 print:hidden">
       <Link href={engagementHref(engagementId)} className={buttonStyles({ variant: "ghost" })}>
         Back to this booking
       </Link>
+    </div>
+  );
+}
+
+function Reference({
+  label,
+  value,
+  numeric = false,
+}: {
+  label: string;
+  value: string;
+  numeric?: boolean;
+}) {
+  return (
+    <div className="bg-canvas px-5 py-3">
+      <dt className="text-[0.625rem] font-extrabold uppercase tracking-[0.09em] text-text-secondary">
+        {label}
+      </dt>
+      <dd
+        {...(numeric ? { "data-numeric": true } : {})}
+        className="mt-0.5 text-sm font-bold tracking-tight text-text"
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Party({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[0.625rem] font-extrabold uppercase tracking-[0.09em] text-text-secondary">
+        {label}
+      </p>
+      <div className="mt-1.5">{children}</div>
     </div>
   );
 }
@@ -179,21 +325,17 @@ function Line({
   label,
   value,
   numeric = false,
-  emphasis = false,
 }: {
   label: string;
   value: string;
   numeric?: boolean;
-  emphasis?: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3 px-5 py-3">
-      <dt className={emphasis ? "font-semibold text-text" : "text-sm text-text-secondary"}>
-        {label}
-      </dt>
+    <div className="flex flex-wrap items-baseline justify-between gap-3 px-4 py-3">
+      <dt className="text-sm text-text-secondary">{label}</dt>
       <dd
         {...(numeric ? { "data-numeric": true } : {})}
-        className={emphasis ? "text-lg font-semibold text-text" : "font-medium text-text"}
+        className="font-semibold text-text"
       >
         {value}
       </dd>
@@ -246,8 +388,7 @@ function DownloadButton({ engagementId, number }: { engagementId: string; number
   return (
     <div>
       <Button
-        variant="outline"
-        size="sm"
+        variant="primary"
         onClick={() => void download()}
         loading={state === "working"}
         loadingLabel="Preparing"

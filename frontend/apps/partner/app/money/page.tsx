@@ -1,0 +1,49 @@
+import type { Metadata } from "next";
+
+import { EarningsPanel } from "@/features/earnings/view/earnings-panel";
+import { PartnerShell } from "@/features/session/partner-shell";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Money",
+  robots: { index: false, follow: false },
+};
+
+/**
+ * The Money tab (`/money`) — one of the three permanent destinations in
+ * `TAP_FIRST_NAV`, alongside `/work` and `/me`.
+ *
+ * ## Wrapped in `PartnerShell`, matching `/work`'s own precedent
+ *
+ * The task brief's own route sketch was a bare `<EarningsPanel />`, but
+ * `PartnerShell` is the only place `BottomTabBar`/`TAP_FIRST_NAV` is ever
+ * rendered (`features/session/partner-shell.tsx`) — nothing mounts it
+ * globally. Shipping this page without it would mean the Money tab has no
+ * way back to Work or Me, and no top bar, no notification bell, no sign
+ * out. `requirePartnerRole` is left off, matching `app/work/page.tsx`
+ * (Task 6) and the currently-live `app/earnings/page.tsx` this route
+ * replaces (Task 5 redirects `/earnings` here) — both use the plain,
+ * unrestricted shell rather than `requirePartnerRole`.
+ *
+ * ## `<main>` and the landmark, not `EarningsPanel`'s job
+ *
+ * `EarningsPanel` renders three different return branches (pending, error,
+ * success) and none of them carry a `<main>` today — the old
+ * `app/earnings/page.tsx` supplied that wrapper at the route level, not
+ * inside the shared component, so this keeps the same division of
+ * responsibility rather than adding a landmark to a component whose data
+ * logic this task is explicitly not meant to touch. The heading is
+ * `sr-only`: the design direction here is pictures and numbers, the same
+ * call `features/work-stack/view/work-home.tsx` already made for `/work`.
+ */
+export default function MoneyPage() {
+  return (
+    <PartnerShell>
+      <main className="mx-auto w-full max-w-2xl px-4 py-6">
+        <h1 className="sr-only">Money</h1>
+        <EarningsPanel />
+      </main>
+    </PartnerShell>
+  );
+}

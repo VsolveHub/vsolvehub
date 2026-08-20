@@ -127,3 +127,14 @@ export function stageHref(engagementId: string, stageId: string): string {
 export function engagementListHref(mode: "lead_only" | "managed"): string {
   return mode === "lead_only" ? "/bookings/workforce" : "/projects";
 }
+
+/**
+ * One engagement's receipt.
+ *
+ * Separate from `engagementHref` because a receipt is a document somebody
+ * forwards to whoever keeps their books, and "the booking page, then find the
+ * receipt on it" is not an address you can forward.
+ */
+export function engagementReceiptHref(engagementId: string): string {
+  return `${engagementHref(engagementId)}/receipt`;
+}

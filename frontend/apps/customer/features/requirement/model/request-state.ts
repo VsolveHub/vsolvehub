@@ -135,3 +135,42 @@ export function showsQuoteDeadline(state: RequestState): boolean {
 export function isOurFailure(state: RequestState): boolean {
   return state === "CLOSED_SLA_BREACH" || state === "MATCHING_DELAYED";
 }
+
+/**
+ * The first sentence of a state's explanation, and whatever is left.
+ *
+ * ## The bug this exists to make impossible
+ *
+ * The detail screen wants two things: one sentence somebody can read at a
+ * glance, and the full account underneath for whoever wants it. That was
+ * briefly two hand-written strings per state — a `headline` beside the
+ * `explanation` — and three of the fourteen were written identically to their
+ * own explanation, so the card printed the same sentence twice, once in
+ * 20px bold and once in 14px grey. Four more repeated it as a prefix.
+ *
+ * Two strings that must agree will eventually disagree. So there is one
+ * string, and the split is computed: the lede is the explanation's first
+ * sentence, and `rest` is what follows it — empty when the explanation *is*
+ * one sentence, which is exactly the case that was being rendered twice.
+ *
+ * The consequence worth stating: **no state can ever say the same thing
+ * twice**, because `rest` is a suffix of the text `lede` was taken from and
+ * cannot contain it.
+ *
+ * Abbreviations are why this is not `split(". ")`. "Rs. 500" and "e.g." would
+ * both cut mid-sentence; the boundary has to be a full stop followed by a
+ * space and a capital, which is the shape every sentence in the state table
+ * actually has.
+ */
+export function splitLede(explanation: string): { lede: string; rest: string } {
+  const text = explanation.trim();
+  const boundary = /(?<=\.)\s+(?=[A-Z])/;
+  const match = boundary.exec(text);
+  if (match === null || match.index === undefined) {
+    return { lede: text, rest: "" };
+  }
+  return {
+    lede: text.slice(0, match.index),
+    rest: text.slice(match.index + match[0].length).trim(),
+  };
+}

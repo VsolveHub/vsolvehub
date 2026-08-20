@@ -32,9 +32,17 @@ import type { Page, Route } from "@playwright/test";
 const API = "**/api/v1";
 
 export const AUTHENTICATED_SESSION = {
-  user: { id: "cust-1", phone_number: "+919000000001" },
+  user: {
+    id: "cust-1",
+    phone_number: "+919000000001",
+    display_name: "Anitha",
+    full_name: "Anitha Rao",
+    email: "anitha@example.test",
+    date_joined: "2026-01-12T08:30:00Z",
+    roles: ["customer"],
+  },
   active_role: "customer",
-  roles: ["customer"],
+  session_expires_at: "2026-09-01T09:00:00Z",
 };
 
 export function envelope(code: string, details: unknown = null) {

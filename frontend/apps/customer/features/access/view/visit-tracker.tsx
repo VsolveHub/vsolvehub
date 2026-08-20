@@ -3,10 +3,8 @@
 import type { VisitPlanPhase } from "@vsolve/query";
 import {
   Badge,
-  Button,
   Disclosure,
   EmptyState,
-  RailHeadline,
   RailLayout,
   Skeleton,
   buttonStyles,
@@ -15,7 +13,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { formatVisitSlot, type VisitSlotRow, type VisitTrackerView } from "../adapters";
+import { calendarDay, formatVisitSlot, type VisitSlotRow, type VisitTrackerView } from "../adapters";
 import { AccessRefusal } from "./access-refusal";
 import { VendorIdentity } from "./vendor-identity";
 
@@ -74,6 +72,38 @@ export interface VisitTrackerProps {
   supportAction?: ReactNode;
 
   /**
+   * Which half of this surface to draw.
+   *
+   * This component owns two things: the list of slots, and the plan's money
+   * rail beside it. On its own page that pairing is right and `both` renders
+   * it. Inside the request detail it is wrong twice over — the page already
+   * has a rail of its own, so `both` produced a rail nested inside a column
+   * next to an empty one, and the plan price ended up in the narrower of the
+   * two.
+   *
+   * So the page renders this twice: `main` in the reading column and `rail`
+   * into its own rail. Two mounts share one query through the cache, so the
+   * second costs a render and no network.
+   */
+  slot?: "both" | "main" | "rail";
+
+  /**
+   * The estimates that have arrived, as prices.
+   *
+   * A written estimate is a page: scope, staging, exclusions, warranty. None of
+   * that belongs on the request, and none of it is what somebody opening the
+   * request wants — they want to know whether anything has come back and what
+   * it costs. So this is the number and the name, and the way through to the
+   * document.
+   *
+   * Empty renders nothing. Passed in rather than read here because entitlement
+   * to these figures is the server's answer, and the panel above already has
+   * it — asking again from a list component would be a second place that could
+   * get the gate wrong.
+  */
+  estimates?: readonly { proposalId: string; vendorName: string | null; priceLabel: string }[];
+
+  /**
    * The plan-size chooser, when re-choosing is still allowed.
    *
    * A slot rather than a prop set, because the chooser owns its own read, its
@@ -100,8 +130,11 @@ export function VisitTracker({
   supportAction,
   planSwitcher,
   brief,
+  slot = "both",
+  estimates = [],
 }: VisitTrackerProps) {
   if (isLoading) {
+    if (slot === "rail") return null;
     return (
       <div aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading your site visits</span>
@@ -111,6 +144,7 @@ export function VisitTracker({
   }
 
   if (readError !== null && readError !== undefined) {
+    if (slot === "rail") return null;
     return (
       <AccessRefusal
         error={readError}
@@ -122,10 +156,18 @@ export function VisitTracker({
     );
   }
 
-  return (
-    <RailLayout
-      railLabel="Your visit plan"
-      rail={
+  const isSearchingForProfessionals =
+    tracker !== null &&
+    tracker.rows.length > 0 &&
+    tracker.rows.every((row) => row.state === "awaiting") &&
+    estimates.length === 0;
+
+  if (isSearchingForProfessionals) {
+    if (slot === "rail") return null;
+    return <VendorSearchPanel tracker={tracker} />;
+  }
+
+  const rail = (
         <VisitPlanRail
           phase={phase}
           tracker={tracker}
@@ -134,48 +176,111 @@ export function VisitTracker({
           planSwitcher={planSwitcher}
           brief={brief}
         />
-      }
+  );
+
+  const main = (
+    <section
+      aria-labelledby="visits-heading"
+      className="overflow-hidden rounded-[10px] border border-line bg-surface shadow-card"
     >
-    <section aria-labelledby="visits-heading" className="rounded-card border border-line bg-surface p-4">
-      <h2 id="visits-heading" className="text-lg font-semibold text-text">
-        {tracker === null || tracker.planSize <= 1
-          ? "Your site visit"
-          : `Your ${tracker.planSize} site visits`}
-      </h2>
+      <div className="border-b border-line bg-canvas px-4 py-4 sm:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[0.6875rem] font-extrabold uppercase text-text-muted">
+              On-site estimate journey
+            </p>
+            <h2 id="visits-heading" className="mt-1 text-xl font-extrabold leading-tight text-text sm:text-2xl">
+              See every visit at a glance
+            </h2>
+          </div>
+          {tracker?.isCharged ? <Badge tone="success">Paid</Badge> : null}
+        </div>
+        {tracker !== null && tracker.rows.length > 0 ? (
+          <VisitJourney tracker={tracker} visitHref={visitHref} />
+        ) : null}
+      </div>
 
-      {/* Three counts before any prose.
-          The page used to open with a paragraph about the plan and put a
-          paragraph between every row, so working out whether anything needed
-          the Customer *today* meant reading all of it. The counts answer that
-          in one glance; the paragraph that used to be here is still on the
-          screen, folded, at the bottom. */}
-      <VisitCounts tracker={tracker} />
-
-      {tracker === null || tracker.rows.length === 0 ? (
-        <div className="mt-3">
+      <div className="p-4 sm:p-5">
+        {tracker === null || tracker.rows.length === 0 ? (
           <EmptyState
             compact
             title="No visits yet"
             description="We are inviting professionals who cover this work. Each one that accepts confirms a time here."
           />
-        </div>
-      ) : (
-        <ul className="mt-3 flex list-none flex-col gap-3 p-0">
-          {tracker.rows.map((row) => (
-            <VisitRow
-              key={row.id}
-              row={row}
-              planSize={tracker.planSize}
-              visitHref={visitHref}
-            />
-          ))}
-        </ul>
-      )}
+        ) : (
+          <ul className="flex list-none flex-col gap-3 p-0">
+            {tracker.rows.map((row) => (
+              <VisitRow
+                key={row.id}
+                row={row}
+                planSize={tracker.planSize}
+                visitHref={visitHref}
+              />
+            ))}
+          </ul>
+        )}
 
-      {tracker !== null && tracker.rows.some((row) => row.state === "completed") ? (
+        {estimates.length > 0 ? (
+          <section aria-labelledby="estimates-heading" className="mt-5 rounded-[10px] border border-line bg-canvas p-3">
+          <h3
+            id="estimates-heading"
+            className="text-[0.6875rem] font-bold uppercase text-text-secondary"
+          >
+            {estimates.length === 1 ? "The estimate so far" : "The estimates so far"}
+          </h3>
+          <ul className="mt-2 flex list-none flex-col gap-1.5 p-0">
+            {estimates.map((estimate, index) => (
+              <li key={estimate.proposalId}>
+                <Link
+                  href={estimatesHref}
+                  className={cn(
+                    "flex items-center gap-3 rounded-control px-3 py-2.5",
+                    "bg-surface ring-1 ring-inset ring-line",
+                    "transition-colors duration-fast hover:bg-surface-hover",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">
+                    {estimate.vendorName ?? `Estimate ${index + 1}`}
+                  </span>
+                  <span
+                    data-numeric
+                    className="shrink-0 text-sm font-extrabold text-text"
+                  >
+                    {estimate.priceLabel}
+                  </span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="size-3.5 shrink-0 text-warm-400"
+                  >
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                  <span className="sr-only">— read this estimate in full</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex">
+            <Link
+              href={estimatesHref}
+              className={buttonStyles({ variant: "outline", className: "w-full sm:w-auto" })}
+            >
+              {estimates.length === 1 ? "Read it in full" : "Compare them in full"}
+            </Link>
+          </div>
+          </section>
+      ) : tracker !== null && tracker.rows.some((row) => row.state === "completed") ? (
+        // A visit has been and no estimate has landed yet. The way through
+        // still exists, because the page it leads to explains the wait.
         <div className="mt-4">
-          <Link href={estimatesHref} className="inline-block">
-            <Button variant="outline">Read the estimates</Button>
+          <Link href={estimatesHref} className={buttonStyles({ variant: "outline" })}>
+            Read the estimates
           </Link>
         </div>
       ) : null}
@@ -185,7 +290,7 @@ export function VisitTracker({
           named yet, or what happens to an unfilled slot's money, still has the
           answer on this screen. It is simply no longer in the way of the three
           rows they came to look at. */}
-      <Disclosure summary="How these visits work" className="mt-4">
+      <Disclosure summary="How these visits work" className="mt-5">
         <PlanStatement phase={phase} tracker={tracker} />
         {tracker !== null && tracker.rows.some((row) => row.vendor === null) ? (
           <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
@@ -196,8 +301,113 @@ export function VisitTracker({
           </p>
         ) : null}
       </Disclosure>
+
+      {slot === "main" ? (
+        <div className="mt-5 lg:hidden">
+          <VisitPlanRail
+            embedded
+            phase={phase}
+            tracker={tracker}
+            checkoutAvailable={checkoutAvailable}
+            bookVisitsHref={bookVisitsHref}
+            planSwitcher={planSwitcher}
+            brief={brief}
+          />
+        </div>
+      ) : null}
+      </div>
     </section>
+  );
+
+  // The page asked for one half. `RailLayout` is the standalone pairing
+  // and is skipped entirely, because a layout that places a rail is the
+  // wrong thing to nest inside a page that already has one.
+  if (slot === "rail") return rail;
+  if (slot === "main") return main;
+
+  return (
+    <RailLayout railLabel="Your visit plan" rail={rail}>
+      {main}
     </RailLayout>
+  );
+}
+
+function VendorSearchPanel({ tracker }: { tracker: VisitTrackerView }) {
+  const slots = tracker.planSize === 1 ? "one visit" : `${tracker.planSize} visits`;
+
+  return (
+    <section
+      aria-labelledby="vendor-search-heading"
+      className="overflow-hidden rounded-[10px] border border-line bg-surface shadow-card"
+    >
+      <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+        <div className="order-2 min-w-0 lg:order-1">
+          <p className="text-[0.6875rem] font-extrabold uppercase text-text-muted">
+            Matching in progress
+          </p>
+          <h2
+            id="vendor-search-heading"
+            className="mt-2 text-2xl font-extrabold leading-tight text-text sm:text-3xl"
+          >
+            Finding the best professionals for this job
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-text-secondary">
+            We are checking verified professionals nearby. The first accepted
+            visit will appear here with the professional and time.
+          </p>
+
+          <SearchJourney slots={slots} />
+        </div>
+
+        <div className="order-1 mx-auto flex aspect-square w-full max-w-[17rem] items-center justify-center lg:order-2">
+          <div className="relative size-56 rounded-full bg-selected-surface">
+            <span className="absolute inset-4 rounded-full border border-navy-200" />
+            <span className="absolute inset-10 rounded-full border border-navy-200/80" />
+            <span className="absolute inset-16 rounded-full border border-navy-200/60" />
+            <span className="absolute left-1/2 top-1/2 h-px w-[45%] origin-left animate-spin bg-action motion-reduce:animate-none" />
+            <span className="absolute left-[58%] top-[24%] size-3 animate-ping rounded-full bg-action motion-reduce:animate-none" />
+            <span className="absolute left-[58%] top-[24%] size-3 rounded-full bg-action" />
+            <span className="absolute bottom-10 left-12 size-2 rounded-full bg-success-text" />
+            <span className="absolute right-12 top-16 size-2 rounded-full bg-success-text" />
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="grid size-20 place-items-center rounded-full bg-surface text-action-active shadow-raised ring-1 ring-line">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-8">
+                  <circle cx="11" cy="11" r="6" />
+                  <path d="m16 16 4 4M11 8v6m-3-3h6" />
+                </svg>
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SearchJourney({ slots }: { slots: string }) {
+  return (
+    <ol className="mt-6 grid grid-cols-3" aria-label="Matching journey">
+      <SearchJourneyStep label="Request ready" state="done" />
+      <SearchJourneyStep label={`Finding ${slots}`} state="active" />
+      <SearchJourneyStep label="Time confirmed" state="next" />
+    </ol>
+  );
+}
+
+function SearchJourneyStep({
+  label,
+  state,
+}: {
+  label: string;
+  state: "done" | "active" | "next";
+}) {
+  return (
+    <li className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-0 before:right-0 before:top-4 before:h-px before:bg-line first:before:left-1/2 last:before:right-1/2">
+      <span aria-hidden className={cn("relative z-10 grid size-8 place-items-center rounded-full ring-4 ring-surface", state === "done" ? "bg-success-surface text-success-text" : null, state === "active" ? "bg-action text-action-text" : null, state === "next" ? "bg-surface-sunken text-text-muted" : null)}>
+        {state === "done" ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="size-3.5"><path d="m5 12 5 5 9-10" /></svg> : <span className={cn("size-2 rounded-full bg-current", state === "active" ? "animate-pulse motion-reduce:animate-none" : null)} />}
+      </span>
+      <span className="mt-2 text-[0.6875rem] font-bold leading-4 text-text-secondary">{label}</span>
+    </li>
   );
 }
 
@@ -221,6 +431,7 @@ function VisitPlanRail({
   bookVisitsHref,
   planSwitcher,
   brief,
+  embedded = false,
 }: {
   phase: VisitPlanPhase;
   tracker: VisitTrackerView | null;
@@ -228,22 +439,50 @@ function VisitPlanRail({
   bookVisitsHref: string;
   planSwitcher?: ReactNode;
   brief?: ReactNode;
+  embedded?: boolean;
 }) {
   if (tracker === null) return null;
 
   const held = tracker.rows.find((row) => row.state === "held") ?? null;
+  const paid = phase === "active" || phase === "settled";
+  const status = paid
+    ? { label: "Paid", tone: "success" as const }
+    : phase === "pending"
+      ? { label: "Confirming", tone: "info" as const }
+      : checkoutAvailable
+        ? { label: "Ready", tone: "warning" as const }
+        : { label: "Not charged", tone: "neutral" as const };
 
   return (
-    <div className="flex flex-col gap-3">
-      <RailHeadline
-        eyebrow={tracker.planSize === 1 ? "1-visit plan" : `${tracker.planSize}-visit plan`}
-        value={tracker.priceLabel}
-        footnote={
-          tracker.planSize === 1
-            ? "The visit and the written estimate."
-            : `All ${tracker.planSize} visits and their written estimates.`
-        }
-      />
+    <section
+      aria-label="Visit plan payment"
+      className={cn(
+        "flex flex-col gap-4",
+        embedded
+          ? "border-t border-line pt-5"
+          : "rounded-[10px] border border-line bg-surface p-4 shadow-card",
+      )}
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-navy-900 text-white">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-5">
+              <path d="M7 3v3m10-3v3M5 9h14M6 5h12a1 1 0 0 1 1 1v13H5V6a1 1 0 0 1 1-1Z" />
+            </svg>
+          </span>
+          <div>
+            <p className="text-[0.6875rem] font-extrabold uppercase text-text-muted">
+              {tracker.planSize === 1 ? "1 visit" : `${tracker.planSize} visits`}
+            </p>
+            <p data-numeric className="mt-0.5 text-2xl font-extrabold leading-none text-text">
+              {tracker.priceLabel}
+            </p>
+          </div>
+        </div>
+        <Badge tone={status.tone}>{status.label}</Badge>
+      </header>
+
+      <PaymentJourney phase={phase} checkoutAvailable={checkoutAvailable} />
 
       {checkoutAvailable ? (
         <div className="flex flex-col gap-2">
@@ -258,9 +497,16 @@ function VisitPlanRail({
           ) : null}
         </div>
       ) : phase === "chosen" ? (
-        <p className="rounded-card border border-success-line bg-success-surface p-4 text-sm leading-5 text-text">
-          <strong className="font-semibold">Nothing charged yet.</strong> You pay
-          once, when the first professional confirms a time.
+        <p className="text-sm font-medium leading-5 text-text-secondary">
+          Payment opens only after a professional accepts a time.
+        </p>
+      ) : phase === "pending" ? (
+        <p className="text-sm font-medium leading-5 text-text-secondary" role="status">
+          Your bank is responding. This page updates automatically.
+        </p>
+      ) : paid ? (
+        <p className="text-sm font-medium leading-5 text-text-secondary">
+          Your visits are locked. No further visit payment is needed.
         </p>
       ) : null}
 
@@ -271,17 +517,67 @@ function VisitPlanRail({
         </p>
       ) : null}
 
-      <Disclosure summary="What the visit fee covers" hint="Not the project price">
+      <Disclosure summary="Payment and refund details" hint="Visit fee only">
         <p>
           Travel and the professional&rsquo;s time on site, plus a written estimate
           you keep whether or not you hire them. It is not part of the project
-          price.
+          price. Any visit that is not filled refunds its share automatically.
         </p>
       </Disclosure>
 
       {planSwitcher}
       {brief}
-    </div>
+    </section>
+  );
+}
+
+function PaymentJourney({
+  phase,
+  checkoutAvailable,
+}: {
+  phase: VisitPlanPhase;
+  checkoutAvailable: boolean;
+}) {
+  const paid = phase === "active" || phase === "settled";
+  const matched = checkoutAvailable || phase === "pending" || paid;
+
+  return (
+    <ol className="grid grid-cols-3" aria-label="Payment journey">
+      <PaymentJourneyStep label="Pro accepts" state={matched ? "done" : "active"} />
+      <PaymentJourneyStep label="Pay once" state={paid ? "done" : matched ? "active" : "next"} />
+      <PaymentJourneyStep label="Visits lock" state={paid ? "done" : "next"} />
+    </ol>
+  );
+}
+
+function PaymentJourneyStep({
+  label,
+  state,
+}: {
+  label: string;
+  state: "done" | "active" | "next";
+}) {
+  return (
+    <li className="relative flex min-w-0 flex-col items-center text-center before:absolute before:left-0 before:right-0 before:top-3 before:h-px before:bg-line first:before:left-1/2 last:before:right-1/2">
+      <span
+        aria-hidden
+        className={cn(
+          "relative z-10 grid size-6 place-items-center rounded-full ring-4 ring-surface",
+          state === "done" ? "bg-success-text text-white" : null,
+          state === "active" ? "bg-action text-action-text" : null,
+          state === "next" ? "bg-surface-sunken text-text-muted" : null,
+        )}
+      >
+        {state === "done" ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" className="size-3">
+            <path d="m5 12 4 4 10-10" />
+          </svg>
+        ) : (
+          <span className={cn("size-1.5 rounded-full bg-current", state === "active" ? "animate-pulse motion-reduce:animate-none" : null)} />
+        )}
+      </span>
+      <span className="mt-2 text-[0.625rem] font-bold leading-4 text-text-secondary">{label}</span>
+    </li>
   );
 }
 
@@ -396,47 +692,92 @@ const SLOT_BADGE: Record<VisitSlotRow["state"], { label: string; tone: "neutral"
  * Renders nothing when there is nothing to count. A strip of zeroes above an
  * empty state is a summary of an absence.
  */
-function VisitCounts({ tracker }: { tracker: VisitTrackerView | null }) {
-  if (tracker === null || tracker.rows.length === 0) return null;
-
-  const today = tracker.rows.filter((row) => isToday(row.scheduledFor, row.timeZone)).length;
-  const upcoming = tracker.rows.filter(
-    (row) =>
-      (row.state === "scheduled" || row.state === "held") &&
-      !isToday(row.scheduledFor, row.timeZone),
-  ).length;
-
+function VisitJourney({
+  tracker,
+  visitHref,
+}: {
+  tracker: VisitTrackerView;
+  visitHref: (visitId: string) => string;
+}) {
   return (
-    <dl className="mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-control border border-line">
-      <VisitCount label="Today" value={today} emphasise={today > 0} />
-      <VisitCount label="Upcoming" value={upcoming} />
-      <VisitCount label="Open slots" value={tracker.openSlots} />
-    </dl>
+    <ol className="mt-5 grid list-none p-0" style={{ gridTemplateColumns: `repeat(${tracker.rows.length}, minmax(0, 1fr))` }}>
+      {tracker.rows.map((row) => {
+        const body = (
+          <>
+            <span
+              aria-hidden
+              className={cn(
+                "relative z-10 grid size-11 place-items-center rounded-full border-2 ring-4 ring-canvas transition-transform duration-fast",
+                row.state === "awaiting" ? "border-info-line bg-selected-surface text-action-active" : null,
+                row.state === "held" ? "border-warning-line bg-warning-surface text-warning-text" : null,
+                row.state === "scheduled" || row.state === "in_progress" ? "border-action-line bg-action-surface text-action-active" : null,
+                row.state === "completed" ? "border-success-line bg-success-surface text-success-text" : null,
+                row.state === "cancelled" || row.state === "vendor_no_show" || row.state === "customer_no_show" ? "border-line bg-surface-sunken text-text-muted" : null,
+                row.visitId !== null ? "group-hover:-translate-y-0.5" : null,
+              )}
+            >
+              <VisitStateGlyph state={row.state} />
+            </span>
+            <span className="mt-2 text-[0.6875rem] font-bold text-text-secondary">
+              Visit {row.position}
+            </span>
+            <span className="mt-0.5 line-clamp-2 text-xs font-extrabold leading-4 text-text">
+              {journeyLabel(row)}
+            </span>
+          </>
+        );
+
+        return (
+          <li key={row.id} className="relative flex min-w-0 flex-col items-center px-1 text-center before:absolute before:left-0 before:right-0 before:top-[1.35rem] before:h-0.5 before:bg-line first:before:left-1/2 last:before:right-1/2">
+            {row.visitId === null ? (
+              <div className="group flex min-w-0 flex-col items-center">{body}</div>
+            ) : (
+              <Link href={visitHref(row.visitId)} className="group flex min-w-0 flex-col items-center rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring">
+                {body}
+                <span className="sr-only">Open visit {row.position}</span>
+              </Link>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
-function VisitCount({
-  label,
-  value,
-  emphasise = false,
-}: {
-  label: string;
-  value: number;
-  emphasise?: boolean;
-}) {
-  return (
-    <div className="px-2 py-2 text-center">
-      <dd
-        className={cn(
-          "text-xl font-semibold tabular-nums",
-          emphasise ? "text-action-active" : "text-text",
-        )}
-      >
-        {value}
-      </dd>
-      <dt className="text-xs font-medium text-text-secondary">{label}</dt>
-    </div>
-  );
+function journeyLabel(row: VisitSlotRow): string {
+  switch (row.state) {
+    case "awaiting":
+      return "Matching";
+    case "held":
+      return "Held for you";
+    case "scheduled":
+      return "Booked";
+    case "in_progress":
+      return "On site";
+    case "completed":
+      return "Visit complete";
+    case "vendor_no_show":
+      return "Did not arrive";
+    case "customer_no_show":
+      return "Visit missed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return "Update";
+  }
+}
+
+function VisitStateGlyph({ state }: { state: VisitSlotRow["state"] }) {
+  if (state === "completed") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="size-5"><path d="m5 12 4 4 10-10" /></svg>;
+  }
+  if (state === "awaiting") {
+    return <span className="relative grid size-5 place-items-center"><span className="absolute size-5 animate-ping rounded-full bg-current opacity-20 motion-reduce:animate-none" /><span className="size-2.5 rounded-full bg-current" /></span>;
+  }
+  if (state === "cancelled" || state === "vendor_no_show" || state === "customer_no_show") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="size-5"><path d="m7 7 10 10M17 7 7 17" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className="size-5"><path d="M7 3v3m10-3v3M5 9h14M6 5h12a1 1 0 0 1 1 1v13H5V6a1 1 0 0 1 1-1Z" /></svg>;
 }
 
 /**
@@ -487,12 +828,17 @@ function VisitRow({
   const badge = SLOT_BADGE[row.state] ?? SLOT_BADGE.awaiting;
   // The visit's own zone since 1.26.0, not the deprecated single-city constant.
   const when = formatVisitSlot(row.scheduledFor, row.timeZone);
+  const day = calendarDay(row.scheduledFor, row.timeZone);
   const today = isToday(row.scheduledFor, row.timeZone);
+
+  if (row.visitId === null) {
+    return <AwaitingVisitRow row={row} planSize={planSize} />;
+  }
 
   return (
     <li
       className={cn(
-        "rounded-card border p-3",
+        "rounded-[10px] border bg-surface p-3 shadow-sm",
         // Today's visit is the one row that might need somebody in the next hour,
         // so it is the one row drawn differently. Emphasis is the palette's own
         // action tint rather than a second colour.
@@ -506,7 +852,7 @@ function VisitRow({
           <div className="min-w-0">
             <p className="text-sm font-medium text-text">
               {row.state === "awaiting"
-                ? "Nobody has taken this slot yet"
+                ? "Still finding a professional"
                 : "We will name them before they arrive"}
             </p>
             <p className="text-sm text-text-secondary">
@@ -517,28 +863,35 @@ function VisitRow({
         <Badge tone={badge.tone}>{badge.label}</Badge>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-control bg-surface-sunken px-3 py-2">
-        <span className="text-sm font-medium text-text">{when ?? "No time yet"}</span>
-        {/* One clause, not the paragraph the row used to carry. The full
-            sentence about what this money is doing is on the visit page. */}
-        <span className="text-sm tabular-nums text-text-secondary">
-          {row.money.amountLabel} {MONEY_CLAUSE[row.money.kind]}
+      <Link
+        href={visitHref(row.visitId)}
+        className={cn(
+          "mt-3 flex items-center gap-3 rounded-control px-3 py-2.5",
+          "transition-colors duration-fast",
+          "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+          today
+            ? "bg-action text-action-text hover:bg-action-hover"
+            : "bg-surface-sunken hover:bg-warm-200",
+        )}
+      >
+        <SlotWhen when={when} day={day} onAction={today} />
+        <SlotMoney row={row} onAction={today} />
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-4 shrink-0"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+        <span className="sr-only">
+          {today ? "Open today's visit" : "Open this visit"}
         </span>
-      </div>
-
-      {row.visitId !== null ? (
-        <div className="mt-3">
-          <Link
-            href={visitHref(row.visitId)}
-            className={buttonStyles({
-              variant: today ? "primary" : "outline",
-              size: "sm",
-            })}
-          >
-            {today ? "Open today's visit" : "Open visit"}
-          </Link>
-        </div>
-      ) : null}
+      </Link>
     </li>
   );
 }
@@ -551,9 +904,119 @@ function VisitRow({
  * the page says what it means.
  */
 const MONEY_CLAUSE: Record<VisitSlotRow["money"]["kind"], string> = {
-  unspent: "set aside",
+  unspent: "ready",
   committed: "covering this visit",
   earned: "paid out",
   refunded: "refunded",
   replaced: "held for a free replacement",
 };
+
+/**
+ * The day, as a tile where there is one and as words where there is not.
+ *
+ * A slot without a confirmed date cannot print a placeholder day, because that
+ * would be an invented fact. It says the time is still being confirmed instead.
+ */
+function SlotWhen({
+  when,
+  day,
+  onAction = false,
+}: {
+  when: string | null;
+  day: { weekday: string; dayOfMonth: string; month: string } | null;
+  onAction?: boolean;
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-2.5">
+      {day === null ? null : (
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-9 shrink-0 flex-col items-center justify-center rounded-plate",
+            onAction ? "bg-navy-900/10" : "bg-surface",
+          )}
+        >
+          <span className="text-[0.5625rem] font-bold uppercase leading-none opacity-70">
+            {day.weekday}
+          </span>
+          <span className="text-sm font-extrabold leading-none">{day.dayOfMonth}</span>
+        </span>
+      )}
+      <span className="truncate text-sm font-semibold">
+        {when ?? "Time being confirmed"}
+      </span>
+    </span>
+  );
+}
+
+function AwaitingVisitRow({
+  row,
+  planSize,
+}: {
+  row: VisitSlotRow;
+  planSize: number;
+}) {
+  return (
+    <li className="rounded-[10px] border border-info-line bg-selected-surface p-4 sm:p-5">
+      <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+        <SearchBeacon />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            <Badge tone="info" dot>
+              Matching now
+            </Badge>
+            <span className="text-xs font-bold uppercase text-text-secondary">
+              Visit {row.position} of {planSize}
+            </span>
+          </div>
+          <h3 className="mt-3 text-xl font-extrabold leading-tight text-text sm:text-lg">
+            Finding your next professional
+          </h3>
+          <p className="mt-1 max-w-[34rem] text-sm font-medium leading-6 text-text-secondary">
+            We are checking verified professionals near you. The moment one accepts,
+            their visit time appears here.
+          </p>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function SearchBeacon() {
+  return (
+    <div
+      aria-hidden
+      className="relative grid size-28 shrink-0 place-items-center sm:size-20"
+    >
+      <span className="absolute inset-0 rounded-full bg-surface shadow-card ring-1 ring-info-line" />
+      <span className="absolute inset-3 rounded-full border border-info-line" />
+      <span className="absolute inset-6 rounded-full border border-info-line/80" />
+      <span className="absolute left-1/2 top-1/2 h-px w-[42%] origin-left animate-spin bg-action motion-reduce:animate-none" />
+      <span className="absolute left-[62%] top-[26%] size-3 animate-ping rounded-full bg-action motion-reduce:animate-none" />
+      <span className="absolute left-[62%] top-[26%] size-3 rounded-full bg-action" />
+      <span className="absolute grid size-10 place-items-center rounded-full bg-surface ring-1 ring-line sm:size-8">
+        <span className="size-2.5 rounded-full bg-action" />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * What this slot's money did, in three words.
+ *
+ * Every clause is the short form of the sentence `SlotMoneyLine` renders in
+ * full on the visit page. The list says which of the five things happened; the
+ * page says what it means.
+ */
+function SlotMoney({ row, onAction = false }: { row: VisitSlotRow; onAction?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 text-right text-xs font-semibold tabular-nums",
+        onAction ? "opacity-80" : "text-text-secondary",
+      )}
+    >
+      {row.money.amountLabel} {MONEY_CLAUSE[row.money.kind]}
+    </span>
+  );
+}

@@ -14,6 +14,7 @@ import {
   useUpdateAddress,
 } from "@/features/booking/queries";
 import { AddressStage } from "@/features/booking/view/address-stage";
+import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useCustomerSession } from "@/features/session/queries";
 
 import {
@@ -75,6 +76,7 @@ import { SlotsModal } from "./slots-modal";
 export function CheckoutWorkspace() {
   const router = useRouter();
   const session = useCustomerSession();
+  const profileGate = useProfileCompletionGate("booking");
 
   const [addressId, setAddressId] = useState<string | null>(null);
   /** Reopens the address picker for a row that is already filled in. */
@@ -460,7 +462,7 @@ export function CheckoutWorkspace() {
                   disabled={quote === null || quote.status !== "ACTIVE"}
                   loading={createCheckout.isPending || isPricing}
                   loadingLabel={isPricing ? "Working out your price" : "Confirming"}
-                  onClick={handleConfirm}
+                  onClick={() => profileGate.run(handleConfirm)}
                 >
                   Confirm booking
                 </Button>
@@ -524,6 +526,7 @@ export function CheckoutWorkspace() {
         onConfirm={handleSchedule}
         onDismiss={() => setSlotsOverride(false)}
       />
+      {profileGate.dialog}
     </div>
   );
 }

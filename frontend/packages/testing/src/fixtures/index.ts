@@ -34,8 +34,10 @@ export function user(overrides: Partial<Schemas["User"]> = {}): Schemas["User"] 
   return {
     id: "11111111-1111-4111-8111-111111111111",
     phone_number: "+919000000001",
+    display_name: "Anitha",
     full_name: "Anitha Rao",
     email: "anitha.rao@example.com",
+    date_joined: "2026-01-12T08:30:00Z",
     roles: ["customer"],
     ...overrides,
   };

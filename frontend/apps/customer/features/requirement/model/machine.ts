@@ -115,16 +115,19 @@ export type RequirementAction =
    * resolves that by discarding the client tree. Both renders start empty and the
    * restore is a second, deliberate commit.
    *
-   * Only Customer intent travels. No verdict, no requirement id, no attachment:
-   * the verdict is a server answer that may be stale, and an attachment is a file
-   * handle that does not survive a reload. Restoring either would put a claim on
-   * screen that nothing behind it can honour.
+   * Customer intent travels with the opaque id of its server draft. The id is
+   * re-read under the current Customer before it is used, which resumes the
+   * canonical visit plan and stored attachments without serializing either.
+   * The verdict is still omitted because it is a server answer that may be
+   * stale, and a local attachment handle still cannot survive a reload.
    */
   | {
       type: "RESTORE_INTENT";
+      requirementId: string | null;
       answers: Readonly<Record<string, unknown>>;
       addressId: string | null;
       requestedStart: string | null;
+      serviceBy: string | null;
       flexibilityDays: number;
       additionalDetails: string;
       language: string | null;
@@ -309,9 +312,11 @@ export function requirementReducer(
       // longer applies, so it goes the same way as an edit.
       return invalidateVerdict({
         ...state,
+        requirementId: action.requirementId,
         answers: action.answers,
         addressId: action.addressId,
         requestedStart: action.requestedStart,
+        serviceBy: action.serviceBy,
         flexibilityDays: action.flexibilityDays,
         additionalDetails: action.additionalDetails,
         language: action.language,

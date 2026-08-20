@@ -3,6 +3,8 @@
 import { Button, QuantityStepper, cn, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
+import { Pictogram, type PictogramName } from "@/components/pictogram";
+
 import {
   EXCLUSION_CHOICES,
   WARRANTY_CHOICES,
@@ -194,7 +196,7 @@ function WorkStep({
         {work.map((preset) => (
           <Tile
             key={preset.code}
-            glyph={preset.glyph}
+            icon={preset.icon}
             label={preset.label}
             selected={estimate.work.includes(preset.code)}
             onToggle={() => onChange(toggleWork(estimate, preset.code))}
@@ -207,7 +209,7 @@ function WorkStep({
         {materials.map((preset) => (
           <Tile
             key={preset.code}
-            glyph={preset.glyph}
+            icon={preset.icon}
             label={preset.label}
             selected={estimate.materials.includes(preset.code)}
             onToggle={() => onChange(toggleMaterial(estimate, preset.code))}
@@ -226,7 +228,7 @@ function WorkStep({
               return (
                 <PriceRow
                   key={code}
-                  glyph={preset.glyph}
+                  icon={preset.icon}
                   label={preset.label}
                   detail={`${entry?.days ?? 1} ${entry?.days === 1 ? "day" : "days"}`}
                   amountPaise={entry?.amountPaise ?? null}
@@ -241,7 +243,7 @@ function WorkStep({
               return (
                 <PriceRow
                   key={code}
-                  glyph={preset.glyph}
+                  icon={preset.icon}
                   label={preset.label}
                   detail={`${entry?.quantity ?? 1} ${preset.unit}`}
                   amountPaise={entry?.amountPaise ?? null}
@@ -285,7 +287,7 @@ function PricingSheet({
     return (
       <MoneyPad
         title={preset.label}
-        glyph={preset.glyph}
+        icon={preset.icon}
         amountPaise={entry?.amountPaise ?? null}
         onChange={(amountPaise) => onChange(setWorkAmount(estimate, code, amountPaise))}
         onDone={onDone}
@@ -308,7 +310,7 @@ function PricingSheet({
   return (
     <MoneyPad
       title={preset.label}
-      glyph={preset.glyph}
+      icon={preset.icon}
       amountPaise={entry?.amountPaise ?? null}
       onChange={(amountPaise) => onChange(setMaterialAmount(estimate, code, amountPaise))}
       onDone={onDone}
@@ -351,7 +353,7 @@ function ExtrasStep({
           <SectionLabel>Is tax on top?</SectionLabel>
           <div className="flex flex-col gap-2">
             <ChoiceCard
-              glyph="➕"
+              icon="more"
               title="Tax on top"
               detail={`${formatMoney(subtotal)} + ${formatMoney(gst)} = ${formatMoney(subtotal + gst)}`}
               selected={estimate.taxBasis === "EXCLUSIVE"}
@@ -360,7 +362,7 @@ function ExtrasStep({
               }
             />
             <ChoiceCard
-              glyph="📦"
+              icon="money"
               title="Price includes tax"
               detail={`Customer pays ${formatMoney(subtotal)}`}
               selected={estimate.taxBasis === "INCLUSIVE"}
@@ -375,7 +377,7 @@ function ExtrasStep({
         {WARRANTY_CHOICES.map((choice) => (
           <Tile
             key={choice.code}
-            glyph={choice.glyph}
+            icon={choice.icon}
             label={choice.label}
             selected={estimate.warrantyCode === choice.code}
             onToggle={() => onChange({ ...estimate, warrantyCode: choice.code })}
@@ -388,7 +390,7 @@ function ExtrasStep({
         {EXCLUSION_CHOICES.map((choice) => (
           <Tile
             key={choice.code}
-            glyph={choice.glyph}
+            icon={choice.icon}
             label={choice.label}
             selected={estimate.exclusions.includes(choice.code)}
             onToggle={() => onChange(toggleExclusion(estimate, choice.code))}
@@ -440,7 +442,7 @@ function CheckStep({
           return (
             <SummaryRow
               key={code}
-              glyph={preset.glyph}
+              icon={preset.icon}
               label={`${preset.label} · ${entry?.days ?? 1} ${entry?.days === 1 ? "day" : "days"}`}
               value={entry?.amountPaise == null ? "—" : formatMoney(entry.amountPaise)}
             />
@@ -453,17 +455,17 @@ function CheckStep({
           return (
             <SummaryRow
               key={code}
-              glyph={preset.glyph}
+              icon={preset.icon}
               label={`${preset.label} · ${entry?.quantity ?? 1} ${preset.unit}`}
               value={entry?.amountPaise == null ? "—" : formatMoney(entry.amountPaise)}
             />
           );
         })}
         {estimate.taxBasis === "EXCLUSIVE" ? (
-          <SummaryRow glyph="🧾" label="Tax" value={formatMoney(estimate.taxPaise)} />
+          <SummaryRow icon="papers" label="Tax" value={formatMoney(estimate.taxPaise)} />
         ) : null}
         {warranty !== undefined && warranty.code !== "none" ? (
-          <SummaryRow glyph={warranty.glyph} label={`${warranty.label} guarantee`} value="✓" />
+          <SummaryRow icon={warranty.icon} label={`${warranty.label} guarantee`} value="✓" />
         ) : null}
       </ul>
 
@@ -505,16 +507,17 @@ function TileGrid({ children }: { children: React.ReactNode }) {
  *
  * `aria-pressed` rather than a checkbox role: these are toggles that change what
  * is on the screen below them, and a screen reader announcing "pressed" is the
- * accurate reading. The glyph is `aria-hidden` because the caption is the name —
- * announcing "paint roller, Paint" says it twice.
+ * accurate reading. The icon is `aria-hidden` (`Pictogram` sets it internally)
+ * because the caption is the name — announcing "paint roller, Paint" says it
+ * twice.
  */
 function Tile({
-  glyph,
+  icon,
   label,
   selected,
   onToggle,
 }: {
-  glyph: string;
+  icon: PictogramName;
   label: string;
   selected: boolean;
   onToggle: () => void;
@@ -532,9 +535,7 @@ function Tile({
           : "border-line bg-surface hover:bg-surface-hover",
       )}
     >
-      <span aria-hidden className="text-2xl leading-none">
-        {glyph}
-      </span>
+      <Pictogram name={icon} className="h-8 w-8" />
       <span
         className={cn(
           "text-xs font-semibold leading-tight",
@@ -548,13 +549,13 @@ function Tile({
 }
 
 function PriceRow({
-  glyph,
+  icon,
   label,
   detail,
   amountPaise,
   onPress,
 }: {
-  glyph: string;
+  icon: PictogramName;
   label: string;
   detail: string;
   amountPaise: number | null;
@@ -570,9 +571,7 @@ function PriceRow({
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
         )}
       >
-        <span aria-hidden className="w-8 text-center text-xl">
-          {glyph}
-        </span>
+        <Pictogram name={icon} className="h-8 w-8" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-text">{label}</span>
           <span className="block text-xs text-text-secondary">{detail}</span>
@@ -593,13 +592,13 @@ function PriceRow({
 }
 
 function ChoiceCard({
-  glyph,
+  icon,
   title,
   detail,
   selected,
   onSelect,
 }: {
-  glyph: string;
+  icon: PictogramName;
   title: string;
   detail: string;
   selected: boolean;
@@ -616,9 +615,7 @@ function ChoiceCard({
         selected ? "border-2 border-success-text bg-success-surface" : "border-line bg-surface",
       )}
     >
-      <span aria-hidden className="text-xl">
-        {glyph}
-      </span>
+      <Pictogram name={icon} className="h-8 w-8" />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-text">{title}</span>
         <span className="block text-xs tabular-nums text-text-secondary">{detail}</span>
@@ -639,19 +636,17 @@ function ChoiceCard({
 }
 
 function SummaryRow({
-  glyph,
+  icon,
   label,
   value,
 }: {
-  glyph: string;
+  icon: PictogramName;
   label: string;
   value: string;
 }) {
   return (
     <li className="flex items-center gap-3 rounded-card border border-line bg-surface p-3">
-      <span aria-hidden className="w-8 text-center text-xl">
-        {glyph}
-      </span>
+      <Pictogram name={icon} className="h-8 w-8" />
       <span className="min-w-0 flex-1 text-sm font-semibold text-text">{label}</span>
       <span className="text-sm font-bold tabular-nums text-text">{value}</span>
     </li>

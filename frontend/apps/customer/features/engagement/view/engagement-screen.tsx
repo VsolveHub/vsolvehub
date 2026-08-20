@@ -8,8 +8,9 @@ import {
   requestHref,
   stageHref,
 } from "@/lib/routes";
-import { Badge, Button, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
+import { Badge, Button, Dialog, ErrorState, Readout, Skeleton, buttonStyles, cn } from "@vsolve/ui";
 import Link from "next/link";
+import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { evidenceIndex, toProjectView } from "@/features/project/adapters";
@@ -17,7 +18,13 @@ import { useProject } from "@/features/project/queries";
 import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/project-panels";
 import { CashDemandReport } from "@/features/shift-day/view/cash-demand-report";
 import { toAmendmentsView, toEngagementView, type EngagementView, type StageView } from "../adapters";
-import { useEngagement, useEngagementAmendments, useFundStage } from "../queries";
+import {
+  isSimulatedCaptureUnavailable,
+  useEngagement,
+  useEngagementAmendments,
+  useFundStage,
+  useSimulateStageCapture,
+} from "../queries";
 import { CrewBookingSummary } from "./crew-booking-summary";
 import { CrewDayPanel } from "./crew-day-panel";
 import { PaymentReceipt } from "./payment-receipt";
@@ -111,6 +118,12 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
   const engagementQuery = useEngagement(engagementId);
   const amendmentsQuery = useEngagementAmendments(engagementId);
   const fund = useFundStage();
+  /**
+   * Which stage the funding dialog is open on, held as an id rather than the
+   * row itself so a refetch mid-dialog re-reads the amount instead of showing
+   * the one that was on screen when it opened.
+   */
+  const [fundingStageId, setFundingStageId] = useState<string | null>(null);
 
   const view = engagementQuery.data === undefined ? null : toEngagementView(engagementQuery.data);
   const amendments = amendmentsQuery.data === undefined ? null : toAmendmentsView(amendmentsQuery.data);
@@ -134,6 +147,10 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
   // list, which is a real page, rather than to a requirement id we do not have.
   const requestLink = view === null ? REQUESTS_HREF : requestHref(view.requirementId);
   const nouns = nounsFor(view?.mode ?? "unknown");
+  // Resolved from the live view every render, so a refetch while the dialog is
+  // open corrects the amount rather than leaving a stale one under a Pay button.
+  const fundingStage =
+    view?.stages.find((stage) => stage.stageId === fundingStageId) ?? null;
 
   if (engagementQuery.isPending) {
     return (
@@ -171,18 +188,27 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
 
   return (
     <Wrapper>
-      <header>
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <h1 className="text-xl font-semibold text-text">{nouns.engagementTitle}</h1>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {view.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
-            <EngagementStatusBadge status={view.status} />
+      {isProject ? (
+        <ProjectHero
+          view={view}
+          nouns={nouns}
+          onFund={(stageId) => setFundingStageId(stageId)}
+          isFunding={fund.isPending}
+        />
+      ) : (
+        <header>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h1 className="text-xl font-semibold text-text">{nouns.engagementTitle}</h1>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {view.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
+              <EngagementStatusBadge status={view.status} />
+            </div>
           </div>
-        </div>
-        {view.createdAt !== null ? (
-          <p className="mt-1 text-sm text-text-secondary">Agreed on {view.createdAt}</p>
-        ) : null}
-      </header>
+          {view.createdAt !== null ? (
+            <p className="mt-1 text-sm text-text-secondary">Agreed on {view.createdAt}</p>
+          ) : null}
+        </header>
+      )}
 
       {/* A3 opens as a receipt: which days, how much cash, who is coming. The
           rest of this screen — progress, agreed work, stages, disputes — sits
@@ -202,11 +228,11 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
 
       <div id="engagement-detail" />
 
-      <ModePanel view={view} />
+      {isProject ? null : <ModePanel view={view} />}
 
       {/* `M2-FE-608`: progress, active stage and next action, at the top, from
           the server's own numbers. */}
-      <ProgressPanel view={view} nouns={nouns} />
+      {isProject ? null : <ProgressPanel view={view} nouns={nouns} />}
 
       {/* `M2-FE-509`: who is doing the work, the agreed crew composition and the
           contact rule — read back off the quote the engagement was frozen from,
@@ -217,6 +243,9 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         quotesHref={`${requestLink}/quotes`}
       />
 
+      {isProject ? (
+        <ProjectMoneyFlow view={view} />
+      ) : (
       <section aria-labelledby="totals-heading" className="mt-6">
         <h2 id="totals-heading" className="text-lg font-semibold text-text">
           What was agreed
@@ -249,13 +278,29 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
           ) : null}
         </dl>
       </section>
+      )}
 
       <StageList
         view={view}
         nouns={nouns}
-        onFund={(stageId) => fund.mutate({ engagementId, stageId })}
+        // Opening a dialog rather than charging on the press. The old handler
+        // fired the checkout straight from the row, which meant the one control
+        // that moves money had no confirmation and no statement of the amount
+        // next to it.
+        onFund={(stageId) =>
+          setFundingStageId(view.stages.some((stage) => stage.stageId === stageId) ? stageId : null)
+        }
         isFunding={fund.isPending}
       />
+
+      {fundingStage === null ? null : (
+        <FundStageDialog
+          engagementId={engagementId}
+          stage={fundingStage}
+          nouns={nouns}
+          onClose={() => setFundingStageId(null)}
+        />
+      )}
 
       {isStageNotFundable(fund.error) ? (
         <div className="mt-4">
@@ -321,56 +366,121 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         />
       ) : null}
 
-      <section aria-labelledby="history-heading" className="mt-8">
-        <h2 id="history-heading" className="text-lg font-semibold text-text">
-          What was agreed, and how it changed
-        </h2>
-        {amendments === null ? (
-          <p className="mt-2 text-sm leading-6 text-text-secondary">
-            We could not read the change history just now, so we are not going to
-            show you a version of this agreement we cannot vouch for.
-          </p>
-        ) : (
-          <AgreementHistory
-            engagement={view}
-            amendments={amendments}
-            originalTotalPaise={view.stagedTotalPaise - view.amendmentDeltaPaise}
-          />
-        )}
-      </section>
+      {isProject ? (
+        <section aria-label="Agreement versions" className="mt-6">
+          <details className="group overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-5 [&::-webkit-details-marker]:hidden">
+              <RecordIcon kind="agreement" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-extrabold text-text">Agreement versions</span>
+                <span className="block text-xs font-medium text-text-secondary">
+                  Original scope, accepted changes and totals
+                </span>
+              </span>
+              <span data-numeric className="hidden text-sm font-extrabold text-text sm:block">
+                {view.stagedTotalLabel}
+              </span>
+              <Chevron />
+            </summary>
+            <div className="border-t border-line bg-canvas px-4 pb-4 sm:px-5">
+              {amendments === null ? (
+                <p className="pt-4 text-sm leading-6 text-text-secondary">
+                  We could not read the change history just now, so no unverified version is shown.
+                </p>
+              ) : (
+                <AgreementHistory
+                  engagement={view}
+                  amendments={amendments}
+                  originalTotalPaise={view.stagedTotalPaise - view.amendmentDeltaPaise}
+                />
+              )}
+            </div>
+          </details>
+        </section>
+      ) : (
+        <section aria-labelledby="history-heading" className="mt-8">
+          <h2 id="history-heading" className="text-lg font-semibold text-text">
+            What was agreed, and how it changed
+          </h2>
+          {amendments === null ? (
+            <p className="mt-2 text-sm leading-6 text-text-secondary">
+              We could not read the change history just now, so we are not going to
+              show you a version of this agreement we cannot vouch for.
+            </p>
+          ) : (
+            <AgreementHistory
+              engagement={view}
+              amendments={amendments}
+              originalTotalPaise={view.stagedTotalPaise - view.amendmentDeltaPaise}
+            />
+          )}
+        </section>
+      )}
 
       <EngagementTimeline engagementId={engagementId} />
 
-      <section aria-labelledby="record-heading" className="mt-8">
-        <h2 id="record-heading" className="text-lg font-semibold text-text">
-          The record
-        </h2>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          What you asked for, who was invited, what they quoted, when they visited
-          and what you chose all stay on the request it came from, for both of
-          you.
-        </p>
+      <section aria-labelledby="record-heading" className={isProject ? "mt-6" : "mt-8"}>
+        {isProject ? (
+          <details className="group overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-5 [&::-webkit-details-marker]:hidden">
+              <RecordIcon kind="folder" />
+              <span className="min-w-0 flex-1">
+                <span id="record-heading" className="block text-sm font-extrabold text-text">
+                  Project records
+                </span>
+                <span className="block text-xs font-medium text-text-secondary">
+                  Request, visits, quote and payment receipts
+                </span>
+              </span>
+              <Chevron />
+            </summary>
+            <div className="border-t border-line bg-canvas px-4 pb-4 sm:px-5">
+              <PaymentReceipt view={view} />
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <Link href={requestLink} className={buttonStyles({ variant: "outline", className: "justify-between" })}>
+                  Open request history
+                  <ForwardChevron />
+                </Link>
+                <Link href={engagementListHref("managed")} className={buttonStyles({ variant: "ghost", className: "justify-between" })}>
+                  All your {nouns.engagement}s
+                  <ForwardChevron />
+                </Link>
+              </div>
+            </div>
+          </details>
+        ) : (
+          <>
+            <h2 id="record-heading" className="text-lg font-semibold text-text">
+              The record
+            </h2>
+            <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
+              What you asked for, who was invited, what they quoted, when they visited
+              and what you chose all stay on the request it came from, for both of
+              you.
+            </p>
 
-        {/* A3 only: the day the crew is due is the one day this booking needs an
-            answer from the Customer. Silent on every other day. */}
-        {/* `CrewDayPanel` used to be mounted here as well. It now sits in the
-            confirmation summary's rail at the top, which is where somebody
-            opening this screen on the morning of a shift is looking — and two
-            mounts meant two copies of the same two buttons, either of which
-            could be pressed. */}
+            {/* A3 only: the day the crew is due is the one day this booking needs an
+                answer from the Customer. Silent on every other day. */}
+            {/* `CrewDayPanel` used to be mounted here as well. It now sits in the
+                confirmation summary's rail at the top, which is where somebody
+                opening this screen on the morning of a shift is looking — and two
+                mounts meant two copies of the same two buttons, either of which
+                could be pressed. */}
 
-        <PaymentReceipt view={view} />
+            <PaymentReceipt view={view} />
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={requestLink} className={buttonStyles({ variant: "outline" })}>
-            Open the full history
-          </Link>
-          {view.mode !== "unknown" ? (
-            <Link href={engagementListHref(view.mode)} className={buttonStyles({ variant: "ghost" })}>
-              All your {nouns.engagement}s
-            </Link>
-          ) : null}
-        </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href={requestLink} className={buttonStyles({ variant: "outline" })}>
+                Open the full history
+              </Link>
+              {view.mode !== "unknown" ? (
+                <Link href={engagementListHref(view.mode)} className={buttonStyles({ variant: "ghost" })}>
+                  All your {nouns.engagement}s
+                </Link>
+              ) : null}
+            </div>
+          </>
+        )}
       </section>
     </Wrapper>
   );
@@ -405,6 +515,319 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
       <dt className="text-sm text-text-secondary">{label}</dt>
       <dd className={strong ? "text-lg font-semibold text-text" : "text-text"}>{value}</dd>
     </div>
+  );
+}
+
+function ProjectHero({
+  view,
+  nouns,
+  onFund,
+  isFunding,
+}: {
+  view: EngagementView;
+  nouns: ModeNouns;
+  onFund: (stageId: string) => void;
+  isFunding: boolean;
+}) {
+  const active = view.stages.find((stage) => stage.stageId === view.activeStageId) ?? null;
+  const nextFundable =
+    view.stages.find((stage) => stage.stageId === view.nextFundableStageId) ?? null;
+  const reviewStage =
+    view.stages.find((stage) => stage.stageId === view.stagesAwaitingReviewIds[0]) ?? null;
+  const focus = reviewStage ?? nextFundable ?? active;
+
+  return (
+    <section className="overflow-hidden rounded-card border border-navy-700 bg-surface shadow-card">
+      <div className="bg-navy-900 px-5 py-5 text-white sm:px-6 sm:py-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-navy-100">Your project</p>
+            <h1 className="mt-1 text-3xl font-extrabold leading-tight sm:text-4xl">
+              {focus?.label ?? "Project journey"}
+            </h1>
+            {view.createdAt !== null ? (
+              <p className="mt-2 text-sm font-medium text-navy-100">Agreed {view.createdAt}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {view.isDisputed ? <Badge tone="danger">Problem raised</Badge> : null}
+            <EngagementStatusBadge status={view.status} />
+          </div>
+        </div>
+
+        <ProjectStageMap view={view} />
+      </div>
+
+      <div className="grid gap-5 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="flex min-w-0 items-start gap-3">
+          <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-action-surface text-action-active ring-1 ring-action-line">
+            <ActionGlyph action={view.nextAction} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase text-text-muted">What happens next</p>
+            <p className="mt-1 text-lg font-extrabold leading-snug text-text">
+              {nextActionCopy(view.nextAction, nouns, actionStageKind(view))}
+            </p>
+            {focus?.scheduledOn !== null && focus?.scheduledOn !== undefined ? (
+              <p className="mt-1 text-sm font-medium text-text-secondary">{focus.scheduledOn}</p>
+            ) : null}
+          </div>
+        </div>
+        <ProjectHeroAction
+          view={view}
+          reviewStage={reviewStage}
+          nextFundable={nextFundable}
+          onFund={onFund}
+          isFunding={isFunding}
+        />
+      </div>
+
+      <details className="group border-t border-line">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="text-sm font-extrabold text-text">How stage payments protect you</span>
+          <span className="ml-auto hidden text-xs font-semibold text-text-secondary sm:block">Pay one stage at a time</span>
+          <Chevron />
+        </summary>
+        <div className="border-t border-line bg-canvas px-5 py-5 sm:px-6">
+          <PaymentProtectionFlow />
+          <p className="mt-4 max-w-2xl text-sm font-medium leading-6 text-text-secondary">
+            You fund only the stage that is ready. Work money reaches the professional after
+            you approve that stage. Site-visit fees remain separate from project work.
+          </p>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function ProjectStageMap({ view }: { view: EngagementView }) {
+  if (view.stages.length === 0) {
+    return <p className="mt-6 text-sm font-medium text-navy-100">Stages will appear here once agreed.</p>;
+  }
+
+  return (
+    <ol
+      className="mt-7 grid list-none p-0"
+      style={{ gridTemplateColumns: `repeat(${view.stages.length}, minmax(0, 1fr))` }}
+      aria-label="Project stages"
+    >
+      {view.stages.map((stage) => {
+        const body = (
+          <>
+            <span
+              aria-hidden
+              className={cn(
+                "relative z-10 grid size-10 place-items-center rounded-full border-2 ring-4 ring-navy-900",
+                stage.status === "PENDING" ? "border-navy-500 bg-navy-800 text-navy-200" : null,
+                stage.status === "IN_PROGRESS" || stage.status === "CORRECTION_REQUESTED"
+                  ? "border-action-line bg-action text-action-text"
+                  : null,
+                stage.status === "AWAITING_REVIEW"
+                  ? "border-white bg-white text-navy-900"
+                  : null,
+                stage.status === "APPROVED" || stage.status === "RELEASED"
+                  ? "border-success-line bg-success-surface text-success-text"
+                  : null,
+                stage.status === "DISPUTED" ? "border-danger-line bg-danger-surface text-danger-text" : null,
+                stage.status === "CANCELLED" ? "border-navy-600 bg-navy-800 text-navy-300" : null,
+              )}
+            >
+              <StageGlyph status={stage.status} />
+            </span>
+            <span className="mt-2 line-clamp-2 text-xs font-bold leading-4 text-white">
+              {stage.label}
+            </span>
+          </>
+        );
+
+        return (
+          <li key={stage.stageId} className="relative flex min-w-0 flex-col items-center px-1 text-center before:absolute before:left-0 before:right-0 before:top-5 before:h-0.5 before:bg-navy-600 first:before:left-1/2 last:before:right-1/2">
+            {stage.status === "PENDING" ? (
+              <div className="flex min-w-0 flex-col items-center">{body}</div>
+            ) : (
+              <Link href={stageHref(view.engagementId, stage.stageId)} className="group flex min-w-0 flex-col items-center rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+                {body}
+                <span className="sr-only">Open {stage.label}</span>
+              </Link>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function StageGlyph({ status }: { status: StageView["status"] }) {
+  if (status === "APPROVED" || status === "RELEASED") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.7} strokeLinecap="round" strokeLinejoin="round" className="size-4"><path d="m5 12 4 4 10-10" /></svg>;
+  }
+  if (status === "DISPUTED" || status === "CANCELLED") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4"><path d="m7 7 10 10m0-10L7 17" /></svg>;
+  }
+  if (status === "IN_PROGRESS") {
+    return <span className="relative grid size-4 place-items-center"><span className="absolute size-4 animate-ping rounded-full bg-current opacity-20 motion-reduce:animate-none" /><span className="size-2 rounded-full bg-current" /></span>;
+  }
+  return <span className="size-2 rounded-full bg-current" />;
+}
+
+function ActionGlyph({ action }: { action: EngagementView["nextAction"] }) {
+  if (action === "review_stage" || action === "accept_completion") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-5"><path d="m5 12 4 4 10-10" /></svg>;
+  }
+  if (action === "fund_stage") {
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-5"><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18m-5 5h2" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-5"><circle cx="12" cy="12" r="8" /><path d="M12 8v4m0 4h.01" /></svg>;
+}
+
+function ProjectHeroAction({
+  view,
+  reviewStage,
+  nextFundable,
+  onFund,
+  isFunding,
+}: {
+  view: EngagementView;
+  reviewStage: StageView | null;
+  nextFundable: StageView | null;
+  onFund: (stageId: string) => void;
+  isFunding: boolean;
+}) {
+  if (view.nextAction === "review_stage" && reviewStage !== null) {
+    return (
+      <Link href={stageHref(view.engagementId, reviewStage.stageId)} className={buttonStyles({ size: "lg", className: "w-full lg:w-auto" })}>
+        Check this stage
+      </Link>
+    );
+  }
+  if (view.nextAction === "fund_stage" && nextFundable !== null) {
+    return (
+      <Button size="lg" onClick={() => onFund(nextFundable.stageId)} loading={isFunding} loadingLabel="Opening payment" className="w-full lg:w-auto">
+        Fund {nextFundable.amountLabel}
+      </Button>
+    );
+  }
+  if (view.nextAction === "accept_completion") {
+    return (
+      <Link href="#completion-heading" className={buttonStyles({ size: "lg", className: "w-full lg:w-auto" })}>
+        Confirm completion
+      </Link>
+    );
+  }
+  return null;
+}
+
+function PaymentProtectionFlow() {
+  const steps = [
+    ["wallet", "Fund a stage"],
+    ["work", "Professional works"],
+    ["check", "You approve"],
+    ["payout", "They are paid"],
+  ] as const;
+
+  return (
+    <ol className="grid grid-cols-4" aria-label="How stage payments move">
+      {steps.map(([icon, label]) => (
+        <li key={label} className="relative flex min-w-0 flex-col items-center px-1 text-center before:absolute before:left-0 before:right-0 before:top-4 before:h-px before:bg-line first:before:left-1/2 last:before:right-1/2">
+          <span aria-hidden className="relative z-10 grid size-8 place-items-center rounded-full bg-surface text-action-active ring-4 ring-canvas">
+            <MoneyGlyph kind={icon} />
+          </span>
+          <span className="mt-2 text-xs font-bold leading-4 text-text-secondary">{label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ProjectMoneyFlow({ view }: { view: EngagementView }) {
+  const steps = [
+    ["Agreed", view.stagedTotalLabel, "wallet"],
+    ["Funded", view.fundedTotalLabel, "lock"],
+    ["Approved", view.approvedTotalLabel, "check"],
+    ["Paid out", view.releasedTotalLabel, "payout"],
+  ] as const;
+
+  return (
+    <section aria-labelledby="money-flow-heading" className="mt-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase text-text-muted">Project money</p>
+          <h2 id="money-flow-heading" className="mt-1 text-xl font-extrabold text-text">Follow every rupee</h2>
+        </div>
+        {view.hasRefund ? <Badge tone="info">Refund recorded</Badge> : null}
+      </div>
+      <div className="mt-3 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+        <ol className="grid grid-cols-4 bg-canvas px-2 py-5 sm:px-5" aria-label="Project money flow">
+          {steps.map(([label, value, icon]) => (
+            <li key={label} className="relative flex min-w-0 flex-col items-center px-1 text-center before:absolute before:left-0 before:right-0 before:top-5 before:h-0.5 before:bg-line first:before:left-1/2 last:before:right-1/2">
+              <span aria-hidden className="relative z-10 grid size-10 place-items-center rounded-full bg-surface text-action-active ring-4 ring-canvas">
+                <MoneyGlyph kind={icon} />
+              </span>
+              <span className="mt-2 text-xs font-bold text-text-secondary">{label}</span>
+              <span data-numeric className="mt-0.5 max-w-full text-sm font-extrabold text-text sm:text-base">{value}</span>
+            </li>
+          ))}
+        </ol>
+        <details className="group border-t border-line">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring [&::-webkit-details-marker]:hidden">
+            <span className="text-sm font-extrabold text-text">Full money breakdown</span>
+            <span className="ml-auto hidden text-xs font-semibold text-text-secondary sm:block">Tax, changes and refunds</span>
+            <Chevron />
+          </summary>
+          <dl className="border-t border-line bg-canvas">
+            <Row label="Originally agreed" value={view.totalLabel} />
+            {view.amendmentDeltaPaise !== 0 ? (
+              <Row label={view.amendmentDeltaPaise < 0 ? "Changes took off" : "Changes added"} value={view.amendmentDeltaLabel} />
+            ) : null}
+            <Row label="Tax" value={view.taxLabel} />
+            {view.hasRefund ? <Row label="Refunded to you" value={view.refundedTotalLabel} /> : null}
+            {view.commissionTreatment !== null ? <Row label="Commission" value={view.commissionTreatment} /> : null}
+          </dl>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+function MoneyGlyph({ kind }: { kind: "wallet" | "work" | "check" | "lock" | "payout" }) {
+  const path = {
+    wallet: "M5 6h12a2 2 0 0 1 2 2v10H5a2 2 0 0 1-2-2V6Zm0 0 10-3v3m1 6h3",
+    work: "M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7m-9 0h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm-2 5h14",
+    check: "m5 12 4 4 10-10",
+    lock: "M7 10V8a5 5 0 0 1 10 0v2m-11 0h12v10H6V10Z",
+    payout: "M4 12h16m-5-5 5 5-5 5",
+  }[kind];
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className="size-4"><path d={path} /></svg>;
+}
+
+function Chevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0 text-text-muted transition-transform duration-fast group-open:rotate-180">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function ForwardChevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function RecordIcon({ kind }: { kind: "agreement" | "folder" }) {
+  const path =
+    kind === "agreement"
+      ? "M7 3h7l4 4v14H7V3Zm7 0v5h5M10 13h5m-5 4h5"
+      : "M3 7h7l2 2h9v10H3V7Zm0 0V5h6l2 2";
+
+  return (
+    <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-sunken text-action-active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+        <path d={path} />
+      </svg>
+    </span>
   );
 }
 
@@ -549,10 +972,11 @@ function StageList({
 
   return (
     <section aria-labelledby="stages-heading" className="mt-6">
-      <h2 id="stages-heading" className="text-lg font-semibold text-text">
+      <p className="text-xs font-bold uppercase text-text-muted">Project plan</p>
+      <h2 id="stages-heading" className="mt-1 text-xl font-extrabold text-text">
         {nouns.stagesHeading}
       </h2>
-      <ol className="mt-3 flex list-none flex-col gap-2 p-0">
+      <ol className="mt-4 flex list-none flex-col gap-3 p-0">
         {view.stages.map((stage) => (
           <StageRow
             key={stage.stageId}
@@ -588,10 +1012,26 @@ function StageRow({
   const isMaterial = stage.kind === "material_advance";
 
   return (
-    <li className="rounded-card border border-line p-3">
+    <li className="relative pl-11 before:absolute before:bottom-[-0.75rem] before:left-[1.15rem] before:top-9 before:w-px before:bg-line last:before:hidden">
+      <span
+        aria-hidden
+        className={cn(
+          "absolute left-0 top-3 grid size-9 place-items-center rounded-full border-2 bg-surface ring-4 ring-canvas",
+          stage.status === "PENDING" ? "border-line text-text-muted" : null,
+          stage.status === "IN_PROGRESS" || stage.status === "CORRECTION_REQUESTED" ? "border-action-line bg-action-surface text-action-active" : null,
+          stage.status === "AWAITING_REVIEW" ? "border-warning-line bg-warning-surface text-warning-text" : null,
+          stage.status === "APPROVED" || stage.status === "RELEASED" ? "border-success-line bg-success-surface text-success-text" : null,
+          stage.status === "DISPUTED" ? "border-danger-line bg-danger-surface text-danger-text" : null,
+          stage.status === "CANCELLED" ? "border-line bg-surface-sunken text-text-muted" : null,
+        )}
+      >
+        <StageGlyph status={stage.status} />
+      </span>
+      <article className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+      <div className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-text">{stage.label}</p>
+          <p className="font-extrabold text-text">{stage.label}</p>
           {stage.scheduledOn !== null ? (
             <p className="mt-0.5 text-sm text-text-secondary">{stage.scheduledOn}</p>
           ) : null}
@@ -603,15 +1043,15 @@ function StageRow({
             <StageKindBadge kind={stage.kind} nouns={nouns} />
           </div>
         </div>
-        <p className="shrink-0 font-medium text-text">{stage.amountLabel}</p>
+        <p data-numeric className="shrink-0 text-lg font-extrabold text-text">{stage.amountLabel}</p>
       </div>
 
       {/* The review is the money screen, so it gets a real link whenever there is
           something to decide — and whenever there is not, so the evidence and
           the decision that was taken stay readable. */}
       {stage.status !== "PENDING" ? (
-        <div className="mt-3">
-          <Link href={reviewHref} className={buttonStyles({ variant: stage.canApprove ? "primary" : "outline" })}>
+        <div className="mt-4">
+          <Link href={reviewHref} className={buttonStyles({ variant: stage.canApprove ? "primary" : "outline", className: "w-full sm:w-auto" })}>
             {stage.canApprove
               ? isMaterial
                 ? "Check the materials"
@@ -654,43 +1094,183 @@ function StageRow({
           tells us the outcome and that can take a few minutes — do not pay again.
         </p>
       ) : stage.fundingState === "FUNDED" ? (
-        <p className="mt-3 text-sm text-text-secondary">
-          {isMaterial
-            ? "Funded. The professional buys the materials with it."
-            : "Funded. It reaches the professional once you approve the work."}
-        </p>
+        <StageMoneyDetails summary="Funded" detail={isMaterial ? "The professional buys the agreed materials with this money." : "This money is held until you approve the work."} />
       ) : stage.isNextToFund && stage.kind === "unknown" ? (
         // Fail closed. This app cannot name what the money is for, so it does
         // not collect it — the same rule the unknown commercial mode follows,
         // and for the same reason: the optimistic reading is the wrong one.
-        <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
-          {kindCopy.fundingPurpose}
-        </p>
+        <StageMoneyDetails summary="Why payment is unavailable" detail={kindCopy.fundingPurpose} />
       ) : stage.isNextToFund ? (
         <div className="mt-3">
-          <p className="max-w-prose text-sm leading-6 text-text-secondary">
-            {kindCopy.fundingPurpose} It is {stage.amountLabel}, at its full
-            price.
-          </p>
-          <div className="mt-2">
+          <div>
             <Button
               onClick={() => onFund(stage.stageId)}
               loading={isFunding}
               loadingLabel="Starting your payment"
+              className="w-full sm:w-auto"
             >
               {isMaterial
                 ? `Pay for these materials — ${stage.amountLabel}`
                 : `Fund this stage — ${stage.amountLabel}`}
             </Button>
           </div>
+          <StageMoneyDetails summary="What this payment covers" detail={kindCopy.fundingPurpose} />
         </div>
       ) : stage.fundingState === "REQUIRED" ? (
-        <p className="mt-3 text-sm text-text-secondary">
-          {isMaterial
-            ? "You will be asked for this when the work before it is done."
-            : "You will be asked for this when the stage before it is done."}
-        </p>
+        <StageMoneyDetails summary="Payment comes later" detail={isMaterial ? "You will be asked for this after the earlier work is done." : "You will be asked for this after the previous stage is done."} />
       ) : null}
+      </div>
+      </article>
     </li>
+  );
+}
+
+function StageMoneyDetails({ summary, detail }: { summary: string; detail: string }) {
+  return (
+    <details className="group mt-3 border-t border-line pt-1">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-sm font-bold text-text transition-colors duration-fast hover:text-text-link focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring [&::-webkit-details-marker]:hidden">
+        <span>{summary}</span>
+        <Chevron />
+      </summary>
+      <p className="pb-2 text-sm font-medium leading-6 text-text-secondary">{detail}</p>
+    </details>
+  );
+}
+
+/**
+ * Funding one stage: the amount, the consequence, and one press.
+ *
+ * ## What was here before
+ *
+ * The row's Pay button called the checkout command directly. That created a
+ * `PaymentAttempt` and handed back a `payment_attempt_id` which nothing used —
+ * no provider is configured in this environment — so the stage sat at
+ * `PROVIDER_PENDING` indefinitely, the engagement's totals never moved, and the
+ * vendor was never told they could start. The control worked; the outcome did
+ * not exist. And it charged on a single press with the amount nowhere near the
+ * button.
+ *
+ * ## The two steps, and why the Customer sees one
+ *
+ * Funding is genuinely two server calls — create the checkout, then capture it —
+ * and there is no honest way to collapse them, because the second is what a
+ * payment provider would do. So the dialog runs both behind one confirmation:
+ * the checkout is created, and if it came back on the **fake** provider the
+ * capture is simulated immediately.
+ *
+ * `provider` is the server's own field on the checkout, not a guess. On any
+ * real provider this stops after the checkout and says so plainly, rather than
+ * pretending money moved — and `simulate-capture` answers `404` wherever it is
+ * switched off, which is production, so the panel cannot be talked into working
+ * there either.
+ *
+ * ## Why the confirmation is not optional
+ *
+ * Capture is irreversible from the Customer's side: undoing it means a refund,
+ * not a delete. A dialog stating the amount is the difference between a
+ * deliberate payment and a mis-tap on a list of stages.
+ */
+function FundStageDialog({
+  engagementId,
+  stage,
+  nouns,
+  onClose,
+}: {
+  engagementId: string;
+  stage: StageView;
+  nouns: ModeNouns;
+  onClose: () => void;
+}) {
+  const fund = useFundStage();
+  const capture = useSimulateStageCapture();
+  const [settled, setSettled] = useState<"paid" | "awaiting-provider" | null>(null);
+
+  const isWorking = fund.isPending || capture.isPending;
+  const failure = fund.error ?? (isSimulatedCaptureUnavailable(capture.error) ? null : capture.error);
+
+  async function pay() {
+    // `useFundStage` keys its idempotency on the stage, so a second press
+    // returns the same attempt rather than a second charge.
+    const checkout = await fund.mutateAsync({ engagementId, stageId: stage.stageId });
+
+    const attemptId = checkout?.payment_attempt_id ?? null;
+    if (attemptId === null || checkout?.provider !== "fake") {
+      // A real provider is configured and this app has no sheet to hand the
+      // charge to. Saying so beats a success state nothing backs up.
+      setSettled("awaiting-provider");
+      return;
+    }
+
+    try {
+      await capture.mutateAsync({ engagementId, paymentAttemptId: attemptId });
+      setSettled("paid");
+    } catch (error) {
+      // Capture switched off is what production looks like, and the checkout
+      // above genuinely was created — so it settles as awaiting rather than as
+      // a failure that lost the Customer's press.
+      if (isSimulatedCaptureUnavailable(error)) setSettled("awaiting-provider");
+      else throw error;
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next && !isWorking) onClose();
+      }}
+      title={settled === "paid" ? `${nouns.stage} funded` : `Fund this ${nouns.stage}?`}
+      description={
+        settled === "paid"
+          ? undefined
+          : `${stage.label} — the professional is told to start once this clears.`
+      }
+      footer={
+        settled !== null ? (
+          <Button onClick={onClose}>Done</Button>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={isWorking}>
+              Cancel
+            </Button>
+            <Button
+              loading={isWorking}
+              loadingLabel="Taking payment"
+              onClick={() => void pay()}
+            >
+              Pay {stage.amountLabel}
+            </Button>
+          </>
+        )
+      }
+    >
+      {settled === "paid" ? (
+        <p className="text-sm leading-6 text-text-secondary">
+          {stage.amountLabel} is funded and held against this {nouns.stage}. It
+          reaches the professional only after you accept the work — you are not
+          paying them yet.
+        </p>
+      ) : settled === "awaiting-provider" ? (
+        <p className="text-sm leading-6 text-text-secondary" role="status">
+          The charge has been created and is with the payment provider. Your bank
+          or UPI app tells us the outcome and that can take a few minutes — do
+          not pay again.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Readout label="Amount" value={stage.amountLabel} tone="active" />
+          <p className="text-sm leading-6 text-text-secondary">
+            This money is held against this {nouns.stage}. It reaches the
+            professional only after you have seen the work and accepted it, and
+            it comes back to you if this {nouns.stage} is never delivered.
+          </p>
+          {failure !== null && failure !== undefined ? (
+            <p role="alert" className="text-sm text-danger-text">
+              {describeError(failure, "mutation").message}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </Dialog>
   );
 }

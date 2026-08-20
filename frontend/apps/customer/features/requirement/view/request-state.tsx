@@ -2,9 +2,8 @@
 
 import { Badge } from "@vsolve/ui";
 import type { BadgeProps } from "@vsolve/ui";
-import type { ReactNode } from "react";
 
-import { isOurFailure, type RequestState } from "../model/request-state";
+import type { RequestState } from "../model/request-state";
 
 /**
  * What each request state says, and what it offers next — `M2-FE-215`.
@@ -37,9 +36,15 @@ import { isOurFailure, type RequestState } from "../model/request-state";
  */
 
 export interface RequestStateCopy {
-  /** The badge, and the headline on the detail. Plain language, no state names. */
+  /** The badge. Plain language, no state names. */
   label: string;
-  /** What is actually happening, and what has and has not been decided. */
+  /**
+   * What is actually happening, and what has and has not been decided.
+   *
+   * The detail screen shows its first sentence large and the remainder
+   * underneath — see `splitLede`, which is why there is no second `headline`
+   * field here to drift out of step with this one.
+   */
   explanation: string;
   /**
    * The one truthful next step, or null when there genuinely is not one.
@@ -146,7 +151,13 @@ export const REQUEST_STATE_COPY: Record<RequestState, RequestStateCopy> = {
   },
 
   CLOSED_ABANDONED: {
-    label: "You cancelled this",
+    // "Cancelled by you" rather than "You cancelled this", because the
+    // explanation's own first sentence is "You cancelled this request." and the
+    // detail screen renders that sentence directly under this badge. A label
+    // the lede then repeats spends the reader's first two lines saying one
+    // thing. It also stays distinct from `CLOSED_CANCELLED`'s bare "Cancelled",
+    // which is the case where somebody other than the Customer stopped it.
+    label: "Cancelled by you",
     explanation: "You cancelled this request. Nothing was charged.",
     nextStep: null,
     tone: "neutral",
@@ -179,51 +190,14 @@ export function RequestStateBadge({ state }: { state: RequestState }) {
   );
 }
 
-export interface RequestStateNoticeProps {
-  state: RequestState;
-  /**
-   * Offered where support is the honest answer.
-   *
-   * The feature does not own the support channel — the route passes the
-   * control in — and it is rendered only where `isOurFailure` says we are the
-   * reason there is nothing to show. Attaching it to every state would train
-   * people to ignore it on the one that needs it.
-   */
-  supportAction?: ReactNode;
-}
-
-const NOTICE_TONES: Record<RequestStateCopy["tone"], string> = {
-  success: "border-success-line bg-success-surface",
-  warning: "border-warning-line bg-warning-surface",
-  danger: "border-danger-line bg-danger-surface",
-  info: "border-info-line bg-info-surface",
-  brand: "border-info-line bg-info-surface",
-  action: "border-action-line bg-action-surface",
-  neutral: "border-line bg-surface-sunken",
-};
-
 /**
- * The full statement of where a request stands.
+ * The full statement of where a request stands used to live here as
+ * `RequestStateNotice` — a tinted panel rendering the label, the explanation and
+ * the next step as three consecutive paragraphs.
  *
- * Used on the detail, and on the list wherever the state is one the Customer
- * should not have to open a page to understand — a closure with a refund in it
- * being the obvious case.
+ * It is now `components/status-card.tsx`, which renders the same table's words
+ * ranked rather than stacked: the chip, then `headline`, then the next step as a
+ * control, with `explanation` behind a disclosure. Deleted rather than kept
+ * beside it, because two components rendering one state table is exactly how a
+ * Customer ends up reading two different accounts of the same request.
  */
-export function RequestStateNotice({ state, supportAction }: RequestStateNoticeProps) {
-  const copy = REQUEST_STATE_COPY[state];
-
-  return (
-    <div className={`rounded-card border p-4 ${NOTICE_TONES[copy.tone]}`}>
-      <p className="font-semibold text-text">{copy.label}</p>
-      <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        {copy.explanation}
-      </p>
-      {copy.nextStep !== null ? (
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text">{copy.nextStep}</p>
-      ) : null}
-      {isOurFailure(state) && supportAction !== undefined ? (
-        <div className="mt-3">{supportAction}</div>
-      ) : null}
-    </div>
-  );
-}

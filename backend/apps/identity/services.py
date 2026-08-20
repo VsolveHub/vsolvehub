@@ -246,6 +246,48 @@ def revoke_current_session(request: HttpRequest) -> None:
 
 
 @transaction.atomic
+def update_customer_profile(
+    *,
+    user: User,
+    display_name: str | None = None,
+    full_name: str | None = None,
+    email: str | None = None,
+) -> User:
+    """Update customer-owned identity fields without changing sign-in identity."""
+    locked_user = User.objects.select_for_update().get(pk=user.pk)
+    profile, _created = CustomerProfile.objects.select_for_update().get_or_create(user=locked_user)
+    changed_fields: list[str] = []
+
+    if display_name is not None:
+        profile.display_name = " ".join(display_name.split())
+        profile.save(update_fields=("display_name", "updated_at"))
+        changed_fields.append("display_name")
+
+    user_fields: list[str] = []
+    if full_name is not None:
+        locked_user.full_name = " ".join(full_name.split())
+        user_fields.append("full_name")
+        changed_fields.append("full_name")
+    if email is not None:
+        locked_user.email = email.strip()
+        user_fields.append("email")
+        changed_fields.append("email")
+    if user_fields:
+        locked_user.save(update_fields=(*user_fields, "updated_at"))
+
+    if changed_fields:
+        record_access_event(
+            actor=locked_user,
+            subject_user=locked_user,
+            action="identity.customer_profile_updated",
+            object_type="customer_profile",
+            object_id=profile.id,
+            metadata={"fields": changed_fields},
+        )
+    return locked_user
+
+
+@transaction.atomic
 def switch_active_role(*, user: User, session_key: str, role_code: str) -> UserSession:
     """Switch one session to an already granted role; role grants are never implicit."""
     role = Role.objects.filter(code=role_code).first()

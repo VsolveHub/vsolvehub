@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { getStableIdempotencyKey, request } from "@vsolve/api-client";
+import { ApiRequestError, getStableIdempotencyKey, request } from "@vsolve/api-client";
 import {
   M2_FRESHNESS,
   boundedPoll,
@@ -276,6 +276,72 @@ export function useFundStage() {
     },
     retry: false,
   });
+}
+
+export interface SimulateStageCaptureInput {
+  /** Only so the engagement's own totals can be refetched. */
+  engagementId: string;
+  paymentAttemptId: string;
+}
+
+/**
+ * Marks a stage's funding charge captured with no gateway involved.
+ *
+ * **Development only, and the server is the gatekeeper.** `POST
+ * /payment-attempts/{id}/simulate-capture/` answers `404` wherever simulated
+ * capture is switched off, and refuses any attempt that is not on the fake
+ * provider — so this cannot be made to work in production by calling it.
+ *
+ * ## Why the customer app has this at all
+ *
+ * `POST /engagement-stages/{id}/funding/` creates a checkout and hands back a
+ * `payment_attempt_id`. Nothing then completed it: no provider is configured,
+ * so every funded stage sat at `PROVIDER_PENDING` for ever and the whole of what
+ * funding triggers — the stage moving to `FUNDED`, the engagement's running
+ * totals, the vendor being told they can start — was unreachable. The button
+ * existed and the outcome did not.
+ *
+ * ## Why it routes through the same endpoint as every other simulated capture
+ *
+ * Because `simulate_capture` hands a fabricated "captured" to
+ * `apply_provider_payment`, which is the function a real webhook calls. A stub
+ * that flipped the stage's own status would produce a stage nothing downstream
+ * agreed was funded, which is worse than no stub — it makes development diverge
+ * from production exactly where the money is.
+ */
+export function useSimulateStageCapture() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SimulateStageCaptureInput) =>
+      request(() =>
+        getApiClient().POST("/api/v1/payment-attempts/{attempt_id}/simulate-capture/", {
+          params: { path: { attempt_id: input.paymentAttemptId } },
+        }),
+      ),
+    onSettled: (_data, _error, input) => {
+      // The stage's funding state, the engagement's four running totals and the
+      // list row's next action all move on capture. `detail` is a prefix of the
+      // stage key, so one call covers the stage the Customer is looking at too.
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.engagements.detail(input.engagementId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: m2QueryKeys.engagements.list("customer"),
+      });
+    },
+    retry: false,
+  });
+}
+
+/**
+ * `404` from simulated capture — the environment has it switched off.
+ *
+ * Not an error to show. It is how production answers, and the panel simply is
+ * not offered there.
+ */
+export function isSimulatedCaptureUnavailable(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.status === 404;
 }
 
 /* --------------------------------------------------------------------------

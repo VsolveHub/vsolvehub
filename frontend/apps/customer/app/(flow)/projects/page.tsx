@@ -1,37 +1,18 @@
-import type { Metadata } from "next";
+import { permanentRedirect } from "next/navigation";
 
-import { EngagementListScreen } from "@/features/engagement/view/engagement-list-screen";
+import { activityTabHref } from "@/features/activity/view/activity-screen";
 
 /**
- * `My projects` — `M2-FE-608`.
- *
- * Overall progress, the active stage, the funded amount, the next action and
- * whether a problem is open, for every managed (A5) engagement the Customer has.
- * The route the information architecture names, and the same read as
- * `/bookings/workforce` — `GET /engagements/` is one list and `commercial_mode`
- * is the split.
- *
- * The project's own workspace is `/engagements/[engagementId]`, which Wave A2
- * mounted: an engagement is addressed by its own id so it survives a
- * notification opened months after the request closed.
- *
- * Dynamic and never indexed.
+ * `My projects` moved into the Activity hub.
+
+ * The project's own workspace is `/engagements/{id}` and is untouched; only the
+ * list moved. The route stays addressed so a notification opened months after
+ * the request closed still lands somewhere real.
  */
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Your projects",
-  robots: { index: false, follow: false },
-};
-
-export default function ProjectsPage() {
-  return (
-    <main>
-      <EngagementListScreen
-        mode="managed"
-        newRequestHref="/requests/new"
-        requestsHref="/requests"
-      />
-    </main>
-  );
+export default function RedirectToActivity(): never {
+  // Permanent rather than temporary: this is an information-architecture
+  // decision, not a maintenance window, and a `308` lets browsers and crawlers
+  // stop asking. `activityTabHref` owns the target so the segment name lives in
+  // exactly one module.
+  permanentRedirect(activityTabHref("projects"));
 }

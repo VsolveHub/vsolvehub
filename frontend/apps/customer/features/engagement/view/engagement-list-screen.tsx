@@ -48,6 +48,22 @@ export interface EngagementListScreenProps {
   /** Where a Customer with nothing here goes to start one. */
   newRequestHref: string;
   requestsHref: string;
+  /**
+   * Whether this is the whole page or a section of one.
+   *
+   * `page` is the original standalone route: its own heading, its own reading
+   * column, its own way back to the requests list. `embedded` is the same list
+   * inside the Activity hub, which already supplies all three — so the frame is
+   * dropped and nothing else is.
+   *
+   * What is deliberately **not** conditional is the `LEAD_ONLY` direct-payment
+   * reminder. It is the one sentence on this screen that changes what a
+   * Customer believes about who holds their money, and a layout flag must never
+   * be able to remove it. `M2-FE-509` puts it above the list precisely because
+   * somebody who skims and never opens a row is who it is for, and that person
+   * skims the hub exactly as readily as the standalone page.
+   */
+  chrome?: "page" | "embedded";
 }
 
 /**
@@ -65,6 +81,7 @@ export function EngagementListScreen({
   mode,
   newRequestHref,
   requestsHref,
+  chrome = "page",
 }: EngagementListScreenProps) {
   const query = useEngagements();
   const nouns = nounsFor(mode);
@@ -75,7 +92,7 @@ export function EngagementListScreen({
 
   if (query.isPending) {
     return (
-      <Wrapper mode={mode}>
+      <Wrapper mode={mode} chrome={chrome} hasRows={rows.length > 0}>
         <div aria-busy="true" aria-live="polite">
           <span className="sr-only">Loading your {nouns.engagement}s</span>
           <Skeleton className="h-24 w-full" />
@@ -91,7 +108,7 @@ export function EngagementListScreen({
   if (query.isError) {
     const presentation = describeError(query.error, "read");
     return (
-      <Wrapper mode={mode}>
+      <Wrapper mode={mode} chrome={chrome} hasRows={rows.length > 0}>
         <ErrorState
           title={presentation.title}
           message={presentation.message}
@@ -105,7 +122,7 @@ export function EngagementListScreen({
   }
 
   return (
-    <Wrapper mode={mode}>
+    <Wrapper mode={mode} chrome={chrome} hasRows={rows.length > 0}>
       {rows.length === 0 ? (
         <EmptyState
           title={`No ${nouns.engagement}s yet`}
@@ -164,37 +181,66 @@ export function EngagementListScreen({
         </div>
       ) : null}
 
-      <div className="mt-8">
-        <Link href={requestsHref} className={buttonStyles({ variant: "ghost" })}>
-          All your requests
-        </Link>
-      </div>
+      {chrome === "page" ? (
+        <div className="mt-8">
+          <Link href={requestsHref} className={buttonStyles({ variant: "ghost" })}>
+            All your requests
+          </Link>
+        </div>
+      ) : null}
     </Wrapper>
   );
 }
 
 function Wrapper({
   mode,
+  chrome,
+  hasRows,
   children,
 }: {
   mode: "lead_only" | "managed";
+  chrome: "page" | "embedded";
+  /**
+   * Whether the list under this frame has anything in it.
+   *
+   * Only consulted for the embedded direct-payment reminder. See the render
+   * condition below for why an exception exists at all.
+   */
+  hasRows: boolean;
   children: React.ReactNode;
 }) {
+  const framed = chrome === "page";
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-16 pt-6">
-      <h1 className="text-xl font-bold text-text">
-        {mode === "lead_only" ? "People you have hired" : "Your projects"}
-      </h1>
-      <p className="mt-1 text-sm text-text-secondary">
-        {mode === "lead_only"
-          ? "Jobs where you agreed a rate with a professional and pay them directly."
-          : "Work you are funding through Vsolve, one stage at a time."}
-      </p>
+    <div
+      className={
+        framed ? "mx-auto flex w-full max-w-3xl flex-col px-4 pb-16 pt-6" : "flex w-full flex-col"
+      }
+    >
+      {framed ? (
+        <>
+          <h1 className="text-xl font-bold text-text">
+            {mode === "lead_only" ? "People you have hired" : "Your projects"}
+          </h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            {mode === "lead_only"
+              ? "Jobs where you agreed a rate with a professional and pay them directly."
+              : "Work you are funding through Vsolve, one stage at a time."}
+          </p>
+        </>
+      ) : null}
 
       {/* `M2-FE-509`: the direct-payment reminder, above the list rather than
           inside a row. Somebody who skims and never opens a row is precisely
           the person this sentence exists for. */}
-      {mode === "lead_only" ? (
+      {/* Standalone, this is a whole page about hiring people directly, so the
+          reminder belongs on it whether or not the list has filled up yet.
+          Embedded, it is one section of a hub — and a money warning standing
+          over an empty list warns about nothing while looking exactly like a
+          problem, which is its own kind of dishonesty. It appears the instant
+          there is a single row to warn about, which is the only moment it can
+          mislead by being absent. */}
+      {mode === "lead_only" && (framed || hasRows) ? (
         <p className="mt-4 rounded-card border border-warning-line bg-warning-surface p-4 text-sm leading-6 text-text">
           <strong className="font-semibold">You pay these professionals directly.</strong>{" "}
           Vsolve does not hold your money for this work, so payment, refunds and

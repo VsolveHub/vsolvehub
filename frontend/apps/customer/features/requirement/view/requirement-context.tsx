@@ -8,6 +8,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 
@@ -36,6 +37,8 @@ import {
 interface RequirementContextValue {
   state: RequirementDraftState;
   dispatch: (action: RequirementAction) => void;
+  /** True after the browser's saved draft has been read once. */
+  hasRestoredIntent: boolean;
   /** Null when the Customer may continue. */
   blocked: BlockReason | null;
   canContinue: boolean;
@@ -67,13 +70,14 @@ export function useRequirement(): RequirementContextValue {
 /**
  * What is written to sessionStorage.
  *
- * Customer intent only — the same rule the M1 booking workspace follows. No
- * verdict, no requirement id, no attachment:
+ * Customer intent plus the opaque id of the server draft it belongs to. No
+ * verdict and no local attachment handle:
  *
  * - the **verdict** is the server's reading of an answer set, and replaying one
  *   would show a lifecycle sentence nothing has re-derived;
- * - the **requirement id** would let a restored tab patch a server draft the
- *   Customer may have since submitted or abandoned from another tab;
+ * - the **requirement id** is restored so reload resumes the same draft instead
+ *   of creating a duplicate. `RequirementFlow` re-reads that id before using it
+ *   and leaves the editor when the server says the draft is no longer editable;
  * - an **attachment** is a live `File` handle that does not survive a reload, so
  *   restoring its row would show an upload that can never finish.
  *
@@ -82,10 +86,14 @@ export function useRequirement(): RequirementContextValue {
  */
 interface PersistedIntent {
   categorySlug: string;
+  /** Optional for entries written before reload resumed the server draft. */
+  requirementId?: string | null;
   answers: Record<string, unknown>;
   addressId: string | null;
   /** Optional on the way in: entries written before "Start from" existed still restore. */
   requestedStart?: string | null;
+  /** Optional for entries written before the hard deadline was persisted. */
+  serviceBy?: string | null;
   /**
    * Optional on the way in, because entries written while this was a boolean
    * still have to restore. A draft persisted before the change carries
@@ -138,9 +146,11 @@ function writeIntent(state: RequirementDraftState): void {
   if (typeof window === "undefined") return;
   const intent: PersistedIntent = {
     categorySlug: state.categorySlug,
+    requirementId: state.requirementId,
     answers: state.answers,
     addressId: state.addressId,
     requestedStart: state.requestedStart,
+    serviceBy: state.serviceBy,
     flexibilityDays: state.flexibilityDays,
     additionalDetails: state.additionalDetails,
     language: state.language,
@@ -196,32 +206,41 @@ export function RequirementProvider({
 }: RequirementProviderProps) {
   const [state, dispatch] = useReducer(requirementReducer, categorySlug, start);
   const today = useMemo(() => todayIso(), []);
+  const [hasRestoredIntent, setHasRestoredIntent] = useState(false);
 
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
     const intent = readIntent(categorySlug);
-    if (intent === null) return;
-    dispatch({
-      type: "RESTORE_INTENT",
-      answers: intent.answers,
-      addressId: intent.addressId,
-      requestedStart: intent.requestedStart ?? null,
-      flexibilityDays: intent.flexibilityDays ?? 0,
-      additionalDetails: intent.additionalDetails,
-      language: intent.language,
-      // Older entries predate this field. An absent bag restores as empty
-      // rather than as `undefined`, which the reducer would spread into state
-      // and every panel would then read through an optional chain it should
-      // not need.
-      optionalDetails: intent.optionalDetails ?? {},
-    });
+    if (intent !== null) {
+      dispatch({
+        type: "RESTORE_INTENT",
+        requirementId: intent.requirementId ?? null,
+        answers: intent.answers,
+        addressId: intent.addressId,
+        requestedStart: intent.requestedStart ?? null,
+        serviceBy: intent.serviceBy ?? null,
+        flexibilityDays: intent.flexibilityDays ?? 0,
+        additionalDetails: intent.additionalDetails,
+        language: intent.language,
+        // Older entries predate this field. An absent bag restores as empty
+        // rather than as `undefined`, which the reducer would spread into state
+        // and every panel would then read through an optional chain it should
+        // not need.
+        optionalDetails: intent.optionalDetails ?? {},
+      });
+    }
+    setHasRestoredIntent(true);
   }, [categorySlug]);
 
+  // Do not serialize the empty hydration state over the entry the effect above
+  // is about to restore. The restore and this flag settle in the same update,
+  // so the first write always contains restored intent (also in Strict Mode).
   useEffect(() => {
+    if (!hasRestoredIntent) return;
     writeIntent(state);
-  }, [state]);
+  }, [hasRestoredIntent, state]);
 
   /**
    * The step lives in the URL, so a reload lands where the Customer was.
@@ -285,6 +304,7 @@ export function RequirementProvider({
     () => ({
       state,
       dispatch,
+      hasRestoredIntent,
       blocked,
       canContinue: canAdvance(state, today, hasUnresolvedDuplicate),
       today,
@@ -293,7 +313,17 @@ export function RequirementProvider({
       advance,
       back,
     }),
-    [state, blocked, today, hasUnresolvedDuplicate, goTo, open, advance, back],
+    [
+      state,
+      hasRestoredIntent,
+      blocked,
+      today,
+      hasUnresolvedDuplicate,
+      goTo,
+      open,
+      advance,
+      back,
+    ],
   );
 
   return <RequirementContext.Provider value={value}>{children}</RequirementContext.Provider>;

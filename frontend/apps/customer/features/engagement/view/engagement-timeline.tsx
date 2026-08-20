@@ -49,18 +49,28 @@ export function EngagementTimeline({ engagementId }: EngagementTimelineProps) {
   const events = query.data === undefined ? null : toEngagementEvents(query.data);
 
   return (
-    <section aria-labelledby="engagement-timeline-heading" className="mt-8">
-      <h2 id="engagement-timeline-heading" className="text-lg font-semibold text-text">
-        Everything that has happened
-      </h2>
-
+    <section aria-label="Project activity" className="mt-6">
+      <details className="group overflow-hidden rounded-card border border-line bg-surface shadow-card">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 px-4 py-3 transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-sunken text-action-active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-4"><path d="M12 8v4l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-extrabold text-text">Project activity</span>
+            <span className="block text-xs font-medium text-text-secondary">
+              {events === null ? "Loading the shared record" : `${events.length} recorded update${events.length === 1 ? "" : "s"}`}
+            </span>
+          </span>
+          <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0 text-text-muted transition-transform duration-fast group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
+        </summary>
+        <div className="border-t border-line bg-canvas px-4 py-4 sm:px-5">
       {query.isPending ? (
-        <div className="mt-3" aria-busy="true" aria-live="polite">
+        <div aria-busy="true" aria-live="polite">
           <span className="sr-only">Loading the record</span>
           <Skeleton className="h-32 w-full" />
         </div>
       ) : events === null ? (
-        <div className="mt-3">
+        <div>
           {(() => {
             const presentation = describeError(query.error, "read");
             return (
@@ -77,7 +87,7 @@ export function EngagementTimeline({ engagementId }: EngagementTimelineProps) {
           })()}
         </div>
       ) : events.length === 0 ? (
-        <div className="mt-3">
+        <div>
           <EmptyState
             title="Nothing has happened yet"
             compact
@@ -85,7 +95,7 @@ export function EngagementTimeline({ engagementId }: EngagementTimelineProps) {
           />
         </div>
       ) : (
-        <Timeline label="Everything that has happened on this job" className="mt-3">
+        <Timeline label="Everything that has happened on this job">
           {events.map((event) => (
             <TimelineEvent
               key={event.eventId}
@@ -102,6 +112,8 @@ export function EngagementTimeline({ engagementId }: EngagementTimelineProps) {
           ))}
         </Timeline>
       )}
+        </div>
+      </details>
     </section>
   );
 }

@@ -31,7 +31,15 @@ test.describe("My requests", () => {
     await installRequirementApi(page);
     await page.goto("/requests");
 
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your requests");
+    // `/requests` is now a permanent redirect into the Activity hub's Requests
+    // segment — the list itself did not move, its front door did. Asserting the
+    // hub heading plus the current segment is what proves the redirect landed
+    // somewhere real rather than merely not 404ing.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Activity");
+    await expect(page.getByRole("link", { name: "Requests" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await expect(page.getByRole("heading", { name: "Housekeeping staff" })).toBeVisible();
     await expect(page.getByText("You are hiring people for a period of time.")).toBeVisible();
   });

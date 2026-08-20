@@ -10,12 +10,10 @@ import { getApiClient } from "@/lib/api/browser";
 import { LiveOfferSheet } from "@/features/crew-offer/view/live-offer-sheet";
 import { NotificationBell } from "@/features/notifications/view/notification-bell";
 import {
-  activeWorkspace,
-  navigationFor,
   resolveWorkspaces,
+  TAP_FIRST_NAV,
   type WorkspaceNavItem,
 } from "@/features/workspace/registry";
-import { WorkspaceSwitcher } from "@/features/workspace/workspace-switcher";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
 /**
@@ -243,13 +241,13 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   }
 
   // Resolved after the guard, so a signed-out or forbidden visitor never has
-  // navigation computed for a session they do not hold. An unread grant list is
-  // the M1 navigation: the tab bar is the one surface where "approved for
-  // nothing" and "we could not ask" are allowed to look the same, because
-  // neither authorizes a tab. The screens behind them tell the difference.
+  // this asked for on their behalf. The tab bar itself no longer depends on
+  // this — it is the fixed `TAP_FIRST_NAV` below — but `NotificationBell`
+  // still needs to know which M2 workspace keys this Partner holds, to
+  // decide where an ENGAGEMENT notice may safely link. An unread grant list
+  // and an empty one are deliberately indistinguishable here: nothing
+  // downstream of `workspaces` authorizes anything.
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
-  const workspace = activeWorkspace(workspaces, pathname);
-  const navItems = navigationFor(workspace);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -264,13 +262,14 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             <span className="text-sm font-semibold text-text-secondary">Partner</span>
           </Link>
           {/*
-            The bell sits beside Sign Out rather than in the tab bar, and only in
-            this branch. `MAX_TAB_ITEMS` is six and the A3 workspace already fills
-            it, so a seventh nav item would not appear — `navigationFor` takes the
-            overflow out of the workspace's own destinations from the tail, so it
-            would have silently evicted Crew. And mounting it any earlier would
-            poll an unread count for a session that is still being checked, or one
-            that turned out not to hold a Partner account at all.
+            The bell sits beside Sign Out rather than in the tab bar. The tab
+            bar is a fixed three destinations (`TAP_FIRST_NAV`) with no
+            per-Partner variation to make room for it, and `notification-bell.tsx`
+            explains the deeper reason anyway: a notification is an
+            interruption, not a destination. Mounting it here rather than
+            earlier would poll an unread count for a session that is still
+            being checked, or one that turned out not to hold a Partner
+            account at all.
 
             `workspaceKeys` decides where an ENGAGEMENT notice may safely link. It
             is passed down from the list already resolved here so the panel does
@@ -289,20 +288,13 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             </Button>
           </div>
         </div>
-
-        {/* Renders nothing until a Partner actually holds an M2 capability. */}
-        {workspaces.length > 0 ? (
-          <div className="mx-auto max-w-2xl px-3 pb-2">
-            <WorkspaceSwitcher workspaces={workspaces} active={workspace} />
-          </div>
-        ) : null}
       </header>
 
       {/* ---- Page content ---- */}
       <ShellContent>{children}</ShellContent>
 
       {/* ---- Bottom tab bar ---- */}
-      <BottomTabBar items={navItems} />
+      <BottomTabBar items={TAP_FIRST_NAV} />
 
       {/*
         A live crew offer, on whatever screen the lead is looking at.
@@ -310,8 +302,8 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
         Mounted in the shell rather than on `/offers` because an A3 offer expires
         in about two minutes and the cascade pushes it — a lead reading their
         earnings when one lands would otherwise never see it, and a wave would
-        widen for no reason. The sheet suppresses itself on `/offers`, where the
-        list is already on screen.
+        widen for no reason. The sheet suppresses itself on `/work` and
+        `/work/offers/…`, the two screens that already render the offer.
 
         Gated on the grant, not merely on the session. This shell also renders
         for `/apply`, where `requirePartnerRole` is deliberately off because

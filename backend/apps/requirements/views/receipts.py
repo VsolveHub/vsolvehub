@@ -124,5 +124,7 @@ def _crew_money(requirement_id: uuid.UUID) -> tuple[str, tuple[DocumentLine, ...
 
 def _buyer(engagement: object) -> str:
     customer = getattr(engagement, "customer", None)
-    name = str(getattr(customer, "display_name", "") or "").strip()
-    return name or str(getattr(customer, "phone_number", "") or "Customer")
+    full_name = str(getattr(customer, "full_name", "") or "").strip()
+    profile = getattr(customer, "customer_profile", None)
+    display_name = str(getattr(profile, "display_name", "") or "").strip()
+    return full_name or display_name or str(getattr(customer, "phone_number", "") or "Customer")

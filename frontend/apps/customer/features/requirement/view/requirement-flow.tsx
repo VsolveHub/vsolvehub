@@ -18,6 +18,7 @@ import { WizardShell } from "@/features/project-request/view/wizard-shell";
 import { toPlanTierViews } from "@/features/access/adapters";
 import { useChooseVisitPlan, useVisitPlan } from "@/features/access/queries";
 import { VisitPlanChooser } from "@/features/access/view/visit-plan-chooser";
+import { guideToVisitPlanSelection } from "@/features/access/view/guide-to-visit-plan";
 import {
   selectionOnlyQuestionSet,
   toDuplicateView,
@@ -41,6 +42,7 @@ import {
   useSubmitRequirement,
   isRequirementExpired,
   isSubmitInProgress,
+  type SaveRequirementInput,
 } from "../queries";
 import { useAttachments } from "../use-attachments";
 import type { Screen } from "../model/screens";
@@ -136,6 +138,29 @@ function startOfLocalDay(isoDate: string): string {
   return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 0, 0, 0, 0).toISOString();
 }
 
+export function toPlaceAndDateSaveInput({
+  requirementId,
+  addressId,
+  requestedStart,
+  flexibilityDays,
+  serviceBy,
+}: {
+  requirementId: string;
+  addressId: string | null;
+  requestedStart: string | null;
+  flexibilityDays: number;
+  serviceBy: string | null;
+}): SaveRequirementInput | null {
+  if (addressId === null || requestedStart === null) return null;
+  return {
+    requirementId,
+    addressId,
+    requestedStart: startOfLocalDay(requestedStart),
+    flexibilityDays,
+    serviceBy,
+  };
+}
+
 export function isWorkspaceAdvancingForScreen({
   screen,
   isCreatingRequirement,
@@ -150,13 +175,68 @@ export function isWorkspaceAdvancingForScreen({
   return false;
 }
 
+/** Only the action visible on the current phone screen may busy its CTA. */
+export function isWizardActionPending({
+  screen,
+  isAdvancingCurrentScreen,
+  isPreparingSubmit,
+  isSubmittingRequirement,
+  isChoosingPlan,
+}: {
+  screen: Screen;
+  isAdvancingCurrentScreen: boolean;
+  isPreparingSubmit: boolean;
+  isSubmittingRequirement: boolean;
+  isChoosingPlan: boolean;
+}): boolean {
+  if (screen === "review") {
+    return isPreparingSubmit || isSubmittingRequirement || isChoosingPlan;
+  }
+  return isAdvancingCurrentScreen;
+}
+
+interface SubmitPreparation {
+  saveAnswers: () => Promise<string | null>;
+  savePlaceAndDates: (requirementId: string) => Promise<boolean>;
+  saveDetails: (requirementId: string) => Promise<boolean>;
+  onPlaceAndDateFailure: () => void;
+}
+
+/** Make the server draft match the brief currently visible in the browser. */
+export async function prepareRequirementForSubmit({
+  saveAnswers,
+  savePlaceAndDates,
+  saveDetails,
+  onPlaceAndDateFailure,
+}: SubmitPreparation): Promise<string | null> {
+  const requirementId = await saveAnswers();
+  if (requirementId === null) return null;
+
+  if (!(await savePlaceAndDates(requirementId))) {
+    onPlaceAndDateFailure();
+    return null;
+  }
+
+  if (!(await saveDetails(requirementId))) return null;
+  return requirementId;
+}
+
 function FlowBody({
   service,
   variant,
   initialSelection = null,
   onDuplicatesChange,
 }: FlowBodyProps) {
-  const { state, dispatch, today, advance, back, open, canContinue } = useRequirement();
+  const {
+    state,
+    dispatch,
+    hasRestoredIntent,
+    today,
+    advance,
+    back,
+    open,
+    canContinue,
+  } = useRequirement();
   const initialSelectionApplied = useRef(false);
   // Above every early return, because hooks are. `useIsWideScreen` decides
   // between the phone wizard and the desktop brief — see its own note on why
@@ -182,6 +262,8 @@ function FlowBody({
    * the query cache as though it were a fact.
    */
   const [pendingPlanSize, setPendingPlanSize] = useState<number | null>(null);
+  /** True only for writes started by pressing the review CTA. */
+  const [isPreparingSubmit, setIsPreparingSubmit] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -322,6 +404,7 @@ function FlowBody({
   }, [submitted, service.slug]);
 
   useEffect(() => {
+    if (!hasRestoredIntent) return;
     if (initialSelectionApplied.current) return;
     if (isWriting) return;
 
@@ -334,6 +417,14 @@ function FlowBody({
     const question = questionSet.questions.find((candidate) => candidate.kind === "choice");
     if (question === undefined) return;
     if (!(question.options ?? []).some((option) => option.value === initialSelection)) return;
+
+    // A reload restored the same server draft and answer. Its canonical record
+    // is being re-read below, so another POST/PATCH here would only create a
+    // background mutation (and used to turn the review CTA into a spinner).
+    if (chosenService === initialSelection && state.requirementId !== null) {
+      initialSelectionApplied.current = true;
+      return;
+    }
 
     initialSelectionApplied.current = true;
     dispatch({ type: "ANSWER", questionCode: question.code, value: initialSelection });
@@ -363,8 +454,10 @@ function FlowBody({
     })();
   }, [
     advance,
+    chosenService,
     createRequirement,
     dispatch,
+    hasRestoredIntent,
     initialSelection,
     isSelectionOnlyWhatScreen,
     isWriting,
@@ -375,6 +468,26 @@ function FlowBody({
     state.requirementId,
     variant.id,
   ]);
+
+  useEffect(() => {
+    const draft = record.data;
+    if (!hasRestoredIntent || submitted !== undefined || draft === undefined) return;
+
+    if (draft.status !== "DRAFT") {
+      clearPersistedRequirement(service.slug);
+      router.replace(requestHref(draft.id));
+      return;
+    }
+
+    // The id came from browser storage; this authenticated read proves it still
+    // names the Customer's editable draft and restores the server-owned
+    // lifecycle verdict that is deliberately not serialized.
+    dispatch({
+      type: "APPLY_VERDICT",
+      verdict: toLifecycleVerdict(draft),
+      requirementId: draft.id,
+    });
+  }, [dispatch, hasRestoredIntent, record.data, router, service.slug, submitted]);
 
   if (submitted !== undefined) {
     return (
@@ -460,16 +573,16 @@ function FlowBody({
    * the three-write chain work on a first send.
    */
   async function savePlaceAndDates(requirementId: string): Promise<boolean> {
-    if (state.addressId === null || state.requestedStart === null) {
-      return false;
-    }
+    const input = toPlaceAndDateSaveInput({
+      requirementId,
+      addressId: state.addressId,
+      requestedStart: state.requestedStart,
+      flexibilityDays: state.flexibilityDays,
+      serviceBy: state.serviceBy,
+    });
+    if (input === null) return false;
     try {
-      await saveRequirement.mutateAsync({
-        requirementId,
-        addressId: state.addressId,
-        requestedStart: startOfLocalDay(state.requestedStart),
-        flexibilityDays: state.flexibilityDays,
-      });
+      await saveRequirement.mutateAsync(input);
       return true;
     } catch {
       return false;
@@ -526,17 +639,13 @@ function FlowBody({
    */
   async function handleReviewAndSend() {
     if (!canSendBrief) return;
-    const requirementId = await saveAnswers();
+    const requirementId = await prepareRequirementForSubmit({
+      saveAnswers,
+      savePlaceAndDates,
+      saveDetails,
+      onPlaceAndDateFailure: () => open("where_when"),
+    });
     if (requirementId === null) return;
-    if (!(await savePlaceAndDates(requirementId))) {
-      // The only way this fails without an error of its own is a missing address
-      // or start date, which belongs to section 2. Landing there beats a CTA
-      // that silently does nothing — the failure this whole handler was
-      // reported for.
-      open("where_when");
-      return;
-    }
-    if (!(await saveDetails(requirementId))) return;
     // `open`, not `goTo`. `review` is never in `visited` from the brief, so
     // `goTo` refused it and the send ended in silence after three good writes.
     open("review");
@@ -561,7 +670,9 @@ function FlowBody({
    * Customer would read a `409` for something that was on the screen in front of
    * them.
    */
-  const canSubmit = canContinue && (!isA5 || chosenPlanSize !== null);
+  const canSubmit =
+    canContinue && state.verdict !== null && (!isA5 || chosenPlanSize !== null);
+  const needsVisitPlanSelection = isA5 && chosenPlanSize === null;
 
   /**
    * The three-row recap on review, each row returning to the step that owns it.
@@ -600,16 +711,52 @@ function FlowBody({
     sectionBlocks.what ?? sectionBlocks.where_when ?? sectionBlocks.details ?? null;
   const canSendBrief = briefBlocked === null;
 
-  function handleSubmit() {
-    if (state.requirementId === null) return;
-    submitRequirement.mutate({
-      requirementId: state.requirementId,
-      // The server's `allow_duplicate` and the client's "they were shown the
-      // notice and said these are different jobs" are the same fact. Sending
-      // `true` by default would turn `GAP-004` into decoration.
-      allowDuplicate: state.duplicateOverridden,
-    });
+  async function handleSubmit() {
+    if (
+      !canSubmit ||
+      isWriting ||
+      isPreparingSubmit ||
+      choosePlan.isPending ||
+      submitRequirement.isPending
+    ) {
+      return;
+    }
+
+    submitRequirement.reset();
+    setIsPreparingSubmit(true);
+    try {
+      const requirementId = await prepareRequirementForSubmit({
+        saveAnswers,
+        savePlaceAndDates,
+        saveDetails,
+        onPlaceAndDateFailure: () => open("where_when"),
+      });
+      if (requirementId === null) return;
+
+      await submitRequirement.mutateAsync({
+        requirementId,
+        // The server's `allow_duplicate` and the client's "they were shown the
+        // notice and said these are different jobs" are the same fact. Sending
+        // `true` by default would turn `GAP-004` into decoration.
+        allowDuplicate: state.duplicateOverridden,
+      });
+    } catch {
+      // The mutation owns the visible refusal. Keeping it here prevents an
+      // expected API rejection from becoming an unhandled event promise.
+    } finally {
+      setIsPreparingSubmit(false);
+    }
   }
+
+  const reviewActionPending =
+    isPreparingSubmit || submitRequirement.isPending || choosePlan.isPending;
+  const wizardActionPending = isWizardActionPending({
+    screen: state.screen,
+    isAdvancingCurrentScreen,
+    isPreparingSubmit,
+    isSubmittingRequirement: submitRequirement.isPending,
+    isChoosingPlan: choosePlan.isPending,
+  });
 
   const notices = (
     <FlowNotices
@@ -656,12 +803,32 @@ function FlowBody({
         title={service.name}
         step={stepFor[state.screen]}
         onBack={() => (state.screen === "what" ? router.back() : back())}
-        onContinue={() =>
-          state.screen === "review" ? handleSubmit() : void handleAdvance()
+        onContinue={() => {
+          if (state.screen !== "review") {
+            void handleAdvance();
+            return;
+          }
+          if (needsVisitPlanSelection) {
+            guideToVisitPlanSelection();
+            return;
+          }
+          void handleSubmit();
+        }}
+        canContinue={
+          state.screen === "review"
+            ? needsVisitPlanSelection
+              ? canContinue
+              : canSubmit
+            : canContinue
         }
-        canContinue={state.screen === "review" ? canSubmit : canContinue}
-        isSaving={isWriting || submitRequirement.isPending}
-        continueLabel={state.screen === "review" ? "Send this request" : "Continue"}
+        isSaving={wizardActionPending}
+        continueLabel={
+          state.screen === "review"
+            ? needsVisitPlanSelection
+              ? "Select number of estimates"
+              : "Send this request"
+            : "Continue"
+        }
         reassurance={
           state.screen === "review"
             ? chosenPlanPrice === null
@@ -852,12 +1019,12 @@ function FlowBody({
     >
       <ReviewScreen
           categoryName={service.name}
-          addressLines={null}
+          addressLines={addressLine === null ? null : [addressLine]}
           // Nothing published says the requirement is free until the server
           // answers the submit. See `RequirementSent`.
           isFree={null}
-          onSubmit={handleSubmit}
-          isSubmitting={submitRequirement.isPending}
+          onSubmit={() => void handleSubmit()}
+          isSubmitting={reviewActionPending}
           submitError={submitFailureCopy(submitRequirement.error)}
           visitPlanChooser={
             isA5 && state.requirementId !== null ? (
@@ -885,10 +1052,12 @@ function FlowBody({
           // Stated here rather than met as a 409 after the Send button — the one
           // place a Customer reads a refusal for something that was on screen.
           submitBlockedReason={
-            isA5 && chosenPlanSize === null
+            needsVisitPlanSelection
               ? "Choose how many professionals should visit before you send this. It costs nothing now."
               : null
           }
+          requiresVisitPlanSelection={needsVisitPlanSelection}
+          isChoosingVisitPlan={choosePlan.isPending}
         />
     </RequirementWorkspace>
   );

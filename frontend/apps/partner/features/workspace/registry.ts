@@ -6,6 +6,7 @@ import {
   HardHat,
   Home,
   UserCircle,
+  UserCircle2,
   Users,
   Wallet,
   Zap,
@@ -98,6 +99,49 @@ export const BASE_NAV: WorkspaceNavItem[] = [
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/earnings", label: "Money", icon: Wallet },
   { href: "/profile", label: "You", icon: UserCircle },
+];
+
+/**
+ * The tap-first navigation: three destinations, unconditionally, for
+ * every signed-in Partner regardless of which capabilities they hold.
+ *
+ * Used by `partner-shell.tsx`'s bottom tab bar in place of
+ * `navigationFor(activeWorkspace(...))`. This supersedes `BASE_NAV` and
+ * `WorkspaceSwitcher` for that one call site only — everything else in
+ * this file stays in place, because it still has live consumers outside
+ * the tab bar:
+ *
+ *  - `WORKSPACE_REGISTRY` / `resolveWorkspaces` / `ResolvedWorkspace` gate
+ *    every M2 workspace route (`features/workspace/view/workspace-route.tsx`,
+ *    `features/workspace/model/session-guard.ts`) and drive the
+ *    capability-request screen's "this would open the ___ workspace" copy
+ *    (`features/capability/adapters/capability-options.ts`).
+ *  - `WORKFORCE_WORKSPACE` / `PROJECT_WORKSPACE` are the app's canonical
+ *    archetype-key constants, reused well beyond navigation — notification
+ *    routing (`features/notifications/model/feed.ts`) and several
+ *    per-archetype screens (`crew-offer`, `engagement`, `enquiry`, `shift`,
+ *    `crew`, `proposal`) import them directly.
+ *  - `activeWorkspace` / `navigationFor` / `BASE_NAV` (above) stay because
+ *    `navigationFor` itself still reads `BASE_NAV` internally, even though
+ *    `partner-shell.tsx` no longer calls either.
+ *
+ * Retiring those once every consumer above has a real replacement is a
+ * separate, deliberately deferred follow-up — not done here. See
+ * `docs/superpowers/specs/2026-08-19-partner-tap-first-redesign-design.md`
+ * and task 4's report in `.superpowers/sdd/2026-08-19-partner-tap-first-redesign/`
+ * for the full reasoning (notification `targetHref` in particular needs a
+ * product decision this task cannot make: where should an `ENGAGEMENT`
+ * notice link now that the shell no longer resolves a single active
+ * workspace?).
+ *
+ * Nothing here decides authorization. `useWorkStack` (features/work-stack)
+ * only ever surfaces a `WorkItem` the underlying query already returned,
+ * and Django already scoped that query to what this Partner may see.
+ */
+export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
+  { href: "/work", label: "Work", icon: Users },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "/me", label: "Me", icon: UserCircle2 },
 ];
 
 /**

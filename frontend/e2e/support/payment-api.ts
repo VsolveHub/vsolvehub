@@ -43,7 +43,15 @@ export function minutesAway(minutes: number): string {
 }
 
 export const AUTHENTICATED_CUSTOMER = {
-  user: { id: "cust-1", phone_number: "+919000000001", roles: ["customer"] },
+  user: {
+    id: "cust-1",
+    phone_number: "+919000000001",
+    display_name: "Anitha",
+    full_name: "Anitha Rao",
+    email: "anitha@example.test",
+    date_joined: "2026-01-12T08:30:00Z",
+    roles: ["customer"],
+  },
   active_role: "customer",
   session_expires_at: null,
 };

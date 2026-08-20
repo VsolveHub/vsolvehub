@@ -30,13 +30,31 @@ export const money = (paise: number) => ({ amount_paise: paise, currency: "INR" 
  * nothing there.
  */
 export const AUTHENTICATED_PARTNER = {
-  user: { id: "partner-1", phone_number: "+919000000002", roles: ["partner"] },
+  user: {
+    id: "partner-1",
+    phone_number: "+919000000002",
+    display_name: "Ravi",
+    full_name: "Ravi Kumar",
+    email: "ravi@example.test",
+    date_joined: "2026-01-12T08:30:00Z",
+    roles: ["partner"],
+  },
   active_role: "partner",
+  session_expires_at: "2026-09-01T09:00:00Z",
 };
 
 export const AUTHENTICATED_CUSTOMER = {
-  user: { id: "cust-1", phone_number: "+919000000001", roles: ["customer"] },
+  user: {
+    id: "cust-1",
+    phone_number: "+919000000001",
+    display_name: "Anitha",
+    full_name: "Anitha Rao",
+    email: "anitha@example.test",
+    date_joined: "2026-01-12T08:30:00Z",
+    roles: ["customer"],
+  },
   active_role: "customer",
+  session_expires_at: "2026-09-01T09:00:00Z",
 };
 
 /** Nobody signed in — a 200 projection, which is what contract 1.3.0 publishes. */
@@ -53,8 +71,17 @@ export const ANONYMOUS_SESSION = {
  * Partner who is also a Customer gets — not an edge case.
  */
 export const PARTNER_ACTING_AS_CUSTOMER = {
-  user: { id: "partner-1", phone_number: "+919000000002", roles: ["customer", "partner"] },
+  user: {
+    id: "partner-1",
+    phone_number: "+919000000002",
+    display_name: "Ravi",
+    full_name: "Ravi Kumar",
+    email: "ravi@example.test",
+    date_joined: "2026-01-12T08:30:00Z",
+    roles: ["customer", "partner"],
+  },
   active_role: "customer",
+  session_expires_at: "2026-09-01T09:00:00Z",
 };
 
 /**

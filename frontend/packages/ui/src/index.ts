@@ -48,6 +48,10 @@ export { ToastProvider, useToast } from "./toast";
 
 // Navigation
 export { Stepper } from "./stepper";
+// One control standing in for what used to be three top-level nav items. The
+// styles are exported beside the component because a segment that changes
+// *where you are* has to be a link, and this package owns no router.
+export { SegmentedTrack, SegmentCount, segmentStyles } from "./segmented";
 
 // Record and summary primitives shared by the M2 requirement, quote, engagement
 // and Operations surfaces. Each renders server-supplied, server-authorized

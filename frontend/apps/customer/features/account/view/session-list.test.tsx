@@ -19,8 +19,10 @@ import { noContent, ok, refusal } from "../fixtures";
  */
 
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
+const router = vi.hoisted(() => ({ replace: vi.fn(), refresh: vi.fn() }));
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const { SessionList } = await import("./session-list");
 
@@ -48,6 +50,8 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   for (const method of Object.values(client)) method.mockReset();
+  router.replace.mockReset();
+  router.refresh.mockReset();
 });
 
 afterEach(() => {
@@ -129,6 +133,18 @@ describe("revoking", () => {
 
     await waitFor(() => expect(client.DELETE).toHaveBeenCalledTimes(1));
     expect(client.DELETE.mock.calls[0]![1].params.path).toEqual({ session_id: "sess-9" });
+  });
+
+  it("goes to login after ending the current session", async () => {
+    client.GET.mockResolvedValue(ok([session({ is_current: true })]));
+    client.DELETE.mockResolvedValue(noContent());
+    render(<SessionList />, { wrapper });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out here" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Sign out" }));
+
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login"));
+    expect(router.refresh).toHaveBeenCalledOnce();
   });
 
   it("keeps the dialog open and says why when it fails", async () => {

@@ -24,6 +24,8 @@ export const queryKeys = {
     all: ["session"] as const,
     /** The authenticated user and session expiry. */
     current: () => [...queryKeys.session.all, "current"] as const,
+    /** Customer-owned personal details, editable independently of login. */
+    profile: () => [...queryKeys.session.all, "profile"] as const,
     /** Active sessions for device management and revocation. */
     devices: () => [...queryKeys.session.all, "devices"] as const,
   },

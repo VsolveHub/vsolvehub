@@ -3,6 +3,8 @@
 import { Button, cn, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
+import { Pictogram, type PictogramName } from "@/components/pictogram";
+
 /**
  * A price, entered by tapping.
  *
@@ -35,8 +37,8 @@ import { useState } from "react";
 export interface MoneyPadProps {
   /** What is being priced, in the vendor's own words. */
   readonly title: string;
-  /** The glyph from the preset, so the screen matches the tile they tapped. */
-  readonly glyph: string;
+  /** The icon from the preset, so the screen matches the tile they tapped. */
+  readonly icon: PictogramName;
   readonly amountPaise: number | null;
   readonly onChange: (amountPaise: number | null) => void;
   readonly onDone: () => void;
@@ -52,7 +54,7 @@ const MAXIMUM_RUPEES = 100_000_000;
 
 export function MoneyPad({
   title,
-  glyph,
+  icon,
   amountPaise,
   onChange,
   onDone,
@@ -71,9 +73,7 @@ export function MoneyPad({
   return (
     <section aria-labelledby="money-pad-heading" className="flex flex-col gap-3">
       <h2 id="money-pad-heading" className="flex items-center gap-2 text-base font-semibold text-text">
-        <span aria-hidden className="text-2xl">
-          {glyph}
-        </span>
+        <Pictogram name={icon} className="h-6 w-6" />
         {title}
       </h2>
 

@@ -57,8 +57,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <QueryProvider>
           <SessionSync />
-          <AppChrome />
-          {children}
+          {/* The chrome wraps the page rather than sitting above it: the phone
+              tab bar is fixed to the bottom of the viewport, so the same
+              component that decides whether it renders must also reserve the
+              space it covers. See `AppChrome`. */}
+          <AppChrome>{children}</AppChrome>
         </QueryProvider>
       </body>
     </html>

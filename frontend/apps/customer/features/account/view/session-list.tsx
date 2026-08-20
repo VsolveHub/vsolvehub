@@ -3,6 +3,7 @@
 import { describeError, useRevokeSession, useSessionDevices } from "@vsolve/query";
 import type { UserSession } from "@vsolve/query";
 import { Badge, Button, Dialog, EmptyState, ErrorState, Skeleton } from "@vsolve/ui";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { getApiClient } from "@/lib/api/browser";
@@ -72,6 +73,7 @@ export function SessionList() {
   const apiClient = getApiClient();
   const sessionsQuery = useSessionDevices(apiClient);
   const revokeSession = useRevokeSession(apiClient);
+  const router = useRouter();
   const [confirming, setConfirming] = useState<UserSession | null>(null);
 
   async function confirmRevoke() {
@@ -84,6 +86,10 @@ export function SessionList() {
         isCurrent: confirming.is_current,
       });
       setConfirming(null);
+      if (confirming.is_current) {
+        router.replace("/login");
+        router.refresh();
+      }
     } catch {
       // Kept open with the reason. A dialog that closes on failure claims the
       // session ended when it did not.

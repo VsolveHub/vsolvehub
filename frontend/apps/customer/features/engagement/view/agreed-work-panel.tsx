@@ -1,54 +1,22 @@
 "use client";
 
 import { readVendorIdentity } from "@vsolve/query";
-import { Badge, Skeleton, formatMoney } from "@vsolve/ui";
+import { Badge, Skeleton, buttonStyles, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
 
 import { useCustomerQuotes } from "@/features/quotes/queries";
 import type { EngagementView } from "../adapters";
 import type { ModeNouns } from "./engagement-status";
 
-/**
- * Who is doing the work, and what was agreed about them — `M2-FE-509`.
- *
- * The task asks for the **agreed crew composition** and a **permitted identity
- * summary**, and `Engagement` carries neither: it publishes `partner` as a bare
- * id, no worker count, no rate and no name. What it does publish is the
- * `proposal` it was frozen from — so this reads the accepted quote back and
- * renders the composition that was actually agreed.
- *
- * ## Why that read is allowed here, and why it is still optional
- *
- * `customer_may_read_full_quotes` gates it, and an unlock in `CONSUMED` is
- * readable — `READABLE_STATUSES` is `(ACTIVE, CONSUMED)` — so consuming the
- * unlock at engagement creation does not close the quotes back off. On A5 a
- * charged plan does the same job.
- *
- * It is still treated as **supplementary**: a failed or refused read renders as
- * a sentence and a link, never as an error banner. The engagement itself loaded;
- * the agreement, its money and its stages are all on screen, and turning a
- * secondary join into a red box would teach the Customer that something is wrong
- * with a job that is fine.
- *
- * ## The identity rule
- *
- * `display_name` is null until the server decides disclosure is permitted, and
- * this renders that as policy rather than as a missing field. Nothing here
- * un-hides a name, and no phone number exists anywhere on the wire at 1.25.0 —
- * `contact_released_at` says *when* contact becomes permitted and nothing
- * publishes the number itself. Logged in `frontend-execution-plan.md` §7.
- */
-
 export interface AgreedWorkPanelProps {
   engagement: EngagementView;
   nouns: ModeNouns;
-  /** Where the accepted quote is readable in full. */
   quotesHref: string;
 }
 
+/** The accepted professional and quote, kept compact because the quote has its own page. */
 export function AgreedWorkPanel({ engagement, nouns, quotesHref }: AgreedWorkPanelProps) {
   const query = useCustomerQuotes(engagement.requirementId);
-
   const quote =
     query.data === undefined
       ? null
@@ -58,65 +26,88 @@ export function AgreedWorkPanel({ engagement, nouns, quotesHref }: AgreedWorkPan
 
   return (
     <section aria-labelledby="agreed-work-heading" className="mt-6">
-      <h2 id="agreed-work-heading" className="text-lg font-semibold text-text">
-        Who is doing this
+      <p className="text-xs font-bold uppercase text-text-muted">Your professional</p>
+      <h2 id="agreed-work-heading" className="mt-1 text-xl font-extrabold text-text">
+        Who is doing the work
       </h2>
 
       {query.isPending ? (
         <div className="mt-3" aria-busy="true">
-          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-28 w-full" />
         </div>
       ) : quote === null ? (
-        <p className="mt-2 max-w-prose text-sm leading-6 text-text-secondary">
-          We could not read the quote you accepted just now, so we are not going
-          to describe it from memory.{" "}
-          <Link href={quotesHref} className="font-medium text-text-link hover:underline">
-            It is here in full
+        <div className="mt-3 flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center">
+          <VendorMark name={null} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-extrabold text-text">Professional details unavailable</p>
+            <p className="mt-0.5 text-xs font-medium text-text-secondary">
+              The accepted quote remains available.
+            </p>
+          </div>
+          <Link href={quotesHref} className={buttonStyles({ variant: "outline" })}>
+            Open quote
           </Link>
-          .
-        </p>
+        </div>
       ) : (
-        <div className="mt-3 rounded-card border border-line bg-surface p-4">
-          <Identity vendor={quote.vendor} />
+        <div className="mt-3 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+          <div className="flex items-center gap-4 p-4 sm:p-5">
+            <Identity vendor={quote.vendor} />
+          </div>
 
-          {/* The A3 composition, exactly as the accepted quote states it. Every
-              number is the vendor's own; nothing here is multiplied out into a
-              total, because the engagement publishes the total and a second
-              arithmetic path is a second answer. */}
           {engagement.mode === "lead_only" &&
           quote.worker_count !== null &&
           quote.minimum_days !== null ? (
-            <p className="mt-3 text-sm leading-6 text-text">
-              <strong className="font-semibold">
-                {quote.worker_count} {quote.worker_count === 1 ? "person" : "people"}
-              </strong>{" "}
-              for {quote.minimum_days} {quote.minimum_days === 1 ? "day" : "days"}
-              {quote.rate_paise_per_worker_day !== null
-                ? `, at ${formatMoney(quote.rate_paise_per_worker_day)} per person per day`
-                : ""}
-              .
-            </p>
+            <div className="flex items-center gap-3 border-t border-line px-4 py-3 sm:px-5">
+              <PanelIcon kind="team" />
+              <p className="min-w-0 flex-1 text-sm font-medium text-text-secondary">
+                <strong className="font-extrabold text-text">
+                  {quote.worker_count} {quote.worker_count === 1 ? "person" : "people"}
+                </strong>{" "}
+                for {quote.minimum_days} {quote.minimum_days === 1 ? "day" : "days"}
+                {quote.rate_paise_per_worker_day !== null
+                  ? ` at ${formatMoney(quote.rate_paise_per_worker_day)} per person per day`
+                  : ""}
+              </p>
+            </div>
           ) : null}
 
           {engagement.mode === "lead_only" ? (
-            <p className="mt-2 text-sm leading-6 text-text-secondary">
-              Who exactly turns up on a given day can change — the professional
-              runs their own team. If fewer people arrive than you agreed, say so
-              on that {nouns.stage}.
-            </p>
+            <details className="group border-t border-line">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center px-4 py-3 text-sm font-bold text-text transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-5 [&::-webkit-details-marker]:hidden">
+                Team attendance details
+              </summary>
+              <p className="border-t border-line bg-canvas px-4 py-3 text-sm leading-6 text-text-secondary sm:px-5">
+                The professional runs their team. If fewer people arrive than agreed, report it on that {nouns.stage}.
+              </p>
+            </details>
           ) : null}
 
-          <p className="mt-3 text-sm leading-6 text-text-secondary">
-            {engagement.contactReleasedAt !== null
-              ? `You can contact each other from ${engagement.contactReleasedAt}. We do not publish their phone number on this screen.`
-              : "Contact details are not released yet."}
-          </p>
-
-          <p className="mt-3 text-sm">
-            <Link href={quotesHref} className="font-medium text-text-link hover:underline">
-              Read the whole quote you accepted
+          <div className="grid border-t border-line sm:grid-cols-2">
+            <div className="flex min-h-16 items-center gap-3 px-4 py-3 sm:border-r sm:border-line sm:px-5">
+              <PanelIcon kind="contact" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-text-muted">Contact</p>
+                <p className="mt-0.5 text-sm font-bold text-text">
+                  {engagement.contactReleasedAt !== null
+                    ? `Available from ${engagement.contactReleasedAt}`
+                    : "Not released yet"}
+                </p>
+              </div>
+            </div>
+            <Link
+              href={quotesHref}
+              className="flex min-h-16 items-center gap-3 border-t border-line px-4 py-3 transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:border-t-0 sm:px-5"
+            >
+              <PanelIcon kind="quote" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold text-text-muted">Accepted quote</span>
+                <span className="mt-0.5 block text-sm font-bold text-text">Scope, terms and warranty</span>
+              </span>
+              <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4 text-text-muted">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
             </Link>
-          </p>
+          </div>
         </div>
       )}
     </section>
@@ -125,19 +116,60 @@ export function AgreedWorkPanel({ engagement, nouns, quotesHref }: AgreedWorkPan
 
 function Identity({ vendor }: { vendor: unknown }) {
   const identity = readVendorIdentity(vendor);
+  const name = identity.displayName ?? "Professional assigned";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <p className="font-medium text-text">
-        {identity.displayName ?? "Their name is shared before they arrive"}
-      </p>
-      {identity.vendorType !== null ? (
-        <Badge tone="neutral">{identity.vendorType}</Badge>
-      ) : null}
-      {/* Verification defaults to false in the parser, not true: an unverified
-          professional shown as verified is the one direction of this field that
-          can hurt somebody. */}
-      {identity.isVerified ? <Badge tone="success">Verified</Badge> : null}
-    </div>
+    <>
+      <VendorMark name={identity.displayName} />
+      <div className="min-w-0 flex-1">
+        <p className="text-lg font-extrabold text-text">{name}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {identity.vendorType !== null ? (
+            <Badge tone="neutral">{friendlyVendorType(identity.vendorType)}</Badge>
+          ) : null}
+          {identity.isVerified ? <Badge tone="success">Verified</Badge> : null}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function VendorMark({ name }: { name: string | null }) {
+  const initials = (name ?? "Professional")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return (
+    <span aria-hidden className="grid size-12 shrink-0 place-items-center rounded-full bg-selected-surface text-sm font-extrabold text-action-active ring-1 ring-action-line">
+      {initials}
+    </span>
+  );
+}
+
+function friendlyVendorType(value: string): string {
+  return value
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`)
+    .join(" ");
+}
+
+function PanelIcon({ kind }: { kind: "team" | "contact" | "quote" }) {
+  const path = {
+    team: "M16 18v-1.5A3.5 3.5 0 0 0 12.5 13h-5A3.5 3.5 0 0 0 4 16.5V18m6-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7 1a2.5 2.5 0 0 0 0-5m1 12v-1a3 3 0 0 0-2-2.83",
+    contact: "M6 4h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L15 13l5 2v3a2 2 0 0 1-2 2C10.27 20 4 13.73 4 6a2 2 0 0 1 2-2Z",
+    quote: "M7 3h7l4 4v14H7V3Zm7 0v5h5M10 13h5m-5 4h5",
+  }[kind];
+
+  return (
+    <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-sunken text-action-active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-4">
+        <path d={path} />
+      </svg>
+    </span>
   );
 }

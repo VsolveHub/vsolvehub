@@ -35,7 +35,12 @@ export interface CustomerSession {
   isAnonymous: boolean;
   /** The question could not be answered. Offer a retry, never a login wall. */
   isUnavailable: boolean;
+  userId: string | null;
   phoneNumber: string | null;
+  displayName: string | null;
+  fullName: string | null;
+  email: string | null;
+  dateJoined: string | null;
   /** Django's currently selected role, or null when signed out. */
   activeRole: string | null;
   refetch: () => void;
@@ -53,7 +58,12 @@ export function useCustomerSession(): CustomerSession {
     isAuthenticated: guard.status === "authenticated",
     isAnonymous: guard.status === "unauthenticated",
     isUnavailable: guard.status === "error" || guard.status === "forbidden",
+    userId: guard.user?.id ?? null,
     phoneNumber: guard.user?.phone_number ?? null,
+    displayName: guard.user?.display_name?.trim() || null,
+    fullName: guard.user?.full_name?.trim() || null,
+    email: guard.user?.email?.trim() || null,
+    dateJoined: guard.user?.date_joined ?? null,
     activeRole: guard.activeRole,
     refetch: () =>
       void queryClient.invalidateQueries({ queryKey: queryKeys.session.current() }),

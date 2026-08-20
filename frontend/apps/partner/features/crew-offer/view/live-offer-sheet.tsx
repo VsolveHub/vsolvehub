@@ -38,16 +38,28 @@ import { useAcceptCrewOffer, usePartnerCrewOffers, type CrewOffer } from "../que
  * is routinely a few seconds stale, and a button rendered inside that window
  * produces a refusal describing a race that never happened.
  *
- * ## Suppressed on the offers page
+ * ## Suppressed where the offer is already on screen
  *
- * Where the list is already on screen, a sheet over it is the same offer twice
+ * Where the offer is already rendered, a sheet over it is the same offer twice
  * with two accept buttons — and the one underneath would keep working.
+ *
+ * That used to mean `/offers`, which was never right: `/offers` is A1's
+ * unit-scoped inbox, a different endpoint and a different record type from the
+ * A3 crew offers this sheet shows. The two places an A3 offer is now on screen
+ * are `/work` — the merged WORK stack renders every live offer as its own card
+ * — and `/work/offers/…`, the offer's own detail screen. Both are matched here.
+ *
+ * Deliberately not the whole `/work` subtree: `/work/jobs/…` and
+ * `/work/enquiries/…` are detail screens with no offer on them, and a lead
+ * reading one of those when an offer lands is exactly the case this sheet
+ * exists for.
  */
 export function LiveOfferSheet() {
   const pathname = usePathname();
-  const onOffersPage = pathname?.startsWith("/offers") ?? false;
+  const showsOffersAlready =
+    pathname === "/work" || (pathname?.startsWith("/work/offers") ?? false);
 
-  const offersQuery = usePartnerCrewOffers(!onOffersPage);
+  const offersQuery = usePartnerCrewOffers(!showsOffersAlready);
   const [dismissed, setDismissed] = useState<string | null>(null);
 
   const data = offersQuery.data ?? null;
@@ -57,7 +69,7 @@ export function LiveOfferSheet() {
   // one about to lapse is the one worth interrupting for.
   const offer = live[0] ?? null;
 
-  if (onOffersPage || offer === null || dismissed === offer.invitation_id) return null;
+  if (showsOffersAlready || offer === null || dismissed === offer.invitation_id) return null;
 
   return (
     <OfferSheet

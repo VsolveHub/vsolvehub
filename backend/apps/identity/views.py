@@ -32,6 +32,7 @@ from apps.identity.serializers import (
     ConsentReceiptCreateSerializer,
     ConsentReceiptSerializer,
     CsrfTokenSerializer,
+    CustomerProfileUpdateSerializer,
     OtpIssuedSerializer,
     OtpRequestSerializer,
     OtpVerifySerializer,
@@ -55,6 +56,7 @@ from apps.identity.services import (
     revoke_current_session,
     set_communication_preference,
     switch_active_role,
+    update_customer_profile,
     verify_login_otp,
 )
 from common.errors.serializers import ApiErrorSerializer
@@ -234,6 +236,31 @@ class LogoutView(APIView):
     def post(self, request: Request) -> Response:
         revoke_current_session(request._request)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CustomerProfileView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(tags=["Authentication"], responses={200: UserSerializer})
+    def get(self, request: Request) -> Response:
+        return Response(UserSerializer(cast(User, request.user)).data)
+
+    @extend_schema(
+        tags=["Authentication"],
+        request=CustomerProfileUpdateSerializer,
+        responses={200: UserSerializer, 400: ApiErrorSerializer},
+    )
+    def patch(self, request: Request) -> Response:
+        serializer = CustomerProfileUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = update_customer_profile(
+            user=cast(User, request.user),
+            display_name=cast(str | None, data.get("display_name")),
+            full_name=cast(str | None, data.get("full_name")),
+            email=cast(str | None, data.get("email")),
+        )
+        return Response(UserSerializer(user).data)
 
 
 class SessionListView(APIView):

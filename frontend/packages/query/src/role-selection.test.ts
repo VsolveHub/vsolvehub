@@ -21,8 +21,10 @@ import { evaluateAuthGuard, type CurrentUser } from "./session";
 const USER: CurrentUser = {
   id: "user-1",
   phone_number: "+919810000001",
+  display_name: "Test Operator",
   full_name: "Test Operator",
   email: "operator@example.com",
+  date_joined: "2026-01-12T08:30:00Z",
   roles: ["customer", "operations"],
 };
 

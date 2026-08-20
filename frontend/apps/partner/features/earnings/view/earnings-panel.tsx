@@ -1,7 +1,8 @@
 "use client";
 
 import { Badge, Button, Card, ErrorState, Spinner, formatMoney } from "@vsolve/ui";
-import { AlertTriangle, CheckCircle2, ChevronDown, Hourglass, Landmark } from "lucide-react";
+
+import { Pictogram } from "@/components/pictogram";
 
 import {
   usePartnerBalance,
@@ -83,7 +84,7 @@ export function EarningsPanel() {
       {/* Warning banner */}
       {data.pending_paise > 0 ? (
         <div className="flex gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
-          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-warning-text" aria-hidden />
+          <Pictogram name="later" className="mt-0.5 h-5 w-5 shrink-0 text-warning-text" />
           <div>
             <p className="text-sm font-semibold text-warning-text">
               Some of your earnings are on hold
@@ -108,34 +109,38 @@ export function EarningsPanel() {
         </p>
       </Card>
 
+      {/* Three colour-coded plates, one per balance status — the same info/
+          warning/success tones `STATUS_TONE` already assigns to RESERVED/
+          PENDING/PAID in the ledger below, just carried up to this
+          breakdown so the two agree at a glance. */}
       <div className="grid grid-cols-3 gap-3">
-        <Card className="p-3">
-          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-text-muted">
-            <Hourglass size={12} aria-hidden />
+        <div className="rounded-plate border border-info-line bg-info-surface p-3">
+          <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-info-text">
+            <Pictogram name="held" className="h-3 w-3" />
             Waiting
           </p>
-          <p data-numeric className="mt-1 text-lg font-bold text-text">
+          <p data-numeric className="mt-1 text-lg font-bold text-info-text">
             {formatMoney(data.reserved_paise)}
           </p>
-        </Card>
-        <Card className="p-3">
+        </div>
+        <div className="rounded-plate border border-warning-line bg-warning-surface p-3">
           <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-warning-text">
-            <AlertTriangle size={12} aria-hidden />
+            <Pictogram name="later" className="h-3 w-3" />
             On hold
           </p>
-          <p data-numeric className="mt-1 text-lg font-bold text-text">
+          <p data-numeric className="mt-1 text-lg font-bold text-warning-text">
             {formatMoney(data.pending_paise)}
           </p>
-        </Card>
-        <Card className="p-3">
+        </div>
+        <div className="rounded-plate border border-success-line bg-success-surface p-3">
           <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-success-text">
-            <CheckCircle2 size={12} aria-hidden />
+            <Pictogram name="done" className="h-3 w-3" />
             Paid
           </p>
-          <p data-numeric className="mt-1 text-lg font-bold text-text">
+          <p data-numeric className="mt-1 text-lg font-bold text-success-text">
             {formatMoney(data.paid_paise)}
           </p>
-        </Card>
+        </div>
       </div>
 
       <Card className="p-5">
@@ -163,7 +168,7 @@ export function EarningsPanel() {
       {/* Payout method */}
       <Card className="flex items-center gap-3 p-4">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-info-surface text-info-text">
-          <Landmark size={20} aria-hidden />
+          <Pictogram name="money" className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-text">Payout Method</p>
@@ -263,7 +268,7 @@ export function EarningsPanel() {
             <Button
               variant="outline"
               size="sm"
-              icon={<ChevronDown size={14} />}
+              icon={<Pictogram name="more" className="h-3.5 w-3.5" />}
               loading={ledger.isFetchingNextPage}
               loadingLabel="Loading"
               onClick={() => void ledger.fetchNextPage()}

@@ -20,6 +20,31 @@ const nextConfig: NextConfig = {
       fullUrl: process.env.NODE_ENV !== "production",
     },
   },
+  async redirects() {
+    return [
+      { source: "/dashboard", destination: "/work", permanent: true },
+      { source: "/workforce", destination: "/work", permanent: true },
+      { source: "/projects", destination: "/work", permanent: true },
+      { source: "/jobs", destination: "/work", permanent: true },
+      { source: "/jobs/:bookingId", destination: "/work/jobs/:bookingId", permanent: true },
+      { source: "/workforce/offers", destination: "/work", permanent: true },
+      { source: "/offers", destination: "/work", permanent: true },
+      { source: "/workforce/enquiries", destination: "/work", permanent: true },
+      { source: "/workforce/enquiries/:invitationId", destination: "/work/enquiries/:invitationId", permanent: true },
+      { source: "/projects/enquiries", destination: "/work", permanent: true },
+      { source: "/projects/enquiries/:invitationId", destination: "/work/enquiries/:invitationId", permanent: true },
+      { source: "/projects/enquiries/:invitationId/estimate", destination: "/work/enquiries/:invitationId/estimate", permanent: true },
+      { source: "/workforce/shifts", destination: "/work", permanent: true },
+      { source: "/workforce/shifts/:engagementId", destination: "/work/jobs/:engagementId", permanent: true },
+      { source: "/workforce/shifts/:engagementId/days/:stageId", destination: "/work/jobs/:engagementId/days/:stageId", permanent: true },
+      { source: "/projects/stages", destination: "/work", permanent: true },
+      { source: "/projects/stages/:engagementId", destination: "/work/jobs/:engagementId", permanent: true },
+      { source: "/workforce/crew", destination: "/me/crew", permanent: true },
+      { source: "/earnings", destination: "/money", permanent: true },
+      { source: "/profile", destination: "/me", permanent: true },
+      { source: "/availability", destination: "/me", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

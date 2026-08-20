@@ -62,20 +62,24 @@ export function RequestAttachments({
 }: RequestAttachmentsProps) {
   if (rows.length === 0) return null;
 
-  return (
-    <section aria-labelledby="request-attachments-heading" className="mt-6">
-      <h2 id="request-attachments-heading" className="text-lg font-semibold text-text">
-        Files you attached
-      </h2>
-      <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        Only the professionals we invited to quote can open these, and only once
-        a file has passed our security check. Anyone who declines, runs out of
-        time or is not chosen loses access; the professional you pick keeps it
-        for the job.
-      </p>
+  const photoCount = rows.filter((row) => row.kind === "image").length;
+  const voiceCount = rows.filter((row) => row.kind === "audio").length;
+  const otherCount = rows.length - photoCount - voiceCount;
+  const summary = [
+    photoCount === 0 ? null : `${photoCount} ${photoCount === 1 ? "photo" : "photos"}`,
+    voiceCount === 0 ? null : `${voiceCount} ${voiceCount === 1 ? "voice note" : "voice notes"}`,
+    otherCount === 0 ? null : `${otherCount} ${otherCount === 1 ? "file" : "files"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
+  return (
+    <section
+      aria-labelledby="request-attachments-heading"
+      className="rounded-[10px] border border-line bg-surface px-5 py-4 shadow-card"
+    >
       {removeError !== null && removeError !== undefined ? (
-        <div className="mt-3">
+        <div className="mb-3">
           <ErrorState
             title="We could not remove that file"
             message={describeError(removeError, "mutation").message}
@@ -85,7 +89,12 @@ export function RequestAttachments({
         </div>
       ) : null}
 
-      <ul aria-label="Files on this request" className="mt-3 flex list-none flex-col gap-2 p-0">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10.5rem] sm:items-start">
+        <div>
+          <h2 id="request-attachments-heading" className="text-base font-bold tracking-tight text-text">
+            What you sent
+          </h2>
+          <ul aria-label="Files on this request" className="mt-3 flex list-none flex-wrap gap-2.5 p-0">
         {rows.map((row) => {
           const rejected = row.status === "failed";
           const attachmentId = row.attachmentId;
@@ -96,33 +105,24 @@ export function RequestAttachments({
               key={row.id}
               className={
                 rejected
-                  ? "flex items-center gap-3 rounded-control border border-danger-line bg-danger-surface px-3 py-2.5"
-                  : "flex items-center gap-3 rounded-control border border-line bg-surface px-3 py-2.5"
+                  ? "group relative flex size-[78px] items-center justify-center rounded-[8px] border border-danger-line bg-danger-surface"
+                  : row.kind === "audio"
+                    ? "group relative flex size-[78px] items-center justify-center rounded-[8px] border border-signal-300 bg-signal-50"
+                    : "group relative flex size-[78px] items-center justify-center rounded-[8px] border border-line bg-surface-sunken"
               }
             >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-text">{row.name}</p>
-                <p
-                  className={
-                    rejected
-                      ? "mt-0.5 text-xs text-danger-text"
-                      : "mt-0.5 text-xs text-text-secondary"
-                  }
-                >
-                  {rejected
-                    ? (row.error ?? "This file was not attached.")
-                    : row.status === "checking"
-                      ? "Still being checked. No professional has seen it yet."
-                      : `Passed our check · ${row.size}`}
-                </p>
-              </div>
+              <AttachmentGlyph kind={row.kind} rejected={rejected} />
+              <span className="sr-only">
+                {row.name}
+                {rejected ? `, ${row.error ?? "not attached"}` : ""}
+              </span>
 
               {removable ? (
                 <button
                   type="button"
                   disabled={isRemoving}
                   onClick={() => onRemove(attachmentId)}
-                  className="inline-flex min-h-11 shrink-0 items-center rounded-control px-2.5 text-xs font-semibold text-text-secondary hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:opacity-50"
+                  className="absolute right-1 top-1 inline-flex min-h-7 items-center rounded-control bg-surface px-2 text-[0.6875rem] font-semibold text-text-secondary shadow-card hover:bg-surface-hover hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:opacity-50"
                 >
                   Remove
                   <span className="sr-only"> {row.name}</span>
@@ -131,7 +131,57 @@ export function RequestAttachments({
             </li>
           );
         })}
-      </ul>
+          </ul>
+        </div>
+        {summary.length > 0 ? (
+          <p className="text-sm font-semibold leading-snug text-text-secondary">{summary}</p>
+        ) : null}
+      </div>
     </section>
+  );
+}
+
+function AttachmentGlyph({
+  kind,
+  rejected,
+}: {
+  kind: AttachmentRowView["kind"];
+  rejected: boolean;
+}) {
+  if (kind === "audio") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        className={rejected ? "size-5 text-danger-text" : "size-5 text-text-secondary"}
+      >
+        <path d="M6 10v4" />
+        <path d="M9 8v8" />
+        <path d="M12 6v12" />
+        <path d="M15 9v6" />
+        <path d="M18 11v2" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={rejected ? "size-5 text-danger-text" : "size-5 text-warm-400"}
+    >
+      <rect x="4" y="6" width="16" height="12" rx="1.5" />
+      <path d="m7 15 3.2-3.2 2.5 2.5 1.4-1.4L17 15" />
+      <circle cx="9" cy="10" r="1" />
+    </svg>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Readout, cn } from "@vsolve/ui";
+import { useState } from "react";
 
 import { AccessRefusal } from "./access-refusal";
 import type { VisitArrivalCode } from "../queries";
@@ -29,6 +30,21 @@ import type { VisitArrivalCode } from "../queries";
  * `spaced` exists on it for exactly this: a code that is read aloud digit by
  * digit needs the tracking, and its `announce` keeps a screen reader from
  * running six separate numbers together into one six-digit number nobody said.
+ *
+ * ## Why the code is covered until it is asked for
+ *
+ * The instruction beside it — give it to them only once they are standing with
+ * you — is the whole security property, and an instruction is a weaker
+ * protection than a shape. A code printed the moment the page opens is a code
+ * that can be read down the phone the evening before, screenshotted into a
+ * chat, or shoulder-read on a bus, and none of those leave a trace: the proof
+ * is gone and the visit still starts.
+ *
+ * One tap is not a meaningful obstacle to the person who owns the code — they
+ * are standing at their own door — but it moves revealing it from something
+ * that happens *to* them to something they *do*, which is the same reason the
+ * no-show report sits behind a confirmation. Nothing is hidden that they cannot
+ * see instantly, so this is not a paywall pattern; it is a lid.
  */
 
 export interface ArrivalCodePanelProps {
@@ -51,6 +67,12 @@ export function ArrivalCodePanel({
   supportAction,
   className,
 }: ArrivalCodePanelProps) {
+  // Reset is deliberately not wired to the code value: a Customer who reveals,
+  // reads it out, and watches the visit start should not see the digits blink
+  // away under them on the next refetch. It resets when the page does, which is
+  // the same lifetime as standing at the door.
+  const [revealed, setRevealed] = useState(false);
+
   if (isLoading) return null;
 
   // Nothing live and nothing issuable: the visit is not at a point where arrival
@@ -72,15 +94,45 @@ export function ArrivalCodePanel({
 
       {code.code !== null ? (
         <>
-          <Readout
-            label="Read this out when they arrive"
-            value={code.code}
-            spaced
-            size="lg"
-            announce={`Arrival code: ${code.code.split("").join(" ")}`}
-            caption={expiryCaption(code)}
-            className="mt-2"
-          />
+          {revealed ? (
+            <Readout
+              label="Read this out when they arrive"
+              value={code.code}
+              spaced
+              size="lg"
+              announce={`Arrival code: ${code.code.split("").join(" ")}`}
+              caption={expiryCaption(code)}
+              className="mt-2"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setRevealed(true)}
+              className={cn(
+                "mt-2 flex w-full items-center gap-3 rounded-plate border border-action-line bg-surface p-4 pl-5 text-left",
+                "relative overflow-hidden",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+              )}
+            >
+              {/* The same orange rule the revealed plate carries, so the covered
+                  and uncovered states read as one object rather than two. */}
+              <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-action" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="text-xs font-bold uppercase tracking-[0.08em] text-text-secondary">
+                  Show only when they are with you
+                </span>
+                <span
+                  aria-hidden
+                  className="text-3xl font-bold leading-none tracking-[0.2em] text-warm-300"
+                >
+                  ••••••
+                </span>
+              </span>
+              <span className="shrink-0 rounded-control bg-action px-4 py-2.5 text-sm font-extrabold text-action-text">
+                Show code
+              </span>
+            </button>
+          )}
           <p className="mt-3 max-w-prose text-sm leading-6 text-text-secondary">
             Give it to them only once they are standing with you.{" "}
             <strong className="font-semibold text-text">

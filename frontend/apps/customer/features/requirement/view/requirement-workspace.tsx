@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Stepper } from "@vsolve/ui";
+import { Button, Stepper, cn } from "@vsolve/ui";
 import type { ReactNode } from "react";
 
 import { SCREENS, SCREEN_LABELS, isFinalScreen, screenIndex } from "../model/screens";
@@ -63,7 +63,12 @@ export function RequirementWorkspace({
   const isLast = isFinalScreen(state.screen);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6">
+    <div
+      className={cn(
+        "mx-auto flex w-full flex-col gap-6 px-4 py-6",
+        isLast ? "max-w-5xl" : "max-w-2xl",
+      )}
+    >
       <Stepper steps={steps} current={current} label="Your request" />
 
       {notice}

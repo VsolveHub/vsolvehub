@@ -1,7 +1,9 @@
 "use client";
 
-import { AddressSummary, Button, ErrorState, ScheduleSummary } from "@vsolve/ui";
+import { Button, ErrorState, cn } from "@vsolve/ui";
 import { useState, type ReactNode } from "react";
+
+import { guideToVisitPlanSelection } from "@/features/access/view/guide-to-visit-plan";
 
 import { OPTIONAL_DETAILS, OPTIONAL_DETAIL_LABELS, type Screen } from "../model/screens";
 import type { DraftAttachment } from "../model/state";
@@ -9,54 +11,10 @@ import { BLOCK_COPY } from "./block-copy";
 import { OptionalDetailPanel, summariseOptionalDetail } from "./optional-detail-panels";
 import { useRequirement } from "./requirement-context";
 
-/**
- * Screen 4 — Review. **This is the confirmation.**
- *
- * `M2-FE-206` and `FLOW-03`: submitting happens here, and no separate
- * "confirm your immutable version" step may be added after it. The earlier design
- * had one, and it was the same act twice — a second screen asking "are you sure?"
- * about a page whose only job was to let the Customer be sure.
- *
- * ## Every row is editable, and editing goes back to the screen that owns it
- *
- * Not a modal. One place per answer, so a Customer changing the date does it
- * where the date's consequences are written down.
- *
- * ## The extras live here, and are not steps
- *
- * `FLOW-02`. Callback preference, site visit, access constraints and preferred
- * communication were each a screen in the pre-audit design. They are real options
- * that a minority want; none is worth a step every Customer walks through. They
- * are reachable from here and sequenced nowhere.
- *
- * ## Saying it is free is not reassurance, it is the contract
- *
- * `M2-FE-212`. `isFree` comes from the server that enforces it rather than from a
- * literal here, because a hardcoded promise outlives the policy it describes.
- * Until the server can answer, the screen says nothing about price at all — which
- * is the honest state, not a silent `true`.
- */
+/** Review is the confirmation: no second approval screen follows this one. */
 
-interface ReviewRow {
-  label: string;
-  value: string;
-  screen: Screen;
-}
-
-/**
- * What the attachments row says, and why it is not a count of the rows.
- *
- * A row exists for every file the Customer chose, including the ones that were
- * refused and the ones still clearing their scan. "4 attached" over three
- * verified files and one rejected one is the review screen telling somebody a
- * photograph went with their request when it did not — which is the exact harm
- * the scan states exist to prevent, restated as a summary.
- *
- * So each group is named separately, and the ones that are not attached are
- * described as not attached.
- */
 function attachmentSummary(attachments: readonly DraftAttachment[]): string {
-  if (attachments.length === 0) return "None";
+  if (attachments.length === 0) return "No files added";
 
   const attached = attachments.filter((item) => item.state === "attached").length;
   const checking = attachments.filter((item) => item.state === "scanning").length;
@@ -64,46 +22,23 @@ function attachmentSummary(attachments: readonly DraftAttachment[]): string {
     (item) => item.state === "failed" || item.state === "queued" || item.state === "uploading",
   ).length;
 
-  const parts: string[] = [];
-  parts.push(attached === 1 ? "1 attached" : `${attached} attached`);
-  if (checking > 0) parts.push(`${checking} still being checked`);
+  const parts = [attached === 1 ? "1 file ready" : `${attached} files ready`];
+  if (checking > 0) parts.push(`${checking} being checked`);
   if (notAttached > 0) parts.push(`${notAttached} not attached`);
-  return parts.join(", ");
+  return parts.join(" · ");
 }
 
 export interface ReviewScreenProps {
   categoryName: string;
   addressLines: readonly string[] | null;
-  /** The server's own statement that nothing is charged. Null until it can answer. */
   isFree: boolean | null;
   onSubmit: () => void;
   isSubmitting: boolean;
-  /** A refusal from the submit command, already turned into a sentence. */
   submitError: string | null;
-  /**
-   * The A5 visit-plan chooser — `M2-FE-216`.
-   *
-   * A **control on this screen**, not a fifth screen: `SCREENS.length === 4` is
-   * asserted by `boundary.test.ts` and this is passed in as a node rather than
-   * added to the sequence, exactly as the four optional-detail panels are. It is
-   * `undefined` for A3, where there is no visit to plan and
-   * `POST .../visit-plan/` answers `400 m2_lifecycle_not_supported`.
-   *
-   * Injected rather than mounted here, for the reason the whole `view/` layer is
-   * built on: this file holds copy and layout and calls no endpoint.
-   */
   visitPlanChooser?: ReactNode;
-  /**
-   * A reason to refuse submit that the reducer cannot know.
-   *
-   * The reducer's own `blocked` is derived from the Customer's answers.
-   * `_assert_visit_plan_chosen` refuses an A5 submit with
-   * `m2_visit_plan_required` until a plan exists — a **server** fact about a
-   * record this screen only just created, and one no local guard can compute.
-   * Passing it in keeps the disabled-*and*-explained pairing intact without
-   * teaching the reducer about an endpoint.
-   */
   submitBlockedReason?: string | null;
+  requiresVisitPlanSelection?: boolean;
+  isChoosingVisitPlan?: boolean;
 }
 
 export function ReviewScreen({
@@ -115,209 +50,339 @@ export function ReviewScreen({
   submitError,
   visitPlanChooser,
   submitBlockedReason = null,
+  requiresVisitPlanSelection = false,
+  isChoosingVisitPlan = false,
 }: ReviewScreenProps) {
-  // `open`, not `goTo`. Every control below sends somebody back into a section
-  // to change it, and `goTo` refuses any screen not already in `visited` —
-  // which on a brief reached through the rail is most of them. An "Edit"
-  // link that silently does nothing is the same defect the rail had.
   const { state, open, blocked } = useRequirement();
   const [openExtra, setOpenExtra] = useState<string | null>(null);
-
-  // The schedule gets the shared `ScheduleSummary` rather than a row of its own,
-  // so "needed by" reads the same here as it will on the request timeline and in
-  // the Partner's enquiry. Attachments stay a plain row — a count is a count.
-  const rows: ReviewRow[] = [
+  const summaryItems: readonly SummaryItem[] = [
     {
-      label: "Attachments",
+      label: "Work",
+      value: categoryName,
+      detail: "Project brief",
+      screen: "what",
+      icon: "work",
+    },
+    {
+      label: "Place",
+      value: addressLines?.join(", ") ?? "Location saved",
+      detail: "Where professionals will visit",
+      screen: "where_when",
+      icon: "place",
+    },
+    {
+      label: "When",
+      value: formatRequestDate(state.requestedStart),
+      detail:
+        state.flexibilityDays > 0
+          ? `${state.flexibilityDays} day${state.flexibilityDays === 1 ? "" : "s"} flexible`
+          : "Fixed start date",
+      screen: "where_when",
+      icon: "calendar",
+    },
+    {
+      label: "Proof",
       value: attachmentSummary(state.attachments),
+      detail: "Photos, files and voice notes",
       screen: "details",
+      icon: "attachment",
     },
   ];
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-text">Check this over</h2>
-      <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-        This is what professionals will see. You can change anything before you
-        send it.
-      </p>
+      <header className="rounded-card border border-navy-700 bg-navy-900 px-5 py-5 text-white shadow-card sm:px-6 sm:py-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-2 text-sm font-bold text-navy-100">
+              <span
+                className={cn(
+                  "size-2 rounded-full",
+                  blocked === null ? "bg-success-text" : "bg-warning-text",
+                )}
+                aria-hidden
+              />
+              {blocked === null ? "Brief ready" : "Brief needs a check"}
+            </div>
+            <h2 className="mt-2 text-2xl font-extrabold leading-tight sm:text-3xl">
+              Ready to find your fit-out team
+            </h2>
+            <p className="mt-2 text-sm font-medium leading-6 text-navy-100">
+              Check the project facts, choose your site visits, then send.
+            </p>
+          </div>
+          <ReviewRoute />
+        </div>
+      </header>
 
       {state.verdict !== null ? (
-        <p className="mt-4 rounded-card border border-info-line bg-info-surface p-4 text-sm text-text">
-          {state.verdict.explanation}
-        </p>
+        <div className="mt-4 flex items-start gap-3 rounded-card border border-info-line bg-info-surface px-4 py-3">
+          <ReviewIcon kind="shield" className="mt-0.5 size-5 shrink-0 text-info-text" />
+          <p className="text-sm font-medium leading-6 text-text">{state.verdict.explanation}</p>
+        </div>
       ) : null}
 
-      <div className="mt-4 rounded-card border border-line bg-surface">
-        <div className="border-b border-line p-4">
-          <p className="font-semibold text-text">{categoryName}</p>
-          <button
-            type="button"
-            onClick={() => open("what")}
-            className="mt-2 min-h-11 rounded-control font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          >
-            Change
-            <span className="sr-only"> what you need</span>
-          </button>
-        </div>
-
-        {addressLines !== null ? (
-          <div className="flex items-start justify-between gap-3 border-b border-line p-4">
-            <AddressSummary lines={addressLines} />
-            <button
-              type="button"
-              onClick={() => open("where_when")}
-              className="min-h-11 shrink-0 rounded-control px-3 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-            >
-              Change
-              <span className="sr-only"> the address</span>
-            </button>
-          </div>
-        ) : null}
-
-        <div className="flex items-start justify-between gap-3 border-b border-line p-4">
-          <ScheduleSummary
-            // Both dates, because they mean different things and the review is
-            // where a Customer catches having reversed them. `dates` is when the
-            // work starts; the warning line under it is the point after which
-            // there is no reason to do it at all.
-            dates={
-              state.requestedStart === null
-                ? "No start date chosen"
-                : `From ${state.requestedStart}`
-            }
-            flexible={state.flexibilityDays > 0}
-          />
-          <button
-            type="button"
-            onClick={() => open("where_when")}
-            className="min-h-11 shrink-0 rounded-control px-3 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          >
-            Change
-            <span className="sr-only"> the dates</span>
-          </button>
-        </div>
-
-        <dl className="flex flex-col">
-          {rows.map((row) => (
-            <div
-              key={row.label}
-              className="flex items-baseline justify-between gap-3 border-b border-line p-4 last:border-0"
-            >
-              <div className="min-w-0">
-                <dt className="text-sm text-text-secondary">{row.label}</dt>
-                <dd className="mt-0.5 text-text">{row.value}</dd>
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <section aria-labelledby="brief-summary-heading" className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+            <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
+              <div>
+                <p className="text-xs font-bold uppercase text-text-muted">Review</p>
+                <h3 id="brief-summary-heading" className="mt-0.5 text-lg font-extrabold text-text">
+                  Your project brief
+                </h3>
               </div>
-              <button
-                type="button"
-                onClick={() => open(row.screen)}
-                className="min-h-11 shrink-0 rounded-control px-3 font-semibold text-info-text underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-bold",
+                  blocked === null
+                    ? "bg-success-surface text-success-text"
+                    : "bg-warning-surface text-warning-text",
+                )}
               >
-                Change
-                <span className="sr-only"> {row.label.toLowerCase()}</span>
-              </button>
+                {blocked === null ? "4 parts ready" : "Check required"}
+              </span>
             </div>
-          ))}
-        </dl>
-      </div>
 
-      {state.additionalDetails ? (
-        <div className="mt-4 rounded-card border border-line bg-surface p-4">
-          <p className="text-sm text-text-secondary">What you added</p>
-          <p className="mt-1 whitespace-pre-line text-text">{state.additionalDetails}</p>
+            <div className="grid sm:grid-cols-2">
+              {summaryItems.map((item) => (
+                <SummaryButton key={item.label} item={item} onEdit={() => open(item.screen)} />
+              ))}
+            </div>
+
+            {state.additionalDetails ? (
+              <details className="group border-t border-line">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-bold text-text transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring sm:px-5 [&::-webkit-details-marker]:hidden">
+                  Notes you added
+                  <span className="ml-auto text-xs font-semibold text-text-muted">Open</span>
+                  <DownChevron />
+                </summary>
+                <p className="whitespace-pre-line border-t border-line bg-canvas px-4 py-4 text-sm leading-6 text-text-secondary sm:px-5">
+                  {state.additionalDetails}
+                </p>
+              </details>
+            ) : null}
+          </section>
+
+          <section aria-labelledby="extras-heading">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase text-text-muted">Optional</p>
+                <h3 id="extras-heading" className="mt-0.5 text-lg font-extrabold text-text">
+                  Access and contact preferences
+                </h3>
+              </div>
+              <span className="hidden text-xs font-semibold text-text-muted sm:block">
+                Add only what applies
+              </span>
+            </div>
+            <ul className="mt-3 flex list-none flex-col gap-2 p-0">
+              {OPTIONAL_DETAILS.map((key) => {
+                const summary = summariseOptionalDetail(state.optionalDetails, key);
+                const buttonId = `extra-${key}`;
+                const expanded = openExtra === key;
+
+                return (
+                  <li key={key} className="overflow-hidden rounded-card border border-line bg-surface">
+                    <button
+                      id={buttonId}
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={expanded ? `${buttonId}-panel` : undefined}
+                      onClick={() => setOpenExtra(expanded ? null : key)}
+                      className="flex min-h-14 w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring"
+                    >
+                      <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-surface-sunken text-action-active">
+                        <ReviewIcon kind="settings" className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-extrabold text-text">
+                          {OPTIONAL_DETAIL_LABELS[key]}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-medium text-text-secondary">
+                          {summary ?? "Not added"}
+                        </span>
+                      </span>
+                      <DownChevron />
+                    </button>
+
+                    {expanded ? (
+                      <div id={`${buttonId}-panel`} className="border-t border-line bg-canvas">
+                        <OptionalDetailPanel detail={key} labelledBy={buttonId} />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         </div>
-      ) : null}
 
-      {/* Above the optional extras, deliberately. This is not optional on A5 —
-          the submit is refused without it — and putting a required control
-          under a heading that says "only if you need them" would be the screen
-          mislabelling its own requirement. */}
-      {visitPlanChooser}
+        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-24">
+          {visitPlanChooser}
 
-      <section className="mt-6" aria-labelledby="extras-heading">
-        <h3 id="extras-heading" className="text-sm font-semibold text-text">
-          Optional — only if you need them
-        </h3>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-text-secondary">
-          None of these are needed to send your request. Open one only if it
-          applies to you.
-        </p>
-        <ul className="mt-2 flex list-none flex-col gap-2 p-0">
-          {OPTIONAL_DETAILS.map((key) => {
-            const summary = summariseOptionalDetail(state.optionalDetails, key);
-            const buttonId = `extra-${key}`;
+          {submitError !== null ? (
+            <ErrorState title="We could not send this" message={submitError} inline />
+          ) : null}
 
-            return (
-              <li key={key}>
-                <button
-                  id={buttonId}
-                  type="button"
-                  aria-expanded={openExtra === key}
-                  aria-controls={openExtra === key ? `${buttonId}-panel` : undefined}
-                  onClick={() => setOpenExtra(openExtra === key ? null : key)}
-                  className="min-h-11 w-full rounded-control border border-line bg-surface px-4 py-2.5 text-left font-medium text-text hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-                >
-                  {OPTIONAL_DETAIL_LABELS[key]}
-                  {/* The summary is what turns a row of four identical buttons
-                      into a record of what was said. Without it the Customer
-                      has to open each one to find out whether they answered
-                      it — which is the flow-weight cost the panels were
-                      supposed to remove. */}
-                  {summary !== null ? (
-                    <span className="mt-0.5 block text-sm font-normal text-text-secondary">
-                      {summary}
-                    </span>
-                  ) : null}
-                </button>
+          <section className="rounded-card bg-navy-900 p-5 text-white shadow-card">
+            <p className="text-xs font-bold uppercase text-navy-200">Final step</p>
+            <h3 className="mt-1 text-xl font-extrabold">Start matching</h3>
+            <p className="mt-2 text-sm font-medium leading-6 text-navy-100">
+              Professionals receive this brief after you send it. Nothing is booked yet.
+            </p>
+            <Button
+              block
+              variant="secondary"
+              className="mt-4"
+              onClick={
+                requiresVisitPlanSelection ? guideToVisitPlanSelection : onSubmit
+              }
+              loading={isSubmitting || isChoosingVisitPlan}
+              loadingLabel={
+                isChoosingVisitPlan ? "Saving your estimate choice" : "Sending your request"
+              }
+              disabled={
+                blocked !== null ||
+                (submitBlockedReason !== null && !requiresVisitPlanSelection)
+              }
+            >
+              {requiresVisitPlanSelection ? "Select number of estimates" : "Send this request"}
+            </Button>
 
-                {openExtra === key ? (
-                  <div id={`${buttonId}-panel`}>
-                    <OptionalDetailPanel detail={key} labelledBy={buttonId} />
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {submitError !== null ? (
-        <div className="mt-6">
-          <ErrorState title="We could not send this" message={submitError} inline />
-        </div>
-      ) : null}
-
-      <div className="mt-6">
-        <Button
-          onClick={onSubmit}
-          loading={isSubmitting}
-          loadingLabel="Sending your request"
-          disabled={blocked !== null || submitBlockedReason !== null}
-        >
-          Send this request
-        </Button>
-        {/* Review has no "Next", so the workspace never states the block reason
-            here. Repeating the pairing — disabled control *and* stated reason —
-            is what stops the final screen being the one place a Customer can
-            dead-end with nothing to read. The reducer's reason wins when both
-            exist: an unanswered question has to be fixed before a visit plan
-            can matter. */}
-        {blocked !== null ? (
-          <p role="status" className="mt-2 max-w-prose text-sm text-text-secondary">
-            {BLOCK_COPY[blocked]}
-          </p>
-        ) : submitBlockedReason !== null ? (
-          <p role="status" className="mt-2 max-w-prose text-sm text-text-secondary">
-            {submitBlockedReason}
-          </p>
-        ) : null}
-        {isFree === true ? (
-          <p className="mt-2 max-w-prose text-sm text-text-secondary">
-            Sending this is free. Nothing is charged now, and nothing is charged
-            until professionals have sent you quotes to look at.
-          </p>
-        ) : null}
+            {blocked !== null ? (
+              <p role="status" className="mt-3 text-sm leading-5 text-navy-100">
+                {BLOCK_COPY[blocked]}
+              </p>
+            ) : submitBlockedReason !== null ? (
+              <p role="status" className="mt-3 text-sm leading-5 text-navy-100">
+                {submitBlockedReason}
+              </p>
+            ) : isFree === true ? (
+              <p className="mt-3 text-sm font-semibold text-navy-100">
+                Free to send. Nothing is charged now.
+              </p>
+            ) : null}
+          </section>
+        </aside>
       </div>
     </div>
   );
+}
+
+interface SummaryItem {
+  label: string;
+  value: string;
+  detail: string;
+  screen: Screen;
+  icon: ReviewIconKind;
+}
+
+function SummaryButton({ item, onEdit }: { item: SummaryItem; onEdit: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      aria-label={`Edit ${item.label.toLowerCase()}`}
+      className="group flex min-h-28 cursor-pointer items-start gap-3 border-b border-line px-4 py-4 text-left transition-colors duration-fast hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring odd:sm:border-r sm:px-5"
+    >
+      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-action-surface text-action-active">
+        <ReviewIcon kind={item.icon} className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-bold uppercase text-text-muted">{item.label}</span>
+        <span className="mt-1 block break-words text-sm font-extrabold leading-5 text-text">
+          {item.value}
+        </span>
+        <span className="mt-1 block text-xs font-medium text-text-secondary">{item.detail}</span>
+      </span>
+      <span aria-hidden className="mt-1 text-text-muted transition-transform duration-fast group-hover:translate-x-0.5 motion-reduce:transform-none">
+        <ReviewIcon kind="edit" className="size-4" />
+      </span>
+    </button>
+  );
+}
+
+function ReviewRoute() {
+  const steps = [
+    ["brief", "Brief ready"],
+    ["visit", "Site visits"],
+    ["quote", "Written quotes"],
+  ] as const;
+
+  return (
+    <ol className="grid w-full max-w-sm grid-cols-3" aria-label="What happens after sending">
+      {steps.map(([icon, label], index) => (
+        <li key={label} className="relative flex min-w-0 flex-col items-center px-1 text-center before:absolute before:left-0 before:right-0 before:top-4 before:h-px before:bg-navy-600 first:before:left-1/2 last:before:right-1/2">
+          <span aria-hidden className={cn("relative z-10 grid size-8 place-items-center rounded-full ring-4 ring-navy-900", index === 0 ? "bg-white text-navy-900" : "bg-navy-700 text-navy-100")}>
+            <ReviewIcon kind={icon} className="size-4" />
+          </span>
+          <span className="mt-2 text-xs font-bold leading-4 text-white">{label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+type ReviewIconKind =
+  | "work"
+  | "place"
+  | "calendar"
+  | "attachment"
+  | "shield"
+  | "settings"
+  | "edit"
+  | "brief"
+  | "visit"
+  | "quote";
+
+function ReviewIcon({ kind, className }: { kind: ReviewIconKind; className?: string }) {
+  const path = {
+    work: "M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7m-9 0h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm-2 5h14",
+    place: "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Zm-8 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+    calendar: "M6 3v3m12-3v3M4 8h16v12H4V8Zm0-3h16v3H4V5Zm4 7h3v3H8v-3Z",
+    attachment: "m9 12 5-5a3 3 0 0 1 4 4l-7 7a5 5 0 0 1-7-7l7-7",
+    shield: "M12 3 5 6v5c0 4.5 2.8 7.7 7 10 4.2-2.3 7-5.5 7-10V6l-7-3Zm-3 9 2 2 4-4",
+    settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0-5v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4m0-12.8L17 7M7 17l-1.4 1.4",
+    edit: "m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-13 3 3",
+    brief: "M7 3h7l4 4v14H7V3Zm7 0v5h5M10 13h5m-5 4h5",
+    visit: "M4 18h16M7 18v-5l5-4 5 4v5M9 8V5h6v3",
+    quote: "M5 5h14v11H9l-4 4V5Zm4 4h6m-6 3h4",
+  }[kind];
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
+function DownChevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="size-4 shrink-0 text-text-muted transition-transform duration-fast group-open:rotate-180">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function formatRequestDate(value: string | null): string {
+  if (value === null) return "No start date";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(parsed);
 }

@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   ConfirmAction,
+  Disclosure,
   EmptyState,
   Skeleton,
   Timeline,
@@ -14,7 +15,12 @@ import { useState } from "react";
 
 import { requestHref, requestQuotesHref } from "@/lib/routes";
 
-import { formatVisitSlot, toVisitTrackerView, type VisitSlotRow } from "../adapters";
+import {
+  calendarDay,
+  formatVisitSlot,
+  toVisitTrackerView,
+  type VisitSlotRow,
+} from "../adapters";
 import {
   useConfirmVisitArrival,
   useIssueVisitArrivalCode,
@@ -24,7 +30,7 @@ import {
 } from "../queries";
 import { AccessRefusal } from "./access-refusal";
 import { ArrivalCodePanel } from "./arrival-code-panel";
-import { SlotMoneyLine } from "./visit-money";
+import { SlotMoneyLine, slotMoneySummary } from "./visit-money";
 import { VendorIdentity } from "./vendor-identity";
 
 /**
@@ -130,7 +136,11 @@ export function VisitDetailScreen({
 
   return (
     <PageFrame>
-      <VisitHeader row={row} requirementId={requirementId} planSize={tracker?.planSize ?? 1} />
+      <VisitBreadcrumb requirementId={requirementId} position={row.position} planSize={tracker?.planSize ?? 1} />
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
+      <VisitHeader row={row} planSize={tracker?.planSize ?? 1} />
 
       {row.vendor !== null ? (
         <section
@@ -148,6 +158,13 @@ export function VisitDetailScreen({
         </section>
       ) : null}
 
+      <VisitProgress row={row} requirementId={requirementId} />
+
+      {/* The money, as an answer rather than a paragraph. */}
+      <VisitMoneyCard row={row} />
+        </div>
+
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
       <ArrivalCodePanel
         code={codeQuery.data ?? null}
         isLoading={codeQuery.isPending && codeQuery.fetchStatus !== "idle"}
@@ -156,18 +173,6 @@ export function VisitDetailScreen({
         issueError={issueCode.error}
         supportAction={supportAction}
       />
-
-      <VisitProgress row={row} requirementId={requirementId} />
-
-      <section
-        aria-labelledby="visit-money-heading"
-        className="rounded-card border border-line bg-surface p-4"
-      >
-        <h2 id="visit-money-heading" className="text-sm font-semibold text-text">
-          This visit
-        </h2>
-        <SlotMoneyLine row={row} />
-      </section>
 
       <VisitCommands
         row={row}
@@ -191,6 +196,8 @@ export function VisitDetailScreen({
         attempting="update this visit"
         supportAction={supportAction}
       />
+        </aside>
+      </div>
     </PageFrame>
   );
 }
@@ -205,18 +212,18 @@ export function VisitDetailScreen({
  * and timestamp ended up a thousand pixels apart, reading as two unrelated
  * columns rather than one row.
  *
- * `max-w-3xl` rather than the quotes screen's `max-w-6xl`, because this is one
- * column of cards and not two, and prose set to six columns wide is unreadable
- * however well it is spaced.
+ * `max-w-6xl`, because above `lg` this *is* two columns: the record on the
+ * left, and the arrival code plus the two visit-day commands in a rail on the
+ * right. The rail exists for one reason — on the morning of the visit the code
+ * is the only thing on this page anybody opens it for, and it should not be
+ * below four cards of context.
  *
  * Applied to every state and not only the loaded one, so the page does not
  * change width when the data lands.
  */
 function PageFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
-      {children}
-    </div>
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</div>
   );
 }
 
@@ -236,31 +243,54 @@ const STATE_BADGE: Record<
 
 function VisitHeader({
   row,
-  requirementId,
   planSize,
 }: {
   row: VisitSlotRow;
-  requirementId: string;
   planSize: number;
 }) {
   const badge = STATE_BADGE[row.state] ?? STATE_BADGE.awaiting;
   const when = formatVisitSlot(row.scheduledFor, row.timeZone);
 
+  const day = calendarDay(row.scheduledFor, row.timeZone);
+
   return (
-    <header className="flex flex-col gap-2">
-      <Link
-        href={requestHref(requirementId)}
-        className="text-sm font-medium text-text-link hover:underline"
-      >
-        Back to your request
-      </Link>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-text">
-          Visit {row.position} of {planSize}
-        </h1>
-        <Badge tone={badge.tone}>{badge.label}</Badge>
+    // The way back is the breadcrumb above this, not a second link inside the
+    // card. Two of them on one screen is two answers to one question.
+    <header className="flex flex-col gap-3">
+      <div className="flex items-center gap-4 rounded-card border border-line bg-surface p-4 shadow-card">
+        {/* The date as an object rather than a clause. This screen is opened on
+            the morning of the visit as often as any other time, and "when" is
+            the first question it should answer without being read. Absent until
+            a professional has taken the slot — a tile printing a day nobody has
+            agreed to would be the invented fact this codebase forbids. */}
+        {day === null ? null : (
+          <div
+            aria-hidden
+            className="flex size-14 shrink-0 flex-col items-center justify-center rounded-control bg-action-secondary text-action-secondary-text"
+          >
+            <span className="text-[0.625rem] font-bold uppercase tracking-[0.1em] opacity-75">
+              {day.weekday}
+            </span>
+            <span className="text-2xl font-extrabold leading-none">{day.dayOfMonth}</span>
+            <span className="text-[0.625rem] font-bold uppercase tracking-[0.06em] opacity-75">
+              {day.month}
+            </span>
+          </div>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h1 className="text-lg font-extrabold tracking-tight text-text">
+            {when ?? "No time confirmed yet"}
+          </h1>
+          <p className="text-sm font-medium text-text-secondary">
+            Visit {row.position} of {planSize}
+          </p>
+        </div>
+
+        <Badge tone={badge.tone} className="shrink-0">
+          {badge.label}
+        </Badge>
       </div>
-      <p className="text-sm text-text-secondary">{when ?? "No time confirmed yet"}</p>
     </header>
   );
 }
@@ -409,5 +439,87 @@ function VisitCommands({
         </>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Where this visit sits, as a trail rather than a back link.
+ *
+ * A single "Back to your request" answers one question — how do I leave — and
+ * none of the others. On a page reached from a notification months later, the
+ * useful facts are which job this belongs to and which of its visits this is,
+ * and a trail states both while still being the way out.
+ */
+function VisitBreadcrumb({
+  requirementId,
+  position,
+  planSize,
+}: {
+  requirementId: string;
+  position: number;
+  planSize: number;
+}) {
+  return (
+    <nav aria-label="Breadcrumb">
+      <ol className="flex list-none flex-wrap items-center gap-2 p-0 text-sm font-medium text-text-secondary">
+        <li>
+          <Link href="/activity" className="hover:text-text hover:underline">
+            Activity
+          </Link>
+        </li>
+        <li aria-hidden className="text-warm-400">
+          /
+        </li>
+        <li>
+          <Link href={requestHref(requirementId)} className="hover:text-text hover:underline">
+            Your request
+          </Link>
+        </li>
+        <li aria-hidden className="text-warm-400">
+          /
+        </li>
+        <li className="font-bold text-text" aria-current="page">
+          Visit {position} of {planSize}
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * What this slot's money is doing: the answer, then the account.
+ *
+ * "Where is my ₹499" is a glance; "why is it there and when does it move" is a
+ * read, and the two do not deserve the same weight. The summary and the
+ * sentence are the same server figures — see `slotMoneySummary` for why that
+ * duplication is safe.
+ */
+function VisitMoneyCard({ row }: { row: VisitSlotRow }) {
+  return (
+    <section
+      aria-labelledby="visit-money-heading"
+      className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-start sm:gap-5"
+    >
+      <div className="relative shrink-0 overflow-hidden rounded-plate bg-canvas py-3 pl-5 pr-4 ring-1 ring-inset ring-line">
+        <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-line-strong" />
+        <h2
+          id="visit-money-heading"
+          className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-text-secondary"
+        >
+          Held for this visit
+        </h2>
+        <p data-numeric className="mt-0.5 text-2xl font-extrabold leading-none text-text">
+          {row.money.amountLabel}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="text-pretty text-sm font-semibold leading-6 text-text">
+          {slotMoneySummary(row)}
+        </p>
+        <Disclosure summary="What happens to this money" className="mt-1.5">
+          <SlotMoneyLine row={row} />
+        </Disclosure>
+      </div>
+    </section>
   );
 }

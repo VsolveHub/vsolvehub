@@ -1,13 +1,13 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
-/**
- * `/account` has no content of its own.
- *
- * A landing page here would be a menu duplicating the nav that is already on
- * screen, and it would put an extra tap between someone and the reason they came
- * — which is almost always an address. `replace` semantics: the redirect must
- * not become a history entry that a back press bounces off.
- */
+import { ProfileOverview } from "@/features/account/view/profile-overview";
+
+export const metadata: Metadata = {
+  title: "Your profile",
+  robots: { index: false, follow: false },
+};
+
+/** The profile avatar lands here; related records remain in the account rail. */
 export default function AccountPage() {
-  redirect("/account/addresses");
+  return <ProfileOverview />;
 }
