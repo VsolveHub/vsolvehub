@@ -190,6 +190,36 @@ describe("after a reload", () => {
   });
 });
 
+describe("going online from a cold offline load", () => {
+  /**
+   * The panel loaded with nothing in storage, so the mount probe had nothing to
+   * confirm — and never marked itself complete. The id written by a successful
+   * "Go online" then re-read as an unconfirmed stored session, and the panel
+   * froze on "Checking" until a reload. Going online must land on "Online" in
+   * the same page load that requested it.
+   */
+  it("shows Online, not Checking, once Django confirms the session", async () => {
+    client.POST.mockResolvedValue(
+      ok({
+        id: "sess-new",
+        service_area_id: AREA.id,
+        started_at: new Date().toISOString(),
+        last_persisted_heartbeat_at: new Date().toISOString(),
+        server_now: new Date().toISOString(),
+      }),
+    );
+
+    render(<PresencePanel consentVersion="2026-07" />, { wrapper });
+    await goOnline();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /go offline/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Online")).toBeInTheDocument();
+    expect(screen.queryByText(/checking/i)).not.toBeInTheDocument();
+  });
+});
+
 describe("when Django refuses to put the Partner online", () => {
   it("shows the reason the server gave", async () => {
     client.POST.mockResolvedValue(

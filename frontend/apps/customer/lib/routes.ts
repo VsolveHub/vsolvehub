@@ -52,6 +52,11 @@ export function requestQuotesHref(requirementId: string): string {
   return `/requests/${requirementId}/quotes`;
 }
 
+/** One professional's estimate, focused inside the existing comparison page. */
+export function requestEstimateHref(requirementId: string, proposalId: string): string {
+  return `${requestQuotesHref(requirementId)}#estimate-${proposalId}`;
+}
+
 /**
  * One site visit's own page: who is coming, the arrival code, what happens next.
  *
@@ -86,9 +91,9 @@ export function bookCrewHref(serviceSlug: string): string {
 /**
  * The A3 booking-fee checkout, opened only while a lead's offer is held.
  *
- * A route rather than a modal, for the reason `/requests/[id]/book-visits` is
- * one: a payment is a record that outlives the screen that started it, and a
- * Customer who closed the tab mid-UPI comes back to a URL.
+ * This remains a route because the crew checkout has its own recovery screen.
+ * The A5 visit checkout instead recovers on the request page that owns its
+ * visit-plan tracker.
  */
 export function bookCrewFeeHref(requirementId: string): string {
   return `/requests/${requirementId}/book-crew`;
@@ -102,9 +107,9 @@ export function engagementHref(engagementId: string): string {
 /**
  * The receipt for the fee Vsolve collected on one engagement.
  *
- * Its own route rather than a modal, for the reason `book-visits` is one: a
- * receipt is a record somebody comes back to, forwards to whoever keeps their
- * books, and expects to find at a URL. A dialog cannot be any of those.
+ * Its own route rather than a modal because a receipt is a record somebody
+ * comes back to, forwards to whoever keeps their books, and expects to find at
+ * a URL. A dialog cannot be any of those.
  */
 export function receiptHref(engagementId: string): string {
   return `/engagements/${engagementId}/receipt`;

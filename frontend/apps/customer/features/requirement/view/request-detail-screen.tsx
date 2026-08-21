@@ -4,12 +4,20 @@ import type { Schemas } from "@vsolve/api-client";
 import { isFreelyEditable } from "@vsolve/query";
 import { buttonStyles, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
+import { useQuoteTeasers } from "@/features/access/queries";
 import { RequestAccessPanel } from "@/features/access/view/request-access-panel";
 import { useAddresses } from "@/features/addresses/queries";
 import { useEngagements } from "@/features/engagement/queries";
 import { toEngagementLists } from "@/features/engagement/adapters";
-import { bookCrewFeeHref, engagementHref, engagementReceiptHref } from "@/lib/routes";
+import {
+  bookCrewFeeHref,
+  engagementHref,
+  engagementReceiptHref,
+  requestQuotesHref,
+} from "@/lib/routes";
 import { toArchetype, toRequestHeader, toServerAttachmentRows, toTimelineEvents } from "../adapters";
 import {
   isAlreadyRemoved,
@@ -22,6 +30,7 @@ import { TapRow, TapRowGroup } from "@/components/patterns";
 import { RequestAttachments } from "./request-attachments";
 import { RequestDetail } from "./request-detail";
 import { titleForSlug } from "./my-requests-screen";
+import { engagementDestination } from "../model/engagement-redirect";
 
 /**
  * One request, wired — `M2-FE-214`, `M2-FE-215`, `M2-FE-211`.
@@ -118,11 +127,22 @@ function isSameWords(a: string, b: string): boolean {
 }
 
 export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps) {
+  const router = useRouter();
   const requirementQuery = useRequirement(requirementId);
   const timelineQuery = useRequirementTimeline(requirementId);
   const removeAttachment = useRemoveAttachment();
 
   const draft = requirementQuery.data ?? null;
+  useEffect(() => {
+    const destination = engagementDestination(draft?.engagement_id ?? null);
+    if (destination !== null) {
+      router.replace(destination);
+    }
+  }, [draft?.engagement_id, router]);
+  const teasersQuery = useQuoteTeasers(
+    requirementId,
+    draft !== null && !isFreelyEditable(draft.status),
+  );
   const timeline = timelineQuery.data;
   const timelineEvents = timeline === undefined ? [] : toTimelineEvents(timeline);
 
@@ -251,8 +271,7 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
             slot="rail"
             requirementId={requirementId}
             archetype={toArchetype(draft)}
-            quotesHref={`/requests/${requirementId}/quotes`}
-            bookVisitsHref={`/requests/${requirementId}/book-visits`}
+            quotesHref={requestQuotesHref(requirementId)}
             bookCrewFeeHref={bookCrewFeeHref(requirementId)}
             supportAction={supportAction}
             requestFacts={requestFacts}
@@ -262,6 +281,16 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
         }
         railRecords={<BookingRecords requirementId={requirementId} />}
         request={request}
+        headerAction={
+          (teasersQuery.data?.teasers.length ?? 0) > 0 ? (
+            <Link
+              href={requestQuotesHref(requirementId)}
+              className={buttonStyles({ variant: "outline", className: "w-full sm:w-auto" })}
+            >
+              Compare Quotes
+            </Link>
+          ) : undefined
+        }
         subtitle={subtitle}
         facts={facts}
         railRows={railRows}
@@ -308,8 +337,7 @@ export function RequestDetailScreen({ requirementId }: RequestDetailScreenProps)
           slot="main"
           requirementId={requirementId}
           archetype={toArchetype(draft)}
-          quotesHref={`/requests/${requirementId}/quotes`}
-          bookVisitsHref={`/requests/${requirementId}/book-visits`}
+          quotesHref={requestQuotesHref(requirementId)}
           bookCrewFeeHref={bookCrewFeeHref(requirementId)}
           supportAction={supportAction}
           requestFacts={requestFacts}

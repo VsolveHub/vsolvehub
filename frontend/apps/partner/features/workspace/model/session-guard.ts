@@ -30,8 +30,9 @@ import { WORKSPACE_REGISTRY } from "../registry";
  * And the recovery is **never** `/jobs`. `/jobs` is the A1 task-service
  * lifecycle. Landing a workforce agency there after a suspension tells them
  * their shifts became jobs, which is both false and precisely the record-erasure
- * `M2-FE-111` forbids. `/dashboard` is the base app every Partner holds and the
- * only honest destination.
+ * `M2-FE-111` forbids. `/work` is the base app every Partner holds — the
+ * one WORK stack, gated on nothing but approval — and the only honest
+ * destination. `/dashboard` no longer exists; the tap-first IA replaced it.
  *
  * ## Read-only survives; commands do not
  *
@@ -43,7 +44,7 @@ import { WORKSPACE_REGISTRY } from "../registry";
  */
 
 /** The base app, which every Partner holds regardless of any M2 capability. */
-export const RECOVERY_HREF = "/dashboard";
+export const RECOVERY_HREF = "/home";
 
 export type WorkspaceAvailability =
   /** Held, recognised, and authorizing everything it did before. */

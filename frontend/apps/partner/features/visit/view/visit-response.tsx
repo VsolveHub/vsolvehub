@@ -3,6 +3,7 @@
 import { Button, Card, ConfirmAction, ErrorState, Skeleton, SkeletonRegion } from "@vsolve/ui";
 import { categorizeError, describeError } from "@vsolve/query";
 import { RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { DeclineDialog } from "@/features/enquiry/view/decline-dialog";
@@ -68,6 +69,7 @@ export interface VisitResponseProps {
 }
 
 export function VisitResponse({ enquiry }: VisitResponseProps) {
+  const router = useRouter();
   const [selected, setSelected] = useState<SlotOption | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [decliningOpen, setDecliningOpen] = useState(false);
@@ -76,7 +78,10 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
   const planVisit = planVisitOf(enquiry.siteVisits);
   // The grid is only worth drawing while this vendor can still take a slot.
   // A declined or expired invitation would spend a guaranteed refusal on it.
-  const canTakeSlot = permissions.canAccept && planVisit === null;
+  // ACCEPTED is the recovery path for project enquiries accepted by the older
+  // UI before the visit picker was restored to the live route.
+  const canTakeSlot =
+    (enquiry.status === "INVITED" || enquiry.status === "ACCEPTED") && planVisit === null;
 
   const slots = usePartnerVisitSlots(enquiry.id, canTakeSlot);
   const confirm = useConfirmVisitSlot(enquiry.id);
@@ -86,12 +91,13 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
 
   if (outcome) {
     return (
-      <Card className="flex flex-col gap-3 p-4">
-        <h2 className="text-sm font-semibold text-text">{outcome.title}</h2>
-        <p className="text-sm leading-6 text-text-secondary">{outcome.message}</p>
-        {outcome.isHeld ? null : (
-          <p className="text-sm leading-6 text-text-secondary">{CONFIRM_COMMITMENT}</p>
-        )}
+      <Card className="flex flex-col gap-1 p-4" role="status">
+        <h2 className="text-base font-bold text-text">{outcome.title}</h2>
+        <p className="text-sm leading-5 text-text-secondary">
+          {outcome.isHeld
+            ? "Waiting for customer payment. Do not travel yet."
+            : "You are booked. The customer has been notified."}
+        </p>
       </Card>
     );
   }
@@ -107,12 +113,11 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
   }
 
   return (
-    <Card className="flex flex-col gap-4 p-4">
+    <Card className="flex flex-col gap-3 p-4">
       <div>
-        <h2 className="text-sm font-semibold text-text">Confirm a visit slot</h2>
-        <p className="mt-1 text-sm leading-6 text-text-secondary">
-          This customer has paid for a professional to come and look. Pick a time you can be there.
-          Confirming a slot is how you take this job — there is no separate accept.
+        <h2 className="text-lg font-bold text-text">Choose a visit time</h2>
+        <p className="mt-0.5 text-sm leading-5 text-text-secondary">
+          Pick a time you can reach the site.
         </p>
       </div>
 
@@ -134,7 +139,7 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
             disabled={confirm.isPending}
           />
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex justify-end">
             <Button
               variant="ghost"
               size="sm"
@@ -151,9 +156,6 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
             >
               Refresh times
             </Button>
-            <span className="text-xs text-text-muted">
-              Times expire. Refresh if this screen has been open a while.
-            </span>
           </div>
         </>
       )}
@@ -176,7 +178,7 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
           loadingLabel="Confirming"
           onClick={() => setConfirming(true)}
         >
-          {selected === null ? "Pick a time to continue" : `Confirm ${selected.label}`}
+          {selected === null ? "Choose a time" : `Book ${selected.label}`}
         </Button>
 
         {permissions.canDecline ? (
@@ -186,7 +188,7 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
         ) : null}
       </div>
 
-      <p className="text-xs leading-5 text-text-muted">{CONFIRM_COMMITMENT}</p>
+      <p className="text-xs leading-5 text-text-muted">Complete the estimate during this visit.</p>
 
       <ConfirmAction
         open={confirming}
@@ -201,7 +203,12 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
             // The token, untouched. Nothing about the time is reconstructed
             // from it — the label above came from `starts_at` beside it.
             { slotToken: selected.token },
-            { onSuccess: () => setConfirming(false) },
+            {
+              onSuccess: () => {
+                setConfirming(false);
+                router.replace(`/work/enquiries/${enquiry.id}/visit`);
+              },
+            },
           );
         }}
       />

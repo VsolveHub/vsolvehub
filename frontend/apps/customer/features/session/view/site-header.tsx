@@ -184,7 +184,7 @@ export const NAV_TARGETS: readonly NavTarget[] = [
   // Deliberately first and deliberately public: the catalog and the anonymous
   // basket are real surfaces for somebody who has never signed in.
   { href: "/catalog", label: "Services", shortLabel: "Services", icon: "home", private: false },
-  { href: "/activity", label: "Activity", shortLabel: "Activity", icon: "activity", private: true },
+  { href: "/activity", label: "Bookings", shortLabel: "Bookings", icon: "activity", private: true },
   { href: "/cart", label: "Basket", shortLabel: "Basket", icon: "basket", private: false },
 ];
 

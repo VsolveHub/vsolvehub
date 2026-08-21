@@ -21,8 +21,8 @@ import { useEngagement } from "../queries";
  *
  * A receipt is a record somebody returns to, forwards to whoever keeps their
  * books, and expects to find at a URL months later. A modal is none of those.
- * The same reasoning put `book-visits` and `book-crew` on routes rather than in
- * overlays: anything that outlives the screen that opened it needs an address.
+ * Payment receipts keep that address even when the checkout itself opens in an
+ * overlay on the request that owns it.
  *
  * ## What it deliberately is not
  *
@@ -184,8 +184,9 @@ export function ReceiptDocument({ engagementId }: ReceiptDocumentProps) {
           <Party label="Received by">
             <p className="text-sm font-semibold text-text">V Solve Hub</p>
             <p className="mt-1 text-sm text-text-secondary">
-              Verified professionals for home, trade and site work
+              Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081
             </p>
+            <p className="mt-1 text-sm text-text-secondary">support@vsolvehub.com</p>
           </Party>
         </div>
 

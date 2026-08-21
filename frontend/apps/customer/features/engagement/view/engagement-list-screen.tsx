@@ -140,16 +140,9 @@ export function EngagementListScreen({
       ) : (
         <ol className="mt-4 flex list-none flex-col gap-3 p-0">
           {rows.map((row) => (
-            <Row
+            <EngagementListRow
               key={row.engagementId}
               row={row}
-              nouns={nouns}
-              engagementHref={engagementHref(row.engagementId)}
-              actionHref={
-                row.actionStageId === null
-                  ? null
-                  : stageHref(row.engagementId, row.actionStageId)
-              }
             />
           ))}
         </ol>
@@ -254,7 +247,23 @@ function Wrapper({
   );
 }
 
-function Row({
+export function EngagementListRow({ row }: { row: EngagementRowView }) {
+  const nouns = nounsFor(row.mode);
+  const href = engagementHref(row.engagementId);
+  const actionHref =
+    row.actionStageId === null ? null : stageHref(row.engagementId, row.actionStageId);
+
+  return (
+    <EngagementRow
+      row={row}
+      nouns={nouns}
+      engagementHref={href}
+      actionHref={actionHref}
+    />
+  );
+}
+
+function EngagementRow({
   row,
   nouns,
   engagementHref,

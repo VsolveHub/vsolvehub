@@ -47,7 +47,19 @@ import { useAcceptCrewOffer, usePartnerCrewOffers, type CrewOffer } from "../que
  * unit-scoped inbox, a different endpoint and a different record type from the
  * A3 crew offers this sheet shows. The two places an A3 offer is now on screen
  * are `/work` — the merged WORK stack renders every live offer as its own card
- * — and `/work/offers/…`, the offer's own detail screen. Both are matched here.
+ * — and `/work/offers/[invitationId]`, the offer's own detail screen. Both are
+ * matched here.
+ *
+ * The match is `/work/offers/` **with** the trailing slash, not a bare
+ * `startsWith("/work/offers")`. Task 7 Part B added a second, bare
+ * `/work/offers` route — the A1 direct-offer inbox, no id, a different record
+ * type again — and a prefix match with no trailing slash also matches that
+ * route and its own sub-paths. That inbox never renders an A3 offer, so
+ * matching it here would suppress this sheet for a lead sitting on the A1
+ * list with a live A3 offer arriving on a countdown, with nothing else on
+ * screen to catch it. `/work/offers/[invitationId]` always has a segment
+ * after the slash, so the trailing slash keeps that route matched while
+ * excluding the bare inbox exactly.
  *
  * Deliberately not the whole `/work` subtree: `/work/jobs/…` and
  * `/work/enquiries/…` are detail screens with no offer on them, and a lead
@@ -57,7 +69,7 @@ import { useAcceptCrewOffer, usePartnerCrewOffers, type CrewOffer } from "../que
 export function LiveOfferSheet() {
   const pathname = usePathname();
   const showsOffersAlready =
-    pathname === "/work" || (pathname?.startsWith("/work/offers") ?? false);
+    pathname === "/work" || (pathname?.startsWith("/work/offers/") ?? false);
 
   const offersQuery = usePartnerCrewOffers(!showsOffersAlready);
   const [dismissed, setDismissed] = useState<string | null>(null);

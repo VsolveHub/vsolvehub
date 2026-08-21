@@ -146,7 +146,12 @@ def _complete_engagement_if_finished(engagement: Engagement) -> None:
 
 
 @transaction.atomic
-def accept_engagement_completion(*, engagement_id: uuid.UUID, actor: User) -> Engagement:
+def accept_engagement_completion(
+    *,
+    engagement_id: uuid.UUID,
+    actor: User,
+    completion_code_verified: bool = False,
+) -> Engagement:
     """The Customer accepts the finished work. `COMPLETING → COMPLETED`, then the warranty.
 
     Also closes the requirement, which is the last transition in
@@ -173,7 +178,10 @@ def accept_engagement_completion(*, engagement_id: uuid.UUID, actor: User) -> En
     that meant two different things depending on the variant would be worse than one fewer status.
     """
     engagement = (
-        Engagement.objects.select_for_update()
+        # `requirement.configuration` is nullable, so PostgreSQL rejects an unrestricted
+        # `FOR UPDATE` across the outer join. Completion owns the Engagement row; configuration
+        # is read-only policy context and must not be included in the lock target.
+        Engagement.objects.select_for_update(of=("self",))
         .select_related("requirement__configuration")
         .get(pk=engagement_id)
     )
@@ -182,7 +190,11 @@ def accept_engagement_completion(*, engagement_id: uuid.UUID, actor: User) -> En
     if engagement.status != Engagement.Status.COMPLETING:
         raise StageTransitionError("This engagement is not finished yet.")
     _assert_no_stage_is_still_open(engagement)
-    if engagement.handover_submitted_at is not None and engagement.handover_accepted_at is None:
+    if (
+        not completion_code_verified
+        and engagement.handover_submitted_at is not None
+        and engagement.handover_accepted_at is None
+    ):
         raise StageTransitionError(
             "Accept the handover before closing this project, or ask the vendor to correct it.",
         )

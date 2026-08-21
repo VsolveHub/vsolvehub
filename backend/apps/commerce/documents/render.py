@@ -29,6 +29,7 @@ from io import BytesIO
 from typing import Any
 
 from django.utils import timezone
+from reportlab.graphics.shapes import Circle, Drawing, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_RIGHT
 from reportlab.lib.pagesizes import A4
@@ -85,6 +86,8 @@ class DocumentSpec:
     lines: tuple[DocumentLine, ...]
     total_label: str
     total_amount: str
+    issuer_address: str = ""
+    issuer_contact: str = ""
     #: Money the issuer did **not** collect, disclosed under the total. An A3 booking costs far more
     #: than the fee Vsolve takes, and a document that mentioned only its own slice would leave the
     #: reader wondering where the rest went.
@@ -168,6 +171,27 @@ def _rows(lines: tuple[DocumentLine, ...], styles: dict[str, ParagraphStyle]) ->
     return table
 
 
+def _brand_mark() -> Drawing:
+    """Small vector mark so every PDF carries the brand without a filesystem asset."""
+
+    mark = Drawing(12 * mm, 12 * mm)
+    mark.add(
+        Circle(6 * mm, 6 * mm, 5.5 * mm, fillColor=colors.HexColor("#0F766E"), strokeColor=None)
+    )
+    mark.add(
+        String(
+            6 * mm,
+            4.1 * mm,
+            "V",
+            textAnchor="middle",
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            fillColor=colors.white,
+        )
+    )
+    return mark
+
+
 def render_pdf(spec: DocumentSpec) -> bytes:
     """One document, as PDF bytes. Same spec in, same page out."""
     styles = _styles()
@@ -206,8 +230,37 @@ def render_pdf(spec: DocumentSpec) -> bytes:
         *(DocumentLine(label=key, amount=value) for key, value in spec.meta),
     )
 
+    issuer_lines = [f"<b>{spec.issuer_name}</b>"]
+    if spec.issuer_address:
+        issuer_lines.append(spec.issuer_address)
+    if spec.issuer_contact:
+        issuer_lines.append(spec.issuer_contact)
+    masthead = Table(
+        [
+            [
+                _brand_mark(),
+                Paragraph("<br/>".join(issuer_lines), styles["muted"]),
+                Paragraph(spec.title, styles["title"]),
+            ]
+        ],
+        colWidths=[14 * mm, 91 * mm, 50 * mm],
+        hAlign="LEFT",
+    )
+    masthead.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LINEBELOW", (0, 0), (-1, -1), 1.2, colors.HexColor("#0F766E")),
+            ]
+        )
+    )
+
     story: list[Any] = [
-        Paragraph(spec.title, styles["title"]),
+        masthead,
         Spacer(1, 3 * mm),
         _rows(header, styles),
         Spacer(1, 8 * mm),

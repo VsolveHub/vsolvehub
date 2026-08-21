@@ -48,6 +48,7 @@ export interface FieldProps {
    */
   error?: string;
   required?: boolean;
+  showOptional?: boolean;
   className?: string;
 }
 
@@ -56,6 +57,7 @@ export function Field({
   description,
   error,
   required = false,
+  showOptional = true,
   className,
   children,
 }: FieldProps) {
@@ -80,9 +82,9 @@ export function Field({
               </span>
               <span className="sr-only"> (required)</span>
             </>
-          ) : (
+          ) : showOptional ? (
             <span className="ml-1.5 font-normal text-text-muted">(optional)</span>
-          )}
+          ) : null}
         </label>
 
         {description ? (

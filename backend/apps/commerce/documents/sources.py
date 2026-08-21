@@ -17,6 +17,10 @@ from .render import DocumentLine, DocumentSpec
 #: second entity: `TaxDocument.legal_entity_code` already exists for that day, and inventing a
 #: settings lookup before there is anything to look up hides which one is real.
 ISSUER_NAME = "V Solve Hub"
+# Temporary correspondence address requested for the document design. Kept in one source so it
+# can be replaced by the registered address without hunting through renderers and frontends.
+ISSUER_ADDRESS = "Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081"
+ISSUER_CONTACT = "support@vsolvehub.com · www.vsolvehub.com"
 
 #: Said on every M1 invoice. Kept here rather than in the renderer because it is a statement about
 #: *this* document, and the M2 receipt's equivalent says something quite different.
@@ -63,6 +67,8 @@ def order_invoice_spec(document: TaxDocument) -> DocumentSpec:
         lines=lines,
         total_label="Total paid",
         total_amount=format_money(document.total_paise),
+        issuer_address=ISSUER_ADDRESS,
+        issuer_contact=ISSUER_CONTACT,
         footnote=INVOICE_FOOTNOTE,
         # The flag is the model's own. A test invoice that printed like a real one is a test
         # invoice somebody files with their accounts.
@@ -97,6 +103,8 @@ def access_receipt_spec(
         lines=(DocumentLine(label=purpose, amount=format_money(amount_paise)),),
         total_label="Paid to V Solve Hub",
         total_amount=format_money(amount_paise),
+        issuer_address=ISSUER_ADDRESS,
+        issuer_contact=ISSUER_CONTACT,
         context_heading=context_heading,
         context_lines=context_lines,
         footnote=RECEIPT_FOOTNOTE,

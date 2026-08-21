@@ -122,7 +122,7 @@ describe("a workspace the Partner does not hold", () => {
     await screen.findByText(/no longer on your account/i);
 
     const hrefs = [...container.querySelectorAll("a")].map((link) => link.getAttribute("href"));
-    expect(hrefs).toContain("/dashboard");
+    expect(hrefs).toContain("/home");
     expect(hrefs).not.toContain("/jobs");
   });
 
@@ -198,7 +198,7 @@ describe("an unknown workspace key", () => {
     // also nothing worth asking on its behalf.
     renderRoute("A9_SOMETHING_NEW");
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/home"));
     expect(client.GET).not.toHaveBeenCalled();
   });
 });

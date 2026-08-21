@@ -8,6 +8,7 @@ import { getCategory, getCategoryServices, type Category } from "@/features/cata
 import { groupServicesBySubcategory } from "@/features/catalog/grouping";
 import { ServiceCard } from "@/features/catalog/components/service-card";
 import { Breadcrumbs } from "@/features/catalog/components/breadcrumbs";
+import { WorkforceCatalog } from "@/features/catalog/components/workforce-catalog";
 
 type PageProps = {
   params: Promise<{ category: string }>;
@@ -73,6 +74,18 @@ function ServiceGridSkeleton() {
       ))}
     </div>
   );
+}
+
+async function WorkforceGrid({
+  category,
+  activeTrade,
+}: {
+  category: Category;
+  activeTrade: string | null;
+}) {
+  const services = await getCategoryServices(category.slug);
+  if (services === null) notFound();
+  return <WorkforceCatalog category={category} services={services} activeTrade={activeTrade} />;
 }
 
 /**
@@ -177,6 +190,22 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
   // Resolved before streaming so an unknown slug 404s rather than rendering a
   // heading for a category that does not exist.
   if (!category) notFound();
+
+  if (category.slug === "workforce-and-projects") {
+    return (
+      <main className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
+        <Breadcrumbs
+          trail={[
+            { label: "Services", href: "/catalog" },
+            { label: category.name, href: `/catalog/${category.slug}` },
+          ]}
+        />
+        <Suspense key={activeTrade ?? "all"} fallback={<ServiceGridSkeleton />}>
+          <WorkforceGrid category={category} activeTrade={activeTrade} />
+        </Suspense>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">

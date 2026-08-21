@@ -78,11 +78,6 @@ class VisitSlotConfirmationSerializer(serializers.Serializer[dict[str, Any]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
-class VisitArrivalSerializer(serializers.Serializer[dict[str, Any]]):
-    """Arrival on the non-OTP fallback. No body: presence is the assertion, and who made it is
-    the session."""
-
-
 class VisitNoShowSerializer(serializers.Serializer[dict[str, Any]]):
     """Report that a scheduled visit did not happen.
 

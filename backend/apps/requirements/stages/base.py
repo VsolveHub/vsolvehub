@@ -73,11 +73,14 @@ def original_terms_of(row: dict[str, Any]) -> dict[str, Any]:
     `scheduled_on` is serialized to a string because the column is JSON and a `date` is not.
     """
     scheduled = row.get("scheduled_on") or None
+    starts = row.get("starts_on") or None
     return {
         "label": str(row.get("label") or "")[:200],
         "deliverable": str(row.get("deliverable") or ""),
         "amount_paise": int(row.get("amount_paise") or 0),
         "scheduled_on": (scheduled.isoformat() if isinstance(scheduled, date) else scheduled),
+        "starts_on": starts.isoformat() if isinstance(starts, date) else starts,
+        "duration_days": row.get("duration_days") or None,
     }
 
 

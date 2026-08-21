@@ -120,7 +120,9 @@ class PartnerProposalCollectionView(ThrottledWriteMixin, APIView):
             404: ApiErrorSerializer,
             409: OpenApiResponse(
                 response=ApiErrorSerializer,
-                description="`m2_wage_floor_unavailable` when Operations has not mapped this "
+                description="`m2_proposal_window_closed` when the Customer has already continued "
+                "with another professional; the proposal is not written. "
+                "`m2_wage_floor_unavailable` when Operations has not mapped this "
                 "variant to a wage-floor skill, has not set a state code on the service area, or "
                 "has loaded no floor for that pair. This **fails closed** — an A3 quote is refused "
                 "rather than accepted unchecked, because brokering labour below the statutory "

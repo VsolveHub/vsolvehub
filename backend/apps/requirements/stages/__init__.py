@@ -92,6 +92,7 @@ from .review import (
     expire_stage_review,
     request_stage_correction,
     resolve_stage_dispute,
+    settle_stage_with_project_completion_code,
 )
 from .sweeps import (
     orphaned_stage_evidence_upload_ids,
@@ -137,6 +138,7 @@ __all__ = [
     "release_stage_payout",
     "request_stage_correction",
     "resolve_stage_dispute",
+    "settle_stage_with_project_completion_code",
     "stage_payout_release_due_ids",
     "stage_review_due_ids",
     "start_stage",

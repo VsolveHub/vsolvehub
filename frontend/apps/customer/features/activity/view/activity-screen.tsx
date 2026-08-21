@@ -1,197 +1,279 @@
-import { SegmentedTrack, segmentStyles } from "@vsolve/ui";
+"use client";
+
+import { describeError } from "@vsolve/query";
+import { Button, EmptyState, ErrorState, Skeleton, buttonStyles } from "@vsolve/ui";
 import Link from "next/link";
 
-import { BookingGroupList } from "@/features/bookings/view/group-list";
-import { EngagementListScreen } from "@/features/engagement/view/engagement-list-screen";
-import { MyRequestsScreen } from "@/features/requirement/view/my-requests-screen";
+import { BookingGroupRow } from "@/features/bookings/view/group-list";
+import { useBookingGroups, type BookingGroup } from "@/features/bookings/queries";
+import { toEngagementLists, type EngagementRowView } from "@/features/engagement/adapters";
+import { useEngagements, type Engagement } from "@/features/engagement/queries";
+import { EngagementListRow } from "@/features/engagement/view/engagement-list-screen";
+import { toRequestRows, type RequestRowView } from "@/features/requirement/adapters";
+import { useMyRequests, type RequirementSummary } from "@/features/requirement/queries";
+import { RequestRow } from "@/features/requirement/view/requests-list";
+import { requestHref } from "@/lib/routes";
 
-/**
- * The three segments of the Activity hub, and how a URL turns into one.
- *
- * Exported from the screen rather than from a module of their own: the route,
- * the four redirects and the screen all need the same three answers, and the
- * parsing is still testable without rendering anything because it is a pure
- * function that happens to live beside its only consumer.
- */
+export type BookingSection = "needs_you" | "active" | "past";
 
-export const ACTIVITY_TABS = ["booked", "requests", "projects"] as const;
+const CLOSED_REQUESTS: ReadonlySet<RequirementSummary["status"]> = new Set([
+  "CLOSED_NO_SUPPLY",
+  "CLOSED_SLA_BREACH",
+  "CLOSED_EXPIRED",
+  "CLOSED_ABANDONED",
+  "CLOSED_COMPLETE",
+  "CLOSED_CANCELLED",
+]);
 
-export type ActivityTab = (typeof ACTIVITY_TABS)[number];
+export function requestSection(status: RequirementSummary["status"]): BookingSection {
+  if (CLOSED_REQUESTS.has(status)) return "past";
+  if (status === "DRAFT" || status === "QUOTES_READY" || status === "UNLOCKED") {
+    return "needs_you";
+  }
+  return "active";
+}
 
-export const DEFAULT_ACTIVITY_TAB: ActivityTab = "booked";
+export function engagementSection(row: EngagementRowView): BookingSection {
+  if (
+    row.nextAction === "review_stage" ||
+    row.nextAction === "fund_stage" ||
+    row.nextAction === "accept_completion"
+  ) {
+    return "needs_you";
+  }
+  if (row.status === "COMPLETED" || row.status === "CLOSED" || row.status === "CANCELLED") {
+    return "past";
+  }
+  return "active";
+}
 
-/**
- * What each segment is called, and what it promises.
- *
- * The three descriptions are not decoration. They are the sentence that keeps
- * the money promises apart now that the three lists share one screen: platform
- * bookings are paid through us, crew wages are not, projects are funded stage
- * by stage. Merging the lists is only defensible because these stay.
- */
-export const ACTIVITY_TAB_COPY: Record<ActivityTab, { label: string; description: string }> = {
-  booked: {
-    label: "Booked",
-    description: "Work that is arranged — both jobs booked through us and crew you hired directly.",
-  },
-  requests: {
-    label: "Requests",
-    description: "Jobs you have described and what is happening to each one.",
-  },
-  projects: {
-    label: "Projects",
-    description: "Work you are funding through V Solve Hub, one stage at a time.",
-  },
+export function groupSection(group: BookingGroup): BookingSection {
+  if (group.status === "PAYMENT_PENDING" || group.status === "REPLAN_REQUIRED") {
+    return "needs_you";
+  }
+  if (
+    group.status === "COMPLETED" ||
+    group.status === "CANCELLED" ||
+    group.status === "EXPIRED" ||
+    group.status === "FAILED"
+  ) {
+    return "past";
+  }
+  return "active";
+}
+
+export function requestBelongsInBookings(requirement: RequirementSummary): boolean {
+  return requirement.engagement_id === null;
+}
+
+type BookingItem =
+  | { kind: "request"; key: string; section: BookingSection; sortAt: string; row: RequestRowView }
+  | { kind: "engagement"; key: string; section: BookingSection; sortAt: string; row: EngagementRowView }
+  | { kind: "group"; key: string; section: BookingSection; sortAt: string; group: BookingGroup };
+
+function byNewest(a: BookingItem, b: BookingItem): number {
+  return Date.parse(b.sortAt) - Date.parse(a.sortAt);
+}
+
+function itemsFrom(
+  requirements: readonly RequirementSummary[],
+  engagements: readonly Engagement[],
+  groups: readonly BookingGroup[],
+): { items: BookingItem[]; unknownEngagements: number } {
+  const requestRows = toRequestRows(
+    requirements.filter(requestBelongsInBookings),
+    (requirement) => requirement.service_name,
+  );
+  const requirementById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+  const engagementLists = toEngagementLists(engagements);
+  const engagementById = new Map(engagements.map((engagement) => [engagement.id, engagement]));
+
+  return {
+    items: [
+      ...requestRows.map((row): BookingItem => {
+        const source = requirementById.get(row.id);
+        return {
+          kind: "request",
+          key: `request:${row.id}`,
+          section: requestSection(row.status),
+          sortAt: source?.last_activity_at ?? "",
+          row,
+        };
+      }),
+      ...[...engagementLists.workforce, ...engagementLists.projects].map(
+        (row): BookingItem => ({
+          kind: "engagement",
+          key: `engagement:${row.engagementId}`,
+          section: engagementSection(row),
+          sortAt: engagementById.get(row.engagementId)?.created_at ?? "",
+          row,
+        }),
+      ),
+      ...groups.map(
+        (group): BookingItem => ({
+          kind: "group",
+          key: `group:${group.id}`,
+          section: groupSection(group),
+          sortAt: group.updated_at,
+          group,
+        }),
+      ),
+    ].sort(byNewest),
+    unknownEngagements: engagementLists.undescribable.length,
+  };
+}
+
+const SECTION_COPY: Record<BookingSection, { title: string; description: string }> = {
+  needs_you: { title: "Needs you", description: "A decision or payment is waiting for you." },
+  active: { title: "Upcoming and active", description: "Visits, requests and work still moving." },
+  past: { title: "Past", description: "Finished, cancelled or closed work." },
 };
 
-/**
- * Narrow an untrusted `?tab=` to a segment.
- *
- * A query parameter is user input and arrives as `string | string[] | undefined`
- * from Next. Anything that is not one of the three is the default rather than an
- * error: a stale bookmark or a truncated share link should land somebody on the
- * hub, not on a 404.
- */
-export function toActivityTab(value: string | string[] | undefined): ActivityTab {
-  const first = Array.isArray(value) ? value[0] : value;
-  return ACTIVITY_TABS.includes(first as ActivityTab)
-    ? (first as ActivityTab)
-    : DEFAULT_ACTIVITY_TAB;
-}
+export function ActivityScreen() {
+  const requirementsQuery = useMyRequests();
+  const engagementsQuery = useEngagements();
+  const groupsQuery = useBookingGroups();
 
-/** The canonical href for a segment. One place, so links and redirects agree. */
-export function activityTabHref(tab: ActivityTab): string {
-  return tab === DEFAULT_ACTIVITY_TAB ? "/activity" : `/activity?tab=${tab}`;
-}
-
-/**
- * Everything the Customer has going, in one place.
- *
- * ## Why this screen exists
- *
- * `My bookings`, `My requests` and `My projects` were three top-level
- * destinations, plus `/bookings/workforce` reachable only from a sentence at the
- * bottom of one of them. Four places, and which one holds the thing you are
- * looking for depends on knowing our vocabulary: that a job you described is a
- * "request" until somebody quotes it, that hiring a crew produces a "booking"
- * but funding a renovation produces a "project". A Customer who wants "the
- * bathroom job" knows none of that and should not have to.
- *
- * So there is one door, and the distinctions become segments behind it.
- *
- * ## What the merge must not cost, and does not
- *
- * The three lists say different things about who holds the money, and that is
- * not a detail — it is the difference between work V Solve Hub is accountable
- * for and work it merely introduced. `engagement-list-screen.tsx` refuses to put
- * one noun over both, and it is right to. Nothing here overrules that:
- *
- * - Each segment carries its own description, above its own list.
- * - The A3 direct-payment reminder still renders above the crew rows, in the
- *   `Booked` segment, exactly as it does on the standalone page.
- * - The two halves of `Booked` are separate sections with separate headings,
- *   not one merged list, because one of them is money we hold and the other is
- *   money we never touch.
- *
- * ## Why this is a Server Component
- *
- * It renders headings, links and three client lists that fetch their own data.
- * There is nothing here to hydrate: the segments are `<Link>`s, so the current
- * segment lives in the URL, the back button works, and a segment is shareable.
- * That is also why they are not a `SegmentedControl` — that control is for view
- * state, and which record set you are looking at is a place.
- *
- * ## Why there are no counts on the segments
- *
- * A count is the most useful thing a segment can carry and the easiest to get
- * wrong. Bookings and engagements are both cursor-paginated, so what this screen
- * could count is "rows on the first page", and a `2` beside a segment holding
- * twenty is worse than no number at all. Real counts need a summary the server
- * publishes; until it does, the segments say what they hold and not how much.
- */
-export function ActivityScreen({ tab }: { tab: ActivityTab }) {
-  const copy = ACTIVITY_TAB_COPY[tab];
+  const requirements = requirementsQuery.data ?? [];
+  const engagements = (engagementsQuery.data?.pages ?? []).flatMap((page) => page.results);
+  const groups = (groupsQuery.data?.pages ?? []).flatMap((page) => page.results);
+  const { items, unknownEngagements } = itemsFrom(requirements, engagements, groups);
+  const isFirstLoad =
+    items.length === 0 &&
+    (requirementsQuery.isPending || engagementsQuery.isPending || groupsQuery.isPending);
+  const errors = [requirementsQuery.error, engagementsQuery.error, groupsQuery.error].filter(
+    (error): error is Error => error instanceof Error,
+  );
+  const hasDirectPay = items.some(
+    (item) => item.kind === "engagement" && item.row.mode === "lead_only",
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-16 pt-6 sm:px-6">
-      <h1 className="text-2xl font-extrabold tracking-tight text-text">Activity</h1>
-
-      <SegmentedTrack label="Your work" className="mt-4">
-        {ACTIVITY_TABS.map((candidate) => (
-          <Link
-            key={candidate}
-            href={activityTabHref(candidate)}
-            aria-current={candidate === tab ? "page" : undefined}
-            className={segmentStyles({ selected: candidate === tab })}
-          >
-            {ACTIVITY_TAB_COPY[candidate].label}
-          </Link>
-        ))}
-      </SegmentedTrack>
-
-      <p className="mt-3 text-sm leading-6 text-text-secondary">{copy.description}</p>
-
-      <div className="mt-5">
-        {tab === "booked" ? <BookedSegment /> : null}
-        {tab === "requests" ? <MyRequestsScreen /> : null}
-        {tab === "projects" ? (
-          <EngagementListScreen
-            mode="managed"
-            chrome="embedded"
-            newRequestHref="/requests/new"
-            requestsHref={activityTabHref("requests")}
-          />
-        ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-text">Bookings</h1>
+          <p className="mt-1 max-w-xl text-sm leading-6 text-text-secondary">
+            Everything you have booked or asked us to arrange, in one place.
+          </p>
+        </div>
+        <Link href="/requests/new" className={buttonStyles()}>
+          Describe a job
+        </Link>
       </div>
+
+      {hasDirectPay ? (
+        <details className="mt-4 rounded-control border border-line bg-surface px-4 py-3 text-sm text-text-secondary">
+          <summary className="cursor-pointer font-semibold text-text">How payments work</summary>
+          <p className="mt-2 leading-6">
+            Some crew bookings are paid directly to the professional. Vsolve does not hold those
+            service payments; projects funded through Vsolve show their funded amount on the card.
+          </p>
+        </details>
+      ) : null}
+
+      {isFirstLoad ? (
+        <div className="mt-6 flex flex-col gap-3" aria-label="Loading your bookings">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-32 w-full" />
+          ))}
+        </div>
+      ) : null}
+
+      {errors.length > 0 ? (
+        <div className="mt-6">
+          <ErrorState
+            inline
+            title="Some bookings could not be loaded"
+            message={describeError(errors[0], "read").message}
+            actionLabel="Try again"
+            onAction={() => {
+              void requirementsQuery.refetch();
+              void engagementsQuery.refetch();
+              void groupsQuery.refetch();
+            }}
+          />
+        </div>
+      ) : null}
+
+      {!isFirstLoad && items.length === 0 && errors.length === 0 ? (
+        <div className="mt-8">
+          <EmptyState
+            title="No bookings yet"
+            description="Describe what you need and it will stay here from the first request to the finished work."
+            action={
+              <Link href="/catalog" className={buttonStyles({ variant: "outline" })}>
+                Browse services
+              </Link>
+            }
+          />
+        </div>
+      ) : null}
+
+      {(["needs_you", "active", "past"] as const).map((section) => {
+        const sectionItems = items.filter((item) => item.section === section);
+        if (sectionItems.length === 0) return null;
+        const copy = SECTION_COPY[section];
+        return (
+          <section key={section} aria-labelledby={`bookings-${section}`} className="mt-8">
+            <div className="mb-3">
+              <h2 id={`bookings-${section}`} className="text-lg font-bold text-text">
+                {copy.title}
+              </h2>
+              <p className="mt-0.5 text-sm text-text-secondary">{copy.description}</p>
+            </div>
+            <ul className="flex list-none flex-col gap-3 p-0">
+              {sectionItems.map((item) => (
+                <BookingTimelineRow key={item.key} item={item} />
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+
+      {unknownEngagements > 0 ? (
+        <p className="mt-6 rounded-control border border-line bg-surface-sunken p-4 text-sm leading-6 text-text-secondary">
+          {unknownEngagements === 1
+            ? "One agreement uses"
+            : `${unknownEngagements} agreements use`} a payment type this app cannot describe yet.
+          Contact support to open the record safely.
+        </p>
+      ) : null}
+
+      {engagementsQuery.hasNextPage || groupsQuery.hasNextPage ? (
+        <div className="mt-8 flex flex-wrap gap-3">
+          {engagementsQuery.hasNextPage ? (
+            <Button
+              variant="outline"
+              loading={engagementsQuery.isFetchingNextPage}
+              onClick={() => void engagementsQuery.fetchNextPage()}
+            >
+              Show older work
+            </Button>
+          ) : null}
+          {groupsQuery.hasNextPage ? (
+            <Button
+              variant="outline"
+              loading={groupsQuery.isFetchingNextPage}
+              onClick={() => void groupsQuery.fetchNextPage()}
+            >
+              Show older bookings
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/**
- * Two lists under one segment, and why they are not one list.
- *
- * A job booked through the catalog and a crew hired off the rate card are both
- * "booked" in the only sense a Customer cares about — somebody is coming. But we
- * hold the money for the first and never touch it for the second, so a single
- * list would need one set of words for two different promises. Two sections with
- * their own headings costs a little vertical space and keeps the promise exact.
- */
-function BookedSegment() {
+function BookingTimelineRow({ item }: { item: BookingItem }) {
+  if (item.kind === "group") return <BookingGroupRow group={item.group} />;
+  if (item.kind === "engagement") return <EngagementListRow row={item.row} />;
   return (
-    <div className="flex flex-col gap-8">
-      <section aria-labelledby="activity-bookings-heading">
-        <h2
-          id="activity-bookings-heading"
-          className="text-xs font-bold uppercase tracking-[0.08em] text-text-secondary"
-        >
-          Booked through V Solve Hub
-        </h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Every visit in a booking is confirmed together.
-        </p>
-        <div className="mt-3">
-          <BookingGroupList />
-        </div>
-      </section>
-
-      <section aria-labelledby="activity-crew-heading">
-        <h2
-          id="activity-crew-heading"
-          className="text-xs font-bold uppercase tracking-[0.08em] text-text-secondary"
-        >
-          Crew you have hired
-        </h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          Jobs where you agreed a rate with a professional and pay them directly.
-        </p>
-        <div className="mt-3">
-          <EngagementListScreen
-            mode="lead_only"
-            chrome="embedded"
-            newRequestHref="/requests/new"
-            requestsHref={activityTabHref("requests")}
-          />
-        </div>
-      </section>
-    </div>
+    <RequestRow
+      request={item.row}
+      href={requestHref(item.row.id)}
+      isClosed={item.section === "past"}
+    />
   );
 }

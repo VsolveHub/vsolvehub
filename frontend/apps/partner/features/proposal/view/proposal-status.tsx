@@ -2,6 +2,7 @@
 
 import { Badge, Button, Card, ConfirmAction, ErrorState, FactList, formatMoney } from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
+import { useServerCountdown } from "@vsolve/query";
 import { useState } from "react";
 
 import { timeAgo } from "@/lib/format";
@@ -63,6 +64,8 @@ export interface ProposalStatusProps {
   readonly submitted: Proposal | null;
   /** Opens the composer for a revision. */
   readonly onRevise: () => void;
+  /** Customer-facing A5 records are estimates; A3 records are quotes. */
+  readonly documentKind?: "quote" | "estimate";
 }
 
 export function ProposalStatus({
@@ -71,6 +74,7 @@ export function ProposalStatus({
   requirementId,
   submitted,
   onRevise,
+  documentKind = "quote",
 }: ProposalStatusProps) {
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const withdraw = useWithdrawProposal();
@@ -86,19 +90,29 @@ export function ProposalStatus({
     invitationId,
   });
   const record = submitted ?? trace.current;
+  const revisionCountdown = useServerCountdown(record?.revision_expires_at ?? null, 1_000);
   const view = resolveProposalView({ enquiryStatus, proposal: record });
+  const documentLabel = documentKind === "estimate" ? "estimate" : "quote";
+  const documentCopy = (copy: string) =>
+    documentKind === "estimate"
+      ? copy.replaceAll("quotes", "estimates").replaceAll("quote", "estimate")
+      : copy;
 
   if (view.kind === "none") return null;
 
   if (view.kind === "unreadable") {
     return (
       <Card className="flex flex-col gap-3 p-4">
-        <h2 className="text-sm font-semibold text-text">Your quote</h2>
+        <h2 className="text-sm font-semibold text-text">Your {documentLabel}</h2>
         {mine.isPending ? (
-          <p className="text-sm leading-6 text-text-secondary">Loading the quote you sent…</p>
+          <p className="text-sm leading-6 text-text-secondary">
+            Loading the {documentLabel} you sent…
+          </p>
         ) : (
           <>
-            <p className="text-sm leading-6 text-text-secondary">{UNREADABLE_PROPOSAL_NOTICE}</p>
+            <p className="text-sm leading-6 text-text-secondary">
+              {documentCopy(UNREADABLE_PROPOSAL_NOTICE)}
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -108,9 +122,11 @@ export function ProposalStatus({
               >
                 Try again
               </Button>
-              <Button variant="ghost" onClick={onRevise}>
-                Send a new quote
-              </Button>
+              {documentKind === "quote" ? (
+                <Button variant="ghost" onClick={onRevise}>
+                  Send a new quote
+                </Button>
+              ) : null}
             </div>
           </>
         )}
@@ -122,14 +138,18 @@ export function ProposalStatus({
   const status = describeProposalStatus(current.status);
   const usability = describeUsability(current.usability);
   const revalidation = revalidationNoticeFor(current);
-  const permissions = permissionsFor({ proposal: current, enquiryStatus });
+  const permissions = permissionsFor({
+    proposal: current,
+    enquiryStatus,
+    revisionWindowOpen: revisionCountdown?.isExpired !== true,
+  });
   const presentation = withdraw.error ? describeError(withdraw.error, "mutation") : null;
 
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-text">
-          Your quote
+          Your {documentLabel}
           {current.revision > 1 ? (
             <span className="ml-2 font-normal text-text-secondary">
               revision {current.revision}
@@ -141,7 +161,7 @@ export function ProposalStatus({
         </Badge>
       </div>
 
-      <p className="text-sm leading-6 text-text-secondary">{status.meaning}</p>
+      <p className="text-sm leading-6 text-text-secondary">{documentCopy(status.meaning)}</p>
 
       <FactList
         items={[
@@ -213,8 +233,8 @@ export function ProposalStatus({
         // — so this states where it stands rather than offering a button that
         // cannot exist yet. `M2-FE-705` is where that path gets built.
         <p className="text-sm leading-6 text-warning-text">
-          Vsolve recorded this quote on your behalf and it has not been confirmed by you, so the
-          customer cannot see it yet. Support will confirm it with you directly.
+          Vsolve recorded this {documentLabel} on your behalf and it has not been confirmed by you,
+          so the customer cannot see it yet. Support will confirm it with you directly.
         </p>
       ) : null}
 
@@ -231,7 +251,7 @@ export function ProposalStatus({
       <div className="flex flex-wrap gap-2">
         {permissions.canSupersede ? (
           <Button variant="outline" onClick={onRevise} disabled={withdraw.isPending}>
-            Send a revised quote
+            Revise {documentLabel}
           </Button>
         ) : null}
 
@@ -248,13 +268,15 @@ export function ProposalStatus({
         ) : null}
       </div>
 
-      {trace.superseded.length > 0 ? <SupersessionTrace rows={trace.superseded} /> : null}
+      {trace.superseded.length > 0 ? (
+        <SupersessionTrace rows={trace.superseded} documentLabel={documentLabel} />
+      ) : null}
 
       <ConfirmAction
         open={confirmingWithdraw}
         onOpenChange={setConfirmingWithdraw}
-        title="Withdraw this quote"
-        consequence="The customer can no longer choose this quote. Your enquiry stays open, so you can send a new one — but this price is off the table as soon as you confirm, and withdrawing cannot be undone."
+        title={`Withdraw this ${documentLabel}`}
+        consequence={`The customer can no longer choose this ${documentLabel}. Your enquiry stays open, so you can send a new one — but this price is off the table as soon as you confirm, and withdrawing cannot be undone.`}
         confirmLabel="Withdraw"
         destructive
         pending={withdraw.isPending}
@@ -365,7 +387,13 @@ function MaterialBreakdown({ lines }: { readonly lines: Proposal["material_lines
  * row can be chosen. It is here because append-only is the point — a vendor
  * arguing about what they quoted needs the chain, not the latest number.
  */
-function SupersessionTrace({ rows }: { readonly rows: readonly Proposal[] }) {
+function SupersessionTrace({
+  rows,
+  documentLabel,
+}: {
+  readonly rows: readonly Proposal[];
+  readonly documentLabel: "quote" | "estimate";
+}) {
   return (
     <details className="rounded-control border border-line p-3">
       <summary className="min-h-11 cursor-pointer text-sm font-semibold text-text">
@@ -386,8 +414,8 @@ function SupersessionTrace({ rows }: { readonly rows: readonly Proposal[] }) {
         })}
       </ul>
       <p className="mt-2 text-xs leading-5 text-text-muted">
-        Vsolve never overwrites a quote. The customer can still see each of these, and none of them
-        can be chosen once it has been replaced.
+        Vsolve never overwrites {documentLabel === "estimate" ? "an" : "a"} {documentLabel}. The
+        customer can still see each version, and none can be chosen after it has been replaced.
       </p>
     </details>
   );

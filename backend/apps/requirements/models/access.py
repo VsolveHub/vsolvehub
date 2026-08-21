@@ -413,7 +413,7 @@ class SiteVisit(models.Model):
     )
 
     class ArrivalMethod(models.TextChoices):
-        """How arrival was proved. `START_OTP` is M3 activation and is never written in M2."""
+        """How arrival was proved. The non-OTP value is retained for historical records only."""
 
         NON_OTP_FALLBACK = "NON_OTP_FALLBACK", "Confirmed without an OTP"
         START_OTP = "START_OTP", "Confirmed with a start OTP"
@@ -486,6 +486,17 @@ class SiteVisit(models.Model):
                 condition=models.Q(plan_share__isnull=False)
                 & models.Q(status__in=("REQUESTED", "SCHEDULED", "IN_PROGRESS", "COMPLETED")),
                 name="requirements_one_live_visit_per_plan_share",
+            ),
+            # Partner reservations prevent one professional being in two places.
+            # This is the Customer-side twin: two professionals on the same
+            # project cannot claim the same visit start. Overlapping non-equal
+            # starts are serialized and rejected by the requirement-row lock in
+            # `confirm_visit_slot` / `reschedule_plan_visit`.
+            models.UniqueConstraint(
+                fields=("requirement", "scheduled_for"),
+                condition=models.Q(plan_share__isnull=False, scheduled_for__isnull=False)
+                & models.Q(status__in=("REQUESTED", "SCHEDULED", "IN_PROGRESS", "COMPLETED")),
+                name="requirements_one_plan_visit_per_time",
             ),
         ]
         indexes = [

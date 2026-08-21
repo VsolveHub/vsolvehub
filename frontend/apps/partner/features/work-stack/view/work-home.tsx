@@ -4,22 +4,21 @@ import { ApiRequestError } from "@vsolve/api-client";
 import { useAuthGuard, useServerCountdown, type Countdown } from "@vsolve/query";
 import { ErrorState, Spinner, cn, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 
 import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { usePartnerApplication } from "@/features/application/queries";
 import { ReadinessChecklist } from "@/features/application/view/readiness-checklist";
 import { ApplicationStatusBanner } from "@/features/application/view/status-banner";
-import { usePartnerPerformance } from "@/features/earnings/queries";
-import { ProjectInvitationBanner } from "@/features/notifications/view/project-invitation-banner";
+import { usePartnerPerformance, type PartnerPerformance } from "@/features/earnings/queries";
+import { readStoredSession } from "@/features/presence/model/stored-session";
 import { PartnerPresence } from "@/features/presence/view/partner-presence";
 import { PARTNER_ROLE, SwitchToPartner } from "@/features/session/partner-shell";
-import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
-import { PROJECT_WORKSPACE, resolveWorkspaces } from "@/features/workspace/registry";
 import { getApiClient } from "@/lib/api/browser";
 
 import type { WorkItem } from "../model/work-item";
 import { useWorkStack } from "../queries";
+import { WaitingRadar } from "./waiting-radar";
 
 /**
  * The signed-in home, rebuilt as the one WORK surface.
@@ -178,40 +177,87 @@ function WorkStack() {
   const performance = usePartnerPerformance();
 
   /*
-    The A5 project workspace, resolved only so `ProjectInvitationBanner` can be
-    handed the grant it needs. This is the same `usePartnerWorkspaceGrants`
-    query the shell already runs, so TanStack serves it from cache rather than
-    issuing a second request. The banner's prop is required and non-nullable,
-    so a Partner without the A5 grant renders no banner at all rather than one
-    holding a fabricated workspace — and the banner itself still re-checks
-    `enquiry.view` on the grant before it reads the notification feed.
+    What is on the Partner's plate *right now*, and what is merely on file.
+
+    The stack merges every record this vendor touches, which on a working
+    account means a permanent tail of quotes they have sent and jobs already
+    settled. On the home that tail is noise — it pushed today's money and the
+    availability control off the top of a real screen and made "nothing waiting"
+    unreachable for anybody with any history at all.
+
+    So the home carries the three urgencies that are a call to action, and
+    `/work/all` carries the same stack unfiltered — reached through the Work
+    tab, which is why the home draws no link of its own to it. The split is by
+    whose move it is, never by count.
   */
-  const grants = usePartnerWorkspaceGrants();
-  const projectWorkspace =
-    resolveWorkspaces(grants.grants ?? []).find(
-      (workspace) => workspace.key === PROJECT_WORKSPACE,
-    ) ?? null;
+  const needsYou = stack.items.filter(
+    (item) => item.urgency === "live" || item.urgency === "needs_price" || item.urgency === "doing",
+  );
 
   return (
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-[linear-gradient(180deg,var(--color-warm-25)_0%,var(--color-canvas)_100%)]">
-      {/* The screen is pictures and numbers; the landmark still needs a name. */}
       <h1 className="sr-only">Your work</h1>
 
-      <TodayPlate netPaise={performance.data?.today_net_paise ?? null} />
-
-      <div className="flex flex-1 flex-col gap-3.5 px-4 pt-3.5 pb-3">
-        {/* An interrupt, so it sits above everything it interrupts — the same
-            position it held on the A5 workspace home this screen replaces. It
-            renders nothing at all when no project enquiry is waiting. */}
-        {projectWorkspace ? <ProjectInvitationBanner workspace={projectWorkspace} /> : null}
-
+      <div className="flex flex-col gap-3.5 px-4 pt-3.5">
         {/* The one presence control in the app, shared with `/me` rather than
-            copied — see `PartnerPresence`'s own reasoning against a second one. */}
+            copied — see `PartnerPresence`'s own reasoning against a second one.
+            First on the screen because an offline Partner has exactly one thing
+            worth doing here, and every number below it is history until they do. */}
         <PartnerPresence />
 
-        <StackBody stack={stack} />
+        <TodayPlate
+          netPaise={performance.data?.today_net_paise ?? null}
+          jobs={performance.data?.today_jobs ?? null}
+        />
+
+        <MonthStrip performance={performance.data ?? null} />
+      </div>
+
+      <div className="flex flex-1 flex-col gap-3.5 px-4 pt-4 pb-3">
+        <StackBody stack={stack} needsYou={needsYou} />
       </div>
     </main>
+  );
+}
+
+/**
+ * The two figures that put today in context, and nothing beyond them.
+ *
+ * `PartnerPerformance` publishes seven numbers; three belong on a home screen.
+ * Today is the hero plate above. This month answers "am I having a good month",
+ * and the average answers "compared to what" — which is the only reason a single
+ * month's figure means anything. Lifetime totals and the daily series are
+ * genuinely interesting and genuinely not urgent: they live on `/money`, which
+ * already renders them, and repeating them here would make the home a worse
+ * version of that screen.
+ *
+ * Renders nothing at all while the read is in flight. Three skeleton tiles above
+ * the fold would draw the eye to the least important row on the screen, and the
+ * row is supporting context — its absence for a second costs nothing.
+ */
+function MonthStrip({ performance }: { performance: PartnerPerformance | null }) {
+  if (performance === null) return null;
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <Metric label="This month" value={formatMoney(performance.month_net_paise)} />
+      <Metric
+        label={performance.month_jobs === 1 ? "Job done" : "Jobs done"}
+        value={String(performance.month_jobs)}
+      />
+      <Metric label="Usual month" value={formatMoney(performance.average_monthly_net_paise)} />
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface px-3 py-2.5">
+      <span className="truncate text-[1.0625rem] font-extrabold leading-none tracking-[-0.02em] text-text">
+        {value}
+      </span>
+      <span className="truncate text-[0.6875rem] font-semibold text-text-muted">{label}</span>
+    </div>
   );
 }
 
@@ -219,16 +265,22 @@ function WorkStack() {
  * Loading and failure for the whole stack at once, because that is what
  * `useWorkStack` reports.
  *
- * It merges five queries and is all-or-nothing on both: one pending source
+ * It merges six queries and is all-or-nothing on both: one pending source
  * makes the whole hook pending, and one failed source empties `items` and sets
- * `error`. So there is one spinner and one error state here, never five — a
- * screen showing four working sources and quietly hiding the broken fifth would
+ * `error`. So there is one spinner and one error state here, never six — a
+ * screen showing five working sources and quietly hiding the broken sixth would
  * tell a Partner they have no offers when the offers endpoint is down.
  *
  * No retry button: the hook composes six query objects and exposes no refetch,
  * and a reload is the recovery that actually re-runs all of them.
  */
-function StackBody({ stack }: { stack: ReturnType<typeof useWorkStack> }) {
+function StackBody({
+  stack,
+  needsYou,
+}: {
+  stack: ReturnType<typeof useWorkStack>;
+  needsYou: readonly WorkItem[];
+}) {
   if (stack.isPending) {
     return (
       <p className="flex flex-1 items-center justify-center gap-2 py-16 text-text-secondary">
@@ -249,15 +301,54 @@ function StackBody({ stack }: { stack: ReturnType<typeof useWorkStack> }) {
     );
   }
 
-  if (stack.items.length === 0) return <EmptyWork />;
+  if (needsYou.length === 0) return <WaitingForWork />;
 
   return (
-    <div className="flex flex-col gap-3">
-      {stack.items.map((item) => (
+    <section className="flex flex-col gap-2.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+          Needs you
+        </h2>
+        <span className="text-[0.6875rem] font-bold text-text-muted">
+          {needsYou.length}
+        </span>
+      </div>
+      {needsYou.map((item) => (
         <WorkCard key={item.key} item={item} />
       ))}
-    </div>
+    </section>
   );
+}
+
+/**
+ * Nothing needs this Partner — the screen they see most, and the one the old
+ * stack answered with a blank rectangle.
+ *
+ * Whether the radar sweeps is decided by presence, not by the stack: an offline
+ * Partner has no dispatch running for them and must not be shown an animation
+ * claiming otherwise. `readStoredSession` is the same source
+ * `PresencePanel` restores from on load, read here rather than lifted into
+ * shared state because it is a browser fact both components observe, not a
+ * value either of them owns.
+ *
+ * `useSyncExternalStore` for the same reason `PresencePanel` uses it: reading
+ * storage during render makes the server and client trees disagree, and the
+ * flicker that produces is a Partner watching their availability appear to drop
+ * and come back.
+ */
+function WaitingForWork() {
+  const storedSession = useSyncExternalStore(
+    subscribeToNothing,
+    () => readStoredSession() !== null,
+    () => false,
+  );
+
+  return <WaitingRadar isOnline={storedSession} />;
+}
+
+/** Storage does not change under us within a paint; nothing to subscribe to. */
+function subscribeToNothing(): () => void {
+  return () => {};
 }
 
 /**
@@ -271,41 +362,58 @@ function StackBody({ stack }: { stack: ReturnType<typeof useWorkStack> }) {
  * transcribed pictogram set (same rays, same 4.2 centre). It says "today"; the
  * number beside it says how much.
  */
-function TodayPlate({ netPaise }: { netPaise: number | null }) {
+function TodayPlate({ netPaise, jobs }: { netPaise: number | null; jobs: number | null }) {
   return (
-    <div className="px-4 pt-3.5">
-      <div className="flex items-center gap-3 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-3.5 shadow-card">
-        <Pictogram name="days" className="h-7.5 w-7.5 shrink-0 text-action-hover" />
-        <span className="text-[2.75rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
+    <div className="flex items-center gap-3 rounded-card bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-3.5 shadow-card">
+      <Pictogram name="days" size="lg" className="shrink-0 text-action-hover" />
+      <span className="flex flex-col gap-px">
+        <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
+          Earned today
+        </span>
+        <span className="text-[2rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
           {netPaise === null ? "—" : formatMoney(netPaise)}
         </span>
-        <span className="sr-only">earned today</span>
-      </div>
+      </span>
+      {/* Zero is a real answer and says so. A blank space where a count belongs
+          reads as a screen that failed to load, which is the one thing an idle
+          Partner must not conclude. */}
+      {jobs === null ? null : (
+        <span className="ml-auto flex shrink-0 flex-col items-end text-[0.8125rem] font-semibold leading-snug text-navy-200">
+          {jobs === 0 ? (
+            <>
+              <span>No jobs</span>
+              <span>yet today</span>
+            </>
+          ) : (
+            <>
+              <span>
+                {jobs} {jobs === 1 ? "job" : "jobs"}
+              </span>
+              <span>finished</span>
+            </>
+          )}
+        </span>
+      )}
     </div>
   );
 }
 
-/**
- * Nothing waiting — one drawn medallion and no invented content.
- *
- * `Empty.dc.html` also draws a "3 jobs within 12 km" pill and two "widen your
- * radius" / "add a trade" fix buttons beneath it. All three are mock numbers
- * with no Partner-facing endpoint behind them, so they are deliberately not
- * ported: a made-up count of nearby work on the screen a Partner checks when
- * they have none is the worst possible place to invent a figure.
- */
-function EmptyWork() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center py-16">
-      <div className="relative grid h-42 w-42 place-items-center">
-        <span className="absolute inset-0 rounded-full bg-surface-sunken" />
-        <span className="absolute inset-5.5 rounded-full border-2 border-dashed border-[var(--color-warm-300)]" />
-        <Pictogram name="all-work" className="relative h-21 w-21 text-[var(--color-warm-400)]" />
-      </div>
-      <p className="sr-only">You have no work waiting right now.</p>
-    </div>
-  );
-}
+/*
+  `EmptyWork` lived here — a static dashed medallion for "nothing waiting".
+
+  It is `WaitingRadar` now (`./waiting-radar.tsx`), for two reasons. It was
+  effectively unreachable: the old home rendered the whole stack, so
+  `items.length` was only ever zero for a Partner with no history at all, and
+  every established vendor saw a tail of settled cards instead. And a still
+  medallion answers "do you have work for me?" the same way a screen that failed
+  to load does. The radar says the dispatch is running — and stops sweeping when
+  the Partner is offline, because then it isn't.
+
+  What the canvas drew and neither version ports: a "3 jobs within 12 km" pill
+  and "widen your radius" / "add a trade" buttons. All three are figures with no
+  Partner-facing endpoint behind them, and the screen a vendor checks when they
+  have no work is the worst possible place to invent one.
+*/
 
 /* --------------------------------------------------------------------------
    The four card states
@@ -318,7 +426,7 @@ function EmptyWork() {
  * I'm doing it, I got paid — and each one is a different card in
  * `Main.dc.html`, not one card with a different border. See `WorkUrgency`.
  */
-function WorkCard({ item }: { item: WorkItem }) {
+export function WorkCard({ item }: { item: WorkItem }) {
   switch (item.urgency) {
     case "live":
       return <LiveOfferCard item={item} />;
@@ -326,6 +434,12 @@ function WorkCard({ item }: { item: WorkItem }) {
       return <NeedsPriceCard item={item} />;
     case "settled":
       return <SettledCard item={item} />;
+    case "answered":
+      return <AnsweredCard item={item} />;
+    case "not_chosen":
+      return <OutcomeCard item={item} />;
+    case "closed":
+      return <OutcomeCard item={item} />;
     case "doing":
       return <DoingCard item={item} />;
   }
@@ -341,36 +455,62 @@ const TILE = "grid h-13 w-13 shrink-0 place-items-center rounded-[0.9375rem]";
 const BAR = "flex h-14 items-center justify-center gap-2 rounded-[0.8125rem]";
 
 /**
- * A picture and a number, which is the only way this app states a fact.
+ * A picture and a value, at the size the design sets for a card fact.
  *
- * `Know — the facts, always as picture plus number` is the canvas's own name
- * for this set, and the rule is exactly that: never the number alone, never the
- * word.
+ * Sizing is a `size` prop now rather than a className, so the 16px the canvas
+ * actually draws is what renders — the old comment here explained that a
+ * smaller class lost its fight with `Pictogram`'s hard-coded default and that
+ * every fact was therefore sized *up* to dodge it. That defect is fixed at the
+ * component (`components/pictogram.tsx`), so this can be the size it wants.
  *
- * One size for every fact on the screen, at the pictogram's own 24px default.
- * The canvas draws two (17px beside 15px text, 21px beside 19px), but
- * `Pictogram` hard-codes `h-6 w-6` and `cn` is `clsx` rather than
- * `tailwind-merge` — so a smaller class does not replace that default, it joins
- * it, and the cascade then resolves the tie by stylesheet order in Tailwind's
- * favour rather than the caller's. Sizing every fact at or above the default
- * sidesteps that silently-wrong outcome, and a larger picture beside a larger
- * number is the direction this redesign is going anyway.
+ * The glyph is decorative and the value carries the meaning. Where the glyph
+ * alone is ambiguous — `time` reads as both "starts at" and "how long" — the
+ * caller passes a `label`, which renders above the value at a third its size.
  */
-function Fact({ name, children }: { name: PictogramName; children: ReactNode }) {
+function Fact({
+  name,
+  label,
+  children,
+}: {
+  name: PictogramName;
+  label?: string;
+  children: ReactNode;
+}) {
   return (
-    <span className="flex items-center gap-1.5 text-[1.1875rem] font-bold">
-      <Pictogram name={name} className="shrink-0" />
-      {children}
+    <span className="flex items-center gap-1.5">
+      <Pictogram name={name} size="sm" className="shrink-0" />
+      <span className="flex min-w-0 flex-col leading-tight">
+        {label === undefined ? null : (
+          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.04em] opacity-70">
+            {label}
+          </span>
+        )}
+        <span className="truncate text-[0.9375rem] font-bold">{children}</span>
+      </span>
     </span>
   );
 }
 
-/** "9:00 am" in the device's own zone. Null-safe, so a card can just ask. */
-function clockTime(iso: string | null): string | null {
-  if (iso === null) return null;
-  const at = new Date(iso);
+/**
+ * When this card happens, formatted as what it actually is.
+ *
+ * A scheduled visit has a slot and reads "9:00 am". An enquiry has a **day** the
+ * customer picked, which the server publishes as a `date-time` at midnight — so
+ * formatting it as a clock printed "12:00 am" on every enquiry card in the
+ * stack. It reads "12 Sep" now. `WorkItem.whenIsDay` is what decides; see its
+ * doc comment for why the value is not sniffed.
+ */
+function whenLabel(item: WorkItem): string | null {
+  if (item.whenIso === null) return null;
+  const at = new Date(item.whenIso);
   if (Number.isNaN(at.getTime())) return null;
-  return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(at);
+
+  return new Intl.DateTimeFormat(
+    "en-IN",
+    item.whenIsDay
+      ? { day: "numeric", month: "short" }
+      : { hour: "numeric", minute: "2-digit" },
+  ).format(at);
 }
 
 /** The headline number, or the canvas's "₹ ?" for something not yet priced. */
@@ -434,28 +574,57 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
         CARD,
         lapsed
           ? "border border-line bg-surface"
-          : "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_rgb(214_94_0/0.32)]",
+          : "bg-[linear-gradient(135deg,var(--color-signal-400)_0%,var(--color-action)_55%,var(--color-action-active)_100%)] shadow-[0_4px_12px_color-mix(in_oklab,var(--color-action-active)_32%,transparent)]",
       )}
     >
       <span className="flex items-center gap-2.75">
         <span className={cn(TILE, lapsed ? "bg-surface-sunken" : "bg-surface")}>
-          <Pictogram name="now" className="h-7.5 w-7.5 text-text" />
+          <Pictogram name="now" size="lg" className="text-text" />
         </span>
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-text">
-          <span className="text-[2.0625rem] font-extrabold leading-none tracking-[-0.02em]">
+          <CardTitle item={item} />
+          <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em]">
             {money(item.amountPaise)}
           </span>
-          {item.areaLabel ? (
-            <Fact name="distance">
-              <span className="truncate">{item.areaLabel}</span>
-            </Fact>
-          ) : null}
         </span>
 
         {countdown && !lapsed ? <CountdownDial countdown={countdown} /> : null}
       </span>
+
+      {item.areaLabel ? (
+        <span className="text-text">
+          <Fact name="distance">{item.areaLabel}</Fact>
+        </span>
+      ) : null}
+
+      <span className={cn(BAR, "bg-surface")}>
+        <Pictogram name="yes" size="md" className="text-success-text" />
+        <span className="text-base font-bold text-text">Take this job</span>
+      </span>
     </Link>
+  );
+}
+
+/**
+ * What the job is, which is the first thing a card has to say.
+ *
+ * `WorkItem.accessibleName` was built as an `sr-only` string on the rule that
+ * this app renders pictures and numbers and never a service name. That rule is
+ * what left a Partner looking at `₹450` for a job whose trade was nowhere on
+ * screen. It is the card's title now — see the field's own doc comment in
+ * `../model/work-item.ts`, which records the change.
+ */
+function CardTitle({ item }: { item: WorkItem }) {
+  return (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="truncate text-base font-semibold leading-snug">{item.title}</span>
+      {item.stateLabel === null ? null : (
+        <span className="truncate text-[0.6875rem] font-bold uppercase tracking-[0.04em] opacity-70">
+          {item.stateLabel}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -473,7 +642,7 @@ function LiveOfferCard({ item }: { item: WorkItem }) {
  */
 function CountdownDial({ countdown }: { countdown: Countdown }) {
   return (
-    <span className="grid h-13.5 w-13.5 shrink-0 place-items-center rounded-full bg-[rgb(0_17_46/0.13)]">
+    <span className="grid h-13.5 w-13.5 shrink-0 place-items-center rounded-full bg-text/13">
       <span aria-hidden className="text-sm font-extrabold tracking-[-0.02em] text-text">
         {countdown.display}
       </span>
@@ -490,7 +659,7 @@ function CountdownDial({ countdown }: { countdown: Countdown }) {
  * are not ported rather than filled with placeholder tiles.
  */
 function NeedsPriceCard({ item }: { item: WorkItem }) {
-  const at = clockTime(item.whenIso);
+  const at = whenLabel(item);
 
   return (
     <Link
@@ -500,24 +669,34 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
     >
       <span className="flex items-center gap-2.75">
         <span className={cn(TILE, "bg-surface-sunken")}>
-          <Pictogram name="new" className="h-7.5 w-7.5 text-signal-700" />
+          <Pictogram name="new" size="lg" className="text-signal-700" />
         </span>
 
         <span className="flex min-w-0 flex-1 flex-col gap-0.75">
-          <span className="text-[2.0625rem] font-extrabold leading-none tracking-[-0.02em] text-signal-700">
-            {money(item.amountPaise)}
+          <CardTitle item={item} />
+          <span className="flex items-baseline gap-2">
+            <span className="text-[1.875rem] font-extrabold leading-none tracking-[-0.02em] text-signal-700">
+              {money(item.amountPaise)}
+            </span>
+            {item.amountPaise === null ? (
+              <span className="text-[0.8125rem] font-semibold text-text-muted">
+                no price yet
+              </span>
+            ) : null}
           </span>
           {at ? (
             <span className="text-text-secondary">
-              <Fact name="time">{at}</Fact>
+              <Fact name={item.whenIsDay ? "date" : "time"} label="Starts">
+                {at}
+              </Fact>
             </span>
           ) : null}
         </span>
       </span>
 
       <span className={cn(BAR, "bg-action shadow-[0_2px_0_var(--color-action-active)]")}>
-        <Pictogram name="price" className="h-6.75 w-6.75 text-action-text" />
-        <Pictogram name="go" className="h-6.75 w-6.75 text-action-text" />
+        <Pictogram name="price" size="md" className="text-action-text" />
+        <span className="text-base font-bold text-action-text">Send a price</span>
       </span>
     </Link>
   );
@@ -539,7 +718,7 @@ function NeedsPriceCard({ item }: { item: WorkItem }) {
  * glyph beside the number says which is which.
  */
 function DoingCard({ item }: { item: WorkItem }) {
-  const at = clockTime(item.whenIso);
+  const at = whenLabel(item);
 
   return (
     <Link
@@ -557,33 +736,28 @@ function DoingCard({ item }: { item: WorkItem }) {
             "bg-[linear-gradient(150deg,var(--color-navy-300),var(--color-navy-500))]",
           )}
         >
-          <Pictogram name="doing" className="h-7.5 w-7.5 text-surface" />
+          <Pictogram name="doing" size="lg" className="text-surface" />
         </span>
 
-        <span className="flex min-w-0 flex-1 flex-col gap-1.75 text-text">
-          {at ? (
-            <span className="text-action-secondary">
-              <Fact name="time">{at}</Fact>
-            </span>
-          ) : (
-            <span className="text-[1.8125rem] font-extrabold leading-none tracking-[-0.02em]">
-              {money(item.amountPaise)}
-            </span>
-          )}
-          {item.areaLabel ? (
-            <span className="text-action-secondary">
-              <Fact name="distance">
-                <span className="truncate">{item.areaLabel}</span>
-              </Fact>
-            </span>
-          ) : null}
+        <span className="flex min-w-0 flex-1 flex-col gap-1 text-text">
+          <CardTitle item={item} />
+          <span className="flex min-w-0 items-center gap-3 text-action-secondary">
+            {at ? <Fact name={item.whenIsDay ? "date" : "time"}>{at}</Fact> : null}
+            {item.areaLabel ? <Fact name="distance">{item.areaLabel}</Fact> : null}
+            {at === null && item.areaLabel === null ? (
+              <span className="text-[1.5rem] font-extrabold leading-none tracking-[-0.02em] text-text">
+                {money(item.amountPaise)}
+              </span>
+            ) : null}
+          </span>
         </span>
       </span>
 
       <span
         className={cn(BAR, "bg-action-secondary shadow-[0_2px_0_var(--color-navy-900)]")}
       >
-        <Pictogram name="go" className="h-7 w-7 text-action-secondary-text" />
+        <Pictogram name="go" size="md" className="text-action-secondary-text" />
+        <span className="text-base font-bold text-action-secondary-text">Open this job</span>
       </span>
     </Link>
   );
@@ -607,12 +781,86 @@ function SettledCard({ item }: { item: WorkItem }) {
       )}
     >
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-success-text">
-        <Pictogram name="done" className="h-6.5 w-6.5 text-surface" />
+        <Pictogram name="done" size="md" className="text-surface" />
       </span>
-      <span className="flex-1 text-[1.8125rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
+      <span className="flex min-w-0 flex-1 flex-col gap-px text-success-text">
+        <span className="truncate text-[0.9375rem] font-semibold leading-snug">
+          {item.title}
+        </span>
+        <span className="flex items-center gap-1 text-xs font-semibold opacity-75">
+          <Pictogram name="held" size="xs" className="shrink-0" />
+          Held until payout
+        </span>
+      </span>
+      <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-success-text">
         {money(item.amountPaise)}
       </span>
-      <Pictogram name="held" className="h-6 w-6 shrink-0 text-success-text" />
+    </Link>
+  );
+}
+
+/**
+ * You answered; the customer has not.
+ *
+ * ## Why this is not the settled card
+ *
+ * It was, briefly, and the result was a green "held until payout" row carrying
+ * **`₹ ?`** — announcing that the platform did not know a price, on the one card
+ * whose entire subject is a price the vendor had just sent. Two separate
+ * untruths: nothing is held, and the amount is not unknown to the vendor.
+ *
+ * The design's four states are "somebody asked → I answered → I'm doing it → I
+ * got paid". This is the second. It gets the calm, neutral treatment a waiting
+ * room deserves — no money slot at all, because `EnquirySummary` does not
+ * publish the vendor's quoted total and a figure this card cannot source is a
+ * figure it must not draw.
+ */
+function AnsweredCard({ item }: { item: WorkItem }) {
+  return (
+    <Link
+      href={item.href}
+      aria-label={cardLabel(item)}
+      className={cn(
+        "flex min-h-14 items-center gap-3 rounded-card border border-info-line bg-info-surface px-3.5 py-2.75",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+      )}
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-info-text">
+        <Pictogram name="price" size="md" className="text-surface" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-px text-info-text">
+        <span className="truncate text-[0.9375rem] font-semibold leading-snug">{item.title}</span>
+        <span className="truncate text-xs font-semibold opacity-75">
+          Waiting for the customer to decide
+        </span>
+      </span>
+      <Pictogram name="go" size="sm" className="shrink-0 text-info-text" />
+    </Link>
+  );
+}
+
+function OutcomeCard({ item }: { item: WorkItem }) {
+  return (
+    <Link
+      href={item.href}
+      aria-label={cardLabel(item)}
+      className={cn(
+        "flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface px-3.5 py-2.75",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
+      )}
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface-sunken">
+        <Pictogram name="no" size="md" className="text-text-muted" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-px">
+        <span className="truncate text-[0.9375rem] font-semibold leading-snug text-text">
+          {item.title}
+        </span>
+        <span className="text-xs font-semibold capitalize text-text-muted">
+          {item.stateLabel}
+        </span>
+      </span>
+      <Pictogram name="go" size="sm" className="shrink-0 text-text-muted" />
     </Link>
   );
 }

@@ -13,6 +13,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
+import { BookingSupport } from "@/features/support/view/booking-support";
+import { CompletionRating } from "@/features/ratings/view/completion-rating";
 import { evidenceIndex, toProjectView } from "@/features/project/adapters";
 import { useProject } from "@/features/project/queries";
 import { ProjectDecisions, ProjectWarranty } from "@/features/project/view/project-panels";
@@ -28,6 +30,7 @@ import {
 import { CrewBookingSummary } from "./crew-booking-summary";
 import { CrewDayPanel } from "./crew-day-panel";
 import { PaymentReceipt } from "./payment-receipt";
+import { ProjectCompletionCodePanel } from "./project-completion-code";
 import { AgreedWorkPanel } from "./agreed-work-panel";
 import { AgreementHistory } from "./agreement-history";
 import { AmendmentPanel } from "./amendment-panel";
@@ -340,7 +343,11 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
         />
       ) : null}
 
-      <CompletionPanel engagement={view} project={project} nouns={nouns} onDone={refetchAll} />
+      {isProject ? (
+        <ProjectCompletionCodePanel engagementId={view.engagementId} status={view.status} />
+      ) : (
+        <CompletionPanel engagement={view} project={project} nouns={nouns} onDone={refetchAll} />
+      )}
 
       {/* The warranty half of `M2-FE-611`, below the acceptance because the
           hold-back is the story after the work is finished. Every number on it
@@ -418,6 +425,16 @@ export function EngagementScreen({ engagementId }: EngagementScreenProps) {
       )}
 
       <EngagementTimeline engagementId={engagementId} />
+
+      <BookingSupport reference={view.engagementId} />
+
+      <div className={isProject ? "mt-6" : "mt-8"}>
+        <CompletionRating
+          subject="engagement"
+          id={view.engagementId}
+          isComplete={["COMPLETED", "WARRANTY", "CLOSED"].includes(view.status)}
+        />
+      </div>
 
       <section aria-labelledby="record-heading" className={isProject ? "mt-6" : "mt-8"}>
         {isProject ? (
@@ -709,8 +726,8 @@ function ProjectHeroAction({
   }
   if (view.nextAction === "accept_completion") {
     return (
-      <Link href="#completion-heading" className={buttonStyles({ size: "lg", className: "w-full lg:w-auto" })}>
-        Confirm completion
+      <Link href="#completion-code" className={buttonStyles({ size: "lg", className: "w-full lg:w-auto" })}>
+        Show completion code
       </Link>
     );
   }

@@ -157,7 +157,7 @@ describe("recovery", () => {
   it("sends a withdrawn Partner to the base app", () => {
     const recovery = recoveryFor({ kind: "WITHDRAWN" });
     expect(recovery?.href).toBe(RECOVERY_HREF);
-    expect(RECOVERY_HREF).toBe("/dashboard");
+    expect(RECOVERY_HREF).toBe("/home");
   });
 
   it("offers a retry only where retrying could work", () => {

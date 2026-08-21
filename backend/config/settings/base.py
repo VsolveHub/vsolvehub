@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "apps.locations",
     "apps.partners",
     "apps.requirements",
+    "apps.ratings",
 ]
 
 MIDDLEWARE = [
@@ -667,6 +668,15 @@ M2_VISIT_ARRIVAL_CODE_TTL_SECONDS = env.int(
 # Same budget as every other OTP here. Five wrong entries is a vendor who has misread the digits,
 # not one who is guessing at a six-digit space.
 M2_VISIT_ARRIVAL_CODE_MAX_ATTEMPTS = env.int("M2_VISIT_ARRIVAL_CODE_MAX_ATTEMPTS", default=5)
+
+# Customer-held consent used when a Partner closes a custom project. The plaintext display copy
+# is cache-only; the database keeps only an expiring password hash.
+M2_PROJECT_COMPLETION_CODE_TTL_SECONDS = env.int(
+    "M2_PROJECT_COMPLETION_CODE_TTL_SECONDS", default=30 * 60
+)
+M2_PROJECT_COMPLETION_CODE_MAX_ATTEMPTS = env.int(
+    "M2_PROJECT_COMPLETION_CODE_MAX_ATTEMPTS", default=5
+)
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://127.0.0.1:56379/1")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://127.0.0.1:56379/2")

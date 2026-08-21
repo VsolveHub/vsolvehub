@@ -3,6 +3,8 @@
 import { Badge, Button, Card, ErrorState, Readout, Spinner, formatMoney } from "@vsolve/ui";
 import { useState } from "react";
 
+import { CompletionRating } from "@/features/ratings/view/completion-rating";
+
 import {
   canCancel,
   canRequestStartOtp,
@@ -307,6 +309,13 @@ export function VisitPanel({ bookingId }: { bookingId: string }) {
       {canRespondToCompletion(data) ? <CompletionDecision visit={data} /> : null}
 
       <VisitActions visit={data} />
+      <div className="mt-6">
+        <CompletionRating
+          subject="booking"
+          id={data.id}
+          isComplete={data.status === "COMPLETED" || data.status === "PARTIALLY_COMPLETED"}
+        />
+      </div>
     </Card>
   );
 }

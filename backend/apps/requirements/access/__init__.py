@@ -27,11 +27,10 @@ The package map, door by door:
 * `unlock` — A3's door: the quote unlock from checkout to refund (`M2-BE-401`..`405`).
 * `visit_plans` — A5's door: tier choice, the vendor's slot confirmation on the shared grid, the
   plan charge, and rescheduling a booked visit (`M2-BE-215`, `419`..`427`).
-* `settlement` — what a booked visit becomes: arrival, completion, the two no-shows, the share each
+* `settlement` — what a booked visit becomes: completion, the two no-shows, the share each
   outcome earns or refunds (`M2-BE-423`, `425`, `426`), and the sweep selectors `tasks.py` reads.
-* `arrival` — the code the Customer reads out and the vendor enters, which is what turns "somebody
-  tapped arrived" into proof the two of them were in the same place.
-  `settlement.confirm_visit_arrival` remains the audited fallback for a dead phone or no signal.
+* `arrival` — the mandatory code the Customer reads out and the vendor enters, which is what turns
+  "somebody tapped arrived" into proof the two of them were in the same place.
 * `reclassification` — money carried across an A3↔A5 archetype change, and never charged twice
   (`M2-BE-427`).
 """
@@ -63,7 +62,6 @@ from .settlement import (
     _release_grid_slot,
     _settle_plan_if_complete,
     complete_plan_visit,
-    confirm_visit_arrival,
     expired_visit_hold_ids,
     held_visit_payout_share_ids,
     missed_estimate_visit_ids,
@@ -125,7 +123,6 @@ __all__ = [
     "complete_plan_visit",
     "complete_unlock",
     "complete_visit_plan",
-    "confirm_visit_arrival",
     "confirm_visit_arrival_with_code",
     "confirm_visit_slot",
     "consume_unlock",

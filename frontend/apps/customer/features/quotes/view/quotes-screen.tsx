@@ -21,13 +21,15 @@ import {
   segmentStyles,
 } from "@vsolve/ui";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { AccessRefusal } from "@/features/access/view/access-refusal";
 import { useUnlockState, useVisitPlan } from "@/features/access/queries";
 import { useRequirement } from "@/features/requirement/queries";
 import { titleForSlug } from "@/features/requirement/view/my-requests-screen";
 import { toQuoteListView, toSelectionView } from "../adapters";
+import { destinationAfterSelection } from "../model/selection-navigation";
 import {
   useCustomerQuotes,
   useRejectQuote,
@@ -87,7 +89,7 @@ function QuoteBreadcrumb({ requestLabel }: { requestLabel: string }) {
       <ol className="flex flex-wrap items-center gap-2">
         <li>
           <Link href="/activity" className="hover:text-text">
-            Activity
+            Bookings
           </Link>
         </li>
         <li aria-hidden className="text-warm-400">
@@ -113,6 +115,7 @@ export function QuotesScreen({
   requirementId,
   requestHref,
 }: QuotesScreenProps) {
+  const router = useRouter();
   const unlockQuery = useUnlockState(requirementId);
   const planQuery = useVisitPlan(requirementId);
   const requirementQuery = useRequirement(requirementId);
@@ -162,6 +165,16 @@ export function QuotesScreen({
     selection === null
       ? null
       : (list?.cards.find((card) => card.proposalId === selection.proposalId) ?? null);
+
+  // A visit-detail link can arrive before this async list has mounted its
+  // estimate card. Re-apply the hash once the server data is present so the
+  // Customer lands on the professional they chose, not merely at page top.
+  useEffect(() => {
+    if (quotesQuery.data === undefined || !window.location.hash.startsWith("#estimate-")) return;
+    const target = document.getElementById(window.location.hash.slice(1));
+    if (target === null) return;
+    window.requestAnimationFrame(() => target.scrollIntoView({ block: "start" }));
+  }, [quotesQuery.data]);
 
   // `M2-FE-414`. A live selection blocks a second one and the control is
   // withheld rather than disabled, so a stale render cannot start one. The
@@ -248,6 +261,7 @@ export function QuotesScreen({
         view={view}
         onViewChange={setView}
         picked={pickedId}
+        chosenId={selection?.proposalId ?? null}
         onPick={setPicked}
         isRevalidating={revalidate.isPending}
         onReject={setRejecting}
@@ -274,7 +288,7 @@ export function QuotesScreen({
               {list?.cards.find((card) => card.proposalId === pickedId)?.payableLabel}
             </p>
             <p className="mt-0.5 text-xs font-medium leading-5 text-text-secondary">
-              Not a booking until they confirm. Nothing is charged now.
+              Choosing opens the engagement. Nothing is charged now.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -283,7 +297,19 @@ export function QuotesScreen({
             </Button>
             <Button
               className="min-w-[198px] justify-between gap-4 px-7"
-              onClick={() => select.mutate({ requirementId, proposalId: pickedId })}
+              onClick={() =>
+                select.mutate(
+                  { requirementId, proposalId: pickedId },
+                  {
+                    onSuccess: (chosen) => {
+                      const destination = destinationAfterSelection(chosen);
+                      if (destination !== null) {
+                        router.replace(destination);
+                      }
+                    },
+                  },
+                )
+              }
               loading={select.isPending}
               loadingLabel="Choosing"
             >
@@ -331,6 +357,7 @@ function QuoteBody({
   view,
   onViewChange,
   picked,
+  chosenId,
   onPick,
   isRevalidating,
   onReject,
@@ -348,6 +375,7 @@ function QuoteBody({
   view: "quotes" | "compare";
   onViewChange: (view: "quotes" | "compare") => void;
   picked: string | null;
+  chosenId: string | null;
   onPick: (proposalId: string) => void;
   isRevalidating: boolean;
   onReject: (proposalId: string) => void;
@@ -436,6 +464,7 @@ function QuoteBody({
         isA5={isA5}
         canChoose={canChoose}
         picked={picked}
+        isChosen={chosenId === card.proposalId}
         onPick={onPick}
         onReject={onReject}
         onRevalidate={onRevalidate}
@@ -501,6 +530,7 @@ function QuoteBody({
           isComparableOnOneBasis={list.isComparableOnOneBasis}
           detailHrefFor={(proposalId) => `#estimate-${proposalId}`}
           pickedId={picked}
+          chosenId={chosenId}
           onPick={canChoose ? onPick : undefined}
         />
       </div>
@@ -519,6 +549,7 @@ function QuoteBody({
             index={index}
             onPick={canChoose ? onPick : undefined}
             isPicked={picked === card.proposalId}
+            isChosen={chosenId === card.proposalId}
             onReject={canChoose ? onReject : undefined}
             onRevalidate={onRevalidate}
             isRevalidating={isRevalidating}
@@ -542,6 +573,7 @@ function SingleQuoteExperience({
   isA5,
   canChoose,
   picked,
+  isChosen,
   onPick,
   onReject,
   onRevalidate,
@@ -551,6 +583,7 @@ function SingleQuoteExperience({
   isA5: boolean;
   canChoose: boolean;
   picked: string | null;
+  isChosen: boolean;
   onPick: (proposalId: string) => void;
   onReject: (proposalId: string) => void;
   onRevalidate: (proposalId: string) => void;
@@ -564,6 +597,7 @@ function SingleQuoteExperience({
           index={0}
           onPick={canChoose ? onPick : undefined}
           isPicked={picked === card.proposalId}
+          isChosen={isChosen}
           onReject={canChoose ? onReject : undefined}
           onRevalidate={onRevalidate}
           isRevalidating={isRevalidating}

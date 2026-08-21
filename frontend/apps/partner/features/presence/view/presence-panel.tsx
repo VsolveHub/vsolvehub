@@ -143,7 +143,19 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
    * availability dropping and coming back.
    */
   const storedSession = useSyncExternalStore(subscribeToNothing, readStoredSession, () => null);
-  const [hasProbedStoredSession, setHasProbedStoredSession] = useState(false);
+  /**
+   * Starts true when nothing is stored, because then there is nothing to probe.
+   *
+   * Not `useState(false)` corrected by the effect below: `storedSession`
+   * re-reads storage on every render, so the id written by a successful "Go
+   * online" turns it non-null mid-session — and with this still false the
+   * panel froze on "Checking" until a reload. Reading storage in the
+   * initialiser is hydration-safe here because `isRestoring` also needs
+   * `storedSession`, which is `null` on the server pass either way.
+   */
+  const [hasProbedStoredSession, setHasProbedStoredSession] = useState(
+    () => readStoredSession() === null,
+  );
   /** True only while a stored session exists and Django has not answered about it. */
   const isRestoring = storedSession !== null && !hasProbedStoredSession;
 
@@ -206,8 +218,8 @@ export function PresencePanel({ consentVersion }: { consentVersion: string | nul
   useEffect(() => {
     const stored = readStoredSession();
     // Nothing stored means nothing to confirm and no request to spend. The
-    // screen already reads as offline, because `isRestoring` is false without
-    // a stored session.
+    // screen already reads as offline, because `hasProbedStoredSession`
+    // initialised to true when storage was empty.
     if (stored === null) return;
 
     let cancelled = false;

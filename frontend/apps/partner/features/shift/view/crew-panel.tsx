@@ -308,7 +308,7 @@ function RosterPicker({
           Your roster is empty. Vsolve needs the people on it before anybody can be put on a shift.
         </p>
         <Link
-          href="/workforce/crew"
+          href="/me/crew"
           className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
           Add your crew
@@ -387,7 +387,7 @@ function AssignFailure({ error }: { readonly error: unknown }) {
           reference={presentation.reference}
         />
         <Link
-          href="/workforce/crew"
+          href="/me/crew"
           className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
           Go to your crew

@@ -16,36 +16,59 @@ import {
   RailLayout,
   Skeleton,
   buttonStyles,
+  cn,
   useIsWideScreen,
 } from "@vsolve/ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { BROWSE_HREF, requestHref } from "@/lib/routes";
+import { preferredAddressId, useAddresses } from "@/features/addresses/queries";
 import {
+  toDraftIntent,
   toQuestionSet,
   type RequirementService,
   type RequirementVariant,
 } from "@/features/requirement/adapters";
-import { useCreateRequirement, useSaveRequirement } from "@/features/requirement/queries";
-import { toRateDisclosureView, toRateUnavailableView } from "../adapters";
-import { initialAnswers, presetSize, type PresetSize } from "../model/size";
 import {
-  clearBookAtRateKey,
-  useBookAtPublishedRate,
-  useRateCardPreview,
-} from "../queries";
+  existingDraftId,
+  useCreateRequirement,
+  useMyRequests,
+  useProbableDuplicates,
+  useRequirement as useRequirementRecord,
+  useSaveRequirement,
+} from "@/features/requirement/queries";
+import { toRateDisclosureView, toRateUnavailableView } from "../adapters";
+import {
+  clearCrewBookingIntent,
+  readCrewBookingIntent,
+  writeCrewBookingIntent,
+} from "../model/booking-intent";
+import {
+  OTHER_WORK_TYPE,
+  WORK_DESCRIPTION_CODE,
+  crewDetailQuestions,
+  hiddenCrewQuestionCodes,
+  resumeCrewBookingStep,
+  selectedWorkLabel,
+  selectedWorkValue,
+  workTypeQuestion,
+  type CrewBookingStep,
+} from "../model/booking-flow";
+import { initialAnswers, presetSize, type PresetSize } from "../model/size";
+import { useBookAtPublishedRate, useRateCardPreview } from "../queries";
 import { CrewAddressPicker } from "./crew-address-picker";
 import { JobFormError, JobFormScreen } from "./mobile/job-form-screen";
 import { RateScreen } from "./mobile/rate-screen";
 import { PresetQuestions, requiredAnswersPresent } from "./preset-questions";
 import { RateRail } from "./rate-rail";
+import { WorkPickerScreen, WorkTypeIcon } from "./work-picker-screen";
 
 /**
  * The A3 preset — `M2-FE-425`, and the rate it shows — `M2-FE-426`.
  *
- * One screen, opened by the catalog's **Book a crew** action. ADR-0009: what
+ * A three-stage flow, opened by the catalog's **Book a crew** action. ADR-0009: what
  * this market sells is a commodity priced per worker per day at a street rate
  * everybody already knows, so a Customer asking for four helpers for two days of
  * shifting does not need three competing essays inside a 72-hour SLA and a
@@ -53,19 +76,16 @@ import { RateRail } from "./rate-rail";
  *
  * ## This is deliberately not the four-screen flow
  *
- * The four screens remain the A5 shape and the A3 **fallback's**. This asks the
- * skill (chosen by the route), the headcount, the dates and the price-moving
- * facts, and shows the published rate beside them — nothing else, because the
- * rate card has already decided the price and the remaining unknowns are the
- * ones that move it.
+ * The four screens remain the A5 shape and the A3 **fallback's**. A3 starts with
+ * the human question — what the crew will do — before asking for people, days,
+ * date and site. The final stage shows the published rate and nothing invents a
+ * price in the browser.
  *
- * ## The rate is beside the form, not after it
+ * ## The rate follows an explicit confirmation
  *
- * There is no longer a "see the rate" step. The form is on the left and the
- * price is on the right, and the price follows the form: change the headcount
- * and the rail re-prices. That is the whole reason the desktop layout exists —
- * on a phone the rate had to be a second screen, and a second screen turns a
- * published price into something you go and ask for.
+ * Browsing work and shaping a crew remain local until the Customer presses
+ * **See my live rate**. Desktop uses a review-and-rate layout; a phone uses the
+ * compact rate screen. Both are the same third stage and the same server price.
  *
  * **Nothing on this screen calculates money.** The rail's figures come from
  * `GET .../rate-card/?headcount=&days=`, which prices a size without saving it;
@@ -76,16 +96,16 @@ import { RateRail } from "./rate-rail";
  *
  * ## Where the writes are, now that pricing is not one
  *
- * Two, and neither is on the hot path:
+ * Two explicit actions:
  *
- * 1. **The address decides the card.** `rate_card_for_requirement` resolves it
- *    through `requirement.service_area`, so an address that is not on the draft
- *    cannot be priced at all. Choosing one writes the draft.
+ * 1. **See my live rate prepares the draft.** `rate_card_for_requirement`
+ *    resolves the card through `requirement.service_area`, so the chosen
+ *    address, start and size are saved together at that deliberate boundary.
  * 2. **Booking prices the draft, not the preview.** `rate-card/book/` reads the
  *    size from stored answers, so the answers are saved immediately before it
  *    runs. Without that, a Customer could book a size they never saw priced.
  *
- * Changing a stepper writes nothing. It changes a query string.
+ * Opening the page, choosing an address and changing a stepper write nothing.
  */
 
 type Address = Schemas["Address"];
@@ -115,6 +135,16 @@ function todayIso(): string {
   const month = `${now.getMonth() + 1}`.padStart(2, "0");
   const day = `${now.getDate()}`.padStart(2, "0");
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/** Storage access itself can throw in locked-down or private browser contexts. */
+function crewIntentStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -160,20 +190,16 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
     // the first render — see `initialAnswers`.
     initialAnswers(questionSet.questions),
   );
-  const [address, setAddress] = useState<Address | null>(null);
   const [addressId, setAddressId] = useState<string | null>(null);
   const [requestedStart, setRequestedStart] = useState<string>("");
   const [requirementId, setRequirementId] = useState<string | null>(null);
-  /** Set after the Customer read a duplicate warning and said the jobs differ. */
-  const [allowDuplicate, setAllowDuplicate] = useState(false);
   /**
-   * Which of the phone's two steps is showing. Ignored on a wide screen.
+   * Which stage is showing on both phone and desktop.
    *
-   * Held here rather than in the mobile view so a resize does not reset it, and
-   * so the wide layout — which shows both halves at once — cannot get out of
-   * step with a value it does not read.
+   * Held here rather than in a view so a resize does not reset the Customer's
+   * progress or create a second source of truth for navigation.
    */
-  const [mobileStep, setMobileStep] = useState<"form" | "rate">("form");
+  const [bookingStep, setBookingStep] = useState<CrewBookingStep>("work");
   /** Incremented to ask the address dialog to open. See `AddressStage`. */
   const [addressSignal, setAddressSignal] = useState(0);
   /**
@@ -186,6 +212,21 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const createRequirement = useCreateRequirement();
   const saveRequirement = useSaveRequirement();
   const book = useBookAtPublishedRate();
+  const requestsQuery = useMyRequests();
+  const resumableRequirementId =
+    requirementId ?? existingDraftId(requestsQuery.data ?? [], service.slug);
+  const requirementQuery = useRequirementRecord(resumableRequirementId);
+  const addressesQuery = useAddresses();
+  const addresses = addressesQuery.data ?? [];
+  const effectiveAddressId = preferredAddressId(addresses, addressId);
+  const address =
+    addresses.find((candidate) => candidate.id === effectiveAddressId) ?? null;
+  const workQuestion = workTypeQuestion(questionSet.questions);
+  const detailQuestions = crewDetailQuestions(questionSet.questions);
+  const workValue = selectedWorkValue(answers);
+  const workLabel = selectedWorkLabel(workQuestion, answers);
+  const localIntentRestored = useRef(false);
+  const restoredServerDraftId = useRef<string | null>(null);
 
   const size = presetSize(answers);
   const settledSize = useDebouncedSize(size);
@@ -198,9 +239,68 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const today = todayIso();
   const formComplete =
     requiredAnswersPresent(questionSet.questions, answers) &&
-    addressId !== null &&
+    effectiveAddressId !== null &&
     requestedStart !== "" &&
     size !== null;
+
+  /**
+   * Restores local intent after hydration. No storage read happens in the state
+   * initializer, so the server and first client render stay identical.
+   */
+  useEffect(() => {
+    const restore = window.setTimeout(() => {
+      const intent = readCrewBookingIntent(crewIntentStorage(), service.slug, variant.id);
+      if (intent !== null) {
+        const resumableStep = resumeCrewBookingStep(workQuestion, intent.answers);
+        setAnswers((current) => ({ ...current, ...intent.answers }));
+        setAddressId(intent.addressId);
+        setRequestedStart(intent.requestedStart);
+        setRequirementId(intent.requirementId);
+        setBookingStep(
+          intent.step === "work" || resumableStep === "work"
+            ? "work"
+            : "details",
+        );
+      }
+      localIntentRestored.current = true;
+    }, 0);
+    return () => window.clearTimeout(restore);
+  }, [service.slug, variant.id, workQuestion]);
+
+  useEffect(() => {
+    if (!localIntentRestored.current) return;
+    writeCrewBookingIntent(crewIntentStorage(), {
+      serviceSlug: service.slug,
+      variantId: variant.id,
+      requirementId,
+      answers,
+      addressId,
+      requestedStart,
+      step: bookingStep,
+    });
+  }, [addressId, answers, bookingStep, requirementId, requestedStart, service.slug, variant.id]);
+
+  useEffect(() => {
+    const draft = requirementQuery.data;
+    if (draft === undefined) return;
+    if (draft.status !== "DRAFT") {
+      clearCrewBookingIntent(crewIntentStorage(), service.slug);
+      router.replace(requestHref(draft.id));
+      return;
+    }
+    if (restoredServerDraftId.current === draft.id) return;
+
+    const intent = toDraftIntent(draft);
+    const restore = window.setTimeout(() => {
+      restoredServerDraftId.current = draft.id;
+      setRequirementId(draft.id);
+      setAnswers((current) => ({ ...current, ...intent.answers }));
+      setAddressId(intent.addressId);
+      setRequestedStart(intent.requestedStart ?? "");
+      setBookingStep(resumeCrewBookingStep(workQuestion, intent.answers));
+    }, 0);
+    return () => window.clearTimeout(restore);
+  }, [requirementQuery.data, router, service.slug, workQuestion]);
 
   /**
    * The draft's id, created at most once however many times this is called.
@@ -213,24 +313,30 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const creating = useRef<Promise<string> | null>(null);
   async function ensureRequirementId(): Promise<string> {
     if (requirementId !== null) return requirementId;
-    creating.current ??= createRequirement
-      .mutateAsync({
+    creating.current ??= (async () => {
+      let existingId = existingDraftId(requestsQuery.data ?? [], service.slug);
+      if (existingId === null && requestsQuery.isPending) {
+        const lookup = await requestsQuery.refetch();
+        existingId = existingDraftId(lookup.data ?? [], service.slug);
+      }
+      if (existingId !== null) {
+        setRequirementId(existingId);
+        return existingId;
+      }
+
+      const draft = await createRequirement.mutateAsync({
         variantId: variant.id,
         answers,
-        // The server defaults this; sent explicitly because the generated
-        // request type requires it.
         language: "en-IN",
-      })
-      .then((draft) => {
-        setRequirementId(draft.id);
-        return draft.id;
-      })
-      .catch((error: unknown) => {
-        // Cleared so the next attempt genuinely retries rather than re-awaiting
-        // a promise that is already rejected.
-        creating.current = null;
-        throw error;
       });
+      setRequirementId(draft.id);
+      return draft.id;
+    })().catch((error: unknown) => {
+      // Cleared so the next attempt genuinely retries rather than re-awaiting
+      // a promise that is already rejected.
+      creating.current = null;
+      throw error;
+    });
     return creating.current;
   }
 
@@ -248,26 +354,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    */
   async function handleAddressSelected(nextAddressId: string) {
     setAddressId(nextAddressId);
-    edited();
-    try {
-      const targetId = await ensureRequirementId();
-      await saveRequirement.mutateAsync({
-        requirementId: targetId,
-        addressId: nextAddressId,
-        // No `serviceBy`. The server derives the closing date from the start day
-        // (`services._closing_date`); sending one here would make this screen the
-        // authority on when a request dies, which is exactly the question the
-        // Customer was being asked and could not answer well.
-      });
-    } catch {
-      // Rendered from the mutations' own errors below, next to the form they are
-      // about. Swallowed here so a handled rejection does not reach the console.
-    }
-  }
-
-  /** Any edit re-opens the duplicate question. */
-  function edited() {
-    setAllowDuplicate(false);
   }
 
   /**
@@ -280,25 +366,74 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
    * saw priced, which is the exact failure the query-parameter preview was
    * designed to make impossible.
    */
-  async function handleBook() {
-    if (!formComplete || addressId === null) return;
-    let targetId: string;
+  async function saveCrewDraft(): Promise<string | null> {
+    if (!formComplete || effectiveAddressId === null) return null;
     try {
-      targetId = await ensureRequirementId();
+      const targetId = await ensureRequirementId();
       await saveRequirement.mutateAsync({
         requirementId: targetId,
         answers,
-        addressId,
+        addressId: effectiveAddressId,
         requestedStart: startOfLocalDay(requestedStart),
       });
+      return targetId;
     } catch {
-      return; // Rendered below. Booking an unsynced draft is not a fallback.
+      return null;
     }
+  }
+
+  async function handleShowRate() {
+    if ((await saveCrewDraft()) !== null) setBookingStep("rate");
+  }
+
+  function handleAnswer(code: string, value: unknown) {
+    setAnswers((current) => {
+      if (code !== workQuestion?.code || value === OTHER_WORK_TYPE) {
+        return { ...current, [code]: value };
+      }
+      const next = { ...current, [code]: value };
+      delete next[WORK_DESCRIPTION_CODE];
+      return next;
+    });
+  }
+
+  async function handleBook() {
+    const targetId = await saveCrewDraft();
+    if (targetId === null) return;
     book.mutate(
-      { requirementId: targetId, allowDuplicate },
-      { onSuccess: () => router.push(requestHref(targetId)) },
+      { requirementId: targetId, allowDuplicate: false },
+      {
+        onSuccess: () => {
+          clearCrewBookingIntent(crewIntentStorage(), service.slug);
+          router.push(requestHref(targetId));
+        },
+      },
     );
   }
+
+  const duplicatesQuery = useProbableDuplicates(
+    effectiveAddressId !== null && requestedStart !== ""
+      ? {
+          addressId: effectiveAddressId,
+          requestedStart: startOfLocalDay(requestedStart),
+          variantId: variant.id,
+        }
+      : null,
+  );
+  const requestToReopen =
+    duplicatesQuery.data?.find((duplicate) => duplicate.mergeable) ?? null;
+  const refetchDuplicates = duplicatesQuery.refetch;
+
+  useEffect(() => {
+    if (requestToReopen === null) return;
+    clearCrewBookingIntent(crewIntentStorage(), service.slug);
+    router.replace(requestHref(requestToReopen.id));
+  }, [requestToReopen, router, service.slug]);
+
+  useEffect(() => {
+    if (!isRequirementDuplicate(book.error)) return;
+    void refetchDuplicates();
+  }, [book.error, refetchDuplicates]);
 
   const writeError = createRequirement.error ?? saveRequirement.error ?? null;
   const isBooking = book.isPending || saveRequirement.isPending;
@@ -313,60 +448,68 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   const addressPicker = (
     <CrewAddressPicker
       variantId={variant.id}
-      selectedAddressId={addressId}
+      selectedAddressId={effectiveAddressId}
       presentation={isWide ? "row" : "none"}
       openSignal={addressSignal}
       onSelect={(id) => void handleAddressSelected(id)}
-      onResolved={setAddress}
     />
   );
 
+  if (bookingStep === "work") {
+    return (
+      <WorkPickerScreen
+        serviceName={service.name}
+        question={workQuestion}
+        value={workValue}
+        isWide={isWide}
+        onSelect={(value) => {
+          if (workQuestion !== null) handleAnswer(workQuestion.code, value);
+        }}
+        onContinue={() => {
+          if (workLabel !== null) setBookingStep("details");
+        }}
+        onBack={() => router.back()}
+      />
+    );
+  }
+
   if (!isWide) {
-    return mobileStep === "form" ? (
+    return bookingStep === "details" ? (
       <JobFormScreen
         serviceName={service.name}
-        questions={questionSet.questions}
+        questions={detailQuestions}
         answers={answers}
-        hiddenCodes={hiddenQuestionCodes(answers)}
-        onAnswer={(code, value) => {
-          setAnswers((current) => ({ ...current, [code]: value }));
-          edited();
-        }}
+        hiddenCodes={hiddenCrewQuestionCodes(answers)}
+        onAnswer={handleAnswer}
         requestedStart={requestedStart === "" ? null : requestedStart}
         onRequestedStart={(isoDate) => {
           setRequestedStart(isoDate);
-          edited();
         }}
         addressLine={address === null ? null : addressSummaryLine(address)}
         onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
         addressPicker={addressPicker}
         canContinue={formComplete}
         isSaving={saveRequirement.isPending || createRequirement.isPending}
-        // Advancing does not write. The draft was written when the address was
-        // chosen, and the rate is a query — so step two is a render, not a save,
-        // and stepping back costs nothing.
-        onContinue={() => setMobileStep("rate")}
+        // This explicit action is the first write for a new crew. Merely opening
+        // the service and choosing an address stays local.
+        onContinue={() => void handleShowRate()}
         saveError={
           writeErrorMessage === null ? undefined : <JobFormError message={writeErrorMessage} />
         }
-        onBack={() => router.back()}
+        selectedWorkLabel={workLabel ?? "Selected work"}
+        onChangeWork={() => setBookingStep("work")}
+        onBack={() => setBookingStep("work")}
       />
     ) : (
       <RateScreen
         rate={rate}
         city={address?.city ?? null}
         isStale={previewQuery.isFetching}
-        onBack={() => setMobileStep("form")}
+        onBack={() => setBookingStep("details")}
         onBook={() => void handleBook()}
         isBooking={isBooking}
         notice={
-          <RailFooterNotices
-            book={book}
-            onClearDuplicate={() => {
-              if (requirementId !== null) clearBookAtRateKey(requirementId);
-              setAllowDuplicate(true);
-            }}
-          />
+          <RailFooterNotices book={book} />
         }
         unavailable={
           rate === null && state !== null && !previewQuery.isFetching ? (
@@ -382,13 +525,16 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Book a crew</h1>
-        <p className="mt-1.5 max-w-prose text-sm leading-6 text-text-secondary">
-          Set the job on the left. The rate on the right updates as you go.
-        </p>
-      </header>
+    <div
+      key={bookingStep}
+      className="crew-stage-enter mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6"
+    >
+      <DesktopBookingHero
+        serviceName={service.name}
+        step={bookingStep}
+        count={size?.headcount ?? 1}
+        days={size?.days ?? 1}
+      />
 
       {questionSet.unsupported.length > 0 ? (
         <div
@@ -405,64 +551,38 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
         </div>
       ) : null}
 
-      <RailLayout
-        railLabel="What this costs"
-        rail={
-          <RateRail
-            rate={rate}
-            cityLabel={address?.city ?? null}
-            // Stale while the debounce has not fired yet, and while the server
-            // is answering the size it did fire for. Both are "the figures on
-            // screen are not for the size you can see".
-            isStale={
-              previewQuery.isFetching ||
-              (size !== null && settledSize !== null && !sameSize(size, settledSize))
-            }
-            placeholder={placeholderFor({
-              hasAddress: addressId !== null,
-              hasSize: size !== null,
-              unavailableReason: unavailable?.reason ?? null,
-            })}
-            footer={
-              <RailFooter
-                rate={rate}
-                state={state}
-                previewQuery={previewQuery}
-                book={book}
-                service={service}
-                formComplete={formComplete}
-                isBooking={isBooking}
-                onBook={() => void handleBook()}
-                onClearDuplicate={() => {
-                  // The decision spends the key the refused attempt used.
-                  // Without this the override is sent under a key whose stored
-                  // payload said `allow_duplicate: false`, and the server
-                  // refuses the mismatch — the Customer would press this and
-                  // never get past the warning.
-                  if (requirementId !== null) clearBookAtRateKey(requirementId);
-                  setAllowDuplicate(true);
-                }}
-              />
-            }
-          />
-        }
-      >
-        <div className="flex flex-col gap-6">
-          <section className="rounded-card border border-line bg-surface p-5">
-            <h2 className="sr-only">The job</h2>
+      {bookingStep === "details" ? (
+        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex flex-col gap-6">
+            <button
+              type="button"
+              onClick={() => setBookingStep("work")}
+              className="group flex min-h-20 items-center gap-4 rounded-[20px] border border-selected-line bg-selected-surface p-4 text-left transition-[border-color,box-shadow,transform] duration-base hover:-translate-y-0.5 hover:border-selected hover:shadow-raised active:translate-y-0 active:scale-[0.99] motion-reduce:transform-none"
+            >
+              <span className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-navy-900 text-signal-300">
+                <WorkTypeIcon code={workValue ?? "other"} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-bold uppercase tracking-[0.11em] text-text-muted">
+                  Work selected
+                </span>
+                <span className="mt-1 block text-lg font-bold text-text">{workLabel}</span>
+              </span>
+              <span className="text-sm font-bold text-text-link group-hover:underline">Change</span>
+            </button>
+
+          <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
+            <SectionLabel number="2" title="How much help do you need?" caption="Set the crew and duration" />
             <PresetQuestions
-              questions={questionSet.questions}
+              questions={detailQuestions}
               answers={answers}
-              hiddenCodes={hiddenQuestionCodes(answers)}
-              onAnswer={(code, value) => {
-                setAnswers((current) => ({ ...current, [code]: value }));
-                edited();
-              }}
+              hiddenCodes={hiddenCrewQuestionCodes(answers)}
+              onAnswer={handleAnswer}
             />
           </section>
 
-          <section className="rounded-card border border-line bg-surface p-5">
-            <h2 className="sr-only">Where and when</h2>
+          <section className="rounded-[20px] border border-line bg-surface p-5 shadow-sm sm:p-6">
+            <SectionLabel number="3" title="Where and when?" caption="Date and saved address" />
             <div className="flex flex-col gap-5">
               <Field
                 label="Start from"
@@ -475,7 +595,6 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
                   value={requestedStart}
                   onChange={(event) => {
                     setRequestedStart(event.target.value);
-                    edited();
                   }}
                 />
               </Field>
@@ -490,6 +609,17 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
             </div>
           </section>
 
+          <Button
+            block
+            size="lg"
+            disabled={!formComplete}
+            loading={createRequirement.isPending || saveRequirement.isPending}
+            loadingLabel="Preparing your live rate"
+            onClick={() => void handleShowRate()}
+          >
+            See my live rate
+          </Button>
+
           {writeError !== null ? (
             <ErrorState
               title="We could not save that"
@@ -502,9 +632,252 @@ export function BookCrewScreen({ service, variant }: BookCrewScreenProps) {
               inline
             />
           ) : null}
+          </div>
+
+          <aside className="sticky top-6 rounded-[22px] bg-navy-900 p-5 text-white shadow-raised">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-300">Crew plan</p>
+            <CrewConstellation count={size?.headcount ?? 1} days={size?.days ?? 1} compact />
+            <dl className="mt-5 divide-y divide-white/10 border-y border-white/10 text-sm">
+              <PlanLine label="Work" value={workLabel ?? "Choose work"} />
+              <PlanLine label="Start" value={requestedStart === "" ? "Choose date" : formatShortDate(requestedStart)} />
+              <PlanLine label="Site" value={address === null ? "Add an address" : addressSummaryLine(address)} />
+            </dl>
+            <p className="mt-4 text-xs leading-5 text-white/60">
+              Nothing is sent until you ask for the live rate.
+            </p>
+          </aside>
         </div>
-      </RailLayout>
+      ) : (
+        <RailLayout
+          railLabel="What this costs"
+          rail={
+            <RateRail
+              rate={rate}
+              cityLabel={address?.city ?? null}
+              isStale={
+                previewQuery.isFetching ||
+                (size !== null && settledSize !== null && !sameSize(size, settledSize))
+              }
+              placeholder={placeholderFor({
+                hasAddress: effectiveAddressId !== null,
+                hasSize: size !== null,
+                unavailableReason: unavailable?.reason ?? null,
+              })}
+              footer={
+                <RailFooter
+                  rate={rate}
+                  state={state}
+                  previewQuery={previewQuery}
+                  book={book}
+                  service={service}
+                  formComplete={formComplete}
+                  isBooking={isBooking}
+                  onBook={() => void handleBook()}
+                />
+              }
+            />
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <section className="rounded-[22px] border border-line bg-surface p-6 shadow-card">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-signal-700">Ready to review</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-text">Your crew, at a glance</h2>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <ReviewTile label="Work" value={workLabel ?? "Selected work"} icon={<WorkTypeIcon code={workValue ?? "other"} />} />
+                <ReviewTile label="Crew" value={`${size?.headcount ?? 1} ${(size?.headcount ?? 1) === 1 ? "person" : "people"} × ${size?.days ?? 1} ${(size?.days ?? 1) === 1 ? "day" : "days"}`} icon={<CrewIcon />} />
+                <ReviewTile label="Starts" value={requestedStart === "" ? "Not chosen" : formatShortDate(requestedStart)} icon={<CalendarIcon />} />
+                <ReviewTile label="Site" value={address === null ? "Not chosen" : addressSummaryLine(address)} icon={<PinIcon />} />
+              </div>
+              <Button variant="outline" className="mt-5" onClick={() => setBookingStep("details")}>
+                Change crew plan
+              </Button>
+            </section>
+            <div className="rounded-[18px] border border-warning-line bg-warning-surface p-4">
+              <p className="text-sm font-bold text-text">Pay the crew directly after each day.</p>
+              <p className="mt-1 text-sm leading-6 text-text-secondary">
+                Vsolve charges only the booking fee shown in the rate panel, and only after a supervisor accepts.
+              </p>
+            </div>
+            <RailFooterNotices book={book} />
+          </div>
+        </RailLayout>
+      )}
     </div>
+  );
+}
+
+function DesktopBookingHero({
+  serviceName,
+  step,
+  count,
+  days,
+}: {
+  serviceName: string;
+  step: CrewBookingStep;
+  count: number;
+  days: number;
+}) {
+  const activeIndex = step === "work" ? 0 : step === "details" ? 1 : 2;
+  return (
+    <header className="relative mb-7 overflow-hidden rounded-[28px] bg-navy-900 px-6 py-7 text-white sm:px-8 sm:py-9">
+      <div aria-hidden className="absolute -right-16 -top-24 size-64 rounded-full bg-signal-500/20 blur-3xl" />
+      <div className="relative grid items-center gap-7 md:grid-cols-[1fr_300px]">
+        <div>
+          <Link
+            href="/catalog/workforce-and-projects"
+            className="inline-flex min-h-11 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>
+              <path d="m12 5-5 5 5 5M7 10h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Browse crews
+          </Link>
+          <p className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-signal-300">
+            {step === "rate" ? "Your live rate" : "Plan your crew"}
+          </p>
+          <h1 className="mt-2 max-w-xl text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+            {step === "rate"
+              ? "One last look before you book."
+              : `Build your ${serviceName.toLowerCase()} crew`}
+          </h1>
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-white/80">
+            {["Choose work", "Plan crew", "Review rate"].map((label, index) => (
+              <span key={label} className="contents">
+                {index > 0 ? <span aria-hidden className="text-white/30">&rarr;</span> : null}
+                <FlowPill
+                  number={`${index + 1}`}
+                  label={label}
+                  status={index === activeIndex ? "active" : index < activeIndex ? "complete" : "upcoming"}
+                />
+              </span>
+            ))}
+          </div>
+        </div>
+        <CrewConstellation count={count} days={days} />
+      </div>
+    </header>
+  );
+}
+
+function FlowPill({
+  number,
+  label,
+  status,
+}: {
+  number: string;
+  label: string;
+  status: "active" | "complete" | "upcoming";
+}) {
+  const active = status === "active";
+  return (
+    <span
+      className={
+        active
+          ? "inline-flex min-h-9 items-center gap-2 rounded-full bg-white px-3 font-semibold text-navy-900"
+          : status === "complete"
+            ? "inline-flex min-h-9 items-center gap-2 rounded-full border border-success-line/40 bg-success-surface/10 px-3 text-white"
+            : "inline-flex min-h-9 items-center gap-2 rounded-full border border-white/15 px-3"
+      }
+    >
+      <span className={active ? "text-signal-700" : status === "complete" ? "text-signal-300" : "text-white/50"}>
+        {status === "complete" ? (
+          <svg viewBox="0 0 16 16" fill="none" className="size-4" aria-hidden><path d="m3.5 8 3 3 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        ) : number}
+      </span>
+      {label}
+    </span>
+  );
+}
+
+function SectionLabel({
+  number,
+  title,
+  caption,
+}: {
+  number: string;
+  title: string;
+  caption: string;
+}) {
+  return (
+    <div className="mb-5 flex items-center gap-3 border-b border-line pb-4">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-action-surface text-sm font-bold text-signal-700">
+        {number}
+      </span>
+      <div>
+        <h2 className="font-bold text-text">{title}</h2>
+        <p className="text-xs text-text-secondary">{caption}</p>
+      </div>
+    </div>
+  );
+}
+
+/** The signature roster: it grows as the Customer adds people. */
+function CrewConstellation({ count, days, compact = false }: { count: number; days: number; compact?: boolean }) {
+  const visible = Math.min(Math.max(count, 1), 6);
+  return (
+    <figure className={cn("group rounded-[22px] border border-white/10 bg-white/[0.07] backdrop-blur-sm", compact ? "mt-4 p-4" : "p-5")}>
+      <div className={cn("flex items-end justify-center gap-2", compact ? "min-h-20" : "min-h-28")} aria-hidden>
+        {Array.from({ length: visible }, (_, index) => (
+          <span
+            key={index}
+            className="flex w-8 flex-col items-center transition-transform duration-300 ease-out group-hover:-translate-y-1 motion-reduce:transform-none"
+            style={{ transitionDelay: `${index * 45}ms` }}
+          >
+            <span className="size-4 rounded-full bg-signal-300" />
+            <span className={cn("mt-1 w-6 rounded-t-full bg-white/90", compact ? "h-9" : "h-12")} />
+          </span>
+        ))}
+      </div>
+      <figcaption className="mt-4 flex items-baseline justify-between border-t border-white/10 pt-4">
+        <span className="text-sm text-white/65">Crew plan</span>
+        <strong className="text-lg tabular-nums text-white">
+          {count} {count === 1 ? "person" : "people"} {"\u00d7"} {days} {days === 1 ? "day" : "days"}
+        </strong>
+      </figcaption>
+    </figure>
+  );
+}
+
+function PlanLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[64px_1fr] gap-3 py-3">
+      <dt className="text-white/55">{label}</dt>
+      <dd className="text-right font-semibold text-white">{value}</dd>
+    </div>
+  );
+}
+
+function ReviewTile({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+  return (
+    <div className="flex min-h-24 items-center gap-3 rounded-[16px] border border-line bg-surface-hover p-4">
+      <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-[12px] bg-action-surface text-navy-700 [&>svg]:size-6">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-text-muted">{label}</span>
+        <span className="mt-1 block text-sm font-bold leading-5 text-text">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+function CrewIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-1a2.5 2.5 0 1 0 0-5M3 19v-2a5 5 0 0 1 10 0v2M14 14a4 4 0 0 1 7 3v2" /></svg>;
+}
+
+function CalendarIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4v3M19 4v3M4 9h16M5 6h14a1 1 0 0 1 1 1v13H4V7a1 1 0 0 1 1-1Z" /></svg>;
+}
+
+function PinIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
+}
+
+function formatShortDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) return isoDate;
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(
+    new Date(year, month - 1, day),
   );
 }
 
@@ -534,27 +907,16 @@ function addressSummaryLine(address: Address): string {
  */
 function RailFooterNotices({
   book,
-  onClearDuplicate,
 }: {
   book: ReturnType<typeof useBookAtPublishedRate>;
-  onClearDuplicate: () => void;
 }) {
   if (isRequirementDuplicate(book.error)) {
     return (
-      <div className="rounded-card border border-warning-line bg-warning-surface p-4">
-        <p className="font-semibold text-text">You may already have a request open for this</p>
+      <div className="rounded-card border border-line bg-surface-sunken p-4" aria-live="polite">
+        <p className="font-semibold text-text">Opening your existing request</p>
         <p className="mt-1 text-sm leading-6 text-text-secondary">
-          We found one at the same address around the same dates. Booking again
-          would send two crews.
+          This crew is already requested for the same place and dates, so we are reopening it.
         </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={onClearDuplicate}>
-            These are different jobs
-          </Button>
-          <Link href="/requests" className={buttonStyles({ variant: "ghost" })}>
-            See my requests
-          </Link>
-        </div>
       </div>
     );
   }
@@ -613,7 +975,6 @@ function RailFooter({
   formComplete,
   isBooking,
   onBook,
-  onClearDuplicate,
 }: {
   rate: ReturnType<typeof toRateDisclosureView>;
   state: { preview: Schemas["RatePreview"] } | null;
@@ -623,7 +984,6 @@ function RailFooter({
   formComplete: boolean;
   isBooking: boolean;
   onBook: () => void;
-  onClearDuplicate: () => void;
 }) {
   // First load only. A re-price keeps the previous figures and dims them, which
   // `RateRail` handles — swapping to a skeleton on every stepper press would be
@@ -667,22 +1027,11 @@ function RailFooter({
   return (
     <div className="flex flex-col gap-2">
       {isRequirementDuplicate(book.error) ? (
-        <div className="rounded-card border border-warning-line bg-warning-surface p-4">
-          <p className="font-semibold text-text">
-            You may already have a request open for this
-          </p>
+        <div className="rounded-card border border-line bg-surface-sunken p-4" aria-live="polite">
+          <p className="font-semibold text-text">Opening your existing request</p>
           <p className="mt-1 text-sm leading-6 text-text-secondary">
-            We found one at the same address around the same dates. Booking again
-            would send two crews.
+            This crew is already requested for the same place and dates, so we are reopening it.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="outline" onClick={onClearDuplicate}>
-              These are different jobs
-            </Button>
-            <Link href="/requests" className={buttonStyles({ variant: "ghost" })}>
-              See my requests
-            </Link>
-          </div>
         </div>
       ) : book.error !== null ? (
         <ErrorState
@@ -795,10 +1144,8 @@ function bookFailureCopy(error: unknown): string {
  * catalogue owns this vocabulary, and a Customer whose variant does not publish
  * an `other` option simply never sees the box.
  */
-const OTHER_WORK_TYPE = "other";
-
 export function hiddenQuestionCodes(
   answers: Readonly<Record<string, unknown>>,
 ): readonly string[] {
-  return answers.work_type === OTHER_WORK_TYPE ? [] : ["work_description"];
+  return hiddenCrewQuestionCodes(answers);
 }

@@ -2,9 +2,9 @@
 
 ## What this is for
 
-`settlement.confirm_visit_arrival` lets either party mark a visit as arrived, from anywhere. That
-was the right call while arrival proved nothing, but the A5 visit plan is money the Customer has
-already paid for somebody to travel, and the visit is what earns the vendor their share of it. So
+The retired tap-only arrival let either party mark a visit as arrived from anywhere. But the A5
+visit plan is money the Customer has already paid for somebody to travel, and the visit is what
+earns the vendor their share of it. So
 "did they actually turn up" is a financial question, and a button either side can press from a
 sofa is not an answer to it.
 
@@ -25,12 +25,10 @@ an eviction — loses the digits while the hash survives, so the page asks for a
 than showing a stale one. Losing the display copy is a nuisance; losing the verification copy
 would be a visit nobody can prove.
 
-## Why the fallback is kept
+## Why there is no fallback
 
-`confirm_visit_arrival` stays. Phones die, rural sites have no signal, and a vendor standing in
-somebody's kitchen unable to start a visit they travelled for is a worse failure than a weaker
-proof. The two paths are distinguished forever by `arrival_method`, which is exactly why that
-field was stored before either of them was worth distinguishing.
+The code is the arrival proof, not an enhancement. A second tap-only command would make the code
+optional and would let either party start a paid visit from somewhere else.
 """
 
 import secrets
@@ -118,7 +116,7 @@ def _assert_awaiting_arrival(visit: SiteVisit) -> None:
     """A code only means anything on a visit that is scheduled and not yet started.
 
     `SCHEDULED` is also the proof the plan was paid: a visit whose plan payment has not been
-    verified is *held*, not scheduled, which is the same guard `SiteVisitArrivalView` documents.
+    verified is *held*, not scheduled, which is the same guard the arrival-code views document.
     """
 
     if visit.status == SiteVisit.Status.IN_PROGRESS:

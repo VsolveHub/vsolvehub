@@ -109,6 +109,19 @@ export function useMyRequests(enabled = true) {
   });
 }
 
+/** The newest editable draft for this service from the newest-first request list. */
+export function existingDraftId(
+  requests: readonly RequirementSummary[],
+  serviceSlug: string,
+): string | null {
+  return (
+    requests.find(
+      (requirement) =>
+        requirement.status === "DRAFT" && requirement.category_slug === serviceSlug,
+    )?.id ?? null
+  );
+}
+
 /** One requirement's own record — the tracking header and the flow's resume read. */
 export function useRequirement(requirementId: string | null) {
   return useQuery({
@@ -205,16 +218,15 @@ export function useProbableDuplicates(input: DuplicateCheckInput | null) {
 /**
  * Creates the server-side draft — the first write in the whole flow.
  *
- * Called once, when the Customer leaves screen 1, not on every keystroke. The
- * draft is what turns local intent into something `PATCH` can address, and the
- * response carries the two things the client cannot compute: the inferred
- * lifecycle's plain sentence, and which required answers are still missing.
+ * Called at an explicit boundary — Continue, See my live rate, or Review and
+ * send — never from a service-card press or an address default. The draft turns
+ * local intent into something `PATCH` can address, and the response carries the
+ * inferred lifecycle and any missing required answers.
  *
- * Not idempotency-keyed, deliberately. `POST /requirements/` takes no
- * `Idempotency-Key` header — a duplicate draft costs nothing, reserves nothing
- * and is never charged for, and the duplicate check (`GAP-004`) is what catches
- * the case that matters. Adding a key the server does not read would be
- * ceremony that looks like a guarantee.
+ * `POST /requirements/` takes no client idempotency header. Django serializes
+ * creation per Customer and variant instead: it answers `200` with the existing
+ * editable draft or `201` with a new one. That server invariant is what makes a
+ * reload, second tab, or missed list cache safe.
  */
 export interface CreateRequirementInput {
   variantId: string;

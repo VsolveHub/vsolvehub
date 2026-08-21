@@ -18,10 +18,10 @@ import type { RequirementQuestionView } from "@/features/requirement/adapters";
 import { NUMBER_FLOOR } from "../../model/size";
 
 /**
- * A3 · 1 — Tell us the job.
+ * A3 · 2 — Plan the crew.
  *
- * Step one of two on a phone. The rate is step two rather than a column beside
- * this one, because a 390px screen has no beside.
+ * The work was chosen on step one. This screen asks only for the variables that
+ * shape the crew and its rate; the published rate follows on step three.
  *
  * ## What is deliberately not on this screen
  *
@@ -67,6 +67,9 @@ export interface JobFormScreenProps {
   onContinue: () => void;
   saveError?: ReactNode;
   onBack: () => void;
+  /** The work chosen on step one, shown as a compact editable summary. */
+  selectedWorkLabel: string;
+  onChangeWork: () => void;
 }
 
 /** The day, in the customer's own locale. Built from parts, never from `new Date(iso)`. */
@@ -103,6 +106,8 @@ export function JobFormScreen({
   onContinue,
   saveError,
   onBack,
+  selectedWorkLabel,
+  onChangeWork,
 }: JobFormScreenProps) {
   const [dateOpen, setDateOpen] = useState(false);
 
@@ -119,7 +124,7 @@ export function JobFormScreen({
     <MobileScreen
       title="Book a crew"
       onBack={onBack}
-      step="Step 1 of 2"
+      step="Step 2 of 3"
       reassurance="Free. Nothing is booked yet."
       action={
         <Button
@@ -134,7 +139,24 @@ export function JobFormScreen({
         </Button>
       }
     >
-      <ScreenHeading eyebrow={serviceName} title="Tell us the job" />
+      <div className="crew-stage-enter flex flex-col gap-4">
+        <ScreenHeading eyebrow={serviceName} title="Plan the crew" />
+
+        <button
+          type="button"
+          onClick={onChangeWork}
+          className="flex min-h-14 items-center justify-between gap-3 rounded-[14px] border border-selected-line bg-selected-surface px-3.5 py-3 text-left transition-[border-color,transform] duration-base hover:-translate-y-0.5 hover:border-selected active:translate-y-0 active:scale-[0.99] focus-visible:outline-focus-ring motion-reduce:transform-none"
+        >
+          <span className="min-w-0">
+            <span className="block text-[11px] font-bold uppercase tracking-[0.1em] text-text-muted">
+              Work selected
+            </span>
+            <span className="mt-0.5 block text-sm font-bold leading-5 text-text">
+              {selectedWorkLabel}
+            </span>
+          </span>
+          <span className="shrink-0 text-xs font-bold text-text-link">Change</span>
+        </button>
 
       {others.map((question) => (
         <div key={question.code}>
@@ -259,7 +281,8 @@ export function JobFormScreen({
         onSelect={onRequestedStart}
       />
 
-      {addressPicker}
+        {addressPicker}
+      </div>
     </MobileScreen>
   );
 }

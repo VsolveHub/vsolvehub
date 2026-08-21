@@ -5,11 +5,10 @@ import { BookCrewFeeScreen } from "@/features/crew/view/book-crew-fee-screen";
 /**
  * The A3 booking-fee checkout — `M2-FE-428`.
  *
- * A route rather than a modal, and the reason is the one `/requests/[id]/
- * book-visits` gives: a payment is a record that outlives the screen that
- * started it. A Customer who closed the tab mid-UPI comes back to a URL, and
- * this is it — the rate-card read behind it answers from the requirement id
- * alone, so the recovery needs nothing the browser might have lost.
+ * A route rather than a modal because its accepted-crew recovery screen is
+ * addressable. A Customer who closed the tab mid-UPI comes back to this URL;
+ * the rate-card read behind it answers from the requirement id alone, so the
+ * recovery needs nothing the browser might have lost.
  *
  * Nothing is refused here at the route level. The screen renders whatever the
  * server says: no booking, a lapsed hold, a settled fee and an A5 requirement

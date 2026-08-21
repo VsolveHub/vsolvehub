@@ -22,12 +22,17 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.catalog.models import ServiceVariant
 from apps.foundation.services import execute_idempotent
 from apps.identity.models import User
 from apps.partners.permissions import IsOperationsUser, IsPartnerUser
 from apps.partners.selectors import partner_profile_for_user
 from apps.requirements import stages
-from apps.requirements.exceptions import RequirementDomainError, RequirementNotFoundError
+from apps.requirements.exceptions import (
+    RequirementDomainError,
+    RequirementNotFoundError,
+    RequirementTransitionError,
+)
 from apps.requirements.models import EngagementStage
 from apps.requirements.selectors import (
     customer_engagements,
@@ -143,6 +148,9 @@ class EngagementCompletionView(APIView):
         parameters=[IDEMPOTENCY_KEY_HEADER],
         request=None,
         description=(
+            "A3 workforce completion only. A5 custom projects refuse this route: the Customer "
+            "displays their completion code and the Partner enters it through the project "
+            "completion command.\n\n"
             "The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the "
             "requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its "
             "own, when every stage is released; this is the separate fact that the Customer "
@@ -178,6 +186,13 @@ class EngagementCompletionView(APIView):
             _raise_api_error(exc)
         if engagement.customer_id != customer.id:
             _raise_api_error(RequirementNotFoundError())
+        if engagement.archetype == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+            _raise_api_error(
+                RequirementTransitionError(
+                    "Show the project completion code to the Partner. Custom projects close only "
+                    "after they enter that code."
+                )
+            )
 
         def command() -> tuple[int, dict[str, object]]:
             try:

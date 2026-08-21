@@ -7,6 +7,7 @@ before one is asked for money. Clarification and the site-visit shapes both role
 `enquiries`; everything a vendor sees lives there too.
 """
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -150,6 +151,7 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
     #: they had already sent it (`M2-FE-212`).
     is_free = serializers.SerializerMethodField()
     attachments = RequirementAttachmentSerializer(many=True, read_only=True)
+    engagement_id = serializers.SerializerMethodField()
     server_now = serializers.SerializerMethodField()
 
     class Meta:
@@ -177,6 +179,7 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
             "language",
             "additional_details",
             "attachments",
+            "engagement_id",
             "server_now",
         )
         read_only_fields = fields
@@ -205,6 +208,10 @@ class RequirementDraftSerializer(serializers.ModelSerializer[CustomerRequirement
         would go `false` first.
         """
         return True
+
+    def get_engagement_id(self, obj: CustomerRequirement) -> uuid.UUID | None:
+        engagement = getattr(obj, "engagement", None)
+        return engagement.id if engagement is not None else None
 
     def get_server_now(self, _obj: CustomerRequirement) -> str:
         server_now: datetime = self.context["server_now"]
@@ -239,6 +246,7 @@ class RequirementSummarySerializer(serializers.ModelSerializer[CustomerRequireme
     teaser_count = serializers.SerializerMethodField()
     closure_reason = serializers.SerializerMethodField()
     last_activity_at = serializers.DateTimeField(source="updated_at", read_only=True)
+    engagement_id = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerRequirement
@@ -253,6 +261,7 @@ class RequirementSummarySerializer(serializers.ModelSerializer[CustomerRequireme
             "teaser_count",
             "closure_reason",
             "last_activity_at",
+            "engagement_id",
         )
         read_only_fields = fields
 
@@ -265,6 +274,10 @@ class RequirementSummarySerializer(serializers.ModelSerializer[CustomerRequireme
 
     def get_closure_reason(self, obj: CustomerRequirement) -> str | None:
         return closure_reason(obj)
+
+    def get_engagement_id(self, obj: CustomerRequirement) -> uuid.UUID | None:
+        engagement = getattr(obj, "engagement", None)
+        return engagement.id if engagement is not None else None
 
 
 class RequirementSummaryPageSerializer(serializers.Serializer[dict[str, Any]]):

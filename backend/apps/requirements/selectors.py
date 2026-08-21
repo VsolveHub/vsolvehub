@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 
 from apps.catalog.models import ServiceVariant
 from apps.identity.hashing import keyed_hash
@@ -169,7 +169,7 @@ def customer_requirements(customer: User) -> QuerySet[CustomerRequirement]:
     """`My requests`, newest first, with the teaser count the list row needs."""
     return (
         CustomerRequirement.objects.filter(customer=customer)
-        .select_related("variant__service", "configuration")
+        .select_related("variant__service", "configuration", "engagement")
         .annotate(
             teaser_count=Count(
                 "proposals",
@@ -191,7 +191,9 @@ def requirement_for_customer(*, customer: User, requirement_id: uuid.UUID) -> Cu
     confirms a record is there to be found.
     """
     requirement = (
-        CustomerRequirement.objects.select_related("variant__service", "configuration", "address")
+        CustomerRequirement.objects.select_related(
+            "variant__service", "configuration", "address", "engagement"
+        )
         .filter(customer=customer, id=requirement_id)
         .first()
     )
@@ -212,6 +214,13 @@ def partner_invitations(partner: PartnerProfile) -> QuerySet[VendorInvitation]:
     return (
         VendorInvitation.objects.filter(partner=partner)
         .select_related("requirement__variant__service", "snapshot")
+        .prefetch_related(
+            Prefetch(
+                "proposals",
+                queryset=Proposal.objects.order_by("-revision"),
+                to_attr="ordered_proposals",
+            )
+        )
         .order_by("-created_at", "id")
     )
 
@@ -223,6 +232,13 @@ def invitation_for_partner(
         VendorInvitation.objects.select_related(
             "requirement__variant__service",
             "snapshot",
+        )
+        .prefetch_related(
+            Prefetch(
+                "proposals",
+                queryset=Proposal.objects.order_by("-revision"),
+                to_attr="ordered_proposals",
+            )
         )
         .filter(partner=partner, id=invitation_id)
         .first()

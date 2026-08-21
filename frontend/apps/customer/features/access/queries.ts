@@ -383,43 +383,6 @@ export interface SiteVisitCommandInput {
 }
 
 /**
- * Confirms the professional arrived — the non-OTP fallback.
- *
- * **The default path in M2, not a degraded one.** The start OTP is M3
- * activation, and `arrival_method` is stored so every historical arrival still
- * says truthfully how it was proved once OTP is switched on. Either party may
- * confirm; this is the Customer's side of it.
- */
-export function useConfirmVisitArrival() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: SiteVisitCommandInput) =>
-      request(() =>
-        getApiClient().POST("/api/v1/site-visits/{site_visit_id}/arrival/", {
-          params: {
-            path: { site_visit_id: input.siteVisitId },
-            header: {
-              "Idempotency-Key": getStableIdempotencyKey(
-                `m2-visit-arrival:${input.siteVisitId}`,
-              ),
-            },
-          },
-        }),
-      ),
-    onSettled: (_data, _error, input) => {
-      void queryClient.invalidateQueries({
-        queryKey: m2AccessKeys.visitPlan(input.requirementId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: m2QueryKeys.requirements.timeline(input.requirementId),
-      });
-    },
-    retry: false,
-  });
-}
-
-/**
  * Why the visit did not happen.
  *
  * Typed from the generated enum since contract 1.26.0, not `string`. It was a

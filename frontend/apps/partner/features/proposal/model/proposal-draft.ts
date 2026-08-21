@@ -84,6 +84,9 @@ export interface StageDraft {
   readonly amountPaise: number | null;
   /** ISO date, or null when the vendor did not commit to one. */
   readonly endsOn: string | null;
+  /** Frozen schedule inputs from the on-site estimate. Optional on the desk composer. */
+  readonly startsOn?: string | null;
+  readonly durationDays?: number | null;
 }
 
 export const EMPTY_STAGE: StageDraft = {
@@ -307,6 +310,8 @@ export function toStageRequests(
       title: stage.title.trim(),
       deliverable: stage.deliverable.trim(),
       amount_paise: stage.amountPaise,
+      ...(stage.startsOn ? { starts_on: stage.startsOn } : {}),
+      ...(stage.durationDays ? { duration_days: stage.durationDays } : {}),
       ends_on: stage.endsOn,
     };
   });

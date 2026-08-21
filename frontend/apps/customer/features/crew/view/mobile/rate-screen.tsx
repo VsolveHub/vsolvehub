@@ -11,7 +11,7 @@ import type { RateDisclosureView } from "../../adapters";
 /**
  * A3 · 2 — Our rate for this.
  *
- * Step two of two: the published number, what it comes to, and the one promise
+ * Step three of three: the published number, what it comes to, and the one promise
  * that has to be read before the booking control.
  *
  * ## Every figure is the server's, and the screen has no state without them
@@ -71,7 +71,7 @@ export function RateScreen({
     <MobileScreen
       title="Our rate for this"
       onBack={onBack}
-      step="Step 2 of 2"
+      step="Step 3 of 3"
       reassurance={
         rate === null
           ? undefined
@@ -91,6 +91,7 @@ export function RateScreen({
         ) : undefined
       }
     >
+      <div className="crew-stage-enter flex flex-col gap-3">
       {notice}
 
       {unavailable !== undefined ? (
@@ -135,6 +136,7 @@ export function RateScreen({
           )}
         </div>
       )}
+      </div>
     </MobileScreen>
   );
 }

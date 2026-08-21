@@ -115,7 +115,7 @@ export function PayoutPanel({ engagement, wording }: PayoutPanelProps) {
       <p className="text-sm leading-6 text-text-secondary">
         Earnings from {wording.parentMany} appear on your statement beside your other work.{" "}
         <Link
-          href="/earnings"
+          href="/money"
           className="font-semibold text-action focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
         >
           Open Money

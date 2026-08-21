@@ -84,6 +84,11 @@ class RequirementCollectionView(APIView):
         operation_id="m2_requirement_create",
         request=RequirementCreateSerializer,
         responses={
+            200: OpenApiResponse(
+                response=RequirementDraftSerializer,
+                description="The Customer already had an editable draft for this service; the "
+                "same draft is returned so the client can resume it.",
+            ),
             201: RequirementDraftSerializer,
             400: OpenApiResponse(
                 response=ApiErrorSerializer,
@@ -103,7 +108,7 @@ class RequirementCollectionView(APIView):
             is_active=True,
         )
         try:
-            requirement = services.create_draft(
+            requirement, created = services.get_or_create_draft(
                 customer=cast(User, request.user),
                 variant=variant,
                 answers=serializer.validated_data.get("answers") or {},
@@ -111,7 +116,10 @@ class RequirementCollectionView(APIView):
             )
         except RequirementDomainError as exc:
             _raise_api_error(exc)
-        return _draft_response(requirement, http_status=status.HTTP_201_CREATED)
+        return _draft_response(
+            requirement,
+            http_status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
 
 class RequirementDetailView(APIView):

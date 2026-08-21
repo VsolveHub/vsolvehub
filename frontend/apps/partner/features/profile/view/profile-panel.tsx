@@ -2,17 +2,9 @@
 
 import { Button, Card, ErrorState, Skeleton } from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
-import {
-  BadgeCheck,
-  CalendarDays,
-  ClipboardList,
-  Hourglass,
-  MapPin,
-  Phone,
-  Wallet,
-  Wrench,
-} from "lucide-react";
 import Link from "next/link";
+
+import { Pictogram, type PictogramName } from "@/components/pictogram";
 import { useState, type ReactNode } from "react";
 
 import { isNoProfileYet, usePartnerProfile, type PartnerProfile } from "../queries";
@@ -140,21 +132,28 @@ export function ProfilePanel() {
 
   return (
     <Page>
-      <Card className="flex items-center gap-4 p-5">
+      {/*
+        The same navy identity band `/me` opens with, so the hop between the two
+        does not read as a hop between two different apps.
+
+        `size="sm"` is gone from Edit: `@vsolve/ui`'s button compiles it to
+        `h-9` — 36px, under the 44px tap floor this app sets everywhere else.
+      */}
+      <Card className="flex items-center gap-4 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-5">
         <span
           aria-hidden
-          className="flex size-14 shrink-0 items-center justify-center rounded-full bg-selected-surface text-2xl font-bold text-text-link"
+          className="flex size-16 shrink-0 items-center justify-center rounded-[20px] bg-[linear-gradient(150deg,var(--color-navy-300)_0%,var(--color-navy-500)_100%)] text-2xl font-bold text-surface"
         >
           {initialOf(profile)}
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-bold text-text">{profile.display_name}</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-text-secondary">
-            <Phone aria-hidden className="size-4" />
+          <h1 className="truncate text-lg font-bold text-surface">{profile.display_name}</h1>
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-navy-200">
+            <Pictogram name="call" size="sm" className="shrink-0" />
             {profile.phone_number}
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setIsEditingName(true)}>
+        <Button variant="outline" onClick={() => setIsEditingName(true)}>
           Edit
         </Button>
       </Card>
@@ -179,13 +178,13 @@ export function ProfilePanel() {
       {status === null ? null : (
         <div className={`rounded-card border p-5 ${TONE_STYLES[status.tone]}`}>
           <p className="flex items-center gap-2 text-base font-bold">
-            {status.tone === "good" ? (
-              <BadgeCheck aria-hidden className="size-5" />
-            ) : status.tone === "wait" ? (
-              <Hourglass aria-hidden className="size-5" />
-            ) : (
-              <ClipboardList aria-hidden className="size-5" />
-            )}
+            <Pictogram
+              name={
+                status.tone === "good" ? "warranty" : status.tone === "wait" ? "later" : "papers"
+              }
+              size="md"
+              className="shrink-0"
+            />
             {status.title}
           </p>
           <p className="mt-1 text-sm">{status.body}</p>
@@ -193,7 +192,7 @@ export function ProfilePanel() {
       )}
 
       <Card className="p-5">
-        <Fact icon={<Wrench aria-hidden className="size-5" />} label="What you do">
+        <Fact icon="all-work" label="What you do">
           {profile.skills.length === 0 ? (
             <span className="text-text-secondary">Not set yet</span>
           ) : (
@@ -201,7 +200,7 @@ export function ProfilePanel() {
           )}
         </Fact>
 
-        <Fact icon={<MapPin aria-hidden className="size-5" />} label="Where you work">
+        <Fact icon="distance" label="Where you work">
           {profile.service_areas.length === 0 ? (
             <span className="text-text-secondary">Not set yet</span>
           ) : (
@@ -209,7 +208,7 @@ export function ProfilePanel() {
           )}
         </Fact>
 
-        <Fact icon={<CalendarDays aria-hidden className="size-5" />} label="With us since">
+        <Fact icon="date" label="With us since">
           {new Date(profile.member_since).toLocaleDateString(undefined, {
             month: "long",
             year: "numeric",
@@ -222,10 +221,10 @@ export function ProfilePanel() {
           ) : null}
         </Fact>
 
-        <Fact icon={<Wallet aria-hidden className="size-5" />} label="Getting paid">
+        <Fact icon="money" label="Getting paid">
           {profile.has_payout_account ? (
             <span className="flex items-center gap-1.5 font-medium text-success">
-              <BadgeCheck aria-hidden className="size-4" />
+              <Pictogram name="done" size="sm" className="shrink-0" />
               Your bank account is ready
             </span>
           ) : (
@@ -239,7 +238,7 @@ export function ProfilePanel() {
       <Card className="p-5">
         <h2 className="text-base font-bold text-text">Manage</h2>
         <div className="mt-3 flex flex-col gap-2">
-          <Link href="/jobs" className="w-full">
+          <Link href="/work/all" className="w-full">
             <Button variant="outline" className="w-full justify-start">
               My bookings
             </Button>
@@ -249,12 +248,7 @@ export function ProfilePanel() {
               My application and documents
             </Button>
           </Link>
-          <Link href="/availability" className="w-full">
-            <Button variant="outline" className="w-full justify-start">
-              My working hours
-            </Button>
-          </Link>
-          <Link href="/earnings" className="w-full">
+          <Link href="/money" className="w-full">
             <Button variant="outline" className="w-full justify-start">
               My money
             </Button>
@@ -274,15 +268,13 @@ function Fact({
   label,
   children,
 }: {
-  icon: ReactNode;
+  icon: PictogramName;
   label: string;
   children: ReactNode;
 }) {
   return (
     <div className="flex gap-4 border-b border-line py-4 last:border-b-0 last:pb-0 first:pt-0">
-      <span aria-hidden className="mt-0.5 shrink-0 text-text-muted">
-        {icon}
-      </span>
+      <Pictogram name={icon} size="md" className="mt-0.5 shrink-0 text-action-secondary" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-text">{label}</p>
         <div className="mt-1 text-sm text-text">{children}</div>

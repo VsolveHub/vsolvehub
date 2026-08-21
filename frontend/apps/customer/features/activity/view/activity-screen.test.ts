@@ -1,58 +1,52 @@
 import { describe, expect, it } from "vitest";
 
+import type { BookingGroup } from "@/features/bookings/queries";
+import type { EngagementRowView } from "@/features/engagement/adapters";
+import type { RequirementSummary } from "@/features/requirement/queries";
+
 import {
-  ACTIVITY_TABS,
-  DEFAULT_ACTIVITY_TAB,
-  activityTabHref,
-  toActivityTab,
+  engagementSection,
+  groupSection,
+  requestBelongsInBookings,
+  requestSection,
 } from "./activity-screen";
+import { ACTIVITY_TABS, activityTabHref, toActivityTab } from "../model/routes";
 
-/**
- * The hub's URL contract.
- *
- * `?tab=` is user input: it arrives from bookmarks, from notification deep
- * links, from a share that a chat client truncated, and from anyone who edits
- * the address bar. The property under test is that none of those can produce a
- * screen that is neither a segment nor a 404 — an unrecognised value is the
- * default, always, because landing somebody on the hub is a better answer to a
- * stale link than an error page.
- */
-describe("toActivityTab", () => {
-  it("accepts every segment the hub renders", () => {
+describe("legacy activity links", () => {
+  it("keeps every old tab and redirect on the single Bookings route", () => {
     for (const tab of ACTIVITY_TABS) {
-      expect(toActivityTab(tab)).toBe(tab);
+      expect(activityTabHref(tab)).toBe("/activity");
+      expect(toActivityTab(tab)).toBe("booked");
     }
-  });
-
-  it("falls back to the default for anything it does not recognise", () => {
-    // Next hands query values through as `string | string[] | undefined`, so all
-    // three shapes reach this function in production.
-    expect(toActivityTab(undefined)).toBe(DEFAULT_ACTIVITY_TAB);
-    expect(toActivityTab("")).toBe(DEFAULT_ACTIVITY_TAB);
-    expect(toActivityTab("Requests")).toBe(DEFAULT_ACTIVITY_TAB);
-    expect(toActivityTab("workforce")).toBe(DEFAULT_ACTIVITY_TAB);
-    expect(toActivityTab("__proto__")).toBe(DEFAULT_ACTIVITY_TAB);
-  });
-
-  it("reads the first value when the parameter is repeated", () => {
-    // `?tab=requests&tab=projects` is legal and arrives as an array.
-    expect(toActivityTab(["requests", "projects"])).toBe("requests");
-    expect(toActivityTab([])).toBe(DEFAULT_ACTIVITY_TAB);
   });
 });
 
-describe("activityTabHref", () => {
-  it("leaves the default segment off the URL", () => {
-    // Two addresses for one screen is two things to keep in step, and the bare
-    // `/activity` is the one the nav points at.
-    expect(activityTabHref(DEFAULT_ACTIVITY_TAB)).toBe("/activity");
+describe("Bookings lifecycle sections", () => {
+  it("puts customer decisions in Needs you and closed requests in Past", () => {
+    expect(requestSection("QUOTES_READY" as RequirementSummary["status"])).toBe("needs_you");
+    expect(requestSection("MATCHING" as RequirementSummary["status"])).toBe("active");
+    expect(requestSection("CLOSED_CANCELLED" as RequirementSummary["status"])).toBe("past");
   });
 
-  it("round-trips every non-default segment", () => {
-    for (const tab of ACTIVITY_TABS) {
-      const href = activityTabHref(tab);
-      const value = new URL(href, "https://example.test").searchParams.get("tab");
-      expect(toActivityTab(value ?? undefined)).toBe(tab);
-    }
+  it("dedupes a request once its engagement is the canonical booking", () => {
+    expect(requestBelongsInBookings({ engagement_id: null } as RequirementSummary)).toBe(true);
+    expect(
+      requestBelongsInBookings({ engagement_id: "engagement-1" } as RequirementSummary),
+    ).toBe(false);
+  });
+
+  it("puts a fundable engagement in Needs you before considering its status", () => {
+    const row = {
+      nextAction: "fund_stage",
+      status: "PENDING_START",
+    } as EngagementRowView;
+
+    expect(engagementSection(row)).toBe("needs_you");
+  });
+
+  it("keeps booking recovery visible and completed bookings in Past", () => {
+    expect(groupSection({ status: "PAYMENT_PENDING" } as BookingGroup)).toBe("needs_you");
+    expect(groupSection({ status: "BOOKED" } as BookingGroup)).toBe("active");
+    expect(groupSection({ status: "COMPLETED" } as BookingGroup)).toBe("past");
   });
 });

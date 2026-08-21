@@ -63,6 +63,7 @@ import { sha256Hex } from "@/features/application/model/upload";
 
 export type Engagement = Schemas["Engagement"];
 export type EngagementStage = Schemas["EngagementStage"];
+export type ProjectCompletionCodeEntry = Schemas["ProjectCompletionCodeEntryRequest"];
 
 /* --------------------------------------------------------------------------
    Reads
@@ -627,4 +628,32 @@ function amendmentOperationId(
     .map((line) => `${line.title.trim()}|${line.quantity}|${line.amountPaise ?? ""}`)
     .join(";");
   return `m2-amendment:${engagementId}:${shape.kind}:${draft.stageId ?? ""}:${draft.reason.trim()}:${lines}`;
+}
+
+/** Close an A5 project only after the Partner enters the Customer-held code. */
+export function useCompleteProjectWithCode(engagementId: string) {
+  const queryClient = useQueryClient();
+  const operationId = `m2-project-completion:${engagementId}`;
+
+  return useMutation({
+    mutationFn: (input: ProjectCompletionCodeEntry): Promise<Engagement> =>
+      request(() =>
+        getApiClient().POST("/api/v1/partner/engagements/{engagement_id}/completion/", {
+          params: {
+            path: { engagement_id: engagementId },
+            header: { "Idempotency-Key": getStableIdempotencyKey(operationId) },
+          },
+          body: input,
+        }),
+      ),
+    onSuccess: (engagement) => {
+      clearIdempotencyKey(operationId);
+      queryClient.setQueryData(m2QueryKeys.engagements.detail(engagementId), engagement);
+      void queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.list("partner") });
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: m2QueryKeys.engagements.detail(engagementId) });
+    },
+    retry: false,
+  });
 }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Money } from "@/features/checkout/view/money";
+import { BookingSupport } from "@/features/support/view/booking-support";
 
 import { ProfessionalCard } from "./professional-card";
 import { VisitProgress } from "./visit-progress";
@@ -441,6 +442,8 @@ export function BookingGroupDetail({ groupId }: { groupId: string }) {
       <p className="mt-4 text-xs text-text-secondary">
         Reference <span className="font-mono tabular-nums">{group.id}</span>
       </p>
+
+      <BookingSupport reference={group.id} />
 
       <CancelSupportDialog
         group={group}

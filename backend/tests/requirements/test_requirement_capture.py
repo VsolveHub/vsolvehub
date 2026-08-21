@@ -225,6 +225,51 @@ def test_an_a1_variant_is_not_a_workforce_request() -> None:
         services.create_draft(customer=_customer(), variant=variant, answers={})
 
 
+def test_get_or_create_draft_reopens_the_existing_service_draft() -> None:
+    variant = _variant(ServiceVariant.BookingArchetype.A3_TIME_BLOCK)
+    _configuration(variant)
+    customer = _customer()
+    first, first_created = services.get_or_create_draft(
+        customer=customer,
+        variant=variant,
+        answers={"worker_count": 3, "duration_days": 2},
+    )
+
+    reopened, reopened_created = services.get_or_create_draft(
+        customer=customer,
+        variant=variant,
+        answers={"worker_count": 9, "duration_days": 9},
+    )
+
+    assert first_created is True
+    assert reopened_created is False
+    assert reopened.id == first.id
+    assert reopened.answers == {"worker_count": 3, "duration_days": 2}
+    assert (
+        CustomerRequirement.objects.filter(
+            customer=customer,
+            variant=variant,
+            status=CustomerRequirement.Status.DRAFT,
+        ).count()
+        == 1
+    )
+
+
+def test_get_or_create_draft_starts_fresh_after_the_previous_request_is_live() -> None:
+    first = _ready_draft()
+    services.submit_requirement(requirement=first, actor=first.customer)
+
+    draft, created = services.get_or_create_draft(
+        customer=first.customer,
+        variant=first.variant,
+        answers={"worker_count": 2, "duration_days": 1},
+    )
+
+    assert created is True
+    assert draft.id != first.id
+    assert draft.status == CustomerRequirement.Status.DRAFT
+
+
 # ---------------------------------------------------------------------------
 # Editing rules (M2-BE-209)
 # ---------------------------------------------------------------------------

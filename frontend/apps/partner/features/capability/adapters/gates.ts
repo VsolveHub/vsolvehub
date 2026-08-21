@@ -53,11 +53,11 @@ import type { GateList, GateName, GateNextAction, GateStatus } from "./wire";
  */
 const ACTION_ROUTES: Record<GateNextAction, { href: string; label: string }> = {
   SUBMIT_APPLICATION: { href: "/apply/review", label: "Finish your application" },
-  ADD_PAYOUT_ACCOUNT: { href: "/earnings", label: "Add your bank details" },
+  ADD_PAYOUT_ACCOUNT: { href: "/money", label: "Add your bank details" },
   // Points at the roster, which the Partner reaches from the assignment they
   // were trying to make. Not at registration — `FLOW-07` is explicit that a crew
   // list is asked for at first assignment and never before.
-  ADD_CREW_MEMBER: { href: "/workforce/crew", label: "Add your crew" },
+  ADD_CREW_MEMBER: { href: "/me/crew", label: "Add your crew" },
 };
 
 export interface GateExplanation {

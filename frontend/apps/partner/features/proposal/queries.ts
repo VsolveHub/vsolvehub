@@ -260,6 +260,11 @@ export function isProposalShapeRefusal(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === "m2_proposal_invalid_shape";
 }
 
+/** The Customer committed the request elsewhere before this stale composer submitted. */
+export function isProposalWindowClosed(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === "m2_proposal_window_closed";
+}
+
 /** The daily rate is below the statutory floor, or no floor could be loaded. */
 export function isWageFloorRefusal(error: unknown): boolean {
   return (

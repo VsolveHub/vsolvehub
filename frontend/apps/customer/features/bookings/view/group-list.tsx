@@ -36,7 +36,7 @@ function totalOf(group: BookingGroup) {
   return group.units.length;
 }
 
-function GroupRow({ group }: { group: BookingGroup }) {
+export function BookingGroupRow({ group }: { group: BookingGroup }) {
   const first = group.units[0];
 
   return (
@@ -153,7 +153,7 @@ export function BookingGroupList() {
     <div>
       <ul className="flex flex-col gap-3">
         {groups.map((group) => (
-          <GroupRow key={group.id} group={group} />
+          <BookingGroupRow key={group.id} group={group} />
         ))}
       </ul>
 

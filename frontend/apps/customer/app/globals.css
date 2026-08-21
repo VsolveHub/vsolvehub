@@ -14,6 +14,51 @@ body {
 }
 
 /*
+ * Crew booking choreography.
+ *
+ * One orchestrated entrance makes a stage change read as movement through the
+ * booking rather than as an unrelated page flash. The cards follow in a short
+ * wave so the eye discovers the choices in the server's published order. No
+ * animation loops: once the options are understood, the interface stays still.
+ */
+@keyframes crew-stage-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes crew-option-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.crew-stage-enter {
+  animation: crew-stage-enter 280ms var(--ease-out) backwards;
+}
+
+.crew-option-enter {
+  animation: crew-option-enter 320ms var(--ease-out) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crew-stage-enter,
+  .crew-option-enter {
+    animation-delay: 0ms !important;
+  }
+}
+
+/*
  * Printing.
  *
  * The M1 order receipt has offered a Print button since Milestone 1 and marks

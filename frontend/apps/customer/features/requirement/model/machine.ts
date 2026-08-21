@@ -69,6 +69,19 @@ export type RequirementAction =
    * discarding the id along with the missing sentence would strand the draft.
    */
   | { type: "APPLY_VERDICT"; verdict: LifecycleVerdict | null; requirementId: string }
+  /** Canonical editable intent discovered on the server from another visit or device. */
+  | {
+      type: "RESTORE_SERVER_DRAFT";
+      requirementId: string;
+      answers: Readonly<Record<string, unknown>>;
+      verdict: LifecycleVerdict | null;
+      addressId: string | null;
+      requestedStart: string | null;
+      serviceBy: string | null;
+      flexibilityDays: number;
+      additionalDetails: string;
+      language: string | null;
+    }
   | { type: "SET_ADDRESS"; addressId: string }
   | { type: "SET_REQUESTED_START"; requestedStart: string | null }
   /**
@@ -253,6 +266,20 @@ export function requirementReducer(
 
     case "APPLY_VERDICT":
       return { ...state, verdict: action.verdict, requirementId: action.requirementId };
+
+    case "RESTORE_SERVER_DRAFT":
+      return {
+        ...state,
+        requirementId: action.requirementId,
+        answers: action.answers,
+        verdict: action.verdict,
+        addressId: action.addressId,
+        requestedStart: action.requestedStart,
+        serviceBy: action.serviceBy,
+        flexibilityDays: action.flexibilityDays,
+        additionalDetails: action.additionalDetails,
+        language: action.language,
+      };
 
     case "SET_ADDRESS":
       // The address does not feed lifecycle inference — what the Customer needs

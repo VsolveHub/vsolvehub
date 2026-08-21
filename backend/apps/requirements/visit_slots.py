@@ -37,7 +37,7 @@ from apps.requirements.exceptions import (
     PolicyUnavailableError,
     VisitSlotUnavailableError,
 )
-from apps.requirements.models import CustomerRequirement, VendorInvitation
+from apps.requirements.models import CustomerRequirement, SiteVisit, VendorInvitation
 
 #: Signed-token salt and version, mirroring `carts.services.WINDOW_SIGNING_SALT`. The version is
 #: checked on redemption so a token issued before a change in what it carries is refused rather
@@ -155,7 +155,7 @@ def candidate_visit_starts(*, invitation: VendorInvitation) -> BookingWindows:
             partner_id for partner_id in snapshot.partner_ids if partner_id == invitation.partner_id
         ),
     )
-    return build_arrival_window_grid(
+    windows = build_arrival_window_grid(
         area=area,
         snapshot=scoped,
         duration=duration,
@@ -166,9 +166,128 @@ def candidate_visit_starts(*, invitation: VendorInvitation) -> BookingWindows:
             duration_minutes=duration,
         ),
     )
+    return remove_requirement_conflicts(windows=windows, requirement=requirement)
 
 
-def slot_is_still_free(*, invitation: VendorInvitation, choice: VisitSlotChoice) -> bool:
+def remove_requirement_conflicts(
+    *,
+    windows: BookingWindows,
+    requirement: CustomerRequirement,
+    exclude_site_visit_id: UUID | None = None,
+) -> BookingWindows:
+    """Mark times already held by another plan visit as unavailable.
+
+    The shared availability snapshot answers whether *this Partner* is free. A
+    project plan asks a second question: whether the Customer is already meeting
+    a different Partner for this same requirement. Both must be true before a
+    slot is offered.
+    """
+    occupied = _occupied_plan_visit_ranges(
+        requirement=requirement,
+        exclude_site_visit_id=exclude_site_visit_id,
+    )
+    if not occupied:
+        return windows
+
+    days = tuple(
+        replace(
+            day,
+            windows=tuple(
+                replace(
+                    window,
+                    is_available=False,
+                    unavailable_reason="NO_CAPACITY",
+                    capacity=0,
+                )
+                if window.is_available
+                and _overlaps_any(
+                    occupied,
+                    *occupied_range_bounds(
+                        VisitSlotChoice(
+                            starts_at=window.starts_at,
+                            duration_minutes=windows.estimated_duration_minutes,
+                        )
+                    ),
+                )
+                else window
+                for window in day.windows
+            ),
+        )
+        for day in windows.days
+    )
+    return replace(windows, days=days)
+
+
+def requirement_slot_is_still_free(
+    *,
+    requirement: CustomerRequirement,
+    choice: VisitSlotChoice,
+    exclude_site_visit_id: UUID | None = None,
+) -> bool:
+    """Whether this Customer project has no other live visit at this time.
+
+    Confirmation and rescheduling hold the requirement row lock while calling
+    this function. That serializes two different Partners racing for the same
+    time; the second transaction sees the first visit and loses cleanly.
+    """
+    lower, upper = occupied_range_bounds(choice)
+    return not _overlaps_any(
+        _occupied_plan_visit_ranges(
+            requirement=requirement,
+            exclude_site_visit_id=exclude_site_visit_id,
+        ),
+        lower,
+        upper,
+    )
+
+
+def _occupied_plan_visit_ranges(
+    *,
+    requirement: CustomerRequirement,
+    exclude_site_visit_id: UUID | None,
+) -> tuple[tuple[datetime, datetime], ...]:
+    visits = SiteVisit.objects.filter(
+        requirement=requirement,
+        plan_share__isnull=False,
+        scheduled_for__isnull=False,
+        status__in=SiteVisit.SHARE_HOLDING_STATUSES,
+    )
+    if exclude_site_visit_id is not None:
+        visits = visits.exclude(pk=exclude_site_visit_id)
+
+    fallback_duration = visit_duration_minutes(requirement)
+    ranges: list[tuple[datetime, datetime]] = []
+    for visit in visits.only("scheduled_for", "duration_minutes"):
+        if visit.scheduled_for is None:  # Narrowed above; keeps MyPy honest.
+            continue
+        ranges.append(
+            occupied_range_bounds(
+                VisitSlotChoice(
+                    starts_at=visit.scheduled_for,
+                    duration_minutes=visit.duration_minutes or fallback_duration,
+                )
+            )
+        )
+    return tuple(ranges)
+
+
+def _overlaps_any(
+    occupied: tuple[tuple[datetime, datetime], ...],
+    lower: datetime,
+    upper: datetime,
+) -> bool:
+    return any(
+        lower < existing_upper and existing_lower < upper
+        for existing_lower, existing_upper in occupied
+    )
+
+
+def slot_is_still_free(
+    *,
+    invitation: VendorInvitation,
+    choice: VisitSlotChoice,
+    exclude_site_visit_id: UUID | None = None,
+) -> bool:
     """Re-ask the grid, at write time, whether this exact start is still bookable.
 
     The token proves the grid once drew this slot; it does not prove the slot is still free, and
@@ -195,7 +314,11 @@ def slot_is_still_free(*, invitation: VendorInvitation, choice: VisitSlotChoice)
         starts_at=choice.starts_at,
         duration_minutes=choice.duration_minutes,
     )
-    return invitation.partner_id in free
+    return invitation.partner_id in free and requirement_slot_is_still_free(
+        requirement=requirement,
+        choice=choice,
+        exclude_site_visit_id=exclude_site_visit_id,
+    )
 
 
 def occupied_range_bounds(choice: VisitSlotChoice) -> tuple[datetime, datetime]:

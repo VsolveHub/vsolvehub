@@ -107,7 +107,8 @@ GET /api/v1/requirements/{id}/visit-plan/   -> available_tiers must not be []
      visits**;
    - slot 1 badged **Holding a time for you** — *not* Confirmed. This is the
      distinction the whole flow turns on: a held slot is not a booking.
-3. Press **Book your visits** → **`/requests/{id}/book-visits`**.
+3. Press **Pay ₹X and lock the visits** on `/requests/{id}`.
+   - The payment breakdown opens on the request page; the URL does not change.
    - It states the professional and the time.
    - It says **one payment for the whole plan**, and that unfilled visits refund
      themselves.
@@ -115,7 +116,7 @@ GET /api/v1/requirements/{id}/visit-plan/   -> available_tiers must not be []
 4. Press **Pay ₹X for the plan**. `POST .../visit-plan/checkout/` returns `201`.
    The screen switches to *"We are confirming your payment"* with **nothing to
    press**.
-5. **Close the tab and reopen the URL.** Same pending state.
+5. **Close the tab and reopen `/requests/{id}`.** Same pending state.
 6. Complete the charge (§5). Reload `/requests/{id}`:
    - the plan reads **charged**;
    - slot 1 is **Confirmed** with its time in the checkout picker's own format;
@@ -125,9 +126,10 @@ GET /api/v1/requirements/{id}/visit-plan/   -> available_tiers must not be []
 
 ## 4. A5 — visit day, estimate, selection, engagement
 
-1. On a **Confirmed** slot, press **They have arrived** →
-   `POST /site-visits/{id}/arrival/`. The row moves to **On site**. This is the
-   non-OTP fallback and it is the default path in M2, not a degraded one.
+1. On a **Confirmed** slot, issue the arrival code on the Customer visit page.
+   As the Partner, enter it into **Arrival code** and press **I've arrived**.
+   `POST /partner/site-visits/{id}/arrival/` moves the row to **On site**. There
+   is no tap-only arrival or completion bypass.
 2. To see the no-show branch instead, use a second slot: press **They did not
    come**, read the consequence, confirm. `POST /site-visits/{id}/no-show/` is
    sent with `party: "VENDOR"`. **There is deliberately no control that can send
@@ -242,7 +244,7 @@ the platform was Hyderabad-only and silently wrong the day it was not.
    and confirm the displayed time moves **with the area**. That is the check that
    the value is genuinely being read and not just pinned to Asia/Kolkata.
 5. The estimate-due line on a completed visit and the held-slot sentence on
-   `/requests/{id}/book-visits` use the same formatter — check both moved too.
+   `/requests/{id}` use the same formatter — check both moved too.
 
 ## J5. The no-show vocabulary — `VisitNoShowReasonEnum`
 

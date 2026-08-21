@@ -35,6 +35,7 @@ export interface ReviewScreenProps {
   onSubmit: () => void;
   isSubmitting: boolean;
   submitError: string | null;
+  submitLabel?: string;
   visitPlanChooser?: ReactNode;
   submitBlockedReason?: string | null;
   requiresVisitPlanSelection?: boolean;
@@ -48,6 +49,7 @@ export function ReviewScreen({
   onSubmit,
   isSubmitting,
   submitError,
+  submitLabel = "Send this request",
   visitPlanChooser,
   submitBlockedReason = null,
   requiresVisitPlanSelection = false,
@@ -247,7 +249,7 @@ export function ReviewScreen({
                 (submitBlockedReason !== null && !requiresVisitPlanSelection)
               }
             >
-              {requiresVisitPlanSelection ? "Select number of estimates" : "Send this request"}
+              {requiresVisitPlanSelection ? "Select number of estimates" : submitLabel}
             </Button>
 
             {blocked !== null ? (

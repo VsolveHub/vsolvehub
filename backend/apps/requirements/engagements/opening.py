@@ -103,6 +103,8 @@ def _a5_stages(proposal: Proposal) -> list[dict[str, Any]]:
                 # is append-only and the vendor may supersede it after reconfirmation.
                 "deliverable": str(stage.get("deliverable") or ""),
                 "amount_paise": int(stage.get("amount_paise", 0)),
+                "starts_on": stage.get("starts_on"),
+                "duration_days": stage.get("duration_days"),
                 "scheduled_on": stage.get("ends_on"),
                 "kind": EngagementStage.Kind.WORK,
             }

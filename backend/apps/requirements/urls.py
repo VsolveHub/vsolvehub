@@ -75,11 +75,13 @@ from apps.requirements.views import (
     PartnerEnquiryQuestionView,
     PartnerEnquirySiteVisitView,
     PartnerEnquiryVisitSlotView,
+    PartnerProjectCompletionView,
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
     PartnerProposalWithdrawView,
     PartnerQuestionAnswerView,
     PartnerWorkspaceListView,
+    ProjectCompletionCodeView,
     ProjectDelayClaimDecisionView,
     ProjectTransferDecisionView,
     RequirementAttachmentCollectionView,
@@ -114,7 +116,6 @@ from apps.requirements.views import (
     SelectionDeclineView,
     SelectionReconfirmView,
     SiteVisitArrivalCodeView,
-    SiteVisitArrivalView,
     SiteVisitArrivalWithCodeView,
     SiteVisitCompleteView,
     SiteVisitNoShowView,
@@ -238,6 +239,16 @@ urlpatterns = [
         EngagementCompletionView.as_view(),
         name="m2-engagement-completion",
     ),
+    path(
+        "engagements/<uuid:engagement_id>/completion-code/",
+        ProjectCompletionCodeView.as_view(),
+        name="m2-project-completion-code",
+    ),
+    path(
+        "partner/engagements/<uuid:engagement_id>/completion/",
+        PartnerProjectCompletionView.as_view(),
+        name="m2-partner-project-completion",
+    ),
     # Wave C3 — scope amendments. `POST` on the collection proposes (vendor); the decision routes
     # belong to the Customer. Both go through the M1 amendment engine.
     path(
@@ -342,11 +353,6 @@ urlpatterns = [
         "partner/site-visits/<uuid:site_visit_id>/arrival/",
         SiteVisitArrivalWithCodeView.as_view(),
         name="site-visit-arrival-with-code",
-    ),
-    path(
-        "site-visits/<uuid:site_visit_id>/arrival/",
-        SiteVisitArrivalView.as_view(),
-        name="m2-site-visit-arrival",
     ),
     path(
         "site-visits/<uuid:site_visit_id>/no-show/",

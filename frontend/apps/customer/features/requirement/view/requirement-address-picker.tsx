@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useAddresses,
+  preferredAddressId,
   useCreateAddress,
   useReverseGeocode,
   useUpdateAddress,
@@ -52,7 +53,13 @@ export function RequirementAddressPicker({
 
   const addressesQuery = useAddresses();
   const addresses = addressesQuery.data ?? [];
-  const selected = addresses.find((address) => address.id === state.addressId) ?? null;
+  const effectiveAddressId = preferredAddressId(addresses, state.addressId);
+  const selected = addresses.find((address) => address.id === effectiveAddressId) ?? null;
+
+  useEffect(() => {
+    if (effectiveAddressId === null || state.addressId === effectiveAddressId) return;
+    dispatch({ type: "SET_ADDRESS", addressId: effectiveAddressId });
+  }, [dispatch, effectiveAddressId, state.addressId]);
 
   const reverseGeocode = useReverseGeocode();
   const createAddress = useCreateAddress();
@@ -111,7 +118,7 @@ export function RequirementAddressPicker({
       isLoading={addressesQuery.isPending}
       serviceability={serviceabilityQuery.data ?? null}
       isCheckingServiceability={serviceabilityQuery.isFetching}
-      selectedAddressId={state.addressId}
+      selectedAddressId={effectiveAddressId}
       onSelect={(address) => dispatch({ type: "SET_ADDRESS", addressId: address.id })}
       onUseCurrentLocation={() => void handleUseCurrentLocation()}
       isUsingCurrentLocation={reverseGeocode.isPending || createAddress.isPending}

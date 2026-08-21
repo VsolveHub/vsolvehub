@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import type { RequestRowView } from "../adapters";
 import {
+  isClosedState,
   isOurFailure,
   requestState,
   showsQuoteDeadline,
@@ -77,9 +78,19 @@ export interface RequestRowProps {
   href: string;
   /** Rendered inside the state notice where support is the honest next step. */
   supportAction?: ReactNode;
+  /**
+   * Whether this request is over.
+   *
+   * A closed request is still worth keeping — a Customer looks one up to see
+   * what happened, or to start the same job again — but it is not news, and it
+   * must not read like a live one. It keeps every word it had and loses the
+   * emphasis: sunken surface, no hover affordance, and the whole card at 70%
+   * until it is pointed at.
+   */
+  isClosed?: boolean;
 }
 
-export function RequestRow({ request, href, supportAction }: RequestRowProps) {
+export function RequestRow({ request, href, supportAction, isClosed = false }: RequestRowProps) {
   // Derived during render from the server clock, so the delayed state appears
   // the moment the promise passes rather than on the next refetch.
   const countdown = useServerCountdown(request.deadlineAt, 60_000);
@@ -90,7 +101,13 @@ export function RequestRow({ request, href, supportAction }: RequestRowProps) {
   const copy = REQUEST_STATE_COPY[state];
 
   return (
-    <li className="rounded-card border border-line bg-surface">
+    <li
+      className={
+        isClosed
+          ? "rounded-card border border-line bg-surface-sunken opacity-70 transition-opacity hover:opacity-100"
+          : "rounded-card border border-line bg-surface"
+      }
+    >
       <Link
         href={href}
         className="block rounded-card p-4 hover:border-warm-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
@@ -217,6 +234,23 @@ export function RequestsList({
     );
   }
 
+  const open = requests.filter((request) => !isClosedState(request.status));
+  /*
+    Newest closure first. The open group keeps the order the read gave it —
+    the server decides what is most pressing and this list must not second-guess
+    it — but a closed group has no urgency to preserve, and the one a Customer
+    is looking for is almost always the one that just ended. Rows with no
+    recorded activity sort last rather than being treated as ancient.
+  */
+  const closed = requests
+    .filter((request) => isClosedState(request.status))
+    .slice()
+    .sort((a, b) => {
+      const at = a.lastActivityAt === null ? 0 : Date.parse(a.lastActivityAt);
+      const bt = b.lastActivityAt === null ? 0 : Date.parse(b.lastActivityAt);
+      return bt - at;
+    });
+
   return (
     <div>
       {error !== null && error !== undefined ? (
@@ -232,16 +266,52 @@ export function RequestsList({
         </div>
       ) : null}
 
-      <ul className="flex list-none flex-col gap-3 p-0">
-        {requests.map((request) => (
-          <RequestRow
-            key={request.id}
-            request={request}
-            href={hrefFor(request.id)}
-            supportAction={supportActionFor?.(request.id)}
-          />
-        ))}
-      </ul>
+      {open.length > 0 ? (
+        <ul className="flex list-none flex-col gap-3 p-0">
+          {open.map((request) => (
+            <RequestRow
+              key={request.id}
+              request={request}
+              href={hrefFor(request.id)}
+              supportAction={supportActionFor?.(request.id)}
+            />
+          ))}
+        </ul>
+      ) : null}
+
+      {/*
+        Everything that is over, underneath and out of the way.
+
+        Before this split the two were one flat list in whatever order the read
+        returned them, drawn identically — so a Customer scrolling their requests
+        met expired and no-supply ones sitting among the live ones, at the same
+        weight, with nothing but a badge to tell them apart. `isClosedState`
+        already existed and already knew the answer; the detail screen consulted
+        it and the list never did.
+
+        Partitioned on `request.status` rather than on the derived state: the
+        only state derivation is `MATCHING → MATCHING_DELAYED`, and neither is
+        closed, so the group a row belongs to cannot depend on a clock. That also
+        keeps this out of the countdown hook, which lives per-row.
+      */}
+      {closed.length > 0 ? (
+        <section className={open.length > 0 ? "mt-8" : undefined}>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Closed · {closed.length}
+          </h2>
+          <ul className="flex list-none flex-col gap-3 p-0">
+            {closed.map((request) => (
+              <RequestRow
+                key={request.id}
+                request={request}
+                href={hrefFor(request.id)}
+                supportAction={supportActionFor?.(request.id)}
+                isClosed
+              />
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="mt-6">
         <Button variant="outline" onClick={onRetry}>

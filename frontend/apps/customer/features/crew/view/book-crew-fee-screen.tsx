@@ -32,10 +32,9 @@ import { ConfirmCrewScreen } from "./mobile/confirm-crew-screen";
 /**
  * The booking-fee checkout — `M2-FE-428`.
  *
- * The A3 mirror of `/requests/[id]/book-visits`, on the same rails and with the
- * same three rules: it exists only against a real accepted commitment, it is a
- * **route** rather than a modal because a payment outlives the screen that
- * started it, and **nothing but a verified provider callback confirms it**.
+ * It exists only against a real accepted commitment, keeps an addressable
+ * recovery screen for the held crew, and **nothing but a verified provider
+ * callback confirms it**.
  *
  * ## Why this can be reached before the money exists, and why leaving is safe
  *

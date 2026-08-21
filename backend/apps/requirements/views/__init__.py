@@ -110,6 +110,7 @@ from .operations_workspace import (
     OperationsTouchMetricView,
     OperationsTouchRollupView,
 )
+from .project_completion import PartnerProjectCompletionView, ProjectCompletionCodeView
 from .projects import (
     EngagementHandoverAcceptanceView,
     EngagementHandoverView,
@@ -201,7 +202,6 @@ from .visit_slots import (
     PartnerEnquiryVisitSlotView,
     PartnerWorkspaceListView,
     SiteVisitArrivalCodeView,
-    SiteVisitArrivalView,
     SiteVisitArrivalWithCodeView,
     SiteVisitNoShowView,
 )
@@ -278,11 +278,13 @@ __all__ = [
     "PartnerEnquiryQuestionView",
     "PartnerEnquirySiteVisitView",
     "PartnerEnquiryVisitSlotView",
+    "PartnerProjectCompletionView",
     "PartnerProposalCollectionView",
     "PartnerProposalDetailView",
     "PartnerProposalWithdrawView",
     "PartnerQuestionAnswerView",
     "PartnerWorkspaceListView",
+    "ProjectCompletionCodeView",
     "ProjectDelayClaimDecisionView",
     "ProjectTransferDecisionView",
     "ProposalCursorPagination",
@@ -319,7 +321,6 @@ __all__ = [
     "SelectionDeclineView",
     "SelectionReconfirmView",
     "SiteVisitArrivalCodeView",
-    "SiteVisitArrivalView",
     "SiteVisitArrivalWithCodeView",
     "SiteVisitCompleteView",
     "SiteVisitNoShowView",

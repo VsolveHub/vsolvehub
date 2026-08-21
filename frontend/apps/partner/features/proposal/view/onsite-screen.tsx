@@ -215,16 +215,15 @@ function SentConfirmation({
   return (
     <Card className="flex flex-col gap-3 p-4">
       <h2 className="text-base font-semibold text-text">Your estimate is with the customer</h2>
-      <p className="text-sm leading-6 text-text-secondary">
-        They can read it in full — there is nothing further for them to pay to see it — and they
-        will compare it with the other estimates they booked. You can send a revised one from the
-        enquiry at any time until they choose; nothing is overwritten.
-      </p>
+      <p className="text-sm leading-5 text-text-secondary">Waiting for the customer to decide.</p>
       <p className="text-sm leading-6 text-text-secondary">
         Revision {proposal.revision} · recorded {new Date(proposal.submitted_at).toLocaleString()}
       </p>
+      <Link href="/work" className={buttonStyles()}>
+        Go to Work
+      </Link>
       <Link href={enquiryHref} className={buttonStyles({ variant: "outline" })}>
-        Back to the enquiry
+        View enquiry
       </Link>
     </Card>
   );

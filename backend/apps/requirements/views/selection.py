@@ -53,8 +53,8 @@ class RequirementSelectionView(ThrottledWriteMixin, APIView):
         tags=["M2 - Selection"],
         operation_id="m2_selection_read",
         description=(
-            "The live selection for this request, or `null`. `reconfirm_by` is the vendor's "
-            "deadline; `engagement_id` fills in once they reconfirm."
+            "The live selection for this request. Selection opens the engagement in the same "
+            "transaction, so `engagement_id` is available immediately on a confirmed selection."
         ),
         responses={200: ProposalSelectionSerializer, 404: ApiErrorSerializer},
     )
@@ -77,11 +77,9 @@ class RequirementSelectionView(ThrottledWriteMixin, APIView):
         parameters=[IDEMPOTENCY_KEY_HEADER],
         request=SelectionCreateSerializer,
         description=(
-            "Choose one vendor. **Selection is not a booking**: it starts the vendor's "
-            "reconfirmation clock, and the engagement opens only when they commit — A3 on their "
-            "reconfirmation, A5 when the first stage is funded. If they decline or the clock runs "
-            "out, the unlock or visit-plan entitlement survives untouched and the next quote costs "
-            "nothing more. Multiple simultaneous selections are not supported."
+            "Choose one vendor and open the engagement atomically after capability, availability "
+            "and quote-validity checks. The response includes `engagement_id`; multiple "
+            "simultaneous selections are not supported."
         ),
         responses={
             201: ProposalSelectionSerializer,

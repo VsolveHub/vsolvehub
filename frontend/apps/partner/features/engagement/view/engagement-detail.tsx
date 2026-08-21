@@ -1,6 +1,15 @@
 "use client";
 
-import { Badge, Card, ErrorState, Skeleton, SkeletonRegion, Timeline, TimelineEvent } from "@vsolve/ui";
+import {
+  Badge,
+  Card,
+  Disclosure,
+  ErrorState,
+  Skeleton,
+  SkeletonRegion,
+  Timeline,
+  TimelineEvent,
+} from "@vsolve/ui";
 import {
   describeError,
   eventsOldestFirst,
@@ -12,6 +21,8 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { timeAgo } from "@/lib/format";
+import { BookingSupport } from "@/features/support/view/booking-support";
+import { CompletionRating } from "@/features/ratings/view/completion-rating";
 
 import { usePartnerEngagement, usePartnerEngagementEvents } from "../queries";
 import { describeEngagementStatus, type StageWording } from "../model/engagement-copy";
@@ -67,6 +78,8 @@ export interface EngagementDetailProps {
   readonly basePath: string;
   /** Which archetype's Wave III tails to name. */
   readonly workspace: "workforce" | "project";
+  /** When present, render one stage as a focused workspace rather than the whole job. */
+  readonly focusStageId?: string;
 }
 
 export function EngagementDetail({
@@ -74,6 +87,7 @@ export function EngagementDetail({
   wording,
   basePath,
   workspace,
+  focusStageId,
 }: EngagementDetailProps) {
   const query = usePartnerEngagement(engagementId);
 
@@ -127,6 +141,23 @@ export function EngagementDetail({
   const engagement = query.data;
   const status = describeEngagementStatus(engagement, wording);
   const stages = orderedStages(engagement);
+  const focusedStage =
+    focusStageId === undefined ? null : stages.find((stage) => stage.id === focusStageId) ?? null;
+
+  if (focusStageId !== undefined && focusedStage === null) {
+    return (
+      <div className="flex flex-col gap-4">
+        {back}
+        <ErrorState
+          title="This stage is not part of the job"
+          message="Open the job again to see its current stages."
+          severity="warning"
+        />
+      </div>
+    );
+  }
+
+  const visibleStages = focusedStage === null ? stages : [focusedStage];
 
   return (
     <div className="flex flex-col gap-4">
@@ -135,7 +166,9 @@ export function EngagementDetail({
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-semibold text-text">
-            {wording.parent.charAt(0).toUpperCase() + wording.parent.slice(1)}
+            {focusedStage === null
+              ? wording.parent.charAt(0).toUpperCase() + wording.parent.slice(1)
+              : "Stage workspace"}
           </h1>
           {status ? (
             <Badge tone={TONE[status.tone]} dot>
@@ -145,10 +178,14 @@ export function EngagementDetail({
             <Badge tone="neutral">State not recognised</Badge>
           )}
         </div>
-        <p className="text-sm leading-6 text-text-secondary">
-          {status?.sentence ??
-            "Vsolve sent a state this version of the app cannot describe. Nothing is wrong with your record; updating the app usually resolves it."}
-        </p>
+        {focusedStage === null ? (
+          <p className="text-sm leading-6 text-text-secondary">
+            {status?.sentence ??
+              "Vsolve sent a state this version of the app cannot describe. Nothing is wrong with your record; updating the app usually resolves it."}
+          </p>
+        ) : (
+          <p className="text-sm text-text-secondary">Your next action and stage record, in one place.</p>
+        )}
       </header>
 
       <section aria-labelledby="engagement-stages" className="flex flex-col gap-3">
@@ -156,9 +193,9 @@ export function EngagementDetail({
           id="engagement-stages"
           className="text-xs font-semibold uppercase tracking-wide text-text-muted"
         >
-          The {wording.many}
+          {focusedStage === null ? `The ${wording.many}` : "Current stage"}
         </h2>
-        {stages.map((stage) => (
+        {visibleStages.map((stage) => (
           <StagePanel
             key={stage.id}
             engagement={engagement}
@@ -172,16 +209,43 @@ export function EngagementDetail({
             dayHref={
               workspace === "workforce" ? `${basePath}/${engagement.id}/days/${stage.id}` : null
             }
+            compact={focusedStage !== null}
+            workspace={workspace}
           />
         ))}
       </section>
 
-      {workspace === "workforce" ? null : <ProjectTails />}
+      {focusedStage === null ? (
+        <>
+          {workspace === "workforce" ? null : <ProjectTails />}
+          <AgreementPanel engagement={engagement} wording={wording} />
+          <AmendmentPanel engagement={engagement} wording={wording} />
+          <PayoutPanel engagement={engagement} wording={wording} />
+          <EngagementHistory engagement={engagement} wording={wording} />
+        </>
+      ) : (
+        <Card className="flex flex-col gap-3 p-4">
+          <Disclosure summary="Agreement and payment" hint="Job details">
+            <div className="flex flex-col gap-3">
+              <AgreementPanel engagement={engagement} wording={wording} />
+              <PayoutPanel engagement={engagement} wording={wording} />
+            </div>
+          </Disclosure>
+          <Disclosure summary="Change the agreed work" hint="Optional">
+            <AmendmentPanel engagement={engagement} wording={wording} />
+          </Disclosure>
+          <Disclosure summary="Job history" hint="Timeline">
+            <EngagementHistory engagement={engagement} wording={wording} />
+          </Disclosure>
+        </Card>
+      )}
 
-      <AgreementPanel engagement={engagement} wording={wording} />
-      <AmendmentPanel engagement={engagement} wording={wording} />
-      <PayoutPanel engagement={engagement} wording={wording} />
-      <EngagementHistory engagement={engagement} wording={wording} />
+      <BookingSupport reference={engagement.id} />
+      <CompletionRating
+        subject="engagement"
+        id={engagement.id}
+        isComplete={["COMPLETED", "WARRANTY", "CLOSED"].includes(engagement.status)}
+      />
     </div>
   );
 }

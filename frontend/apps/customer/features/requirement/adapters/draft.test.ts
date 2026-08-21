@@ -48,6 +48,7 @@ function draft(overrides: Partial<RequirementDraft> = {}): RequirementDraft {
     language: "en-IN",
     additional_details: "",
     attachments: [],
+    engagement_id: null,
     server_now: "2026-08-12T09:00:00Z",
     ...overrides,
   };
@@ -105,6 +106,17 @@ describe("the answer bag", () => {
     expect(toDraftIntent(draft({ answers: "nonsense" })).answers).toEqual({});
     expect(toDraftIntent(draft({ answers: [1, 2] })).answers).toEqual({});
     expect(toDraftIntent(draft({ answers: null })).answers).toEqual({});
+  });
+});
+
+describe("server draft dates", () => {
+  it("restores the start as the Customer's local calendar day", () => {
+    const stored = new Date(2026, 8, 14, 0, 0, 0).toISOString();
+    expect(toDraftIntent(draft({ requested_start: stored })).requestedStart).toBe("2026-09-14");
+  });
+
+  it("keeps an absent start absent", () => {
+    expect(toDraftIntent(draft({ requested_start: null })).requestedStart).toBeNull();
   });
 });
 

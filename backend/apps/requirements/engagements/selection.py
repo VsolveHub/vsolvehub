@@ -117,6 +117,7 @@ def select_proposal(
     # selectable — this is the last moment the Customer can still pick somebody else.
     _assert_vendor_can_still_take_it(requirement=requirement, proposal=proposal)
 
+    decided_at = timezone.now()
     selection = ProposalSelection.objects.create(
         requirement=requirement,
         proposal=proposal,
@@ -125,8 +126,24 @@ def select_proposal(
         # survives on the model for rows written before this changed, and `expire_selection` still
         # answers for them.
         status=ProposalSelection.Status.CONFIRMED,
-        decided_at=timezone.now(),
+        decided_at=decided_at,
     )
+    # A Customer decision is an outcome for every vendor, not only the winner. Close the losing
+    # live proposals in this same transaction so Partner reads never have to infer "not chosen"
+    # from an invitation that correctly remains QUOTED.
+    competing_ids = list(
+        Proposal.objects.select_for_update(of=("self",))
+        .filter(requirement=requirement, status=Proposal.Status.SUBMITTED)
+        .exclude(pk=proposal.pk)
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+    if competing_ids:
+        Proposal.objects.filter(id__in=competing_ids).update(
+            status=Proposal.Status.REJECTED,
+            rejection_reason=Proposal.RejectionReason.NOT_CHOSEN,
+            updated_at=decided_at,
+        )
     proposal.status = Proposal.Status.ACCEPTED
     proposal.save(update_fields=("status", "updated_at"))
     from_status = requirement.status

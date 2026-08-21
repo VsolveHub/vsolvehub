@@ -73,10 +73,10 @@ describe("homeForApplication", () => {
   it("sends everyone else to the signed-in home", () => {
     // Waiting states included: there is nothing for them to do on `/apply`, and
     // the home says so plainly rather than reopening a form they cannot change.
-    expect(homeForApplication("SUBMITTED")).toBe("/dashboard");
-    expect(homeForApplication("UNDER_REVIEW")).toBe("/dashboard");
-    expect(homeForApplication("APPROVED")).toBe("/dashboard");
-    expect(homeForApplication("SUSPENDED")).toBe("/dashboard");
-    expect(homeForApplication("OFFBOARDED")).toBe("/dashboard");
+    expect(homeForApplication("SUBMITTED")).toBe("/home");
+    expect(homeForApplication("UNDER_REVIEW")).toBe("/home");
+    expect(homeForApplication("APPROVED")).toBe("/home");
+    expect(homeForApplication("SUSPENDED")).toBe("/home");
+    expect(homeForApplication("OFFBOARDED")).toBe("/home");
   });
 });

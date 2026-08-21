@@ -35,7 +35,7 @@ from apps.requirements.models import (
 )
 
 from .base import _assert_engagement_live, _locked_stage, add_engagement_money, record_event
-from .release import _release
+from .release import _release, _release_stage_ledger_hold
 
 # ---------------------------------------------------------------------------
 # Review: approve, request correction, dispute (`M2-BE-503`)
@@ -211,6 +211,58 @@ def approve_stage(*, stage_id: uuid.UUID, actor: User) -> EngagementStage:
     if stage.status != EngagementStage.Status.AWAITING_REVIEW:
         raise StageTransitionError("This stage has nothing submitted to approve.")
     return _approve(stage=stage, actor=actor, reason_code="stage_approved")
+
+
+@transaction.atomic
+def settle_stage_with_project_completion_code(
+    *, stage_id: uuid.UUID, customer: User
+) -> EngagementStage:
+    """Settle one funded A5 stage after the Customer shares the project-end code.
+
+    The code is whole-project acceptance, so evidence and the ordinary review window are not
+    prerequisites on this path. The money arithmetic remains the ordinary approval arithmetic;
+    only the proof of acceptance changed. Release is immediate because the Customer has just
+    explicitly signed off the whole project rather than entering a passive dispute window.
+    """
+
+    stage = _locked_stage(stage_id)
+    _assert_engagement_live(stage.engagement)
+    if stage.status == EngagementStage.Status.RELEASED:
+        return stage
+    if stage.status == EngagementStage.Status.DISPUTED:
+        raise StageDisputedError("Resolve the disputed stage before completing this project.")
+    if (
+        stage.engagement.commercial_mode == Engagement.CommercialMode.MANAGED_PAYMENT_REQUIRED
+        and stage.funding_state != EngagementStage.FundingState.FUNDED
+    ):
+        from apps.requirements.exceptions import StageNotFundedError  # noqa: PLC0415
+
+        raise StageNotFundedError("Fund every agreed stage before completing this project.")
+
+    approved = stage
+    if stage.status != EngagementStage.Status.APPROVED:
+        if stage.status not in (
+            EngagementStage.Status.PENDING,
+            EngagementStage.Status.IN_PROGRESS,
+            EngagementStage.Status.AWAITING_REVIEW,
+            EngagementStage.Status.CORRECTION_REQUESTED,
+        ):
+            raise StageTransitionError("This stage cannot be completed from its current state.")
+        approved = _approve(
+            stage=stage,
+            actor=customer,
+            reason_code="stage_approved_by_project_completion_code",
+        )
+
+    if approved.status == EngagementStage.Status.RELEASED:
+        return approved
+    released = _release(
+        stage=approved,
+        actor=customer,
+        reason_code="stage_released_by_project_completion_code",
+    )
+    _release_stage_ledger_hold(released)
+    return released
 
 
 @transaction.atomic

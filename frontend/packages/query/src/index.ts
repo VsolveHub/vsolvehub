@@ -464,6 +464,7 @@ export {
   isCrewConflict,
   isCrewRosterRequired,
 } from "./m2-engagement-partner";
+export { stageDeadline, type StageDeadline, type StageDeadlineState } from "./m2-stage-deadline";
 export type {
   AgreedTotals,
   AmendmentDraft,

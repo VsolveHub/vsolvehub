@@ -29,7 +29,7 @@ const UNFINISHED: readonly Status[] = ["DRAFT", "CHANGES_REQUIRED"];
  * nothing is owed and links onward. Sending a `SUBMITTED` applicant back into
  * the form would invite them to edit a record a reviewer is holding.
  */
-export function homeForApplication(status: Status | null): "/apply" | "/dashboard" {
+export function homeForApplication(status: Status | null): "/apply" | "/home" {
   if (status === null || UNFINISHED.includes(status)) return "/apply";
-  return "/dashboard";
+  return "/home";
 }

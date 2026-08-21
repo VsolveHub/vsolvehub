@@ -11,7 +11,7 @@ import type { SiteVisit } from "@/features/visit/model/visit-state";
 import { toOnsiteRequest } from "../model/onsite-draft";
 import type { TaxBasis } from "../model/proposal-draft";
 import { toOnsiteDraft, type TapEstimate as TapEstimateDraft } from "../model/tap-estimate";
-import { useSubmitProposal, type Proposal } from "../queries";
+import { isProposalWindowClosed, useSubmitProposal, type Proposal } from "../queries";
 import { TapEstimate } from "./tap-estimate";
 
 /**
@@ -55,8 +55,11 @@ export function TapEstimateComposer({
 
   const visitIsOpen = visit !== null && visit.status !== "COMPLETED";
   const refusedForVisit = isVisitNotCompleted(submit.error);
+  const windowClosed = isProposalWindowClosed(submit.error);
   const presentation =
-    submit.error && !refusedForVisit ? describeError(submit.error, "mutation") : null;
+    submit.error && !refusedForVisit && !windowClosed
+      ? describeError(submit.error, "mutation")
+      : null;
 
   function handleSend(estimate: TapEstimateDraft): void {
     if (visit === null || submit.isPending) return;
@@ -91,7 +94,8 @@ export function TapEstimateComposer({
   }
 
   return (
-    <TapEstimate
+    <>
+      <TapEstimate
       archetype={enquiry.archetype}
       startsOn={enquiry.requestedStart}
       requiredTaxBasis={requiredTaxBasisOf(enquiry)}
@@ -121,7 +125,33 @@ export function TapEstimateComposer({
           />
         ) : null
       }
-    />
+      />
+      {windowClosed ? <EstimateClosedDialog /> : null}
+    </>
+  );
+}
+
+export function EstimateClosedDialog() {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="estimate-closed-title"
+      className="fixed inset-0 z-50 grid place-items-end bg-text/45 p-3 sm:place-items-center"
+    >
+      <div className="w-full max-w-sm rounded-card bg-surface p-5 shadow-overlay">
+        <h2 id="estimate-closed-title" className="text-lg font-bold text-text">
+          Estimate closed
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-text-secondary">
+          The customer has already continued with another professional. Your estimate was not
+          sent.
+        </p>
+        <Link href="/work" className={buttonStyles({ className: "mt-5 w-full" })}>
+          Back to work
+        </Link>
+      </div>
+    </div>
   );
 }
 

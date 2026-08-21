@@ -73,6 +73,16 @@ export interface WorkspaceNavItem {
    * published.
    */
   action?: string;
+  /**
+   * The path prefix this tab owns, when it is wider than its own `href`.
+   *
+   * The Work tab points at `/work/all` — the list is the destination — but it
+   * owns the whole `/work` tree: `/work/jobs/{id}`, `/work/offers/{id}`,
+   * `/work/enquiries/{id}/estimate`. Without this the tab bar would go
+   * completely dark the moment a vendor opened a job, because no item's `href`
+   * is a prefix of that path. A tab bar with nothing lit says "you are nowhere".
+   */
+  activePrefix?: string;
 }
 
 export interface WorkspaceDefinition {
@@ -138,8 +148,31 @@ export const BASE_NAV: WorkspaceNavItem[] = [
  * only ever surfaces a `WorkItem` the underlying query already returned,
  * and Django already scoped that query to what this Partner may see.
  */
+/**
+ * ## Why there are four tabs and not three
+ *
+ * The 2026-08-19 redesign collapsed eight nav targets into three, and the win
+ * was real. But it left `/work` doing two jobs: a status screen (am I online,
+ * what have I earned, is anything coming) and a ledger of every record the
+ * vendor touches. On any account with history the ledger won, and the status —
+ * the part checked twenty times a day — was pushed off the top of the screen.
+ *
+ * Splitting them is not a return to the old sprawl. It is one destination
+ * becoming two because it was always two things, and each of the four now
+ * answers a question a vendor actually asks:
+ *
+ * - **Home** — am I online, and what have I made? Plus anything that needs me.
+ * - **Work** — the full list, grouped by whose move it is.
+ * - **Money** — the ledger, payouts, the detail Home deliberately omits.
+ * - **Me** — who I am and what I control.
+ *
+ * `Work` points at `/work/all` rather than `/work`: the tab is the list, and
+ * `/work` redirects to `/home` so that a bookmark, a notification deep link or
+ * a browser history entry from before the split still lands somewhere true.
+ */
 export const TAP_FIRST_NAV: readonly WorkspaceNavItem[] = [
-  { href: "/work", label: "Work", icon: Users },
+  { href: "/home", label: "Home", icon: Home },
+  { href: "/work/all", label: "Work", icon: Users, activePrefix: "/work" },
   { href: "/money", label: "Money", icon: Wallet },
   { href: "/me", label: "Me", icon: UserCircle2 },
 ];

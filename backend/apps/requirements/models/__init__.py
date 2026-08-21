@@ -35,7 +35,7 @@ from .capture import (
     RequirementAttachmentUpload,
     RequirementTransition,
 )
-from .engagements import Engagement, EngagementStage
+from .engagements import Engagement, EngagementStage, ProjectCompletionOtp
 from .evidence import (
     EngagementAmendment,
     EngagementEvent,
@@ -95,6 +95,7 @@ __all__ = [
     "EngagementStage",
     "M2AccessPrice",
     "OperationsTouch",
+    "ProjectCompletionOtp",
     "ProjectDelayClaim",
     "ProjectDeliverable",
     "ProjectTransfer",

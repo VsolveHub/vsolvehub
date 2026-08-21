@@ -30,11 +30,12 @@ from apps.partners.models import (
     PartnerServiceArea,
     Skill,
 )
-from apps.requirements import matching, proposals, services
+from apps.requirements import access, engagements, matching, proposals, services
 from apps.requirements.exceptions import (
     InvitationExpiredError,
     InvitationTransitionError,
     ProposalShapeError,
+    ProposalWindowClosedError,
     QuoteSlotConflictError,
     QuoteSlotsExhaustedError,
     RequirementTransitionError,
@@ -42,7 +43,9 @@ from apps.requirements.exceptions import (
 from apps.requirements.models import (
     CapacityHold,
     CustomerRequirement,
+    M2AccessPrice,
     Proposal,
+    QuoteUnlock,
     RequirementSnapshot,
     SiteVisit,
     VendorInvitation,
@@ -769,6 +772,87 @@ def test_quoting_without_accepting_is_refused() -> None:
         )
 
 
+def test_selecting_one_quote_closes_competing_quotes_and_their_stale_composers() -> None:
+    variant = _variant(code="selection-outcome")
+    area = _area()
+    customer = _customer()
+    _vendor(
+        area=area,
+        variant=variant,
+        phone="+919000000061",
+        name="Chosen vendor",
+    )
+    _vendor(
+        area=area,
+        variant=variant,
+        phone="+919000000062",
+        name="Other vendor",
+    )
+    requirement = _matching_requirement(variant=variant, area=area, customer=customer)
+    first_invitation, second_invitation = matching.invite_wave(
+        requirement_id=requirement.id,
+        size=TWO_INVITATIONS,
+    )
+    matching.accept_invitation(invitation_id=first_invitation.id)
+    matching.accept_invitation(invitation_id=second_invitation.id)
+    chosen = proposals.submit_proposal(
+        invitation_id=first_invitation.id,
+        total_paise=A3_TOTAL_PAISE,
+        tax_basis=Proposal.TaxBasis.INCLUSIVE,
+        rate_paise_per_worker_day=80_000,
+        minimum_days=3,
+        worker_count=4,
+    )
+    not_chosen = proposals.submit_proposal(
+        invitation_id=second_invitation.id,
+        total_paise=900_000,
+        tax_basis=Proposal.TaxBasis.INCLUSIVE,
+        rate_paise_per_worker_day=75_000,
+        minimum_days=3,
+        worker_count=4,
+    )
+    price = M2AccessPrice.objects.create(
+        kind=M2AccessPrice.Kind.A3_QUOTE_UNLOCK,
+        plan_size=0,
+        amount_paise=19_900,
+        effective_from=timezone.localdate(),
+        source_reference="selection outcome regression",
+    )
+    QuoteUnlock.objects.create(
+        requirement=requirement,
+        price=price,
+        price_paise=price.amount_paise,
+        status=QuoteUnlock.Status.ACTIVE,
+        activated_at=timezone.now(),
+        unlocked_proposal_ids=[str(chosen.id), str(not_chosen.id)],
+    )
+
+    selection = engagements.select_proposal(
+        requirement_id=requirement.id,
+        proposal_id=chosen.id,
+        actor=customer,
+    )
+
+    chosen.refresh_from_db()
+    not_chosen.refresh_from_db()
+    assert selection.proposal_id == chosen.id
+    assert chosen.status == Proposal.Status.ACCEPTED
+    assert not_chosen.status == Proposal.Status.REJECTED
+    assert not_chosen.rejection_reason == Proposal.RejectionReason.NOT_CHOSEN
+
+    with pytest.raises(ProposalWindowClosedError):
+        proposals.submit_proposal(
+            invitation_id=second_invitation.id,
+            total_paise=840_000,
+            tax_basis=Proposal.TaxBasis.INCLUSIVE,
+            rate_paise_per_worker_day=70_000,
+            minimum_days=3,
+            worker_count=4,
+        )
+
+    assert Proposal.objects.filter(invitation=second_invitation).count() == 1
+
+
 # ---------------------------------------------------------------------------
 # Assisted capture (M2-BE-322)
 # ---------------------------------------------------------------------------
@@ -891,6 +975,15 @@ def test_a_site_visit_schedules_and_completes() -> None:
 
     proposals.schedule_site_visit(
         site_visit_id=visit.id, scheduled_for=timezone.now() + timedelta(days=2)
+    )
+    arrival_code = access.issue_visit_arrival_code(
+        site_visit_id=visit.id,
+        customer=invitation.requirement.customer,
+    )
+    access.confirm_visit_arrival_with_code(
+        site_visit_id=visit.id,
+        vendor_user=invitation.partner.user,
+        code=arrival_code.digits or "",
     )
     completed = proposals.complete_site_visit(
         site_visit_id=visit.id, outcome_notes="Measured the site."

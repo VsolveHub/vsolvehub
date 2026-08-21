@@ -232,6 +232,23 @@
   --color-success: var(--color-success-text);
   --color-danger: var(--color-danger-text);
 
+  /* `critical` is an older spelling of `danger` that 26 call sites across the
+     Partner and Customer apps still use — `text-critical` on payment and
+     checkout error copy, `border-critical-200 bg-critical-50 text-critical` as
+     the "stop" tone in `partner/features/work/model/status.ts` and
+     `profile-panel.tsx`. It was never defined here or in any app's `@theme`,
+     so in Tailwind v4 every one of those utilities compiled to nothing: the
+     error text inherited its parent colour and the stop band rendered with no
+     colour at all — on exactly the four booking states (DISPUTED,
+     RECOVERY_REQUIRED, ABORTED, CANCELLED) that need to look wrong.
+
+     Defining the alias fixes all 26 at once and cannot regress anything,
+     because nothing was rendering. Migrating the call sites to `danger-*` is
+     the real cleanup; it is a separate, mechanical pass across two apps. */
+  --color-critical: var(--color-danger-text);
+  --color-critical-50: var(--color-danger-surface);
+  --color-critical-200: var(--color-danger-line);
+
   /* The "aurora" teal/green gradients belong to the superseded Figma direction
      and are not part of this palette. Kept only so existing markup compiles;
      remove the markup, then remove these. */

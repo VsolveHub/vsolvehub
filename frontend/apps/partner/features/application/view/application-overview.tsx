@@ -131,8 +131,10 @@ export function ApplicationOverview() {
       */}
       {application.status === "APPROVED" ? (
         <div className="flex flex-wrap gap-3 border-t border-line pt-4">
+          {/* `/home` directly: `/dashboard` and `/work` both redirect there,
+              and this is the first link a newly-approved Partner ever follows. */}
           <Link
-            href="/dashboard"
+            href="/home"
             className="inline-flex min-h-12 items-center rounded-control bg-action px-7 font-semibold text-action-text hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             Go to your work

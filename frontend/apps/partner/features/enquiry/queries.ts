@@ -9,6 +9,7 @@ import {
 } from "@vsolve/api-client";
 import {
   M2_FRESHNESS,
+  boundedPoll,
   cursorFromNextUrl,
   invalidateForM2Command,
   m2QueryKeys,
@@ -164,7 +165,22 @@ export function usePartnerEnquiries(enabled = true) {
  * none of which the list row has. Picking from the list would render a detail
  * screen with four empty sections that look like empty *states*.
  */
-export function usePartnerEnquiry(invitationId: string, enabled = true) {
+export interface PartnerEnquiryQueryOptions {
+  /** Keep watching while the first project visit waits for customer payment. */
+  readonly watchHeldVisit?: boolean;
+}
+
+function visitPaymentHasSettled(detail: EnquiryDetail): boolean {
+  return !detail.site_visits.some(
+    (visit) => visit.is_plan_visit && visit.status === "REQUESTED",
+  );
+}
+
+export function usePartnerEnquiry(
+  invitationId: string,
+  enabled = true,
+  options: PartnerEnquiryQueryOptions = {},
+) {
   return useQuery({
     queryKey: m2QueryKeys.invitations.detail(invitationId),
     queryFn: () =>
@@ -175,6 +191,9 @@ export function usePartnerEnquiry(invitationId: string, enabled = true) {
       ),
     enabled: enabled && invitationId !== "",
     ...M2_FRESHNESS.invitationDetail,
+    ...(options.watchHeldVisit
+      ? boundedPoll<EnquiryDetail>({ intervalMs: 5_000, isSettled: visitPaymentHasSettled })
+      : {}),
     retry: (failureCount, error) =>
       error instanceof ApiRequestError && [401, 403, 404].includes(error.status)
         ? false

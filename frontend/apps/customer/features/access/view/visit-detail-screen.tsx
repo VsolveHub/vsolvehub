@@ -9,11 +9,15 @@ import {
   Skeleton,
   Timeline,
   TimelineEvent,
+  buttonStyles,
 } from "@vsolve/ui";
+import { canReadFullEstimates } from "@vsolve/query";
 import Link from "next/link";
 import { useState } from "react";
 
-import { requestHref, requestQuotesHref } from "@/lib/routes";
+import { toQuoteListView, type QuoteCardView } from "@/features/quotes/adapters";
+import { useCustomerQuotes } from "@/features/quotes/queries";
+import { requestEstimateHref, requestHref, requestQuotesHref } from "@/lib/routes";
 
 import {
   calendarDay,
@@ -22,7 +26,6 @@ import {
   type VisitSlotRow,
 } from "../adapters";
 import {
-  useConfirmVisitArrival,
   useIssueVisitArrivalCode,
   useReportVendorNoShow,
   useVisitArrivalCode,
@@ -41,7 +44,7 @@ import { VendorIdentity } from "./vendor-identity";
  * The tracker was carrying four blocks of prose and two destructive controls per
  * row, three rows deep, and it was the only place any of it could go. Everything
  * that is genuinely about *one* visit lives here now: who is coming, the arrival
- * code, what the money did, what happens next, and the two commands. The list
+ * code, what the money did, what happens next, and the no-show command. The list
  * went back to being a list.
  *
  * ## Why it reads the plan rather than the visit
@@ -74,13 +77,22 @@ export function VisitDetailScreen({
   supportAction,
 }: VisitDetailScreenProps) {
   const planQuery = useVisitPlan(requirementId);
-  const arrival = useConfirmVisitArrival();
   const noShow = useReportVendorNoShow();
   const issueCode = useIssueVisitArrivalCode();
+
+  const mayReadEstimates =
+    planQuery.data !== undefined && canReadFullEstimates(planQuery.data);
+  const estimatesQuery = useCustomerQuotes(requirementId, mayReadEstimates);
 
   const tracker =
     planQuery.data === undefined ? null : toVisitTrackerView(planQuery.data);
   const row = tracker?.rows.find((candidate) => candidate.visitId === siteVisitId) ?? null;
+  const estimate =
+    estimatesQuery.data === undefined
+      ? null
+      : (toQuoteListView(estimatesQuery.data).cards.find(
+          (card) => card.siteVisitId === siteVisitId,
+        ) ?? null);
 
   // Asked for only once the slot is at a point where arrival is the question.
   // A code read for a visit nobody has confirmed yet would be a request the
@@ -160,6 +172,26 @@ export function VisitDetailScreen({
 
       <VisitProgress row={row} requirementId={requirementId} />
 
+      {estimate !== null ? (
+        <VisitEstimateSummary
+          estimate={estimate}
+          href={requestEstimateHref(requirementId, estimate.proposalId)}
+        />
+      ) : mayReadEstimates && estimatesQuery.isPending && row.state === "completed" ? (
+        <div aria-busy="true" aria-live="polite">
+          <span className="sr-only">Loading the estimate from this visit</span>
+          <Skeleton className="h-40 w-full" />
+        </div>
+      ) : estimatesQuery.error !== null && row.state === "completed" ? (
+        <AccessRefusal
+          error={estimatesQuery.error}
+          attempting="read the estimate from this visit"
+          supportAction={supportAction}
+          onRetry={() => void estimatesQuery.refetch()}
+          inline={false}
+        />
+      ) : null}
+
       {/* The money, as an answer rather than a paragraph. */}
       <VisitMoneyCard row={row} />
         </div>
@@ -176,8 +208,6 @@ export function VisitDetailScreen({
 
       <VisitCommands
         row={row}
-        requirementId={requirementId}
-        onConfirmArrival={(visitId) => arrival.mutate({ siteVisitId: visitId, requirementId })}
         onReportNoShow={(visitId) =>
           // The reason code is fixed rather than collected. The Customer already
           // confirmed the one fact that matters — nobody turned up — and asking
@@ -188,11 +218,11 @@ export function VisitDetailScreen({
             reasonCode: "VENDOR_DID_NOT_ARRIVE",
           })
         }
-        isPending={arrival.isPending || noShow.isPending}
+        isPending={noShow.isPending}
       />
 
       <AccessRefusal
-        error={arrival.error ?? noShow.error}
+        error={noShow.error}
         attempting="update this visit"
         supportAction={supportAction}
       />
@@ -202,25 +232,51 @@ export function VisitDetailScreen({
   );
 }
 
-/**
- * The page's measure — the thing this screen was missing entirely.
- *
- * `CustomerShell` gates the session and deliberately sets no width, so every
- * screen in the flow tree owns its own container the way `QuotesScreen` does. A
- * screen that renders a bare stack instead runs edge to edge: on a desktop
- * viewport the cards touched both sides of the window and the timeline's title
- * and timestamp ended up a thousand pixels apart, reading as two unrelated
- * columns rather than one row.
- *
- * `max-w-6xl`, because above `lg` this *is* two columns: the record on the
- * left, and the arrival code plus the two visit-day commands in a rail on the
- * right. The rail exists for one reason — on the morning of the visit the code
- * is the only thing on this page anybody opens it for, and it should not be
- * below four cards of context.
- *
- * Applied to every state and not only the loaded one, so the page does not
- * change width when the data lands.
- */
+/** The estimate produced by this visit, matched through `proposal.site_visit.id`. */
+function VisitEstimateSummary({
+  estimate,
+  href,
+}: {
+  estimate: QuoteCardView;
+  href: string;
+}) {
+  return (
+    <section
+      aria-labelledby="visit-estimate-heading"
+      className="rounded-card border border-success-line bg-success-surface p-4"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wide text-success-text">
+            Estimate ready
+          </p>
+          <h2 id="visit-estimate-heading" className="mt-1 text-lg font-extrabold text-text">
+            {estimate.vendorName ?? "This professional"}
+          </h2>
+          <p className="mt-1 text-sm text-text-secondary">
+            {estimate.revision > 1 ? `Revision ${estimate.revision} · ` : ""}Written after this
+            visit
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {estimate.isVerified ? <Badge tone="success">Verified</Badge> : null}
+          <p data-numeric className="text-xl font-extrabold text-text">
+            {estimate.payableLabel}
+          </p>
+        </div>
+      </div>
+
+      <Link
+        href={href}
+        className={buttonStyles({ variant: "outline", className: "mt-4 w-full sm:w-auto" })}
+      >
+        Read this estimate in full
+      </Link>
+    </section>
+  );
+}
+
+/** A stable page width, with the visit record and arrival-code rail side by side. */
 function PageFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</div>
@@ -373,7 +429,7 @@ function VisitProgress({ row, requirementId }: { row: VisitSlotRow; requirementI
 }
 
 /**
- * The two visit-day commands, and the reason they are down here.
+ * The visit-day no-show command, and the reason it is down here.
  *
  * "They did not come" refunds a share and marks a real person's standing, and it
  * used to sit inline on a list beside four other rows. Here it is the last thing
@@ -382,19 +438,16 @@ function VisitProgress({ row, requirementId }: { row: VisitSlotRow; requirementI
  */
 function VisitCommands({
   row,
-  onConfirmArrival,
   onReportNoShow,
   isPending,
 }: {
   row: VisitSlotRow;
-  requirementId: string;
-  onConfirmArrival: (visitId: string) => void;
   onReportNoShow: (visitId: string) => void;
   isPending: boolean;
 }) {
   const [reporting, setReporting] = useState(false);
   const visitId = row.visitId;
-  if (visitId === null || (!row.canConfirmArrival && !row.canReportNoShow)) return null;
+  if (visitId === null || !row.canReportNoShow) return null;
 
   return (
     // `items-start` so each control is the width of its own label. In a plain
@@ -402,23 +455,6 @@ function VisitCommands({
     // one stops reading as a control at all — on the screenshot that reported
     // this, "They did not turn up" looked like a stray centred sentence.
     <div className="flex flex-col items-start gap-2">
-      {row.canConfirmArrival ? (
-        <>
-          <Button
-            variant="outline"
-            onClick={() => onConfirmArrival(visitId)}
-            loading={isPending}
-            loadingLabel="Confirming"
-          >
-            They arrived without using the code
-          </Button>
-          <p className="max-w-prose text-sm leading-6 text-text-secondary">
-            Use this only if the code will not work — a dead phone, or no signal
-            on site. We record which way each arrival was confirmed.
-          </p>
-        </>
-      ) : null}
-
       {row.canReportNoShow ? (
         <>
           <Button variant="ghost" onClick={() => setReporting(true)}>
@@ -464,7 +500,7 @@ function VisitBreadcrumb({
       <ol className="flex list-none flex-wrap items-center gap-2 p-0 text-sm font-medium text-text-secondary">
         <li>
           <Link href="/activity" className="hover:text-text hover:underline">
-            Activity
+            Bookings
           </Link>
         </li>
         <li aria-hidden className="text-warm-400">

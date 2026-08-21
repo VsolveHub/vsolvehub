@@ -40,7 +40,12 @@ describe("TAP_FIRST_NAV", () => {
   // see `TAP_FIRST_NAV`'s own doc comment in `registry.ts` for why that
   // stays rather than being deleted alongside the switcher.
   it("has exactly the three tap-first destinations, in order", () => {
-    expect(TAP_FIRST_NAV.map((item) => item.href)).toEqual(["/work", "/money", "/me"]);
+    expect(TAP_FIRST_NAV.map((item) => item.href)).toEqual([
+      "/home",
+      "/work/all",
+      "/money",
+      "/me",
+    ]);
   });
 
   it("gives every destination a one-word label", () => {

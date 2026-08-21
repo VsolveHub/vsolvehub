@@ -100,4 +100,15 @@ describe("the header", () => {
 
     expect(screen.getByText(/2 quotes waiting/i)).toBeInTheDocument();
   });
+
+  it("places the quote comparison action beside the request heading", () => {
+    renderDetail({
+      headerAction: <a href="/requests/req-1/quotes">Compare Quotes</a>,
+    });
+
+    expect(screen.getByRole("link", { name: "Compare Quotes" })).toHaveAttribute(
+      "href",
+      "/requests/req-1/quotes",
+    );
+  });
 });

@@ -11,6 +11,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from apps.partners.models import PartnerProfile
 
@@ -283,6 +284,56 @@ class Engagement(models.Model):
                     "price through an accepted scope amendment, never by writing the engagement."
                 )
         super().save(*args, **kwargs)
+
+
+class ProjectCompletionOtp(models.Model):
+    """Single-use Customer consent for a Partner to close an A5 project."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    engagement = models.ForeignKey(
+        Engagement,
+        on_delete=models.PROTECT,
+        related_name="completion_otps",
+    )
+    code_hash = models.CharField(max_length=255)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    consumed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="m2_project_completion_otps_consumed",
+    )
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=5)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("engagement", "created_at"),
+                name="requirement_engagem_23b16a_idx",
+            )
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(max_attempts__gt=0),
+                name="requirements_project_completion_otp_attempts_positive",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.engagement_id}:{self.created_at.isoformat()}"
+
+    @property
+    def is_live(self) -> bool:
+        return (
+            self.consumed_at is None
+            and self.expires_at > timezone.now()
+            and self.failed_attempts < self.max_attempts
+        )
 
 
 class EngagementStage(models.Model):

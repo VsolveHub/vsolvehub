@@ -59,7 +59,7 @@ const STATUS_COPY: Record<ProposalStatus, ProposalStatusCopy> = {
     label: "With the customer",
     tone: "progress",
     meaning:
-      "This is the quote the customer sees. Sending a new one replaces it; withdrawing takes it off the table.",
+      "This is the quote the customer sees. You can withdraw it until they choose it; a revision is available only while its correction window is open.",
   },
   SUPERSEDED: {
     label: "Replaced",
@@ -158,8 +158,12 @@ const SETTLED: readonly ProposalStatus[] = ["SELECTED", "ACCEPTED", "LAPSED"];
 export function permissionsFor(input: {
   readonly proposal: Proposal;
   readonly enquiryStatus: EnquiryStatus;
+  /** Kept separate from the clock so this policy remains deterministic in tests. */
+  readonly revisionWindowOpen?: boolean;
 }): ProposalPermissions {
   const slotHeld = input.enquiryStatus === "ACCEPTED" || input.enquiryStatus === "QUOTED";
+  const isEstimate = input.proposal.revision_expires_at !== null;
+  const revisionWindowOpen = input.revisionWindowOpen ?? true;
 
   return {
     canWithdraw: input.proposal.status === "SUBMITTED",
@@ -168,7 +172,11 @@ export function permissionsFor(input: {
     // Wave B3's spine. Not from LAPSED either — the selection has already moved
     // on to the next quote, and superseding a lapsed row would put a price back
     // in front of a customer who is no longer choosing.
-    canSupersede: slotHeld && !SETTLED.includes(input.proposal.status),
+    canSupersede:
+      slotHeld &&
+      (isEstimate
+        ? input.proposal.status === "SUBMITTED" && revisionWindowOpen
+        : !SETTLED.includes(input.proposal.status)),
   };
 }
 

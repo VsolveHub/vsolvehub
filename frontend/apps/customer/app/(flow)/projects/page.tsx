@@ -1,6 +1,6 @@
 import { permanentRedirect } from "next/navigation";
 
-import { activityTabHref } from "@/features/activity/view/activity-screen";
+import { activityTabHref } from "@/features/activity/model/routes";
 
 /**
  * `My projects` moved into the Activity hub.

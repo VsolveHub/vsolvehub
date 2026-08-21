@@ -21,13 +21,16 @@ JSON column. The first was UUIDs in an idempotency response body; see
 `tests/foundation/test_idempotent_response_body.py`. Both are asserted rather than remembered.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
+from django.utils import timezone
 
 from apps.catalog.models import ServiceVariant
 from apps.requirements import access, proposals
+from apps.requirements.exceptions import RequirementTransitionError
 from apps.requirements.models import Proposal, SiteVisit
+from apps.requirements.serializers import ProposalStageSerializer
 from tests.requirements.conftest import (
     M2World,
     invitation_for,
@@ -36,6 +39,7 @@ from tests.requirements.conftest import (
 )
 
 pytestmark = pytest.mark.django_db(transaction=True)
+STAGE_DURATION_DAYS = 4
 
 
 def _completed_visit(world: M2World) -> tuple[object, SiteVisit]:
@@ -47,7 +51,15 @@ def _completed_visit(world: M2World) -> tuple[object, SiteVisit]:
     visit = site_visit_for(invitation=invitation)
     visit.status = SiteVisit.Status.SCHEDULED
     visit.save(update_fields=("status", "updated_at"))
-    access.confirm_visit_arrival(site_visit_id=visit.id, actor=world.vendor.user)
+    arrival_code = access.issue_visit_arrival_code(
+        site_visit_id=visit.id,
+        customer=world.customer,
+    )
+    access.confirm_visit_arrival_with_code(
+        site_visit_id=visit.id,
+        vendor_user=world.vendor.user,
+        code=arrival_code.digits or "",
+    )
     access.complete_plan_visit(site_visit_id=visit.id)
     visit.refresh_from_db()
     return invitation, visit
@@ -112,3 +124,79 @@ def test_an_undated_stage_still_works(world: M2World) -> None:
     proposal.refresh_from_db()
 
     assert proposal.stages[0].get("ends_on") is None
+
+
+def test_stage_start_and_duration_freeze_the_same_deadline() -> None:
+    serializer = ProposalStageSerializer(
+        data={
+            "title": "Painting",
+            "amount_paise": 120_000,
+            "starts_on": "2026-09-10",
+            "duration_days": STAGE_DURATION_DAYS,
+            "ends_on": "2026-09-13",
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    assert serializer.validated_data["starts_on"] == date(2026, 9, 10)
+    assert serializer.validated_data["duration_days"] == STAGE_DURATION_DAYS
+    assert serializer.validated_data["ends_on"] == date(2026, 9, 13)
+
+
+def test_stage_deadline_cannot_disagree_with_its_start_and_duration() -> None:
+    serializer = ProposalStageSerializer(
+        data={
+            "title": "Painting",
+            "amount_paise": 120_000,
+            "starts_on": "2026-09-10",
+            "duration_days": STAGE_DURATION_DAYS,
+            "ends_on": "2026-09-20",
+        }
+    )
+
+    assert not serializer.is_valid()
+    assert "ends_on" in serializer.errors
+
+
+def test_a_customer_rejected_estimate_cannot_be_revised(world: M2World) -> None:
+    invitation, visit = _completed_visit(world)
+    estimate = proposals.submit_proposal(
+        invitation_id=invitation.id,
+        total_paise=120_000,
+        tax_basis="EXCLUSIVE",
+        stages=[{"title": "Strip out", "amount_paise": 120_000}],
+        site_visit_id=visit.id,
+    )
+    Proposal.objects.filter(pk=estimate.id).update(status=Proposal.Status.REJECTED)
+
+    with pytest.raises(RequirementTransitionError, match="can no longer be revised"):
+        proposals.submit_proposal(
+            invitation_id=invitation.id,
+            total_paise=125_000,
+            tax_basis="EXCLUSIVE",
+            stages=[{"title": "Strip out", "amount_paise": 125_000}],
+            site_visit_id=visit.id,
+        )
+
+
+def test_a_project_estimate_revision_closes_after_five_minutes(world: M2World) -> None:
+    invitation, visit = _completed_visit(world)
+    estimate = proposals.submit_proposal(
+        invitation_id=invitation.id,
+        total_paise=120_000,
+        tax_basis="EXCLUSIVE",
+        stages=[{"title": "Strip out", "amount_paise": 120_000}],
+        site_visit_id=visit.id,
+    )
+    Proposal.objects.filter(pk=estimate.id).update(
+        submitted_at=timezone.now() - timedelta(minutes=6)
+    )
+
+    with pytest.raises(RequirementTransitionError, match="first 5 minutes"):
+        proposals.submit_proposal(
+            invitation_id=invitation.id,
+            total_paise=125_000,
+            tax_basis="EXCLUSIVE",
+            stages=[{"title": "Strip out", "amount_paise": 125_000}],
+            site_visit_id=visit.id,
+        )

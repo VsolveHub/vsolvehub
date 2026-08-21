@@ -31,7 +31,7 @@ from rest_framework.test import APIClient
 
 from apps.catalog.models import ServiceVariant
 from apps.partners.models import PartnerCapability, PartnerCrewMembership
-from apps.requirements import proposals
+from apps.requirements import access, proposals
 from apps.requirements.models import CustomerRequirement, RequirementAttachment
 from apps.requirements.selectors import demand_preview_id
 from tests.requirements.conftest import (
@@ -184,6 +184,29 @@ def test_a_customer_only_lists_their_own_requirements(world: M2World) -> None:
     ids = {row["id"] for row in response.json()["results"]}
     assert str(mine.id) in ids
     assert str(theirs.id) not in ids
+
+
+def test_requirement_create_reopens_the_customers_existing_service_draft(world: M2World) -> None:
+    payload = {
+        "variant_id": str(world.variant.id),
+        "answers": {"worker_count": 3, "duration_days": 2},
+        "language": "en-IN",
+    }
+
+    created = world.customer_client.post("/api/v1/requirements/", payload, format="json")
+    reopened = world.customer_client.post("/api/v1/requirements/", payload, format="json")
+
+    assert created.status_code == HTTPStatus.CREATED
+    assert reopened.status_code == HTTPStatus.OK
+    assert reopened.json()["id"] == created.json()["id"]
+    assert (
+        CustomerRequirement.objects.filter(
+            customer=world.customer,
+            variant=world.variant,
+            status=CustomerRequirement.Status.DRAFT,
+        ).count()
+        == 1
+    )
 
 
 def test_the_duplicate_check_refuses_another_customers_address(world: M2World) -> None:
@@ -579,6 +602,15 @@ def test_only_the_attending_vendor_can_complete_a_site_visit(world: M2World) -> 
     proposals.schedule_site_visit(
         site_visit_id=visit.id,
         scheduled_for=timezone.now() + timedelta(days=2),
+    )
+    arrival_code = access.issue_visit_arrival_code(
+        site_visit_id=visit.id,
+        customer=world.customer,
+    )
+    access.confirm_visit_arrival_with_code(
+        site_visit_id=visit.id,
+        vendor_user=world.vendor.user,
+        code=arrival_code.digits or "",
     )
 
     by_customer = world.customer_client.post(

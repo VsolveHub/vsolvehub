@@ -89,6 +89,7 @@ export function ProjectEngagementsScreen({ heading }: ProjectEngagementsScreenPr
 
 export interface EngagementDetailScreenProps {
   readonly engagementId: string;
+  readonly stageId?: string;
 }
 
 export function WorkforceEngagementScreen({ engagementId }: EngagementDetailScreenProps) {
@@ -106,7 +107,10 @@ export function WorkforceEngagementScreen({ engagementId }: EngagementDetailScre
   );
 }
 
-export function ProjectEngagementScreen({ engagementId }: EngagementDetailScreenProps) {
+export function ProjectEngagementScreen({
+  engagementId,
+  stageId,
+}: EngagementDetailScreenProps) {
   return (
     <WorkspaceRoute workspaceKey={PROJECT_WORKSPACE} actions={["stage.submit_evidence"]}>
       {(workspace) => (
@@ -115,6 +119,7 @@ export function ProjectEngagementScreen({ engagementId }: EngagementDetailScreen
           wording={PROJECT_WORDING}
           basePath={`${workspace.home}/stages`}
           workspace="project"
+          focusStageId={stageId}
         />
       )}
     </WorkspaceRoute>

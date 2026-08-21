@@ -87,6 +87,17 @@ class TestRender:
 
         assert len(with_context) > len(without)
 
+    def test_brand_masthead_and_correspondence_address_are_drawn(self) -> None:
+        plain = render_pdf(_spec())
+        branded = render_pdf(
+            _spec(
+                issuer_address="Plot 12, Hitech City Road, Madhapur, Hyderabad 500081",
+                issuer_contact="support@vsolvehub.com · www.vsolvehub.com",
+            )
+        )
+
+        assert len(branded) > len(plain)
+
     def test_rendering_is_deterministic_for_a_fixed_issue_date(self) -> None:
         """Two downloads of one receipt must not differ.
 

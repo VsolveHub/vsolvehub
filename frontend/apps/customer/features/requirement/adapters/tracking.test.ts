@@ -37,6 +37,7 @@ function summary(overrides: Partial<RequirementSummary> = {}): RequirementSummar
     teaser_count: 0,
     closure_reason: null,
     last_activity_at: "2026-08-10T09:33:40Z",
+    engagement_id: null,
     ...overrides,
   };
 }
@@ -145,6 +146,7 @@ describe("the detail header", () => {
       language: "en-IN",
       additional_details: "",
       attachments: [],
+      engagement_id: null,
       server_now: "2026-08-12T09:00:00Z",
       ...overrides,
     };

@@ -103,7 +103,7 @@ describe("SiteHeader", () => {
   it("does not offer a signed-out visitor a link that would bounce them", () => {
     render(<SiteHeader />, { wrapper });
 
-    expect(screen.queryByRole("link", { name: "Activity" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Bookings" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Log in" })).toBeInTheDocument();
   });
 
@@ -115,7 +115,7 @@ describe("SiteHeader", () => {
     // The three private destinations became one. What is being asserted is not
     // the rename but the gate: `Activity` is only offered to someone it will
     // not bounce.
-    expect(screen.getByRole("link", { name: "Activity" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Bookings" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open profile" })).toHaveAttribute(
       "href",
@@ -166,7 +166,7 @@ describe("SiteHeader", () => {
     // indication of where the customer is. Activity now owns that tree: the
     // record routes did not move when the nav item did, so `/bookings/…`,
     // `/requests/…`, `/projects` and `/engagements/…` all resolve to it.
-    expect(screen.getByRole("link", { name: "Activity" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Bookings" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -185,7 +185,7 @@ describe("SiteHeader", () => {
     ]) {
       route.pathname = pathname;
       const { unmount } = render(<SiteHeader />, { wrapper });
-      expect(screen.getByRole("link", { name: "Activity" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "Bookings" })).toHaveAttribute(
         "aria-current",
         "page",
       );

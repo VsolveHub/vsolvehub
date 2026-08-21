@@ -7,8 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const client = { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() };
 
 vi.mock("@/lib/api/browser", () => ({ getApiClient: () => client }));
+vi.mock("@/features/account/view/profile-completion-dialog", () => ({
+  useProfileCompletionGate: () => ({
+    run: (action: () => void) => action(),
+    dialog: null,
+  }),
+}));
 
-const { BookVisitsScreen } = await import("./book-visits-screen");
+const { RequestAccessPanel } = await import("./request-access-panel");
 
 function ok<T>(data: T, status = 200) {
   return { data, error: undefined, response: new Response(null, { status }) };
@@ -81,6 +87,19 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 
+function renderPanel() {
+  return render(
+    <RequestAccessPanel
+      requirementId="req-1"
+      archetype="A5_CUSTOM_PROJECT"
+      quotesHref="/requests/req-1/quotes"
+      bookCrewFeeHref="/requests/req-1/book-crew"
+      slot="rail"
+    />,
+    { wrapper },
+  );
+}
+
 beforeEach(() => {
   window.sessionStorage.clear();
   queryClient = new QueryClient({
@@ -93,8 +112,64 @@ afterEach(() => {
   queryClient.clear();
 });
 
-describe("BookVisitsScreen development payment", () => {
-  it("marks an already-pending fake visit-plan payment as paid", async () => {
+describe("request-detail visit payment", () => {
+  it("opens the payment breakdown in place instead of navigating", async () => {
+    client.GET.mockResolvedValue(ok(visitPlanState()));
+    renderPanel();
+
+    const payButton = await screen.findByRole("button", {
+      name: "Pay ₹99 and lock the visits",
+    });
+    expect(payButton.closest("a")).toBeNull();
+
+    fireEvent.click(payButton);
+
+    expect(await screen.findByRole("dialog", { name: "Pay for the visits" })).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalled();
+  });
+
+  it("starts checkout and captures a fake-provider payment after confirmation", async () => {
+    client.GET.mockResolvedValue(ok(visitPlanState()));
+    client.POST.mockImplementation((path: string) => {
+      if (path === "/api/v1/requirements/{requirement_id}/visit-plan/checkout/") {
+        return Promise.resolve(ok(checkout, 201));
+      }
+      if (path === "/api/v1/payment-attempts/{attempt_id}/simulate-capture/") {
+        return Promise.resolve(ok({}));
+      }
+      return Promise.resolve(ok({}));
+    });
+    renderPanel();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Pay ₹99 and lock the visits" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Pay for the visits" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Pay ₹99" }));
+
+    await waitFor(() =>
+      expect(client.POST).toHaveBeenCalledWith(
+        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
+        { params: { path: { attempt_id: "attempt-1" } } },
+      ),
+    );
+  });
+
+  it("shows the server-provided share for every visit", async () => {
+    client.GET.mockResolvedValue(ok(visitPlanState()));
+    renderPanel();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Pay ₹99 and lock the visits" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Pay for the visits" });
+
+    expect(within(dialog).getAllByText("₹49.50")).toHaveLength(2);
+    expect(within(dialog).getAllByText(/Time not offered yet/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/refunds on its own/)).toBeInTheDocument();
+  });
+
+  it("keeps an already-pending fake payment recoverable on the request page", async () => {
     client.GET.mockResolvedValue(
       ok(
         visitPlanState({
@@ -108,10 +183,7 @@ describe("BookVisitsScreen development payment", () => {
       ),
     );
     client.POST.mockResolvedValue(ok({}));
-
-    render(<BookVisitsScreen requirementId="req-1" requestHref="/requests/req-1" />, {
-      wrapper,
-    });
+    renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: "Mark as paid" }));
 
@@ -121,74 +193,5 @@ describe("BookVisitsScreen development payment", () => {
         { params: { path: { attempt_id: "attempt-1" } } },
       ),
     );
-  });
-
-  it("starts checkout and immediately captures a fake-provider visit-plan payment", async () => {
-    client.GET.mockResolvedValue(ok(visitPlanState()));
-    client.POST.mockImplementation((path: string) => {
-      if (path === "/api/v1/requirements/{requirement_id}/visit-plan/checkout/") {
-        return Promise.resolve(ok(checkout, 201));
-      }
-      if (path === "/api/v1/payment-attempts/{attempt_id}/simulate-capture/") {
-        return Promise.resolve(ok({}));
-      }
-      return Promise.resolve(ok({}));
-    });
-
-    render(<BookVisitsScreen requirementId="req-1" requestHref="/requests/req-1" />, {
-      wrapper,
-    });
-
-    // The page control opens the confirm dialog; it does not charge. The dialog
-    // is where the per-visit split is shown and where the money actually starts.
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Pay ₹99 and lock the visits" }),
-    );
-    expect(client.POST).not.toHaveBeenCalled();
-
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Pay ₹99" }));
-
-    await waitFor(() =>
-      expect(client.POST).toHaveBeenCalledWith(
-        "/api/v1/payment-attempts/{attempt_id}/simulate-capture/",
-        { params: { path: { attempt_id: "attempt-1" } } },
-      ),
-    );
-  });
-
-  it("shows which slot each half of the money is for", async () => {
-    client.GET.mockResolvedValue(ok(visitPlanState()));
-    render(<BookVisitsScreen requirementId="req-1" requestHref="/requests/req-1" />, {
-      wrapper,
-    });
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Pay ₹99 and lock the visits" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-
-    // Each share's own `amount_paise`, not the plan price divided by the slot
-    // count — and the unfilled slot says so, beside the refund rule that applies
-    // to it. This is the question somebody paying for two visits with one time
-    // confirmed actually has.
-    expect(within(dialog).getAllByText("₹49.50")).toHaveLength(2);
-    expect(within(dialog).getAllByText(/Time not offered yet/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText(/refunds on its own/)).toBeInTheDocument();
-  });
-
-  it("cancels without charging", async () => {
-    client.GET.mockResolvedValue(ok(visitPlanState()));
-    render(<BookVisitsScreen requirementId="req-1" requestHref="/requests/req-1" />, {
-      wrapper,
-    });
-
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Pay ₹99 and lock the visits" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Not now" }));
-
-    expect(client.POST).not.toHaveBeenCalled();
   });
 });

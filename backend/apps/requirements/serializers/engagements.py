@@ -9,9 +9,11 @@ the banner below states the rule they all obey.
 what an engagement becomes once work starts.
 """
 
+from datetime import date, timedelta
 from typing import Any
 
 from django.conf import settings
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -307,11 +309,10 @@ class ProposalRejectSerializer(serializers.Serializer[dict[str, Any]]):
 
 
 class ProposalSelectionSerializer(serializers.ModelSerializer[ProposalSelection]):
-    """Selection is not a booking, and this shape says so.
+    """The Customer's persisted choice and the engagement it opened.
 
-    `reconfirm_by` is the whole point: the Customer has chosen and the vendor has not yet agreed.
-    Null when the area carries no operating windows and no business-hours deadline could be
-    computed — which is an unset clock, not an unlimited one.
+    Legacy pending rows may still carry a reconfirmation deadline. New selections are confirmed
+    and carry `engagement_id` in the create response.
     """
 
     engagement_id = serializers.SerializerMethodField()
@@ -428,6 +429,68 @@ class StageDisputeDecisionSerializer(serializers.Serializer[dict[str, Any]]):
     note = serializers.CharField(max_length=2000)
 
 
+class ProjectCompletionCodeSerializer(serializers.Serializer[dict[str, Any]]):
+    """The Customer-only display copy of a project completion challenge."""
+
+    code = serializers.CharField(allow_null=True)
+    expires_at = serializers.DateTimeField(allow_null=True)
+    can_issue = serializers.BooleanField()
+    code_length = serializers.IntegerField()
+    server_now = serializers.DateTimeField()
+
+
+class ProjectCompletionCodeEntrySerializer(serializers.Serializer[dict[str, Any]]):
+    code = serializers.CharField(min_length=4, max_length=12, trim_whitespace=True)
+
+
+def _as_date(value: object) -> date | None:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _stage_schedule(stage: EngagementStage) -> tuple[date | None, int | None]:
+    """Read the frozen schedule, with a legacy fallback for pre-contract projects."""
+
+    requested = stage.engagement.requirement.requested_start
+    cursor = requested.date() if requested is not None else None
+    rows = sorted(stage.engagement.stages.all(), key=lambda row: row.position)
+
+    for row in rows:
+        terms = row.original_terms if isinstance(row.original_terms, dict) else {}
+        starts_on = _as_date(terms.get("starts_on")) or cursor
+        duration_value = terms.get("duration_days")
+        duration_days = (
+            int(duration_value)
+            if isinstance(duration_value, int) and not isinstance(duration_value, bool)
+            else None
+        )
+        deadline = row.scheduled_on
+
+        if starts_on is None and deadline is not None and duration_days is not None:
+            starts_on = deadline - timedelta(days=duration_days - 1)
+        if duration_days is None and starts_on is not None and deadline is not None:
+            derived = (deadline - starts_on).days + 1
+            duration_days = derived if derived > 0 else None
+
+        if row.id == stage.id:
+            return (
+                starts_on if deadline is not None or duration_days is not None else None,
+                duration_days,
+            )
+        if deadline is not None:
+            cursor = deadline + timedelta(days=1)
+        elif starts_on is not None and duration_days is not None:
+            cursor = starts_on + timedelta(days=duration_days)
+
+    return None, None
+
+
 class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     """One shift-day or one milestone, with its money and its clocks.
 
@@ -442,6 +505,8 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
     """
 
     evidence = StageEvidenceSerializer(many=True, read_only=True)
+    starts_on = serializers.SerializerMethodField()
+    duration_days = serializers.SerializerMethodField()
 
     class Meta:
         model = EngagementStage
@@ -454,6 +519,8 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
             #: is money spent on goods, not a milestone somebody performs, and it does not refund
             #: like unearned work.
             "kind",
+            "starts_on",
+            "duration_days",
             "scheduled_on",
             "status",
             "funding_state",
@@ -474,6 +541,14 @@ class EngagementStageSerializer(serializers.ModelSerializer[EngagementStage]):
             "disputed_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.DateField(allow_null=True))
+    def get_starts_on(self, obj: EngagementStage) -> date | None:
+        return _stage_schedule(obj)[0]
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_duration_days(self, obj: EngagementStage) -> int | None:
+        return _stage_schedule(obj)[1]
 
 
 class AccessReceiptSerializer(serializers.Serializer[dict[str, Any]]):
@@ -520,6 +595,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     #: could only say where the record lives. Null when the fee was never charged, which is real:
     #: a plan whose whole price was covered by a reclassification credit takes no payment.
     access_receipt = serializers.SerializerMethodField()
+    server_now = serializers.SerializerMethodField()
 
     class Meta:
         model = Engagement
@@ -547,6 +623,7 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
             "disputed_at",
             "completed_at",
             "access_receipt",
+            "server_now",
             "stages",
             "created_at",
         )
@@ -555,6 +632,10 @@ class EngagementSerializer(serializers.ModelSerializer[Engagement]):
     @extend_schema_field(AccessReceiptSerializer(allow_null=True))
     def get_access_receipt(self, obj: Engagement) -> dict[str, Any] | None:
         return access_receipt_for(obj)
+
+    @extend_schema_field(serializers.DateTimeField())
+    def get_server_now(self, _obj: Engagement) -> Any:
+        return timezone.now()
 
 
 class EngagementPageSerializer(serializers.Serializer[dict[str, Any]]):

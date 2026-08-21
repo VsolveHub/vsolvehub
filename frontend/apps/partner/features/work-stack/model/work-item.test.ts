@@ -84,12 +84,15 @@ function enquiry(overrides: Partial<EnquirySummary> = {}): EnquirySummary {
     category_slug: "deep-cleaning",
     service_name: "Deep clean",
     archetype: "A5_CUSTOM_PROJECT",
+    requirement_status: "MATCHING",
     status: "INVITED",
     wave: 1,
     requested_start: "2026-08-22T04:00:00Z",
     service_by: "2026-08-25",
     language: "en",
     responds_by: "2026-08-20T10:00:00Z",
+    latest_proposal_status: null,
+    latest_proposal_rejection_reason: null,
     created_at: "2026-08-19T06:00:00Z",
     ...overrides,
   };
@@ -120,6 +123,7 @@ function engagement(overrides: Partial<Engagement> = {}): Engagement {
     disputed_at: null,
     completed_at: null,
     access_receipt: null,
+    server_now: NOW,
     stages: [],
     created_at: "2026-08-15T06:00:00Z",
     ...overrides,
@@ -132,7 +136,10 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
     fulfilment_unit_id: null,
     status: "COMPLETED",
     version: 3,
-    scheduled_start: "2026-08-18T09:00:00Z",
+    // Within the 24h settled window (`NOW` minus one hour) so a bare `job()`
+    // stays visible by default — tests exercising the window itself override
+    // this explicitly.
+    scheduled_start: "2026-08-19T09:00:00Z",
     estimated_duration_minutes: 120,
     en_route_at: null,
     arrived_at: null,
@@ -178,14 +185,14 @@ describe("toWorkItems — urgency ordering", () => {
   });
 
   it("ranks by urgency before it looks at any clock", () => {
-    // The settled job's deadline is the earliest instant in the set and the live
-    // offer's is the latest. Rank has to win, or a finished job outranks a
-    // dispatch that expires in ninety seconds.
+    // The settled job's instant is earlier than the live offer's deadline. Rank
+    // has to win, or a finished job outranks a dispatch that expires in ninety
+    // seconds.
     const items = toWorkItems({
       ...EMPTY,
       offers: [offer({ responds_by: "2026-08-19T10:05:00Z" })],
       offersServerNow: NOW,
-      jobs: [job({ status: "COMPLETED", scheduled_start: "2026-01-01T00:00:00Z" })],
+      jobs: [job({ status: "COMPLETED", scheduled_start: "2026-08-19T02:00:00Z" })],
     });
 
     expect(items.map((item) => item.urgency)).toEqual(["live", "settled"]);
@@ -436,6 +443,98 @@ describe("toWorkItems — enquiries", () => {
   });
 });
 
+describe("toWorkItems — a sent quote", () => {
+  /*
+    `answered`, not `settled`.
+
+    The two shared one urgency briefly, which put a sent quote behind the green
+    "held until payout" treatment and rendered its amount as `₹ ?` — the
+    platform announcing it did not know a price, on the one card whose whole
+    subject is a price the vendor had just sent. Nothing is held on a sent quote
+    and nothing is owed; the customer simply has not answered.
+  */
+  it("is its own state, between the work in hand and the money banked", () => {
+    const quoted = enquiry({ id: "e1", status: "QUOTED", latest_proposal_status: "SUBMITTED" });
+
+    const items = toWorkItems({ ...EMPTY, enquiries: [quoted] });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      key: "enquiry:e1",
+      urgency: "answered",
+      respondsBy: null,
+      // Not published on `EnquirySummary`, so never drawn as a figure.
+      amountPaise: null,
+    });
+  });
+
+  it("carries a distinct accessible name from a still-open enquiry", () => {
+    const quoted = enquiry({
+      id: "e1",
+      status: "QUOTED",
+      service_name: "Deep clean",
+      latest_proposal_status: "SUBMITTED",
+    });
+
+    const items = toWorkItems({ ...EMPTY, enquiries: [quoted] });
+
+    expect(items[0]?.accessibleName).toBe("Deep clean, quote sent");
+    // The title is the work alone — the chip carries the state, so a card can
+    // truncate the first without losing the second.
+    expect(items[0]?.title).toBe("Deep clean");
+    expect(items[0]?.stateLabel).toBe("quote sent");
+  });
+
+  it("does not also appear as a needs-price card", () => {
+    const quoted = enquiry({ id: "e1", status: "QUOTED", latest_proposal_status: "SUBMITTED" });
+
+    const items = toWorkItems({ ...EMPTY, enquiries: [quoted] });
+
+    expect(items.filter((item) => item.key === "enquiry:e1")).toHaveLength(1);
+  });
+
+  it("shows a truthful not-chosen outcome after the customer continues elsewhere", () => {
+    const quoted = enquiry({
+      id: "e1",
+      status: "QUOTED",
+      latest_proposal_status: "REJECTED",
+      latest_proposal_rejection_reason: "NOT_CHOSEN",
+    });
+
+    const items = toWorkItems({ ...EMPTY, enquiries: [quoted] });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      urgency: "not_chosen",
+      stateLabel: "not chosen",
+      accessibleName: "Deep clean, not chosen",
+    });
+  });
+
+  it("does not duplicate a chosen quote beside its engagement", () => {
+    const quoted = enquiry({
+      id: "e1",
+      status: "QUOTED",
+      latest_proposal_status: "ACCEPTED",
+    });
+
+    expect(toWorkItems({ ...EMPTY, enquiries: [quoted] })).toEqual([]);
+  });
+
+  it("shows Cancelled instead of waiting when the customer closed the request", () => {
+    const quoted = enquiry({
+      status: "QUOTED",
+      requirement_status: "CLOSED_CANCELLED",
+      latest_proposal_status: "SUBMITTED",
+    });
+
+    expect(toWorkItems({ ...EMPTY, enquiries: [quoted] })[0]).toMatchObject({
+      urgency: "closed",
+      stateLabel: "cancelled",
+    });
+  });
+});
+
 describe("toWorkItems — engagements", () => {
   it("keeps every status that is still this vendor's open business", () => {
     // The regression this file exists for. `IN_PROGRESS` is an
@@ -551,13 +650,16 @@ describe("toWorkItems — A1 visits", () => {
   });
 
   it("sorts the next job soonest-first and finished ones newest-first", () => {
+    // Both settled jobs stay inside the 24h window (see `isRecentlySettled`) —
+    // this test is about relative order among visible jobs, not the window
+    // itself, which has its own describe block below.
     const items = toWorkItems({
       ...EMPTY,
       jobs: [
         job({ id: "later", status: "CONFIRMED", scheduled_start: "2026-08-25T09:00:00Z" }),
         job({ id: "next", status: "CONFIRMED", scheduled_start: "2026-08-20T09:00:00Z" }),
-        job({ id: "old", status: "COMPLETED", scheduled_start: "2026-08-10T09:00:00Z" }),
-        job({ id: "recent", status: "PARTIALLY_COMPLETED", scheduled_start: "2026-08-18T09:00:00Z" }),
+        job({ id: "old", status: "COMPLETED", scheduled_start: "2026-08-19T00:30:00Z" }),
+        job({ id: "recent", status: "PARTIALLY_COMPLETED", scheduled_start: "2026-08-19T08:00:00Z" }),
       ],
     });
 
@@ -567,6 +669,32 @@ describe("toWorkItems — A1 visits", () => {
       "job:recent",
       "job:old",
     ]);
+  });
+
+  it("drops a settled job older than 24h", () => {
+    const items = toWorkItems({
+      ...EMPTY,
+      jobs: [
+        // 30h before `server_now` — clearly outside the window.
+        job({ id: "old", status: "COMPLETED", scheduled_start: "2026-08-18T04:00:00Z" }),
+        // 2h before `server_now` — clearly inside it.
+        job({ id: "recent", status: "PARTIALLY_COMPLETED", scheduled_start: "2026-08-19T08:00:00Z" }),
+      ],
+    });
+
+    expect(items.map((item) => item.key)).toEqual(["job:recent"]);
+  });
+
+  it("keeps a job in progress regardless of how old its scheduled start is", () => {
+    const items = toWorkItems({
+      ...EMPTY,
+      jobs: [
+        job({ id: "old-doing", status: "IN_PROGRESS", scheduled_start: "2026-08-18T04:00:00Z" }),
+        job({ id: "old-done", status: "COMPLETED", scheduled_start: "2026-08-18T04:00:00Z" }),
+      ],
+    });
+
+    expect(items.map((item) => item.key)).toEqual(["job:old-doing"]);
   });
 
   it("drops a job in a state this stack has no card for", () => {
@@ -620,5 +748,43 @@ describe("toWorkItems — keys", () => {
       "job:same",
     ]);
     expect(new Set(items.map((item) => item.key)).size).toBe(items.length);
+  });
+});
+
+/*
+  The three defects a real screenshot surfaced, which no assertion here covered.
+*/
+describe("toWorkItems — what a card can actually say", () => {
+  it("titles a booking from its work, not from its status", () => {
+    const items = toWorkItems({
+      ...EMPTY,
+      jobs: [job({ id: "j1", status: "CONFIRMED" })],
+    });
+
+    expect(items[0]?.title).not.toMatch(/confirmed/i);
+  });
+
+  it("marks an enquiry's requested start as a day, not a moment", () => {
+    const items = toWorkItems({ ...EMPTY, enquiries: [enquiry({ id: "e1" })] });
+
+    // Rendering this as a clock printed "12:00 am" on every enquiry card,
+    // because the customer picks a date and the server stores midnight.
+    expect(items[0]?.whenIsDay).toBe(true);
+  });
+
+  it("marks a booking's scheduled start as a real moment", () => {
+    const items = toWorkItems({ ...EMPTY, jobs: [job({ id: "j1" })] });
+
+    expect(items[0]?.whenIsDay).toBe(false);
+  });
+
+  it("keeps title and accessible name in step", () => {
+    const items = toWorkItems({
+      ...EMPTY,
+      enquiries: [enquiry({ id: "e1", status: "INVITED", service_name: "Rewiring" })],
+    });
+
+    const item = items[0]!;
+    expect(item.accessibleName).toBe(`${item.title}, ${item.stateLabel}`);
   });
 });

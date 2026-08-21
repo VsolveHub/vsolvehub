@@ -255,7 +255,7 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
       <header className="sticky top-0 z-30 border-b border-line bg-surface">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
           <Link
-            href="/dashboard"
+            href="/home"
             className="flex items-center gap-2 rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
           >
             <Logo className="h-7 w-auto" />
@@ -279,7 +279,6 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
             <NotificationBell workspaceKeys={workspaces.map((item) => item.key)} />
             <Button
               variant="ghost"
-              size="sm"
               onClick={() => logout.mutate()}
               loading={logout.isPending}
               loadingLabel="Signing out"
@@ -340,11 +339,18 @@ function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
    * which is invalid and leaves a screen-reader user with no idea where they
    * are.
    */
-  const currentHref = items.reduce<string | null>((best, item) => {
-    const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const current = items.reduce<{ href: string; owned: string } | null>((best, item) => {
+    // A tab may own more of the tree than it points at — `Work` links to
+    // `/work/all` and owns every `/work/…` route. See `WorkspaceNavItem`.
+    const owned = item.activePrefix ?? item.href;
+    const matches = pathname === owned || pathname.startsWith(`${owned}/`);
     if (!matches) return best;
-    return best === null || item.href.length > best.length ? item.href : best;
+    // Compared prefix against prefix. Measuring the winner's `href` instead
+    // would rank the two on different strings, so a short href with a long
+    // prefix could lose to a longer href that matched less of the path.
+    return best === null || owned.length > best.owned.length ? { href: item.href, owned } : best;
   }, null);
+  const currentHref = current?.href ?? null;
 
   return (
     <nav

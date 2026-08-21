@@ -33,6 +33,7 @@ import {
 import { visitHref } from "@/lib/routes";
 
 import { UnlockPanel } from "./unlock-panel";
+import { VisitPlanCheckout } from "./visit-plan-checkout";
 import { VisitTracker } from "./visit-tracker";
 
 /**
@@ -61,8 +62,6 @@ export interface RequestAccessPanelProps {
   archetype: RequirementArchetype | null;
   /** Where the full quotes and estimates are read. */
   quotesHref: string;
-  /** Where the A5 plan is paid for. */
-  bookVisitsHref: string;
   /** Where the A3 booking fee is paid (revision 4). */
   bookCrewFeeHref: string;
   supportAction?: ReactNode;
@@ -279,7 +278,6 @@ function A3QuoteAccess({
 function A5Access({
   requirementId,
   quotesHref,
-  bookVisitsHref,
   supportAction,
   slot = "both",
 }: RequestAccessPanelProps) {
@@ -325,36 +323,45 @@ function A5Access({
         }));
 
   return (
-    <VisitTracker
-      slot={slot}
-      estimates={estimates}
-      phase={state === null ? "choosing" : visitPlanPhase(state)}
-      tracker={tracker}
-      isLoading={planQuery.isPending}
-      readError={planQuery.error}
-      onRetryRead={() => void planQuery.refetch()}
-      bookVisitsHref={bookVisitsHref}
-      checkoutAvailable={state !== null && canCheckOutVisitPlan(state)}
-      estimatesHref={quotesHref}
-      // The visit-day commands moved with the prose, onto the visit's own page.
-      // A destructive control repeated once per row on a list somebody is
-      // scanning is a control pressed by accident.
-      visitHref={(siteVisitId) => visitHref(requirementId, siteVisitId)}
-      supportAction={supportAction}
-      // No plan switcher here, and that is a correction rather than an omission.
-      //
-      // The server does allow re-choosing until a vendor commits, so a control
-      // was added on this screen. What it produced was worse than the
-      // convenience: the invitation wave is bounded by the plan size *at the
-      // moment it went out*, so resizing afterwards leaves a request showing
-      // "2 professionals invited" above three slots, two of which nobody was
-      // ever asked to fill. One tap silently rearranged the flow.
-      //
-      // The choice belongs on review, before the request is sent, which is where
-      // it is offered — and where changing it costs nothing because nothing has
-      // been invited yet. Once professionals are looking at this job, resizing
-      // it is a support conversation, not a segmented control.
-    />
+    <VisitPlanCheckout requirementId={requirementId} state={state}>
+      {(checkoutFlow) => (
+        <VisitTracker
+          slot={slot}
+          estimates={estimates}
+          phase={state === null ? "choosing" : visitPlanPhase(state)}
+          tracker={tracker}
+          isLoading={planQuery.isPending}
+          readError={planQuery.error}
+          onRetryRead={() => void planQuery.refetch()}
+          checkoutAvailable={state !== null && canCheckOutVisitPlan(state)}
+          checkoutPriceLabel={checkoutFlow.chargeableLabel}
+          onStartCheckout={checkoutFlow.openPayment}
+          isStartingCheckout={checkoutFlow.isPending}
+          checkoutError={checkoutFlow.error}
+          canSimulatePendingCapture={checkoutFlow.canSimulatePendingCapture}
+          onSimulatePendingCapture={checkoutFlow.simulatePendingCapture}
+          estimatesHref={quotesHref}
+          // The visit-day commands moved with the prose, onto the visit's own page.
+          // A destructive control repeated once per row on a list somebody is
+          // scanning is a control pressed by accident.
+          visitHref={(siteVisitId) => visitHref(requirementId, siteVisitId)}
+          supportAction={supportAction}
+          // No plan switcher here, and that is a correction rather than an omission.
+          //
+          // The server does allow re-choosing until a vendor commits, so a control
+          // was added on this screen. What it produced was worse than the
+          // convenience: the invitation wave is bounded by the plan size *at the
+          // moment it went out*, so resizing afterwards leaves a request showing
+          // "2 professionals invited" above three slots, two of which nobody was
+          // ever asked to fill. One tap silently rearranged the flow.
+          //
+          // The choice belongs on review, before the request is sent, which is where
+          // it is offered — and where changing it costs nothing because nothing has
+          // been invited yet. Once professionals are looking at this job, resizing
+          // it is a support conversation, not a segmented control.
+        />
+      )}
+    </VisitPlanCheckout>
   );
 }
 

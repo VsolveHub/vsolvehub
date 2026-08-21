@@ -96,6 +96,9 @@ export interface RequestDetailProps {
    */
   primaryAction?: ReactNode;
 
+  /** A secondary destination aligned with the request title. */
+  headerAction?: ReactNode;
+
   events: readonly TimelineEventView[];
   isTimelinePending: boolean;
   timelineError: unknown;
@@ -151,7 +154,7 @@ function RequestBreadcrumb({ current }: { current: string }) {
       <ol className="flex flex-wrap items-center gap-2">
         <li>
           <Link href="/activity" className="hover:text-text">
-            Activity
+            Bookings
           </Link>
         </li>
         <li aria-hidden className="text-warm-400">
@@ -192,6 +195,7 @@ export function RequestDetail({
   facts = [],
   railRows = [],
   primaryAction,
+  headerAction,
   events,
   isTimelinePending,
   timelineError,
@@ -251,12 +255,17 @@ export function RequestDetail({
             <RequestHeaderError error={requestError} onRetry={onRetryRequest} />
           ) : (
             <>
-              <header className="flex flex-col gap-1">
-                <h1 className="text-[1.75rem] font-extrabold leading-tight text-text sm:text-[1.875rem]">
-                  {request.title}
-                </h1>
-                {subtitle !== null ? (
-                  <p className="text-sm font-medium text-text-secondary">{subtitle}</p>
+              <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h1 className="text-[1.75rem] font-extrabold leading-tight text-text sm:text-[1.875rem]">
+                    {request.title}
+                  </h1>
+                  {subtitle !== null ? (
+                    <p className="mt-1 text-sm font-medium text-text-secondary">{subtitle}</p>
+                  ) : null}
+                </div>
+                {headerAction !== undefined ? (
+                  <div className="shrink-0 sm:ml-4">{headerAction}</div>
                 ) : null}
               </header>
 

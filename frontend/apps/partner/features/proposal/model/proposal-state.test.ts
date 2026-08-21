@@ -57,6 +57,38 @@ describe("revising", () => {
         .canSupersede,
     ).toBe(false);
   });
+
+  it("never offers a revision after the customer turns an estimate down", () => {
+    expect(
+      permissionsFor({
+        proposal: proposal({
+          status: "REJECTED",
+          revision_expires_at: "2026-08-12T08:05:00Z",
+        }),
+        enquiryStatus: "QUOTED",
+        revisionWindowOpen: true,
+      }).canSupersede,
+    ).toBe(false);
+  });
+
+  it("closes estimate revision when its five-minute window expires", () => {
+    const estimate = proposal({ revision_expires_at: "2026-08-12T08:05:00Z" });
+
+    expect(
+      permissionsFor({
+        proposal: estimate,
+        enquiryStatus: "QUOTED",
+        revisionWindowOpen: true,
+      }).canSupersede,
+    ).toBe(true);
+    expect(
+      permissionsFor({
+        proposal: estimate,
+        enquiryStatus: "QUOTED",
+        revisionWindowOpen: false,
+      }).canSupersede,
+    ).toBe(false);
+  });
 });
 
 describe("status copy", () => {

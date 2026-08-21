@@ -13,7 +13,7 @@ Two guards here exist because the platform, not only the vendor, carries the con
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -28,6 +28,7 @@ from apps.requirements import access, matching, pricing
 from apps.requirements.exceptions import (
     ProposalNotSelectableError,
     ProposalShapeError,
+    ProposalWindowClosedError,
     RejectionCapReachedError,
     RequirementNotFoundError,
     RequirementTransitionError,
@@ -50,6 +51,39 @@ _CONTACT_PATTERN = re.compile(
     r"(\+?91[\s-]?)?[6-9]\d{9}|\b(whatsapp|whatsap|wa\.me|telegram|gpay|phonepe)\b",
     re.IGNORECASE,
 )
+
+#: A project estimate is editable only while the vendor is still correcting the
+#: submission they just made. After this window it remains an offer the Customer
+#: can act on, so any change belongs to a later engagement amendment rather than
+#: a quietly replaced estimate.
+ESTIMATE_REVISION_WINDOW = timedelta(minutes=5)
+
+
+def estimate_revision_expires_at(proposal: Proposal) -> datetime:
+    """The immutable end of an A5 estimate's correction window."""
+
+    return proposal.submitted_at + ESTIMATE_REVISION_WINDOW
+
+
+def _assert_project_revision_allowed(
+    *, previous: Proposal | None, requirement: CustomerRequirement
+) -> None:
+    """Keep a rejected or settled A5 estimate immutable, and close editing after five minutes."""
+
+    if (
+        previous is None
+        or requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
+    ):
+        return
+    if previous.status != Proposal.Status.SUBMITTED:
+        raise RequirementTransitionError(
+            "This estimate can no longer be revised. You may only withdraw a live estimate "
+            "until the Customer chooses it."
+        )
+    if timezone.now() >= estimate_revision_expires_at(previous):
+        raise RequirementTransitionError(
+            "An estimate can only be revised during the first 5 minutes after it is sent."
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,22 +313,34 @@ def submit_proposal(
     `partners.assert_rate_meets_wage_floor` remains the explicit-inputs function for anything that
     genuinely needs to name a state and a skill.
     """
+    # Selection and submission both lock the requirement first. That shared lock order closes the
+    # race where a stale Partner tab could submit while the Customer was selecting another vendor:
+    # exactly one command observes a live request, and the other observes its committed state.
+    invitation_ref = VendorInvitation.objects.only("requirement_id").get(pk=invitation_id)
+    requirement = (
+        CustomerRequirement.objects.select_for_update(of=("self",))
+        .select_related("configuration", "service_area", "variant")
+        .get(pk=invitation_ref.requirement_id)
+    )
     invitation = (
         VendorInvitation.objects.select_for_update(of=("self",))
-        .select_related(
-            "requirement__configuration", "requirement__service_area", "snapshot", "partner"
-        )
+        .select_related("snapshot", "partner")
         .get(pk=invitation_id)
     )
-    requirement = invitation.requirement
+    invitation.requirement = requirement
 
     if invitation.status not in (
         VendorInvitation.Status.ACCEPTED,
         VendorInvitation.Status.QUOTED,
     ):
         raise RequirementTransitionError("Accept this enquiry before quoting on it.")
-    if requirement.status in CustomerRequirement.CLOSED_STATUSES:
-        raise RequirementTransitionError("This request is closed.")
+    if requirement.status in (
+        CustomerRequirement.Status.SELECTED,
+        CustomerRequirement.Status.ENGAGED,
+    ):
+        raise ProposalWindowClosedError()
+    if requirement.status not in CustomerRequirement.LIVE_STATUSES:
+        raise RequirementTransitionError("This request no longer accepts proposals.")
 
     payload: dict[str, Any] = {
         "rate_paise_per_worker_day": rate_paise_per_worker_day,
@@ -343,6 +389,7 @@ def submit_proposal(
         .order_by("-revision")
         .first()
     )
+    _assert_project_revision_allowed(previous=previous, requirement=requirement)
     if previous is not None and previous.status == Proposal.Status.SUBMITTED:
         previous.status = Proposal.Status.SUPERSEDED
         previous.save(update_fields=("status", "updated_at"))
@@ -495,6 +542,11 @@ def _promote_requirement_when_quoted(requirement: CustomerRequirement) -> None:
 
 @transaction.atomic
 def withdraw_proposal(*, proposal_id: uuid.UUID) -> Proposal:
+    # Selection locks the requirement before the proposal. Use the same order
+    # here so a withdrawal and a Customer choice cannot cross in flight and both
+    # succeed against the same live estimate.
+    requirement_id = Proposal.objects.only("requirement_id").get(pk=proposal_id).requirement_id
+    CustomerRequirement.objects.select_for_update().get(pk=requirement_id)
     proposal = Proposal.objects.select_for_update().get(pk=proposal_id)
     if proposal.status != Proposal.Status.SUBMITTED:
         raise RequirementTransitionError("Only a live quote can be withdrawn.")
@@ -986,8 +1038,10 @@ def complete_site_visit(*, site_visit_id: uuid.UUID, outcome_notes: str = "") ->
         return access.complete_plan_visit(site_visit_id=site_visit_id, outcome_notes=outcome_notes)
 
     visit = SiteVisit.objects.select_for_update().get(pk=site_visit_id)
-    if visit.status != SiteVisit.Status.SCHEDULED:
-        raise RequirementTransitionError("Only a scheduled visit can be completed.")
+    if visit.status != SiteVisit.Status.IN_PROGRESS:
+        raise RequirementTransitionError(
+            "Enter the Customer's arrival code before completing this visit."
+        )
     visit.status = SiteVisit.Status.COMPLETED
     visit.completed_at = timezone.now()
     visit.outcome_notes = outcome_notes

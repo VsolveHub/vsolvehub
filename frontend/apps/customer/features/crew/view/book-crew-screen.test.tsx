@@ -4,6 +4,8 @@ import type { Schemas } from "@vsolve/api-client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { writeCrewBookingIntent } from "../model/booking-intent";
+
 /**
  * The A3 booking form and its live rate rail.
  *
@@ -103,9 +105,14 @@ const variant = {
       is_required: true,
       validation_rules: {},
       options: [
-        { id: "o-1", code: "loading-unloading", label: "Loading & shifting", description: "" },
-        { id: "o-2", code: "site-clearing", label: "Site clearing", description: "" },
-        { id: "o-3", code: "other", label: "Something else", description: "" },
+        { id: "o-1", code: "loading-unloading", label: "Loading and unloading", description: "Moving material off and onto vehicles." },
+        { id: "o-2", code: "material-shifting", label: "Material shifting on site", description: "Carrying material between floors and store rooms." },
+        { id: "o-3", code: "site-clearing", label: "Site clearing and debris removal", description: "Clearing rubble and preparing a space." },
+        { id: "o-4", code: "masonry-helper", label: "Masonry and concreting helper", description: "Assisting a mason or concreting crew." },
+        { id: "o-5", code: "painting-helper", label: "Painting and finishing helper", description: "Surface preparation and painter support." },
+        { id: "o-6", code: "demolition-support", label: "Demolition support", description: "Breaking out and clearing under supervision." },
+        { id: "o-7", code: "general-labour", label: "General site labour", description: "A mix directed by the site supervisor." },
+        { id: "o-8", code: "other", label: "Something else", description: "Tell us in a sentence." },
       ],
     },
     {
@@ -126,6 +133,16 @@ const variant = {
       kind: "NUMBER",
       is_required: true,
       validation_rules: { minimum: 1 },
+      options: [],
+    },
+    {
+      id: "q-work-description",
+      code: "work_description",
+      prompt: "Tell us what the work is",
+      help_text: "A short sentence is enough.",
+      kind: "TEXT",
+      is_required: false,
+      validation_rules: {},
       options: [],
     },
   ],
@@ -166,6 +183,21 @@ async function chooseAddress() {
   fireEvent.click(within(dialog).getByRole("radio", { name: /Site/ }));
 }
 
+/** Confirms step one. This must remain a local-only choice. */
+async function chooseWork() {
+  fireEvent.click(await screen.findByRole("radio", { name: /^Loading and unloading/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Plan this crew" }));
+}
+
+async function openRate() {
+  await chooseWork();
+  await chooseAddress();
+  fireEvent.change(screen.getByLabelText(/Start from/), {
+    target: { value: "2026-09-07" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "See my live rate" }));
+}
+
 /** The query strings every rate read was made with. */
 function rateSizes(): { headcount: number; days: number }[] {
   return client.GET.mock.calls
@@ -189,6 +221,15 @@ beforeEach(() => {
   });
   for (const method of Object.values(client)) method.mockReset();
   push.mockReset();
+  window.sessionStorage.clear();
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  });
 });
 
 afterEach(() => {
@@ -196,28 +237,29 @@ afterEach(() => {
 });
 
 describe("BookCrewScreen rate rail", () => {
-  it("does not price anything until an address is chosen", async () => {
+  it("creates and prices nothing while the customer browses and chooses work", async () => {
     respondToReads();
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
+    expect(await screen.findAllByRole("radio")).toHaveLength(8);
+    fireEvent.click(screen.getByRole("radio", { name: /^Loading and unloading/ }));
 
-    // The card is resolved through the requirement's service area, so there is
-    // genuinely nothing to price yet — and the rail says so instead of showing
-    // a zero.
-    expect(
-      await screen.findByText(/Choose where the work is and we will show the rate/),
-    ).toBeInTheDocument();
+    // Comparing or selecting a work card is navigation state, not a request.
     expect(rateSizes()).toHaveLength(0);
+    expect(client.POST).not.toHaveBeenCalledWith(
+      "/api/v1/requirements/",
+      expect.anything(),
+    );
     expect(screen.queryByText("₹5,400")).not.toBeInTheDocument();
   });
 
-  it("prices the size on the form once an address exists", async () => {
+  it("prices the size only after the complete plan is confirmed", async () => {
     respondToReads();
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
-    await chooseAddress();
+    await openRate();
 
     // The steppers open at the catalogue's own minimum, so the first read asks
     // for that size rather than for whatever the fixture happens to return.
@@ -232,10 +274,11 @@ describe("BookCrewScreen rate rail", () => {
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
-    await chooseAddress();
+    await openRate();
     await waitFor(() => expect(rateSizes().length).toBeGreaterThan(0), AFTER_DEBOUNCE);
 
     const writesBefore = client.PATCH.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Change crew plan" }));
     fireEvent.click(screen.getByRole("button", { name: "More people" }));
     fireEvent.click(screen.getByRole("button", { name: "More people" }));
 
@@ -257,7 +300,7 @@ describe("BookCrewScreen rate rail", () => {
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
-    await chooseAddress();
+    await openRate();
 
     // Every one of these is a field on the payload. The per-day cash is the
     // load-bearing case: it is `lead_day_receipt_paise`, not the total divided
@@ -293,7 +336,7 @@ describe("BookCrewScreen rate rail", () => {
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
-    await chooseAddress();
+    await openRate();
 
     expect(
       await screen.findByText(/We do not have a published day rate for this yet/),
@@ -306,24 +349,60 @@ describe("BookCrewScreen rate rail", () => {
 });
 
 describe("BookCrewScreen booking", () => {
+  it("restores the unfinished work, date and address after a reload without creating a request", async () => {
+    respondToReads();
+    respondToWrites();
+    writeCrewBookingIntent(window.sessionStorage, {
+      serviceSlug: service.slug,
+      variantId: variant.id,
+      requirementId: null,
+      answers: {
+        work_type: "loading-unloading",
+        worker_count: 3,
+        duration_days: 2,
+      },
+      addressId: address.id,
+      requestedStart: "2026-09-07",
+      step: "details",
+    });
+
+    render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
+
+    expect(
+      await screen.findByRole("heading", { name: "Build your construction helpers crew" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Start from/)).toHaveValue("2026-09-07");
+    expect(
+      screen.getByRole("button", { name: /loading and unloading.*change/i }),
+    ).toBeInTheDocument();
+    expect(client.POST).not.toHaveBeenCalledWith(
+      "/api/v1/requirements/",
+      expect.anything(),
+    );
+  });
+
+  it("asks for a sentence only when Something else is chosen", async () => {
+    respondToReads();
+    respondToWrites();
+
+    render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
+    fireEvent.click(await screen.findByRole("radio", { name: /^Something else/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Plan this crew" }));
+
+    expect(screen.getByLabelText("Tell us what the work is")).toBeInTheDocument();
+  });
+
   it("saves the size on screen before booking it", async () => {
     respondToReads();
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
+    await chooseWork();
     await chooseAddress();
-    await screen.findByText("₹5,400");
-
-    fireEvent.change(screen.getByLabelText(/Start from/), {
-      target: { value: "2026-09-07" },
-    });
-    fireEvent.click(screen.getByRole("radio", { name: "Loading & shifting" }));
+    fireEvent.change(screen.getByLabelText(/Start from/), { target: { value: "2026-09-07" } });
     fireEvent.click(screen.getByRole("button", { name: "More people" }));
-
-    await waitFor(
-      () => expect(screen.getByRole("button", { name: "Book this crew" })).toBeEnabled(),
-      AFTER_DEBOUNCE,
-    );
+    fireEvent.click(screen.getByRole("button", { name: "See my live rate" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Book this crew" })).toBeEnabled(), AFTER_DEBOUNCE);
     fireEvent.click(screen.getByRole("button", { name: "Book this crew" }));
 
     // The rail priced by query string, which writes nothing — so the draft still
@@ -353,10 +432,10 @@ describe("BookCrewScreen booking", () => {
     respondToWrites();
 
     render(<BookCrewScreen service={service} variant={variant} />, { wrapper });
+    await chooseWork();
     await chooseAddress();
-    await screen.findByText("₹5,400");
 
-    // Work type and the start date are both unanswered.
-    expect(screen.getByRole("button", { name: "Book this crew" })).toBeDisabled();
+    // The start date is unanswered, so the details action cannot create or price a draft.
+    expect(screen.getByRole("button", { name: "See my live rate" })).toBeDisabled();
   });
 });

@@ -1,12 +1,13 @@
 "use client";
 
-import { Badge, Button, Card, ErrorState, formatMoney } from "@vsolve/ui";
+import { Badge, Button, Card, Disclosure, ErrorState, formatMoney } from "@vsolve/ui";
 import {
   autoApprovalDeadline,
   correctionRequested,
   describeError,
   isStageTransitionNotAllowed,
   reviewClock,
+  stageDeadline,
   stageIsWaitingOnFunding,
   vendorStageCommands,
   workMayStart,
@@ -27,6 +28,7 @@ import {
   type StageWording,
 } from "../model/engagement-copy";
 import { EvidenceComposer } from "./evidence-composer";
+import { ProjectCompletionControl } from "./project-completion-control";
 
 /**
  * One shift-day or one milestone, with everything a vendor does to it.
@@ -86,14 +88,25 @@ export interface StagePanelProps {
    * on the shift-day read, and none of them are on the engagement payload.
    */
   readonly dayHref?: string | null;
+  /** Keeps a stage route action-first and places supporting detail behind taps. */
+  readonly compact?: boolean;
+  readonly workspace: "workforce" | "project";
 }
 
-export function StagePanel({ engagement, stage, wording, dayHref = null }: StagePanelProps) {
+export function StagePanel({
+  engagement,
+  stage,
+  wording,
+  dayHref = null,
+  compact = false,
+  workspace,
+}: StagePanelProps) {
   const status = describeStageStatus(stage, wording);
   const commands = vendorStageCommands(engagement, stage);
   const correction = correctionRequested(stage);
   const material = isMaterialAdvance(stage);
   const start = useStartStage(engagement.id);
+  const deadline = stageDeadline(stage, engagement.server_now);
 
   return (
     <div className="flex flex-col gap-3">
@@ -127,12 +140,37 @@ export function StagePanel({ engagement, stage, wording, dayHref = null }: Stage
             `Vsolve sent a state this version of the app cannot describe. Nothing here is wrong with your ${wording.parent} — updating the app usually resolves it.`}
         </p>
 
-        {material ? (
+        {material && !compact ? (
           <p className="text-sm leading-6 text-text-secondary">{MATERIAL_ADVANCE_NOTE}</p>
         ) : null}
 
-        {stage.scheduled_on === null ? null : (
-          <p className="text-xs text-text-muted">Scheduled for {shortDate(stage.scheduled_on)}</p>
+        {deadline === null ? null : (
+          <div
+            className={`rounded-card border p-3 ${
+              deadline.state === "extra"
+                ? "border-warning-line bg-warning-surface"
+                : "border-line bg-canvas"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                Stage deadline
+              </span>
+              <Badge tone={deadline.state === "extra" ? "warning" : deadline.state === "complete" ? "success" : "info"}>
+                {deadline.label}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm font-semibold text-text">
+              {deadline.startsOn ? `Starts ${shortDate(deadline.startsOn)} · ` : ""}
+              Due {shortDate(deadline.dueOn)}
+              {deadline.durationDays ? ` · ${deadline.durationDays} calendar ${deadline.durationDays === 1 ? "day" : "days"}` : ""}
+            </p>
+            {deadline.state === "extra" ? (
+              <p className="mt-1 text-xs leading-5 text-warning-text">
+                No extra charge. This is a fixed-price project, so extra days do not increase the agreed amount.
+              </p>
+            ) : null}
+          </div>
         )}
 
         {correction === null ? null : (
@@ -145,16 +183,32 @@ export function StagePanel({ engagement, stage, wording, dayHref = null }: Stage
                 ? "They sent it back without writing a reason."
                 : correction}
             </p>
-            <p className="mt-2 text-xs leading-5 text-warning-text">
-              This is a correction, not a change to what you agreed. The price, the scope and this{" "}
-              {wording.one}&rsquo;s own amount are unchanged, and no money has moved. If they want
-              something different from what was agreed, that is a change request you propose and
-              they accept.
-            </p>
+            {compact ? (
+              <Disclosure summary="What this correction changes">
+                This is a correction, not a change to what you agreed. The price, scope and stage
+                amount stay the same. New work needs a separate change request.
+              </Disclosure>
+            ) : (
+              <p className="mt-2 text-xs leading-5 text-warning-text">
+                This is a correction, not a change to what you agreed. The price, the scope and
+                this {wording.one}&rsquo;s own amount are unchanged, and no money has moved. If they
+                want something different from what was agreed, that is a change request you
+                propose and they accept.
+              </p>
+            )}
           </Card>
         )}
 
-        <ReviewClockLine stage={stage} wording={wording} />
+        {compact ? (
+          <Disclosure summary="Stage details" hint={stage.evidence.length > 0 ? `${stage.evidence.length} evidence` : undefined}>
+            <div className="flex flex-col gap-2">
+              {material ? <p>{MATERIAL_ADVANCE_NOTE}</p> : null}
+              <ReviewClockLine stage={stage} wording={wording} />
+            </div>
+          </Disclosure>
+        ) : (
+          <ReviewClockLine stage={stage} wording={wording} />
+        )}
 
         <StartControl
           engagement={engagement}
@@ -165,6 +219,8 @@ export function StagePanel({ engagement, stage, wording, dayHref = null }: Stage
           error={start.isError ? start.error : null}
           onStart={() => start.mutate({ stageId: stage.id })}
         />
+
+        {workspace === "project" ? <ProjectCompletionControl engagement={engagement} /> : null}
 
         {dayHref === null ? null : (
           <Link
@@ -177,14 +233,31 @@ export function StagePanel({ engagement, stage, wording, dayHref = null }: Stage
         )}
       </Card>
 
-      {commands.includes("attach_evidence") || stage.evidence.length > 0 ? (
-        <EvidenceComposer
-          engagement={engagement}
-          stage={stage}
-          wording={wording}
-          canAttach={commands.includes("attach_evidence")}
-          canSubmit={commands.includes("submit")}
-        />
+      {workspace === "workforce" && (commands.includes("attach_evidence") || stage.evidence.length > 0) ? (
+        compact ? (
+          <Card className="p-4">
+            <Disclosure
+              summary={commands.includes("submit") ? "Add evidence and submit" : "Evidence"}
+              hint={stage.evidence.length > 0 ? `${stage.evidence.length} added` : "Open"}
+            >
+              <EvidenceComposer
+                engagement={engagement}
+                stage={stage}
+                wording={wording}
+                canAttach={commands.includes("attach_evidence")}
+                canSubmit={commands.includes("submit")}
+              />
+            </Disclosure>
+          </Card>
+        ) : (
+          <EvidenceComposer
+            engagement={engagement}
+            stage={stage}
+            wording={wording}
+            canAttach={commands.includes("attach_evidence")}
+            canSubmit={commands.includes("submit")}
+          />
+        )
       ) : null}
     </div>
   );

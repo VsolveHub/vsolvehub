@@ -2,7 +2,7 @@
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
  * Source:   contracts/openapi/v1.yaml (version 1.39.0)
- * Checksum: 9feda31f1a6f6b82
+ * Checksum: bd604e25bc60e1f8
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -448,6 +448,22 @@ export interface paths {
          *     auto-finalised, and it holds the Partner payout without touching `cancel_booking`.
          */
         post: operations["booking_quality_dispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{booking_id}/ratings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["booking_rating_list"];
+        put?: never;
+        post: operations["booking_rating_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1345,13 +1361,33 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its own, when every stage is released; this is the separate fact that the Customer agrees it is done.
+         * @description A3 workforce completion only. A5 custom projects refuse this route: the Customer displays their completion code and the Partner enters it through the project completion command.
+         *
+         *     The Customer accepts the finished work. `COMPLETING` → `COMPLETED`, and the requirement closes as `CLOSED_COMPLETE`. An engagement reaches `COMPLETING` on its own, when every stage is released; this is the separate fact that the Customer agrees it is done.
          *
          *     **Three refusals, and none of them approves anything on the way past** (`M2-BE-548`). An open stage refuses — an accepted amendment can append work after `COMPLETING`, and that stage keeps its own review rather than being swept into a settled one. A disputed stage refuses with `m2_stage_disputed`. A **submitted handover the Customer has not accepted** refuses, which is the mechanism that keeps Event and Media delivery on the platform: accept it at `POST /engagements/{id}/handover/acceptance/` first.
          *
          *     **An A5 engagement that withheld warranty retention then moves straight to `WARRANTY`, not `COMPLETED`.** Read `status` from the response rather than assuming the transition you asked for: `warranty_ends_at` on the project read says when the hold-back releases and the engagement becomes `CLOSED`.
          */
         post: operations["m2_engagement_completion_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/completion-code/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Customer-only read/issue; the Partner can never fetch the digits. */
+        get: operations["m2_project_completion_code_read"];
+        put?: never;
+        /** @description Customer-only read/issue; the Partner can never fetch the digits. */
+        post: operations["m2_project_completion_code_issue"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1442,6 +1478,22 @@ export interface paths {
         get: operations["m2_project_read"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/engagements/{engagement_id}/ratings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["engagement_rating_list"];
+        put?: never;
+        post: operations["engagement_rating_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3546,6 +3598,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/partner/engagements/{engagement_id}/completion/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The only ordinary A5 close-out command: enter the Customer's code. */
+        post: operations["m2_project_complete_with_code"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/partner/enquiries/": {
         parameters: {
             query?: never;
@@ -4691,10 +4760,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The live selection for this request, or `null`. `reconfirm_by` is the vendor's deadline; `engagement_id` fills in once they reconfirm. */
+        /** @description The live selection for this request. Selection opens the engagement in the same transaction, so `engagement_id` is available immediately on a confirmed selection. */
         get: operations["m2_selection_read"];
         put?: never;
-        /** @description Choose one vendor. **Selection is not a booking**: it starts the vendor's reconfirmation clock, and the engagement opens only when they commit — A3 on their reconfirmation, A5 when the first stage is funded. If they decline or the clock runs out, the unlock or visit-plan entitlement survives untouched and the next quote costs nothing more. Multiple simultaneous selections are not supported. */
+        /** @description Choose one vendor and open the engagement atomically after capability, availability and quote-validity checks. The response includes `engagement_id`; multiple simultaneous selections are not supported. */
         post: operations["m2_selection_create"];
         delete?: never;
         options?: never;
@@ -4982,23 +5051,6 @@ export interface paths {
         get: operations["services_configuration_retrieve"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/site-visits/{site_visit_id}/arrival/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Record that the vendor is on site. Either party may confirm it. M2 uses the **non-OTP fallback** as the default path rather than as a degraded one — the start OTP is M3 activation — and `arrival_method` is stored so every historical arrival still says truthfully how it was proved once the OTP path is switched on. */
-        post: operations["m2_site_visit_arrival_confirm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6573,6 +6625,8 @@ export interface components {
             /** Format: date-time */
             readonly completed_at: string | null;
             readonly access_receipt: components["schemas"]["AccessReceipt"] | null;
+            /** Format: date-time */
+            readonly server_now: string;
             readonly stages: components["schemas"]["EngagementStage"][];
             /** Format: date-time */
             readonly created_at: string;
@@ -6693,6 +6747,9 @@ export interface components {
             readonly amount_paise: number;
             readonly kind: components["schemas"]["EngagementStageKindEnum"];
             /** Format: date */
+            readonly starts_on: string | null;
+            readonly duration_days: number | null;
+            /** Format: date */
             readonly scheduled_on: string | null;
             readonly status: components["schemas"]["EngagementStageStatusEnum"];
             readonly funding_state: components["schemas"]["EngagementStageFundingStateEnum"];
@@ -6776,6 +6833,7 @@ export interface components {
             readonly category_slug: string;
             readonly service_name: string;
             readonly archetype: string;
+            readonly requirement_status: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
             readonly wave: number;
             /** Format: date-time */
@@ -6785,6 +6843,8 @@ export interface components {
             readonly language: string;
             /** Format: date-time */
             readonly responds_by: string;
+            readonly latest_proposal_status: string | null;
+            readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
             readonly created_at: string;
             readonly answers: unknown;
@@ -6815,6 +6875,7 @@ export interface components {
             readonly category_slug: string;
             readonly service_name: string;
             readonly archetype: string;
+            readonly requirement_status: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
             readonly wave: number;
             /** Format: date-time */
@@ -6824,6 +6885,8 @@ export interface components {
             readonly language: string;
             /** Format: date-time */
             readonly responds_by: string;
+            readonly latest_proposal_status: string | null;
+            readonly latest_proposal_rejection_reason: string | null;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -8757,6 +8820,19 @@ export interface components {
             /** Format: date-time */
             readonly server_now: string;
         };
+        /** @description The Customer-only display copy of a project completion challenge. */
+        ProjectCompletionCode: {
+            code: string | null;
+            /** Format: date-time */
+            expires_at: string | null;
+            can_issue: boolean;
+            code_length: number;
+            /** Format: date-time */
+            server_now: string;
+        };
+        ProjectCompletionCodeEntryRequest: {
+            code: string;
+        };
         /**
          * @description A vendor's claim that the Customer held a milestone up (`M2-BE-544`).
          *
@@ -8992,6 +9068,8 @@ export interface components {
             readonly invitation: string;
             /** @default 1 */
             readonly revision: number;
+            /** Format: date-time */
+            readonly revision_expires_at: string | null;
             readonly status: components["schemas"]["ProposalStatusEnum"];
             readonly usability: components["schemas"]["ProposalUsabilityEnum"];
             readonly rejection_reason: components["schemas"]["RejectionReasonEnum"];
@@ -9108,11 +9186,10 @@ export interface components {
             note: string;
         };
         /**
-         * @description Selection is not a booking, and this shape says so.
+         * @description The Customer's persisted choice and the engagement it opened.
          *
-         *     `reconfirm_by` is the whole point: the Customer has chosen and the vendor has not yet agreed.
-         *     Null when the area carries no operating windows and no business-hours deadline could be
-         *     computed — which is an unset clock, not an unlimited one.
+         *     Legacy pending rows may still carry a reconfirmation deadline. New selections are confirmed
+         *     and carry `engagement_id` in the create response.
          */
         ProposalSelection: {
             /** Format: uuid */
@@ -9159,6 +9236,9 @@ export interface components {
             deliverable: string;
             amount_paise: number;
             /** Format: date */
+            starts_on?: string | null;
+            duration_days?: number | null;
+            /** Format: date */
             ends_on?: string | null;
         };
         /**
@@ -9177,6 +9257,9 @@ export interface components {
             /** @default  */
             deliverable: string;
             amount_paise: number;
+            /** Format: date */
+            starts_on?: string | null;
+            duration_days?: number | null;
             /** Format: date */
             ends_on?: string | null;
         };
@@ -9558,6 +9641,26 @@ export interface components {
             readonly server_now: string;
         };
         /**
+         * @description * `CUSTOMER` - Customer
+         *     * `PARTNER` - Partner
+         * @enum {string}
+         */
+        RaterRoleEnum: "CUSTOMER" | "PARTNER";
+        RatingCreateRequest: {
+            score: number;
+            /** @default  */
+            comment: string;
+        };
+        RatingSummary: {
+            subject_kind: components["schemas"]["SubjectKindEnum"];
+            /** Format: uuid */
+            subject_id: string;
+            can_rate: boolean;
+            counterparty_label: string;
+            my_rating: components["schemas"]["ServiceRating"] | null;
+            ratings: components["schemas"]["ServiceRating"][];
+        };
+        /**
          * @description * `PARTNER_UNREACHABLE` - Partner unreachable
          *     * `CUSTOMER_REQUEST` - Customer request
          *     * `SAFETY_CONCERN` - Safety concern
@@ -9778,6 +9881,8 @@ export interface components {
             readonly language: string;
             readonly additional_details: string;
             readonly attachments: components["schemas"]["RequirementAttachment"][];
+            /** Format: uuid */
+            readonly engagement_id: string | null;
             readonly server_now: string;
         };
         /**
@@ -9863,6 +9968,8 @@ export interface components {
             readonly closure_reason: string | null;
             /** Format: date-time */
             readonly last_activity_at: string;
+            /** Format: uuid */
+            readonly engagement_id: string | null;
         };
         /**
          * @description The page envelope `My requests` has always been sent, now also declared.
@@ -10226,6 +10333,16 @@ export interface components {
             readonly code: string;
             readonly label: string;
             readonly description: string;
+        };
+        ServiceRating: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly rater_role: components["schemas"]["RaterRoleEnum"];
+            readonly score: number;
+            readonly comment: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly is_mine: boolean;
         };
         ServiceVariantConfiguration: {
             /** Format: uuid */
@@ -10621,6 +10738,12 @@ export interface components {
             readonly name: string;
             readonly description: string;
         };
+        /**
+         * @description * `CATALOG_BOOKING` - CATALOG_BOOKING
+         *     * `ENGAGEMENT` - ENGAGEMENT
+         * @enum {string}
+         */
+        SubjectKindEnum: "CATALOG_BOOKING" | "ENGAGEMENT";
         /**
          * @description The floor every state-changing fulfilment command sits on.
          *
@@ -12408,6 +12531,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_rating_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingSummary"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    booking_rating_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                booking_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RatingCreateRequest"];
+                "multipart/form-data": components["schemas"]["RatingCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingSummary"];
                 };
             };
             404: {
@@ -14405,6 +14600,81 @@ export interface operations {
             };
         };
     };
+    m2_project_completion_code_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCompletionCode"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    m2_project_completion_code_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCompletionCode"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description A still-live completion code was issued moments ago. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_engagement_event_list: {
         parameters: {
             query?: never;
@@ -14558,6 +14828,78 @@ export interface operations {
                 };
             };
             /** @description `m2_stage_transition_not_allowed` on an A3 engagement: a workforce booking has shift-days, not milestones. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    engagement_rating_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingSummary"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    engagement_rating_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingCreateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["RatingCreateRequest"];
+                "multipart/form-data": components["schemas"]["RatingCreateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatingSummary"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20095,6 +20437,61 @@ export interface operations {
             };
         };
     };
+    m2_project_complete_with_code: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCompletionCodeEntryRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectCompletionCodeEntryRequest"];
+                "multipart/form-data": components["schemas"]["ProjectCompletionCodeEntryRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Wrong, expired, consumed or exhausted completion code. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     m2_partner_enquiry_list: {
         parameters: {
             query?: {
@@ -21685,7 +22082,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description `m2_wage_floor_unavailable` when Operations has not mapped this variant to a wage-floor skill, has not set a state code on the service area, or has loaded no floor for that pair. This **fails closed** — an A3 quote is refused rather than accepted unchecked, because brokering labour below the statutory minimum is a violation the platform carries, not only the vendor. */
+            /** @description `m2_proposal_window_closed` when the Customer has already continued with another professional; the proposal is not written. `m2_wage_floor_unavailable` when Operations has not mapped this variant to a wage-floor skill, has not set a state code on the service area, or has loaded no floor for that pair. This **fails closed** — an A3 quote is refused rather than accepted unchecked, because brokering labour below the statutory minimum is a violation the platform carries, not only the vendor. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21887,6 +22284,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The Customer already had an editable draft for this service; the same draft is returned so the client can resume it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementDraft"];
+                };
+            };
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -23721,47 +24127,6 @@ export interface operations {
             };
         };
     };
-    m2_site_visit_arrival_confirm: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Stable opaque key for this logical command. Reuse it only when retrying the identical request; using it with a different payload returns 409. */
-                "Idempotency-Key": string;
-            };
-            path: {
-                site_visit_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SiteVisit"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description `m2_requirement_transition_not_allowed` when the visit is not scheduled — a visit whose plan payment has not been verified is still held, not scheduled, and nobody has arrived at it. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
     m2_site_visit_arrival_code_read: {
         parameters: {
             query?: never;
@@ -23882,7 +24247,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description `m2_requirement_transition_not_allowed` when the visit was never scheduled. A visit with no agreed time cannot have happened. */
+            /** @description `m2_requirement_transition_not_allowed` until the Partner enters the Customer's arrival code and the visit is in progress. */
             409: {
                 headers: {
                     [name: string]: unknown;

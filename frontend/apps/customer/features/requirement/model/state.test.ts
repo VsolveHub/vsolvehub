@@ -197,6 +197,36 @@ describe("the invalidation cascade", () => {
     expect(next.requirementId).toBe("req-1");
     expect(next.verdict).toBeNull();
   });
+
+  it("restores the complete editable intent discovered on the server", () => {
+    const next = requirementReducer(draft(), {
+      type: "RESTORE_SERVER_DRAFT",
+      requirementId: "req-existing",
+      answers: { worker_count: 5, duration_days: 3 },
+      verdict: {
+        lifecycle: "A3_TIME_BLOCK",
+        explanation: "You are hiring people for a period of time.",
+        missingRequiredAnswers: [],
+      },
+      addressId: "addr-default",
+      requestedStart: "2026-08-25",
+      serviceBy: "2026-08-28",
+      flexibilityDays: 2,
+      additionalDetails: "Bring safety shoes",
+      language: "en-IN",
+    });
+
+    expect(next).toMatchObject({
+      requirementId: "req-existing",
+      answers: { worker_count: 5, duration_days: 3 },
+      addressId: "addr-default",
+      requestedStart: "2026-08-25",
+      serviceBy: "2026-08-28",
+      flexibilityDays: 2,
+      additionalDetails: "Bring safety shoes",
+      language: "en-IN",
+    });
+  });
 });
 
 /**

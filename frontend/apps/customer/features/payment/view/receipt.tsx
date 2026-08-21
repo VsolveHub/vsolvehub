@@ -3,9 +3,11 @@
 import { describeError } from "@vsolve/query";
 import { Badge, Button, ErrorState, Logo, Skeleton } from "@vsolve/ui";
 import Link from "next/link";
+import { useState } from "react";
 
 import { useBookingGroup } from "@/features/bookings/queries";
 import { Money } from "@/features/checkout/view/money";
+import { PUBLIC_API_BASE_URL } from "@/lib/api/config";
 
 import { useOrder, type Order, type TaxDocument } from "../queries";
 
@@ -72,6 +74,51 @@ function TaxDocumentCard({ document }: { document: TaxDocument }) {
   );
 }
 
+function DownloadInvoiceButton({ document }: { document: TaxDocument }) {
+  const [state, setState] = useState<"idle" | "working" | "failed">("idle");
+
+  async function download() {
+    setState("working");
+    try {
+      const response = await fetch(
+        `${PUBLIC_API_BASE_URL}/api/v1/tax-documents/${document.id}/download/`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error(String(response.status));
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = `invoice-${document.number}.pdf`;
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setState("idle");
+    } catch {
+      setState("failed");
+    }
+  }
+
+  return (
+    <div>
+      <Button
+        variant="primary"
+        onClick={() => void download()}
+        loading={state === "working"}
+        loadingLabel="Preparing PDF"
+      >
+        Download invoice PDF
+      </Button>
+      {state === "failed" ? (
+        <p className="mt-1 text-xs text-danger-text" role="alert">
+          The PDF could not be downloaded. Try again.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function Receipt({ groupId }: { groupId: string }) {
   const groupQuery = useBookingGroup(groupId);
   const group = groupQuery.data;
@@ -131,6 +178,7 @@ export function Receipt({ groupId }: { groupId: string }) {
 
   const order = orderQuery.data;
   const lines = group.units.flatMap((u) => u.lines);
+  const invoice = order.tax_documents.find((document) => document.kind === "INVOICE") ?? null;
 
   return (
     <div className="space-y-6">
@@ -146,22 +194,7 @@ export function Receipt({ groupId }: { groupId: string }) {
           <Badge tone={order.status === "CONFIRMED" ? "success" : "neutral"}>
             {ORDER_STATUS_LABELS[order.status]}
           </Badge>
-          <Button
-            variant="primary"
-            onClick={() => window.print()}
-            className="flex items-center gap-2"
-          >
-            <svg
-              className="size-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            Download Receipt
-          </Button>
+          {invoice === null ? null : <DownloadInvoiceButton document={invoice} />}
           <Button
             variant="outline"
             onClick={() => window.print()}
@@ -180,8 +213,8 @@ export function Receipt({ groupId }: { groupId: string }) {
             <Logo className="h-10 w-auto" />
             <div className="mt-3 text-xs text-text-secondary space-y-0.5">
               <p className="font-semibold text-text">Vsolve Hub Services India Pvt. Ltd.</p>
-              <p>GSTIN: 27AAACV9821F1Z8 · SAC: 998713</p>
-              <p>Vsolve Tower, Financial District, BKC, Mumbai 400051</p>
+              <p>Home services and project marketplace</p>
+              <p>Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081</p>
               <p>Support: support@vsolvehub.com | www.vsolvehub.com</p>
             </div>
           </div>

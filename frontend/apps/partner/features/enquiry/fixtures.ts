@@ -24,12 +24,15 @@ export function enquirySummary(
     // server started sending the name it should always have sent.
     service_name: "Housekeeping staff",
     archetype: "A3_TIME_BLOCK",
+    requirement_status: "MATCHING",
     status: "INVITED",
     wave: 1,
     requested_start: "2026-08-20T03:30:00Z",
     service_by: "2026-08-25",
     language: "en-IN",
     responds_by: "2026-08-14T09:00:00Z",
+    latest_proposal_status: null,
+    latest_proposal_rejection_reason: null,
     created_at: "2026-08-12T06:00:00Z",
     ...overrides,
   };
@@ -124,6 +127,7 @@ export function proposal(overrides: Partial<Schemas["Proposal"]> = {}): Schemas[
     requirement: "22222222-2222-4222-8222-222222222222",
     invitation: "11111111-1111-4111-8111-111111111111",
     revision: 1,
+    revision_expires_at: null,
     status: "SUBMITTED",
     usability: "USABLE",
     // `NOT_CHOSEN` is the enum's zero-information member; it is only meaningful

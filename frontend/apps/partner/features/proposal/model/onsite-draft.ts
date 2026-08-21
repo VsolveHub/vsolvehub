@@ -174,6 +174,7 @@ function addDays(isoDate: string, days: number): string | null {
 
 export interface ScheduledStage {
   readonly stage: OnsiteStageDraft;
+  readonly startsOn: string | null;
   /** The derived end date, or null when there is no start or no day count. */
   readonly endsOn: string | null;
 }
@@ -194,10 +195,11 @@ export function scheduleFor(draft: OnsiteDraft): ScheduledStage[] {
   let cursor = 0;
   return draft.stages.map((stage) => {
     if (draft.startsOn === null || stage.workingDays === null || stage.workingDays <= 0) {
-      return { stage, endsOn: null };
+      return { stage, startsOn: null, endsOn: null };
     }
+    const startsOn = addDays(draft.startsOn, cursor);
     cursor += stage.workingDays;
-    return { stage, endsOn: addDays(draft.startsOn, cursor - 1) };
+    return { stage, startsOn, endsOn: addDays(draft.startsOn, cursor - 1) };
   });
 }
 
@@ -379,10 +381,12 @@ export function toOnsiteRequest(input: {
   }
 
   const schedule = scheduleFor(draft);
-  const workRows: StageDraft[] = schedule.map(({ stage, endsOn }) => ({
+  const workRows: StageDraft[] = schedule.map(({ stage, startsOn, endsOn }) => ({
     title: stage.title.trim(),
     deliverable: stage.deliverable.trim(),
     amountPaise: stage.amountPaise,
+    startsOn,
+    durationDays: stage.workingDays,
     endsOn,
   }));
 

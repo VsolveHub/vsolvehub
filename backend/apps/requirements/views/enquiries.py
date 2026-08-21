@@ -452,8 +452,8 @@ class SiteVisitCompleteView(APIView):
             404: ApiErrorSerializer,
             409: OpenApiResponse(
                 response=ApiErrorSerializer,
-                description="`m2_requirement_transition_not_allowed` when the visit was never "
-                "scheduled. A visit with no agreed time cannot have happened.",
+                description="`m2_requirement_transition_not_allowed` until the Partner enters "
+                "the Customer's arrival code and the visit is in progress.",
             ),
         },
     )

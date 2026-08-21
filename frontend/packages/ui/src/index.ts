@@ -45,6 +45,11 @@ export type { EmptyStateProps } from "./empty-state";
 export { Skeleton, SkeletonText, SkeletonRegion } from "./skeleton";
 export type { SkeletonProps } from "./skeleton";
 export { ToastProvider, useToast } from "./toast";
+export { ServiceRatingDialog, ServiceRatingList } from "./service-rating";
+export type {
+  ListedServiceRating,
+  ServiceRatingDialogProps,
+} from "./service-rating";
 
 // Navigation
 export { Stepper } from "./stepper";

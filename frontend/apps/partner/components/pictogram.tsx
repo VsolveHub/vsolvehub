@@ -184,11 +184,47 @@ const CIRCLES: Partial<Record<PictogramName, readonly CircleSpec[]>> = {
  */
 const FILLED_NAMES = new Set<PictogramName>(["rating"]);
 
+/**
+ * The five sizes this app draws a pictogram at, and nothing between them.
+ *
+ * ## Why this is a prop rather than a `className`
+ *
+ * It used to be a className, and it did not work. `cn` is `clsx`, not
+ * `tailwind-merge` (`packages/ui/src/cn.ts`), so a caller's `h-5 w-5` did not
+ * *replace* the hard-coded `h-6 w-6` — it joined it, emitting
+ * `class="h-6 w-6 h-5 w-5"`, and the cascade then settled the tie by
+ * stylesheet order rather than by what the caller asked for. Tailwind emits
+ * height utilities in ascending scale order, so the larger one wins: every
+ * call site asking for something smaller than the default silently drew at
+ * 24px. `earnings-panel.tsx` asked for 12px beside 11px uppercase labels and
+ * got 24px.
+ *
+ * A prop cannot tie, because there is only ever one size utility in the class
+ * list. `className` stays for colour and layout (`text-*`, `shrink-0`), which
+ * never collide with a size.
+ *
+ * The four hero-scale uses — the `/me` avatar, the empty-work medallion, the
+ * status medallion — still pass an explicit `className` override, and that now
+ * works for the same reason: there is one utility to override rather than two
+ * fighting each other.
+ */
+const SIZES = {
+  xs: "h-3 w-3",
+  sm: "h-4 w-4",
+  md: "h-6 w-6",
+  lg: "h-8 w-8",
+  xl: "h-10 w-10",
+} as const;
+
+export type PictogramSize = keyof typeof SIZES;
+
 export function Pictogram({
   name,
+  size = "md",
   className,
 }: {
   name: PictogramName;
+  size?: PictogramSize;
   className?: string;
 }) {
   const d = PATHS[name];
@@ -205,7 +241,7 @@ export function Pictogram({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
-      className={cn("h-6 w-6", className)}
+      className={cn(SIZES[size], className)}
     >
       {rects?.map((r, index) => (
         <rect key={`rect-${index}`} x={r[0]} y={r[1]} width={r[2]} height={r[3]} rx={r[4]} />

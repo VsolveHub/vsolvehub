@@ -14,6 +14,7 @@ kind of hole that leaves every other test in this file passing.
 
 import uuid
 from datetime import timedelta
+from http import HTTPStatus
 
 import pytest
 from django.contrib.auth.hashers import make_password
@@ -24,6 +25,7 @@ from apps.partners.models import PartnerProfile
 from apps.requirements.access import (
     ArrivalCodeInvalidError,
     ArrivalCodeRateLimitError,
+    complete_plan_visit,
     confirm_visit_arrival_with_code,
     issue_visit_arrival_code,
     live_visit_arrival_code,
@@ -161,6 +163,31 @@ def test_the_right_code_starts_the_visit_and_records_how(world: M2World) -> None
     assert arrived.arrival_method == SiteVisit.ArrivalMethod.START_OTP
     assert arrived.arrival_confirmed_by_id == world.vendor.user_id
     assert arrived.arrival_confirmed_at is not None
+
+
+def test_a_scheduled_visit_cannot_skip_the_arrival_code(world: M2World) -> None:
+    """Completion must not be a second, implicit no-code arrival path."""
+
+    visit = _scheduled_visit(world)
+
+    with pytest.raises(RequirementTransitionError, match="arrival code"):
+        complete_plan_visit(site_visit_id=visit.id)
+
+    visit.refresh_from_db()
+    assert visit.status == SiteVisit.Status.SCHEDULED
+
+
+def test_the_old_tap_only_arrival_route_is_not_published(world: M2World) -> None:
+    visit = _scheduled_visit(world)
+
+    response = world.customer_client.post(
+        f"/api/v1/site-visits/{visit.id}/arrival/",
+        {},
+        format="json",
+        HTTP_IDEMPOTENCY_KEY=uuid.uuid4().hex,
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_a_wrong_guess_is_spent_even_though_the_command_fails(world: M2World) -> None:

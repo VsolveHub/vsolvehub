@@ -92,7 +92,7 @@ describe("the explanation", () => {
 
   it("carries a route and a label the frontend owns", () => {
     const explanation = describeGate(CREW);
-    expect(explanation?.actionHref).toBe("/workforce/crew");
+    expect(explanation?.actionHref).toBe("/me/crew");
     expect(explanation?.actionLabel).toBeTruthy();
   });
 

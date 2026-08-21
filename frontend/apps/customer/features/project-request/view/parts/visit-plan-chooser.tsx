@@ -128,13 +128,20 @@ export function VisitPlanChooser({
                       </span>
                     ) : null}
                   </span>
-                  <span
-                    className={cn(
-                      "shrink-0 tabular-nums text-text",
-                      checked ? "text-base font-extrabold" : "text-sm font-bold",
-                    )}
-                  >
-                    {tier.priceLabel}
+                  <span className="flex shrink-0 flex-col items-end gap-1">
+                    {checked ? (
+                      <span className="rounded-full bg-action px-2 py-0.5 text-[11px] font-extrabold text-action-text">
+                        Selected
+                      </span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        "tabular-nums text-text",
+                        checked ? "text-base font-extrabold" : "text-sm font-bold",
+                      )}
+                    >
+                      {tier.priceLabel}
+                    </span>
                   </span>
                 </label>
               );
@@ -142,6 +149,12 @@ export function VisitPlanChooser({
           </div>
         )}
       </div>
+
+      {value !== null ? (
+        <p className="mt-3 text-sm font-bold text-navy-900" role="status">
+          {value === 1 ? "1 professional selected" : `${value} professionals selected`}
+        </p>
+      ) : null}
     </section>
   );
 }

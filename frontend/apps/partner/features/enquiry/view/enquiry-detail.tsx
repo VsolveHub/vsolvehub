@@ -162,7 +162,11 @@ export function EnquiryDetail({ invitationId, basePath, backLabel }: EnquiryDeta
       {isProject ? (
         <>
           <VisitResponse enquiry={enquiry} />
-          <VisitDayPanel enquiry={enquiry} estimateHref={estimateHref} />
+          <VisitDayPanel
+            enquiry={enquiry}
+            estimateHref={estimateHref}
+            estimateSubmitted={enquiry.status === "QUOTED"}
+          />
         </>
       ) : (
         <RespondActions enquiry={enquiry} />
@@ -173,6 +177,7 @@ export function EnquiryDetail({ invitationId, basePath, backLabel }: EnquiryDeta
         invitationId={enquiry.id}
         requirementId={enquiry.requirementId}
         submitted={submitted}
+        documentKind={isProject ? "estimate" : "quote"}
         onRevise={() => {
           if (isProject) {
             // A revision to a project estimate is another on-site submission and

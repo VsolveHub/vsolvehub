@@ -11,17 +11,17 @@ import { usePartnerJobs } from "@/features/work/queries";
 import { toWorkItems, type WorkItem } from "./model/work-item";
 
 /**
- * The merged, sorted WORK stack. Composes four already-existing queries —
+ * The merged, sorted WORK stack. Composes six already-existing queries —
  * no new network call is added; TanStack dedupes each by its existing
  * query key exactly as `LiveOfferSheet` already relies on for the offers
  * query alone.
  *
  * Loading is "any source still pending"; error is "any source errored",
- * surfaced as the first error found — a screen showing four independent
+ * surfaced as the first error found — a screen showing six independent
  * spinners/errors for one merged list would contradict the entire point of
  * merging it.
  *
- * ## The four sources publish three different envelopes, and each is unwrapped
+ * ## The six queries publish three different envelopes, and each is unwrapped
  *    where the hook that owns it actually puts the rows
  *
  * This is the whole reason the unwrapping below is not uniform, and getting it

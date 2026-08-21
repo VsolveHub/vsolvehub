@@ -22,7 +22,14 @@ import type { PartnerVisit } from "@/features/work/queries";
  * and shown an empty WORK screen to a vendor mid-job. A `Set<string>` cannot
  * catch that. This one does.
  */
-export type WorkUrgency = "live" | "needs_price" | "doing" | "settled";
+export type WorkUrgency =
+  | "live"
+  | "needs_price"
+  | "doing"
+  | "answered"
+  | "not_chosen"
+  | "closed"
+  | "settled";
 
 /**
  * `offer` covers **two** sources, deliberately.
@@ -88,14 +95,110 @@ export interface WorkItem {
   /** ISO scheduled/requested start, for sorting the "doing" bucket. `null` if unscheduled. */
   readonly whenIso: string | null;
   /**
+   * Whether `whenIso` is a **day** the customer asked for rather than a moment
+   * anybody scheduled.
+   *
+   * An enquiry's `requested_start` is published as `date-time` but is the date
+   * the customer picked in the requirement flow, so it arrives at midnight. A
+   * card that formatted it as a clock said **"STARTS 12:00 am"** on every
+   * enquiry — a precise-looking time nobody chose, on the screen a vendor uses
+   * to plan their day.
+   *
+   * True for both enquiry sources; false for an A1 visit, whose
+   * `scheduled_start` is a real slot. The card picks a date or a clock from
+   * this rather than guessing from the value, because midnight is also a
+   * legitimate — if unlikely — scheduled time, and guessing would silently
+   * mis-render the one job that really does start then.
+   */
+  readonly whenIsDay: boolean;
+  /**
    * The published area label, when the source type carries one. This is
    * NOT a distance — no Partner-facing field publishes distance today (see
    * plan Deviation 1). `null` where the source type has no area field
    * (enquiries and engagements do not).
    */
   readonly areaLabel: string | null;
-  /** Accessible name only — this app renders pictures and numbers, never this string as visible body copy. */
+  /**
+   * What the work **is**, and nothing else — the card's visible title.
+   *
+   * One short noun phrase, so it survives one line at 360px: "Interior fit-out
+   * project", "Deep clean". Deliberately carries no state, because packing both
+   * into one string is what produced "Interior fit-out project, waiting on y…"
+   * on a real screen — a title that truncates before it reaches the part that
+   * distinguishes it from the card above.
+   *
+   * Where a source publishes no name for the work, this says what kind of
+   * record it is in the vendor's own vocabulary ("Project", "Booking") rather
+   * than restating its status. `Engagement` and `PartnerBooking` both publish
+   * no service name (`schema.d.ts:6544`, `:7926`); a booking's first work task
+   * carries a real `label` and is used where there is one.
+   */
+  readonly title: string;
+  /**
+   * Where the work has got to — the small chip beside the title, and the part
+   * of the accessible name that follows it. `null` where the card's colour and
+   * its action already say it.
+   */
+  readonly stateLabel: string | null;
+  /**
+   * Title and state as one string, for `aria-label` on the card link.
+   *
+   * Composed rather than authored: a screen reader announcing the title and
+   * then the chip separately would read the card twice, and the two must never
+   * drift apart.
+   *
+   * It used to be accessible-name-only, on the 2026-08-19 rule that this app
+   * renders pictures and numbers and never a service name as visible copy. That
+   * rule is what left a Partner reading `₹450` beside a map pin for a job whose
+   * trade was nowhere on the screen, and it is superseded by
+   * `docs/superpowers/specs/2026-08-21-partner-readable-ui-design.md`:
+   * the picture is the fast path, the word is the guarantee.
+   *
+   * Two enquiry states share the `needs_price` urgency and the colour cannot
+   * tell them apart, so the state half is what distinguishes them: "Shop
+   * fit-out, waiting on your answer" versus "Shop fit-out, needs a price".
+   */
   readonly accessibleName: string;
+}
+
+/**
+ * What to call an engagement, from the only field that distinguishes one.
+ *
+ * `archetype` is an unenumerated `type: string` on the wire, so this matches the
+ * one value the A3 path is known to publish and treats everything else as a
+ * project — the A5 case, and the larger one. Getting it wrong costs a vendor a
+ * slightly generic noun; inventing a service name would cost them a wrong one.
+ */
+function engagementTitle(engagement: Engagement): string {
+  return engagement.archetype === "A3_TIME_BLOCK" ? "Crew booking" : "Project";
+}
+
+/**
+ * What to call a booking: the work its first task names.
+ *
+ * `PartnerBooking` publishes no service name, but `work_tasks[].label` is the
+ * real description of the work and `VisitJobView` titles its own screen from
+ * the same field — so the card and the screen it opens say the same thing. A
+ * booking with no tasks is a real state (`canReport` documents it), and gets the
+ * generic noun rather than an empty title.
+ */
+function jobTitle(job: PartnerVisit): string {
+  const [first, ...rest] = job.work_tasks;
+  if (first === undefined) return "Job";
+  return rest.length === 0 ? first.label : `${first.label} +${rest.length}`;
+}
+
+/** Title plus state, in the one order every card announces them. */
+function named(title: string, stateLabel: string | null): {
+  title: string;
+  stateLabel: string | null;
+  accessibleName: string;
+} {
+  return {
+    title,
+    stateLabel,
+    accessibleName: stateLabel === null ? title : `${title}, ${stateLabel}`,
+  };
 }
 
 const CREW_OFFER_HREF = (id: string) => `/work/offers/${id}`;
@@ -118,10 +221,13 @@ const JOB_HREF = (id: string) => `/work/jobs/${id}`;
  */
 const DIRECT_OFFER_HREF = () => `/work/offers`;
 
-/** A published enum member, said out loud. Never a label — see `accessibleName`. */
-function spoken(status: string): string {
-  return status.toLowerCase().replace(/_/g, " ");
-}
+/*
+  `spoken()` lived here — a helper that turned a published enum member into
+  "waiting for approval" so a card could be titled from its status. Both its
+  callers are gone: a card titled "Job, confirmed" or "Engagement, active" told
+  a vendor the one thing the card's own colour already said, and none of what
+  the work actually was. Titles come from `jobTitle` / `engagementTitle` now.
+*/
 
 /**
  * A published string that is present but empty, read as the absence it is.
@@ -157,10 +263,12 @@ function fromCrewOffers(offers: readonly CrewOffer[], serverNow: string): WorkIt
         urgency: "live" as const,
         respondsBy: offer.responds_by,
         whenIso: offer.requested_start,
+        whenIsDay: false,
         areaLabel: area,
-        accessibleName: `Crew offer, ${offer.headcount} ${helperNoun(offer.headcount)}, ${
-          area ?? "area not given"
-        }`,
+        ...named(
+          `Crew offer · ${offer.headcount} ${helperNoun(offer.headcount)}`,
+          area,
+        ),
       };
     });
 }
@@ -228,8 +336,9 @@ function fromDirectOffers(offers: readonly Offer[]): WorkItem[] {
         // `expires_at` is non-nullable, so this is never null.
         respondsBy: offer.undo_deadline ?? offer.expires_at,
         whenIso: offer.starts_at,
+        whenIsDay: false,
         areaLabel: area,
-        accessibleName: `Offer, ${label}, ${area ?? "area not given"}`,
+        ...named(label, area),
       };
     });
 }
@@ -270,15 +379,68 @@ function fromEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
     // needs the instant.
     respondsBy: enquiry.responds_by,
     whenIso: enquiry.requested_start,
+    // The customer picked a day, not a time — see `whenIsDay`.
+    whenIsDay: true,
     areaLabel: null,
     // An `INVITED` enquiry has not been accepted yet, so "needs a price" would
-    // be the wrong sentence for it even though it shares the `needs_price`
-    // urgency. The urgency is the card's colour; this is what is read out.
-    accessibleName:
-      enquiry.status === "INVITED"
-        ? `${enquiry.service_name}, waiting on your answer`
-        : `${enquiry.service_name}, needs a price`,
+    // be the wrong state for it even though it shares the `needs_price`
+    // urgency. The urgency is the card's colour; this is the chip.
+    ...named(
+      enquiry.service_name,
+      enquiry.status === "INVITED" ? "waiting on your answer" : "needs a price",
+    ),
   }));
+}
+
+/**
+ * Whether this vendor already answered and is waiting on the customer.
+ *
+ * `quoted` is the one bucket `isVendorsMove` excludes on purpose — the ball is
+ * with the customer, not this vendor (see that function's own doc comment).
+ * But it is still this vendor's own sent price, and dropping it from the stack
+ * entirely left no card at all for "I answered" — one of the four states the
+ * module doc at the top of this file promises. It reads as `settled`: green,
+ * done-my-part, no clock running, because there genuinely is nothing left for
+ * this vendor to do until the customer moves.
+ */
+function quotedOutcome(
+  enquiry: EnquirySummary,
+): "waiting" | "not_chosen" | "cancelled" | null {
+  if (bucketOf(enquiry.status) !== "quoted") return null;
+  if (enquiry.latest_proposal_status === "SUBMITTED") return "waiting";
+  if (
+    enquiry.latest_proposal_status === "REJECTED" &&
+    enquiry.latest_proposal_rejection_reason === "NOT_CHOSEN"
+  ) {
+    return "not_chosen";
+  }
+  if (enquiry.requirement_status.startsWith("CLOSED_")) return "cancelled";
+  return null;
+}
+
+function fromQuotedEnquiries(enquiries: readonly EnquirySummary[]): WorkItem[] {
+  return enquiries.flatMap((enquiry): WorkItem[] => {
+    const outcome = quotedOutcome(enquiry);
+    if (outcome === null) return [];
+    return [
+      {
+        kind: "enquiry" as const,
+        key: `enquiry:${enquiry.id}`,
+        href: ENQUIRY_HREF(enquiry.id),
+        amountPaise: null,
+        urgency:
+          outcome === "waiting" ? "answered" : outcome === "not_chosen" ? "not_chosen" : "closed",
+        respondsBy: null,
+        whenIso: enquiry.requested_start,
+        whenIsDay: true,
+        areaLabel: null,
+        ...named(
+          enquiry.service_name,
+          outcome === "waiting" ? "quote sent" : outcome === "not_chosen" ? "not chosen" : "cancelled",
+        ),
+      },
+    ];
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -340,8 +502,18 @@ function fromEngagements(engagements: readonly Engagement[]): WorkItem[] {
       // given a date this module made up.
       respondsBy: null,
       whenIso: null,
+      whenIsDay: false,
       areaLabel: null,
-      accessibleName: `Engagement, ${spoken(engagement.status)}`,
+      /*
+        `Engagement` publishes no service name — only `archetype`, a
+        `requirement` uuid and money (`schema.d.ts:6544`). So the title is what
+        kind of record this is in the vendor's own vocabulary, which is what
+        `engagement-copy`'s wording exists to decide. It is not much, but
+        "Project" beats the status: a card reading "Engagement, active" told a
+        vendor the one thing they could already see from its colour, and none
+        of the thing they opened the app to find out.
+      */
+      ...named(engagementTitle(engagement), null),
     }));
 }
 
@@ -383,6 +555,27 @@ const SETTLED_VISIT_STATUS: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
   "PARTIALLY_COMPLETED",
 ]);
 
+const SETTLED_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A settled job stays on the stack for 24h, then drops off — otherwise every
+ * job a Partner has ever finished becomes a permanent green tail and
+ * `EmptyWork` ("Nothing today") is unreachable for anyone with history.
+ *
+ * `scheduled_start` is the closest instant `PartnerVisit` publishes for a
+ * finished job — there is no separate completed-at timestamp on the wire
+ * today, so this is measured from when the job was due to start, not from
+ * when it was actually marked done. `server_now` (not the browser's clock)
+ * is the reference instant, the same clock-skew guard `offersServerNow` gives
+ * the crew-offer countdown.
+ */
+function isRecentlySettled(job: PartnerVisit): boolean {
+  const scheduled = new Date(job.scheduled_start).getTime();
+  const now = new Date(job.server_now).getTime();
+  if (Number.isNaN(scheduled) || Number.isNaN(now)) return true;
+  return now - scheduled < SETTLED_WINDOW_MS;
+}
+
 /*
  * `DISPUTED`, `RECOVERY_REQUIRED` and `CANCELLED` are still dropped, and
  * deliberately so rather than by oversight. What a disputed or clawed-back job
@@ -393,7 +586,11 @@ const SETTLED_VISIT_STATUS: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
 
 function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
   return jobs
-    .filter((job) => DOING_VISIT_STATUS.has(job.status) || SETTLED_VISIT_STATUS.has(job.status))
+    .filter(
+      (job) =>
+        DOING_VISIT_STATUS.has(job.status) ||
+        (SETTLED_VISIT_STATUS.has(job.status) && isRecentlySettled(job)),
+    )
     .map((job) => ({
       kind: "job" as const,
       key: `job:${job.id}`,
@@ -405,8 +602,13 @@ function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
       urgency: (SETTLED_VISIT_STATUS.has(job.status) ? "settled" : "doing") as WorkUrgency,
       respondsBy: null,
       whenIso: job.scheduled_start,
+      // A real slot on the availability grid, unlike an enquiry's requested day.
+      whenIsDay: false,
       areaLabel: null,
-      accessibleName: `Job, ${spoken(job.status)}`,
+      // The first work task's own `label` — the only field on `PartnerBooking`
+      // that names the work. `VisitJobView` titles the job screen from the same
+      // place, so the card and the screen it opens agree.
+      ...named(jobTitle(job), SETTLED_VISIT_STATUS.has(job.status) ? "done" : null),
     }));
 }
 
@@ -414,15 +616,29 @@ function fromJobs(jobs: readonly PartnerVisit[]): WorkItem[] {
    The merge
    -------------------------------------------------------------------------- */
 
+/**
+ * `answered` sits between the work in hand and the money already banked.
+ *
+ * The design's four states are "somebody asked → I answered → I'm doing it → I
+ * got paid", and `answered` is the second of them. It briefly shared `settled`
+ * with the fourth, which put a sent quote behind the padlock treatment that
+ * means "your money is held" and rendered its amount as `₹ ?` — announcing that
+ * the platform did not know a price for the one card whose entire content is a
+ * price the vendor just sent. Nothing is owed on a sent quote and nothing is
+ * held; the customer simply has not answered yet.
+ */
 const URGENCY_RANK: Record<WorkUrgency, number> = {
   live: 0,
   needs_price: 1,
   doing: 2,
-  settled: 3,
+  answered: 3,
+  not_chosen: 4,
+  closed: 5,
+  settled: 6,
 };
 
 /**
- * Merges the four source lists into one sorted stack.
+ * Merges the six source lists into one sorted stack.
  *
  * Sort key is `(urgency rank, deadline-or-start ascending)`. Within "live"
  * this puts the offer closest to expiring first — the same ordering
@@ -468,6 +684,7 @@ export function toWorkItems(sources: {
     // produced the row.
     ...fromDirectOffers(sources.directOffers),
     ...fromEnquiries(sources.enquiries),
+    ...fromQuotedEnquiries(sources.enquiries),
     ...fromEngagements(sources.engagements),
     ...fromJobs(sources.jobs),
   ];

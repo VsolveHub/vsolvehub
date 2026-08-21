@@ -222,6 +222,10 @@ def confirm_visit_slot(*, invitation_id: uuid.UUID, slot_id: str) -> VisitSlotCo
     if requirement.archetype != A5:
         raise LifecycleNotSupportedError("Only project requests book visit slots.")
 
+    # Every visit on one Customer project takes this same row lock. Partner
+    # availability is protected by the reservation exclusion constraint; this
+    # lock protects the Customer's diary when two different Partners race for
+    # the same time.
     CustomerRequirement.objects.select_for_update().get(pk=requirement.pk)
     plan = VisitPlan.objects.select_for_update().filter(requirement=requirement).first()
     if plan is None or plan.status in (VisitPlan.Status.VOID, VisitPlan.Status.SETTLED):
@@ -498,6 +502,9 @@ def reschedule_plan_visit(*, visit: SiteVisit, scheduled_for: datetime) -> SiteV
     because moving a visit is not a payment and a reschedule must not harden a hold the Customer
     has not paid for.
     """
+    # Confirmation takes the same lock. Without it, two Partners could both
+    # pass the requirement-wide overlap read before either moved its visit.
+    CustomerRequirement.objects.select_for_update().get(pk=visit.requirement_id)
     partner = visit.invitation.partner
     duration = visit.duration_minutes or visit_slots.visit_duration_minutes(visit.requirement)
     choice = visit_slots.VisitSlotChoice(starts_at=scheduled_for, duration_minutes=duration)
@@ -517,7 +524,11 @@ def reschedule_plan_visit(*, visit: SiteVisit, scheduled_for: datetime) -> SiteV
     was_tentative = any(item.status == Reservation.Status.TENTATIVE for item in existing)
     for reservation in existing:
         reservation.release()
-    if not visit_slots.slot_is_still_free(invitation=visit.invitation, choice=choice):
+    if not visit_slots.slot_is_still_free(
+        invitation=visit.invitation,
+        choice=choice,
+        exclude_site_visit_id=visit.id,
+    ):
         raise VisitSlotUnavailableError()
 
     _hold_grid_slot(visit=visit, partner=partner, choice=choice, tentative=was_tentative)

@@ -156,6 +156,20 @@ class ProposalNotSelectableError(RequirementDomainError):
         )
 
 
+class ProposalWindowClosedError(RequirementDomainError):
+    """The Customer has already committed this request to another professional."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            code="m2_proposal_window_closed",
+            message=(
+                "The customer has already continued with another professional. "
+                "Your proposal was not sent."
+            ),
+            status_code=409,
+        )
+
+
 class AttachmentRejectedError(RequirementDomainError):
     def __init__(self, message: str, *, retryable: bool = False) -> None:
         super().__init__(

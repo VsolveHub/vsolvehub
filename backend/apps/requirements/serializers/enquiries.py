@@ -7,6 +7,7 @@ submits. What the Customer is shown of that quote once they have paid for it liv
 `engagements`.
 """
 
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -15,6 +16,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.partners.photos import partner_photo_url
+from apps.requirements import proposals
 from apps.requirements.models import Proposal, RequirementQuestion, SiteVisit, VendorInvitation
 from apps.requirements.selectors import (
     QUESTION_ASKER_ROLES,
@@ -268,12 +270,15 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
         read_only=True,
     )
     archetype = serializers.CharField(source="snapshot.archetype", read_only=True)
+    requirement_status = serializers.CharField(source="requirement.status", read_only=True)
     requested_start = serializers.DateTimeField(source="snapshot.requested_start", read_only=True)
     service_by = serializers.DateField(source="snapshot.service_by", read_only=True)
     language = serializers.CharField(source="snapshot.language", read_only=True)
     #: Guidance for a countdown only. The backend owns expiry and slot ownership; a client clock
     #: that has drifted must never be what decides an enquiry is still open.
     responds_by = serializers.DateTimeField(read_only=True)
+    latest_proposal_status = serializers.SerializerMethodField()
+    latest_proposal_rejection_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = VendorInvitation
@@ -285,15 +290,32 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "category_slug",
             "service_name",
             "archetype",
+            "requirement_status",
             "status",
             "wave",
             "requested_start",
             "service_by",
             "language",
             "responds_by",
+            "latest_proposal_status",
+            "latest_proposal_rejection_reason",
             "created_at",
         )
         read_only_fields: tuple[str, ...] = fields
+
+    def _latest_proposal(self, obj: VendorInvitation) -> Proposal | None:
+        ordered = getattr(obj, "ordered_proposals", None)
+        if isinstance(ordered, list):
+            return ordered[0] if ordered else None
+        return Proposal.objects.filter(invitation=obj).order_by("-revision").first()
+
+    def get_latest_proposal_status(self, obj: VendorInvitation) -> str | None:
+        proposal = self._latest_proposal(obj)
+        return proposal.status if proposal is not None else None
+
+    def get_latest_proposal_rejection_reason(self, obj: VendorInvitation) -> str | None:
+        proposal = self._latest_proposal(obj)
+        return proposal.rejection_reason or None if proposal is not None else None
 
 
 class EnquirySummaryPageSerializer(serializers.Serializer[dict[str, Any]]):
@@ -393,7 +415,8 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         return required_tax_basis(obj.requirement)
 
     def get_proposals(self, obj: VendorInvitation) -> list[dict[str, Any]]:
-        queryset = Proposal.objects.filter(invitation=obj).order_by("-revision")
+        ordered = getattr(obj, "ordered_proposals", None)
+        queryset = ordered if isinstance(ordered, list) else obj.proposals.order_by("-revision")
         return list(ProposalSerializer(queryset, many=True).data)
 
     def get_server_now(self, _obj: VendorInvitation) -> str:
@@ -425,7 +448,25 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
         required=False, allow_blank=True, max_length=2000, default=""
     )
     amount_paise = serializers.IntegerField(min_value=0)
+    starts_on = serializers.DateField(required=False, allow_null=True, default=None)
+    duration_days = serializers.IntegerField(
+        required=False, allow_null=True, min_value=1, max_value=3650, default=None
+    )
     ends_on = serializers.DateField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        starts_on = attrs.get("starts_on")
+        duration_days = attrs.get("duration_days")
+        ends_on = attrs.get("ends_on")
+        if starts_on is not None and duration_days is not None:
+            expected = starts_on + timedelta(days=int(duration_days) - 1)
+            if ends_on is None:
+                attrs["ends_on"] = expected
+            elif ends_on != expected:
+                raise serializers.ValidationError(
+                    {"ends_on": "The deadline must match the start date and number of days."}
+                )
+        return attrs
 
     def to_representation(self, instance: Any) -> dict[str, Any]:
         """Read a stored stage defensively; the column is a `JSONField`, not a table.
@@ -442,6 +483,8 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
             "title": str(stage.get("title") or stage.get("label") or ""),
             "deliverable": str(stage.get("deliverable") or ""),
             "amount_paise": int(stage.get("amount_paise") or 0),
+            "starts_on": stage.get("starts_on"),
+            "duration_days": stage.get("duration_days"),
             "ends_on": stage.get("ends_on"),
         }
 
@@ -489,6 +532,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
 
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
+    revision_expires_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Proposal
@@ -497,6 +541,7 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "requirement",
             "invitation",
             "revision",
+            "revision_expires_at",
             "status",
             "usability",
             "rejection_reason",
@@ -522,6 +567,12 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "submitted_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_revision_expires_at(self, obj: Proposal) -> datetime | None:
+        if obj.requirement.archetype != "A5_CUSTOM_PROJECT":
+            return None
+        return proposals.estimate_revision_expires_at(obj)
 
 
 class ProposalPageSerializer(serializers.Serializer[dict[str, Any]]):

@@ -43,7 +43,7 @@ describe("the capability notice", () => {
     render(<CapabilityNotice recovery={recoveryFor({ kind: "WITHDRAWN" })} />);
     expect(screen.getByRole("link", { name: /home screen/i })).toHaveAttribute(
       "href",
-      "/dashboard",
+      "/home",
     );
   });
 

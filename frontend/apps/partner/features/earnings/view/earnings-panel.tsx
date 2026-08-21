@@ -84,7 +84,7 @@ export function EarningsPanel() {
       {/* Warning banner */}
       {data.pending_paise > 0 ? (
         <div className="flex gap-3 rounded-card border border-warning-line bg-warning-surface p-4">
-          <Pictogram name="later" className="mt-0.5 h-5 w-5 shrink-0 text-warning-text" />
+          <Pictogram name="later" size="sm" className="mt-0.5 shrink-0 text-warning-text" />
           <div>
             <p className="text-sm font-semibold text-warning-text">
               Some of your earnings are on hold
@@ -116,7 +116,7 @@ export function EarningsPanel() {
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-plate border border-info-line bg-info-surface p-3">
           <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-info-text">
-            <Pictogram name="held" className="h-3 w-3" />
+            <Pictogram name="held" size="xs" />
             Waiting
           </p>
           <p data-numeric className="mt-1 text-lg font-bold text-info-text">
@@ -125,7 +125,7 @@ export function EarningsPanel() {
         </div>
         <div className="rounded-plate border border-warning-line bg-warning-surface p-3">
           <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-warning-text">
-            <Pictogram name="later" className="h-3 w-3" />
+            <Pictogram name="later" size="xs" />
             On hold
           </p>
           <p data-numeric className="mt-1 text-lg font-bold text-warning-text">
@@ -134,7 +134,7 @@ export function EarningsPanel() {
         </div>
         <div className="rounded-plate border border-success-line bg-success-surface p-3">
           <p className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-success-text">
-            <Pictogram name="done" className="h-3 w-3" />
+            <Pictogram name="done" size="xs" />
             Paid
           </p>
           <p data-numeric className="mt-1 text-lg font-bold text-success-text">
@@ -168,7 +168,7 @@ export function EarningsPanel() {
       {/* Payout method */}
       <Card className="flex items-center gap-3 p-4">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-info-surface text-info-text">
-          <Pictogram name="money" className="h-5 w-5" />
+          <Pictogram name="money" size="sm" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-text">Payout Method</p>
@@ -267,8 +267,7 @@ export function EarningsPanel() {
           <div className="mt-4 flex justify-center">
             <Button
               variant="outline"
-              size="sm"
-              icon={<Pictogram name="more" className="h-3.5 w-3.5" />}
+              icon={<Pictogram name="more" size="xs" />}
               loading={ledger.isFetchingNextPage}
               loadingLabel="Loading"
               onClick={() => void ledger.fetchNextPage()}

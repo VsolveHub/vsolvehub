@@ -13,6 +13,7 @@ import {
   useServiceability,
   useUpdateAddress,
 } from "@/features/booking/queries";
+import { preferredAddressId } from "@/features/addresses/queries";
 import { AddressStage } from "@/features/booking/view/address-stage";
 import { useProfileCompletionGate } from "@/features/account/view/profile-completion-dialog";
 import { useCustomerSession } from "@/features/session/queries";
@@ -97,7 +98,9 @@ export function CheckoutWorkspace() {
 
   const addressesQuery = useAddresses(session.isAuthenticated);
   const addresses = addressesQuery.data ?? [];
-  const selectedAddress = addresses.find((address) => address.id === addressId) ?? null;
+  const effectiveAddressId = preferredAddressId(addresses, addressId);
+  const selectedAddress =
+    addresses.find((address) => address.id === effectiveAddressId) ?? null;
 
   const reverseGeocode = useReverseGeocode();
   const createAddress = useCreateAddress();
@@ -116,7 +119,9 @@ export function CheckoutWorkspace() {
    * three-service one, and the `group_key`s it published would be refused.
    */
   const groupsQuery = useSchedulingGroups(
-    cart && addressId !== null ? { cartVersion: cart.version, addressId } : null,
+    cart && effectiveAddressId !== null
+      ? { cartVersion: cart.version, addressId: effectiveAddressId }
+      : null,
   );
   const groups = groupsQuery.data ?? [];
 
@@ -169,12 +174,12 @@ export function CheckoutWorkspace() {
   function handleSchedule(starts: ReadonlyMap<string, string>) {
     setChosenStarts(starts);
     setSlotsOverride(false);
-    if (!cart || addressId === null) return;
+    if (!cart || effectiveAddressId === null) return;
     setPlanFailures(null);
     createPlanSet.mutate(
       {
         cartVersion: cart.version,
-        addressId,
+        addressId: effectiveAddressId,
         preferredStarts: [...starts].map(([groupKey, startsAt]) => ({ groupKey, startsAt })),
       },
       {
@@ -315,7 +320,7 @@ export function CheckoutWorkspace() {
               actionLabel={isScheduled ? "Edit" : undefined}
               onAction={isScheduled ? () => setSlotsOverride(true) : undefined}
             >
-              {addressId === null ? (
+              {effectiveAddressId === null ? (
                 <span>Pick an address first — times depend on the area.</span>
               ) : groupsQuery.isPending ? (
                 <Skeleton className="h-5 w-40" />
@@ -361,7 +366,7 @@ export function CheckoutWorkspace() {
                   isLoading={addressesQuery.isPending}
                   serviceability={serviceabilityQuery.data ?? null}
                   isCheckingServiceability={serviceabilityQuery.isFetching}
-                  selectedAddressId={addressId}
+                  selectedAddressId={effectiveAddressId}
                   onSelect={(address) => {
                     setAddressId(address.id);
                     setIsEditingAddress(false);
@@ -381,7 +386,7 @@ export function CheckoutWorkspace() {
             </section>
           ) : null}
 
-          {addressId !== null && groups.length > 0 && !isScheduled ? (
+          {effectiveAddressId !== null && groups.length > 0 && !isScheduled ? (
             <div>
               <Button onClick={() => setSlotsOverride(true)}>Select slots</Button>
             </div>
@@ -522,7 +527,7 @@ export function CheckoutWorkspace() {
         groups={groups}
         value={chosenStarts}
         cartVersion={cart?.version ?? 0}
-        addressId={addressId ?? ""}
+        addressId={effectiveAddressId ?? ""}
         onConfirm={handleSchedule}
         onDismiss={() => setSlotsOverride(false)}
       />

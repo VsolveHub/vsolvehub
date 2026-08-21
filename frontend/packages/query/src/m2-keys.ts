@@ -343,6 +343,8 @@ export const m2QueryKeys = {
      */
     project: (engagementId: string) =>
       [...m2QueryKeys.engagements.detail(engagementId), "project"] as const,
+    completionCode: (engagementId: string) =>
+      [...m2QueryKeys.engagements.detail(engagementId), "completion-code"] as const,
   },
 
   /**

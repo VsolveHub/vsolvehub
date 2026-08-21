@@ -21,7 +21,7 @@ import { VisitPlanChooser } from "@/features/access/view/visit-plan-chooser";
 import { guideToVisitPlanSelection } from "@/features/access/view/guide-to-visit-plan";
 import {
   selectionOnlyQuestionSet,
-  toDuplicateView,
+  toDraftIntent,
   toLifecycleVerdict,
   toAttachmentRows,
   toQuestionSet,
@@ -36,6 +36,8 @@ import { MAXIMUM_ATTACHMENTS } from "../model/upload";
 import { clearPersistedRequirement, RequirementProvider, useRequirement } from "./requirement-context";
 import {
   useCreateRequirement,
+  existingDraftId,
+  useMyRequests,
   useProbableDuplicates,
   useRequirement as useRequirementRecord,
   useSaveRequirement,
@@ -49,7 +51,6 @@ import type { Screen } from "../model/screens";
 import { briefSectionBlocks } from "../model/state";
 import { DetailsScreen } from "./details-screen";
 import { ProjectBriefScreen } from "./project-brief-screen";
-import { DuplicateNotice } from "./duplicate-notice";
 import { RequirementAddressPicker } from "./requirement-address-picker";
 import { RequirementSent } from "./requirement-sent";
 import { VoiceNoteRecorder } from "./voice-note-recorder";
@@ -103,22 +104,14 @@ export interface RequirementFlowProps {
 }
 
 export function RequirementFlow(props: RequirementFlowProps) {
-  // Lifted above the provider because the provider takes the unresolved-duplicate
-  // flag as a prop while the query that answers it needs `addressId` from
-  // inside. A boolean rather than the list: React bails out of a set to the
-  // same value, so the child reporting on every render cannot loop.
-  const [hasDuplicate, setHasDuplicate] = useState(false);
-
   return (
-    <RequirementProvider categorySlug={props.service.slug} hasUnresolvedDuplicate={hasDuplicate}>
-      <FlowBody {...props} onDuplicatesChange={setHasDuplicate} />
+    <RequirementProvider categorySlug={props.service.slug}>
+      <FlowBody {...props} />
     </RequirementProvider>
   );
 }
 
-interface FlowBodyProps extends RequirementFlowProps {
-  onDuplicatesChange: (hasDuplicate: boolean) => void;
-}
+type FlowBodyProps = RequirementFlowProps;
 
 /** The query parameter carrying the chosen service. Also read on the way in. */
 const SELECTED_SERVICE_PARAM = "selected_service";
@@ -225,7 +218,6 @@ function FlowBody({
   service,
   variant,
   initialSelection = null,
-  onDuplicatesChange,
 }: FlowBodyProps) {
   const {
     state,
@@ -247,19 +239,13 @@ function FlowBody({
   const [addressSignal, setAddressSignal] = useState(0);
   const addresses = useAddresses();
   /**
-   * The tier the Customer just pressed, before the server has agreed.
+   * The final tier the Customer wants to send.
    *
-   * Choosing a plan is a write, and rendering the selection from the server's
-   * answer meant the highlight did not move until the round trip finished — so
-   * switching between one professional and two felt like the screen reloading
-   * rather than like pressing a radio button.
-   *
-   * This is **intent, not data**. It moves the highlight and nothing else: the
-   * price beside each tier is still Operations' published figure, and the plan
-   * the request is actually sent with is whatever the server recorded. If the
-   * write fails, the server's answer wins on the next render and the highlight
-   * goes back — which is the honest outcome, and why this is not written into
-   * the query cache as though it were a fact.
+   * Earlier, every card tap immediately resized the server plan. A Customer
+   * comparing 1, 2 and 3 therefore wrote all three choices, and the last card
+   * they inspected silently became the invitation count. Keep review-form state
+   * local instead; `handleSubmit` persists exactly this final value and awaits
+   * the server before opening matching.
    */
   const [pendingPlanSize, setPendingPlanSize] = useState<number | null>(null);
   /** True only for writes started by pressing the review CTA. */
@@ -270,6 +256,9 @@ function FlowBody({
   const createRequirement = useCreateRequirement();
   const saveRequirement = useSaveRequirement();
   const submitRequirement = useSubmitRequirement();
+  const requestsQuery = useMyRequests(hasRestoredIntent && state.requirementId === null);
+  const resumableRequirementId =
+    state.requirementId ?? existingDraftId(requestsQuery.data ?? [], service.slug);
 
   const questionSet = selectionOnlyQuestionSet(service.slug, toQuestionSet(variant));
   const isSelectionOnlyWhatScreen =
@@ -322,10 +311,13 @@ function FlowBody({
       : null,
   );
   const duplicates = duplicatesQuery.data ?? [];
+  const requestToReopen = duplicates.find((duplicate) => duplicate.mergeable) ?? null;
 
   useEffect(() => {
-    onDuplicatesChange(duplicates.length > 0);
-  }, [duplicates.length, onDuplicatesChange]);
+    if (requestToReopen === null) return;
+    clearPersistedRequirement(service.slug);
+    router.replace(requestHref(requestToReopen.id));
+  }, [requestToReopen, router, service.slug]);
 
   const attachments = useAttachments({
     requirementId: state.requirementId,
@@ -343,7 +335,7 @@ function FlowBody({
    * `VOLATILE_STATE` refetches on focus, which is what makes a verdict that
    * lands while the tab is in the background show up on return.
    */
-  const record = useRequirementRecord(state.requirementId);
+  const record = useRequirementRecord(resumableRequirementId);
   const serverAttachments = record.data?.attachments;
 
   useEffect(() => {
@@ -374,14 +366,7 @@ function FlowBody({
   const choosePlan = useChooseVisitPlan();
   const planState = planQuery.data ?? null;
   const savedPlanSize = planState?.plan?.plan_size ?? null;
-  /**
-   * What the chooser shows: the press if one is outstanding, the record
-   * otherwise.
-   *
-   * The pending value is dropped as soon as the server agrees, so a failed write
-   * falls back to the truth rather than leaving a highlight nothing stands
-   * behind.
-   */
+  /** What the chooser shows: this review's final choice, then the saved draft. */
   const chosenPlanSize =
     pendingPlanSize !== null && pendingPlanSize !== savedPlanSize
       ? pendingPlanSize
@@ -428,45 +413,20 @@ function FlowBody({
 
     initialSelectionApplied.current = true;
     dispatch({ type: "ANSWER", questionCode: question.code, value: initialSelection });
-    void (async () => {
-      const answers = { ...state.answers, [question.code]: initialSelection };
-      try {
-        const draft =
-          state.requirementId === null
-            ? await createRequirement.mutateAsync({
-                variantId: variant.id,
-                answers,
-                language: state.language ?? "en-IN",
-              })
-            : await saveRequirement.mutateAsync({
-                requirementId: state.requirementId,
-                answers,
-              });
-        dispatch({
-          type: "APPLY_VERDICT",
-          verdict: toLifecycleVerdict(draft),
-          requirementId: draft.id,
-        });
-        advance();
-      } catch {
-        // The mutation error renders in `FlowNotices` on the same screen.
-      }
-    })();
+    // Catalog selection is navigation intent, not a database command. The
+    // first draft write happens only when the Customer explicitly continues or
+    // sends the completed brief.
+    advance();
   }, [
     advance,
     chosenService,
-    createRequirement,
     dispatch,
     hasRestoredIntent,
     initialSelection,
     isSelectionOnlyWhatScreen,
     isWriting,
     questionSet.questions,
-    saveRequirement,
-    state.answers,
-    state.language,
     state.requirementId,
-    variant.id,
   ]);
 
   useEffect(() => {
@@ -479,15 +439,41 @@ function FlowBody({
       return;
     }
 
-    // The id came from browser storage; this authenticated read proves it still
-    // names the Customer's editable draft and restores the server-owned
-    // lifecycle verdict that is deliberately not serialized.
+    if (state.requirementId === null) {
+      // No browser entry named this draft, so the server's editable intent is
+      // the complete resume source: address, dates and detail as well as the id.
+      const intent = toDraftIntent(draft);
+      dispatch({
+        type: "RESTORE_SERVER_DRAFT",
+        requirementId: draft.id,
+        answers: intent.answers,
+        verdict: toLifecycleVerdict(draft),
+        addressId: intent.addressId,
+        requestedStart: intent.requestedStart,
+        serviceBy: intent.serviceBy,
+        flexibilityDays: intent.flexibilityDays,
+        additionalDetails: intent.additionalDetails,
+        language: intent.language,
+      });
+      return;
+    }
+
+    // A browser entry may contain newer unsaved typing, so only restore the
+    // server-owned verdict when it already points at this same draft.
     dispatch({
       type: "APPLY_VERDICT",
       verdict: toLifecycleVerdict(draft),
       requirementId: draft.id,
     });
-  }, [dispatch, hasRestoredIntent, record.data, router, service.slug, submitted]);
+  }, [
+    dispatch,
+    hasRestoredIntent,
+    record.data,
+    router,
+    service.slug,
+    state.requirementId,
+    submitted,
+  ]);
 
   if (submitted !== undefined) {
     return (
@@ -513,8 +499,13 @@ function FlowBody({
    */
   async function saveAnswers(answers = state.answers): Promise<string | null> {
     try {
+      let targetId = state.requirementId ?? existingDraftId(requestsQuery.data ?? [], service.slug);
+      if (targetId === null && requestsQuery.isPending) {
+        const lookup = await requestsQuery.refetch();
+        targetId = existingDraftId(lookup.data ?? [], service.slug);
+      }
       const draft =
-        state.requirementId === null
+        targetId === null
           ? await createRequirement.mutateAsync({
               variantId: variant.id,
               answers,
@@ -524,7 +515,7 @@ function FlowBody({
               language: state.language ?? "en-IN",
             })
           : await saveRequirement.mutateAsync({
-              requirementId: state.requirementId,
+              requirementId: targetId,
               answers,
             });
       dispatch({
@@ -542,7 +533,7 @@ function FlowBody({
   }
 
   /**
-   * Persists a picked service card immediately, and **does not advance**.
+   * Keeps a picked service card local, and **does not advance**.
    *
    * It used to advance, because the fit-out picker was a screen whose only job
    * was that one choice and moving on was the whole interaction. On the one-page
@@ -552,17 +543,11 @@ function FlowBody({
    * every later read of `state.screen` mean something different from what it
    * looks like.
    *
-   * The save stays. The choice is what the lifecycle verdict is inferred from,
-   * and having it on the server before the Customer reaches section 2 is what
-   * lets the verdict be right when they get there.
+   * A card press is browsing intent, not permission to create a request. The
+   * completed brief writes it when the Customer presses Review and send.
    */
-  async function saveSelectedChoice(questionCode: string, value: string) {
-    if (!isSelectionOnlyWhatScreen || isWriting) return;
-    await saveAnswers({ ...state.answers, [questionCode]: value });
-  }
-
-  async function handleChoiceSelect(questionCode: string, value: string) {
-    await saveSelectedChoice(questionCode, value);
+  function handleChoiceSelect(_questionCode: string, _value: string) {
+    // `WhatScreen` dispatches the answer before notifying this boundary.
   }
 
   /**
@@ -610,11 +595,9 @@ function FlowBody({
       advance();
       return;
     }
-    // Past screen one the draft exists — `what` is the only screen that can
-    // create it, and its guard is what stops anybody reaching here without one.
-    // Bailing rather than asserting: a null here is a bug, not a Customer error,
-    // and the honest response is to leave them on a screen that still works.
-    const requirementId = state.requirementId;
+    // A catalog link may skip the one-question first screen without writing.
+    // Continuing from location is then the first explicit commit.
+    const requirementId = state.requirementId ?? (await saveAnswers());
     if (requirementId === null) return;
     const saved =
       state.screen === "where_when"
@@ -698,7 +681,7 @@ function FlowBody({
       onEdit: () => open("details"),
     },
   ];
-  const sectionBlocks = briefSectionBlocks(state, today, duplicates.length > 0);
+  const sectionBlocks = briefSectionBlocks(state, today, false);
   /**
    * What is stopping the send, in the order the page reads.
    *
@@ -733,12 +716,20 @@ function FlowBody({
       });
       if (requirementId === null) return;
 
+      await persistVisitPlanSelectionForSubmit({
+        isA5,
+        requirementId,
+        selectedPlanSize: chosenPlanSize,
+        savedPlanSize,
+        choose: (input) => choosePlan.mutateAsync(input),
+      });
+      setPendingPlanSize(null);
+
       await submitRequirement.mutateAsync({
         requirementId,
-        // The server's `allow_duplicate` and the client's "they were shown the
-        // notice and said these are different jobs" are the same fact. Sending
-        // `true` by default would turn `GAP-004` into decoration.
-        allowDuplicate: state.duplicateOverridden,
+        // A same-place/date match is reopened automatically before this point;
+        // this flow never silently forces a second live request through.
+        allowDuplicate: false,
       });
     } catch {
       // The mutation owns the visible refusal. Keeping it here prevents an
@@ -759,19 +750,7 @@ function FlowBody({
   });
 
   const notices = (
-    <FlowNotices
-      writeError={writeError}
-      duplicates={duplicates.map((duplicate) =>
-        toDuplicateView(
-          duplicate,
-          new Date(duplicate.created_at).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-          }),
-        ),
-      )}
-      duplicateHrefFor={requestHref}
-    />
+    <FlowNotices writeError={writeError} />
   );
 
   // The brief is its own page and does not live inside the wizard shell — that
@@ -826,7 +805,7 @@ function FlowBody({
           state.screen === "review"
             ? needsVisitPlanSelection
               ? "Select number of estimates"
-              : "Send this request"
+              : visitPlanSubmitLabel(chosenPlanSize)
             : "Continue"
         }
         reassurance={
@@ -911,15 +890,19 @@ function FlowBody({
             planSize={chosenPlanSize}
             onPlanSize={(planSize) => {
               if (state.requirementId === null) return;
-              // The highlight moves now; the write settles behind it. Nothing is
-              // charged by choosing — it bounds the invitation wave and snapshots
-              // the price — so there is no risk in showing the press first.
+              choosePlan.reset();
               setPendingPlanSize(planSize);
-              choosePlan.mutate({ requirementId: state.requirementId, planSize });
             }}
             isLoadingTiers={planQuery.isPending}
             notice={
-              submitFailureCopy(submitRequirement.error) === null ? undefined : (
+              choosePlan.error !== null ? (
+                <ErrorState
+                  title="We could not save that choice"
+                  message={describeError(choosePlan.error, "mutation").message}
+                  severity="error"
+                  inline
+                />
+              ) : submitFailureCopy(submitRequirement.error) === null ? undefined : (
                 <ErrorState
                   title="We could not send that"
                   message={submitFailureCopy(submitRequirement.error)!}
@@ -1026,6 +1009,7 @@ function FlowBody({
           onSubmit={() => void handleSubmit()}
           isSubmitting={reviewActionPending}
           submitError={submitFailureCopy(submitRequirement.error)}
+          submitLabel={visitPlanSubmitLabel(chosenPlanSize)}
           visitPlanChooser={
             isA5 && state.requirementId !== null ? (
               <VisitPlanChooser
@@ -1040,8 +1024,8 @@ function FlowBody({
                 readError={planQuery.error}
                 onRetryRead={() => void planQuery.refetch()}
                 onChoose={(planSize) => {
+                  choosePlan.reset();
                   setPendingPlanSize(planSize);
-                  choosePlan.mutate({ requirementId: state.requirementId!, planSize });
                 }}
                 isChoosing={choosePlan.isPending}
                 chooseError={choosePlan.error}
@@ -1117,6 +1101,36 @@ function addressSummaryLine(
   return locality === "" ? address.postal_code : `${locality} — ${address.postal_code}`;
 }
 
+interface PersistVisitPlanSelectionInput {
+  readonly isA5: boolean;
+  readonly requirementId: string;
+  readonly selectedPlanSize: number | null;
+  readonly savedPlanSize: number | null;
+  readonly choose: (input: { requirementId: string; planSize: number }) => Promise<unknown>;
+}
+
+/**
+ * Save the one count visible on Review before matching is opened.
+ *
+ * A tap is only form state. The submit action awaits this write, so a draft
+ * that previously held three cannot be sent while the screen says one.
+ */
+export async function persistVisitPlanSelectionForSubmit({
+  isA5,
+  requirementId,
+  selectedPlanSize,
+  savedPlanSize,
+  choose,
+}: PersistVisitPlanSelectionInput): Promise<void> {
+  if (!isA5 || selectedPlanSize === null || selectedPlanSize === savedPlanSize) return;
+  await choose({ requirementId, planSize: selectedPlanSize });
+}
+
+function visitPlanSubmitLabel(planSize: number | null): string {
+  if (planSize === null) return "Send this request";
+  return planSize === 1 ? "Send to 1 professional" : `Send to ${planSize} professionals`;
+}
+
 /**
  * The sentence under a refused submit.
  *
@@ -1141,12 +1155,8 @@ function submitFailureCopy(error: unknown): string | null {
 
 function FlowNotices({
   writeError,
-  duplicates,
-  duplicateHrefFor,
 }: {
   writeError: unknown;
-  duplicates: readonly { id: string; summary: string; createdLabel: string; mergeable: boolean }[];
-  duplicateHrefFor: (requirementId: string) => string;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -1161,10 +1171,6 @@ function FlowNotices({
           severity="error"
           inline
         />
-      ) : null}
-
-      {duplicates.length > 0 ? (
-        <DuplicateNotice duplicates={duplicates} hrefFor={duplicateHrefFor} />
       ) : null}
     </div>
   );

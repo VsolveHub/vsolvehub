@@ -118,10 +118,9 @@ export function visitPermissionsFor(visit: SiteVisit | null): VisitPermissions {
 
   return {
     canConfirmArrival: visit.status === "SCHEDULED",
-    // Both, because arrival confirmation can genuinely fail on site — no signal
-    // in a basement — and refusing to let a vendor close a visit they attended
-    // because a button did not reach the server is the wrong failure.
-    canComplete: visit.status === "SCHEDULED" || visit.status === "IN_PROGRESS",
+    // Arrival-code verification is mandatory. A scheduled visit cannot skip
+    // straight to completion.
+    canComplete: visit.status === "IN_PROGRESS",
     canReportCustomerNoShow: visit.status === "SCHEDULED" || visit.status === "IN_PROGRESS",
     canEstimate: visit.status === "COMPLETED",
   };
@@ -139,7 +138,7 @@ export function visitPermissionsFor(visit: SiteVisit | null): VisitPermissions {
  * write the estimate there.
  */
 export const CONFIRM_COMMITMENT =
-  "Confirming books your calendar for this time. You are agreeing to travel to the customer's site at that slot and to write your estimate while you are there — the estimate is what the customer paid for, so a visit that produces none pays you nothing and is refunded to them.";
+  "Book only if you can reach the site at this time and complete the estimate during the visit.";
 
 export interface ConfirmationOutcome {
   readonly title: string;

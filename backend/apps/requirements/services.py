@@ -152,6 +152,50 @@ def create_draft(
 
 
 @transaction.atomic
+def get_or_create_draft(
+    *,
+    customer: User,
+    variant: ServiceVariant,
+    answers: dict[str, Any] | None = None,
+    language: str = "en-IN",
+) -> tuple[CustomerRequirement, bool]:
+    """Return this Customer's editable draft for a service, creating only when absent.
+
+    Opening a service is resumable intent, not a request to manufacture another row.  The
+    Customer row is locked before the lookup so two tabs that continue at the same moment cannot
+    both observe "no draft" and create one.  The existing draft is returned unchanged: its
+    address, dates and detail are the work the Customer is coming back to, and a later explicit
+    ``PATCH`` is the only command allowed to replace them.
+
+    The lock deliberately scopes the invariant to API draft creation without adding a partial
+    unique constraint over historical data.  Older deployments may already contain duplicate
+    drafts; the newest remains the resumable one and no migration deletes or rewrites the others.
+    """
+    locked_customer = User.objects.select_for_update().get(pk=customer.pk)
+    existing = (
+        CustomerRequirement.objects.filter(
+            customer=locked_customer,
+            variant=variant,
+            status=CustomerRequirement.Status.DRAFT,
+        )
+        .order_by("-updated_at", "-created_at", "id")
+        .first()
+    )
+    if existing is not None:
+        return existing, False
+
+    return (
+        create_draft(
+            customer=locked_customer,
+            variant=variant,
+            answers=answers,
+            language=language,
+        ),
+        True,
+    )
+
+
+@transaction.atomic
 def update_draft(
     *,
     requirement: CustomerRequirement,

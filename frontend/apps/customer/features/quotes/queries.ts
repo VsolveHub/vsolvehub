@@ -224,9 +224,9 @@ export interface SelectProposalInput {
 /**
  * Chooses one vendor — `M2-FE-410`, `M2-FE-414`.
  *
- * **Selection is not a booking.** It starts the vendor's reconfirmation clock,
- * and the engagement opens only when they commit. Every screen downstream of
- * this renders `PENDING_RECONFIRMATION` as waiting, never as confirmed.
+ * Selection re-checks the vendor's eligibility and opens the engagement in one
+ * transaction. The response carries `engagement_id`, so the comparison screen
+ * can move directly into the job.
  *
  * Keyed on the requirement *and* the proposal: choosing a different vendor is a
  * different decision and must not replay the first one's answer.

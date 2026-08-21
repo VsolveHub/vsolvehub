@@ -414,6 +414,8 @@ export function toArchetype(draft: RequirementDraft): RequirementArchetype | nul
 export interface DraftIntent {
   answers: Readonly<Record<string, unknown>>;
   addressId: string | null;
+  /** The Customer's local calendar day, recovered from the stored date-time. */
+  requestedStart: string | null;
   serviceBy: string | null;
   /** Days either side the Customer can move the start. Zero means exact. */
   flexibilityDays: number;
@@ -425,6 +427,7 @@ export function toDraftIntent(draft: RequirementDraft): DraftIntent {
   return {
     answers: readAnswers(draft.answers),
     addressId: draft.address_id,
+    requestedStart: toLocalInputDate(draft.requested_start),
     serviceBy: draft.service_by,
     // The integer, which is the source of truth. `is_date_flexible` is the
     // server's own derivation of it (`flexibility_days > 0`) and carries less:
@@ -434,6 +437,16 @@ export function toDraftIntent(draft: RequirementDraft): DraftIntent {
     additionalDetails: draft.additional_details,
     language: draft.language === "" ? null : draft.language,
   };
+}
+
+/** A wire date-time as the date input value in the browser's own timezone. */
+function toLocalInputDate(value: string | null): string | null {
+  if (value === null) return null;
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return null;
+  const month = `${instant.getMonth() + 1}`.padStart(2, "0");
+  const day = `${instant.getDate()}`.padStart(2, "0");
+  return `${instant.getFullYear()}-${month}-${day}`;
 }
 
 

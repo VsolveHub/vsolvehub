@@ -24,16 +24,27 @@ const OPTIONS: readonly { code: Locale; script: string; fontClass: string }[] = 
  * `Locale`/`DEFAULT_LOCALE` come straight from `@vsolve/ui`'s `i18n.tsx` seam
  * rather than a local re-declaration, so this screen and the eventual
  * `I18nProvider` wiring can never drift apart on what a valid locale is.
+ *
+ * `min-h-[calc(100dvh-9rem)]` rather than `min-h-screen`: `app/me/language/page.tsx`
+ * renders this inside `PartnerShell`, which already owns a sticky top bar and
+ * a fixed bottom tab bar, so a full-viewport main inside it overshoots the
+ * real available space by that chrome's height — same issue and same fix as
+ * `features/work-stack/view/work-home.tsx`'s `WorkStack`, another
+ * `PartnerShell` child. 9rem is that allowance.
  */
 export function LanguagePicker() {
   const router = useRouter();
-  const [selected, setSelected] = useState<Locale>(DEFAULT_LOCALE);
+  const [selected, setSelected] = useState<Locale>(() => {
+    if (typeof window === "undefined") return DEFAULT_LOCALE;
+    const saved = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    return OPTIONS.some((option) => option.code === saved) ? (saved as Locale) : DEFAULT_LOCALE;
+  });
 
   return (
-    <main className="flex min-h-screen flex-col bg-[linear-gradient(170deg,var(--color-navy-700)_0%,var(--color-navy-900)_60%,var(--color-navy-900)_100%)] px-5">
+    <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-[linear-gradient(170deg,var(--color-navy-700)_0%,var(--color-navy-900)_60%,var(--color-navy-900)_100%)] px-5">
       <div className="flex flex-col items-center gap-4.5 pt-16 pb-11">
         <div className="grid h-19 w-19 place-items-center rounded-[22px] bg-action shadow-raised">
-          <Pictogram name="home" className="h-11 w-11 text-text" />
+          <Pictogram name="home" size="xl" className="text-text" />
         </div>
       </div>
 
@@ -42,6 +53,7 @@ export function LanguagePicker() {
           <button
             key={option.code}
             type="button"
+            aria-pressed={selected === option.code}
             onClick={() => setSelected(option.code)}
             className={
               selected === option.code
@@ -59,13 +71,14 @@ export function LanguagePicker() {
       <div className="pb-8.5 pt-7">
         <button
           type="button"
+          aria-label="Confirm language"
           onClick={() => {
             window.localStorage.setItem(LOCALE_STORAGE_KEY, selected);
             router.back();
           }}
           className="flex h-22 w-full items-center justify-center rounded-[22px] bg-success-text shadow-[0_4px_0_var(--color-success-active)]"
         >
-          <Pictogram name="go" className="h-11.5 w-11.5 text-surface" />
+          <Pictogram name="go" size="xl" className="text-surface" />
         </button>
       </div>
     </main>

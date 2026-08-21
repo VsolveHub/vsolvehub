@@ -34,6 +34,7 @@ const row = (id: string): RequirementSummary => ({
   teaser_count: 0,
   closure_reason: null,
   last_activity_at: "2026-08-13T09:00:00Z",
+  engagement_id: null,
 });
 
 const page = (...rows: readonly RequirementSummary[]): RequirementSummaryPage => ({

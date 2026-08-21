@@ -3,6 +3,7 @@
 import type { VisitPlanPhase } from "@vsolve/query";
 import {
   Badge,
+  Button,
   Disclosure,
   EmptyState,
   RailLayout,
@@ -51,9 +52,15 @@ export interface VisitTrackerProps {
   readError: unknown;
   onRetryRead: () => void;
 
-  /** Rendered when the server says the plan checkout may be opened. */
-  bookVisitsHref: string;
+  /** Opens the plan-fee breakdown on this page. */
+  onStartCheckout: () => void;
   checkoutAvailable: boolean;
+  /** The server's chargeable amount after any carried credit. */
+  checkoutPriceLabel: string | null;
+  isStartingCheckout: boolean;
+  checkoutError: unknown;
+  canSimulatePendingCapture: boolean;
+  onSimulatePendingCapture: () => void;
 
   /** Where the delivered estimates are read. Shown once any visit has completed. */
   estimatesHref: string;
@@ -123,8 +130,13 @@ export function VisitTracker({
   isLoading,
   readError,
   onRetryRead,
-  bookVisitsHref,
   checkoutAvailable,
+  checkoutPriceLabel,
+  onStartCheckout,
+  isStartingCheckout,
+  checkoutError,
+  canSimulatePendingCapture,
+  onSimulatePendingCapture,
   estimatesHref,
   visitHref,
   supportAction,
@@ -172,7 +184,12 @@ export function VisitTracker({
           phase={phase}
           tracker={tracker}
           checkoutAvailable={checkoutAvailable}
-          bookVisitsHref={bookVisitsHref}
+          checkoutPriceLabel={checkoutPriceLabel}
+          onStartCheckout={onStartCheckout}
+          isStartingCheckout={isStartingCheckout}
+          checkoutError={checkoutError}
+          canSimulatePendingCapture={canSimulatePendingCapture}
+          onSimulatePendingCapture={onSimulatePendingCapture}
           planSwitcher={planSwitcher}
           brief={brief}
         />
@@ -309,7 +326,12 @@ export function VisitTracker({
             phase={phase}
             tracker={tracker}
             checkoutAvailable={checkoutAvailable}
-            bookVisitsHref={bookVisitsHref}
+            checkoutPriceLabel={checkoutPriceLabel}
+            onStartCheckout={onStartCheckout}
+            isStartingCheckout={isStartingCheckout}
+            checkoutError={checkoutError}
+            canSimulatePendingCapture={canSimulatePendingCapture}
+            onSimulatePendingCapture={onSimulatePendingCapture}
             planSwitcher={planSwitcher}
             brief={brief}
           />
@@ -428,7 +450,12 @@ function VisitPlanRail({
   phase,
   tracker,
   checkoutAvailable,
-  bookVisitsHref,
+  checkoutPriceLabel,
+  onStartCheckout,
+  isStartingCheckout,
+  checkoutError,
+  canSimulatePendingCapture,
+  onSimulatePendingCapture,
   planSwitcher,
   brief,
   embedded = false,
@@ -436,7 +463,12 @@ function VisitPlanRail({
   phase: VisitPlanPhase;
   tracker: VisitTrackerView | null;
   checkoutAvailable: boolean;
-  bookVisitsHref: string;
+  checkoutPriceLabel: string | null;
+  onStartCheckout: () => void;
+  isStartingCheckout: boolean;
+  checkoutError: unknown;
+  canSimulatePendingCapture: boolean;
+  onSimulatePendingCapture: () => void;
   planSwitcher?: ReactNode;
   brief?: ReactNode;
   embedded?: boolean;
@@ -486,9 +518,16 @@ function VisitPlanRail({
 
       {checkoutAvailable ? (
         <div className="flex flex-col gap-2">
-          <Link href={bookVisitsHref} className={buttonStyles({ size: "lg", block: true })}>
-            Pay {tracker.priceLabel} and lock the visits
-          </Link>
+          <Button
+            block
+            size="lg"
+            onClick={onStartCheckout}
+            loading={isStartingCheckout}
+            loadingLabel="Starting your payment"
+          >
+            {phase === "failed" ? "Try again" : "Pay"}{" "}
+            {checkoutPriceLabel ?? tracker.priceLabel} and lock the visits
+          </Button>
           {held !== null ? (
             <p className="text-center text-[0.8125rem] leading-5 text-text-secondary">
               {formatVisitSlot(held.scheduledFor, held.timeZone) ?? "The confirmed slot"} is
@@ -501,14 +540,28 @@ function VisitPlanRail({
           Payment opens only after a professional accepts a time.
         </p>
       ) : phase === "pending" ? (
-        <p className="text-sm font-medium leading-5 text-text-secondary" role="status">
-          Your bank is responding. This page updates automatically.
-        </p>
+        <div role="status">
+          <p className="text-sm font-medium leading-5 text-text-secondary">
+            Your bank is responding. This page updates automatically.
+          </p>
+          {canSimulatePendingCapture ? (
+            <Button
+              className="mt-3"
+              onClick={onSimulatePendingCapture}
+              loading={isStartingCheckout}
+              loadingLabel="Marking as paid"
+            >
+              Mark as paid
+            </Button>
+          ) : null}
+        </div>
       ) : paid ? (
         <p className="text-sm font-medium leading-5 text-text-secondary">
           Your visits are locked. No further visit payment is needed.
         </p>
       ) : null}
+
+      <AccessRefusal error={checkoutError} attempting="pay for these visits" />
 
       {tracker.openSlots > 0 ? (
         <p className="text-sm leading-5 text-text-secondary">

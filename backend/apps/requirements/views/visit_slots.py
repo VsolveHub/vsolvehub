@@ -40,7 +40,6 @@ from apps.requirements.serializers import (
     SiteVisitSerializer,
     VisitArrivalCodeEntrySerializer,
     VisitArrivalCodeSerializer,
-    VisitArrivalSerializer,
     VisitNoShowSerializer,
     VisitSlotConfirmationSerializer,
     VisitSlotConfirmSerializer,
@@ -180,58 +179,6 @@ class PartnerEnquiryVisitSlotView(ThrottledWriteMixin, APIView):
                 "invitation_id": str(invitation_id),
                 **serializer.validated_data,
             },
-            command=command,
-        )
-        return Response(result.body, status=result.status_code)
-
-
-class SiteVisitArrivalView(APIView):
-    """Arrival on the non-OTP fallback, which is the default path in M2."""
-
-    permission_classes = (IsAuthenticated,)
-
-    @extend_schema(
-        tags=["M2 - Site visits"],
-        operation_id="m2_site_visit_arrival_confirm",
-        parameters=[IDEMPOTENCY_KEY_HEADER],
-        request=VisitArrivalSerializer,
-        description=(
-            "Record that the vendor is on site. Either party may confirm it. M2 uses the "
-            "**non-OTP fallback** as the default path rather than as a degraded one — the start "
-            "OTP is M3 activation — and `arrival_method` is stored so every historical arrival "
-            "still says truthfully how it was proved once the OTP path is switched on."
-        ),
-        responses={
-            200: SiteVisitSerializer,
-            404: ApiErrorSerializer,
-            409: OpenApiResponse(
-                response=ApiErrorSerializer,
-                description="`m2_requirement_transition_not_allowed` when the visit is not "
-                "scheduled — a visit whose plan payment has not been verified is still held, not "
-                "scheduled, and nobody has arrived at it.",
-            ),
-        },
-    )
-    def post(self, request: Request, site_visit_id: uuid.UUID) -> Response:
-        actor = cast(User, request.user)
-        key = _idempotency_key(request)
-        try:
-            visit = site_visit_for_participant(user=actor, site_visit_id=site_visit_id)
-        except RequirementDomainError as exc:
-            _raise_api_error(exc)
-
-        def command() -> tuple[int, dict[str, object]]:
-            try:
-                arrived = access.confirm_visit_arrival(site_visit_id=visit.id, actor=actor)
-            except RequirementDomainError as exc:
-                _raise_api_error(exc)
-            return status.HTTP_200_OK, cast(dict[str, object], SiteVisitSerializer(arrived).data)
-
-        result = execute_idempotent(
-            actor=actor,
-            operation="m2.site_visit.arrival",
-            key=key,
-            request_payload={"site_visit_id": str(site_visit_id)},
             command=command,
         )
         return Response(result.body, status=result.status_code)
@@ -486,13 +433,10 @@ class SiteVisitArrivalCodeView(APIView):
 
 
 class SiteVisitArrivalWithCodeView(APIView):
-    """`POST /partner/site-visits/{id}/arrival/` — the vendor types in what the Customer read out.
+    """`POST /partner/site-visits/{id}/arrival/` — enter the Customer's code.
 
-    Separate from `SiteVisitArrivalView` rather than an optional field on it. That route is the
-    audited fallback either party may use when a phone is dead or a site has no signal, and
-    folding the code into it as optional would make the strong path opt-in on the request body —
-    which is to say, not a requirement at all. Two routes, two `arrival_method` values, and the
-    stored method says forever which of them proved any given visit.
+    This is the only arrival route. The required body keeps the proof mandatory;
+    there is no participant-side tap that can bypass it.
     """
 
     permission_classes = (IsAuthenticated, IsPartnerUser)

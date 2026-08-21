@@ -7,22 +7,16 @@ import type { SlotGridView, SlotOption } from "../model/slot-grid";
 import { describeVisitDuration, describeGrid, gridShape } from "../model/slot-grid";
 
 /**
- * The grid of candidate visit starts, rendered exactly as the server drew it.
+ * The next two future days of candidate visit starts for the Partner.
  *
  * The Partner-side twin of the A1 checkout's `preferred-start-picker`. Same
  * shape, same source, same rule — **the browser never computes availability** —
- * and three deliberate differences, each of which is why this is its own
- * component rather than an import across an app boundary:
+ * and three display rules narrow that server-owned answer without recomputing
+ * availability in the browser:
  *
- * 1. **Every day is shown, including days where nothing is open.** The customer
- *    picker filters to bookable days, which is right for somebody choosing a
- *    convenient time. It is wrong here: an ineligible vendor's grid is *entirely*
- *    unavailable, and filtering it would leave an empty screen where the truth is
- *    "these are the times, and none of them is yours". A grid that renders its
- *    own refusal is information; an empty state is a shrug.
- * 2. **The unavailable reason is shown per slot**, not hidden. "You are not
- *    free" and "outside working hours here" send a vendor to two different
- *    places — their own calendar, or support.
+ * 1. Today is omitted. Partners need lead time to travel to a project visit.
+ * 2. Only the next two server-ordered future days are considered, and only
+ *    slots the server marked available are shown.
  * 3. **Nothing is preselected and nothing is remembered across a reload.** Slot
  *    ids are signed tokens that expire; a selection restored from storage would
  *    be a token the server refuses, presented as a choice the vendor already
@@ -42,34 +36,36 @@ export function VisitSlotPicker({
   onSelect,
   disabled = false,
 }: VisitSlotPickerProps) {
-  const shape = gridShape(grid);
-  const notice = describeGrid(shape);
+  const visibleDays = grid.days
+    .filter((day) => !day.isToday)
+    .slice(0, 2)
+    .map((day) => {
+      const slots = day.slots.filter((slot) => slot.isAvailable);
+      return { ...day, slots, openCount: slots.length };
+    })
+    .filter((day) => day.openCount > 0);
+  const notice =
+    visibleDays.length === 0
+      ? {
+          title: "No visit times in the next 2 days",
+          message: "Refresh later to check for new times.",
+        }
+      : describeGrid(gridShape(grid));
 
-  // Open the first day that has something on it, so a vendor whose Tuesday is
-  // full does not land on an empty tab. Falls back to the first day, which is
-  // what an entirely closed grid should show.
-  const [dayIndex, setDayIndex] = useState<number>(() => {
-    const firstOpen = grid.days.findIndex((day) => day.openCount > 0);
-    return firstOpen === -1 ? 0 : firstOpen;
-  });
-
-  const day = grid.days[dayIndex] ?? null;
+  const [dayIndex, setDayIndex] = useState(0);
+  const day = visibleDays[dayIndex] ?? visibleDays[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm leading-6 text-text-secondary">
-        Each visit is {describeVisitDuration(grid.visitDurationMinutes)} on site. Times are shown{" "}
+    <div className="flex flex-col gap-3">
+      <p className="text-sm font-medium leading-5 text-text-secondary">
+        {describeVisitDuration(grid.visitDurationMinutes)} visit <span aria-hidden>·</span>{" "}
         {grid.timezoneUnsupported ? (
           <>
-            in your device&rsquo;s timezone — this phone does not recognise{" "}
-            <span className="font-medium text-text">{grid.timezone}</span>, which is the timezone
-            Vsolve booked them in. Check the date and time against the customer&rsquo;s area before
-            you confirm.
+            Check the site&rsquo;s timezone before booking
           </>
         ) : (
           <>
-            in <span className="font-medium text-text">{grid.timezone}</span>, the
-            customer&rsquo;s local time.
+            <span className="text-text">{grid.timezone}</span>
           </>
         )}
       </p>
@@ -84,24 +80,21 @@ export function VisitSlotPicker({
         </div>
       ) : null}
 
-      {grid.days.length === 0 ? null : (
+      {visibleDays.length === 0 ? null : (
         <>
           <fieldset className="m-0 border-0 p-0">
-            <legend className="text-sm font-semibold text-text">Pick a day</legend>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {grid.days.map((candidate, index) => (
+            <legend className="text-sm font-semibold text-text">Day</legend>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {visibleDays.map((candidate, index) => (
                 <Button
                   key={candidate.date}
-                  variant={dayIndex === index ? "primary" : "outline"}
+                  variant={day?.date === candidate.date ? "primary" : "outline"}
                   size="sm"
-                  aria-pressed={dayIndex === index}
+                  aria-pressed={day?.date === candidate.date}
                   onClick={() => setDayIndex(index)}
                   disabled={disabled}
                 >
                   {candidate.label}
-                  {candidate.openCount === 0 ? (
-                    <span className="ml-1 font-normal opacity-70">· none open</span>
-                  ) : null}
                 </Button>
               ))}
             </div>
@@ -109,13 +102,11 @@ export function VisitSlotPicker({
 
           {day === null ? null : (
             <fieldset className="m-0 border-0 p-0">
-              <legend className="text-sm font-semibold text-text">
-                Pick a start time on {day.label}
-              </legend>
+              <legend className="text-sm font-semibold text-text">Time on {day.label}</legend>
               <div
                 role="radiogroup"
                 aria-label={`Start times on ${day.label}`}
-                className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2"
+                className="mt-2 grid grid-cols-2 gap-2"
               >
                 {day.slots.map((slot) => (
                   <SlotButton
@@ -134,9 +125,7 @@ export function VisitSlotPicker({
 
       {grid.isPreliminary ? (
         <p className="text-xs leading-5 text-text-muted">
-          These times are a snapshot of your calendar, not a reservation. A slot can be taken while
-          you are looking at it — if that happens Vsolve will say so and show you the times that are
-          left. Nothing is held until you confirm.
+          Times stay live until you book one.
         </p>
       ) : null}
     </div>
@@ -186,7 +175,7 @@ function SlotButton({
     >
       <span className="text-sm font-semibold">{slot.label}</span>
       <span className={`text-xs ${selected ? "text-info-text" : "text-text-muted"}`}>
-        {selected ? "Selected" : "Tap to choose this time"}
+        {selected ? "Selected" : "Choose"}
       </span>
     </button>
   );

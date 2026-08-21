@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ActivityScreen, toActivityTab } from "@/features/activity/view/activity-screen";
+import { ActivityScreen } from "@/features/activity/view/activity-screen";
 
 /**
  * The Activity hub — one door onto bookings, requests and projects.
@@ -15,19 +15,14 @@ import { ActivityScreen, toActivityTab } from "@/features/activity/view/activity
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your activity",
+  title: "Your bookings",
   robots: { index: false, follow: false },
 };
 
-export default async function ActivityPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ tab?: string | string[] }>;
-}) {
-  const { tab } = await searchParams;
+export default function ActivityPage() {
   return (
     <main>
-      <ActivityScreen tab={toActivityTab(tab)} />
+      <ActivityScreen />
     </main>
   );
 }

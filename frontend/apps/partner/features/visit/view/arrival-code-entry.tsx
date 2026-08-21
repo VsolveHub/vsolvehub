@@ -12,8 +12,8 @@ import { useState, type FormEvent } from "react";
  * proved nothing — and the A5 plan is money the customer already paid for
  * somebody to travel, so "did they turn up" is a financial question. The code
  * only moves between two people standing together, and that is the whole point
- * of it. The tap-only path still exists beside this, quietly, for the dead phone
- * and the basement with no signal.
+ * of it. There is no tap-only bypass: the code is the proof that both people
+ * are at the site together.
  *
  * ## Why it is not the shared `OtpForm`
  *
@@ -64,6 +64,7 @@ export function ArrivalCodeEntry({
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Field
         label="Arrival code"
+        showOptional={false}
         description={`Ask the customer for the ${codeLength}-digit code on their screen. Entering it starts the visit.`}
         error={error ?? undefined}
       >
@@ -88,7 +89,7 @@ export function ArrivalCodeEntry({
         loading={isSubmitting}
         loadingLabel="Starting the visit"
       >
-        Start the visit
+        I&rsquo;ve arrived
       </Button>
     </form>
   );

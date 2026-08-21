@@ -20,7 +20,6 @@ from django.utils import timezone
 
 from apps.assignments.models import Reservation
 from apps.commerce.services import request_standalone_refund
-from apps.identity.models import User
 from apps.partners.models import PartnerProfile
 from apps.payouts.models import PartnerLedgerEntry
 from apps.payouts.services import payable_account
@@ -39,35 +38,6 @@ from apps.requirements.models import (
 
 
 @transaction.atomic
-def confirm_visit_arrival(*, site_visit_id: uuid.UUID, actor: User) -> SiteVisit:
-    """Record that the vendor is on site, on the non-OTP fallback path.
-
-    `milestones.md` defers OTP to M3, so `NON_OTP_FALLBACK` is the *default* path in M2 rather than
-    a degraded one — the field is stored so that when the start OTP is activated, every historical
-    arrival still says truthfully how it was proved.
-    """
-    visit = SiteVisit.objects.select_for_update().get(pk=site_visit_id)
-    if visit.status == SiteVisit.Status.IN_PROGRESS:
-        return visit
-    if visit.status != SiteVisit.Status.SCHEDULED:
-        raise RequirementTransitionError("Only a scheduled visit can be marked as arrived.")
-    visit.status = SiteVisit.Status.IN_PROGRESS
-    visit.arrival_confirmed_at = timezone.now()
-    visit.arrival_method = SiteVisit.ArrivalMethod.NON_OTP_FALLBACK
-    visit.arrival_confirmed_by = actor
-    visit.save(
-        update_fields=(
-            "status",
-            "arrival_confirmed_at",
-            "arrival_method",
-            "arrival_confirmed_by",
-            "updated_at",
-        )
-    )
-    return visit
-
-
-@transaction.atomic
 def complete_plan_visit(*, site_visit_id: uuid.UUID, outcome_notes: str = "") -> SiteVisit:
     """Close a visit that happened, and start the post-visit estimate clock.
 
@@ -82,8 +52,10 @@ def complete_plan_visit(*, site_visit_id: uuid.UUID, outcome_notes: str = "") ->
     )
     if visit.status == SiteVisit.Status.COMPLETED:
         return visit
-    if visit.status not in (SiteVisit.Status.SCHEDULED, SiteVisit.Status.IN_PROGRESS):
-        raise RequirementTransitionError("Only a scheduled visit can be completed.")
+    if visit.status != SiteVisit.Status.IN_PROGRESS:
+        raise RequirementTransitionError(
+            "Enter the Customer's arrival code before completing this visit."
+        )
     now = timezone.now()
     visit.status = SiteVisit.Status.COMPLETED
     visit.completed_at = now

@@ -43,6 +43,8 @@ export interface QuoteCardProps {
    */
   onPick?: (proposalId: string) => void;
   isPicked: boolean;
+  /** The server-persisted choice, distinct from a local pre-selection. */
+  isChosen?: boolean;
 
   onReject?: (proposalId: string) => void;
   /** `M2-FE-413` — offered only on an expired quote, and it charges nothing. */
@@ -55,6 +57,7 @@ export function QuoteCard({
   index,
   onPick,
   isPicked,
+  isChosen = false,
   onReject,
   onRevalidate,
   isRevalidating,
@@ -70,7 +73,7 @@ export function QuoteCard({
       aria-labelledby={headingId}
       className={cn(
         "scroll-mt-6 overflow-hidden rounded-card bg-surface",
-        isPicked
+        isPicked || isChosen
           ? "shadow-raised ring-2 ring-selected"
           : "border border-line shadow-card",
       )}
@@ -95,7 +98,7 @@ export function QuoteCard({
         className={cn(
           "block p-4",
           pickable ? "cursor-pointer" : null,
-          isPicked ? "bg-selected-surface" : null,
+          isPicked || isChosen ? "bg-selected-surface" : null,
         )}
       >
         <input
@@ -121,6 +124,7 @@ export function QuoteCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           {card.isVerified ? <Badge tone="success">Verified</Badge> : null}
+          {isChosen ? <Badge tone="success">Chosen</Badge> : null}
           {card.isOutOfBudget ? <Badge tone="warning">Over budget</Badge> : null}
           {card.isExpired ? <Badge tone="neutral">Price expired</Badge> : null}
           {pickable ? (

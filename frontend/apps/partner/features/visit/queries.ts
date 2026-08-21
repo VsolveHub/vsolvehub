@@ -171,23 +171,10 @@ function applyVisitToEnquiry(
 }
 
 /**
- * Record that the vendor is on site.
- *
- * The **non-OTP fallback is the default path in M2, not a degraded one** — the
- * start OTP is M3 activation — and `arrival_method` is stored so a historical
- * arrival still says truthfully how it was proved once OTP is switched on. Either
- * party may confirm, so a second confirmation from the customer is not a
- * conflict.
- */
-/**
  * Arrival proved by the code the customer is holding — contract 1.39.0.
  *
- * The strong path, and a separate route from `useConfirmVisitArrival` rather than
- * an optional field on it. That one is the audited fallback either party may use
- * when a phone is dead or a basement has no signal; folding the code into it as
- * optional would make the proof opt-in on a request body, which is to say not a
- * requirement at all. The server records which of the two proved each visit and
- * that record is permanent.
+ * The only arrival path. Keeping the code on its own required request body means
+ * a visit cannot be started by a weaker tap-only command.
  *
  * ## Why a stable idempotency key is safe here
  *
@@ -227,39 +214,6 @@ export function useConfirmVisitArrivalWithCode(invitationId: string) {
       // it just spent an attempt on lives server-side. Re-reading the enquiry is
       // what keeps the panel honest if the customer confirmed from their side
       // while the vendor was typing.
-      void queryClient.invalidateQueries({
-        queryKey: m2QueryKeys.invitations.detail(invitationId),
-      });
-    },
-    retry: false,
-  });
-}
-
-export function useConfirmVisitArrival(invitationId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (input: { readonly siteVisitId: string }) =>
-      request(() =>
-        getApiClient().POST("/api/v1/site-visits/{site_visit_id}/arrival/", {
-          params: {
-            path: { site_visit_id: input.siteVisitId },
-            header: {
-              "Idempotency-Key": getStableIdempotencyKey(
-                `m2-visit-arrival:${input.siteVisitId}`,
-              ),
-            },
-          },
-        }),
-      ),
-    onSuccess: async (visit, input) => {
-      applyVisitToEnquiry(queryClient, invitationId, visit);
-      clearIdempotencyKey(`m2-visit-arrival:${input.siteVisitId}`);
-      await invalidateForM2Command(queryClient, "confirm_visit_arrival", {
-        siteVisitId: input.siteVisitId,
-      });
-    },
-    onError: () => {
       void queryClient.invalidateQueries({
         queryKey: m2QueryKeys.invitations.detail(invitationId),
       });

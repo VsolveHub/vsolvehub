@@ -73,7 +73,7 @@ export function MoneyPad({
   return (
     <section aria-labelledby="money-pad-heading" className="flex flex-col gap-3">
       <h2 id="money-pad-heading" className="flex items-center gap-2 text-base font-semibold text-text">
-        <Pictogram name={icon} className="h-6 w-6" />
+        <Pictogram name={icon} size="md" />
         {title}
       </h2>
 

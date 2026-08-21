@@ -12,11 +12,13 @@ export interface QuoteComparisonProps {
   onChoose?: (proposalId: string) => void;
   isChoosing?: boolean;
   pickedId?: string | null;
+  /** The quote already chosen on the persisted selection. */
+  chosenId?: string | null;
   onPick?: (proposalId: string) => void;
 }
 
 export function QuoteComparison(props: QuoteComparisonProps) {
-  const { cards, pickedId = null, onPick } = props;
+  const { cards, pickedId = null, chosenId = null, onPick } = props;
   if (cards.length === 0) return null;
 
   const cheapest = cheapestIndex(cards);
@@ -37,6 +39,7 @@ export function QuoteComparison(props: QuoteComparisonProps) {
               <th scope="col" className="w-[200px] border-b border-line bg-surface p-0" />
               {cards.map((card, index) => {
                 const picked = card.proposalId === pickedId;
+                const chosen = card.proposalId === chosenId;
                 const pickable = onPick !== undefined && card.isSelectable && !card.isExpired;
                 return (
                   <th
@@ -44,7 +47,7 @@ export function QuoteComparison(props: QuoteComparisonProps) {
                     scope="col"
                     className={cn(
                       "w-[326px] border-b border-line px-4 py-5 align-top text-text",
-                      picked
+                      picked || chosen
                         ? "bg-selected-surface shadow-[inset_0_3px_0_0_var(--color-selected)]"
                         : null,
                     )}
@@ -59,7 +62,11 @@ export function QuoteComparison(props: QuoteComparisonProps) {
                             {vendorLine(card)}
                           </p>
                         </div>
-                        {card.isVerified ? (
+                        {chosen ? (
+                          <Badge tone="success" className="px-2 py-0.5 text-[0.6875rem]">
+                            Chosen
+                          </Badge>
+                        ) : card.isVerified ? (
                           <Badge tone="success" className="px-2 py-0.5 text-[0.6875rem]">
                             Verified
                           </Badge>
@@ -103,12 +110,13 @@ export function QuoteComparison(props: QuoteComparisonProps) {
                 </th>
                 {row.values.map((value, index) => {
                   const picked = cards[index]?.proposalId === pickedId;
+                  const chosen = cards[index]?.proposalId === chosenId;
                   return (
                     <td
                       key={`${row.label}-${cards[index]?.proposalId ?? index}`}
                       className={cn(
                         "border-b border-line px-4 py-4 align-top text-[0.9375rem] font-semibold leading-6 text-text",
-                        picked ? "bg-selected-surface" : null,
+                        picked || chosen ? "bg-selected-surface" : null,
                         row.emphasis ? "text-2xl font-extrabold tracking-tight" : null,
                       )}
                     >

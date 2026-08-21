@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ApiRequestError, getStableIdempotencyKey, request } from "@vsolve/api-client";
+import { ApiRequestError, getStableIdempotencyKey, request, type Schemas } from "@vsolve/api-client";
 import {
   M2_FRESHNESS,
   boundedPoll,
@@ -61,6 +61,7 @@ import { getApiClient } from "@/lib/api/browser";
  */
 
 export type { Engagement, EngagementStage };
+export type ProjectCompletionCode = Schemas["ProjectCompletionCode"];
 
 /* --------------------------------------------------------------------------
    Reads
@@ -626,6 +627,40 @@ export function useAcceptCompletion() {
       // Completion closes the requirement as `CLOSED_COMPLETE`, so `My requests`
       // and the request detail are both out of date the moment this succeeds.
       void queryClient.invalidateQueries({ queryKey: m2QueryKeys.requirements.all });
+    },
+    retry: false,
+  });
+}
+
+/** Customer-only read of the live code. A Partner has no equivalent read endpoint. */
+export function useProjectCompletionCode(engagementId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: m2QueryKeys.engagements.completionCode(engagementId),
+    queryFn: (): Promise<ProjectCompletionCode> =>
+      request(() =>
+        getApiClient().GET("/api/v1/engagements/{engagement_id}/completion-code/", {
+          params: { path: { engagement_id: engagementId } },
+        }),
+      ),
+    enabled,
+    ...M2_FRESHNESS.stage,
+    retry: shouldRetryM2Read,
+  });
+}
+
+/** Issue a short-lived Customer-held code that explicitly accepts the whole project. */
+export function useIssueProjectCompletionCode(engagementId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (): Promise<ProjectCompletionCode> =>
+      request(() =>
+        getApiClient().POST("/api/v1/engagements/{engagement_id}/completion-code/", {
+          params: { path: { engagement_id: engagementId } },
+        }),
+      ),
+    onSuccess: (result) => {
+      queryClient.setQueryData(m2QueryKeys.engagements.completionCode(engagementId), result);
     },
     retry: false,
   });

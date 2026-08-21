@@ -45,6 +45,23 @@ export type AddressPatch = Schemas["PatchedAddressRequest"];
 export type ResolvedLocation = Schemas["ReverseGeocodeResponse"];
 
 /**
+ * The address a booking should open with.
+ *
+ * A still-valid explicit choice always wins. Otherwise the Customer's default is selected, with
+ * the first saved address as a defensive fallback for older address books that predate the
+ * one-default invariant. This is pure so every booking surface follows the same rule.
+ */
+export function preferredAddressId(
+  addresses: readonly Address[],
+  selectedAddressId: string | null,
+): string | null {
+  if (selectedAddressId !== null && addresses.some((address) => address.id === selectedAddressId)) {
+    return selectedAddressId;
+  }
+  return addresses.find((address) => address.is_default)?.id ?? addresses[0]?.id ?? null;
+}
+
+/**
  * Turns a coordinate pair into address text.
  *
  * Lives here rather than with the booking flow because its only purpose is to
