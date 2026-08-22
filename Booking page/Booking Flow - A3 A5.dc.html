@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Plus Jakarta Sans", system-ui, sans-serif; background: #e9e3da; color: #00112e; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  a { color: #00246b; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+</style>
+</helmet>
+
+<div style="background:#e9e3da; min-height:100vh; padding:38px 44px 90px;">
+
+  <header style="max-width:760px;">
+    <p style="margin:0; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#756c5e;">V Solve Hub · customer booking flow</p>
+    <h1 style="margin:8px 0 0; font-size:32px; line-height:38px; font-weight:800; letter-spacing:-0.02em; color:#00112e;">Workforce and project booking, stripped back</h1>
+    <p style="margin:10px 0 0; font-size:15px; line-height:24px; color:#453f37; text-wrap:pretty;">Every screen redrawn for the phone. The rules, the money and the promises are all still there — they are just rows, pills and one-tap disclosures instead of paragraphs.</p>
+    <div style="margin-top:16px; display:flex; flex-wrap:wrap; gap:8px;">
+      <span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:#ffffff; border:1px solid #ddd6cb; padding:7px 13px; font-size:12px; font-weight:600; color:#00112e;"><span style="height:6px; width:6px; border-radius:9999px; background:#f87000;"></span>One sentence of prose per screen</span>
+      <span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:#ffffff; border:1px solid #ddd6cb; padding:7px 13px; font-size:12px; font-weight:600; color:#00112e;"><span style="height:6px; width:6px; border-radius:9999px; background:#f87000;"></span>Money as rows, never sentences</span>
+      <span style="display:inline-flex; align-items:center; gap:7px; border-radius:9999px; background:#ffffff; border:1px solid #ddd6cb; padding:7px 13px; font-size:12px; font-weight:600; color:#00112e;"><span style="height:6px; width:6px; border-radius:9999px; background:#f87000;"></span>Policy behind a tap, not above the fold</span>
+    </div>
+  </header>
+
+  <sc-if value="{{ showWorkforce }}" hint-placeholder-val="{{ true }}">
+  <section style="margin-top:44px;">
+
+    <div style="display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; border-top:2px solid #00112e; padding-top:14px;">
+      <h2 style="margin:0; font-size:21px; font-weight:800; letter-spacing:-0.01em; color:#00112e;">Workforce · A3</h2>
+      <p style="margin:0; font-size:14px; color:#453f37;">Published day rate, instant dispatch. One payment to us: the booking fee. Wages are cash, direct to the crew.</p>
+    </div>
+
+    <div style="margin-top:22px; display:flex; align-items:flex-start; gap:26px;">
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#ffd6b8; border-radius:6px; padding:4px 8px;">A3 · 1</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/book/[service]</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Book a crew</p>
+            <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">Step 1 of 2</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">Construction helpers</p>
+              <h2 style="margin:5px 0 0; font-size:21px; line-height:26px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">Tell us the job</h2>
+            </div>
+
+            <div>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600; color:#00112e;">What will they do?</p>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #00112e; background:#00112e; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#ffffff; cursor:pointer;">Loading &amp; shifting</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Site clearing</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Digging</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Something else</button>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:12px 13px;">
+                <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">People</p>
+                <div style="margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <button type="button" aria-label="Fewer people" style="display:inline-flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; font-family:inherit; font-size:18px; font-weight:700; color:#453f37; cursor:pointer;">−</button>
+                  <span style="font-size:26px; font-weight:700; letter-spacing:-0.02em; color:#00112e;">3</span>
+                  <button type="button" aria-label="More people" style="display:inline-flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #00112e; background:#ffffff; font-family:inherit; font-size:18px; font-weight:700; color:#00112e; cursor:pointer;">+</button>
+                </div>
+              </div>
+              <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:12px 13px;">
+                <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">Days</p>
+                <div style="margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <button type="button" aria-label="Fewer days" style="display:inline-flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; font-family:inherit; font-size:18px; font-weight:700; color:#453f37; cursor:pointer;">−</button>
+                  <span style="font-size:26px; font-weight:700; letter-spacing:-0.02em; color:#00112e;">2</span>
+                  <button type="button" aria-label="More days" style="display:inline-flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #00112e; background:#ffffff; font-family:inherit; font-size:18px; font-weight:700; color:#00112e; cursor:pointer;">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600; color:#00112e;">Getting to the work</p>
+              <div style="display:flex; gap:5px; padding:4px; border-radius:12px; background:#e3ddd3;">
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:#5c554a; cursor:pointer;">Ground floor</button>
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:#ffffff; box-shadow:0 1px 2px rgba(0,17,46,0.12); font-family:inherit; font-size:13px; font-weight:700; color:#00112e; cursor:pointer;">Lift</button>
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:#5c554a; cursor:pointer;">Stairs only</button>
+              </div>
+            </div>
+
+            <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px; font-family:inherit; text-align:left; cursor:pointer;">
+              <div style="flex:1 1 auto; min-width:0;">
+                <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">Start from</p>
+                <p style="margin:3px 0 0; font-size:15px; font-weight:600; color:#00112e;">Mon, 7 September</p>
+              </div>
+              <svg viewBox="0 0 12 12" style="height:12px; width:12px; flex-shrink:0; color:#8d8477;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+
+            <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px; font-family:inherit; text-align:left; cursor:pointer;">
+              <div style="flex:1 1 auto; min-width:0;">
+                <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">Where</p>
+                <p style="margin:3px 0 0; font-size:15px; font-weight:600; color:#00112e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Plot 42, Kondapur — 500084</p>
+              </div>
+              <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Change</span>
+            </button>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <p style="margin:0 0 9px; text-align:center; font-size:12px; color:#756c5e;">Free. Nothing is booked yet.</p>
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#f87000; font-family:inherit; font-size:15px; font-weight:700; color:#00112e; cursor:pointer;">See the rate</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Six answers, no essay. The two paragraphs about drafts, closing dates and what pricing costs are gone — the one that mattered sits above the button.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#ffd6b8; border-radius:6px; padding:4px 8px;">A3 · 2</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">…/book/[service] — priced</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Our rate for this</p>
+            <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">Step 2 of 2</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:12px;">
+            <div style="border-radius:16px; background:#00112e; padding:18px; color:#ffffff;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#f87000;">Published rate · Hyderabad</p>
+              <p style="margin:8px 0 0; display:flex; align-items:baseline; gap:8px;">
+                <span style="font-size:42px; line-height:44px; font-weight:800; letter-spacing:-0.03em;">₹900</span>
+                <span style="font-size:14px; font-weight:500; color:#c9c2b6;">per person, per day</span>
+              </p>
+              <p style="margin:12px 0 0; padding-top:12px; border-top:1px solid #22334d; font-size:13px; color:#c9c2b6;">8-hour shift · overtime ₹150 per hour, only if you approve it</p>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:14px;">
+                <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">3 people × 2 days</p>
+                <p style="margin:0; font-size:20px; font-weight:700; letter-spacing:-0.01em; color:#00112e;">₹5,400</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:13.5px; font-weight:600; color:#00112e;">Cash to the crew</p>
+                  <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">₹2,550 at the end of each day</p>
+                </div>
+                <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:600; color:#00112e;">₹5,100</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 14px; background:#faf8f5;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:13.5px; font-weight:600; color:#00112e;">Booking fee, to us</p>
+                  <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">Charged only when a crew accepts</p>
+                </div>
+                <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:700; color:#00112e;">₹300</p>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:flex-start; gap:10px; border-radius:14px; border:1px solid #ffc4a0; background:#fff4ec; padding:13px 14px;">
+              <svg viewBox="0 0 20 20" style="height:17px; width:17px; flex-shrink:0; margin-top:1px; color:#8a5200;" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 3.5 5v5c0 3.3 2.6 6.2 6.5 7.5 3.9-1.3 6.5-4.2 6.5-7.5V5L10 2.5Z"></path></svg>
+              <p style="margin:0; font-size:13px; line-height:20px; color:#00112e;"><strong style="font-weight:700;">You pay the crew directly.</strong> We never hold wage money, so the work itself is between you and them.</p>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <details>
+                <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                  <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                    <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    What the rate includes
+                  </span>
+                  <span style="flex-shrink:0; font-size:12px; color:#756c5e;">6 things</span>
+                </summary>
+                <div style="border-top:1px solid #f0ece5; padding:12px 14px 14px 36px;">
+                  <ul style="margin:0; padding-left:16px; display:flex; flex-direction:column; gap:5px; font-size:13px; line-height:20px; color:#453f37;">
+                    <li>Supervisor on site all day</li>
+                    <li>Own basic tools and gloves</li>
+                    <li>Travel to your address</li>
+                    <li>Insurance cover for the crew</li>
+                  </ul>
+                </div>
+              </details>
+              <details style="border-top:1px solid #f0ece5;">
+                <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                  <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                    <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    What can change the price
+                  </span>
+                  <span style="flex-shrink:0; font-size:12px; color:#756c5e;">Published</span>
+                </summary>
+                <div style="border-top:1px solid #f0ece5; padding:4px 14px 10px 36px;">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid #f0ece5;">
+                    <p style="margin:0; font-size:13px; color:#453f37;">Stairs above 3rd floor</p>
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">+₹100 / person / day</p>
+                  </div>
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:8px 0;">
+                    <p style="margin:0; font-size:13px; color:#453f37;">Night shift</p>
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">+₹250 / person / day</p>
+                  </div>
+                  <p style="margin:8px 0 0; font-size:12px; line-height:18px; color:#756c5e;">Anything extra is a change you approve in the app, at these rates.</p>
+                </div>
+              </details>
+              <details style="border-top:1px solid #f0ece5;">
+                <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                  <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                    <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    If you cancel
+                  </span>
+                  <span style="flex-shrink:0; font-size:12px; color:#756c5e;">Fee rules</span>
+                </summary>
+                <div style="border-top:1px solid #f0ece5; padding:12px 14px 14px 36px;">
+                  <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">Cancel early and the ₹300 comes back whole. Cancel late and part of it pays the supervisor for turning down other work. Nobody came? Full refund, and we find another crew.</p>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <p style="margin:0 0 9px; text-align:center; font-size:12px; color:#756c5e;">You pay ₹300 only when a supervisor accepts.</p>
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#f87000; font-family:inherit; font-size:15px; font-weight:700; color:#00112e; cursor:pointer;">Book this crew</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">The rate disclosure was six stacked paragraphs. Now: one number, three rows, one promise, three taps. Nothing was removed from the contract.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#ffd6b8; border-radius:6px; padding:4px 8px;">A3 · 3</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/[id] — matching</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Construction helpers</p>
+            <span style="flex-shrink:0; border-radius:9999px; background:#eef2fb; padding:4px 10px; font-size:11px; font-weight:700; color:#00246b;">Live</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:12px;">
+            <div style="border-radius:16px; background:#00112e; padding:18px; color:#ffffff;">
+              <div style="display:flex; align-items:center; gap:9px;">
+                <span style="display:inline-flex; height:9px; width:9px; border-radius:9999px; background:#f87000;"></span>
+                <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#f87000;">Finding your crew</p>
+              </div>
+              <p style="margin:9px 0 0; font-size:24px; line-height:30px; font-weight:700; letter-spacing:-0.015em;">Usually within 2 hours</p>
+              <p style="margin:7px 0 0; font-size:13.5px; line-height:21px; color:#c9c2b6;">12 supervisors nearby have it. First to accept gets the job.</p>
+              <div style="margin-top:15px; display:flex; gap:5px;">
+                <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#f87000;"></span>
+                <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#22334d;"></span>
+                <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#22334d;"></span>
+              </div>
+              <p style="margin:8px 0 0; font-size:12px; color:#8f8879;">Wave 1 of 3 — we widen the search on our own.</p>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 14px;">
+                <p style="margin:0; font-size:13.5px; color:#453f37;">3 people · 2 days</p>
+                <p style="margin:0; font-size:13.5px; font-weight:600; color:#00112e;">From Mon, 7 Sept</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 14px;">
+                <p style="margin:0; font-size:13.5px; color:#453f37;">Kondapur — 500084</p>
+                <span style="font-size:13px; font-weight:600; color:#00246b;">Edit request</span>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:13px 14px; background:#faf8f5;">
+                <p style="margin:0; font-size:13.5px; font-weight:600; color:#00112e;">₹900 per person per day</p>
+                <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">₹5,400</p>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:9px; border-radius:14px; border:1px solid #d5cec3; background:#efece5; padding:13px 14px;">
+              <span style="display:inline-flex; height:20px; width:20px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9999px; background:#ffffff; border:1px solid #d5cec3; font-size:12px; font-weight:700; color:#453f37;">₹</span>
+              <p style="margin:0; font-size:13px; line-height:20px; color:#00112e;"><strong style="font-weight:700;">Nothing charged yet.</strong> ₹300 when someone accepts, nothing if nobody does.</p>
+            </div>
+          </div>
+
+          <div style="flex:0 0 auto; padding:13px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <p style="margin:0 0 10px; text-align:center; font-size:12px; color:#756c5e;">We will text you the moment a crew is confirmed.</p>
+            <button type="button" style="display:flex; width:100%; height:46px; align-items:center; justify-content:center; border:1px solid #c4bcae; border-radius:11px; background:#ffffff; font-family:inherit; font-size:14px; font-weight:600; color:#453f37; cursor:pointer;">Cancel this request</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">A waiting screen with nothing to press should be the calmest page in the app. Wave progress replaces the "we have widened the search" paragraph.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#ffd6b8; border-radius:6px; padding:4px 8px;">A3 · 4</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/[id]/book-crew</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Confirm your crew</p>
+            <span style="flex-shrink:0; border-radius:9999px; background:#fff4ec; padding:4px 10px; font-size:11px; font-weight:700; color:#8a5200;">27 min left</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:12px;">
+            <div style="border-radius:16px; border:1px solid #a8ddbc; background:#e8f6ed; padding:16px;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#0e7c3a;">Accepted · holding for you</p>
+              <div style="margin-top:12px; display:flex; align-items:center; gap:12px;">
+                <span style="flex-shrink:0; display:inline-flex; height:46px; width:46px; align-items:center; justify-content:center; border-radius:9999px; background:#00112e; font-size:16px; font-weight:700; color:#ffffff;">RK</span>
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:17px; font-weight:700; color:#00112e;">Ramesh K.</p>
+                  <p style="margin:2px 0 0; font-size:13px; color:#3d6b4d;">Supervisor · brings 2 helpers · ID verified</p>
+                </div>
+              </div>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:13px 14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:13.5px; font-weight:600; color:#00112e;">3 people × 2 days</p>
+                  <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">Mon 7 – Tue 8 Sept, from 9:00 am</p>
+                </div>
+                <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:600; color:#00112e;">₹5,400</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:13px 14px;">
+                <p style="margin:0; font-size:13.5px; color:#453f37;">Cash to the crew, at day end</p>
+                <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:600; color:#00112e;">₹5,100</p>
+              </div>
+              <div style="border-top:1px solid #e7e2da; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:15px 14px; background:#00112e;">
+                <p style="margin:0; font-size:14px; font-weight:700; color:#ffffff;">Pay now to confirm</p>
+                <p style="margin:0; flex-shrink:0; font-size:22px; font-weight:800; letter-spacing:-0.02em; color:#ffffff;">₹300</p>
+              </div>
+            </div>
+
+            <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">Leave this and the hold lapses — we keep looking, and nothing is charged either way.</p>
+
+            <details style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff;">
+              <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                  <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  What the ₹300 is for
+                </span>
+              </summary>
+              <div style="border-top:1px solid #f0ece5; padding:12px 14px 14px 36px;">
+                <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">It holds this crew for your dates and is the only money we collect on this job. Refunded in full if nobody arrives.</p>
+              </div>
+            </details>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#f87000; font-family:inherit; font-size:15px; font-weight:700; color:#00112e; cursor:pointer;">Pay ₹300 and confirm</button>
+            <p style="margin:9px 0 0; text-align:center; font-size:12px; color:#756c5e;">UPI, card or netbanking</p>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Who accepted, what it costs, one button. The countdown moved into the title bar so the amount owns the page.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#ffd6b8; border-radius:6px; padding:4px 8px;">A3 · 5</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">confirmed → /engagements/[id]</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <p style="margin:0; flex:1 1 auto; padding-left:8px; font-size:15px; font-weight:700; color:#00112e;">Booked</p>
+            <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Done</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:20px 14px 16px; display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:6px 0 2px;">
+              <span style="display:inline-flex; height:52px; width:52px; align-items:center; justify-content:center; border-radius:9999px; background:#0e7c3a;">
+                <svg viewBox="0 0 24 24" style="height:24px; width:24px; color:#ffffff;" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"></path></svg>
+              </span>
+              <h2 style="margin:13px 0 0; font-size:23px; line-height:28px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">Your crew is confirmed</h2>
+              <p style="margin:6px 0 0; font-size:14px; color:#453f37;">Ramesh K. and 2 helpers</p>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">Day 1</p>
+                  <p style="margin:4px 0 0; font-size:16px; font-weight:700; color:#00112e;">Mon, 7 Sept · 9:00 am</p>
+                </div>
+                <button type="button" style="flex-shrink:0; display:inline-flex; height:40px; align-items:center; border:1px solid #c4bcae; border-radius:10px; background:#ffffff; padding:0 14px; font-family:inherit; font-size:13px; font-weight:600; color:#00112e; cursor:pointer;">Add to calendar</button>
+              </div>
+              <div style="border-top:1px solid #f0ece5; padding:12px 14px;">
+                <p style="margin:0; font-size:13px; color:#453f37;">Day 2 — Tue, 8 Sept · 9:00 am</p>
+              </div>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #ffc4a0; background:#fff4ec; padding:15px;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#8a5200;">Have ready on day 1</p>
+              <p style="margin:6px 0 0; font-size:32px; line-height:36px; font-weight:800; letter-spacing:-0.02em; color:#00112e;">₹2,550</p>
+              <p style="margin:5px 0 0; font-size:13px; color:#453f37;">Cash, to Ramesh, at the end of the day.</p>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px;">
+              <div style="min-width:0;">
+                <p style="margin:0; font-size:12px; color:#756c5e;">Booking fee receipt</p>
+                <p style="margin:3px 0 0; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:#00112e;">M2A-2026-27-2</p>
+              </div>
+              <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">View</span>
+            </div>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#f87000; font-family:inherit; font-size:15px; font-weight:700; color:#00112e; cursor:pointer;">Open this booking</button>
+            <p style="margin:9px 0 0; text-align:center; font-size:12px; color:#756c5e;">Attendance and daily settlement live there.</p>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">A receipt screen, not a lecture. The settlement model is not re-explained here — the booking page owns it.</p>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ showEdgeCases }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#e3ddd3; border-radius:6px; padding:4px 8px;">A3 · edge</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">cascade exhausted</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Construction helpers</p>
+            <span style="flex-shrink:0; border-radius:9999px; background:#fff4ec; padding:4px 10px; font-size:11px; font-weight:700; color:#8a5200;">Your turn</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <h2 style="margin:0; font-size:21px; line-height:27px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">No crew took this yet</h2>
+              <p style="margin:7px 0 0; font-size:13.5px; line-height:21px; color:#453f37;">We asked everyone nearby who can field 3 people. <strong style="font-weight:700; color:#00112e;">Nothing has been charged.</strong></p>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px solid #f87000; background:#fff4ec; padding:14px; font-family:inherit; text-align:left; cursor:pointer;">
+                <div style="flex:1 1 auto; min-width:0;">
+                  <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Search wider</p>
+                  <p style="margin:3px 0 0; font-size:12.5px; color:#8a5200;">Same ₹900 rate, bigger radius</p>
+                </div>
+                <svg viewBox="0 0 12 12" style="height:12px; width:12px; flex-shrink:0; color:#8a5200;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+              <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:14px; font-family:inherit; text-align:left; cursor:pointer;">
+                <div style="flex:1 1 auto; min-width:0;">
+                  <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Get quotes instead</p>
+                  <p style="margin:3px 0 0; font-size:12.5px; color:#756c5e;">Vendors send their own prices. Slower.</p>
+                </div>
+                <svg viewBox="0 0 12 12" style="height:12px; width:12px; flex-shrink:0; color:#8d8477;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+            </div>
+
+            <p style="margin:0; font-size:12.5px; line-height:19px; color:#756c5e;">We do not raise the price to find someone — the rate is set for your city and paid to the crew directly.</p>
+          </div>
+
+          <div style="flex:0 0 auto; padding:13px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:46px; align-items:center; justify-content:center; border:1px solid #c4bcae; border-radius:11px; background:#ffffff; font-family:inherit; font-size:14px; font-weight:600; color:#453f37; cursor:pointer;">Cancel this request</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Three paragraphs of diagnosis became two choices, ranked. Cancel stays quiet at the bottom.</p>
+        </sc-if>
+      </div>
+      </sc-if>
+
+    </div>
+  </section>
+  </sc-if>
+
+  <sc-if value="{{ showProject }}" hint-placeholder-val="{{ true }}">
+  <section style="margin-top:52px;">
+
+    <div style="display:flex; flex-wrap:wrap; align-items:baseline; gap:14px; border-top:2px solid #00112e; padding-top:14px;">
+      <h2 style="margin:0; font-size:21px; font-weight:800; letter-spacing:-0.01em; color:#00112e;">Project · A5</h2>
+      <p style="margin:0; font-size:14px; color:#453f37;">Nobody prices this without seeing it. Four screens to describe it, one payment for visits, then estimates you choose from.</p>
+    </div>
+
+    <div style="margin-top:22px; display:flex; align-items:flex-start; gap:26px;">
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 1</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/new/[service] — what</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <div style="display:flex; align-items:center; gap:8px; height:56px; padding:0 12px;">
+              <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+                <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </span>
+              <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Interior fit-out</p>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">1 of 4</span>
+            </div>
+            <div style="display:flex; gap:5px; padding:0 12px 11px;">
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#e0dad0;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#e0dad0;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#e0dad0;"></span>
+            </div>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:18px;">
+            <h2 style="margin:0; font-size:22px; line-height:27px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">What needs doing?</h2>
+
+            <div>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600; color:#00112e;">The work</p>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #00112e; background:#00112e; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#ffffff; cursor:pointer;">Full fit-out</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Renovation</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Repair</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Custom build</button>
+              </div>
+            </div>
+
+            <div>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600; color:#00112e;">The space</p>
+              <div style="display:flex; gap:5px; padding:4px; border-radius:12px; background:#e3ddd3;">
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:#5c554a; cursor:pointer;">Home</button>
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:#ffffff; box-shadow:0 1px 2px rgba(0,17,46,0.12); font-family:inherit; font-size:13px; font-weight:700; color:#00112e; cursor:pointer;">Office</button>
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:#5c554a; cursor:pointer;">Shop</button>
+              </div>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px;">
+              <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">Roughly how big?</p>
+              <div style="margin-top:6px; display:flex; align-items:baseline; gap:8px;">
+                <span style="font-size:24px; font-weight:700; letter-spacing:-0.02em; color:#00112e;">1,250</span>
+                <span style="font-size:14px; color:#756c5e;">sq ft</span>
+              </div>
+            </div>
+
+            <div>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600; color:#00112e;">Budget in mind</p>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Under ₹5L</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #00112e; background:#00112e; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#ffffff; cursor:pointer;">₹5–15L</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">₹15L+</button>
+                <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 15px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;">Not sure</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#00246b; font-family:inherit; font-size:15px; font-weight:700; color:#ffffff; cursor:pointer;">Continue</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Four taps and a number. The customer is never asked to pick an archetype and never told how matching works.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 2</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">where &amp; when</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <div style="display:flex; align-items:center; gap:8px; height:56px; padding:0 12px;">
+              <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+                <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </span>
+              <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Interior fit-out</p>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">2 of 4</span>
+            </div>
+            <div style="display:flex; gap:5px; padding:0 12px 11px;">
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#e0dad0;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#e0dad0;"></span>
+            </div>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:16px;">
+            <h2 style="margin:0; font-size:22px; line-height:27px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">Where and when</h2>
+
+            <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px; font-family:inherit; text-align:left; cursor:pointer;">
+              <div style="flex:1 1 auto; min-width:0;">
+                <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">The site</p>
+                <p style="margin:3px 0 0; font-size:15px; font-weight:600; color:#00112e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Level 3, Cyber Gateway — 500081</p>
+              </div>
+              <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Change</span>
+            </button>
+
+            <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px; font-family:inherit; text-align:left; cursor:pointer;">
+              <div style="flex:1 1 auto; min-width:0;">
+                <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">Ready to start</p>
+                <p style="margin:3px 0 0; font-size:15px; font-weight:600; color:#00112e;">Mon, 15 September</p>
+              </div>
+              <svg viewBox="0 0 12 12" style="height:12px; width:12px; flex-shrink:0; color:#8d8477;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+
+            <div>
+              <p style="margin:0 0 8px; font-size:13px; font-weight:600; color:#00112e;">How firm is that date?</p>
+              <div style="display:flex; gap:5px; padding:4px; border-radius:12px; background:#e3ddd3;">
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:#5c554a; cursor:pointer;">Exact</button>
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:#ffffff; box-shadow:0 1px 2px rgba(0,17,46,0.12); font-family:inherit; font-size:13px; font-weight:700; color:#00112e; cursor:pointer;">± a week</button>
+                <button type="button" style="flex:1 1 0; height:40px; border:0; border-radius:9px; background:transparent; font-family:inherit; font-size:13px; font-weight:600; color:#5c554a; cursor:pointer;">± a month</button>
+              </div>
+            </div>
+
+            <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:14px; border:1px dashed #c4bcae; background:transparent; padding:13px 14px; font-family:inherit; text-align:left; cursor:pointer;">
+              <div style="flex:1 1 auto; min-width:0;">
+                <p style="margin:0; font-size:14px; font-weight:600; color:#00112e;">Must finish by a date?</p>
+                <p style="margin:3px 0 0; font-size:12.5px; color:#756c5e;">Optional. Vendors see it as a hard deadline.</p>
+              </div>
+              <span style="flex-shrink:0; display:inline-flex; height:32px; width:32px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #c4bcae; font-size:17px; font-weight:600; color:#453f37;">+</span>
+            </button>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#00246b; font-family:inherit; font-size:15px; font-weight:700; color:#ffffff; cursor:pointer;">Continue</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">The old field description explained closing dates in 40 words. The deadline is now an optional row with six words under it.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 3</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">details</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <div style="display:flex; align-items:center; gap:8px; height:56px; padding:0 12px;">
+              <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+                <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </span>
+              <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Interior fit-out</p>
+              <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Skip</span>
+            </div>
+            <div style="display:flex; gap:5px; padding:0 12px 11px;">
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#e0dad0;"></span>
+            </div>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <h2 style="margin:0; font-size:22px; line-height:27px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">Show us the space</h2>
+              <p style="margin:6px 0 0; font-size:13.5px; color:#453f37;">All optional — but photos get sharper estimates.</p>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px;">
+              <div style="aspect-ratio:1 / 1; border-radius:12px; border:1px solid #ddd6cb; background:#e3ddd3; display:flex; align-items:flex-end; padding:8px;">
+                <span style="border-radius:6px; background:rgba(0,17,46,0.62); padding:2px 6px; font-size:10px; font-weight:600; color:#ffffff;">Hall</span>
+              </div>
+              <div style="aspect-ratio:1 / 1; border-radius:12px; border:1px solid #ddd6cb; background:#e3ddd3; display:flex; align-items:flex-end; padding:8px;">
+                <span style="border-radius:6px; background:rgba(0,17,46,0.62); padding:2px 6px; font-size:10px; font-weight:600; color:#ffffff;">Cabin</span>
+              </div>
+              <button type="button" style="aspect-ratio:1 / 1; border-radius:12px; border:1px dashed #c4bcae; background:transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; font-family:inherit; cursor:pointer;">
+                <span style="display:inline-flex; height:30px; width:30px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #c4bcae; font-size:16px; font-weight:600; color:#453f37;">+</span>
+                <span style="font-size:11px; font-weight:600; color:#5c554a;">Photo</span>
+              </button>
+            </div>
+
+            <button type="button" style="display:flex; width:100%; align-items:center; gap:13px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px; font-family:inherit; text-align:left; cursor:pointer;">
+              <span style="flex-shrink:0; display:inline-flex; height:44px; width:44px; align-items:center; justify-content:center; border-radius:9999px; background:#00246b;">
+                <svg viewBox="0 0 24 24" style="height:19px; width:19px; color:#ffffff;" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5a2.5 2.5 0 0 1 2.5 2.5v5a2.5 2.5 0 0 1-5 0V6A2.5 2.5 0 0 1 12 3.5Z"></path><path d="M6 11a6 6 0 0 0 12 0"></path><path d="M12 17v3.5"></path></svg>
+              </span>
+              <div style="flex:1 1 auto; min-width:0;">
+                <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Record a voice note</p>
+                <p style="margin:3px 0 0; font-size:12.5px; color:#756c5e;">Faster than typing. Any language.</p>
+              </div>
+            </button>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:13px 14px;">
+              <p style="margin:0; font-size:12px; font-weight:600; color:#756c5e;">Anything else</p>
+              <p style="margin:8px 0 0; font-size:14px; line-height:22px; color:#a39a8c;">Lift till 7pm, no drilling before 9am…</p>
+            </div>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#00246b; font-family:inherit; font-size:15px; font-weight:700; color:#ffffff; cursor:pointer;">Continue</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Voice note sits as a peer of the questions, as the IA requires, but as one tap rather than a paragraph about accessibility.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 4</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">review + visit plan</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <div style="display:flex; align-items:center; gap:8px; height:56px; padding:0 12px;">
+              <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+                <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </span>
+              <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Check and send</p>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">4 of 4</span>
+            </div>
+            <div style="display:flex; gap:5px; padding:0 12px 11px;">
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+              <span style="height:4px; flex:1 1 0; border-radius:9999px; background:#00246b;"></span>
+            </div>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:13px;">
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#756c5e;">Work</p>
+                  <p style="margin:3px 0 0; font-size:14px; font-weight:600; color:#00112e;">Full fit-out · office · 1,250 sq ft</p>
+                </div>
+                <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Edit</span>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#756c5e;">Where and when</p>
+                  <p style="margin:3px 0 0; font-size:14px; font-weight:600; color:#00112e;">Cyber Gateway · 15 Sept, ± a week</p>
+                </div>
+                <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Edit</span>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#756c5e;">Attached</p>
+                  <p style="margin:3px 0 0; font-size:14px; font-weight:600; color:#00112e;">2 photos · 1 voice note</p>
+                </div>
+                <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Edit</span>
+              </div>
+            </div>
+
+            <div style="border-radius:16px; border:1px solid #b0c2e8; background:#eef2fb; padding:15px 14px;">
+              <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">How many pros should visit?</p>
+              <p style="margin:5px 0 0; font-size:13px; line-height:20px; color:#2f4269;">They measure, then price it in writing. You pay once, when the first one confirms a time.</p>
+              <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+                <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:12px; border:1px solid #d3dcee; background:#ffffff; padding:12px 13px; font-family:inherit; text-align:left; cursor:pointer;">
+                  <p style="margin:0; flex:1 1 auto; font-size:14px; font-weight:600; color:#00112e;">1 professional</p>
+                  <p style="margin:0; flex-shrink:0; font-size:14px; font-weight:700; color:#00112e;">₹49</p>
+                </button>
+                <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:12px; border:2px solid #00246b; background:#ffffff; padding:11px 12px; font-family:inherit; text-align:left; cursor:pointer;">
+                  <div style="flex:1 1 auto; min-width:0;">
+                    <p style="margin:0; font-size:14px; font-weight:700; color:#00112e;">2 professionals</p>
+                    <p style="margin:2px 0 0; font-size:12px; font-weight:600; color:#00246b;">Most people compare two</p>
+                  </div>
+                  <p style="margin:0; flex-shrink:0; font-size:16px; font-weight:800; color:#00112e;">₹99</p>
+                </button>
+                <button type="button" style="display:flex; width:100%; align-items:center; gap:12px; border-radius:12px; border:1px solid #d3dcee; background:#ffffff; padding:12px 13px; font-family:inherit; text-align:left; cursor:pointer;">
+                  <p style="margin:0; flex:1 1 auto; font-size:14px; font-weight:600; color:#00112e;">3 professionals</p>
+                  <p style="margin:0; flex-shrink:0; font-size:14px; font-weight:700; color:#00112e;">₹199</p>
+                </button>
+              </div>
+            </div>
+
+            <details style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff;">
+              <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                  <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  Callback, site access, language
+                </span>
+                <span style="flex-shrink:0; font-size:12px; color:#756c5e;">Optional</span>
+              </summary>
+              <div style="border-top:1px solid #f0ece5; padding:12px 14px 14px 36px;">
+                <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">Ask us to call you, tell vendors how to reach the site, or pick the language you want to be contacted in.</p>
+              </div>
+            </details>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <p style="margin:0 0 9px; text-align:center; font-size:12px; color:#756c5e;">Free to send. ₹99 only when a pro confirms a time.</p>
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#00246b; font-family:inherit; font-size:15px; font-weight:700; color:#ffffff; cursor:pointer;">Send this request</button>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">The plan chooser stays a control on review, not a fifth screen. Three rows, one price each, one line of why.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 5</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/[id] — visits</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Office fit-out</p>
+            <span style="flex-shrink:0; border-radius:9999px; background:#eef2fb; padding:4px 10px; font-size:11px; font-weight:700; color:#00246b;">2 visits</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:13px;">
+            <div>
+              <h2 style="margin:0; font-size:21px; line-height:27px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">One pro has a time for you</h2>
+              <p style="margin:6px 0 0; font-size:13.5px; color:#453f37;">Pay once and both visits are locked in.</p>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #a8ddbc; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:11px; padding:14px; background:#e8f6ed;">
+                <span style="flex-shrink:0; display:inline-flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; background:#00112e; font-size:13px; font-weight:700; color:#ffffff;">VI</span>
+                <div style="flex:1 1 auto; min-width:0;">
+                  <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Vaastu Interiors</p>
+                  <p style="margin:2px 0 0; font-size:12.5px; color:#3d6b4d;">Thu 21 Aug · 11:00 am</p>
+                </div>
+                <span style="flex-shrink:0; border-radius:9999px; background:#0e7c3a; padding:4px 10px; font-size:11px; font-weight:700; color:#ffffff;">Holding</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:11px; padding:14px; border-top:1px solid #f0ece5;">
+                <span style="flex-shrink:0; display:inline-flex; height:40px; width:40px; align-items:center; justify-content:center; border-radius:9999px; border:1px dashed #c4bcae; font-size:15px; color:#8d8477;">2</span>
+                <div style="flex:1 1 auto; min-width:0;">
+                  <p style="margin:0; font-size:14px; font-weight:600; color:#453f37;">Second visit</p>
+                  <p style="margin:2px 0 0; font-size:12.5px; color:#756c5e;">6 pros invited · waiting for a time</p>
+                </div>
+              </div>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:13px 14px;">
+                <p style="margin:0; font-size:13.5px; color:#453f37;">2-visit plan</p>
+                <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">₹99</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; padding:11px 14px; background:#faf8f5;">
+                <p style="margin:0; font-size:12.5px; line-height:19px; color:#756c5e;">A visit that never happens refunds its half on its own.</p>
+              </div>
+            </div>
+
+            <details style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff;">
+              <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                  <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  Your request
+                </span>
+                <span style="flex-shrink:0; font-size:12px; color:#756c5e;">Sent 18 Aug</span>
+              </summary>
+              <div style="border-top:1px solid #f0ece5; padding:12px 14px 14px 36px;">
+                <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">Full fit-out · office · 1,250 sq ft · Cyber Gateway · from 15 Sept</p>
+              </div>
+            </details>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#00246b; font-family:inherit; font-size:15px; font-weight:700; color:#ffffff; cursor:pointer;">Pay ₹99 and lock the visits</button>
+            <p style="margin:9px 0 0; text-align:center; font-size:12px; color:#756c5e;">The 11:00 am slot is held until you do.</p>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Per-slot status as two rows instead of a per-phase paragraph. The unfilled slot reads as pending, not broken.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 6</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/[id]/book-visits</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">Book your visits</p>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:13px;">
+            <div style="border-radius:16px; background:#00112e; padding:18px; color:#ffffff;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#f87000;">Held for you</p>
+              <p style="margin:9px 0 0; font-size:21px; line-height:27px; font-weight:700; letter-spacing:-0.015em;">Thu 21 Aug · 11:00 am</p>
+              <p style="margin:6px 0 0; font-size:13.5px; color:#c9c2b6;">Vaastu Interiors, at Cyber Gateway</p>
+            </div>
+
+            <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:13px 14px;">
+                <div style="min-width:0;">
+                  <p style="margin:0; font-size:13.5px; font-weight:600; color:#00112e;">2-visit plan</p>
+                  <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">Both site visits and both written estimates</p>
+                </div>
+                <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:600; color:#00112e;">₹99</p>
+              </div>
+              <div style="border-top:1px solid #e7e2da; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:15px 14px; background:#00246b;">
+                <p style="margin:0; font-size:14px; font-weight:700; color:#ffffff;">To pay now</p>
+                <p style="margin:0; flex-shrink:0; font-size:22px; font-weight:800; letter-spacing:-0.02em; color:#ffffff;">₹99</p>
+              </div>
+            </div>
+
+            <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">One payment for the whole plan. Any visit that does not happen refunds its share without you asking.</p>
+
+            <details style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff;">
+              <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px;">
+                <span style="display:flex; align-items:center; gap:9px; font-size:13.5px; font-weight:600; color:#00112e;">
+                  <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#8d8477; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  What the visit fee covers
+                </span>
+              </summary>
+              <div style="border-top:1px solid #f0ece5; padding:12px 14px 14px 36px;">
+                <p style="margin:0; font-size:13px; line-height:20px; color:#453f37;">Travel and the pro's time on site, plus a written estimate you keep whether or not you hire them. It is not part of the project price.</p>
+              </div>
+            </details>
+          </div>
+
+          <div style="flex:0 0 auto; padding:11px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <button type="button" style="display:flex; width:100%; height:50px; align-items:center; justify-content:center; border:0; border-radius:11px; background:#00246b; font-family:inherit; font-size:15px; font-weight:700; color:#ffffff; cursor:pointer;">Pay ₹99</button>
+            <p style="margin:9px 0 0; text-align:center; font-size:12px; color:#756c5e;">UPI, card or netbanking</p>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Payment 1 of 2 in the A5 journey, and it says what it buys in one row rather than three paragraphs about attempts and callbacks.</p>
+        </sc-if>
+      </div>
+
+      <div style="flex:0 0 auto; width:430px; display:flex; flex-direction:column; gap:11px;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; font-weight:700; letter-spacing:0.06em; color:#00112e; background:#c9d8f5; border-radius:6px; padding:4px 8px;">A5 · 7</span>
+          <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; color:#756c5e;">/requests/[id]/quotes</span>
+        </div>
+
+        <div style="height:880px; display:flex; flex-direction:column; overflow:hidden; border-radius:26px; border:1px solid #d8d1c6; background:#f4f1ec; box-shadow:0 14px 34px rgba(0,17,46,0.08);">
+          <div style="flex:0 0 auto; display:flex; align-items:center; gap:8px; height:56px; padding:0 12px; background:#ffffff; border-bottom:1px solid #e7e2da;">
+            <span style="display:inline-flex; height:36px; width:36px; flex-shrink:0; align-items:center; justify-content:center; border-radius:9px; color:#453f37;">
+              <svg viewBox="0 0 12 12" style="height:13px; width:13px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </span>
+            <p style="margin:0; flex:1 1 auto; font-size:15px; font-weight:700; color:#00112e;">2 estimates</p>
+            <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Compare</span>
+          </div>
+
+          <div style="flex:1 1 auto; overflow:hidden; padding:16px 14px; display:flex; flex-direction:column; gap:12px;">
+            <p style="margin:0; font-size:13.5px; line-height:21px; color:#453f37;">Both priced after seeing the site, on the same tax basis.</p>
+
+            <div style="border-radius:16px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="padding:14px;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+                  <div style="min-width:0;">
+                    <p style="margin:0; font-size:16px; font-weight:700; color:#00112e;">Vaastu Interiors</p>
+                    <p style="margin:3px 0 0; font-size:12.5px; color:#756c5e;">Visited 21 Aug · 14 projects with us</p>
+                  </div>
+                  <span style="flex-shrink:0; border-radius:9999px; background:#e8f6ed; padding:4px 10px; font-size:11px; font-weight:700; color:#0e7c3a;">Verified</span>
+                </div>
+                <p style="margin:12px 0 0; font-size:30px; line-height:34px; font-weight:800; letter-spacing:-0.02em; color:#00112e;">₹8,40,000</p>
+                <p style="margin:4px 0 0; font-size:12.5px; color:#756c5e;">incl. GST · 6 stages · 9 weeks</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 14px; background:#faf8f5;">
+                <p style="margin:0; font-size:13px; color:#453f37;">First stage to fund</p>
+                <p style="margin:0; font-size:14px; font-weight:700; color:#00112e;">₹1,40,000</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; gap:9px; padding:12px 14px;">
+                <button type="button" style="flex:0 0 auto; display:inline-flex; height:44px; align-items:center; border:1px solid #c4bcae; border-radius:10px; background:#ffffff; padding:0 16px; font-family:inherit; font-size:13.5px; font-weight:600; color:#00112e; cursor:pointer;">Read it</button>
+                <button type="button" style="flex:1 1 auto; display:inline-flex; height:44px; align-items:center; justify-content:center; border:0; border-radius:10px; background:#00246b; font-family:inherit; font-size:14px; font-weight:700; color:#ffffff; cursor:pointer;">Choose this</button>
+              </div>
+            </div>
+
+            <div style="border-radius:16px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+              <div style="padding:14px;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+                  <div style="min-width:0;">
+                    <p style="margin:0; font-size:16px; font-weight:700; color:#00112e;">Kalyan Build Studio</p>
+                    <p style="margin:3px 0 0; font-size:12.5px; color:#756c5e;">Visited 23 Aug · 31 projects with us</p>
+                  </div>
+                  <span style="flex-shrink:0; border-radius:9999px; background:#e8f6ed; padding:4px 10px; font-size:11px; font-weight:700; color:#0e7c3a;">Verified</span>
+                </div>
+                <p style="margin:12px 0 0; font-size:30px; line-height:34px; font-weight:800; letter-spacing:-0.02em; color:#00112e;">₹9,10,000</p>
+                <p style="margin:4px 0 0; font-size:12.5px; color:#756c5e;">incl. GST · 5 stages · 7 weeks</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 14px; background:#faf8f5;">
+                <p style="margin:0; font-size:13px; color:#453f37;">First stage to fund</p>
+                <p style="margin:0; font-size:14px; font-weight:700; color:#00112e;">₹1,82,000</p>
+              </div>
+              <div style="border-top:1px solid #f0ece5; display:flex; gap:9px; padding:12px 14px;">
+                <button type="button" style="flex:0 0 auto; display:inline-flex; height:44px; align-items:center; border:1px solid #c4bcae; border-radius:10px; background:#ffffff; padding:0 16px; font-family:inherit; font-size:13.5px; font-weight:600; color:#00112e; cursor:pointer;">Read it</button>
+                <button type="button" style="flex:1 1 auto; display:inline-flex; height:44px; align-items:center; justify-content:center; border:0; border-radius:10px; background:#00246b; font-family:inherit; font-size:14px; font-weight:700; color:#ffffff; cursor:pointer;">Choose this</button>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:9px; border-radius:14px; border:1px solid #d5cec3; background:#efece5; padding:12px 14px;">
+              <svg viewBox="0 0 20 20" style="height:17px; width:17px; flex-shrink:0; color:#453f37;" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 3.5 5v5c0 3.3 2.6 6.2 6.5 7.5 3.9-1.3 6.5-4.2 6.5-7.5V5L10 2.5Z"></path></svg>
+              <p style="margin:0; font-size:12.5px; line-height:19px; color:#00112e;">We hold each stage payment until you approve that stage.</p>
+            </div>
+          </div>
+
+          <div style="flex:0 0 auto; padding:13px 14px 16px; background:#ffffff; border-top:1px solid #e7e2da;">
+            <p style="margin:0; text-align:center; font-size:12px; color:#756c5e;">Nothing is charged until you choose one.</p>
+          </div>
+        </div>
+
+        <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:0; max-width:430px; font-size:12px; line-height:19px; color:#5c554a;">Two comparable cards: total, stages, weeks, first stage. Scope, inclusions and exclusions live one tap deeper in "Read it".</p>
+        </sc-if>
+      </div>
+
+    </div>
+  </section>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;flow&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Both&quot;,&quot;Workforce (A3)&quot;,&quot;Project (A5)&quot;],&quot;default&quot;:&quot;Both&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Scope&quot;},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Scope&quot;},&quot;showEdgeCases&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Scope&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const flow = this.props.flow ?? "Both";
+    return {
+      showWorkforce: flow !== "Project (A5)",
+      showProject: flow !== "Workforce (A3)",
+      showNotes: this.props.showNotes ?? true,
+      showEdgeCases: this.props.showEdgeCases ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

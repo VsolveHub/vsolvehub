@@ -1,0 +1,174 @@
+{
+  "pages": [
+    {
+      "id": "page-0",
+      "name": "Home directions"
+    },
+    {
+      "id": "page-1",
+      "name": "Screens"
+    },
+    {
+      "id": "page-2",
+      "name": "Spec"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Home-Scanner.dc.html",
+      "title": "A · The Scanner",
+      "page": "page-0",
+      "x": 0,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Home-Daybook.dc.html",
+      "title": "B · The Daybook",
+      "page": "page-0",
+      "x": 420,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Home-Switch.dc.html",
+      "title": "C · The Switch",
+      "page": "page-0",
+      "x": 840,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Motion.dc.html",
+      "title": "Motion & offline",
+      "page": "page-0",
+      "x": 1260,
+      "y": 0,
+      "w": 900,
+      "h": 1500
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "1 · Home — idle",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Busy.dc.html",
+      "title": "1b · Home — work in",
+      "page": "page-1",
+      "x": 420,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Work.dc.html",
+      "title": "2 · Work tab",
+      "page": "page-1",
+      "x": 840,
+      "y": 0,
+      "w": 360,
+      "h": 860
+    },
+    {
+      "file": "Offer.dc.html",
+      "title": "3 · Crew offer",
+      "page": "page-1",
+      "x": 1260,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Enquiry.dc.html",
+      "title": "4 · Enquiry",
+      "page": "page-1",
+      "x": 1680,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Estimate.dc.html",
+      "title": "5 · Estimate",
+      "page": "page-1",
+      "x": 2100,
+      "y": 0,
+      "w": 360,
+      "h": 900
+    },
+    {
+      "file": "Job.dc.html",
+      "title": "6 · On the job",
+      "page": "page-1",
+      "x": 2520,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Me.dc.html",
+      "title": "7 · Me",
+      "page": "page-1",
+      "x": 2940,
+      "y": 0,
+      "w": 360,
+      "h": 800
+    },
+    {
+      "file": "Collision.dc.html",
+      "title": "Why labels",
+      "page": "page-2",
+      "x": 0,
+      "y": 0,
+      "w": 860,
+      "h": 1180
+    },
+    {
+      "file": "Elements.dc.html",
+      "title": "Measurements",
+      "page": "page-2",
+      "x": 940,
+      "y": 0,
+      "w": 900,
+      "h": 1560
+    }
+  ],
+  "annotations": [
+    {
+      "id": "directions",
+      "page": "page-0",
+      "x": 0,
+      "y": -190,
+      "w": 900,
+      "text": "Three ways to answer the same question: a partner opens Home, and there is nothing on it.\n\nEach bets on a different axis — A on \"we are looking for you right now\", B on \"here is your day\", C on \"you are on\". The animations are live; give them a few seconds each.\n\nMotion & offline (far right) compares the three side by side and shows what offline has to look like."
+    },
+    {
+      "id": "journey",
+      "page": "page-1",
+      "x": 0,
+      "y": -150,
+      "w": 820,
+      "text": "Four tabs now: Home · Work · Money · Me.\n\nHome (1) is status — availability, today's money, three figures, and the radar while dispatch looks for work. It has two faces: idle, and with work in (1b). Nothing that needs the vendor is ever hidden behind a link.\n\nWork (2) is the full list, grouped by whose move it is. The Work menu item lands straight here.\n\nEvery frame is 360 wide — the mid-range Android this runs on."
+    },
+    {
+      "id": "spec-note",
+      "page": "page-2",
+      "x": 0,
+      "y": -130,
+      "w": 620,
+      "text": "Left: the three controls that render together on the job screen today, and what replaces them.\n\nRight: every measurement the screens are built from - grid, type ramp, icon scale, control tiers."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-0"
+  }
+}

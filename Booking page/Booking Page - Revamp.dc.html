@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Plus Jakarta Sans", system-ui, sans-serif; background: #f4f1ec; color: #00112e; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  a { color: #00246b; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+  @media (max-width: 940px) {
+    .vs-grid { grid-template-columns: 1fr !important; }
+    .vs-rail { position: static !important; }
+  }
+  @media (max-width: 640px) {
+    .vs-days { grid-template-columns: 1fr !important; }
+    .vs-hero { flex-direction: column !important; align-items: flex-start !important; }
+  }
+</style>
+</helmet>
+
+<div style="background:#f4f1ec; min-height:100vh; font-family:'Plus Jakarta Sans', system-ui, sans-serif;">
+
+  <div style="background:#00112e; padding:8px 16px;">
+    <div style="margin:0 auto; max-width:1080px; display:flex; align-items:center; flex-wrap:wrap; gap:14px;">
+      <span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#a89f90;">State</span>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button type="button" onClick="{{ goBooked }}" style="cursor:pointer; border:0; border-radius:9999px; padding:5px 12px; font-family:inherit; font-size:12px; font-weight:600; background:{{ tabBookedBg }}; color:{{ tabBookedFg }};">Just booked</button>
+        <button type="button" onClick="{{ goToday }}" style="cursor:pointer; border:0; border-radius:9999px; padding:5px 12px; font-family:inherit; font-size:12px; font-weight:600; background:{{ tabTodayBg }}; color:{{ tabTodayFg }};">Crew due today</button>
+        <button type="button" onClick="{{ goMid }}" style="cursor:pointer; border:0; border-radius:9999px; padding:5px 12px; font-family:inherit; font-size:12px; font-weight:600; background:{{ tabMidBg }}; color:{{ tabMidFg }};">Day 1 done</button>
+        <button type="button" onClick="{{ goDone }}" style="cursor:pointer; border:0; border-radius:9999px; padding:5px 12px; font-family:inherit; font-size:12px; font-weight:600; background:{{ tabDoneBg }}; color:{{ tabDoneFg }};">Finished</button>
+      </div>
+    </div>
+  </div>
+
+  <header style="border-bottom:1px solid #e7e2da; background:#ffffff;">
+    <div style="margin:0 auto; display:flex; width:100%; max-width:1080px; flex-wrap:wrap; align-items:center; column-gap:24px; row-gap:12px; padding:12px 16px;">
+      <a href="#" style="flex-shrink:0; display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:16px;">
+        <span style="display:inline-flex; height:28px; width:28px; align-items:center; justify-content:center; overflow:hidden; border-radius:9999px;">
+          <img src="assets/logo-mark.png" alt="V Solve Hub" style="height:100%; width:100%; object-fit:contain;" />
+        </span>
+        <span style="color:#00112e;">V Solve <span style="color:#00246b;">Hub</span></span>
+      </a>
+      <nav aria-label="Main" style="display:flex; flex:1 1 0%; flex-wrap:wrap; align-items:center; column-gap:20px; row-gap:8px;">
+        <a href="#" style="font-size:14px; font-weight:500; color:#453f37;">Services</a>
+        <a href="#" style="font-size:14px; font-weight:500; color:#453f37;">Basket</a>
+        <a href="#" style="font-size:14px; font-weight:600; color:#00112e;">My bookings</a>
+        <a href="#" style="font-size:14px; font-weight:500; color:#453f37;">My requests</a>
+        <a href="#" style="font-size:14px; font-weight:500; color:#453f37;">My projects</a>
+        <a href="#" style="font-size:14px; font-weight:500; color:#453f37;">Account</a>
+      </nav>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button type="button" style="position:relative; display:inline-flex; height:44px; width:44px; flex-shrink:0; align-items:center; justify-content:center; border-radius:8px; border:0; background:transparent; color:#453f37; cursor:pointer;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="height:20px; width:20px;" aria-hidden="true">
+            <path d="M18 8a6 6 0 1 0-12 0c0 3.6-.75 5.4-1.5 6.3a.75.75 0 0 0 .55 1.2h13.9a.75.75 0 0 0 .55-1.2C18.75 13.4 18 11.6 18 8Z"></path>
+            <path d="M10 19a2 2 0 0 0 4 0"></path>
+          </svg>
+          <span style="position:absolute; right:4px; top:4px; display:inline-flex; min-width:20px; align-items:center; justify-content:center; border-radius:9999px; background:#f87000; padding:2px 4px; font-size:12px; font-weight:700; line-height:1; color:#00112e;">3</span>
+        </button>
+        <span style="font-size:14px; color:#453f37;">+918019013032</span>
+        <button type="button" style="display:inline-flex; height:44px; align-items:center; border-radius:8px; border:0; background:transparent; padding:0 20px; font-family:inherit; font-size:14px; font-weight:600; color:#00246b; cursor:pointer;">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <div style="margin:0 auto; width:100%; max-width:1080px; padding:20px 16px 80px;">
+
+    <a href="#" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#453f37;">
+      <svg viewBox="0 0 12 12" style="height:11px; width:11px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      All bookings
+    </a>
+
+    <div style="margin-top:14px; display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px;">
+      <div style="min-width:0;">
+        <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">3 helpers · 2 days · booked 17 Aug</p>
+        <h1 style="margin:5px 0 0; font-size:27px; line-height:33px; font-weight:700; letter-spacing:-0.015em; color:#00112e;">Construction helpers</h1>
+      </div>
+      <span style="display:inline-flex; flex-shrink:0; align-items:center; gap:7px; border-radius:9999px; padding:5px 12px; font-size:12px; font-weight:600; background:{{ statusBg }}; color:{{ statusFg }}; box-shadow:inset 0 0 0 1px {{ statusRing }};">
+        <span style="height:6px; width:6px; border-radius:9999px; background:currentColor;"></span>{{ statusLabel }}
+      </span>
+    </div>
+
+    <div class="vs-grid" style="margin-top:22px; display:grid; grid-template-columns:minmax(0,1fr) 316px; gap:20px; align-items:start;">
+
+      <div style="display:flex; flex-direction:column; gap:14px; min-width:0;">
+
+        <section style="border-radius:16px; background:#00112e; padding:20px; color:#ffffff;">
+          <div class="vs-hero" style="display:flex; align-items:center; justify-content:space-between; gap:18px;">
+            <div style="min-width:0;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#f87000;">{{ heroEyebrow }}</p>
+              <p style="margin:7px 0 0; font-size:22px; line-height:28px; font-weight:700; letter-spacing:-0.01em; color:#ffffff;">{{ heroWhen }}</p>
+              <p style="margin:6px 0 0; font-size:14px; line-height:21px; color:#c9c2b6;">{{ heroWho }}</p>
+            </div>
+            <div style="flex-shrink:0; display:flex; flex-direction:column; gap:8px;">
+              <button type="button" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:9px; border:0; background:#f87000; padding:0 18px; font-family:inherit; font-size:14px; font-weight:700; color:#00112e; cursor:pointer; white-space:nowrap;">{{ heroAction }}</button>
+              <button type="button" style="display:inline-flex; height:38px; align-items:center; justify-content:center; border-radius:9px; border:1px solid #3a4a63; background:transparent; padding:0 18px; font-family:inherit; font-size:13px; font-weight:600; color:#ffffff; cursor:pointer; white-space:nowrap;">Message crew</button>
+            </div>
+          </div>
+        </section>
+
+        <section style="border-radius:16px; border:1px solid #ffc4a0; background:#fff4ec; padding:18px;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+            <div style="min-width:0;">
+              <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#8a5200;">{{ cashLabel }}</p>
+              <p style="margin:6px 0 0; font-size:34px; line-height:38px; font-weight:700; letter-spacing:-0.02em; color:#00112e;">{{ cashAmount }}</p>
+              <p style="margin:6px 0 0; font-size:14px; line-height:21px; color:#453f37;">{{ cashNote }}</p>
+            </div>
+            <div style="flex-shrink:0; max-width:210px; border-left:1px solid #ffc4a0; padding-left:16px;">
+              <p style="margin:0; font-size:12px; line-height:19px; color:#8a5200;">The crew is paid in cash, by you, directly. V Solve Hub never holds this money.</p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px;">
+            <h2 style="margin:0; font-size:15px; font-weight:700; letter-spacing:-0.005em; color:#00112e;">The two days</h2>
+            <p style="margin:0; font-size:13px; font-weight:600; color:#453f37;">{{ daysProgress }}</p>
+          </div>
+          <div class="vs-days" style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="border-radius:14px; border:1px solid {{ d1Ring }}; background:#ffffff; padding:14px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">Day 1</p>
+                <span style="display:inline-flex; align-items:center; border-radius:9999px; padding:3px 9px; font-size:11px; font-weight:700; background:{{ d1Bg }}; color:{{ d1Fg }};">{{ d1Status }}</span>
+              </div>
+              <p style="margin:8px 0 0; font-size:16px; font-weight:600; color:#00112e;">Mon, 7 Sept</p>
+              <p style="margin:3px 0 0; font-size:13px; color:#453f37;">3 helpers · 9:00 am</p>
+              <p style="margin:10px 0 0; padding-top:10px; border-top:1px solid #e7e2da; font-size:14px; font-weight:600; color:#00112e;">₹2,550 cash</p>
+            </div>
+            <div style="border-radius:14px; border:1px solid {{ d2Ring }}; background:#ffffff; padding:14px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">Day 2</p>
+                <span style="display:inline-flex; align-items:center; border-radius:9999px; padding:3px 9px; font-size:11px; font-weight:700; background:{{ d2Bg }}; color:{{ d2Fg }};">{{ d2Status }}</span>
+              </div>
+              <p style="margin:8px 0 0; font-size:16px; font-weight:600; color:#00112e;">Tue, 8 Sept</p>
+              <p style="margin:3px 0 0; font-size:13px; color:#453f37;">3 helpers · 9:00 am</p>
+              <p style="margin:10px 0 0; padding-top:10px; border-top:1px solid #e7e2da; font-size:14px; font-weight:600; color:#00112e;">₹2,550 cash</p>
+            </div>
+          </div>
+        </section>
+
+        <sc-if value="{{ askArrival }}" hint-placeholder-val="{{ true }}">
+          <section style="border-radius:16px; border:1px solid #e7e2da; background:#ffffff; padding:18px;">
+            <h2 style="margin:0; font-size:16px; font-weight:700; color:#00112e;">Did the crew arrive?</h2>
+            <p style="margin:5px 0 0; font-size:14px; line-height:21px; color:#453f37;">Tell us either way. This is what settles your ₹300 booking fee.</p>
+            <div style="margin-top:14px; display:flex; flex-wrap:wrap; gap:10px;">
+              <button type="button" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:9px; border:0; background:#f87000; padding:0 20px; font-family:inherit; font-size:14px; font-weight:700; color:#00112e; cursor:pointer;">They arrived</button>
+              <button type="button" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:9px; border:1px solid #756c5e; background:#ffffff; padding:0 20px; font-family:inherit; font-size:14px; font-weight:600; color:#00112e; cursor:pointer;">Nobody came</button>
+            </div>
+            <details style="margin-top:12px;">
+              <summary style="display:inline-flex; cursor:pointer; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#00246b;">
+                <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                What happens to my ₹300?
+              </summary>
+              <div style="margin-top:8px; max-width:62ch; font-size:13px; line-height:22px; color:#453f37;">Crew arrives, we keep it — that is what held the booking. Nobody comes, you get it back in full and we find another crew at no extra cost. Crew travels but cannot work because the site was not ready, it is not returned: part goes to the supervisor for the journey, the rest to us.</div>
+            </details>
+          </section>
+        </sc-if>
+
+        <section style="border-radius:16px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+          <details>
+            <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px;">
+              <span style="display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; color:#00112e;">
+                <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#756c5e; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                How paying for this works
+              </span>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">You pay the crew, not us</span>
+            </summary>
+            <div style="border-top:1px solid #e7e2da; padding:15px 18px 17px 41px; max-width:66ch;">
+              <p style="margin:0; font-size:14px; line-height:23px; color:#00112e;">We connected you and we will help if the connection fails — we will find you somebody else. We do <strong style="font-weight:700;">not</strong> hold your money for this work, so <strong style="font-weight:700;">payment, refunds and any guarantee on the work are between you and them</strong>.</p>
+              <p style="margin:9px 0 0; font-size:13px; line-height:22px; color:#453f37;">You can contact each other from 17 Aug, 11:20 pm. We do not show their number here — it reaches you the way we agreed with them.</p>
+            </div>
+          </details>
+          <details style="border-top:1px solid #e7e2da;">
+            <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px;">
+              <span style="display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; color:#00112e;">
+                <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#756c5e; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                Changes to this job
+              </span>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">{{ changesSummary }}</span>
+            </summary>
+            <div style="border-top:1px solid #e7e2da; padding:15px 18px 17px 41px; max-width:66ch;">
+              <p style="margin:0; font-size:14px; line-height:23px; color:#453f37;">If the crew needs more time or the work changes, the request lands here and <strong style="font-weight:700; color:#00112e;">nothing changes until you accept it.</strong> Overtime and add-ons are priced by us at published rates.</p>
+            </div>
+          </details>
+          <details style="border-top:1px solid #e7e2da;">
+            <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px;">
+              <span style="display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; color:#00112e;">
+                <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#756c5e; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                Everything that has happened
+              </span>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">{{ eventCount }}</span>
+            </summary>
+            <div style="border-top:1px solid #e7e2da; padding:15px 18px 17px 41px;">
+              <ol style="margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:13px;">
+                <li style="display:flex; gap:11px;">
+                  <span style="margin-top:5px; flex-shrink:0; height:7px; width:7px; border-radius:9999px; background:#f87000;"></span>
+                  <div>
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">Booking confirmed, fee paid</p>
+                    <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">17 Aug, 11:20 pm</p>
+                  </div>
+                </li>
+                <li style="display:flex; gap:11px;">
+                  <span style="margin-top:5px; flex-shrink:0; height:7px; width:7px; border-radius:9999px; background:#c9c2b6;"></span>
+                  <div>
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">Quote accepted · ₹5,400</p>
+                    <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">17 Aug, 11:18 pm</p>
+                  </div>
+                </li>
+                <li style="display:flex; gap:11px;">
+                  <span style="margin-top:5px; flex-shrink:0; height:7px; width:7px; border-radius:9999px; background:#c9c2b6;"></span>
+                  <div>
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">Request sent to 4 supervisors</p>
+                    <p style="margin:2px 0 0; font-size:12px; color:#756c5e;">16 Aug, 2:40 pm</p>
+                  </div>
+                </li>
+              </ol>
+              <a href="#" style="display:inline-block; margin-top:13px; font-size:13px; font-weight:600; color:#00246b;">Open the full record</a>
+            </div>
+          </details>
+          <details style="border-top:1px solid #e7e2da;">
+            <summary style="display:flex; cursor:pointer; align-items:center; justify-content:space-between; gap:12px; padding:15px 18px;">
+              <span style="display:flex; align-items:center; gap:9px; font-size:14px; font-weight:600; color:#00112e;">
+                <svg class="chev" viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#756c5e; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                Somebody asked me for extra in cash
+              </span>
+              <span style="flex-shrink:0; font-size:12px; font-weight:600; color:#756c5e;">Report it</span>
+            </summary>
+            <div style="border-top:1px solid #e7e2da; padding:15px 18px 17px 41px; max-width:66ch;">
+              <p style="margin:0; font-size:14px; line-height:23px; color:#453f37;">₹5,400 is the whole price. If somebody asked for more on site — cash, an insisted-on tip, a price they said had gone up — tell us in one tap. No proof needed, no figure needed.</p>
+              <button type="button" style="margin-top:13px; display:inline-flex; height:40px; align-items:center; justify-content:center; border-radius:9px; border:1px solid #756c5e; background:#ffffff; padding:0 16px; font-family:inherit; font-size:13px; font-weight:600; color:#00112e; cursor:pointer;">Report a cash demand</button>
+            </div>
+          </details>
+        </section>
+
+      </div>
+
+      <aside class="vs-rail" style="position:sticky; top:20px; display:flex; flex-direction:column; gap:12px; min-width:0;">
+
+        <section style="border-radius:16px; border:1px solid #e7e2da; background:#ffffff; overflow:hidden;">
+          <div style="padding:15px 16px 13px;">
+            <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">What this costs</p>
+            <p style="margin:7px 0 0; font-size:27px; line-height:31px; font-weight:700; letter-spacing:-0.02em; color:#00112e;">₹5,400</p>
+            <p style="margin:3px 0 0; font-size:12px; color:#453f37;">3 people × 2 days at ₹900 a day</p>
+          </div>
+          <div style="border-top:1px solid #e7e2da; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:12px 16px;">
+              <div style="min-width:0;">
+                <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">Cash to the crew</p>
+                <p style="margin:2px 0 0; font-size:11px; color:#756c5e;">₹2,550 at the end of each day</p>
+              </div>
+              <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:600; color:#00112e;">₹5,100</p>
+            </div>
+            <div style="border-top:1px solid #e7e2da; display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:12px 16px; background:#faf8f5;">
+              <div style="min-width:0;">
+                <p style="margin:0; font-size:13px; font-weight:600; color:#00112e;">Booking fee, to us</p>
+                <p style="margin:2px 0 0; font-size:11px; color:#756c5e;">{{ feeState }}</p>
+              </div>
+              <p style="margin:0; flex-shrink:0; font-size:15px; font-weight:700; color:#00112e;">₹300</p>
+            </div>
+          </div>
+          <div style="border-top:1px solid #e7e2da; padding:13px 16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <p style="margin:0; font-size:12px; color:#453f37;">Receipt</p>
+              <p style="margin:0; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; color:#00112e;">M2A-2026-27-2</p>
+            </div>
+            <button type="button" style="margin-top:11px; display:flex; width:100%; height:38px; align-items:center; justify-content:center; border-radius:9px; border:1px solid #756c5e; background:#ffffff; font-family:inherit; font-size:13px; font-weight:600; color:#00112e; cursor:pointer;">View receipt</button>
+            <details style="margin-top:10px;">
+              <summary style="display:inline-flex; cursor:pointer; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#00246b;">
+                <svg class="chev" viewBox="0 0 12 12" style="height:10px; width:10px; flex-shrink:0; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                Is this a tax invoice?
+              </summary>
+              <p style="margin:7px 0 0; font-size:12px; line-height:20px; color:#453f37;">No — it covers the ₹300 fee only, not the money you pay the crew. Quote the reference if you contact us.</p>
+            </details>
+          </div>
+        </section>
+
+        <section style="border-radius:16px; border:1px solid #e7e2da; background:#ffffff; padding:15px 16px;">
+          <p style="margin:0; font-size:11px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase; color:#756c5e;">Your crew</p>
+          <div style="margin-top:11px; display:flex; align-items:center; gap:11px;">
+            <span style="flex-shrink:0; display:inline-flex; height:38px; width:38px; align-items:center; justify-content:center; border-radius:9999px; background:#00112e; font-size:14px; font-weight:700; color:#ffffff;">RK</span>
+            <div style="min-width:0;">
+              <p style="margin:0; font-size:14px; font-weight:600; color:#00112e;">Ramesh K.</p>
+              <p style="margin:1px 0 0; font-size:12px; color:#756c5e;">Supervisor · brings 2 helpers</p>
+            </div>
+          </div>
+          <p style="margin:12px 0 0; padding-top:12px; border-top:1px solid #e7e2da; font-size:12px; line-height:20px; color:#453f37;">Messages reach him through us. His number is not shown here.</p>
+        </section>
+
+        <a href="#" style="display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:16px; border:1px dashed #d5cec3; padding:14px 16px; font-size:13px; font-weight:600; color:#00112e;">
+          Something wrong with this job?
+          <svg viewBox="0 0 12 12" style="height:11px; width:11px; flex-shrink:0; color:#756c5e;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </a>
+
+      </aside>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const NEUTRAL = { bg: "#f4f1ec", fg: "#453f37", ring: "#e7e2da" };
+const BLUE = { bg: "#eef2fb", fg: "#00246b", ring: "#b0c2e8" };
+const GREEN = { bg: "#e8f6ed", fg: "#0e7c3a", ring: "#a8ddbc" };
+const ORANGE = { bg: "#fff4ec", fg: "#8a5200", ring: "#ffc4a0" };
+
+const STATES = {
+  booked: {
+    statusLabel: "Booked", status: BLUE,
+    heroEyebrow: "Starts in 3 weeks", heroWhen: "Mon, 7 Sept · 9:00 am",
+    heroWho: "Ramesh K. and 2 helpers. Nothing for you to do yet.",
+    heroAction: "Add to calendar",
+    cashLabel: "Have ready on day 1", cashAmount: "₹2,550",
+    cashNote: "Cash, to the crew, at the end of the day.",
+    daysProgress: "0 of 2 done",
+    d1: { status: "Not started", tone: NEUTRAL }, d2: { status: "Not started", tone: NEUTRAL },
+    askArrival: false, feeState: "Paid 17 Aug · settles on arrival",
+    changesSummary: "Nothing waiting", eventCount: "3 events",
+  },
+  today: {
+    statusLabel: "Crew due today", status: ORANGE,
+    heroEyebrow: "Today", heroWhen: "Arriving 9:00 am",
+    heroWho: "Ramesh K. and 2 helpers are on their way.",
+    heroAction: "Confirm they arrived",
+    cashLabel: "Have ready today", cashAmount: "₹2,550",
+    cashNote: "Cash, to Ramesh, at the end of the day.",
+    daysProgress: "0 of 2 done",
+    d1: { status: "Today", tone: ORANGE }, d2: { status: "Not started", tone: NEUTRAL },
+    askArrival: true, feeState: "Paid 17 Aug · settles on arrival",
+    changesSummary: "Nothing waiting", eventCount: "3 events",
+  },
+  mid: {
+    statusLabel: "In progress", status: BLUE,
+    heroEyebrow: "Next up · day 2 of 2", heroWhen: "Tue, 8 Sept · 9:00 am",
+    heroWho: "Same crew. Day 1 done, ₹2,550 paid.",
+    heroAction: "Add to calendar",
+    cashLabel: "Have ready tomorrow", cashAmount: "₹2,550",
+    cashNote: "The last payment on this booking.",
+    daysProgress: "1 of 2 done",
+    d1: { status: "Done", tone: GREEN }, d2: { status: "Not started", tone: NEUTRAL },
+    askArrival: false, feeState: "Paid 17 Aug · settled",
+    changesSummary: "Nothing waiting", eventCount: "6 events",
+  },
+  done: {
+    statusLabel: "Finished", status: GREEN,
+    heroEyebrow: "Finished 8 Sept", heroWhen: "All 2 days complete",
+    heroWho: "₹5,100 paid in cash to the crew. Nothing outstanding.",
+    heroAction: "Rate this crew",
+    cashLabel: "Nothing left to pay", cashAmount: "₹0",
+    cashNote: "₹5,100 was paid in cash across the two days.",
+    daysProgress: "2 of 2 done",
+    d1: { status: "Done", tone: GREEN }, d2: { status: "Done", tone: GREEN },
+    askArrival: false, feeState: "Paid 17 Aug · settled",
+    changesSummary: "None were raised", eventCount: "9 events",
+  },
+};
+
+class Component extends DCLogic {
+  state = { view: "booked" };
+
+  tab(key) {
+    const on = this.state.view === key;
+    return { bg: on ? "#f87000" : "#1b2b45", fg: on ? "#00112e" : "#c9c2b6" };
+  }
+
+  renderVals() {
+    const s = STATES[this.state.view] || STATES.booked;
+    const tb = this.tab("booked"), tt = this.tab("today"), tm = this.tab("mid"), td = this.tab("done");
+    return {
+      goBooked: () => this.setState({ view: "booked" }),
+      goToday: () => this.setState({ view: "today" }),
+      goMid: () => this.setState({ view: "mid" }),
+      goDone: () => this.setState({ view: "done" }),
+      tabBookedBg: tb.bg, tabBookedFg: tb.fg,
+      tabTodayBg: tt.bg, tabTodayFg: tt.fg,
+      tabMidBg: tm.bg, tabMidFg: tm.fg,
+      tabDoneBg: td.bg, tabDoneFg: td.fg,
+      statusLabel: s.statusLabel,
+      statusBg: s.status.bg, statusFg: s.status.fg, statusRing: s.status.ring,
+      heroEyebrow: s.heroEyebrow, heroWhen: s.heroWhen, heroWho: s.heroWho, heroAction: s.heroAction,
+      cashLabel: s.cashLabel, cashAmount: s.cashAmount, cashNote: s.cashNote,
+      daysProgress: s.daysProgress,
+      d1Status: s.d1.status, d1Bg: s.d1.tone.bg, d1Fg: s.d1.tone.fg, d1Ring: s.d1.tone.ring,
+      d2Status: s.d2.status, d2Bg: s.d2.tone.bg, d2Fg: s.d2.tone.fg, d2Ring: s.d2.tone.ring,
+      askArrival: s.askArrival,
+      feeState: s.feeState,
+      changesSummary: s.changesSummary,
+      eventCount: s.eventCount,
+    };
+  }
+}
+</script>
+</body>
+</html>

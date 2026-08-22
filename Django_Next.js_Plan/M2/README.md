@@ -75,9 +75,16 @@ Wave A2 frontend) is demoted to the fallback, and the primary A3 front door is n
 
 ## Branch policy
 
-M2 code is never pushed to `main`. All M2 implementation happens on a dedicated M2 branch and merges
-into `main` only on the owner's explicit instruction. `main` remains the M1 acceptance build, because
-M1 and M2 are separately accepted and separately paid milestones running in parallel.
+**Closed 23 August 2026.** M2 was merged into `main` from `feat/m2-workforce-projects` on the
+owner's explicit instruction, so `main` now carries M1 and M2 together.
+
+The rule this section used to state — M2 never on `main` — existed because M1 and M2 are
+separately accepted and separately paid milestones that ran in parallel, and `main` was the M1
+acceptance build. That is no longer how the tree is arranged. Accepting M1 on its own now means
+cutting a release branch from `d1f443a`, the last commit before the merge.
+
+Merging M2 did not accept it: every task is still `built, owner verification pending`, and the
+gate is the owner's manual pass.
 
 ## Planning boundary
 

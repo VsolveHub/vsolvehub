@@ -5,6 +5,10 @@
 **Paired sessions:** [frontend-session-a.md](frontend-session-a.md) (Customer),
 [frontend-session-b.md](frontend-session-b.md) (Partner + Operations). Do not edit `frontend/**`.
 
+> **Sprint complete (23 August 2026).** Every wave in this prompt is built and M2 is merged into
+> `main`. Contract versions quoted below were current at their wave; the contract is now **1.39.0**.
+> Read this as the record of how the sprint was run, not as live scope.
+
 > **Wave C1 shipped on 12 August 2026.** Contract **1.22.0 publishes 33 M2 paths**, the 17 from C0
 > plus 16 new ones: attachments, site-visit scheduling and completion, and the whole proposal 0013
 > registration surface. The four sweeps that had no schedule now have one. Object-level authorization
@@ -65,7 +69,9 @@
 >
 > Mark tasks in `02-backend-tasks.md` and this file as you go. `[x]` requires the phase's own
 > completion standard — object-level authorization tests plus a published contract path — not a
-> passing unit test alone. Commit once at the wave gate, never per task. Never push to `main`.
+> passing unit test alone. Commit once at the wave gate, never per task. Do not push to `main`
+> without the owner saying so — the blanket M2 embargo ended when M2 was merged on 23 August 2026,
+> but pushing to `main` is still the owner's call.
 
 ## Standing constraints
 

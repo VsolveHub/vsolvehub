@@ -1,13 +1,16 @@
 # M2 Master Task Board
 
 **Scope:** Workforce and project services (`A3_TIME_BLOCK` and `A5_CUSTOM_PROJECT`)
-**Status:** **Contract 1.33.0 is published and the typed client is regenerated and in sync at
-1.33.0** (Gate 5, 2026-08-15). **Every planned wave in this sprint is built: backend C0–C7, and
-every frontend wave in both columns plus the Operations surfaces in `apps/admin`.** The merged tree
-passes typecheck 9/9 and builds 3/3 (customer, partner, admin). Every task is `[~] built — static
-gates green, owner manual verification pending`; **no phase has passed its gate, because the gate
-is the owner's manual pass.** See [SMOKE.md](SMOKE.md) for exactly what to click, and
-§"What is NOT built" below for the honest remainder. Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
+**Status:** **The contract is at 1.39.0 and the typed client is in sync at 1.39.0**
+(`pnpm contract:check`, 23 August 2026). The per-wave records below stop at 1.33.0 (Gate 5,
+2026-08-15); 1.34.0–1.39.0 landed afterwards in the notification and customer/partner experience
+work and are not broken out by wave here. **Every planned wave in this sprint is built: backend
+C0–C7, and every frontend wave in both columns plus the Operations surfaces in `apps/admin`.** The
+merged tree passes typecheck 9/9 and builds 3/3 (customer, partner, admin). Every task is `[~]
+built — static gates green, owner manual verification pending`; **no phase has passed its gate,
+because the gate is the owner's manual pass** — merging M2 into `main` on 23 August 2026 did not
+change that. The walkthroughs are the `m2-*-smoke.md` runbooks in
+[`docs/runbooks/`](../../docs/runbooks/); see §"What is NOT built" below for the honest remainder. Backend waves C0–C3.5 are landed: the C1 remainder, Wave C2 (the A3 unlock — the
 thin-supply fallback since revision 4 — the A5 visit plan with per-slot split payouts, selection and
 reconfirmation), Wave C3 (the engagement + stage spine) and Wave C3.5 (defect closure plus the
 dev-only seed `manage.py seed_m2_demo`). Background sweeps are on Celery beat.

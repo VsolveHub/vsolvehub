@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; background: #e9e3da; color: #00112e; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  a { color: #00246b; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</helmet>
+
+<div style="width:660px; max-height:760px; display:flex; flex-direction:column; overflow:hidden; border-radius:20px; background:#ffffff; box-shadow:0 30px 70px rgba(0,17,46,0.34); font-family:'Plus Jakarta Sans', system-ui, sans-serif;">
+
+  <div style="flex:0 0 auto; display:flex; align-items:flex-start; gap:16px; padding:22px 24px 18px; border-bottom:1px solid #f0ece5;">
+    <div style="flex:1 1 auto; min-width:0;">
+      <sc-if value="{{ listMode }}" hint-placeholder-val="{{ true }}">
+        <h2 style="margin:0; font-size:20px; font-weight:800; letter-spacing:-0.015em; color:#00112e;">Where is the work?</h2>
+        <p style="margin:5px 0 0; font-size:13.5px; color:#453f37;">Pick a saved address or add a new one.</p>
+      </sc-if>
+      <sc-if value="{{ newMode }}" hint-placeholder-val="{{ false }}">
+        <h2 style="margin:0; font-size:20px; font-weight:800; letter-spacing:-0.015em; color:#00112e;">Add a new address</h2>
+        <p style="margin:5px 0 0; font-size:13.5px; color:#453f37;">Saved to your account, so you only type it once.</p>
+      </sc-if>
+    </div>
+    <button type="button" aria-label="Close" onClick="{{ close }}" style="flex-shrink:0; display:inline-flex; height:36px; width:36px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #e7e2da; background:#ffffff; font-family:inherit; cursor:pointer; color:#5c554a;" style-hover="background:#f4f1ec;">
+      <svg viewBox="0 0 14 14" style="height:13px; width:13px;" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m3.5 3.5 7 7M10.5 3.5l-7 7"></path></svg>
+    </button>
+  </div>
+
+  <sc-if value="{{ listMode }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1 1 auto; overflow-y:auto; padding:18px 24px;">
+
+    <button type="button" onClick="{{ pickA1 }}" style="display:flex; width:100%; align-items:flex-start; gap:14px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:15px 16px; font-family:inherit; text-align:left; cursor:pointer;" style-hover="border-color:#00112e; background:#faf8f5;">
+      <span style="flex-shrink:0; margin-top:2px; display:inline-flex; height:20px; width:20px; align-items:center; justify-content:center; border-radius:9999px; border:1.5px solid #c4bcae;">
+        <sc-if value="{{ selA1 }}" hint-placeholder-val="{{ true }}"><span style="height:11px; width:11px; border-radius:9999px; background:#00112e;"></span></sc-if>
+      </span>
+      <div style="flex:1 1 auto; min-width:0;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Home</p>
+          <span style="border-radius:9999px; background:#efece5; padding:3px 9px; font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#5c554a;">Default</span>
+          <sc-if value="{{ selA1 }}" hint-placeholder-val="{{ true }}"><span style="border-radius:9999px; background:#e8f6ed; padding:3px 9px; font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#0e7c3a;">Selected</span></sc-if>
+        </div>
+        <p style="margin:5px 0 0; font-size:13.5px; line-height:20px; color:#453f37;">Flat 402, Lotus Residency, Kondapur, Hyderabad — 500084</p>
+        <p style="margin:6px 0 0; font-size:12.5px; color:#756c5e;">Anita N · +91 98··· 41 · Lift available</p>
+      </div>
+      <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Edit</span>
+    </button>
+
+    <button type="button" onClick="{{ pickA2 }}" style="margin-top:10px; display:flex; width:100%; align-items:flex-start; gap:14px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:15px 16px; font-family:inherit; text-align:left; cursor:pointer;" style-hover="border-color:#00112e; background:#faf8f5;">
+      <span style="flex-shrink:0; margin-top:2px; display:inline-flex; height:20px; width:20px; align-items:center; justify-content:center; border-radius:9999px; border:1.5px solid #c4bcae;">
+        <sc-if value="{{ selA2 }}" hint-placeholder-val="{{ false }}"><span style="height:11px; width:11px; border-radius:9999px; background:#00112e;"></span></sc-if>
+      </span>
+      <div style="flex:1 1 auto; min-width:0;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Office</p>
+          <sc-if value="{{ selA2 }}" hint-placeholder-val="{{ false }}"><span style="border-radius:9999px; background:#e8f6ed; padding:3px 9px; font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#0e7c3a;">Selected</span></sc-if>
+        </div>
+        <p style="margin:5px 0 0; font-size:13.5px; line-height:20px; color:#453f37;">Level 3, Cyber Gateway, HITEC City, Hyderabad — 500081</p>
+        <p style="margin:6px 0 0; font-size:12.5px; color:#756c5e;">Anita N · +91 98··· 41 · Service lift, till 7pm</p>
+      </div>
+      <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Edit</span>
+    </button>
+
+    <button type="button" onClick="{{ pickA3 }}" style="margin-top:10px; display:flex; width:100%; align-items:flex-start; gap:14px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:15px 16px; font-family:inherit; text-align:left; cursor:pointer;" style-hover="border-color:#00112e; background:#faf8f5;">
+      <span style="flex-shrink:0; margin-top:2px; display:inline-flex; height:20px; width:20px; align-items:center; justify-content:center; border-radius:9999px; border:1.5px solid #c4bcae;">
+        <sc-if value="{{ selA3 }}" hint-placeholder-val="{{ false }}"><span style="height:11px; width:11px; border-radius:9999px; background:#00112e;"></span></sc-if>
+      </span>
+      <div style="flex:1 1 auto; min-width:0;">
+        <div style="display:flex; align-items:center; gap:9px;">
+          <p style="margin:0; font-size:15px; font-weight:700; color:#00112e;">Site — Plot 42</p>
+          <sc-if value="{{ selA3 }}" hint-placeholder-val="{{ false }}"><span style="border-radius:9999px; background:#e8f6ed; padding:3px 9px; font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#0e7c3a;">Selected</span></sc-if>
+        </div>
+        <p style="margin:5px 0 0; font-size:13.5px; line-height:20px; color:#453f37;">Plot 42, Survey 118, Gachibowli, Hyderabad — 500032</p>
+        <p style="margin:6px 0 0; font-size:12.5px; color:#756c5e;">Ravi (site contact) · +91 90··· 08 · Open ground, no lift</p>
+      </div>
+      <span style="flex-shrink:0; font-size:13px; font-weight:600; color:#00246b;">Edit</span>
+    </button>
+
+    <div style="margin-top:16px; display:flex; gap:10px;">
+      <button type="button" onClick="{{ toNew }}" style="flex:1 1 0; display:flex; align-items:center; justify-content:center; gap:9px; height:50px; border-radius:12px; border:1px dashed #c4bcae; background:transparent; font-family:inherit; font-size:14px; font-weight:700; color:#00112e; cursor:pointer;" style-hover="border-color:#00112e; background:#faf8f5;">
+        <span style="display:inline-flex; height:24px; width:24px; align-items:center; justify-content:center; border-radius:9999px; border:1px solid #c4bcae; font-size:15px; font-weight:600;">+</span>
+        Add a new address
+      </button>
+      <button type="button" style="flex:0 0 auto; display:flex; align-items:center; gap:9px; height:50px; border-radius:12px; border:1px solid #e0dad0; background:#faf8f5; padding:0 18px; font-family:inherit; font-size:14px; font-weight:600; color:#453f37; cursor:pointer;" style-hover="border-color:#00112e; color:#00112e;">
+        <svg viewBox="0 0 20 20" style="height:16px; width:16px;" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2"></path><circle cx="10" cy="10" r="4"></circle></svg>
+        Use my location
+      </button>
+    </div>
+  </div>
+
+  <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; border-top:1px solid #f0ece5; background:#faf8f5;">
+    <p style="margin:0; font-size:12.5px; color:#756c5e;">Changing the address re-checks who can reach it.</p>
+    <div style="display:flex; gap:10px;">
+      <button type="button" onClick="{{ close }}" style="display:inline-flex; height:46px; align-items:center; border-radius:11px; border:1px solid #c4bcae; background:#ffffff; padding:0 20px; font-family:inherit; font-size:14px; font-weight:600; color:#453f37; cursor:pointer;" style-hover="background:#f4f1ec;">Cancel</button>
+      <button type="button" onClick="{{ close }}" style="display:inline-flex; height:46px; align-items:center; border:0; border-radius:11px; background:#00246b; padding:0 24px; font-family:inherit; font-size:14px; font-weight:700; color:#ffffff; cursor:pointer;" style-hover="background:#001b52;">Use this address</button>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ newMode }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1 1 auto; overflow-y:auto; padding:18px 24px;">
+    <div style="height:150px; border-radius:14px; border:1px solid #e0dad0; background:#e3ddd3; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;">
+      <p style="margin:0; font-size:12.5px; font-weight:600; color:#756c5e;">Map — drop the pin on the gate</p>
+      <span style="position:absolute; bottom:12px; right:12px; display:inline-flex; height:36px; align-items:center; border-radius:9px; border:1px solid #c4bcae; background:#ffffff; padding:0 14px; font-size:12.5px; font-weight:600; color:#00112e;">Locate me</span>
+    </div>
+
+    <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div style="grid-column:1 / -1;">
+        <p style="margin:0 0 7px; font-size:12.5px; font-weight:700; color:#00112e;">Flat, plot or building</p>
+        <div style="height:48px; display:flex; align-items:center; border-radius:11px; border:1.5px solid #00112e; background:#ffffff; padding:0 14px;">
+          <span style="font-size:14px; color:#00112e;">Plot 7, Sai Enclave</span>
+          <span style="width:1px; height:20px; background:#00112e; margin-left:2px;"></span>
+        </div>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <p style="margin:0 0 7px; font-size:12.5px; font-weight:700; color:#00112e;">Street, area</p>
+        <div style="height:48px; display:flex; align-items:center; border-radius:11px; border:1px solid #e0dad0; background:#faf8f5; padding:0 14px;">
+          <span style="font-size:14px; color:#a39a8c;">Road no. 4, Manikonda</span>
+        </div>
+      </div>
+      <div>
+        <p style="margin:0 0 7px; font-size:12.5px; font-weight:700; color:#00112e;">City</p>
+        <div style="height:48px; display:flex; align-items:center; border-radius:11px; border:1px solid #e0dad0; background:#faf8f5; padding:0 14px;">
+          <span style="font-size:14px; color:#00112e;">Hyderabad</span>
+        </div>
+      </div>
+      <div>
+        <p style="margin:0 0 7px; font-size:12.5px; font-weight:700; color:#00112e;">Pincode</p>
+        <div style="height:48px; display:flex; align-items:center; justify-content:space-between; border-radius:11px; border:1px solid #e0dad0; background:#faf8f5; padding:0 14px;">
+          <span style="font-size:14px; color:#00112e;">500089</span>
+          <span style="border-radius:9999px; background:#e8f6ed; padding:3px 9px; font-size:10.5px; font-weight:700; color:#0e7c3a;">We serve here</span>
+        </div>
+      </div>
+      <div style="grid-column:1 / -1;">
+        <p style="margin:0 0 7px; font-size:12.5px; font-weight:700; color:#00112e;">Who will be there</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div style="height:48px; display:flex; align-items:center; border-radius:11px; border:1px solid #e0dad0; background:#faf8f5; padding:0 14px;">
+            <span style="font-size:14px; color:#a39a8c;">Contact name</span>
+          </div>
+          <div style="height:48px; display:flex; align-items:center; border-radius:11px; border:1px solid #e0dad0; background:#faf8f5; padding:0 14px;">
+            <span style="font-size:14px; color:#a39a8c;">Phone</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <p style="margin:0 0 8px; font-size:12.5px; font-weight:700; color:#00112e;">Save it as</p>
+      <div style="display:flex; gap:8px;">
+        <button type="button" style="height:40px; border-radius:9999px; border:1px solid #00112e; background:#00112e; padding:0 16px; font-family:inherit; font-size:13px; font-weight:600; color:#ffffff; cursor:pointer;">Site</button>
+        <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 16px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;" style-hover="border-color:#00112e; color:#00112e;">Home</button>
+        <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 16px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;" style-hover="border-color:#00112e; color:#00112e;">Office</button>
+        <button type="button" style="height:40px; border-radius:9999px; border:1px solid #ddd6cb; background:#ffffff; padding:0 16px; font-family:inherit; font-size:13px; font-weight:600; color:#453f37; cursor:pointer;" style-hover="border-color:#00112e; color:#00112e;">Other</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; border-top:1px solid #f0ece5; background:#faf8f5;">
+    <button type="button" onClick="{{ toList }}" style="display:inline-flex; align-items:center; gap:8px; border:0; background:transparent; padding:0; font-family:inherit; font-size:13.5px; font-weight:600; color:#00246b; cursor:pointer;">
+      <svg viewBox="0 0 12 12" style="height:11px; width:11px;" aria-hidden="true"><path d="M7.5 2 4 6l3.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      Back to saved addresses
+    </button>
+    <button type="button" onClick="{{ toList }}" style="display:inline-flex; height:46px; align-items:center; border:0; border-radius:11px; background:#00246b; padding:0 24px; font-family:inherit; font-size:14px; font-weight:700; color:#ffffff; cursor:pointer;" style-hover="background:#001b52;">Save and use</button>
+  </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:700,&quot;height&quot;:700},&quot;selectedId&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;a1&quot;,&quot;a2&quot;,&quot;a3&quot;],&quot;default&quot;:&quot;a1&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;onPick&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(id: string) =&gt; void&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  state = { mode: "list" };
+
+  renderVals() {
+    const selectedId = this.props.selectedId ?? "a1";
+    const onPick = this.props.onPick;
+    const onClose = this.props.onClose;
+    const pick = (id) => () => { if (onPick) onPick(id); };
+
+    return {
+      listMode: this.state.mode === "list",
+      newMode: this.state.mode === "new",
+      toNew: () => this.setState({ mode: "new" }),
+      toList: () => this.setState({ mode: "list" }),
+      selA1: selectedId === "a1",
+      selA2: selectedId === "a2",
+      selA3: selectedId === "a3",
+      pickA1: pick("a1"),
+      pickA2: pick("a2"),
+      pickA3: pick("a3"),
+      close: () => { if (onClose) onClose(); },
+    };
+  }
+}
+
+</script>
+</body>
+</html>

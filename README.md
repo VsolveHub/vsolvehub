@@ -14,7 +14,7 @@ Next.js frontends, one versioned OpenAPI contract between them.
 | `frontend/` | pnpm + turbo monorepo: three Next.js 16 App Router apps and five shared packages. |
 | `contracts/openapi/v1.yaml` | **The contract.** Generated from Django, committed, and gated — the backend suite fails if it drifts. |
 | `Django_Next.js_Plan/` | The authoritative product and delivery plan. Start at its [README](./Django_Next.js_Plan/README.md). |
-| `docs/adr/`, `docs/runbooks/` | Six architecture decisions, five operational runbooks. |
+| `docs/adr/`, `docs/runbooks/` | Nine architecture decisions, thirteen operational runbooks. |
 
 ### The three frontends
 
@@ -33,22 +33,29 @@ console that approves payouts.
 
 ## Getting started
 
-Requires Docker, Python 3.12+ and Node with pnpm.
+**New here? Read [CONTRIBUTING.md](./CONTRIBUTING.md)** — full setup, the seed order, sign-in
+accounts and the failure modes, written for someone who has not used Django.
 
-```bash
-docker compose up -d                 # PostgreSQL 17 + Redis 7.4
+Requires Docker, Python 3.13 (not 3.14 — `backend/pyproject.toml` pins `>=3.13,<3.14`) and Node
+with pnpm.
+
+```powershell
+docker compose --env-file infra\.env.example -f infra\compose.yaml up -d   # PostgreSQL 17 + Redis 7.4
 
 cd backend
-python -m venv .venv && .venv/Scripts/activate
-pip install -r requirements/local.txt
-python manage.py migrate
-python manage.py seed_console_demo_data   # optional: fills every Operations console
-python manage.py runserver
+.\scripts\bootstrap.cmd                   # creates backend\.venv, installs requirements\dev.txt
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py seed_console_demo_data   # catalog, partners, populated consoles
+.\scripts\server.cmd
 
-cd ../frontend
+cd ..\frontend
 pnpm install
 pnpm dev
 ```
+
+`seed_console_demo_data` is the first of four seed commands and the order between them matters —
+see [CONTRIBUTING.md §3c](./CONTRIBUTING.md).
 
 Local development uses deterministic fake payment and payout providers and an on-screen OTP. All
 three are **fail-closed everywhere else** — an unconfigured provider raises rather than guessing.
@@ -80,18 +87,20 @@ state. Error handling is not fallback data and stays.
 
 ## Status
 
-Two milestones run in parallel, on separate branches, and are separately accepted.
+Two milestones are separately accepted and separately paid. Both now live on `main`.
 
 **Milestone 1 — the Scheduled A1 Technician slice.** Built through S7; S8 acceptance is the remaining
-stage. `main` is the M1 acceptance build. Live board:
-[`Django_Next.js_Plan/M1/task.md`](./Django_Next.js_Plan/M1/task.md).
+stage. Live board: [`Django_Next.js_Plan/M1/task.md`](./Django_Next.js_Plan/M1/task.md).
 
-**Milestone 2 — workforce and project services** (`A3_TIME_BLOCK` + `A5_CUSTOM_PROJECT`). On
-`feat/m2-workforce-projects`, and **never pushed to `main`** without the owner's explicit
-instruction. Backend domain layers for capabilities, requirements, matching and proposals are built
-and tested; contract **1.21.0** publishes 17 M2 paths; the Partner workspace shell is wired to them.
-No phase has passed its gate. Live board:
-[`Django_Next.js_Plan/M2/task.md`](./Django_Next.js_Plan/M2/task.md).
+**Milestone 2 — workforce and project services** (`A3_TIME_BLOCK` + `A5_CUSTOM_PROJECT`). Merged
+into `main` on 23 August 2026 on the owner's explicit instruction, from
+`feat/m2-workforce-projects`. Every planned wave is built — backend C0–C7, both customer and partner
+frontend columns, and the Operations surfaces — and every task is recorded as **built, owner
+verification pending**: no phase has passed its gate, because the gate is the owner's manual pass.
+Live board: [`Django_Next.js_Plan/M2/task.md`](./Django_Next.js_Plan/M2/task.md); the walkthroughs
+are in [`docs/runbooks/`](./docs/runbooks/) (`m2-*-smoke.md`).
 
-The contract version above moves with the branch — `contracts/openapi/v1.yaml` is the truth, not this
-paragraph.
+Accepting M1 on its own no longer means shipping `main`. The last M1-only commit is `d1f443a`; an
+M1 acceptance build has to be cut from there.
+
+The contract is at **1.39.0**. `contracts/openapi/v1.yaml` is the truth, not this paragraph.

@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
+    a { color: #a94900; } a:hover { color: #8a3a00; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 900px; background: #ffffff; padding: 40px; color: #00112e; display: flex; flex-direction: column; gap: 36px;">
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #a89f90;">Partner app · element specification</span>
+    <span style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em;">Every measurement, in one place</span>
+    <span style="font-size: 15px; font-weight: 400; line-height: 1.55; color: #453f37; max-width: 640px;">Base frame is 360&nbsp;&times;&nbsp;800 — the mid&#8209;range Android this product actually runs on. Everything below is specified at that width, so 390 and 412 only ever gain room.</span>
+  </div>
+
+  <!-- ══ FRAME & GRID ══ -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #756c5e; border-bottom: 2px solid #00112e; padding-bottom: 6px;">1 · Frame and grid</span>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px;">
+        <span style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">360</span>
+        <span style="font-size: 12px; font-weight: 600; color: #756c5e;">frame width, px</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px;">
+        <span style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">16</span>
+        <span style="font-size: 12px; font-weight: 600; color: #756c5e;">side gutter, px</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px;">
+        <span style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">328</span>
+        <span style="font-size: 12px; font-weight: 600; color: #756c5e;">content width, px</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 4px;">
+        <span style="font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">56 / 56</span>
+        <span style="font-size: 12px; font-weight: 600; color: #756c5e;">top bar / tab bar</span>
+      </div>
+    </div>
+    <span style="font-size: 14px; line-height: 1.55; color: #453f37;">Vertical rhythm is <strong>4&nbsp;/&nbsp;8&nbsp;/&nbsp;12&nbsp;/&nbsp;16&nbsp;/&nbsp;20&nbsp;/&nbsp;24</strong>. Gap between stacked cards is 12; between a card and the section label above it, 8; between sections, 20. Nothing uses an off&#8209;scale value.</span>
+  </div>
+
+  <!-- ══ TYPE RAMP ══ -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #756c5e; border-bottom: 2px solid #00112e; padding-bottom: 6px;">2 · Type ramp — Plus Jakarta Sans</span>
+    <div style="display: flex; flex-direction: column; gap: 0;">
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">52 / 800 / −0.025em</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Offer hero money</span>
+        <span style="font-size: 52px; font-weight: 800; letter-spacing: -0.025em; line-height: 1;">₹18,000</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">32 / 800 / −0.02em</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Today plate, card money</span>
+        <span style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;">₹2,450</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">20 / 700</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Primary action verb</span>
+        <span style="font-size: 20px; font-weight: 700;">Take this job</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">19 / 700</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Screen title (header)</span>
+        <span style="font-size: 19px; font-weight: 700;">Bathroom tiling</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">16 / 600</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Card title — what the job is</span>
+        <span style="font-size: 16px; font-weight: 600;">Ceiling fan installation</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">15 / 700</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Fact value</span>
+        <span style="font-size: 15px; font-weight: 700;">2:00 pm</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">15 / 400 / 1.55</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Customer's own words</span>
+        <span style="font-size: 15px; font-weight: 400; line-height: 1.55;">Needs wiring and flooring.</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid #f4f1ec;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">12 / 500</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Consequence line</span>
+        <span style="font-size: 12px; font-weight: 500; color: #756c5e;">Starts a paid wait. You keep the job.</span>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 20px; padding: 12px 0;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 700; color: #756c5e;">11 / 700 / 0.06em ᴜᴄ</span>
+        <span style="width: 130px; flex-shrink: 0; font-size: 12px; color: #a89f90;">Section label</span>
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #756c5e;">What you will do</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ ICON SCALE ══ -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #756c5e; border-bottom: 2px solid #00112e; padding-bottom: 6px;">3 · Icon scale — five steps, no others</span>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px;">
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+        <span style="font-size: 13px; font-weight: 800;">xs · 12</span>
+        <span style="font-size: 11px; text-align: center; color: #756c5e;">inline beside 11px label</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+        <span style="font-size: 13px; font-weight: 800;">sm · 16</span>
+        <span style="font-size: 11px; text-align: center; color: #756c5e;">inline beside 13&ndash;15px</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+        <span style="font-size: 13px; font-weight: 800;">md · 24</span>
+        <span style="font-size: 11px; text-align: center; color: #756c5e;">default · action verbs</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+        <span style="font-size: 13px; font-weight: 800;">lg · 32</span>
+        <span style="font-size: 11px; text-align: center; color: #756c5e;">on&#8209;site primary, tiles</span>
+      </div>
+      <div style="border: 1px solid #e7e2da; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+        <span style="font-size: 13px; font-weight: 800;">xl · 40</span>
+        <span style="font-size: 11px; text-align: center; color: #756c5e;">status medallion</span>
+      </div>
+    </div>
+    <span style="font-size: 14px; line-height: 1.55; color: #453f37;">All five come from a <code style="background:#f4f1ec;padding:1px 5px;border-radius:4px;font-size:13px;">size</code> prop on <code style="background:#f4f1ec;padding:1px 5px;border-radius:4px;font-size:13px;">Pictogram</code>, never a className. The component's current hard&#8209;coded <code style="background:#f4f1ec;padding:1px 5px;border-radius:4px;font-size:13px;">h-6 w-6</code> fights every override, because <code style="background:#f4f1ec;padding:1px 5px;border-radius:4px;font-size:13px;">cn</code> is clsx and not tailwind&#8209;merge — so today an icon asked to be 12px draws at 24px.</span>
+  </div>
+
+  <!-- ══ CONTROL TIERS ══ -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #756c5e; border-bottom: 2px solid #00112e; padding-bottom: 6px;">4 · Control tiers — shape carries the stakes</span>
+
+    <div style="display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start;">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+
+        <div style="height: 72px; border-radius: 18px; background: #0e7c3a; box-shadow: 0 3px 0 #0a5c2b; display: flex; align-items: center; justify-content: center; gap: 12px;">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"></path></svg>
+          <span style="font-size: 20px; font-weight: 700; color: #ffffff;">Take this job</span>
+        </div>
+
+        <div style="height: 64px; border-radius: 16px; background: #0e7c3a; box-shadow: 0 3px 0 #0a5c2b; display: flex; align-items: center; justify-content: center; gap: 12px;">
+          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"></path><path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path></svg>
+          <span style="font-size: 19px; font-weight: 700; color: #ffffff;">Start work</span>
+        </div>
+
+        <div style="height: 56px; border-radius: 14px; background: #f87000; box-shadow: 0 2px 0 #d65e00; display: flex; align-items: center; justify-content: center; gap: 10px;">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#00112e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5 18.5 12 13 17.5"></path></svg>
+          <span style="font-size: 17px; font-weight: 700; color: #00112e;">Send to customer</span>
+        </div>
+
+        <div style="min-height: 60px; border-radius: 14px; background: #ffffff; border: 1px solid #d3ccc0; display: flex; align-items: center; gap: 12px; padding: 10px 14px;">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#8a5200" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.4v5.6"></path><path d="M12 16.4v.1"></path></svg>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 16px; font-weight: 700;">Nobody is here</span>
+            <span style="font-size: 12px; font-weight: 500; color: #756c5e;">Starts a paid wait. You keep the job.</span>
+          </div>
+        </div>
+
+        <div style="min-height: 60px; border-radius: 14px; background: #fdecea; border: 1px solid #f4b8b3; display: flex; align-items: center; gap: 12px; padding: 10px 14px;">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#b3261e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+            <span style="font-size: 16px; font-weight: 700; color: #b3261e;">Hand this job back</span>
+            <span style="font-size: 12px; font-weight: 500; color: #b3261e; opacity: 0.85;">You give up the job. No penalty.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0; font-size: 13px;">
+        <div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f4f1ec;">
+          <span style="width: 74px; flex-shrink: 0; font-weight: 800;">72px</span>
+          <span style="line-height: 1.5;"><strong>Decision.</strong> r18 · icon 32 · gap 12 · label 20/700 · fill + 3px hard shadow. One per screen, and only where the tap commits to money or travel.</span>
+        </div>
+        <div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f4f1ec;">
+          <span style="width: 74px; flex-shrink: 0; font-weight: 800;">64px</span>
+          <span style="line-height: 1.5;"><strong>On&#8209;site primary.</strong> r16 · icon 30 · label 19/700. The size is deliberate: this is pressed outdoors, in sunlight, with dusty or gloved hands.</span>
+        </div>
+        <div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f4f1ec;">
+          <span style="width: 74px; flex-shrink: 0; font-weight: 800;">56px</span>
+          <span style="line-height: 1.5;"><strong>Commit / card action.</strong> r14 · icon 24 · label 17/700 (card bars 16/700) · 2px hard shadow. Orange fill carries navy&#8209;900 text — orange on white fails contrast as text, the fill does not.</span>
+        </div>
+        <div style="display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f4f1ec;">
+          <span style="width: 74px; flex-shrink: 0; font-weight: 800;">60px</span>
+          <span style="line-height: 1.5;"><strong>Secondary.</strong> r14 · outlined, never filled · icon 24 left&#8209;aligned · verb 16/700 over a 12/500 consequence line. Left&#8209;aligned on purpose: it must not read as a primary.</span>
+        </div>
+        <div style="display: flex; gap: 12px; padding: 10px 0;">
+          <span style="width: 74px; flex-shrink: 0; font-weight: 800;">60px</span>
+          <span style="line-height: 1.5;"><strong>Destructive.</strong> Same anatomy, danger surface + line, and <em>always last on the screen, below a 1px rule and 20px of air.</em> Nothing sits under it.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ THE FOUR RULES ══ -->
+  <div style="display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #756c5e; border-bottom: 2px solid #00112e; padding-bottom: 6px;">5 · The rules every screen obeys</span>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <div style="border-radius: 14px; background: #faf8f5; border: 1px solid #e7e2da; padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 16px; font-weight: 700;">The first line is what the job is</span>
+        <span style="font-size: 14px; line-height: 1.55; color: #453f37;">Service name at 16/600 on every card, 19/700 in every header. A price for an unnamed job is not a decision anyone can make.</span>
+      </div>
+      <div style="border-radius: 14px; background: #faf8f5; border: 1px solid #e7e2da; padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 16px; font-weight: 700;">Every button states its verb</span>
+        <span style="font-size: 14px; line-height: 1.55; color: #453f37;">Icon, then the verb, in one to three words. No control that changes server state is ever a bare glyph.</span>
+      </div>
+      <div style="border-radius: 14px; background: #faf8f5; border: 1px solid #e7e2da; padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 16px; font-weight: 700;">Opposite actions never share a shape</span>
+        <span style="font-size: 14px; line-height: 1.55; color: #453f37;">Filled and centred means go. Outlined and left&#8209;aligned means think. Red and last means you lose something.</span>
+      </div>
+      <div style="border-radius: 14px; background: #faf8f5; border: 1px solid #e7e2da; padding: 18px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 16px; font-weight: 700;">Numbers stay the biggest thing</span>
+        <span style="font-size: 14px; line-height: 1.55; color: #453f37;">Digits and the rupee sign are what everyone in this market reads. The label is a third the size of the figure and never competes with it.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

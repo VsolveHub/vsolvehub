@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Plus Jakarta Sans", system-ui, sans-serif; background: #f4f1ec; color: #00112e; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+  a { color: #00246b; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+</style>
+</helmet>
+
+<div style="background:#f4f1ec; min-height:100vh; font-family:'Plus Jakarta Sans', system-ui, sans-serif;">
+
+  <header style="border-bottom:1px solid #e7e2da; background:#ffffff;">
+    <div style="margin:0 auto; display:flex; width:100%; max-width:1024px; flex-wrap:wrap; align-items:center; column-gap:24px; row-gap:12px; padding:12px 16px;">
+      <a href="#" style="flex-shrink:0; display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:16px; text-decoration:none;">
+        <span style="display:inline-flex; height:28px; width:28px; align-items:center; justify-content:center; overflow:hidden; border-radius:9999px;">
+          <img src="assets/logo-mark.png" alt="V Solve Hub" style="height:100%; width:100%; object-fit:contain;" />
+        </span>
+        <span style="color:#00112e;">V Solve <span style="color:#00246b;">Hub</span></span>
+      </a>
+
+      <nav aria-label="Main" style="display:flex; flex:1 1 0%; flex-wrap:wrap; align-items:center; column-gap:20px; row-gap:8px;">
+        <a href="#" style="font-size:14px; line-height:20px; font-weight:500; color:#453f37; text-decoration:none;">Services</a>
+        <a href="#" style="font-size:14px; line-height:20px; font-weight:500; color:#453f37; text-decoration:none;">Basket</a>
+        <a href="#" style="font-size:14px; line-height:20px; font-weight:500; color:#453f37; text-decoration:none;">My bookings</a>
+        <a href="#" style="font-size:14px; line-height:20px; font-weight:500; color:#453f37; text-decoration:none;">My requests</a>
+        <a href="#" style="font-size:14px; line-height:20px; font-weight:500; color:#453f37; text-decoration:none;">My projects</a>
+        <a href="#" style="font-size:14px; line-height:20px; font-weight:500; color:#453f37; text-decoration:none;">Account</a>
+      </nav>
+
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button type="button" style="position:relative; display:inline-flex; height:44px; width:44px; flex-shrink:0; align-items:center; justify-content:center; border-radius:8px; border:0; background:transparent; color:#453f37; cursor:pointer;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="height:20px; width:20px;" aria-hidden="true">
+            <path d="M18 8a6 6 0 1 0-12 0c0 3.6-.75 5.4-1.5 6.3a.75.75 0 0 0 .55 1.2h13.9a.75.75 0 0 0 .55-1.2C18.75 13.4 18 11.6 18 8Z"></path>
+            <path d="M10 19a2 2 0 0 0 4 0"></path>
+          </svg>
+          <span style="position:absolute; right:4px; top:4px; display:inline-flex; min-width:20px; align-items:center; justify-content:center; border-radius:9999px; background:#f87000; padding:2px 4px; font-size:12px; font-weight:700; line-height:1; color:#00112e;">3</span>
+        </button>
+        <span style="font-size:14px; line-height:20px; color:#453f37;">+918019013032</span>
+        <button type="button" style="position:relative; display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:8px; border:0; background:transparent; padding:0 20px; font-size:14px; font-weight:600; color:#00246b; cursor:pointer;">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <div style="margin:0 auto; display:flex; width:100%; max-width:672px; flex-direction:column; padding:24px 16px 64px;">
+
+    <header>
+      <div style="display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:8px;">
+        <h1 style="margin:0; font-size:20px; line-height:28px; font-weight:600; color:#00112e;">Your booking</h1>
+        <div style="display:flex; flex-shrink:0; flex-wrap:wrap; align-items:center; gap:8px;">
+          <span style="display:inline-flex; align-items:center; gap:6px; border-radius:9999px; padding:4px 10px; font-size:12px; line-height:16px; font-weight:600; background:#eef2fb; color:#00246b; box-shadow:inset 0 0 0 1px #b0c2e8;">In progress</span>
+        </div>
+      </div>
+      <p style="margin:4px 0 0; font-size:14px; line-height:20px; color:#453f37;">Agreed on 17 Aug, 11:20 pm</p>
+    </header>
+
+    <section style="margin-top:16px; border-radius:14px; border:1px solid #ffc4a0; background:#fff4ec; padding:16px;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+        <h2 style="margin:0; font-size:16px; line-height:24px; font-weight:600; color:#00112e;">You pay the professional directly</h2>
+        <span style="display:inline-flex; flex-shrink:0; align-items:center; gap:6px; border-radius:9999px; padding:4px 10px; font-size:12px; line-height:16px; font-weight:600; background:#fff4ec; color:#8a5200; box-shadow:inset 0 0 0 1px #ffc4a0;">Not a Vsolve booking</span>
+      </div>
+      <p style="margin:8px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#00112e;">We connected you and we will help if the connection fails — we will find you somebody else. We do <strong style="font-weight:600;">not</strong> hold your money for this work, so <strong style="font-weight:600;">payment, refunds and any guarantee on the work are between you and them</strong>. Agree what you are paying, and when, before anybody starts.</p>
+      <p style="margin:8px 0 0; font-size:14px; line-height:20px; color:#453f37;">You can contact each other from 17 Aug, 11:20 pm. We do not show their number on this screen — it reaches you the way we agreed with them.</p>
+    </section>
+
+    <section style="margin-top:24px;">
+      <div style="border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:16px;">
+        <p style="margin:0; font-size:14px; line-height:20px; color:#453f37;">0 of 2 days done</p>
+        <p style="margin:4px 0 0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">Now: Day 1 · Mon, 7 Sept</p>
+        <p style="margin:8px 0 0; font-size:14px; line-height:24px; color:#00112e;">Nothing for you to do — it is with the professional</p>
+      </div>
+    </section>
+
+    <section style="margin-top:24px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">Who is doing this</h2>
+      <p style="margin:8px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">We could not read the quote you accepted just now, so we are not going to describe it from memory. <a href="#" style="font-weight:500; color:#00246b;">It is here in full</a>.</p>
+    </section>
+
+    <section style="margin-top:24px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">What was agreed</h2>
+      <dl style="margin:12px 0 0; border-radius:14px; border:1px solid #e7e2da; background:#ffffff;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; border-bottom:1px solid #e7e2da; padding:16px;">
+          <dt style="font-size:14px; line-height:20px; color:#453f37;">Originally agreed</dt>
+          <dd style="margin:0; font-size:16px; line-height:24px; color:#00112e;">₹5,100</dd>
+        </div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; border-bottom:1px solid #e7e2da; padding:16px;">
+          <dt style="font-size:14px; line-height:20px; color:#453f37;">Agreed now</dt>
+          <dd style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">₹5,100</dd>
+        </div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:16px;">
+          <dt style="font-size:14px; line-height:20px; color:#453f37;">Tax</dt>
+          <dd style="margin:0; font-size:16px; line-height:24px; color:#00112e;">₹0</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section style="margin-top:24px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">The days you agreed</h2>
+      <ol style="margin:12px 0 0; display:flex; list-style:none; flex-direction:column; gap:8px; padding:0;">
+        <li style="border-radius:14px; border:1px solid #e7e2da; padding:12px;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+            <div style="min-width:0;">
+              <p style="margin:0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">Day 1</p>
+              <p style="margin:2px 0 0; font-size:14px; line-height:20px; color:#453f37;">Mon, 7 Sept</p>
+              <div style="margin-top:4px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <span style="display:inline-flex; align-items:center; gap:6px; border-radius:9999px; padding:4px 10px; font-size:12px; line-height:16px; font-weight:600; background:#f4f1ec; color:#453f37; box-shadow:inset 0 0 0 1px #e7e2da;">Not started</span>
+              </div>
+            </div>
+            <p style="margin:0; flex-shrink:0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">₹2,550</p>
+          </div>
+        </li>
+        <li style="border-radius:14px; border:1px solid #e7e2da; padding:12px;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+            <div style="min-width:0;">
+              <p style="margin:0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">Day 2</p>
+              <p style="margin:2px 0 0; font-size:14px; line-height:20px; color:#453f37;">Tue, 8 Sept</p>
+              <div style="margin-top:4px; display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                <span style="display:inline-flex; align-items:center; gap:6px; border-radius:9999px; padding:4px 10px; font-size:12px; line-height:16px; font-weight:600; background:#f4f1ec; color:#453f37; box-shadow:inset 0 0 0 1px #e7e2da;">Not started</span>
+              </div>
+            </div>
+            <p style="margin:0; flex-shrink:0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">₹2,550</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section style="margin-top:32px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">Changes to this job</h2>
+      <p style="margin:8px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">Nothing is waiting for you. If the professional needs more time or the work changes, they send you a request here and <strong style="font-weight:600;">nothing changes until you accept it.</strong></p>
+    </section>
+
+    <section style="margin-top:32px; border-top:1px solid #e7e2da; padding-top:24px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">Did they ask for extra in cash?</h2>
+      <p style="margin:4px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">You booked this at a published rate and that is the whole price. If somebody asked you for more on site — cash, a tip they insisted on, a price they said had gone up — tell us in one tap. You do not have to prove anything and you do not have to name a figure.</p>
+      <p style="margin:8px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">Extra <em>work</em> is different and is allowed: overtime and add-ons are priced by us at the published rates and come to you as a change to agree or refuse. <a href="#" style="font-weight:500; color:#f87000; text-decoration:underline;">Those appear as change requests</a>, never as cash on the day.</p>
+      <div style="margin-top:12px;">
+        <button type="button" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:8px; border:1px solid #756c5e; background:#ffffff; padding:0 20px; font-size:14px; font-weight:600; color:#00112e; cursor:pointer;">They asked me for extra in cash</button>
+      </div>
+    </section>
+
+    <section style="margin-top:32px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">What was agreed, and how it changed</h2>
+      <p style="margin:8px 0 0; font-size:14px; line-height:24px; color:#453f37;">What you agreed has not changed since it was signed.</p>
+    </section>
+
+    <section style="margin-top:32px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">Everything that has happened</h2>
+      <div style="margin-top:12px; display:flex; flex-direction:column; align-items:center; text-align:center; border-radius:14px; border:1px dashed #e7e2da; background:#ffffff; gap:8px; padding:24px 16px;">
+        <p style="margin:0; font-size:14px; line-height:20px; font-weight:600; color:#00112e;">Nothing has happened yet</p>
+        <p style="margin:0; max-width:65ch; font-size:12px; line-height:16px; color:#453f37;">Every step on this job is recorded here as it happens, for both of you.</p>
+      </div>
+    </section>
+
+    <section style="margin-top:32px;">
+      <h2 style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">The record</h2>
+      <p style="margin:4px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">What you asked for, who was invited, what they quoted, when they visited and what you chose all stay on the request it came from, for both of you.</p>
+
+      <section style="margin-top:16px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff; padding:16px;">
+        <h2 style="margin:0; font-size:16px; line-height:24px; font-weight:600; color:#00112e;">Did the crew arrive?</h2>
+        <p style="margin:4px 0 0; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">Tell us either way. This is what settles your booking fee.</p>
+        <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:12px;">
+          <button type="button" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:8px; border:0; background:#f87000; padding:0 20px; font-size:14px; font-weight:600; color:#00112e; cursor:pointer;">They arrived</button>
+          <button type="button" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:8px; border:1px solid #756c5e; background:#ffffff; padding:0 20px; font-size:14px; font-weight:600; color:#00112e; cursor:pointer;">Nobody came</button>
+        </div>
+        <details style="margin-top:12px;">
+          <summary style="display:flex; cursor:pointer; align-items:center; gap:6px; border-radius:8px; padding:4px 0; font-size:14px; line-height:20px; font-weight:500; color:#00246b;">
+            <svg class="chev" viewBox="0 0 12 12" style="height:12px; width:12px; flex-shrink:0; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            What happens to my booking fee?
+          </summary>
+          <div style="margin-top:8px; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">If the crew arrives, the fee is earned and we keep it — it is what you paid to hold the booking. If nobody comes, you get it back in full and we look for another crew at no extra cost. If the crew travels and cannot work because the site was not ready, the fee is not returned: part goes to the supervisor for the journey his team made, and the rest to us.</div>
+        </details>
+      </section>
+
+      <section style="margin-top:12px; border-radius:14px; border:1px solid #e7e2da; background:#ffffff;">
+        <div style="border-bottom:1px solid #e7e2da; padding:16px;">
+          <h3 style="margin:0; font-size:16px; line-height:24px; font-weight:600; color:#00112e;">What this booking costs</h3>
+        </div>
+        <dl style="margin:0;">
+          <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid #e7e2da;">
+            <div>
+              <dt style="font-size:14px; line-height:20px; color:#00112e;">The work</dt>
+              <p style="margin:2px 0 0; max-width:65ch; font-size:12px; line-height:20px; color:#453f37;">3 people × 2 days at ₹900 a day</p>
+            </div>
+            <dd style="margin:0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">₹5,400</dd>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid #e7e2da;">
+            <div>
+              <dt style="font-size:14px; line-height:20px; color:#00112e;">Paid directly to the crew</dt>
+              <p style="margin:2px 0 0; max-width:65ch; font-size:12px; line-height:20px; color:#453f37;">Cash, at the end of each day. V Solve Hub never holds this money.</p>
+            </div>
+            <dd style="margin:0; font-size:16px; line-height:24px; font-weight:500; color:#00112e;">₹5,100</dd>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px; padding:12px 16px;">
+            <div>
+              <dt style="font-size:16px; line-height:24px; font-weight:600; color:#00112e;">Paid to V Solve Hub</dt>
+              <p style="margin:2px 0 0; max-width:65ch; font-size:12px; line-height:20px; color:#453f37;">The booking fee — the only part charged online.</p>
+            </div>
+            <dd style="margin:0; font-size:18px; line-height:28px; font-weight:600; color:#00112e;">₹300</dd>
+          </div>
+        </dl>
+        <div style="border-top:1px solid #e7e2da; padding:16px;">
+          <div style="display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px;">
+            <p style="margin:0; font-size:14px; line-height:20px; font-weight:600; color:#00112e;">Receipt for the ₹300 paid to V Solve Hub</p>
+            <p style="margin:0; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:14px; line-height:20px; color:#453f37;">M2A-2026-27-2</p>
+          </div>
+          <p style="margin:4px 0 0; font-size:14px; line-height:20px; color:#453f37;">Paid on 17 Aug, 11:20 pm</p>
+          <div style="margin-top:12px;">
+            <button type="button" style="display:inline-flex; height:36px; align-items:center; justify-content:center; border-radius:8px; border:1px solid #756c5e; background:#ffffff; padding:0 12px; font-size:14px; font-weight:600; color:#00112e; cursor:pointer;">View receipt</button>
+          </div>
+          <details style="margin-top:12px;">
+            <summary style="display:flex; cursor:pointer; align-items:center; gap:6px; border-radius:8px; padding:4px 0; font-size:14px; line-height:20px; font-weight:500; color:#00246b;">
+              <svg class="chev" viewBox="0 0 12 12" style="height:12px; width:12px; flex-shrink:0; transition:transform 150ms;" aria-hidden="true"><path d="M4 2.5 8 6l-4 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              Is this a tax invoice?
+            </summary>
+            <div style="margin-top:8px; max-width:65ch; font-size:14px; line-height:24px; color:#453f37;">No. This is a receipt for the fee you paid V Solve Hub, and the reference is the number to quote if you contact us about it. It is not a tax invoice, and it does not cover the money you pay the crew for the work itself — that is settled directly between you and them.</div>
+          </details>
+        </div>
+      </section>
+
+      <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px;">
+        <a href="#" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:8px; border:1px solid #756c5e; background:#ffffff; padding:0 20px; font-size:14px; font-weight:600; color:#00112e; text-decoration:none;">Open the full history</a>
+        <a href="#" style="display:inline-flex; height:44px; align-items:center; justify-content:center; border-radius:8px; border:0; background:transparent; padding:0 20px; font-size:14px; font-weight:600; color:#00246b; text-decoration:none;">All your bookings</a>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

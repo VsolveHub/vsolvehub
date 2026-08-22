@@ -5,6 +5,10 @@
 **Task detail:** [03-frontend-tasks.md](03-frontend-tasks.md) · **Master board:** [task.md](task.md)
 **Paired session:** [frontend-session-b.md](frontend-session-b.md) — Partner + Operations. Do not edit their files.
 
+> **Sprint complete (23 August 2026).** Every wave in this prompt is built and M2 is merged into
+> `main`. Contract versions quoted below were current at their wave; the contract is now **1.39.0**.
+> Read this as the record of how the sprint was run, not as live scope.
+
 ## Kickoff prompt for this session
 
 > You are Session A on the M2 frontend — the **Customer application**, `frontend/apps/customer`.
@@ -74,7 +78,9 @@
 > typecheck` and, at a wave gate, `pnpm build --filter=customer`. Report `[~] built — owner
 > verification pending` and end each report with the test files you wrote and the exact command to
 > run them. Never write "N/N pass" for a run that did not happen. See [task.md](task.md)
-> §"Verification convention". Commit at the wave gate, not per task. Never push to `main`.
+> §"Verification convention". Commit at the wave gate, not per task. Do not push to `main` without
+> the owner saying so — the blanket M2 embargo ended when M2 was merged on 23 August 2026, but
+> pushing to `main` is still the owner's call.
 
 ## Standing constraints
 

@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; }
+    a { color: #a94900; } a:hover { color: #8a3a00; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+
+<div style="width: 360px; height: 800px; background: #faf8f5; display: flex; flex-direction: column; overflow: hidden; color: #00112e;">
+
+  <!-- HEADER · 56px -->
+  <div style="height: 56px; flex-shrink: 0; background: #ffffff; border-bottom: 1px solid #e7e2da; display: flex; align-items: center; gap: 10px; padding: 0 12px;">
+    <div style="width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center;">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#00246b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5.5 8.5 12 15 18.5"></path></svg>
+    </div>
+    <span style="flex-grow: 1; min-width: 0; font-size: 17px; font-weight: 700;">Crew offer</span>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; padding: 14px 16px 0 16px; overflow: hidden;">
+
+    <!-- CLOCK · the hottest fact, 64px -->
+    <div style="height: 64px; flex-shrink: 0; border-radius: 14px; background: linear-gradient(135deg, #fb8130 0%, #f87000 55%, #d65e00 100%); box-shadow: 0 4px 12px rgb(214 94 0 / 0.32); display: flex; align-items: center; gap: 12px; padding: 0 16px; margin-bottom: 18px;">
+      <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#00112e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5.2l3.4 2"></path></svg>
+      <span style="font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: #00112e;">1:47</span>
+      <span style="flex-grow: 1; text-align: right; font-size: 13px; font-weight: 700; line-height: 1.3; color: #00112e;">left to<br>decide</span>
+    </div>
+
+    <!-- THE MONEY · hero -->
+    <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #756c5e; margin-bottom: 4px;">You receive</span>
+    <span style="font-size: 52px; font-weight: 800; line-height: 1; letter-spacing: -0.025em; margin-bottom: 6px;">₹18,000</span>
+    <span style="font-size: 13px; font-weight: 500; line-height: 1.45; color: #453f37; margin-bottom: 20px;">For the whole job. The customer pays you directly, at the end of each day.</span>
+
+    <!-- FACT GRID · 2-up, 76px cells -->
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 20px;">
+      <div style="height: 76px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2da; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="9" cy="8" r="3.4"></circle><path d="M2.5 20.5c0-3.6 2.9-6.2 6.5-6.2s6.5 2.6 6.5 6.2"></path><path d="M16.5 5.6a3.4 3.4 0 0 1 0 6.6"></path><path d="M17.6 14.8c2.3.7 3.9 2.9 3.9 5.7"></path></svg>
+        <div style="min-width: 0; display: flex; flex-direction: column;">
+          <span style="font-size: 24px; font-weight: 800; line-height: 1.1;">4</span>
+          <span style="font-size: 12px; font-weight: 600; color: #756c5e;">helpers</span>
+        </div>
+      </div>
+      <div style="height: 76px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2da; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect x="3" y="5" width="18" height="16" rx="2.4"></rect><path d="M8 2.8v4"></path><path d="M16 2.8v4"></path><path d="M3 10h18"></path></svg>
+        <div style="min-width: 0; display: flex; flex-direction: column;">
+          <span style="font-size: 24px; font-weight: 800; line-height: 1.1;">3</span>
+          <span style="font-size: 12px; font-weight: 600; color: #756c5e;">days</span>
+        </div>
+      </div>
+      <div style="height: 76px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2da; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5.2l3.4 2"></path></svg>
+        <div style="min-width: 0; display: flex; flex-direction: column;">
+          <span style="font-size: 20px; font-weight: 800; line-height: 1.1;">8:00 am</span>
+          <span style="font-size: 12px; font-weight: 600; color: #756c5e;">starts</span>
+        </div>
+      </div>
+      <div style="height: 76px; border-radius: 14px; background: #ffffff; border: 1px solid #e7e2da; display: flex; align-items: center; gap: 10px; padding: 0 14px;">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#00246b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 21.5s7-6 7-11.5a7 7 0 0 0-14 0c0 5.5 7 11.5 7 11.5z"></path><circle cx="12" cy="10" r="2.6"></circle></svg>
+        <div style="min-width: 0; display: flex; flex-direction: column;">
+          <span style="font-size: 20px; font-weight: 800; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kondapur</span>
+          <span style="font-size: 12px; font-weight: 600; color: #756c5e;">site</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DECISION · primary 72px, secondary 56px, never the same shape -->
+    <div style="height: 72px; flex-shrink: 0; border-radius: 18px; background: #0e7c3a; box-shadow: 0 3px 0 #0a5c2b; display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px;">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"></path></svg>
+      <span style="font-size: 20px; font-weight: 700; color: #ffffff;">Take this job</span>
+    </div>
+
+    <div style="height: 56px; flex-shrink: 0; border-radius: 14px; background: #ffffff; border: 1px solid #d3ccc0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#756c5e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+      <span style="font-size: 16px; font-weight: 700; color: #453f37;">Pass on this one</span>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

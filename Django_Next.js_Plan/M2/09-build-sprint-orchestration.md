@@ -4,7 +4,8 @@
 parallel agents, build-first: no tests written or run, static gates only, owner tests manually once
 the UI is visible.
 **Convention:** `task.md` §"Verification convention" → "Build-first amendment (2026-08-13)".
-**Branch:** everything on `feat/m2-workforce-projects`. Never `main`.
+**Branch:** this sprint ran on `feat/m2-workforce-projects`, which was merged into `main` on
+23 August 2026. The "never `main`" rule this line used to carry is spent.
 
 ## The dependency truth (what can actually run in parallel)
 
@@ -100,7 +101,8 @@ NON-NEGOTIABLE RULES FOR EVERY AGENT:
   apps/customer/** + its query files; agent B owns apps/partner/** + apps/admin/** + its query
   files. Frozen files (m2-keys.ts, errors.ts, freshness.ts, error-presentation.ts, generated/**)
   may be changed ONLY by the orchestrator between waves, in one integration commit. Never
-  `git add -A`; stage owned paths only. Commit per wave gate with clear messages. Never push main.
+  `git add -A`; stage owned paths only. Commit per wave gate with clear messages. Pushing to `main`
+  is the owner's call — the blanket M2 embargo ended with the 23 August 2026 merge.
 - No mock/placeholder data in application code. Real endpoints, real states, honest empty states.
 - Do not launch dev servers and leave them running; I run the servers myself. Build must pass.
 

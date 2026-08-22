@@ -116,6 +116,11 @@ run that did not happen.
 - Do not commit secrets, `.env` files, databases, media or virtual environments.
 - Use separate branches/worktrees for Codex and Claude once the current dirty tree is safely
   checkpointed by the user.
-- **Never push commercial M2 (workforce/project, `A3_TIME_BLOCK` + `A5_CUSTOM_PROJECT`) code to
-  `main`.** M2 implementation lives on its own branch and merges into `main` only on the owner's
-  explicit instruction. `main` stays the M1 acceptance build.
+- The M2 branch embargo is **spent**. Commercial M2 (workforce/project, `A3_TIME_BLOCK` +
+  `A5_CUSTOM_PROJECT`) was merged into `main` on 23 August 2026 on the owner's explicit
+  instruction, so `main` now carries M1 and M2 together. Do not re-apply the old rule or warn
+  about it.
+- `main` is no longer an M1-only acceptance build. If M1 has to ship on its own, cut a release
+  branch from `d1f443a` — the last commit before the M2 merge.
+- Still branch for feature work rather than committing to `main` directly, and still confirm with
+  the owner before pushing to `main`. That is ordinary caution now, not an M2 prohibition.

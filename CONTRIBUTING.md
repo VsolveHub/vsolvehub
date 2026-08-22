@@ -319,8 +319,9 @@ else might be running it at the same time — `DATABASE_URL=…/vsolve_lane1`. T
 sharing `test_vsolve` fail at setup with `DuplicateDatabase`, and the failure looks nothing like
 its cause.
 
-**Branches.** Work happens on feature branches. `feat/m2-workforce-projects` is Milestone 2, and it
-is **never pushed to `main`** without the owner's explicit instruction.
+**Branches.** `main` carries both milestones — Milestone 2 was merged into it on 23 August 2026.
+Work on a feature branch and open a PR rather than committing to `main` directly, and check with
+the owner before pushing to `main`.
 
 ---
 
