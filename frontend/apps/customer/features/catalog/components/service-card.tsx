@@ -1,95 +1,259 @@
+"use client";
+
 import Link from "next/link";
 import { formatMoney } from "@vsolve/ui";
-
+import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@/features/checkout/queries";
 import type { ServiceCard as ServiceCardData } from "../queries";
+import { serviceHref } from "../service-href";
 
-/**
- * A service in a list.
- *
- * Shows only what helps someone decide (plan 03): what it is and what it starts
- * at. The "typical duration" badge is gone — contract 1.6.0 removed
- * `recommended_duration_minutes` from the card because A1 is task-priced and the
- * server derives an estimate from the tasks a customer actually picks. A single
- * number here would have been a guess about work nobody has described yet.
- *
- * No rating unless real review data exists — an invented "4.8 ★" on a catalogue
- * with no completed bookings is exactly the fabricated-trust signal plan 08
- * recorded as a defect in the partner app.
- *
- * The price comes from `starting_price`, which Django derives from the same
- * active `ServiceRate` the quote engine uses. The card cannot compute or round
- * a price of its own, which is what keeps the catalogue and the quote in
- * agreement (B2 acceptance).
- */
-/**
- * Where tapping this card goes.
- *
- * ## Why the guided lifecycles skip the service page
- *
- * An A1 service genuinely needs its own page: there are tasks to pick, a price
- * that depends on which, and availability to check. A guided requirement has
- * none of that. Its service page carried a paragraph and a single button whose
- * only job was to say "continue" — an interstitial between the customer choosing
- * a service and the screen that asks about it, which on a phone is a whole
- * screen spent on a tap.
- *
- * So A3 goes straight to the crew form and A5 straight to the brief. The service
- * page still exists and still works for anyone who deep-links to it; it simply
- * stops being on the path.
- *
- * `request_archetypes` is the server's own list, which is what makes this a
- * routing decision rather than a guess: `bookable_variant_id` marks the A1 path
- * and nothing marked the others until this field was published.
- */
-const A3_TIME_BLOCK = "A3_TIME_BLOCK";
-
-export function serviceHref(service: ServiceCardData, categorySlug: string): string {
-  if (service.request_archetypes.includes(A3_TIME_BLOCK)) {
-    return `/requests/book/${service.slug}`;
-  }
-  if (service.request_archetypes.length > 0) return `/requests/new/${service.slug}`;
-  return `/catalog/${categorySlug}/${service.slug}`;
-}
+// Re-exported so the existing client-side importers keep their spelling. The
+// definition lives outside this module because `"use client"` would otherwise
+// make it uncallable from the server; see `../service-href`.
+export { serviceHref };
 
 export function ServiceCard({
   service,
   categorySlug,
+  index = 1,
 }: {
   service: ServiceCardData;
   categorySlug: string;
+  index?: number;
 }) {
+  const isLarge = index === 0;
+  const isPopular = index === 1;
+
+  const cartQuery = useCart();
+  const addItem = useAddCartItem();
+  const updateItem = useUpdateCartItem();
+  const removeItem = useRemoveCartItem();
+
+  const isAdding = addItem.isPending;
+  const isUpdating = updateItem.isPending;
+  const isRemoving = removeItem.isPending;
+
+  const cart = cartQuery.data;
+  const cartItem = cart?.items.find(
+    (item) => item.variant_id === service.bookable_variant_id
+  );
+  const cartUnavailable = cartQuery.isLoading || cart === undefined;
+
+  /**
+   * Adds one of this service to the basket.
+   *
+   * ## Why neither branch navigates any more
+   *
+   * Both used to `router.push` the service page, and that is what made the
+   * button look broken: a control labelled "Add" that sometimes opened a page
+   * instead. The `!cart` case was the common one — `useCart` has not resolved on
+   * the first paint, so anyone tapping promptly got navigation rather than an
+   * add. It is a race, so it looked intermittent, which is worse than a
+   * consistent failure.
+   *
+   * A control does the thing it is named after or it does nothing. Returning on
+   * `!cart` is honest; quietly going somewhere else is not. The basket read
+   * normally lands well inside the time it takes to aim at a card, so this
+   * window is small — and a rare dead tap is far better than a tap that
+   * silently throws the reader onto another page.
+   *
+   * Deliberately *not* `disabled` while the basket loads: this page's cards are
+   * server-rendered, so a `disabled` derived from a client-only query bakes into
+   * the HTML as `disabled` and stays that way for as long as hydration takes —
+   * which turned every Add button on the page to stone.
+   *
+   * `bookable_variant_id` cannot be null by the time this runs: `renderCartAction`
+   * shows "Get a quote" instead of this button when it is. The guard stays
+   * because it is what makes that true for the type checker as well as for the
+   * reader.
+   */
+  const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isAdding || cartUnavailable) return;
+    if (!service.bookable_variant_id) return;
+    if (!cart) return;
+
+    addItem.mutate({
+      expectedCartVersion: cart.version,
+      variantId: service.bookable_variant_id,
+      quantity: 1,
+    });
+  };
+
+  const handleIncrement = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (cart && cartItem && !isUpdating) {
+      updateItem.mutate({
+        expectedCartVersion: cart.version,
+        expectedItemVersion: cartItem.version,
+        itemId: cartItem.id,
+        quantity: cartItem.quantity + 1,
+      });
+    }
+  };
+
+  const handleDecrement = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (cart && cartItem && !isUpdating && !isRemoving) {
+      if (cartItem.quantity > 1) {
+        updateItem.mutate({
+          expectedCartVersion: cart.version,
+          expectedItemVersion: cartItem.version,
+          itemId: cartItem.id,
+          quantity: cartItem.quantity - 1,
+        });
+      } else {
+        removeItem.mutate({
+          expectedCartVersion: cart.version,
+          expectedItemVersion: cartItem.version,
+          itemId: cartItem.id,
+        });
+      }
+    }
+  };
+
+  const renderCartAction = (buttonSizeClass: string, textClass: string) => {
+    if (!service.bookable_variant_id) {
+      return (
+        <span className="text-sm font-semibold leading-6 text-navy-900">
+          Get a quote
+        </span>
+      );
+    }
+
+    if (cartItem) {
+      return (
+        <div className={`inline-flex ${buttonSizeClass} items-center border border-action rounded-full overflow-hidden bg-white shadow-xs relative z-20`}>
+          <button
+            type="button"
+            onClick={handleDecrement}
+            disabled={isUpdating || isRemoving}
+            className="px-3.5 h-full flex items-center justify-center text-action font-extrabold text-base hover:bg-[#FFF0E5] transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            -
+          </button>
+          <span className={`${textClass} px-2 font-black text-navy-900 min-w-[20px] text-center`}>
+            {cartItem.quantity}
+          </span>
+          <button
+            type="button"
+            onClick={handleIncrement}
+            disabled={isUpdating}
+            className="px-3.5 h-full flex items-center justify-center text-action font-extrabold text-base hover:bg-[#FFF0E5] transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            +
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={handleAddToCart}
+        disabled={isAdding || cartUnavailable}
+        className={`inline-flex ${buttonSizeClass} items-center justify-center rounded-full bg-action px-5 ${textClass} font-bold text-white shadow-sm transition-transform duration-200 hover:scale-105 hover:bg-[#d65f1a] disabled:opacity-50 cursor-pointer relative z-20`}
+      >
+        {isAdding ? "Adding..." : "Add"}
+        {!isAdding && (
+          <svg viewBox="0 0 20 20" fill="none" className="size-4 ml-1.5" aria-hidden="true" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 4v12m-6-6h12" />
+          </svg>
+        )}
+      </button>
+    );
+  };
+
+  if (isLarge) {
+    return (
+      <div className="group md:col-span-2 flex flex-col md:flex-row min-h-[14rem] overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
+        <Link
+          href={serviceHref(service, categorySlug)}
+          className="w-full md:w-1/2 min-h-[12rem] bg-navy-100 relative overflow-hidden cursor-pointer"
+        >
+          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105" />
+          <div className="absolute inset-0 bg-navy-900/10 mix-blend-multiply" />
+        </Link>
+        
+        <div className="flex flex-col w-full md:w-1/2 p-6 md:p-8">
+          <Link
+            href={serviceHref(service, categorySlug)}
+            className="flex-1 flex flex-col cursor-pointer"
+          >
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="text-balance text-[1.35rem] font-bold leading-snug text-navy-900 transition-colors group-hover:text-action">
+                {service.name}
+              </h3>
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-sunken text-text-muted transition-transform duration-200 group-hover:scale-110">
+                <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden="true" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 10h11m-4-4 4 4-4 4" />
+                </svg>
+              </span>
+            </div>
+
+            <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-text-secondary">
+              {service.short_description || `Expert repair and installation for ${service.name}. Restores smooth functionality and ensures quality.`}
+            </p>
+          </Link>
+
+          <div className="mt-6 flex items-end justify-between gap-3 pt-4 border-t border-line/50">
+            {service.starting_price !== null ? (
+              <div className="min-w-0">
+                <span className="block text-[0.65rem] font-bold uppercase tracking-wider text-text-muted">
+                  Starts at
+                </span>
+                <span data-numeric className="mt-1 block text-[1.35rem] font-extrabold tabular-nums text-navy-900">
+                  {formatMoney(service.starting_price.amount_paise)}
+                </span>
+              </div>
+            ) : null}
+            
+            {renderCartAction("h-9", "text-sm")}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Link
-      href={serviceHref(service, categorySlug)}
-      className="group flex flex-col rounded-card border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-hover"
-    >
-      {/* Most of the catalogue has no cover art. A grey placeholder box would
-          add weight and nothing else, so the card is text-first and simply
-          renders the image when one exists. */}
-      <h3 className="text-balance font-semibold text-text group-hover:text-text-link">
-        {service.name}
-      </h3>
+    <div className="group md:col-span-1 flex min-h-[14rem] flex-col rounded-card border border-transparent bg-white p-5 md:p-6 shadow-card transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-raised">
+      <Link
+        href={serviceHref(service, categorySlug)}
+        className="flex-1 flex flex-col cursor-pointer"
+      >
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <h3 className="text-balance text-[1.15rem] font-bold leading-snug text-navy-900 transition-colors group-hover:text-action">
+            {service.name}
+          </h3>
+          {isPopular && (
+            <span className="inline-flex items-center rounded-full bg-[#FFF0E5] px-2.5 py-0.5 text-[0.65rem] font-bold text-action tracking-wide">
+              Popular
+            </span>
+          )}
+        </div>
 
-      <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{service.short_description}</p>
+        <p className="mt-2 line-clamp-3 flex-1 text-[0.925rem] leading-relaxed text-text-secondary">
+          {service.short_description || `Complete service carried out at your address by a verified professional.`}
+        </p>
+      </Link>
 
-      {/*
-        Two catalogs, one card. A priced service shows what it starts at; a service you *describe*
-        has no price to show, because the price is whatever a vendor quotes after reading the job.
-        Rendering "Starts at —" or a zero would be inventing the number this whole lifecycle exists
-        to avoid, so the card says what happens next instead.
-      */}
-      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
+      <div className="mt-6 flex items-end justify-between gap-3 border-t border-line/50 pt-5">
         {service.starting_price !== null ? (
-          <>
-            <span className="text-xs uppercase tracking-[0.08em] text-text-muted">Starts at</span>
-            <span data-numeric className="text-lg font-bold text-text">
+          <div className="min-w-0">
+            <span className="block text-[0.65rem] font-bold uppercase tracking-wider text-text-muted">
+              Starts at
+            </span>
+            <span data-numeric className="mt-1 block text-lg font-extrabold tabular-nums text-navy-900">
               {formatMoney(service.starting_price.amount_paise)}
             </span>
-          </>
-        ) : (
-          <span className="text-sm font-semibold text-text">Tell us what you need</span>
-        )}
+          </div>
+        ) : null}
+
+        {renderCartAction("h-8", "text-xs")}
       </div>
-    </Link>
+    </div>
   );
 }

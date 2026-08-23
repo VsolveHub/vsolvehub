@@ -19,14 +19,9 @@ import {
  *
  * There is no popover primitive in `@vsolve/ui`, and `dialog.tsx` argues at
  * length against rolling one: the native `<dialog>` gives focus trapping,
- * Escape, background inertness and top-layer rendering for free, and a
- * hand-rolled overlay gets some of that wrong every time. A notification panel
- * is a list somebody reads and acts on, so all four of those matter — not least
- * because half its rows are links that navigate away.
- *
- * `Sheet` rather than `Dialog` because on a phone the bottom edge is the
- * reachable position for a list, and this list is read one-handed far more
- * often than not.
+ * Escape, background inertness and top-layer rendering for free. On mobile the
+ * panel docks to the bottom edge; on desktop it is positioned under the header
+ * bell as a compact dropdown instead of a centred modal.
  *
  * ## Three branches, never two
  *
@@ -72,6 +67,12 @@ export function NotificationPanel({ open, onOpenChange }: NotificationPanelProps
       onOpenChange={onOpenChange}
       title="Notifications"
       description="Updates about your requests, bookings and projects."
+      className={cn(
+        // Desktop: dropdown panel under the header bell, not a centred modal.
+        "md:inset-x-auto md:right-4 md:bottom-auto md:top-[calc(4rem+0.25rem)]",
+        "md:w-[min(24rem,calc(100vw-2rem))] md:max-w-none md:max-h-[min(32rem,calc(100vh-5.5rem))]",
+        "md:rounded-card md:rounded-b-card",
+      )}
       footer={
         <Button
           variant="ghost"

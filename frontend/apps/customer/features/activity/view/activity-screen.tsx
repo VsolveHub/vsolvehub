@@ -148,24 +148,48 @@ export function ActivityScreen() {
     (item) => item.kind === "engagement" && item.row.mode === "lead_only",
   );
 
+  const needsYouCount = items.filter((i) => i.section === "needs_you").length;
+  const activeCount = items.filter((i) => i.section === "active").length;
+  const pastCount = items.filter((i) => i.section === "past").length;
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-16 pt-6 sm:px-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col px-4 pb-16 pt-6 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-6">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-text">Bookings</h1>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-text-secondary">
+          <h1 className="text-2xl font-extrabold tracking-tight text-navy-900 sm:text-3xl">Bookings & Activity</h1>
+          <p className="mt-1 max-w-xl text-sm leading-relaxed text-text-secondary">
             Everything you have booked or asked us to arrange, in one place.
           </p>
         </div>
-        <Link href="/requests/new" className={buttonStyles()}>
-          Describe a job
+        <Link href="/requests/new" className={buttonStyles({ size: "md" })}>
+          + Describe a job
         </Link>
       </div>
 
+      {/* Quick Stats Summary Bar */}
+      {!isFirstLoad && items.length > 0 ? (
+        <div className="mt-6 grid grid-cols-3 gap-3">
+          <div className="flex flex-col rounded-card border border-line bg-surface p-3.5 sm:p-4 shadow-card">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Action Waiting</span>
+            <span className="mt-1 text-2xl font-extrabold text-navy-900">{needsYouCount}</span>
+          </div>
+          <div className="flex flex-col rounded-card border border-line bg-surface p-3.5 sm:p-4 shadow-card">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Active Work</span>
+            <span className="mt-1 text-2xl font-extrabold text-navy-900">{activeCount}</span>
+          </div>
+          <div className="flex flex-col rounded-card border border-line bg-surface p-3.5 sm:p-4 shadow-card">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Completed</span>
+            <span className="mt-1 text-2xl font-extrabold text-navy-900">{pastCount}</span>
+          </div>
+        </div>
+      ) : null}
+
       {hasDirectPay ? (
-        <details className="mt-4 rounded-control border border-line bg-surface px-4 py-3 text-sm text-text-secondary">
-          <summary className="cursor-pointer font-semibold text-text">How payments work</summary>
-          <p className="mt-2 leading-6">
+        <details className="mt-4 rounded-control border border-line bg-surface px-4 py-3 text-sm text-text-secondary shadow-card transition-all">
+          <summary className="cursor-pointer font-bold text-navy-900 flex items-center gap-2">
+            <span>ℹ️</span> How payments work
+          </summary>
+          <p className="mt-2 leading-relaxed text-xs sm:text-sm">
             Some crew bookings are paid directly to the professional. Vsolve does not hold those
             service payments; projects funded through Vsolve show their funded amount on the card.
           </p>
@@ -175,7 +199,7 @@ export function ActivityScreen() {
       {isFirstLoad ? (
         <div className="mt-6 flex flex-col gap-3" aria-label="Loading your bookings">
           {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-32 w-full" />
+            <Skeleton key={index} className="h-32 w-full rounded-card" />
           ))}
         </div>
       ) : null}
@@ -215,14 +239,19 @@ export function ActivityScreen() {
         if (sectionItems.length === 0) return null;
         const copy = SECTION_COPY[section];
         return (
-          <section key={section} aria-labelledby={`bookings-${section}`} className="mt-8">
-            <div className="mb-3">
-              <h2 id={`bookings-${section}`} className="text-lg font-bold text-text">
-                {copy.title}
-              </h2>
-              <p className="mt-0.5 text-sm text-text-secondary">{copy.description}</p>
+          <section key={section} aria-labelledby={`bookings-${section}`} className="mt-8 sm:mt-10">
+            <div className="mb-4 flex items-center justify-between border-b border-line/60 pb-2.5">
+              <div>
+                <h2 id={`bookings-${section}`} className="text-lg font-extrabold text-navy-900 flex items-center gap-2">
+                  {copy.title}
+                  <span className="inline-flex items-center justify-center rounded-full bg-navy-50 px-2.5 py-0.5 text-xs font-bold text-navy-700">
+                    {sectionItems.length}
+                  </span>
+                </h2>
+                <p className="mt-0.5 text-xs sm:text-sm text-text-secondary">{copy.description}</p>
+              </div>
             </div>
-            <ul className="flex list-none flex-col gap-3 p-0">
+            <ul className="flex list-none flex-col gap-3.5 p-0">
               {sectionItems.map((item) => (
                 <BookingTimelineRow key={item.key} item={item} />
               ))}

@@ -17,6 +17,9 @@ export {
 } from "./freshness";
 export type { FreshnessTier } from "./freshness";
 
+export { fetchCachedQuery, ensureCachedQuery } from "./cached-fetch";
+export type { CachedQueryDefinition } from "./cached-fetch";
+
 export { boundedPoll, nextPollDelay } from "./polling";
 export type { BoundedPollOptions, PollPolicyInput } from "./polling";
 

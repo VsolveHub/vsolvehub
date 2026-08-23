@@ -28,20 +28,20 @@ export function WorkforceCatalog({
 
   return (
     <>
-      <section className="group relative mt-4 overflow-hidden rounded-[32px] bg-[#102238] px-6 py-9 text-white sm:px-10 sm:py-12 lg:grid lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-12">
+      <section className="group relative mt-4 overflow-hidden rounded-[24px] bg-[#102238] px-5 py-8 text-white sm:rounded-[32px] sm:px-10 sm:py-12 lg:grid lg:grid-cols-[1.08fr_0.92fr] lg:items-center lg:gap-12">
         <div className="absolute -left-16 -top-20 size-64 rounded-full bg-[#F97316]/15 blur-3xl" />
         <div className="relative z-10">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FDBA74]">
             Workforce, made visual
           </p>
-          <h1 className="mt-3 max-w-2xl text-balance text-4xl font-bold tracking-[-0.035em] sm:text-5xl lg:text-6xl">
+          <h1 className="mt-3 max-w-2xl text-balance text-3xl font-bold tracking-[-0.035em] sm:text-5xl lg:text-6xl">
             Pick a trade. Build a crew.
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-white/70 sm:text-lg">
             Choose the skill first. Set people and days next. See the area rate before you book.
           </p>
 
-          <ol className="mt-7 grid max-w-2xl grid-cols-3 gap-2" aria-label="How crew booking works">
+          <ol className="mt-7 grid max-w-2xl grid-cols-1 gap-2 sm:grid-cols-3" aria-label="How crew booking works">
             <VisualStep number="01" label="Choose service" active />
             <VisualStep number="02" label="Set crew" />
             <VisualStep number="03" label="See rate" />
@@ -112,7 +112,7 @@ export function WorkforceCatalog({
             </Link>
           </div>
         ) : (
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
             {visibleServices.map((service, index) => (
               <WorkforceServiceCard
                 key={service.id}
@@ -191,21 +191,21 @@ function WorkforceServiceCard({
   return (
     <Link
       href={serviceHref(service, categorySlug)}
-      className="group relative min-h-64 overflow-hidden rounded-[24px] border border-line bg-surface p-5 shadow-sm transition-all duration-300 hover:-translate-y-1.5 hover:border-[#FDBA74] hover:shadow-[0_18px_45px_rgba(15,34,56,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-action motion-reduce:transform-none"
+      className="group relative flex min-h-60 flex-col overflow-hidden rounded-[22px] border border-line bg-surface p-5 shadow-card transition-all duration-300 hover:-translate-y-1.5 hover:border-[#FDBA74] hover:shadow-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-action motion-reduce:transform-none sm:min-h-64 sm:rounded-[24px]"
     >
       <div className="flex items-start justify-between gap-4">
-        <span className="grid size-14 place-items-center rounded-[18px] bg-[#FFF1E7] text-[#C2410C] transition-transform duration-300 group-hover:rotate-3 group-hover:scale-105 motion-reduce:transform-none">
-          <TradeIcon kind={kind} className="size-7" />
+        <span className="grid size-12 place-items-center rounded-[16px] bg-[#FFF1E7] text-[#C2410C] transition-transform duration-300 group-hover:rotate-3 group-hover:scale-105 motion-reduce:transform-none sm:size-14 sm:rounded-[18px]">
+          <TradeIcon kind={kind} className="size-6 sm:size-7" />
         </span>
         <span className="text-xs font-bold tabular-nums text-text-muted">{`${index + 1}`.padStart(2, "0")}</span>
       </div>
-      <h3 className="mt-6 text-balance text-xl font-bold text-text transition-colors group-hover:text-[#C2410C]">
+      <h3 className="mt-5 text-balance text-lg font-bold text-text transition-colors group-hover:text-[#C2410C] sm:mt-6 sm:text-xl">
         {service.name}
       </h3>
-      <p className="mt-2 line-clamp-2 text-sm leading-6 text-text-secondary">
+      <p className="mt-2 line-clamp-2 flex-1 text-sm leading-6 text-text-secondary">
         {service.short_description}
       </p>
-      <div className="absolute inset-x-5 bottom-5 flex items-center justify-between border-t border-line pt-4">
+      <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
         <span className="text-sm font-bold text-text">Build this crew</span>
         <span className="grid size-9 place-items-center rounded-full bg-[#102238] text-white transition-transform duration-300 group-hover:translate-x-1 motion-reduce:transform-none">
           <svg viewBox="0 0 20 20" fill="none" className="size-4" aria-hidden="true">

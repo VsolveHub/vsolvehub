@@ -52,64 +52,42 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 const PRIMARY = cn(
-  "bg-action text-action-text",
-  "hover:bg-action-hover active:bg-action-active",
-  "disabled:bg-warm-200 disabled:text-warm-600",
+  "bg-action text-action-text shadow-sm",
+  "hover:bg-action-hover hover:shadow-md active:bg-action-active active:scale-[0.98] motion-reduce:transform-none",
+  "disabled:bg-warm-200 disabled:text-warm-600 disabled:shadow-none disabled:active:scale-100",
 );
 
 const variants: Record<Variant, string> = {
   primary: PRIMARY,
   accent: PRIMARY,
   secondary: cn(
-    "bg-action-secondary text-action-secondary-text",
-    "hover:bg-action-secondary-hover active:bg-navy-900",
-    "disabled:bg-warm-200 disabled:text-warm-600",
+    "bg-action-secondary text-action-secondary-text shadow-sm",
+    "hover:bg-action-secondary-hover hover:shadow-md active:bg-navy-900 active:scale-[0.98] motion-reduce:transform-none",
+    "disabled:bg-warm-200 disabled:text-warm-600 disabled:shadow-none disabled:active:scale-100",
   ),
   outline: cn(
-    "border border-line-strong bg-surface text-text",
-    "hover:bg-surface-hover active:bg-surface-sunken",
-    "disabled:border-line disabled:bg-surface disabled:text-warm-500",
+    "border border-line-strong bg-surface text-text shadow-2xs",
+    "hover:border-navy-700 hover:bg-surface-hover active:bg-surface-sunken active:scale-[0.98] motion-reduce:transform-none",
+    "disabled:border-line disabled:bg-surface disabled:text-warm-500 disabled:shadow-none disabled:active:scale-100",
   ),
   ghost: cn(
     "text-text-link",
-    "hover:bg-selected-surface active:bg-navy-100",
-    "disabled:text-warm-500",
+    "hover:bg-selected-surface hover:text-navy-900 active:bg-navy-100 active:scale-[0.98] motion-reduce:transform-none",
+    "disabled:text-warm-500 disabled:active:scale-100",
   ),
-  // Destructive actions get a dedicated fill so they are never one careless
-  // prop away from looking like the primary action.
   danger: cn(
-    "bg-danger-text text-text-inverse",
-    "hover:bg-[#8f1e17] active:bg-[#7a1a14]",
-    "disabled:bg-warm-200 disabled:text-warm-600",
+    "bg-danger-text text-text-inverse shadow-sm",
+    "hover:bg-[#8f1e17] hover:shadow-md active:bg-[#7a1a14] active:scale-[0.98] motion-reduce:transform-none",
+    "disabled:bg-warm-200 disabled:text-warm-600 disabled:shadow-none disabled:active:scale-100",
   ),
 };
 
-/**
- * `md` and `lg` clear the 44px minimum touch target (plan 03). `sm` is 36px and
- * exists only for dense Operations tables on pointer devices — never for a
- * customer or partner action on a phone.
- */
 const sizes: Record<Size, string> = {
-  sm: "h-9 px-3 text-sm",
-  md: "h-11 px-5 text-sm",
-  lg: "h-12 px-7 text-base",
+  sm: "h-9 px-3.5 text-xs font-semibold tracking-wide",
+  md: "h-11 px-5 text-sm font-semibold tracking-tight",
+  lg: "h-12 px-7 text-base font-bold tracking-tight",
 };
 
-/**
- * The button's visual styles, without the button.
- *
- * Navigation is a link, not a button — a `<button>` that routes breaks
- * middle-click, "open in new tab" and the browser's own affordances. So when
- * something looks like a button but goes somewhere, use a real anchor and take
- * the styling from here:
- *
- * ```tsx
- * <Link href="/book/x" className={buttonStyles({ size: "lg" })}>Book now</Link>
- * ```
- *
- * Exported rather than wrapped in a `ButtonLink` so this package stays free of
- * any router dependency.
- */
 export function buttonStyles({
   variant = "primary",
   size = "md",
@@ -122,8 +100,9 @@ export function buttonStyles({
   className?: string;
 } = {}): string {
   return cn(
-    "relative inline-flex items-center justify-center rounded-control font-semibold",
-    "transition-colors duration-fast ease-out",
+    "relative inline-flex items-center justify-center rounded-control font-semibold select-none",
+    "transition-all duration-fast ease-out",
+    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
     variants[variant],
     sizes[size],
     block && "w-full",

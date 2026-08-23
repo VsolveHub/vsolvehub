@@ -107,3 +107,36 @@ export const getCategory = cache(async (slug: string): Promise<Category | null> 
   const categories = await getCategories();
   return categories.find((category) => category.slug === slug) ?? null;
 });
+
+/**
+ * Every published service, indexed by the category it belongs to.
+ *
+ * One request per category, issued together rather than in sequence — the
+ * catalogue has a handful of categories and serialising them would put the
+ * whole fan-out on the critical path of the search page.
+ *
+ * Each call goes through `getCategoryServices`, so it shares the `cache()`
+ * dedupe and the Data Cache entry a category page already warms. Searching does
+ * not pay for data the browse pages have.
+ *
+ * A category that fails to load is **omitted, not empty** — `getCategoryServices`
+ * returns `null` only for a 404, and anything else still throws through to
+ * `error.tsx`. A category that genuinely has no services and one that could not
+ * be read must not look the same to the ranker.
+ */
+export const getServicesByCategory = cache(
+  async (categories: readonly Category[]): Promise<Map<string, ServiceCard[]>> => {
+    const loaded = await Promise.all(
+      categories.map(async (category) => {
+        const services = await getCategoryServices(category.slug);
+        return [category.slug, services] as const;
+      }),
+    );
+
+    const index = new Map<string, ServiceCard[]>();
+    for (const [slug, services] of loaded) {
+      if (services !== null) index.set(slug, services);
+    }
+    return index;
+  },
+);

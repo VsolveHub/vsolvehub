@@ -1,10 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 import { useIsViewportClaimed } from "@/lib/focus-mode";
 
 import { BottomNav, SiteHeader } from "./site-header";
+import { SiteFooter } from "./site-footer";
 
 /**
  * The app's navigation, except where a screen has taken the viewport.
@@ -29,6 +32,11 @@ import { BottomNav, SiteHeader } from "./site-header";
  */
 export function AppChrome({ children }: { children: ReactNode }) {
   const claimed = useIsViewportClaimed();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname]);
 
   // A focused screen supplies its own header, its own scroll region and its own
   // docked action. It gets the viewport untouched — no chrome, and no padding
@@ -40,7 +48,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
       <SiteHeader />
       {/* Clears the fixed tab bar (56px) plus whatever the device reserves for
           its home indicator. Above `md` the bar is gone and so is the padding. */}
-      <div className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</div>
+      <div className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <div className="min-h-screen">
+          {children}
+        </div>
+        <SiteFooter />
+      </div>
       <BottomNav />
     </>
   );

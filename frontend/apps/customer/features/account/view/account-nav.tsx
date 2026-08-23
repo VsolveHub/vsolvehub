@@ -31,7 +31,7 @@ export function AccountNav() {
     <nav aria-label="Account" className="lg:w-56 lg:shrink-0">
       <ul
         className={cn(
-          "flex gap-1 overflow-x-auto pb-1",
+          "flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           "lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0",
         )}
       >
@@ -46,15 +46,23 @@ export function AccountNav() {
                 href={section.href}
                 aria-current={isCurrent ? "page" : undefined}
                 className={cn(
-                  "block rounded-control px-3 py-2 text-sm",
+                  "block whitespace-nowrap px-4 py-2.5 transition-all duration-fast",
+                  "rounded-full border lg:rounded-none lg:border-0 lg:px-4 lg:py-3",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring",
                   isCurrent
-                    ? "bg-selected-surface font-semibold text-text"
-                    : "font-medium text-text-secondary hover:bg-surface-hover hover:text-text",
+                    ? "border-action bg-action text-white shadow-xs lg:border-l-[3px] lg:border-action lg:bg-[#F6F4F0] lg:text-[#D85C3A] lg:shadow-none"
+                    : "border-[#e7e2da]/70 bg-white text-navy-900 lg:border-l-[3px] lg:border-transparent lg:bg-transparent lg:hover:bg-[#F6F4F0]",
                 )}
               >
-                {section.label}
-                <span className="hidden text-xs font-normal text-text-muted lg:block">
+                <span
+                  className={cn(
+                    "block text-sm font-bold lg:text-[0.95rem]",
+                    isCurrent ? "lg:font-medium lg:text-[#D85C3A]" : "lg:font-medium lg:text-navy-900",
+                  )}
+                >
+                  {section.label}
+                </span>
+                <span className="hidden text-[0.75rem] text-text-secondary lg:block mt-0.5">
                   {section.hint}
                 </span>
               </Link>
