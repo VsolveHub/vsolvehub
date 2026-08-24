@@ -116,7 +116,7 @@ async function CategoryGrid() {
                 <path d="M12 22v-4M9 8V3M15 8V3M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
               </svg>
             </div>
-            <h3 className="text-2xl font-serif font-bold text-white mb-2">Master Electricians</h3>
+            <h3 className="text-2xl font-bold text-white mb-2">Master Electricians</h3>
             <p className="text-sm leading-relaxed text-white/80 max-w-[280px]">
               From smart home integration to complex rewiring, our certified artisans handle it all with precision.
             </p>
@@ -134,7 +134,7 @@ async function CategoryGrid() {
           <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1600&auto=format&fit=crop')] bg-cover bg-center opacity-70" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0A1526] via-[#0A1526]/70 to-transparent" />
           <div className="relative z-10">
-            <h3 className="text-white font-serif font-bold text-[1.35rem]">Plumbing Repairs</h3>
+            <h3 className="text-white font-bold text-[1.35rem]">Plumbing Repairs</h3>
             <p className="text-white/80 text-[0.8rem] mt-1.5 leading-relaxed max-w-[260px]">Taps, leaks, blockages, and full sanitary fitting services handled cleanly.</p>
             <div className="flex items-center gap-1.5 mt-3 text-xs font-bold text-white">
               Explore
@@ -150,7 +150,7 @@ async function CategoryGrid() {
           <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-70" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0A1526] via-[#0A1526]/70 to-transparent" />
           <div className="relative z-10">
-            <h3 className="text-white font-serif font-bold text-[1.35rem]">Carpentry & Technicians</h3>
+            <h3 className="text-white font-bold text-[1.35rem]">Carpentry & Technicians</h3>
             <p className="text-white/80 text-[0.8rem] mt-1.5 leading-relaxed max-w-[260px]">Cupboards, doors, hinges, and flatpack furniture assembly by verified pros.</p>
             <div className="flex items-center gap-1.5 mt-3 text-xs font-bold text-white">
               Explore
@@ -210,7 +210,7 @@ export default async function HomePage() {
               {/* Left Content */}
               <div className="md:absolute md:left-0 md:top-[10%] md:w-[480px] z-10 relative mt-0 mx-4 md:mx-0 flex flex-col justify-center h-full pt-[4.5rem] md:pt-0">
                 <div className="rounded-none md:rounded-card bg-transparent md:bg-navy-900 p-0 md:p-10 shadow-none md:shadow-2xl relative">
-                  <h1 className="text-[2.75rem] md:text-[2.75rem] font-serif md:font-sans font-extrabold leading-[1.1] text-white tracking-tight">
+                  <h1 className="text-[2.75rem] md:text-[2.75rem] md:font-sans font-extrabold leading-[1.1] text-white tracking-tight">
                     Your Home,<br /><span className="text-[#FFAE7B] md:text-action italic md:not-italic">Masterfully</span><br className="md:hidden"/> Handled.
                   </h1>
                   <p className="mt-4 md:mt-6 text-[0.95rem] md:text-[1.05rem] leading-relaxed text-white/80 font-light md:font-normal">
@@ -241,7 +241,7 @@ export default async function HomePage() {
 
           {/* The V Solve Approach Section */}
           <section aria-labelledby="approach-heading" className="mt-20 mb-6 text-center max-w-4xl mx-auto">
-            <h2 id="approach-heading" className="text-[2.25rem] md:text-[2.75rem] font-serif font-extrabold tracking-tight text-navy-900">
+            <h2 id="approach-heading" className="text-[2.25rem] md:text-[2.75rem] font-extrabold tracking-tight text-navy-900">
               The V Solve Approach
             </h2>
             <p className="mt-3 text-[1.05rem] text-text-secondary font-normal">
@@ -272,7 +272,7 @@ export default async function HomePage() {
           <section aria-labelledby="categories-heading" className="mt-36 pb-12 bg-transparent rounded-none px-0">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-6 mb-8 md:mb-8">
               <div>
-                <h2 id="categories-heading" className="text-[2.25rem] md:text-[2.75rem] font-serif font-extrabold tracking-tight text-navy-900">
+                <h2 id="categories-heading" className="text-[2.25rem] md:text-[2.75rem] font-extrabold tracking-tight text-navy-900">
                   Curated Services
                 </h2>
                 <p className="mt-2 text-[1.05rem] text-text-secondary font-normal">
@@ -332,7 +332,7 @@ export default async function HomePage() {
                 Premium Quality
               </div>
               <div className="mt-auto">
-                <h2 className="text-white font-serif font-extrabold text-[1.65rem] leading-tight tracking-tight">
+                <h2 className="text-white font-extrabold text-[1.65rem] leading-tight tracking-tight">
                   Elite Home Services, at Your Doorstep
                 </h2>
               </div>
@@ -342,7 +342,7 @@ export default async function HomePage() {
           {/* Our Services Section */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-serif text-xl font-extrabold text-[#00112e]">Our Services</h2>
+              <h2 className="text-xl font-extrabold text-[#00112e]">Our Services</h2>
               <Link href="/catalog" className="text-sm font-bold text-[#f87000] hover:text-[#fb8130] transition-colors">
                 See All
               </Link>
@@ -386,7 +386,7 @@ export default async function HomePage() {
 
           {/* The V Solve Way */}
           <div className="bg-[#f4f1ec] rounded-[1.5rem] p-6 shadow-2xs border border-[#e7e2da]/30">
-            <h2 className="text-center font-serif text-xl font-extrabold text-[#00112e] mb-6">
+            <h2 className="text-center text-xl font-extrabold text-[#00112e] mb-6">
               The V Solve Way
             </h2>
             <div className="relative flex flex-col gap-6 pl-2">
@@ -445,7 +445,7 @@ export default async function HomePage() {
 
           {/* Why V Solve Hub? */}
           <div className="flex flex-col gap-4">
-            <h2 className="font-serif text-xl font-extrabold text-[#00112e]">
+            <h2 className="text-xl font-extrabold text-[#00112e]">
               Why V Solve Hub?
             </h2>
             

@@ -14,6 +14,7 @@ import {
 } from "@/features/enquiry/queries";
 
 import { VisitDayPanel } from "./visit-day-panel";
+import { SiteAddress } from "./site-address";
 
 /**
  * The Partner's project-visit workspace.
@@ -98,11 +99,17 @@ export function VisitScreen({ invitationId }: { readonly invitationId: string })
             onAction={() => router.replace(enquiryHref)}
           />
         ) : (
-          <VisitDayPanel
-            enquiry={enquiry}
-            estimateHref={`${enquiryHref}/estimate`}
-            isRefreshing={query.isFetching}
-          />
+          <>
+            <SiteAddress
+              address={enquiry.siteAddress}
+              approximateArea={enquiry.approximateArea}
+            />
+            <VisitDayPanel
+              enquiry={enquiry}
+              estimateHref={`${enquiryHref}/estimate`}
+              isRefreshing={query.isFetching}
+            />
+          </>
         )}
 
         <Link href={enquiryHref} className={buttonStyles({ variant: "outline" })}>

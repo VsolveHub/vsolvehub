@@ -50,7 +50,7 @@ export function SearchResults({
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line pb-3">
             <h2
               id="search-services-heading"
-              className="font-serif text-[1.35rem] font-extrabold tracking-tight text-navy-900"
+              className="text-[1.35rem] font-extrabold tracking-tight text-navy-900"
             >
               Services
             </h2>
@@ -72,7 +72,7 @@ export function SearchResults({
         <section aria-labelledby="search-categories-heading">
           <h2
             id="search-categories-heading"
-            className="border-b border-line pb-3 font-serif text-[1.35rem] font-extrabold tracking-tight text-navy-900"
+            className="border-b border-line pb-3 text-[1.35rem] font-extrabold tracking-tight text-navy-900"
           >
             {services.length > 0 ? "Or open the whole trade" : "Trades that match"}
           </h2>

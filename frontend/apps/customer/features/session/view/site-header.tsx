@@ -12,6 +12,7 @@ import { useCart } from "@/features/checkout/queries";
 
 import { useCustomerSession } from "../queries";
 import { ProfileMark, profileName } from "./profile-mark";
+import { CUSTOMER_VIEWPORT_WIDTH_CLASS } from "./app-chrome-layout";
 
 /**
  * The Customer app's top bar.
@@ -57,6 +58,7 @@ export function SiteHeader() {
 
   return (
     <header className={cn(
+      CUSTOMER_VIEWPORT_WIDTH_CLASS,
       "sticky top-0 z-20 transition-colors",
       pathname === "/"
         ? "bg-[#FAF9F7] md:bg-surface md:border-b md:border-line"
@@ -383,11 +385,12 @@ export function BottomNav() {
     <nav
       aria-label="Main"
       className={cn(
-        "fixed inset-x-4 bottom-4 z-50 md:hidden",
-        "bg-white shadow-[0_-4px_24px_rgba(0,0,0,0.08)] rounded-[2rem] border border-[#e7e2da] overflow-hidden"
+        "fixed inset-x-0 bottom-0 z-50 md:hidden",
+        "border-t border-line/80 bg-white/95 pb-[env(safe-area-inset-bottom)]",
+        "shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur"
       )}
     >
-      <div className="flex items-center justify-around px-2 h-18 py-2">
+      <div className="flex h-14 w-full items-stretch px-1">
         {targets.map((target) => {
           const current = isCurrentTarget(target.href, pathname);
           return (
@@ -404,24 +407,30 @@ export function BottomNav() {
                   window.dispatchEvent(new CustomEvent("open-login-popup"));
                 }
               }}
-              className="flex flex-col items-center justify-center flex-1 h-full min-w-0"
+              className={cn(
+                "group flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+              )}
               aria-label={target.label}
             >
-              {current ? (
-                <div className="flex flex-col items-center">
-                  <div className="flex size-9 items-center justify-center rounded-full bg-action text-white shadow-sm transition-transform active:scale-95">
-                    <NavIconMobile name={target.icon} className="size-[1.125rem]" />
-                  </div>
-                  <span className="text-[10px] font-bold text-action mt-1">{target.shortLabel}</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center">
-                  <div className="flex size-9 items-center justify-center text-text-secondary hover:text-navy-900 transition-colors">
-                    <NavIconMobile name={target.icon} className="size-[1.125rem]" />
-                  </div>
-                  <span className="text-[10px] font-semibold text-text-secondary mt-1">{target.shortLabel}</span>
-                </div>
-              )}
+              <span
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center rounded-full transition-colors",
+                  current
+                    ? "bg-action text-white shadow-sm"
+                    : "text-text-secondary group-hover:text-navy-900",
+                )}
+              >
+                <NavIconMobile name={target.icon} className="size-[1.125rem]" />
+              </span>
+              <span
+                className={cn(
+                  "max-w-full truncate text-[10px] leading-none",
+                  current ? "font-bold text-action" : "font-semibold text-text-secondary",
+                )}
+              >
+                {target.shortLabel}
+              </span>
             </Link>
           );
         })}
@@ -429,27 +438,30 @@ export function BottomNav() {
         {session.isResolving || session.isAuthenticated ? null : (
           <button
             onClick={() => window.dispatchEvent(new CustomEvent("open-login-popup"))}
-            className="flex flex-col items-center justify-center flex-1 h-full min-w-0 cursor-pointer bg-transparent border-none p-0 focus:outline-none"
+            className={cn(
+              "flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 border-none bg-transparent p-0",
+              "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring",
+            )}
             aria-label="Log in"
           >
-            <div className="flex flex-col items-center">
-              <div className="flex size-9 items-center justify-center text-text-secondary hover:text-navy-900 transition-colors">
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.9}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="size-[1.125rem]"
-                >
-                  <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
-                  <path d="M10 16l4-4-4-4M14 12H3.5" />
-                </svg>
-              </div>
-              <span className="text-[10px] font-semibold text-text-secondary mt-1">Log in</span>
-            </div>
+            <span className="flex size-8 shrink-0 items-center justify-center text-text-secondary transition-colors hover:text-navy-900">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.9}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-[1.125rem]"
+              >
+                <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+                <path d="M10 16l4-4-4-4M14 12H3.5" />
+              </svg>
+            </span>
+            <span className="max-w-full truncate text-[10px] font-semibold leading-none text-text-secondary">
+              Log in
+            </span>
           </button>
         )}
       </div>

@@ -76,7 +76,7 @@ export default function TermsPage() {
           <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 mb-3">
             Legal & Compliance
           </span>
-          <h1 className="text-3xl sm:text-4xl font-serif font-black tracking-tight text-white mb-3">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-3">
             Terms of Service
           </h1>
           <p className="text-xs text-[#A9B9D1] font-medium">
@@ -122,7 +122,7 @@ export default function TermsPage() {
                   </span>
                   <div>
                     <span className="text-[9px] font-bold font-mono text-[#2563EB] uppercase tracking-wider">Section {sec.num}</span>
-                    <h2 className="text-lg font-extrabold text-[#00112e] font-serif leading-none mt-0.5">
+                    <h2 className="text-lg font-extrabold text-[#00112e] leading-none mt-0.5">
                       {sec.title}
                     </h2>
                   </div>

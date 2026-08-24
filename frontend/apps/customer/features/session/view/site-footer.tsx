@@ -9,7 +9,7 @@ export function SiteFooter() {
         {/* Mobile Minimal Footer */}
         <div className="flex md:hidden flex-col items-center justify-center text-center">
           <Link href="/" aria-label="V Solve Hub home" className="inline-block transition-opacity hover:opacity-90">
-            <span className="font-serif font-bold tracking-tight text-xl text-navy-900">V Solve Hub</span>
+            <span className="font-bold tracking-tight text-xl text-navy-900">V Solve Hub</span>
           </Link>
           <p className="mt-4 text-xs font-medium leading-relaxed text-navy-800 max-w-[280px]">
             Professional home services you can trust. We bring expertise directly to your door.

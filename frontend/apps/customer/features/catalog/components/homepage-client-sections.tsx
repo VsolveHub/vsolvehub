@@ -351,7 +351,7 @@ export function HeroSplitCarousel() {
         <div className="flex-1 flex flex-col justify-between p-8 md:p-10 z-10">
           <div className="flex flex-col gap-2">
             <span className="text-[9px] uppercase tracking-widest font-black text-text-secondary/70">Featured Service</span>
-            <h2 className="text-3xl font-extrabold text-navy-900 font-serif leading-tight">
+            <h2 className="text-3xl font-extrabold text-navy-900 leading-tight">
               {slide.title}
             </h2>
             <p className="text-xs md:text-sm text-text-secondary max-w-sm font-medium leading-relaxed mt-1">
@@ -535,7 +535,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
     <article
       className={`group relative flex w-[300px] md:w-[340px] shrink-0 flex-col justify-between gap-5 rounded-2xl border border-[#e7e2da] bg-white p-6 shadow-sm transition-shadow duration-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)] border-t-4 ${review.accent}`}
     >
-      <span className="absolute right-4 top-2.5 select-none font-serif text-6xl text-[#e7e2da]/20">
+      <span className="absolute right-4 top-2.5 select-none text-6xl text-[#e7e2da]/20">
         &rdquo;
       </span>
 
@@ -594,7 +594,7 @@ function CustomerReviewsMarquee() {
         </span>
         <h2
           id="reviews-heading"
-          className="font-serif text-2xl font-extrabold tracking-tight text-navy-900 md:text-4xl"
+          className="text-2xl font-extrabold tracking-tight text-navy-900 md:text-4xl"
         >
           What Customers Say
         </h2>
@@ -845,7 +845,7 @@ export function HomepageClientSections() {
       {/* 1. Best Sellers Slider */}
       <section className="flex flex-col gap-5">
         <div>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 font-serif tracking-tight">Best Sellers</h2>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Best Sellers</h2>
           <p className="text-sm md:text-base text-text-secondary mt-1">Most booked services in your city</p>
         </div>
 
@@ -859,7 +859,7 @@ export function HomepageClientSections() {
       <section className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 font-serif tracking-tight">Electrician Services</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Electrician Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Certified electrical installations and diagnostics</p>
           </div>
           <button
@@ -880,7 +880,7 @@ export function HomepageClientSections() {
       {/* 4. Service Booking Guides */}
       <section className="flex flex-col gap-5">
         <div>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 font-serif tracking-tight">Service & Booking Guides</h2>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Service & Booking Guides</h2>
           <p className="text-sm md:text-base text-text-secondary mt-1">Read what is included & how to prepare</p>
         </div>
 
@@ -919,7 +919,7 @@ export function HomepageClientSections() {
       <section className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 font-serif tracking-tight">Plumbing Services</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Plumbing Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Taps, leakages, and sanitary fixes</p>
           </div>
           <button
@@ -941,7 +941,7 @@ export function HomepageClientSections() {
       <section className="flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 font-serif tracking-tight">Carpenter Services</h2>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-navy-900 tracking-tight">Carpenter Services</h2>
             <p className="text-sm md:text-base text-text-secondary mt-1 font-medium">Furniture repair, mounts, and fittings</p>
           </div>
           <button

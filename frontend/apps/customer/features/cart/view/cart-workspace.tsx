@@ -25,6 +25,7 @@ import { RemoveCartItemDialog } from "@/features/checkout/view/remove-dialog";
 
 import { useCartSuggestions } from "../queries";
 import { CartSuggestions } from "./cart-suggestions";
+import { CART_PAGE_FRAME } from "./cart-layout";
 import { CartSummary } from "./cart-summary";
 
 /**
@@ -105,7 +106,7 @@ export function CartWorkspace() {
   const isEmpty = cart !== undefined && cart.items.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6">
+    <div className={`${CART_PAGE_FRAME} pb-8 pt-6 sm:pb-12 lg:pb-16`}>
       <h1 className="text-xl font-bold text-text">Your cart</h1>
 
       {cartQuery.isPending ? (

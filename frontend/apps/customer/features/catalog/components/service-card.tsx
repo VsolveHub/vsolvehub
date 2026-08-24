@@ -6,11 +6,6 @@ import { useAddCartItem, useCart, useUpdateCartItem, useRemoveCartItem } from "@
 import type { ServiceCard as ServiceCardData } from "../queries";
 import { serviceHref } from "../service-href";
 
-// Re-exported so the existing client-side importers keep their spelling. The
-// definition lives outside this module because `"use client"` would otherwise
-// make it uncallable from the server; see `../service-href`.
-export { serviceHref };
-
 export function ServiceCard({
   service,
   categorySlug,

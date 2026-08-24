@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.39.0
+  version: 1.42.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -18005,7 +18005,8 @@ components:
 
         Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
         against, and re-reading the requirement would silently move the goalposts under a quote in
-        progress. Customer identity and address are absent before acceptance by design.
+        progress. Customer identity and the exact address are absent from this list by design; only a
+        locality-level area is published.
       properties:
         id:
           type: string
@@ -18020,6 +18021,9 @@ components:
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
         service_name:
+          type: string
+          readOnly: true
+        approximate_area:
           type: string
           readOnly: true
         archetype:
@@ -18098,12 +18102,18 @@ components:
           items:
             $ref: '#/components/schemas/SiteVisit'
           readOnly: true
+        site_address:
+          allOf:
+          - $ref: '#/components/schemas/PartnerSiteAddress'
+          nullable: true
+          readOnly: true
         server_now:
           type: string
           readOnly: true
       required:
       - additional_details
       - answers
+      - approximate_area
       - archetype
       - budget_max_paise
       - budget_min_paise
@@ -18124,6 +18134,7 @@ components:
       - server_now
       - service_by
       - service_name
+      - site_address
       - site_visits
       - status
       - wave
@@ -18134,7 +18145,8 @@ components:
 
         Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
         against, and re-reading the requirement would silently move the goalposts under a quote in
-        progress. Customer identity and address are absent before acceptance by design.
+        progress. Customer identity and the exact address are absent from this list by design; only a
+        locality-level area is published.
       properties:
         id:
           type: string
@@ -18149,6 +18161,9 @@ components:
           readOnly: true
           pattern: ^[-a-zA-Z0-9_]+$
         service_name:
+          type: string
+          readOnly: true
+        approximate_area:
           type: string
           readOnly: true
         archetype:
@@ -18192,6 +18207,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - approximate_area
       - archetype
       - category_slug
       - created_at
@@ -20938,10 +20954,11 @@ components:
       description: |-
         The same visit, as the Partner assigned to it sees it.
 
-        Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
-        amounts the Partner is working to. The Booking Group is not addressable from here at all:
-        `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
-        cheapest way to guarantee that is to never publish the identifier that would let them try.
+        Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
+        exact address. Its estimate and settled earning are this Partner's own money for this one
+        unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
+        cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
+        never publish the identifier that would let them try.
       properties:
         id:
           type: string
@@ -20952,6 +20969,24 @@ components:
           format: uuid
           readOnly: true
           nullable: true
+        display_title:
+          type: string
+          nullable: true
+          readOnly: true
+        approximate_area:
+          type: string
+          nullable: true
+          readOnly: true
+        service_lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartnerBookingServiceLine'
+          readOnly: true
+        requirements:
+          type: array
+          items:
+            type: string
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/BookingStatusEnum'
@@ -21001,6 +21036,11 @@ components:
           - $ref: '#/components/schemas/ScopeAmendment'
           nullable: true
           readOnly: true
+        estimated_earning:
+          allOf:
+          - $ref: '#/components/schemas/PartnerBookingEstimatedEarning'
+          nullable: true
+          readOnly: true
         earning:
           allOf:
           - $ref: '#/components/schemas/PartnerBookingEarning'
@@ -21008,20 +21048,26 @@ components:
           readOnly: true
         server_now:
           type: string
+          format: date-time
           readOnly: true
       required:
       - active_amendment
+      - approximate_area
       - arrived_at
       - customer_unavailable_wait_started_at
+      - display_title
       - earning
       - en_route_at
       - estimated_duration_minutes
+      - estimated_earning
       - evidence
       - fulfilment_unit_id
       - id
       - late_declared_at
+      - requirements
       - scheduled_start
       - server_now
+      - service_lines
       - status
       - version
       - work_tasks
@@ -21047,6 +21093,28 @@ components:
       - gross_paise
       - net_paise
       - status
+    PartnerBookingEstimatedEarning:
+      type: object
+      description: The booked-scope estimate, before completion determines the final
+        ledger earning.
+      properties:
+        gross_paise:
+          type: integer
+          minimum: 0
+        commission_paise:
+          type: integer
+          minimum: 0
+        net_paise:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          maxLength: 3
+      required:
+      - commission_paise
+      - currency
+      - gross_paise
+      - net_paise
     PartnerBookingPage:
       type: object
       properties:
@@ -21070,6 +21138,27 @@ components:
       - previous
       - results
       - server_now
+    PartnerBookingServiceLine:
+      type: object
+      description: One immutable service line carried from the offer into the accepted
+        job.
+      properties:
+        line_id:
+          type: string
+          format: uuid
+        service_label:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        scope:
+          type: object
+          additionalProperties: {}
+      required:
+      - line_id
+      - quantity
+      - scope
+      - service_label
     PartnerBusinessProfile:
       type: object
       properties:
@@ -22026,6 +22115,36 @@ components:
       - name
       - slug
       - timezone
+    PartnerSiteAddress:
+      type: object
+      description: |-
+        The visit destination, disclosed only once the paid visit is genuinely scheduled.
+
+        Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
+        a destination, not a reusable precision-location feed.
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        landmark:
+          type: string
+        locality:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postal_code:
+          type: string
+      required:
+      - city
+      - landmark
+      - line1
+      - line2
+      - locality
+      - postal_code
+      - state
     PartnerSkillChip:
       type: object
       description: A code/name pair, for the chips the directory renders.

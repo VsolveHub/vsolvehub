@@ -61,7 +61,7 @@ vi.mock("@/features/notifications/view/notification-bell", () => ({
   NotificationBell: () => <div data-testid="notification-bell" />,
 }));
 
-const { SiteHeader } = await import("./site-header");
+const { BottomNav, SiteHeader } = await import("./site-header");
 
 let queryClient: QueryClient;
 
@@ -238,5 +238,36 @@ describe("SiteHeader", () => {
     // `/catalog` must not match `/catalogue…`. The boundary slash is what makes
     // `startsWith` safe here.
     expect(screen.getByRole("link", { name: "Services" })).not.toHaveAttribute("aria-current");
+  });
+});
+
+describe("BottomNav", () => {
+  it("uses the compact height that AppChrome reserves on mobile", () => {
+    route.pathname = "/cart";
+
+    render(<BottomNav />, { wrapper });
+
+    const navigation = screen.getByRole("navigation", { name: "Main" });
+    expect(navigation).toHaveClass("inset-x-0", "bottom-0");
+    expect(navigation).toHaveClass("pb-[env(safe-area-inset-bottom)]");
+    expect(navigation).not.toHaveClass("inset-x-4", "bottom-4", "rounded-[2rem]");
+    expect(navigation.firstElementChild).toHaveClass("h-14", "w-full");
+    expect(navigation.firstElementChild).not.toHaveClass("max-w-lg");
+  });
+
+  it("keeps every signed-out destination flexible on a narrow cart viewport", () => {
+    route.pathname = "/cart";
+
+    render(<BottomNav />, { wrapper });
+
+    const navigation = screen.getByRole("navigation", { name: "Main" });
+    const destinations = [
+      ...navigation.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>("a, button"),
+    ];
+
+    expect(destinations).toHaveLength(5);
+    for (const destination of destinations) {
+      expect(destination).toHaveClass("min-w-0", "flex-1");
+    }
   });
 });

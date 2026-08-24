@@ -57,7 +57,7 @@ export default function JoinProPage() {
           <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#EA580C] bg-[#EA580C]/10 px-3 py-1 rounded-full border border-[#EA580C]/20 mb-3">
             Partner Program
           </span>
-          <h1 className="text-3xl sm:text-4xl font-serif font-black tracking-tight text-white mb-3">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-3">
             Become a Partner
           </h1>
           <p className="text-xs text-[#A9B9D1] font-medium max-w-md leading-relaxed">
@@ -99,7 +99,7 @@ export default function JoinProPage() {
           <div className="w-full lg:w-7/12 flex flex-col gap-6">
             <section className="bg-white border border-[#e7e2da] rounded-2xl p-6 sm:p-8 shadow-card flex flex-col gap-6">
               <div className="border-b border-navy-900/10 pb-4">
-                <h2 className="text-lg font-bold font-serif text-navy-900">Partnership Request Form</h2>
+                <h2 className="text-lg font-bold text-navy-900">Partnership Request Form</h2>
                 <p className="text-xs text-text-secondary mt-1 font-medium">Provide details about your experience. Vetting specialists typically contact you within 24 hours.</p>
               </div>
               

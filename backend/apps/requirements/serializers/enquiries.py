@@ -21,6 +21,7 @@ from apps.requirements.models import Proposal, RequirementQuestion, SiteVisit, V
 from apps.requirements.selectors import (
     QUESTION_ASKER_ROLES,
     question_asker_role,
+    requirement_area_label,
     vendor_business_type,
     verified_partner_ids,
 )
@@ -254,7 +255,8 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
 
     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
     against, and re-reading the requirement would silently move the goalposts under a quote in
-    progress. Customer identity and address are absent before acceptance by design.
+    progress. Customer identity and the exact address are absent from this list by design; only a
+    locality-level area is published.
     """
 
     requirement_id = serializers.UUIDField(read_only=True)
@@ -269,6 +271,9 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
         source="requirement.variant.service.name",
         read_only=True,
     )
+    #: A locality-level decision input. Never a street, building, coordinate or customer-entered
+    #: address line. The exact visit address has its own post-payment disclosure below.
+    approximate_area = serializers.SerializerMethodField()
     archetype = serializers.CharField(source="snapshot.archetype", read_only=True)
     requirement_status = serializers.CharField(source="requirement.status", read_only=True)
     requested_start = serializers.DateTimeField(source="snapshot.requested_start", read_only=True)
@@ -289,6 +294,7 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "requirement_id",
             "category_slug",
             "service_name",
+            "approximate_area",
             "archetype",
             "requirement_status",
             "status",
@@ -302,6 +308,10 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "created_at",
         )
         read_only_fields: tuple[str, ...] = fields
+
+    @extend_schema_field(serializers.CharField(allow_blank=True))
+    def get_approximate_area(self, obj: VendorInvitation) -> str:
+        return requirement_area_label(obj.requirement)
 
     def _latest_proposal(self, obj: VendorInvitation) -> Proposal | None:
         ordered = getattr(obj, "ordered_proposals", None)
@@ -362,6 +372,28 @@ class VendorAttachmentListSerializer(serializers.Serializer[dict[str, Any]]):
     server_now = serializers.DateTimeField(read_only=True)
 
 
+class PartnerSiteAddressSerializer(serializers.Serializer[dict[str, Any]]):
+    """The visit destination, disclosed only once the paid visit is genuinely scheduled.
+
+    Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
+    a destination, not a reusable precision-location feed.
+    """
+
+    line1 = serializers.CharField()
+    line2 = serializers.CharField(allow_blank=True)
+    landmark = serializers.CharField(allow_blank=True)
+    locality = serializers.CharField()
+    city = serializers.CharField()
+    state = serializers.CharField()
+    postal_code = serializers.CharField()
+
+
+_SITE_ADDRESS_DISCLOSED_STATUSES = (
+    SiteVisit.Status.SCHEDULED,
+    SiteVisit.Status.IN_PROGRESS,
+)
+
+
 class EnquiryDetailSerializer(EnquirySummarySerializer):
     answers = serializers.JSONField(source="snapshot.answers", read_only=True)
     additional_details = serializers.CharField(
@@ -388,6 +420,10 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
     proposals = serializers.SerializerMethodField()
     questions = RequirementQuestionSerializer(many=True, read_only=True)
     site_visits = SiteVisitSerializer(many=True, read_only=True)
+    #: Null before the Partner has committed to a slot and while the first slot is merely held for
+    #: payment. A verified plan payment promotes the visit to `SCHEDULED`, which is the first point
+    #: at which the Partner both needs and is entitled to the exact destination.
+    site_address = serializers.SerializerMethodField()
     #: The one read carrying a hard `responds_by`. Without the server's own clock beside it a
     #: countdown is drawn against a browser clock that may have drifted, on the field that decides
     #: whether the vendor still has a slot.
@@ -405,6 +441,7 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
             "proposals",
             "questions",
             "site_visits",
+            "site_address",
             "server_now",
         )
         read_only_fields = fields
@@ -421,6 +458,25 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
 
     def get_server_now(self, _obj: VendorInvitation) -> str:
         return timezone.now().isoformat()
+
+    @extend_schema_field(PartnerSiteAddressSerializer(allow_null=True))
+    def get_site_address(self, obj: VendorInvitation) -> dict[str, str] | None:
+        may_travel = any(
+            visit.plan_share_id is not None and visit.status in _SITE_ADDRESS_DISCLOSED_STATUSES
+            for visit in obj.site_visits.all()
+        )
+        address = obj.requirement.address
+        if not may_travel or address is None:
+            return None
+        return {
+            "line1": address.line1,
+            "line2": address.line2,
+            "landmark": address.landmark,
+            "locality": address.locality,
+            "city": address.city,
+            "state": address.state,
+            "postal_code": address.postal_code,
+        }
 
 
 class EnquiryDeclineSerializer(serializers.Serializer[dict[str, Any]]):

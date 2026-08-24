@@ -5,14 +5,14 @@ import { describe, expect, it } from "vitest";
 /**
  * Two rules the enquiry surface turns on, enforced rather than documented.
  *
- * ## 1. No customer contact, ever
+ * ## 1. No customer identity or contact
  *
  * This is the enforceable half of `M2-FE-307`. The task asks for consent before
  * contact disclosure and for cached contact never to survive a revocation — and
- * the honest position at contract 1.21.0 is that **no contact is ever
- * disclosed**: `EnquirySummarySerializer` and `EnquiryDetailSerializer` read the
- * snapshot, which never held a name, an address or a number, and there is no
- * disclosure endpoint to consent to.
+ * The exact site destination now has one purpose-bound disclosure: a paid,
+ * scheduled project visit. Customer name, phone and email still never enter the
+ * enquiry or proposal surface, and the address projection contains none of
+ * them. The enquiry list continues to receive only a locality label.
  *
  * That makes the requirement a *negative* one, and a negative requirement is
  * exactly the kind that rots quietly. A component test proves today's render;
@@ -80,7 +80,7 @@ const CONTACT_FIELDS = [
   "masked_phone",
 ];
 
-describe("customer contact never enters the enquiry surface", () => {
+describe("customer identity and contact never enter the enquiry surface", () => {
   it("names no contact field in any production module", () => {
     const offenders: string[] = [];
 

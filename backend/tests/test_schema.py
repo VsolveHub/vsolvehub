@@ -379,8 +379,19 @@ def test_the_richest_projection_fields_are_typed_rather_than_unknown() -> None:
 
     schema = cast(dict[str, Any], SchemaGenerator().get_schema(public=True))
     customer = schema["components"]["schemas"]["CustomerBooking"]["properties"]
+    partner = schema["components"]["schemas"]["PartnerBooking"]["properties"]
 
     assert customer["work_tasks"]["type"] == "array"
     assert customer["work_tasks"]["items"]["$ref"].endswith("/WorkTask")
     assert "$ref" in str(customer["active_amendment"])
     assert "$ref" in str(customer["completion"])
+    assert partner["display_title"]["type"] == "string"
+    assert partner["display_title"]["nullable"] is True
+    assert partner["approximate_area"]["type"] == "string"
+    assert partner["approximate_area"]["nullable"] is True
+    assert partner["service_lines"]["type"] == "array"
+    assert partner["service_lines"]["items"]["$ref"].endswith("/PartnerBookingServiceLine")
+    assert partner["requirements"]["type"] == "array"
+    assert partner["requirements"]["items"]["type"] == "string"
+    assert "$ref" in str(partner["estimated_earning"])
+    assert "$ref" in str(partner["earning"])

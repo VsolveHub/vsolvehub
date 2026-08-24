@@ -5,6 +5,7 @@ then `PartnerLedgerEntry`. The reverse order between two concurrent batch operat
 way to deadlock this module, and picking an order is cheaper than detecting one.
 """
 
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -49,6 +50,21 @@ ACCOUNT_COOLING_HOURS = 24
 RESERVABLE_STATUSES = (PartnerLedgerEntry.Status.AVAILABLE, PartnerLedgerEntry.Status.RELEASED)
 
 
+@dataclass(frozen=True, slots=True)
+class BookingEarningEstimate:
+    """The Partner's estimated take from the immutable booked scope.
+
+    This is the same gross and commission basis used when the unit was offered. It is deliberately
+    separate from the ledger entry: completion outcomes and accepted amendments can change the
+    final earning, and only settlement is authoritative for money actually owed.
+    """
+
+    gross_paise: int
+    commission_paise: int
+    net_paise: int
+    currency: str
+
+
 def _commission_for(*, gross_paise: int, pricing: dict[str, Any]) -> int:
     """The same clamp `group_services` used to quote the Partner their net at offer time.
 
@@ -63,6 +79,30 @@ def _commission_for(*, gross_paise: int, pricing: dict[str, Any]) -> int:
         int(pricing["commission_cap_paise"]),
         max(int(pricing["commission_floor_paise"]), calculated),
         gross_paise,
+    )
+
+
+def estimated_booking_earning(booking: Booking) -> BookingEarningEstimate | None:
+    """Return the Partner-visible estimate frozen into this booking's quoted unit.
+
+    A legacy booking without a fulfilment unit has no durable priced scope, so it publishes no
+    estimate instead of reconstructing one from mutable work tasks or inventing a fallback price.
+    """
+
+    unit = booking.fulfilment_unit
+    if unit is None:
+        return None
+    quote_unit = unit.quote_unit
+    gross_paise = quote_unit.task_subtotal_paise + quote_unit.minimum_visit_adjustment_paise
+    commission_paise = _commission_for(
+        gross_paise=gross_paise,
+        pricing=quote_unit.quote.pricing_policy_snapshot,
+    )
+    return BookingEarningEstimate(
+        gross_paise=gross_paise,
+        commission_paise=commission_paise,
+        net_paise=gross_paise - commission_paise,
+        currency=unit.currency,
     )
 
 

@@ -1,5 +1,7 @@
 import { Skeleton } from "@vsolve/ui";
 
+import { CART_PAGE_FRAME } from "@/features/cart/view/cart-layout";
+
 /**
  * The route-level shell while the client workspace is being fetched.
  *
@@ -10,7 +12,7 @@ import { Skeleton } from "@vsolve/ui";
  */
 export default function CartLoading() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-16 pt-6">
+    <div className={`${CART_PAGE_FRAME} pb-8 pt-6 sm:pb-12 lg:pb-16`}>
       <output aria-live="polite" className="block">
         <span className="sr-only">Loading your booking</span>
 

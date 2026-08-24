@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.39.0)
- * Checksum: bd604e25bc60e1f8
+ * Source:   contracts/openapi/v1.yaml (version 1.42.0)
+ * Checksum: 22ec85e3b9288069
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -6823,7 +6823,8 @@ export interface components {
          *
          *     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
          *     against, and re-reading the requirement would silently move the goalposts under a quote in
-         *     progress. Customer identity and address are absent before acceptance by design.
+         *     progress. Customer identity and the exact address are absent from this list by design; only a
+         *     locality-level area is published.
          */
         EnquiryDetail: {
             /** Format: uuid */
@@ -6832,6 +6833,7 @@ export interface components {
             readonly requirement_id: string;
             readonly category_slug: string;
             readonly service_name: string;
+            readonly approximate_area: string;
             readonly archetype: string;
             readonly requirement_status: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
@@ -6858,6 +6860,7 @@ export interface components {
             }[];
             readonly questions: components["schemas"]["RequirementQuestion"][];
             readonly site_visits: components["schemas"]["SiteVisit"][];
+            readonly site_address: components["schemas"]["PartnerSiteAddress"] | null;
             readonly server_now: string;
         };
         /**
@@ -6865,7 +6868,8 @@ export interface components {
          *
          *     Reads the **snapshot**, not the live requirement: the snapshot is what this vendor was invited
          *     against, and re-reading the requirement would silently move the goalposts under a quote in
-         *     progress. Customer identity and address are absent before acceptance by design.
+         *     progress. Customer identity and the exact address are absent from this list by design; only a
+         *     locality-level area is published.
          */
         EnquirySummary: {
             /** Format: uuid */
@@ -6874,6 +6878,7 @@ export interface components {
             readonly requirement_id: string;
             readonly category_slug: string;
             readonly service_name: string;
+            readonly approximate_area: string;
             readonly archetype: string;
             readonly requirement_status: string;
             readonly status: components["schemas"]["VendorInvitationStatusEnum"];
@@ -7981,16 +7986,21 @@ export interface components {
         /**
          * @description The same visit, as the Partner assigned to it sees it.
          *
-         *     Deliberately does not carry `order_id`, any sibling unit, or any money beyond the per-task
-         *     amounts the Partner is working to. The Booking Group is not addressable from here at all:
-         *     `G7` requires that a Partner cannot reach a sibling unit's scope or earnings, and the
-         *     cheapest way to guarantee that is to never publish the identifier that would let them try.
+         *     Deliberately does not carry `order_id`, any sibling unit, the Customer's invoice, or their
+         *     exact address. Its estimate and settled earning are this Partner's own money for this one
+         *     unit. The Booking Group is not addressable from here at all: `G7` requires that a Partner
+         *     cannot reach a sibling unit's scope or earnings, and the cheapest way to guarantee that is to
+         *     never publish the identifier that would let them try.
          */
         PartnerBooking: {
             /** Format: uuid */
             readonly id: string;
             /** Format: uuid */
             readonly fulfilment_unit_id: string | null;
+            readonly display_title: string | null;
+            readonly approximate_area: string | null;
+            readonly service_lines: components["schemas"]["PartnerBookingServiceLine"][];
+            readonly requirements: string[];
             readonly status: components["schemas"]["BookingStatusEnum"];
             readonly version: number;
             /** Format: date-time */
@@ -8007,7 +8017,9 @@ export interface components {
             readonly work_tasks: components["schemas"]["WorkTask"][];
             readonly evidence: components["schemas"]["WorkEvidence"][];
             readonly active_amendment: components["schemas"]["ScopeAmendment"] | null;
+            readonly estimated_earning: components["schemas"]["PartnerBookingEstimatedEarning"] | null;
             readonly earning: components["schemas"]["PartnerBookingEarning"] | null;
+            /** Format: date-time */
             readonly server_now: string;
         };
         /** @description One Partner's own money for one job — never the Customer's invoice. */
@@ -8019,6 +8031,13 @@ export interface components {
             status: string;
             calculation_snapshot: unknown;
         };
+        /** @description The booked-scope estimate, before completion determines the final ledger earning. */
+        PartnerBookingEstimatedEarning: {
+            gross_paise: number;
+            commission_paise: number;
+            net_paise: number;
+            currency: string;
+        };
         PartnerBookingPage: {
             /** Format: uri */
             next: string | null;
@@ -8027,6 +8046,16 @@ export interface components {
             results: components["schemas"]["PartnerBooking"][];
             /** Format: date-time */
             server_now: string;
+        };
+        /** @description One immutable service line carried from the offer into the accepted job. */
+        PartnerBookingServiceLine: {
+            /** Format: uuid */
+            line_id: string;
+            service_label: string;
+            quantity: number;
+            scope: {
+                [key: string]: unknown;
+            };
         };
         PartnerBusinessProfile: {
             readonly business_type: components["schemas"]["PartnerBusinessTypeEnum"];
@@ -8390,6 +8419,21 @@ export interface components {
             readonly name: string;
             readonly timezone: string;
             readonly is_accepting_partners: boolean;
+        };
+        /**
+         * @description The visit destination, disclosed only once the paid visit is genuinely scheduled.
+         *
+         *     Customer identity and contact remain absent. Coordinates remain absent too: the Partner needs
+         *     a destination, not a reusable precision-location feed.
+         */
+        PartnerSiteAddress: {
+            line1: string;
+            line2: string;
+            landmark: string;
+            locality: string;
+            city: string;
+            state: string;
+            postal_code: string;
         };
         /** @description A code/name pair, for the chips the directory renders. */
         PartnerSkillChip: {

@@ -48,6 +48,8 @@ export interface EnquiryRow {
    * format it into a title.
    */
   readonly serviceName: string;
+  /** Locality-level location only. Never a street, building or coordinate. */
+  readonly approximateArea: string;
   /** The server's archetype for this record. Decides which composer opens. */
   readonly archetype: string;
   readonly status: EnquiryStatus;
@@ -76,6 +78,8 @@ export interface EnquiryRecord extends EnquiryRow {
   readonly declineReasonCode: string;
   readonly questions: readonly Schemas["RequirementQuestion"][];
   readonly siteVisits: readonly Schemas["SiteVisit"][];
+  /** Exact visit destination, released only once a paid visit is scheduled. */
+  readonly siteAddress: Schemas["PartnerSiteAddress"] | null;
   /**
    * The server's own clock at the moment this enquiry was read (1.24.0).
    *
@@ -102,6 +106,7 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
     id: summary.id,
     requirementId: summary.requirement_id,
     serviceName: summary.service_name,
+    approximateArea: summary.approximate_area,
     archetype: summary.archetype,
     status: summary.status,
     requestedStart: nullableInstant(summary.requested_start),
@@ -123,6 +128,7 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
     declineReasonCode: detail.decline_reason_code,
     questions: detail.questions,
     siteVisits: detail.site_visits,
+    siteAddress: detail.site_address,
     serverNow: detail.server_now,
   };
 }

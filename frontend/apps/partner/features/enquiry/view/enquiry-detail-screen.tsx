@@ -5,15 +5,13 @@ import { ConfirmAction, ErrorState, Spinner } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { Pictogram, type PictogramName } from "@/components/pictogram";
+import { Pictogram } from "@/components/pictogram";
 import { VisitDayPanel } from "@/features/visit/view/visit-day-panel";
 import { VisitResponse } from "@/features/visit/view/visit-response";
 import { ProposalStatus } from "@/features/proposal/view/proposal-status";
-import { shortDate } from "@/lib/format";
 import { PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
 import { describeStatus, permissionsFor } from "../model/enquiry-state";
-import { budgetLine } from "../model/requirement-facts";
 import { planVisitOf, readEnquiryRecord, type EnquiryRecord } from "../model/wire";
 import {
   isEnquiryForbidden,
@@ -24,6 +22,7 @@ import {
   type EnquiryDetail,
 } from "../queries";
 import { DeclineDialog } from "./decline-dialog";
+import { RequirementSummary } from "./requirement-summary";
 
 /**
  * Accept or decline an enquiry — the tap-first gate before a quote.
@@ -42,10 +41,8 @@ import { DeclineDialog } from "./decline-dialog";
  * `WorkspaceRoute`, and none of them are mounted by any route today — no
  * `page.tsx` anywhere in this app ever imported `EnquiryDetailScreen` from
  * `enquiry-screens.tsx` or `EnquiryDetail` from `enquiry-detail.tsx`. This
- * screen is deliberately narrower: read the enquiry, decide whether to take the
- * quote slot, decline with a reason, or — once accepted — go price it. The
- * richer clarification/site-visit/A3-composer surface stays unbuilt in the
- * tap-first design and is out of this task's scope.
+ * screen is the live decision route: it presents the snapshot scope, the
+ * locality-level travel context and the correct action for the archetype.
  *
  * ## The six-tile category grid the canvas drew is not here
  *
@@ -58,9 +55,7 @@ import { DeclineDialog } from "./decline-dialog";
  * was format it into a title." Guessing a `PictogramName` from free-text
  * `service_name` would be exactly the kind of fabricated categorisation that
  * decision already forecloses, so the grid is dropped rather than repurposed.
- * `service_name` itself is still real data — it is read into an `sr-only`
- * heading rather than shown as body prose, matching the "picture and number,
- * never a sentence" rule the rest of this redesign follows.
+ * `service_name` itself is real data and is therefore the visible heading.
  *
  * ## The header badge is `new`, not `crew`
  *
@@ -71,14 +66,8 @@ import { DeclineDialog } from "./decline-dialog";
  * enquiry, one screen earlier — so the badge here says the same thing the card
  * that linked here just said.
  *
- * ## No distance chip
- *
- * `WorkItem.areaLabel` is `null` for every enquiry — `work-item.ts` documents
- * that neither an enquiry nor an engagement publishes a location field — so
- * there is nothing honest to put behind a distance pictogram. The two fact
- * chips shown instead, "When" and "Budget", are both real published fields
- * (`service_by`/`requested_start`, `budget_min_paise`/`budget_max_paise`) that
- * genuinely help a vendor decide whether to accept.
+ * The locality is intentionally approximate. The exact project destination is
+ * disclosed only in the visit workspace after payment confirms the booking.
  */
 
 export function EnquiryDetailScreen({ invitationId }: { invitationId: string }) {
@@ -151,16 +140,10 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
   const kycGate = isKycRequired(accept.error);
   const acceptPresentation = accept.error ? describeError(accept.error, "mutation") : null;
 
-  const dateLabel = enquiry.serviceBy ?? enquiry.requestedStart;
-  const budget = budgetLine(enquiry.budgetMinPaise, enquiry.budgetMaxPaise);
   const estimateHref = `/work/enquiries/${enquiry.id}/estimate`;
 
   return (
     <Screen>
-      {/* The screen is a badge, two facts and a decision; the landmark still
-          needs a name. */}
-      <h1 className="sr-only">{enquiry.serviceName === "" ? "Enquiry" : enquiry.serviceName}</h1>
-
       <div className="flex items-center gap-3 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] p-4">
         <button
           type="button"
@@ -180,17 +163,21 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
           without the trade ever appearing on screen. The `<h1>` stays as the
           landmark; this is the visible title.
         */}
-        <span className="min-w-0 flex-1 truncate text-[1.1875rem] font-bold leading-snug text-surface">
-          {enquiry.serviceName === "" ? "Enquiry" : enquiry.serviceName}
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-navy-200">
+            {isProject ? "Project enquiry" : "Workforce enquiry"}
+          </span>
+          <h1 className="truncate text-[1.1875rem] font-bold leading-snug text-surface">
+            {enquiry.serviceName === "" ? "Enquiry" : enquiry.serviceName}
+          </h1>
+          {enquiry.approximateArea.trim() === "" ? null : (
+            <span className="flex items-center gap-1 text-xs font-semibold text-navy-100">
+              <Pictogram name="distance" size="xs" className="shrink-0" />
+              <span className="truncate">Near {enquiry.approximateArea}</span>
+            </span>
+          )}
         </span>
 
-        {/*
-          No area beneath the name: no enquiry field publishes one. This
-          module's own note at the top says as much — `WorkItem.areaLabel` is
-          null for every enquiry — and a placeholder locality on the screen a
-          vendor uses to decide whether to travel would be the worst possible
-          invented fact.
-        */}
         {isProject && enquiry.status === "QUOTED" ? (
           <span className="shrink-0 rounded-full bg-success-surface px-3 py-2 text-xs font-extrabold text-success-text">
             Estimate sent
@@ -202,9 +189,8 @@ function EnquiryDecision({ detail }: { readonly detail: EnquiryDetail }) {
         )}
       </div>
 
-      <div className="flex flex-col gap-2.5 px-4 pt-3.5">
-        <FactRow icon="date" label="When" value={dateLabel ? shortDate(dateLabel) : "Not stated"} />
-        <FactRow icon="money" label="Budget" value={budget ?? "Not stated"} />
+      <div className="px-4 pt-4">
+        <RequirementSummary enquiry={enquiry} />
       </div>
 
       {isProject ? (
@@ -366,34 +352,6 @@ function QuoteAction() {
  */
 function Screen({ children }: { children: ReactNode }) {
   return <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">{children}</main>;
-}
-
-/**
- * A picture and a number, which is the only way this app states a fact.
- *
- * `label` is never drawn — `Pictogram` is `aria-hidden`, so without it a screen
- * reader hears two bare values in a row with nothing saying which is which.
- */
-function FactRow({
-  icon,
-  label,
-  value,
-}: {
-  readonly icon: PictogramName;
-  readonly label: string;
-  readonly value: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-card border border-line bg-surface p-3">
-      <Pictogram name={icon} size="md" className="shrink-0 text-action-secondary" />
-      <span className="flex min-w-0 flex-col leading-tight">
-        <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
-          {label}
-        </span>
-        <span className="min-w-0 truncate text-xl font-extrabold text-text">{value}</span>
-      </span>
-    </div>
-  );
 }
 
 /**

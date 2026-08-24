@@ -1,7 +1,7 @@
 "use client";
 
 import { describeError } from "@vsolve/query";
-import { ErrorState, cn } from "@vsolve/ui";
+import { ErrorState, cn, formatMoney } from "@vsolve/ui";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -86,37 +86,46 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
   const versioned = { bookingId: visit.id, expectedVersion: visit.version };
   const busy = enRoute.isPending || arrived.isPending || unavailable.isPending;
   const commandError = enRoute.error ?? arrived.error ?? unavailable.error;
+  const money = visit.earning ?? visit.estimated_earning;
 
   return (
     <>
     <main className="flex min-h-[calc(100dvh-9rem)] flex-col bg-canvas">
-      {/* The screen is a clock, a button and a picture; the landmark still
-          needs a name. */}
-      <h1 className="sr-only">Your job — {status.label}</h1>
-
-      <div className="flex items-center gap-3.5 bg-[linear-gradient(160deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-5">
+      <header className="bg-[linear-gradient(150deg,var(--color-navy-700)_0%,var(--color-navy-900)_100%)] px-4 pt-4 pb-6">
+        <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => router.back()}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface/13 transition-colors duration-200 hover:bg-surface/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-inverse"
         >
           <Pictogram name="back" size="md" className="text-surface" />
           <span className="sr-only">Back</span>
         </button>
-
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <JobTitle visit={visit} />
-          <span className="flex items-center gap-2">
-            <Pictogram name="time" size="sm" className="shrink-0 text-action-hover" />
-            <span className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-action-hover">
-              Starts
-            </span>
-            <span className="text-[1.375rem] font-extrabold leading-none tracking-[-0.02em] text-surface">
-              {clockTime(visit.scheduled_start) ?? "—"}
-            </span>
+          <span className="rounded-full border border-surface/25 bg-surface/12 px-3 py-1 text-xs font-bold uppercase tracking-[0.05em] text-surface">
+            {status.label}
           </span>
-        </span>
-      </div>
+        </div>
+
+        <p className="mt-5 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-navy-200">
+          Service visit
+        </p>
+        <JobTitle visit={visit} />
+
+        <div className={cn("mt-5 grid gap-2", money ? "grid-cols-2" : "grid-cols-1")}>
+          <HeroFact
+            icon="time"
+            label="Starts"
+            value={clockTime(visit.scheduled_start) ?? "Time pending"}
+          />
+          {money ? (
+            <HeroFact
+              icon="money"
+              label={visit.earning ? "Final earning" : "Estimated earning"}
+              value={formatMoney(money.net_paise)}
+            />
+          ) : null}
+        </div>
+      </header>
 
       {commandError ? (
         <div className="px-4 pt-4">
@@ -124,7 +133,29 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col gap-3 px-4 pt-4 pb-5">
+      <div className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-5">
+        <ServiceDetails visit={visit} />
+        <VisitDetails visit={visit} />
+
+        <section
+          aria-labelledby="next-step-heading"
+          className="rounded-card border border-line bg-surface p-4 shadow-[var(--shadow-card)]"
+        >
+          <div className="mb-4 flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-selected-surface text-action-secondary">
+              <Pictogram name={STATUS_PICTOGRAM[visit.status]} size="md" />
+            </span>
+            <span className="min-w-0">
+              <h2 id="next-step-heading" className="text-base font-extrabold text-text">
+                Next step
+              </h2>
+              <p className="mt-0.5 text-sm leading-5 text-text-secondary">
+                {STATUS_GUIDANCE[visit.status]}
+              </p>
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-3">
         {canGoEnRoute(visit) ? (
           <BigAction
             tone="secondary"
@@ -173,7 +204,9 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
 
         {canReport(visit) ? <CompletionReport visit={visit} /> : null}
 
-        {isWaiting(visit) ? <StatusMedallion status={visit.status} /> : null}
+            {isWaiting(visit) ? <StatusMedallion status={visit.status} /> : null}
+          </div>
+        </section>
       </div>
     </main>
     <div className="bg-canvas px-4 pb-5">
@@ -188,30 +221,178 @@ export function VisitJobView({ visit }: { readonly visit: PartnerVisit }) {
 }
 
 /**
- * What this job is, from the only field that says so.
+ * What this job is, from the durable booked scope.
  *
- * `PartnerBooking` publishes **no service name** — the schema carries
- * `work_tasks`, `evidence`, `earning` and timestamps, and nothing else that
- * names the job (`schema.d.ts:7926-7949`). So the title is the first work
- * task's own `label`, which is the real published description of the work, plus
- * a count when there is more than one.
- *
- * This is not a fallback for a missing name; it is the name this record has. A
- * booking with no tasks at all renders "Your job" rather than an empty line —
- * `canReport` already documents that a taskless visit is a real state.
+ * `display_title` is derived from immutable fulfilment-unit lines, so it exists
+ * while a confirmed booking still has no operational `work_tasks`. Task labels
+ * remain a compatibility fallback for older projections; only a record with
+ * neither renders "Your job".
  */
 function JobTitle({ visit }: { readonly visit: PartnerVisit }) {
+  const durableTitle = visit.display_title?.trim() || null;
   const [first, ...rest] = visit.work_tasks;
 
   return (
-    <span className="truncate text-[1.1875rem] font-bold leading-snug text-surface">
-      {first === undefined ? "Your job" : first.label}
-      {rest.length > 0 ? (
+    <h1 className="mt-1 max-w-[28ch] text-[1.75rem] font-extrabold leading-tight tracking-[-0.025em] text-surface">
+      {durableTitle ?? (first === undefined ? "Your job" : first.label)}
+      {durableTitle === null && rest.length > 0 ? (
         <span className="font-semibold text-navy-200"> +{rest.length} more</span>
       ) : null}
-    </span>
+    </h1>
   );
 }
+
+function HeroFact({
+  icon,
+  label,
+  value,
+}: {
+  readonly icon: PictogramName;
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 rounded-card border border-surface/15 bg-surface/10 px-3 py-2.5">
+      <Pictogram name={icon} size="md" className="shrink-0 text-action-hover" />
+      <span className="min-w-0">
+        <span className="block text-[0.625rem] font-bold uppercase tracking-[0.06em] text-navy-200">
+          {label}
+        </span>
+        <span className="block truncate text-base font-extrabold tabular-nums text-surface">
+          {value}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** The immutable booked scope, available before start-OTP creates work tasks. */
+function ServiceDetails({ visit }: { readonly visit: PartnerVisit }) {
+  return (
+    <section
+      aria-labelledby="service-details-heading"
+      className="rounded-card border border-line bg-surface p-4 shadow-[var(--shadow-card)]"
+    >
+      <div className="flex items-center gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-selected-surface text-action-secondary">
+          <Pictogram name="all-work" size="md" />
+        </span>
+        <span>
+          <p className="text-[0.6875rem] font-bold uppercase tracking-[0.06em] text-text-muted">
+            Booked scope
+          </p>
+          <h2 id="service-details-heading" className="text-base font-extrabold text-text">
+            Service details
+          </h2>
+        </span>
+      </div>
+
+      <ul className="mt-4 divide-y divide-line overflow-hidden rounded-card border border-line bg-surface-sunken">
+        {visit.service_lines.length > 0 ? (
+          visit.service_lines.map((line) => (
+            <li key={line.line_id} className="flex items-center gap-3 px-3.5 py-3">
+              <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
+              <span className="min-w-0 flex-1 text-sm font-semibold leading-5 text-text">
+                {line.service_label}
+              </span>
+              {line.quantity > 1 ? (
+                <span className="shrink-0 rounded-full border border-line bg-surface px-2 py-1 text-xs font-bold text-text-secondary">
+                  Qty {line.quantity}
+                </span>
+              ) : null}
+            </li>
+          ))
+        ) : (
+          <li className="flex items-center gap-3 px-3.5 py-3">
+            <Pictogram name="yes" size="sm" className="shrink-0 text-success-text" />
+            <span className="text-sm font-semibold leading-5 text-text">
+              {visit.display_title?.trim() || "Your booked service"}
+            </span>
+          </li>
+        )}
+      </ul>
+
+      {visit.requirements.length > 0 ? (
+        <div className="mt-4 border-t border-line pt-4">
+          <div className="flex items-center gap-2 text-sm font-bold text-text">
+            <Pictogram name="doing" size="sm" className="text-action-secondary" />
+            Bring with you
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {visit.requirements.map((requirement) => (
+              <li
+                key={requirement}
+                className="rounded-full border border-line bg-surface-sunken px-3 py-1.5 text-xs font-semibold capitalize text-text-secondary"
+              >
+                {requirement}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function VisitDetails({ visit }: { readonly visit: PartnerVisit }) {
+  return (
+    <section aria-labelledby="visit-details-heading">
+      <h2 id="visit-details-heading" className="mb-2 text-sm font-extrabold text-text">
+        Visit details
+      </h2>
+      <dl className="grid grid-cols-2 gap-2">
+        <DetailFact icon="date" label="Date" value={calendarDate(visit.scheduled_start)} />
+        <DetailFact
+          icon="time"
+          label="Start time"
+          value={clockTime(visit.scheduled_start) ?? "Time pending"}
+        />
+        <DetailFact
+          icon="days"
+          label="Expected work"
+          value={durationLabel(visit.estimated_duration_minutes)}
+        />
+        {visit.approximate_area ? (
+          <DetailFact icon="distance" label="Service area" value={visit.approximate_area} />
+        ) : null}
+      </dl>
+    </section>
+  );
+}
+
+function DetailFact({
+  icon,
+  label,
+  value,
+}: {
+  readonly icon: PictogramName;
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-card border border-line bg-surface px-3 py-3">
+      <dt className="flex items-center gap-1.5 text-[0.6875rem] font-bold uppercase tracking-[0.04em] text-text-muted">
+        <Pictogram name={icon} size="sm" className="shrink-0" />
+        {label}
+      </dt>
+      <dd className="mt-1 break-words text-sm font-bold leading-5 text-text">{value}</dd>
+    </div>
+  );
+}
+
+const STATUS_GUIDANCE: Record<VisitStatus, string> = {
+  CONFIRMED: "Review the scope and tools, then start travelling when you are ready.",
+  EN_ROUTE: "Mark arrival only after you have reached the customer’s site.",
+  ARRIVED: "Ask the customer for the start code before beginning the work.",
+  IN_PROGRESS: "Complete the booked scope, then report the outcome of every task.",
+  ABORTED: "Report what was completed so the job can be settled correctly.",
+  COMPLETION_SUBMITTED: "Your report is with the customer. No action is needed right now.",
+  COMPLETED: "This job is complete and its final earning is shown above.",
+  PARTIALLY_COMPLETED: "The completed portion has been recorded and settled.",
+  DISPUTED: "The customer raised a problem. Vsolve will guide the next action.",
+  RECOVERY_REQUIRED: "Vsolve support needs to resolve this job before it can continue.",
+  CANCELLED: "This visit was cancelled. No travel or work is needed.",
+};
 
 /**
  * The statuses that carry no action of their own.
@@ -702,16 +883,19 @@ function StatusMedallion({ status }: { readonly status: VisitStatus }) {
   const copy = STATUS_COPY[status];
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12">
+    <div
+      role="status"
+      className={cn(
+        "flex min-h-14 items-center gap-3 rounded-card border px-3.5 py-3",
+        MEDALLION_TONE[copy.tone],
+      )}
+    >
       <div
-        className={cn(
-          "grid h-42 w-42 place-items-center rounded-full border-2",
-          MEDALLION_TONE[copy.tone],
-        )}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-current/20"
       >
-        <Pictogram name={STATUS_PICTOGRAM[status]} className="h-21 w-21" />
+        <Pictogram name={STATUS_PICTOGRAM[status]} size="md" />
       </div>
-      <span className="text-center text-xl font-extrabold text-text">{copy.label}</span>
+      <span className="text-sm font-bold">Current status: {copy.label}</span>
     </div>
   );
 }
@@ -774,4 +958,23 @@ function clockTime(iso: string): string | null {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return null;
   return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(at);
+}
+
+/** "Tuesday, 25 Aug" in the device's own zone. */
+function calendarDate(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "Date pending";
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(at);
+}
+
+function durationLabel(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  if (hours === 0) return `${remaining} min`;
+  if (remaining === 0) return `${hours} hr`;
+  return `${hours} hr ${remaining} min`;
 }

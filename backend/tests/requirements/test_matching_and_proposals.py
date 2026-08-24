@@ -1,7 +1,8 @@
 """P3: eligibility, invitation waves, quote slots, proposals, clarification and site visits."""
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.utils import timezone
@@ -267,6 +268,35 @@ def test_a_dormant_vendor_is_not_invited() -> None:
     evaluation = next(i for i in result.evaluations if i.partner.id == dormant.id)
 
     assert matching.ExclusionReason.UNRESPONSIVE in evaluation.exclusions
+
+
+def test_same_day_request_uses_the_whole_chosen_day_for_travel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A date stored at midnight is a chosen day, not a midnight arrival appointment."""
+
+    variant = _variant()
+    area = _area()
+    customer = _customer()
+    vendor = _vendor(area=area, variant=variant, phone="+919000000013", name="Same day")
+    requirement = _matching_requirement(variant=variant, area=area, customer=customer)
+
+    zone = ZoneInfo(area.timezone)
+    chosen_day = timezone.localdate()
+    requested_midnight = datetime.combine(chosen_day, time.min, tzinfo=zone)
+    submitted_at_noon = datetime.combine(chosen_day, time(hour=12), tzinfo=zone)
+    requirement.requested_start = requested_midnight
+    requirement.save(update_fields=("requested_start", "updated_at"))
+    # Django normalises the persisted instant to UTC. Hyderabad midnight is 18:30 on the previous
+    # UTC date, which is the representation that triggered the production failure.
+    requirement.refresh_from_db()
+    monkeypatch.setattr(matching.timezone, "now", lambda: submitted_at_noon)
+
+    result = matching.evaluate_candidates(requirement=requirement)
+    evaluation = next(item for item in result.evaluations if item.partner.id == vendor.id)
+
+    assert matching.ExclusionReason.TRAVEL_NOT_FEASIBLE not in evaluation.exclusions
+    assert evaluation.included
 
 
 def test_a_roster_smaller_than_the_headcount_is_excluded() -> None:

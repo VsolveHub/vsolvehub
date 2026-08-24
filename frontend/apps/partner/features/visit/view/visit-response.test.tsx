@@ -83,8 +83,8 @@ describe("visit booking handoff", () => {
     render(<VisitResponse enquiry={enquiry} />, { wrapper: Wrapper });
 
     fireEvent.click(await screen.findByRole("radio", { name: /Choose/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^Book /i }));
-    fireEvent.click(await screen.findByRole("button", { name: "Confirm the visit" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Accept & book /i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept & book visit" }));
 
     await waitFor(() =>
       expect(router.replace).toHaveBeenCalledWith(`/work/enquiries/${enquiry.id}/visit`),

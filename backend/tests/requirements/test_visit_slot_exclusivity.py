@@ -1,6 +1,7 @@
 """A Customer project cannot host two Partner visits at the same time."""
 
 from datetime import datetime, timedelta
+from http import HTTPStatus
 
 import pytest
 from django.utils import timezone
@@ -112,3 +113,38 @@ def test_another_partner_cannot_confirm_a_project_time_already_held(
     )
     assert occupied.is_available is False
     assert occupied.unavailable_reason == "NO_CAPACITY"
+
+
+def test_project_enquiry_reveals_only_locality_until_the_paid_visit_is_scheduled(
+    world: M2World,
+) -> None:
+    invitation, _other = _two_partner_project(world)
+    grid = visit_slots.candidate_visit_starts(invitation=invitation)
+    slot = next(window for day in grid.days for window in day.windows if window.is_available)
+
+    confirmation = access.confirm_visit_slot(invitation_id=invitation.id, slot_id=slot.id)
+
+    listing = world.vendor_client.get("/api/v1/partner/enquiries/")
+    assert listing.status_code == HTTPStatus.OK
+    row = next(item for item in listing.json()["results"] if item["id"] == str(invitation.id))
+    assert row["approximate_area"] == "Kukatpally, Hyderabad"
+    assert "site_address" not in row
+
+    held = world.vendor_client.get(f"/api/v1/partner/enquiries/{invitation.id}/")
+    assert held.status_code == HTTPStatus.OK
+    assert held.json()["site_address"] is None
+
+    confirmation.visit.status = confirmation.visit.Status.SCHEDULED
+    confirmation.visit.save(update_fields=("status", "updated_at"))
+
+    scheduled = world.vendor_client.get(f"/api/v1/partner/enquiries/{invitation.id}/")
+    assert scheduled.status_code == HTTPStatus.OK
+    assert scheduled.json()["site_address"] == {
+        "line1": "Plot 14",
+        "line2": "",
+        "landmark": "",
+        "locality": "Kukatpally",
+        "city": "Hyderabad",
+        "state": "Telangana",
+        "postal_code": "500072",
+    }

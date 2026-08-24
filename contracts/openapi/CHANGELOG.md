@@ -4,6 +4,39 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.42.0 - Accepted jobs retain their service scope
+
+The Partner booking projection now publishes `service_lines` and `requirements`, copied from the
+immutable fulfilment-unit snapshots that produced the accepted offer. This keeps each booked
+service, quantity, structured scope and required equipment visible before start-OTP verification
+materializes operational `work_tasks`.
+
+The projection remains unit-scoped and contains no Customer identity, contact details, exact
+address, invoice, Booking Group identifier or sibling-unit data.
+
+## 1.41.0 - Project enquiries reveal place progressively
+
+Partner enquiry summaries now publish `approximate_area`, a locality-level label with no street,
+building, coordinates, customer identity or contact details. `EnquiryDetail.site_address` is
+nullable and remains null before visit commitment and while the first visit is held for Customer
+payment. It is populated only when a paid A5 plan visit reaches `SCHEDULED` or `IN_PROGRESS`.
+
+The exact destination contains address lines, landmark, locality, city, state and postal code. It
+still contains no Customer name, phone number, email or coordinates. The disclosure lets the
+Partner travel to a booked visit without turning an unaccepted enquiry into an off-platform lead.
+
+## 1.40.0 - A booked job keeps its offer context
+
+The Partner booking projection now publishes `display_title`, `approximate_area` and
+`estimated_earning`. These are durable booked-scope values available while a booking is still
+`CONFIRMED`, before `work_tasks` are materialized at work start and before settlement creates the
+final `earning` ledger entry.
+
+`estimated_earning` carries gross, commission, net and currency using the same frozen quote and
+commission policy shown in the accepted offer. It is an estimate, not a replacement for `earning`:
+completion outcomes and accepted amendments can change the final amount. The projection continues
+to withhold the Customer's invoice, exact address, Booking Group id and sibling-unit data.
+
 ## 1.34.0 - Somebody is finally told
 
 **The in-app notification feed.** M2 emitted thirty-nine outbox events and three had consumers;

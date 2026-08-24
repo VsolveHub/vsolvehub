@@ -23,6 +23,7 @@ export function enquirySummary(
     // Required since 1.26.0. The inbox titled rows by de-slugging until the
     // server started sending the name it should always have sent.
     service_name: "Housekeeping staff",
+    approximate_area: "Kukatpally, Hyderabad",
     archetype: "A3_TIME_BLOCK",
     requirement_status: "MATCHING",
     status: "INVITED",
@@ -55,6 +56,7 @@ export function enquiryDetail(
     proposals: [],
     questions: [],
     site_visits: [],
+    site_address: null,
     server_now: "2026-08-13T06:00:00Z",
     ...overrides,
   };

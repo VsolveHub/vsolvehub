@@ -115,9 +115,10 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div>
-        <h2 className="text-lg font-bold text-text">Choose a visit time</h2>
+        <h2 className="text-lg font-bold text-text">Book your site visit</h2>
         <p className="mt-0.5 text-sm leading-5 text-text-secondary">
-          Pick a time you can reach the site.
+          Choose when you can attend. Confirming this time accepts the project enquiry and books
+          the visit in one step.
         </p>
       </div>
 
@@ -178,7 +179,7 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
           loadingLabel="Confirming"
           onClick={() => setConfirming(true)}
         >
-          {selected === null ? "Choose a time" : `Book ${selected.label}`}
+          {selected === null ? "Choose a time" : `Accept & book ${selected.label}`}
         </Button>
 
         {permissions.canDecline ? (
@@ -188,14 +189,17 @@ export function VisitResponse({ enquiry }: VisitResponseProps) {
         ) : null}
       </div>
 
-      <p className="text-xs leading-5 text-text-muted">Complete the estimate during this visit.</p>
+      <p className="text-xs leading-5 text-text-muted">
+        If customer payment is still needed, the slot is held first. Travel only after the visit is
+        confirmed and the exact address appears in your visit workspace.
+      </p>
 
       <ConfirmAction
         open={confirming}
         onOpenChange={setConfirming}
-        title={selected ? `Visit at ${selected.label}` : "Confirm this visit"}
+        title={selected ? `Accept and book ${selected.label}` : "Accept and book this visit"}
         consequence={CONFIRM_COMMITMENT}
-        confirmLabel="Confirm the visit"
+        confirmLabel="Accept & book visit"
         pending={confirm.isPending}
         onConfirm={() => {
           if (selected === null) return;

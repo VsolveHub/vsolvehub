@@ -24,6 +24,17 @@ function confirmedVisit(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
   return {
     id: "b1",
     fulfilment_unit_id: null,
+    display_title: "Bathroom deep clean",
+    approximate_area: "Madhapur",
+    service_lines: [
+      {
+        line_id: "l1",
+        service_label: "Bathroom deep clean",
+        quantity: 1,
+        scope: { rooms: 1 },
+      },
+    ],
+    requirements: ["Mop", "Cleaning solution"],
     status: "CONFIRMED",
     version: 1,
     scheduled_start: "2026-08-20T09:00:00Z",
@@ -35,6 +46,12 @@ function confirmedVisit(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
     work_tasks: [],
     evidence: [],
     active_amendment: null,
+    estimated_earning: {
+      gross_paise: 300_000,
+      commission_paise: 45_000,
+      net_paise: 255_000,
+      currency: "INR",
+    },
     earning: null,
     server_now: "2026-08-20T08:00:00Z",
     ...overrides,
@@ -52,6 +69,23 @@ function renderVisit(visit: PartnerVisit) {
 }
 
 describe("handing a job back", () => {
+  it("shows the accepted service, visit facts, tools and earning before its action", () => {
+    renderVisit(confirmedVisit());
+
+    expect(screen.getAllByText("Bathroom deep clean")).toHaveLength(2);
+    expect(screen.queryByText("Your job")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Service details" })).toBeInTheDocument();
+    expect(screen.getByText("Madhapur")).toBeInTheDocument();
+    expect(screen.getByText("1 hr")).toBeInTheDocument();
+    expect(screen.getByText("Mop")).toBeInTheDocument();
+    expect(screen.getByText("Cleaning solution")).toBeInTheDocument();
+    expect(screen.getByText("₹2,550")).toBeInTheDocument();
+
+    const details = screen.getByRole("heading", { name: "Service details" });
+    const action = screen.getByRole("button", { name: "I am on my way" });
+    expect(details.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("offers the control while the job is still confirmed", () => {
     renderVisit(confirmedVisit());
 

@@ -83,6 +83,7 @@ function enquiry(overrides: Partial<EnquirySummary> = {}): EnquirySummary {
     requirement_id: "r2",
     category_slug: "deep-cleaning",
     service_name: "Deep clean",
+    approximate_area: "Kukatpally, Hyderabad",
     archetype: "A5_CUSTOM_PROJECT",
     requirement_status: "MATCHING",
     status: "INVITED",
@@ -134,6 +135,10 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
   return {
     id: "j1",
     fulfilment_unit_id: null,
+    display_title: "Bathroom deep clean",
+    approximate_area: "Madhapur",
+    service_lines: [],
+    requirements: [],
     status: "COMPLETED",
     version: 3,
     // Within the 24h settled window (`NOW` minus one hour) so a bare `job()`
@@ -148,6 +153,12 @@ function job(overrides: Partial<PartnerVisit> = {}): PartnerVisit {
     work_tasks: [],
     evidence: [],
     active_amendment: null,
+    estimated_earning: {
+      gross_paise: 300_000,
+      commission_paise: 45_000,
+      net_paise: 255_000,
+      currency: "INR",
+    },
     earning: {
       gross_paise: 700_000,
       commission_paise: 100_000,
@@ -434,11 +445,12 @@ describe("toWorkItems — enquiries", () => {
     expect(items.map((item) => item.key)).toEqual(["enquiry:sooner", "enquiry:later"]);
   });
 
-  it("never carries a price or an area label for a kind that publishes neither", () => {
+  it("carries no price and only the published approximate area", () => {
     const [item] = toWorkItems({ ...EMPTY, enquiries: [enquiry()] });
 
     expect(item?.amountPaise).toBeNull();
-    expect(item?.areaLabel).toBeNull();
+    expect(item?.areaLabel).toBe("Kukatpally, Hyderabad");
+    expect(item?.actionLabel).toBe("Review & book visit");
     expect(item?.href).toBe("/work/enquiries/e1");
   });
 });
@@ -713,7 +725,7 @@ describe("toWorkItems — A1 visits", () => {
     expect(items).toHaveLength(0);
   });
 
-  it("carries the Partner's net earning, and nothing at all before it settles", () => {
+  it("uses the final net earning after settlement and the estimate before it settles", () => {
     const [settled] = toWorkItems({ ...EMPTY, jobs: [job()] });
     const [unsettled] = toWorkItems({
       ...EMPTY,
@@ -721,8 +733,33 @@ describe("toWorkItems — A1 visits", () => {
     });
 
     expect(settled?.amountPaise).toBe(600_000);
-    expect(unsettled?.amountPaise).toBeNull();
+    expect(settled?.amountLabel).toBe("You earned");
+    expect(unsettled?.amountPaise).toBe(255_000);
+    expect(unsettled?.amountLabel).toBe("Est. payout");
     expect(settled?.href).toBe("/work/jobs/j1");
+  });
+
+  it("keeps the durable booked title, area, schedule and duration before tasks exist", () => {
+    const [item] = toWorkItems({
+      ...EMPTY,
+      jobs: [
+        job({
+          status: "CONFIRMED",
+          work_tasks: [],
+          earning: null,
+          scheduled_start: "2026-08-20T09:00:00Z",
+          estimated_duration_minutes: 90,
+        }),
+      ],
+    });
+
+    expect(item).toMatchObject({
+      title: "Bathroom deep clean",
+      areaLabel: "Madhapur",
+      whenIso: "2026-08-20T09:00:00Z",
+      whenIsDay: false,
+      durationMinutes: 90,
+    });
   });
 });
 

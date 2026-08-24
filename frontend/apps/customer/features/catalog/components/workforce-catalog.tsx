@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import type { Category, ServiceCard as ServiceCardData } from "../queries";
 import { groupServicesBySubcategory } from "../grouping";
-import { serviceHref } from "./service-card";
+import { serviceHref } from "../service-href";
 
 interface WorkforceCatalogProps {
   category: Category;

@@ -138,7 +138,7 @@ export function visitPermissionsFor(visit: SiteVisit | null): VisitPermissions {
  * write the estimate there.
  */
 export const CONFIRM_COMMITMENT =
-  "Book only if you can reach the site at this time and complete the estimate during the visit.";
+  "This accepts the project enquiry and takes one visit slot. Book only if you can reach the site at this time and complete the estimate during the visit.";
 
 export interface ConfirmationOutcome {
   readonly title: string;

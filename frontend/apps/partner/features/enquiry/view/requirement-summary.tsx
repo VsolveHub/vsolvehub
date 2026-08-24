@@ -91,11 +91,7 @@ export function RequirementSummary({ enquiry }: RequirementSummaryProps) {
             },
           ]}
         />
-      ) : (
-        <p className="text-sm leading-6 text-text-secondary">
-          The customer did not state a budget.
-        </p>
-      )}
+      ) : null}
 
       <p className="text-sm leading-6 text-text-secondary">
         Vsolve does not share customer photos or voice notes with vendors yet. If the description
@@ -105,8 +101,9 @@ export function RequirementSummary({ enquiry }: RequirementSummaryProps) {
       <p className="flex items-start gap-2 text-xs leading-5 text-text-muted">
         <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
         <span>
-          The customer&rsquo;s name, address and phone number are not shared with vendors at any
-          point in this screen — not before you accept, and not after.
+          {enquiry.archetype === "A5_CUSTOM_PROJECT"
+            ? "Only the approximate area is shown before booking. The exact site address appears in your visit workspace after customer payment confirms the visit; the customer’s name and phone stay private."
+            : "Only the approximate area is shown with this quote request. The customer’s exact address, name and phone stay private."}
         </span>
       </p>
     </Card>

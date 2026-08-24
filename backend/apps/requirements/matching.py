@@ -62,10 +62,11 @@ from apps.requirements.sla import add_business_hours
 
 MATCHING_POLICY: Final[str] = "m2_capability_area_language_travel_capacity_responsiveness"
 #: Bumped from 1 when eligibility gained language, travel feasibility, calendar availability and
-#: the A1 reservation grid, and ordering stopped being a stable sort on Partner id. An invitation
-#: written under version 1 was decided by different rules, and Operations explaining a past
-#: decision needs to know which.
-MATCHING_POLICY_VERSION: Final[int] = 2
+#: the A1 reservation grid, and ordering stopped being a stable sort on Partner id. Version 3
+#: corrects the travel boundary from midnight at the start of the Customer's chosen day to the end
+#: of that day. An invitation written under an older version was decided by different rules, and
+#: Operations explaining a past decision needs to know which.
+MATCHING_POLICY_VERSION: Final[int] = 3
 
 #: A vendor who has not opened the app in this long is not invited. Every wave spent on a dormant
 #: account burns the Customer's delivery promise.
@@ -251,8 +252,12 @@ def snapshot_requirement(requirement: CustomerRequirement) -> RequirementSnapsho
 
 
 def _requested_days(requirement: CustomerRequirement) -> tuple[date, date]:
+    area = requirement.service_area
+    zone = ZoneInfo(area.timezone) if area is not None else timezone.get_current_timezone()
     start = (
-        requirement.requested_start.date() if requirement.requested_start else timezone.localdate()
+        requirement.requested_start.astimezone(zone).date()
+        if requirement.requested_start
+        else timezone.now().astimezone(zone).date()
     )
     duration = int(requirement.answers.get("duration_days") or 1)
     return start, start + timedelta(days=max(duration - 1, 0))
@@ -272,6 +277,20 @@ def occupied_span(requirement: CustomerRequirement) -> tuple[datetime, datetime]
     start = datetime.combine(starts_on, datetime.min.time(), tzinfo=zone)
     end = datetime.combine(ends_on + timedelta(days=1), datetime.min.time(), tzinfo=zone)
     return start, end
+
+
+def _requested_day_end(requirement: CustomerRequirement) -> datetime:
+    """The first instant after the Customer's requested start day, in the area's timezone.
+
+    Capture stores a chosen *day* in the `requested_start` DateTimeField as local midnight. It is
+    not an appointment at 00:00. Travel eligibility asks whether the Partner can reach the site at
+    any point on that day, so comparing arrival to the stored midnight excludes every candidate
+    when a Customer submits later that same day.
+    """
+    starts_on, _ends_on = _requested_days(requirement)
+    area = requirement.service_area
+    zone = ZoneInfo(area.timezone) if area is not None else timezone.get_current_timezone()
+    return datetime.combine(starts_on + timedelta(days=1), datetime.min.time(), tzinfo=zone)
 
 
 def _held_capacity_partner_ids(
@@ -490,7 +509,7 @@ def _exclusions_for(*, partner: PartnerProfile, pool: _PoolFacts) -> list[str]:
     if (
         requirement.requested_start is not None
         and earliest is not None
-        and earliest > requirement.requested_start
+        and earliest >= _requested_day_end(requirement)
     ):
         reasons.append(ExclusionReason.TRAVEL_NOT_FEASIBLE)
 

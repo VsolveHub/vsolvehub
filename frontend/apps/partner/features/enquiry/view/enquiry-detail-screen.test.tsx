@@ -139,8 +139,13 @@ describe("project visit entry", () => {
     renderProject("INVITED");
 
     expect(
-      await screen.findByRole("heading", { name: "Choose a visit time" }),
+      await screen.findByRole("heading", { name: "Book your site visit" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Home renovation" })).toBeInTheDocument();
+    expect(screen.getByText("Near Kukatpally, Hyderabad")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What the customer asked for" })).toBeInTheDocument();
+    expect(screen.getByText("Two floors, deep clean before a handover.")).toBeInTheDocument();
+    expect(screen.queryByText("Plot 14")).not.toBeInTheDocument();
     expect(await screen.findByRole("radio", { name: /Choose/i })).toBeInTheDocument();
     expect(screen.queryByText("Today")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /22 Aug/i })).toBeInTheDocument();
@@ -155,7 +160,7 @@ describe("project visit entry", () => {
     renderProject("ACCEPTED");
 
     expect(
-      await screen.findByRole("heading", { name: "Choose a visit time" }),
+      await screen.findByRole("heading", { name: "Book your site visit" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Confirm a visit slot first")).not.toBeInTheDocument();
   });
@@ -164,7 +169,7 @@ describe("project visit entry", () => {
     renderProject("ACCEPTED", [planVisit()]);
 
     expect(await screen.findByRole("heading", { name: "Your visit" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Choose a visit time" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Book your site visit" })).not.toBeInTheDocument();
   });
 
   it("shows the submitted estimate with a revise action", async () => {
