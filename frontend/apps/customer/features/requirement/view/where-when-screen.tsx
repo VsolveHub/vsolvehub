@@ -71,12 +71,21 @@ export interface WhereWhenScreenProps {
    * outline rather than a cosmetic duplicate.
    */
   hideHeading?: boolean;
+  /**
+   * The estimate-count chooser, mounted by the container.
+   *
+   * On this screen since the M2-revamp removed the review step: how many
+   * professionals should visit is part of "where and when", and the send
+   * button sits beside it. Absent on A3 and before the draft exists.
+   */
+  visitPlanChooser?: ReactNode;
 }
 
 export function WhereWhenScreen({
   addressPicker,
   minDate,
   hideHeading = false,
+  visitPlanChooser,
 }: WhereWhenScreenProps) {
   const { state, dispatch } = useRequirement();
 
@@ -128,6 +137,8 @@ export function WhereWhenScreen({
             }
           />
         </Field>
+
+        {visitPlanChooser}
       </div>
     </div>
   );

@@ -25,7 +25,7 @@ import {
 } from "../model/state";
 
 /**
- * One state container for the whole four-screen requirement.
+ * One state container for the whole two-screen requirement.
  *
  * One reducer rather than per-screen state is what makes going back a *screen
  * change* instead of a navigation: nothing remounts, nothing refetches and
@@ -71,18 +71,17 @@ export function useRequirement(): RequirementContextValue {
  * What is written to sessionStorage.
  *
  * Customer intent plus the opaque id of the server draft it belongs to. No
- * verdict and no local attachment handle:
+ * verdict:
  *
  * - the **verdict** is the server's reading of an answer set, and replaying one
  *   would show a lifecycle sentence nothing has re-derived;
  * - the **requirement id** is restored so reload resumes the same draft instead
  *   of creating a duplicate. `RequirementFlow` re-reads that id before using it
- *   and leaves the editor when the server says the draft is no longer editable;
- * - an **attachment** is a live `File` handle that does not survive a reload, so
- *   restoring its row would show an upload that can never finish.
+ *   and leaves the editor when the server says the draft is no longer editable.
  *
- * Attachments are the one place this is a visible loss, and it is stated on the
- * details screen rather than hidden.
+ * Entries written by earlier builds carry keys this shape no longer names —
+ * `additionalDetails`, `language`, `optionalDetails` — and they parse fine;
+ * what is no longer collected is simply no longer read.
  */
 interface PersistedIntent {
   categorySlug: string;
@@ -101,17 +100,6 @@ interface PersistedIntent {
    * throwing away the rest of the brief.
    */
   flexibilityDays?: number;
-  additionalDetails: string;
-  language: string | null;
-  /**
-   * The four optional extras. Intent, so they travel — and normalised on every
-   * read by `readOptionalDetail`, which is what makes trusting this JSON safe.
-   *
-   * Optional on the way *in*: an entry written by a build that predates the
-   * panels is still a perfectly good draft, and refusing to restore it because
-   * one key is missing would lose a Customer's answers to a version skew.
-   */
-  optionalDetails?: Record<string, unknown>;
 }
 
 const STORAGE_PREFIX = "vsolve.requirement.";
@@ -152,9 +140,6 @@ function writeIntent(state: RequirementDraftState): void {
     requestedStart: state.requestedStart,
     serviceBy: state.serviceBy,
     flexibilityDays: state.flexibilityDays,
-    additionalDetails: state.additionalDetails,
-    language: state.language,
-    optionalDetails: state.optionalDetails,
   };
   try {
     window.sessionStorage.setItem(storageKey(state.categorySlug), JSON.stringify(intent));
@@ -222,13 +207,6 @@ export function RequirementProvider({
         requestedStart: intent.requestedStart ?? null,
         serviceBy: intent.serviceBy ?? null,
         flexibilityDays: intent.flexibilityDays ?? 0,
-        additionalDetails: intent.additionalDetails,
-        language: intent.language,
-        // Older entries predate this field. An absent bag restores as empty
-        // rather than as `undefined`, which the reducer would spread into state
-        // and every panel would then read through an optional chain it should
-        // not need.
-        optionalDetails: intent.optionalDetails ?? {},
       });
     }
     setHasRestoredIntent(true);

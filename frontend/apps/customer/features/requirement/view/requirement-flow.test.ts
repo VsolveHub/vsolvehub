@@ -62,10 +62,10 @@ describe("requirement flow saving state", () => {
     ).toBe(true);
   });
 
-  it("does not busy Send request for a background draft restore", () => {
+  it("does not busy the send CTA for a background draft restore", () => {
     expect(
       isWizardActionPending({
-        screen: "review",
+        screen: "where_when",
         isAdvancingCurrentScreen: false,
         isPreparingSubmit: false,
         isSubmittingRequirement: false,
@@ -74,10 +74,10 @@ describe("requirement flow saving state", () => {
     ).toBe(false);
   });
 
-  it("keeps Send request busy for the writes started by that button", () => {
+  it("keeps the send CTA busy for the writes started by that button", () => {
     expect(
       isWizardActionPending({
-        screen: "review",
+        screen: "where_when",
         isAdvancingCurrentScreen: false,
         isPreparingSubmit: true,
         isSubmittingRequirement: false,
@@ -153,47 +153,48 @@ describe("requirement submission preparation", () => {
     expect(writes).toBe(0);
   });
 
-  it("saves every restored review section before returning the draft to submit", async () => {
+  it("saves the answers and then the place before returning the draft to submit", async () => {
     const writes: string[] = [];
 
-    const requirementId = await prepareRequirementForSubmit({
+    const prepared = await prepareRequirementForSubmit({
       saveAnswers: async () => {
         writes.push("answers");
-        return "requirement-42";
+        return { requirementId: "requirement-42", isA5: true };
       },
       savePlaceAndDates: async (id) => {
         writes.push(`place:${id}`);
         return true;
       },
-      saveDetails: async (id) => {
-        writes.push(`details:${id}`);
-        return true;
-      },
       onPlaceAndDateFailure: () => writes.push("show-place"),
     });
 
-    expect(requirementId).toBe("requirement-42");
-    expect(writes).toEqual([
-      "answers",
-      "place:requirement-42",
-      "details:requirement-42",
-    ]);
+    expect(prepared).toEqual({ requirementId: "requirement-42", isA5: true });
+    expect(writes).toEqual(["answers", "place:requirement-42"]);
   });
 
   it("stops submission and returns to location when that section cannot be saved", async () => {
     const writes: string[] = [];
 
-    const requirementId = await prepareRequirementForSubmit({
-      saveAnswers: async () => "requirement-42",
+    const prepared = await prepareRequirementForSubmit({
+      saveAnswers: async () => ({ requirementId: "requirement-42", isA5: false }),
       savePlaceAndDates: async () => false,
-      saveDetails: async () => {
-        writes.push("details");
-        return true;
-      },
       onPlaceAndDateFailure: () => writes.push("show-place"),
     });
 
-    expect(requirementId).toBeNull();
+    expect(prepared).toBeNull();
     expect(writes).toEqual(["show-place"]);
+  });
+
+  it("carries the saved draft's lifecycle so a first send can stop for the plan", async () => {
+    // The submit path decides "does this need an estimate count?" from the
+    // response to the save it just made — the render that started the send may
+    // predate the draft existing at all.
+    const prepared = await prepareRequirementForSubmit({
+      saveAnswers: async () => ({ requirementId: "requirement-7", isA5: true }),
+      savePlaceAndDates: async () => true,
+      onPlaceAndDateFailure: () => undefined,
+    });
+
+    expect(prepared?.isA5).toBe(true);
   });
 });

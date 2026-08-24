@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Field, Input, Textarea, cn } from "@vsolve/ui";
+import { Card, Field, Input, cn } from "@vsolve/ui";
 
 import type { RequirementQuestionView } from "../adapters";
 import { useRequirement } from "./requirement-context";
@@ -373,8 +373,11 @@ function renderQuestion({
           }
         />
       ) : (
-        <Textarea
-          rows={3}
+        // A single-line fact field, never a textarea. The M2-revamp removed
+        // every describe-it-yourself seam from capture; a catalogue `TEXT`
+        // question still renders so a required question cannot dead-end the
+        // form, but it is an input for a fact, not a box for a paragraph.
+        <Input
           value={typeof value === "string" ? value : ""}
           onChange={(event) =>
             dispatch({

@@ -79,8 +79,6 @@ export type RequirementAction =
       requestedStart: string | null;
       serviceBy: string | null;
       flexibilityDays: number;
-      additionalDetails: string;
-      language: string | null;
     }
   | { type: "SET_ADDRESS"; addressId: string }
   | { type: "SET_REQUESTED_START"; requestedStart: string | null }
@@ -114,9 +112,6 @@ export type RequirementAction =
    * byte moved — have no server counterpart and are left alone.
    */
   | { type: "SYNC_SERVER_ATTACHMENTS"; attachments: readonly ServerAttachment[] }
-  | { type: "SET_LANGUAGE"; language: string | null }
-  | { type: "SET_ADDITIONAL_DETAILS"; text: string }
-  | { type: "SET_OPTIONAL_DETAIL"; key: string; value: unknown }
   /** The Customer saw the probable duplicate and chose to continue anyway. */
   | { type: "OVERRIDE_DUPLICATE" }
   /**
@@ -142,17 +137,6 @@ export type RequirementAction =
       requestedStart: string | null;
       serviceBy: string | null;
       flexibilityDays: number;
-      additionalDetails: string;
-      language: string | null;
-      /**
-       * Restored, because the four extras are Customer intent like everything
-       * else here — and because a Customer who typed out a page of access
-       * instructions and reloaded would otherwise find the panel empty and the
-       * review row saying they had asked for nothing. Every value is normalised
-       * on read (`readOptionalDetail`), so untrusted storage cannot reach a
-       * control.
-       */
-      optionalDetails: Readonly<Record<string, unknown>>;
     }
   | { type: "GO_TO"; screen: Screen }
   | { type: "OPEN"; screen: Screen }
@@ -277,8 +261,6 @@ export function requirementReducer(
         requestedStart: action.requestedStart,
         serviceBy: action.serviceBy,
         flexibilityDays: action.flexibilityDays,
-        additionalDetails: action.additionalDetails,
-        language: action.language,
       };
 
     case "SET_ADDRESS":
@@ -319,18 +301,6 @@ export function requirementReducer(
     case "SYNC_SERVER_ATTACHMENTS":
       return syncServerAttachments(state, action.attachments);
 
-    case "SET_LANGUAGE":
-      return { ...state, language: action.language };
-
-    case "SET_ADDITIONAL_DETAILS":
-      return { ...state, additionalDetails: action.text };
-
-    case "SET_OPTIONAL_DETAIL":
-      return {
-        ...state,
-        optionalDetails: { ...state.optionalDetails, [action.key]: action.value },
-      };
-
     case "OVERRIDE_DUPLICATE":
       return { ...state, duplicateOverridden: true };
 
@@ -345,9 +315,6 @@ export function requirementReducer(
         requestedStart: action.requestedStart,
         serviceBy: action.serviceBy,
         flexibilityDays: action.flexibilityDays,
-        additionalDetails: action.additionalDetails,
-        language: action.language,
-        optionalDetails: action.optionalDetails,
       });
 
     case "RESTORE_SCREEN": {

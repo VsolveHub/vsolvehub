@@ -10,7 +10,12 @@ import { Segmented } from "@/features/booking/view/parts/segmented";
 import { AnsweredOptionalRow, OptionalRow } from "./parts/optional-row";
 
 /**
- * A5 · 2 — Where and when.
+ * Step 2 of 2 — Where and when.
+ *
+ * The last screen since the M2-revamp removed the review step: the estimate
+ * count is chosen here (the container mounts the chooser into
+ * `visitPlanChooser`) and the docked action sends the brief. There is nothing
+ * to review because everything being sent is on this screen or one tap back.
  *
  * ## The deadline is an optional row, not a required field
  *
@@ -57,6 +62,12 @@ export interface WhereWhenScreenProps {
   /** The hard deadline, or null when they have none. */
   serviceBy: string | null;
   onServiceBy: (isoDate: string | null) => void;
+
+  /**
+   * The estimate-count chooser, mounted by the container so this screen owns
+   * no plan data. Absent on A3 and before the draft exists server-side.
+   */
+  visitPlanChooser?: ReactNode;
 }
 
 const DAY = new Intl.DateTimeFormat("en-IN", {
@@ -83,6 +94,7 @@ export function WhereWhenScreen({
   onFlexibilityDays,
   serviceBy,
   onServiceBy,
+  visitPlanChooser,
 }: WhereWhenScreenProps) {
   const [startOpen, setStartOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
@@ -131,6 +143,8 @@ export function WhereWhenScreen({
           onRemove={() => onServiceBy(null)}
         />
       )}
+
+      {visitPlanChooser}
 
       <DateSheet
         open={startOpen}

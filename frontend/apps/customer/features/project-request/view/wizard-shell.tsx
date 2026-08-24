@@ -12,7 +12,7 @@ import { StepMeter } from "./parts/step-meter";
  * A thin wrapper over the shared phone shell rather than a second shell: the
  * header height, the back target, the truncation rule and the docked footer are
  * all identical to A3's, and two shells would drift the first time any of them
- * changed. What this adds is the four-step meter and the navy action.
+ * changed. What this adds is the two-step meter and the navy action.
  *
  * ## Why the action is navy
  *
@@ -57,7 +57,7 @@ export interface WizardShellProps {
 export function WizardShell({
   title,
   step,
-  total = 4,
+  total = 2,
   onBack,
   onContinue,
   canContinue,

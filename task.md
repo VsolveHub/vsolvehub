@@ -6,7 +6,7 @@ Implementation tracker for the Customer and Partner flow redesign.
 
 - **Codex:** `backend/**`, `contracts/openapi/**`, backend tests and contract publication.
 - **Antigravity:** `frontend/**`, frontend tests and UI integration.
-- **Claude:** not involved in this work.
+- **Claude:** the M2-revamp brief refactor on the `M2-revamp` branch (FE-1 and the two revamp decisions below); writes tests but never runs them — the owner runs all test suites.
 - Do not hand-edit generated API clients or the generated OpenAPI document.
 - Codex publishes the backend contract first; Antigravity consumes the generated client.
 
@@ -27,10 +27,18 @@ Implementation tracker for the Customer and Partner flow redesign.
 - [x] Use the existing frontend colors, semantic tokens, typography, components and Lucide icon language. Do not introduce a new visual theme or hardcoded colors.
 - [x] Global Partner navigation appears only on top-level destinations. Focused task screens use a back button and page title without the persistent top/bottom navbar.
 
+### M2-revamp decisions — fixed 2026-08-25
+
+- [x] **Remove the Review step entirely.** It restated the address and slot the Customer chose one screen earlier. The brief is **two steps**; the submit guard re-asserts every earlier rule, so no protection was lost.
+- [x] **The Customer never describes anything.** No `additional_details` paragraph, no photos, no voice notes, no textareas anywhere in capture. Category questions collect facts only — choices, numbers, yes/no.
+- [x] **"What needs doing?" is infographic.** Choice questions render as icon tiles (Lucide keyword mapping, letter monogram when no icon matches — never a wrong pictogram); booleans are Yes/No tiles; numbers stay on the keypad card; detailed options keep the illustrated card + dialog picker. The catalogue must not publish `TEXT` questions for this flow — the renderer keeps a one-line fact input only so a stale catalogue cannot dead-end the form.
+- [x] **Estimate count lives on "Where and when".** The 1/2/3 chooser moved from Review onto step 2, defaults to 2 when the server sells it, and the send button sits beside it ("Send to N professionals"). Visit-slot pickers (BE-2) mount on this same step when the contract lands.
+- [x] **Low text everywhere.** One reassurance line per screen; no paragraphs the Customer must read to proceed.
+
 ## Final flow
 
 ```text
-Customer creates a 3-step brief
+Customer creates a 2-step brief
   -> chooses 1/2/3 estimates
   -> chooses one visit slot for each estimate
   -> platform dispatches fixed-time offers to eligible available Partners
@@ -47,12 +55,15 @@ Customer creates a 3-step brief
 ## Customer brief after removing friction
 
 ```text
-Step 1 of 3  What needs doing?
-Step 2 of 3  Where and when?
-Step 3 of 3  Review, choose estimate count and choose visit slot(s)
+Step 1 of 2  What needs doing?         (icon tiles + keypad card, zero typing)
+Step 2 of 2  Where and when?           (address, dates, estimate count, visit
+                                        slot pickers once BE-2 lands, and Send)
 ```
 
-The request must remain useful without media or free-text detail. Category questions should collect only facts needed for matching or estimating. Do not add replacement fields merely to fill the removed screen.
+There is no review step. The request must remain useful without media or
+free-text detail. Category questions should collect only facts needed for
+matching or estimating — publish them as choice/number/boolean, never `TEXT`.
+Do not add replacement fields merely to fill the removed screens.
 
 ---
 
@@ -193,18 +204,22 @@ cd backend
 
 # Antigravity — frontend
 
-## FE-1 — Convert the Customer brief to three steps
+## FE-1 — Convert the Customer brief to two steps — DONE 2026-08-25 (Claude, `M2-revamp`)
 
-**Objective:** Remove the unnecessary screen and shorten the request flow.
+**Objective:** Remove the unnecessary screens and shorten the request flow.
 
-- [ ] Delete the “Show us the space” step from the project-request state machine and progress meter.
-- [ ] Remove requirement photo/file upload, voice recorder, language, additional instructions, callback/access controls and review summaries from this flow.
-- [ ] Do not remove shared stage-evidence UI used after a project starts.
-- [ ] Renumber the remaining flow to 1 of 3, 2 of 3 and 3 of 3.
-- [ ] Keep draft resume, back navigation, validation and edit-from-review behavior for the remaining fields.
-- [ ] Do not add replacement text areas or optional drawers.
+- [x] Delete the “Show us the space” step from the project-request state machine and progress meter.
+- [x] Delete the Review step; move the estimate-count chooser onto Where and when and make its CTA the send.
+- [x] Remove requirement photo/file upload, voice recorder, language, additional instructions, callback/access controls and review summaries from this flow.
+- [x] Do not remove shared stage-evidence UI used after a project starts (`model/upload.ts`, server-attachment adapters and post-submit attachment views kept).
+- [x] Renumber the remaining flow to 1 of 2 and 2 of 2 (`SCREEN_BUDGET = 2`, enforced by `boundary.test.ts`).
+- [x] Keep draft resume, back navigation and validation; the submit guard on Where and when re-asserts step 1’s rule.
+- [x] Do not add replacement text areas or optional drawers.
+- [x] Rebuild “What needs doing?” as icon tiles (`option-tiles.tsx` + `option-icons.ts`, lucide-react added to the customer app).
+- [ ] Follow-up: strip the dormant draft-attachment reducer machinery and upload mutations once BE-1 retires the requirement-upload endpoints.
+- [ ] Owner verification pending: run Vitest suites for `features/requirement` and `features/project-request`, walk the phone + desktop brief manually.
 
-**Done when:** a Customer reaches Review after service facts and site/date selection with no media step or empty placeholder.
+**Done when:** a Customer reaches Send after service facts and site/date selection with no media step, no review screen and no empty placeholder.
 
 ## FE-2 — Customer slot selection and matching
 
@@ -212,7 +227,7 @@ cd backend
 
 **Objective:** Make the Customer visibly own every visit time.
 
-- [ ] On Review, keep the 1/2/3 estimate selector and render one slot picker per requested estimate.
+- [ ] On Where and when (there is no Review), keep the 1/2/3 estimate selector and render one slot picker per requested estimate.
 - [ ] Reuse the existing available-window components and signed tokens.
 - [ ] Show requested slots before submission and allow each to be changed.
 - [ ] After submission, show each slot independently as Searching, Held, Booked or No professional found.
@@ -349,7 +364,7 @@ pnpm build
 
 ## Manual acceptance journey
 
-- [ ] Customer completes the three-step brief without seeing media/audio/details controls.
+- [ ] Customer completes the two-step brief without seeing media/audio/details controls or a review screen.
 - [ ] Customer selects two estimates and two visit times.
 - [ ] Available Partners receive fixed-time offers; no Partner sees a slot picker.
 - [ ] First acceptance wins; another Partner receives the taken-state response.
@@ -361,6 +376,18 @@ pnpm build
 - [ ] Both Partners define installments whose amounts reconcile with their totals.
 - [ ] Customer compares both, selects one and funds only the first installment.
 - [ ] Focused Partner pages have no persistent navbar; top-level Partner pages still do.
+
+## Revamp progress log — `M2-revamp` branch
+
+**2026-08-25 — FE-1 + revamp decisions implemented (Claude).**
+
+- Brief collapsed 4 screens → 2: `screens.ts` now `["what", "where_when"]`; `where_when`’s guard is the submit guard and re-asserts step 1.
+- Deleted both skins of the details and review screens, the optional-detail panels/model, the voice recorder, the draft-attachment capture hook, and the orphaned A5 post-submit mocks (`visits/book-visits/estimates` screens, `estimate-card`, `slot-row`).
+- New `OptionTiles` + `iconForOption` render every short choice and boolean as icon tiles; `lucide-react@^0.469.0` added to the customer app (same pin as partner/admin).
+- Estimate-count chooser mounts on Where and when (phone slot + desktop section), defaults to the 2-pro tier when published; CTA reads “Send to N professionals”.
+- `additional_details`, `language` capture and the optional extras removed from the draft state, reducer, sessionStorage shape and submit chain; the save/create query layer is untouched (A3 crew flow shares it, contract unchanged until BE-1).
+- Boundary fix: `requirement-flow.tsx` no longer imports the generated client.
+- Static gates run: `tsc --noEmit`, `eslint --max-warnings 0`, `next build` — all green. Test suites updated but NOT run (owner runs them).
 
 ## Out of scope
 
