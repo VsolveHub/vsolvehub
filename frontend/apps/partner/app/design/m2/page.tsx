@@ -25,6 +25,10 @@ export const metadata: Metadata = {
 };
 
 const SCREENS: readonly { slug: string; name: string; note: string }[] = [
+  // The two screens before an estimate exists at all: answering the offer,
+  // then waiting on the customer's payment.
+  { slug: "offer", name: "Fixed-time offer", note: "The customer picked the time — accept or pass, nothing to schedule" },
+  { slug: "held", name: "Held visit", note: "Won, but do not travel yet: the address unlocks when payment clears" },
   { slug: "mode", name: "Estimate mode", note: "Item wise or labour wise — asked once, before anything is typed" },
   { slug: "items", name: "Item list", note: "The priced ledger, grouped into sections with subtotals" },
   { slug: "quick-add", name: "Quick add", note: "The catalogue a partner taps rows in from" },

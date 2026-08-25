@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EmptyState } from "@vsolve/ui";
 
+import { CATALOGUE_SCROLL_MARGIN_CLASS, categorySectionId } from "./category-rail";
 import type { CategoryGroup } from "./grouping";
 import { iconForService } from "./service-icon";
 
@@ -38,6 +39,23 @@ import { iconForService } from "./service-icon";
  * looking for a plumber is looking for the trade. The category is the quiet
  * rail with the running total; the trade is the label next to the tiles. A
  * category with a single trade prints one heading, not the same words twice.
+ *
+ * ## Each section is an anchor target
+ *
+ * `CategoryRail` jumps here with a plain `#fragment`, so every section carries
+ * the id that rail computes and the scroll offset it publishes. Both come from
+ * `category-rail.tsx` rather than being spelled out again — an id typed in two
+ * files is an id that eventually disagrees, and a rail whose chips point at
+ * nothing fails silently, scrolling nowhere with no error anywhere.
+ *
+ * ## Press feedback, and the one place it is allowed to move
+ *
+ * A tile depresses on `:active` and nothing else animates. The transform is
+ * listed property-by-property rather than as `transition-all`, because a grid
+ * cell that transitions its own box reflows the row it is in; and it is dropped
+ * under `prefers-reduced-motion` the way `packages/ui/src/button.tsx` does it,
+ * because the global reduced-motion block shortens durations without cancelling
+ * the transform itself.
  */
 
 export interface ServiceGridProps {
@@ -65,7 +83,15 @@ export function ServiceGrid({ categories }: ServiceGridProps) {
         const namesTrades = category.subcategories.length > 1;
 
         return (
-          <section key={category.id} aria-labelledby={headingId} className="flex flex-col gap-4">
+          <section
+            key={category.id}
+            id={categorySectionId(category.slug)}
+            aria-labelledby={headingId}
+            // The offset class is a literal inside `category-rail.tsx`, which is
+            // under `@source "../features"`, so Tailwind's scanner still emits
+            // the utility even though it is interpolated here.
+            className={`flex flex-col gap-4 ${CATALOGUE_SCROLL_MARGIN_CLASS}`}
+          >
             <div className="flex items-baseline gap-2.5 border-b border-line pb-1.5">
               <h2
                 id={headingId}
@@ -102,9 +128,9 @@ export function ServiceGrid({ categories }: ServiceGridProps) {
                           className={[
                             "flex h-full min-h-24 flex-col items-center gap-2",
                             "rounded-card border border-line bg-surface px-1.5 py-3 text-center",
-                            "transition-colors duration-fast",
+                            "transition-[background-color,border-color,transform] duration-fast ease-out",
                             "hover:border-line-strong hover:bg-surface-hover",
-                            "active:bg-surface-sunken",
+                            "active:scale-[0.97] active:bg-surface-sunken motion-reduce:transform-none",
                           ].join(" ")}
                         >
                           <span

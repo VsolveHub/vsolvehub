@@ -162,18 +162,29 @@ export function ServiceCard({
     );
   };
 
+  /**
+   * The lead card: wider and louder, but no longer illustrated.
+   *
+   * ## Why the image half is gone
+   *
+   * It was one hardcoded stock photograph of a cupboard hinge, served to every
+   * service in the catalogue — a plumber's leak repair and a pest-control visit
+   * both wore it. That is not decoration, it is a small lie about what is being
+   * booked, and `ServiceCard` has no cover field to tell the truth with. FE-9's
+   * rule for listings: a list row costs one image per service, and a listing is
+   * where that bill comes due. The service's own page still carries a real
+   * cover, which is where an image can be about the thing it sits next to.
+   *
+   * What still distinguishes this card is structural rather than pictorial — it
+   * spans both columns, sets its title a size larger, and gives the description
+   * three lines instead of the sibling's clamp. The remaining column takes the
+   * full width, because a two-column card with one column removed and the other
+   * still at `md:w-1/2` leaves half the card empty.
+   */
   if (isLarge) {
     return (
-      <div className="group md:col-span-2 flex flex-col md:flex-row min-h-[14rem] overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
-        <Link
-          href={serviceHref(service, categorySlug)}
-          className="w-full md:w-1/2 min-h-[12rem] bg-navy-100 relative overflow-hidden cursor-pointer"
-        >
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center transition-transform duration-700 group-hover:scale-105" />
-          <div className="absolute inset-0 bg-navy-900/10 mix-blend-multiply" />
-        </Link>
-        
-        <div className="flex flex-col w-full md:w-1/2 p-6 md:p-8">
+      <div className="group md:col-span-2 flex flex-col min-h-[14rem] overflow-hidden rounded-card border border-transparent bg-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-300">
+        <div className="flex flex-col w-full flex-1 p-6 md:p-8">
           <Link
             href={serviceHref(service, categorySlug)}
             className="flex-1 flex flex-col cursor-pointer"

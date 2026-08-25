@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 
+import {
+  CATALOGUE_SCROLL_MARGIN_CLASS,
+  CATALOGUE_TOP_ID,
+  CategoryRail,
+} from "@/features/catalog/icon-catalogue/category-rail";
 import { groupServiceIndex } from "@/features/catalog/icon-catalogue/grouping";
 import { getServiceIndex } from "@/features/catalog/icon-catalogue/queries";
 import { ServiceGrid } from "@/features/catalog/icon-catalogue/service-grid";
@@ -54,7 +59,13 @@ export default async function AllServicesPage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
-      <header className="mb-6 flex items-baseline gap-3">
+      <header
+        // What the rail's "All" chip returns to. The offset is the rail's own
+        // constant so the two cannot disagree about how much chrome is stacked
+        // above a jump target.
+        id={CATALOGUE_TOP_ID}
+        className={`mb-4 flex items-baseline gap-3 ${CATALOGUE_SCROLL_MARGIN_CLASS}`}
+      >
         <h1 className="flex-1 text-xl font-extrabold tracking-tight text-text">All services</h1>
         {index.length > 0 ? (
           <p className="shrink-0 text-xs font-bold text-text-muted">
@@ -63,7 +74,15 @@ export default async function AllServicesPage() {
         ) : null}
       </header>
 
-      <ServiceGrid categories={categories} />
+      {/* Between the heading and the grid, so it is the next thing a keyboard
+          reaches and the next thing a screen reader hears — an accelerator
+          offered before the list it accelerates, never instead of it. Every
+          service below stays reachable by scrolling; nothing here filters. */}
+      <CategoryRail categories={categories} />
+
+      <div className="pt-5">
+        <ServiceGrid categories={categories} />
+      </div>
     </main>
   );
 }

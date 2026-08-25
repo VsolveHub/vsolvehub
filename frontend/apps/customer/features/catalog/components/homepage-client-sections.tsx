@@ -80,7 +80,6 @@ const BEST_SELLERS = [
     price: 249,
     slug: "fan-installation",
     categorySlug: "electrician",
-    image: "https://images.unsplash.com/photo-1558002038-1055907df827?q=80&w=1200&auto=format&fit=crop",
     desc: "Assembly, mounting and wiring of a new ceiling or wall fan.",
   },
   {
@@ -88,7 +87,6 @@ const BEST_SELLERS = [
     price: 299,
     slug: "cupboard-hinge-repair",
     categorySlug: "technician",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop",
     desc: "Meticulous cabinet hinge replacement and slide channel alignment.",
   },
   {
@@ -96,7 +94,6 @@ const BEST_SELLERS = [
     price: 99,
     slug: "electrician-plug-point-fixing",
     categorySlug: "electrician",
-    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=1200&auto=format&fit=crop",
     desc: "Secure loose sockets and restore safe power to your plug points.",
   },
   {
@@ -104,7 +101,6 @@ const BEST_SELLERS = [
     price: 199,
     slug: "plumber-tap-replacement",
     categorySlug: "plumber",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&auto=format&fit=crop",
     desc: "Swap worn taps with a new fixture and leak-free connections.",
   },
 ];
@@ -115,7 +111,6 @@ const ELECTRICIAN_SERVICES = [
     price: 249,
     slug: "fan-installation",
     categorySlug: "electrician",
-    image: "https://images.unsplash.com/photo-1558002038-1055907df827?q=80&w=1200&auto=format&fit=crop",
     desc: "Assembly, mounting and wiring of a new ceiling or wall fan.",
   },
   {
@@ -123,7 +118,6 @@ const ELECTRICIAN_SERVICES = [
     price: 149,
     slug: "electrician-exhaust-fan-installation",
     categorySlug: "electrician",
-    image: "https://images.unsplash.com/photo-1565814329452-e1efa11c5b89?q=80&w=1200&auto=format&fit=crop",
     desc: "Kitchen and bathroom exhaust fan mounting with proper ducting.",
   },
   {
@@ -131,7 +125,6 @@ const ELECTRICIAN_SERVICES = [
     price: 99,
     slug: "electrician-door-bell-installation",
     categorySlug: "electrician",
-    image: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=1200&auto=format&fit=crop",
     desc: "Wireless or wired doorbell setup with chime alignment and testing.",
   },
   {
@@ -139,7 +132,6 @@ const ELECTRICIAN_SERVICES = [
     price: 299,
     slug: "electrician-db-board-repair",
     categorySlug: "electrician",
-    image: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=1200&auto=format&fit=crop",
     desc: "Distribution board fault tracing, breaker checks, and safe repairs.",
   },
 ];
@@ -150,7 +142,6 @@ const PLUMBING_SERVICES = [
     price: 199,
     slug: "plumber-tap-replacement",
     categorySlug: "plumber",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=1200&auto=format&fit=crop",
     desc: "Swap worn taps with a new fixture and leak-free connections.",
   },
   {
@@ -158,7 +149,6 @@ const PLUMBING_SERVICES = [
     price: 149,
     slug: "plumber-shower-repair",
     categorySlug: "plumber",
-    image: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=1200&auto=format&fit=crop",
     desc: "Fix dripping showers, weak flow, and mixer cartridge issues.",
   },
   {
@@ -166,7 +156,6 @@ const PLUMBING_SERVICES = [
     price: 149,
     slug: "plumber-pipe-leakage-fix",
     categorySlug: "plumber",
-    image: "https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?q=80&w=1200&auto=format&fit=crop",
     desc: "Trace and seal leaking pipe joints under sinks, walls, or ceilings.",
   },
   {
@@ -174,7 +163,6 @@ const PLUMBING_SERVICES = [
     price: 149,
     slug: "plumber-pipe-joint-repair",
     categorySlug: "plumber",
-    image: "https://images.unsplash.com/photo-1585704032915-c3400ca276ec?q=80&w=1200&auto=format&fit=crop",
     desc: "Reseal leaking joints under sinks, washbasins, and exposed piping.",
   },
 ];
@@ -185,7 +173,6 @@ const CARPENTRY_SERVICES = [
     price: 299,
     slug: "cupboard-hinge-repair",
     categorySlug: "technician",
-    image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?q=80&w=1200&auto=format&fit=crop",
     desc: "Meticulous cabinet hinge replacement and slide channel alignment.",
   },
   {
@@ -193,7 +180,6 @@ const CARPENTRY_SERVICES = [
     price: 199,
     slug: "carpenter-door-repair",
     categorySlug: "technician",
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1200&auto=format&fit=crop",
     desc: "Fix sticking doors, misaligned frames, and damaged hinges or latches.",
   },
   {
@@ -201,7 +187,6 @@ const CARPENTRY_SERVICES = [
     price: 149,
     slug: "carpenter-lock-fitting",
     categorySlug: "technician",
-    image: "https://images.unsplash.com/photo-1558002038-1055907df827?q=80&w=1200&auto=format&fit=crop",
     desc: "Install or replace door locks, latches, and security hardware.",
   },
   {
@@ -209,17 +194,25 @@ const CARPENTRY_SERVICES = [
     price: 199,
     slug: "carpenter-shelf-installation",
     categorySlug: "technician",
-    image: "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?q=80&w=1200&auto=format&fit=crop",
     desc: "Wall-mounted shelf fitting with level alignment and secure anchoring.",
   },
 ];
 
+/**
+ * One entry in a home rail.
+ *
+ * There is deliberately no `image` here. The rails above used to carry a stock
+ * photograph each, and a nullable-or-optional `image?: string` is exactly how
+ * those URLs would find their way back one entry at a time — so the field is
+ * gone from the shape, not merely left unset. FE-9's rule about listings is the
+ * reason: a service list pays one image request per row, and these rows sit
+ * above the fold on the busiest page in the app.
+ */
 type HomepageServiceItem = {
   name: string;
   price: number;
   slug: string;
   categorySlug: string;
-  image: string;
   desc: string;
 };
 
@@ -240,6 +233,22 @@ function homepageServiceGridClass(count: number): string {
   return `flex gap-5 overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid ${cols} md:gap-6 md:overflow-visible md:pb-0`;
 }
 
+/**
+ * One rail tile: name, one line of what it is, the price, and the Add.
+ *
+ * ## Why the picture band went and nothing replaced it
+ *
+ * The `h-36` band held a stock photograph chosen by hand per entry, so the
+ * catalogue's own listing rule applies — see `ServiceGrid` and `ServiceRow`,
+ * both of which already refuse a cover on a list for the same reason. Four
+ * rails of four is sixteen requests before the reader has scrolled.
+ *
+ * Nothing takes its place. A generic mark repeated sixteen times identifies
+ * nothing, and the honest alternative — a per-service icon — is not ours to
+ * invent: these are hardcoded marketing entries with no `icon_key`, and
+ * `iconForService` keys off a vocabulary the backend owns. The tile already has
+ * its anchors in the price and the orange Add; what it loses is decoration.
+ */
 function HomepageServiceCard({
   item,
   renderAction,
@@ -250,13 +259,7 @@ function HomepageServiceCard({
   const href = homepageServiceHref(item);
 
   return (
-    <div className="group flex w-[280px] shrink-0 flex-col overflow-hidden rounded-2xl border border-[#e7e2da] bg-white shadow-xs transition-shadow hover:shadow-md md:w-full">
-      <Link href={href} className="block overflow-hidden">
-        <div
-          className="h-36 bg-cover bg-center animate-fade-in transition-transform duration-500 group-hover:scale-105"
-          style={{ backgroundImage: `url('${item.image}')` }}
-        />
-      </Link>
+    <div className="group flex w-[280px] shrink-0 flex-col rounded-2xl border border-[#e7e2da] bg-white shadow-xs transition-shadow hover:shadow-md md:w-full">
       <div className="flex flex-1 flex-col justify-between gap-4 p-4">
         <Link href={href} className="flex cursor-pointer flex-col gap-1.5">
           <h3 className="font-extrabold text-base text-navy-900 transition-colors group-hover:text-action">
@@ -289,6 +292,19 @@ function HomepageServiceRow({
   );
 }
 
+/**
+ * A slide of the featured-service hero. **Keeps its `image` on purpose.**
+ *
+ * FE-9 strips list-level imagery, and it says so with a carve-out: not "an
+ * unrelated marketing hero". This is that hero. It is three slides linking to
+ * three category pages, one of them visible at a time — a fixed cost that does
+ * not grow with the catalogue, which is the whole distinction the rule turns
+ * on. A rail that renders one image per service is what scales to four hundred
+ * requests; a carousel with three does not.
+ *
+ * So `image` living here while `HomepageServiceItem` has none is the intended
+ * asymmetry, not an oversight to tidy up on the next pass.
+ */
 interface PromoSlide {
   title: string;
   subtitle: string;
