@@ -26,6 +26,18 @@ export type Category = Schemas["Category"];
 export type ServiceCard = Schemas["ServiceCard"];
 export type ServiceDetail = Schemas["ServiceDetail"];
 export type ServiceVariantConfiguration = Schemas["ServiceVariantConfiguration"];
+/**
+ * The backend-owned icon vocabulary, published at contract 1.43.0.
+ *
+ * Exported as a type so `icon-catalogue/service-icon.ts` can key an exhaustive
+ * `Record` on it — the point being that a value added to `IconKeyEnum` breaks
+ * that file's compilation until somebody maps it. A type-only import is erased,
+ * so this stays reachable from client components despite the `server-only` at
+ * the top of this file.
+ */
+export type IconKey = Schemas["IconKeyEnum"];
+/** One row of the compact catalogue: identity, ordering and an icon key. No media. */
+export type ServiceIndexItem = Schemas["ServiceIndexItem"];
 
 const catalogPolicy = (tags: string[]) => ({
   revalidate: CATALOG_REVALIDATE_SECONDS,

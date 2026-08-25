@@ -40,6 +40,11 @@ export default defineConfig([
     files: [
       "apps/customer/features/project-request/**/*.{ts,tsx}",
       "apps/customer/features/quotes/**/*.{ts,tsx}",
+      // Scoped to the new subtree only. `features/catalog` at large carries 44
+      // distinct raw hex values across its marketing-era components; cleaning
+      // those is a separate mechanical pass, and doing it inside a screen build
+      // would bury this diff.
+      "apps/customer/features/catalog/icon-catalogue/**/*.{ts,tsx}",
       "apps/partner/features/proposal/**/*.{ts,tsx}",
       "apps/partner/features/enquiry/**/*.{ts,tsx}",
       "apps/partner/features/visit/**/*.{ts,tsx}",

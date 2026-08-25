@@ -253,7 +253,40 @@ cannot fix — that says the estimate is saved and Operations has been notified.
 
 ---
 
-## Appendix — customer-owned visit slots (BE-2), noted not proposed
+## Appendix A — two gaps in the published catalogue index (BE-8, already shipped)
+
+Found while building the icon grid against `catalog_service_index` at 1.43.0.
+Both are small, and neither blocks the screen.
+
+**1. The index cannot route a guided service.** `ServiceIndexItem` carries no
+`request_archetypes` and no `bookable_variant_id`, so `service-href.ts` — which
+sends A3 to `/requests/book/…` and A5 to `/requests/new/…` — cannot be used from
+this grid. Every tile therefore links to `/catalog/{category}/{service}`, and a
+guided service reached from the full catalogue pays one interstitial screen that
+the *same service* reached from a category page does not.
+
+Either publish `request_archetypes` on the index row (four bytes on a payload
+that is already deliberately small) or have the service page redirect. The first
+is cheaper and keeps the routing decision in one place.
+
+**2. Two endpoints disagree about whether a service can be an orphan.** Every
+`subcategory_*` field on `ServiceIndexItem` is non-nullable. But the existing
+`features/catalog/grouping.ts` maintains an `ungrouped` bucket for a
+`ServiceCard` whose `subcategory_slug` matches no published subcategory —
+written precisely so an orphaned service is not silently unreachable stock.
+
+The index makes that case unrepresentable, so its grouping has no such bucket.
+Both cannot be right. Either the orphan is impossible and the older defence is
+dead code, or it is possible and the index will drop those services on the floor.
+Worth one look at the queryset before anyone relies on the index for completeness.
+
+**3. Not a gap, but worth stating:** the design's section headings — Electrician,
+Plumber, AC Technician — are *subcategories* in this model; the categories above
+them are Home, Beauty, Pets. The grid therefore renders two levels rather than
+one, and collapses to a single heading where a category holds one trade. Flagging
+it so nobody reconciles the artboard against the data model and assumes a bug.
+
+## Appendix B — customer-owned visit slots (BE-2), noted not proposed
 
 While auditing: the slot grid, the signed slot token and the confirm operation already
 exist and work — `m2_visit_slot_list`, `VisitSlotGrid`, `VisitSlot.id` ("a signed token

@@ -43,7 +43,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
   // A focused screen supplies its own header, its own scroll region and its own
   // docked action. It gets the viewport untouched — no chrome, and no padding
   // reserved for chrome that is not there.
-  if (claimed) return <>{children}</>;
+  //
+  // The design gallery is the same case reached a different way: each page there
+  // renders a whole artboard, app bar and tab bar included, so the real chrome
+  // around it would draw a second header above the drawn one and a second tab
+  // bar below it. It is a path check rather than a `claimViewport()` call
+  // because those pages are server components with nothing to run the claim.
+  if (claimed || pathname.startsWith("/design/")) return <>{children}</>;
 
   return (
     <>
