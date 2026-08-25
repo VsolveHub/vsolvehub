@@ -36,6 +36,7 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     minimumDays: null,
     workerCount: null,
     stages: [],
+    materials: [],
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,

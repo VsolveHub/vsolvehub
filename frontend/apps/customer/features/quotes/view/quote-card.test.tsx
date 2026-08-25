@@ -25,6 +25,7 @@ function estimate(): QuoteCardView {
     minimumDays: null,
     workerCount: null,
     stages: [],
+    materials: [],
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
@@ -35,6 +36,55 @@ function estimate(): QuoteCardView {
     visitCompletedAt: "2026-08-21T07:30:00Z",
   };
 }
+
+describe("materials the vendor priced in", () => {
+  /**
+   * Regression. `CustomerProposal.material_lines` was on the wire, the vendor sent
+   * it, the vendor's own read-back rendered it — and this card dropped it, while
+   * the amounts stayed inside `total_paise`. A Customer was being charged for
+   * goods the app never named.
+   */
+  it("names every material, because their cost is already inside the total", () => {
+    render(
+      <QuoteCard
+        card={{
+          ...estimate(),
+          materials: [
+            { title: "Cement", quantityLabel: "8 bags", amountLabel: "₹3,200" },
+            { title: "Waterproofing membrane", quantityLabel: null, amountLabel: "₹1,800" },
+          ],
+        }}
+        index={0}
+        isPicked={false}
+        isChosen={false}
+        isRevalidating={false}
+      />,
+    );
+
+    expect(screen.getByText("Cement")).toBeInTheDocument();
+    expect(screen.getByText("8 bags")).toBeInTheDocument();
+    expect(screen.getByText("₹3,200")).toBeInTheDocument();
+    expect(screen.getByText("Waterproofing membrane")).toBeInTheDocument();
+    expect(screen.getByText("₹1,800")).toBeInTheDocument();
+
+    // The reader has to be told these are not an extra on top of the headline.
+    expect(screen.getByText("Already counted in the total above.")).toBeInTheDocument();
+  });
+
+  it("says nothing at all when the vendor priced no materials", () => {
+    render(
+      <QuoteCard
+        card={estimate()}
+        index={0}
+        isPicked={false}
+        isChosen={false}
+        isRevalidating={false}
+      />,
+    );
+
+    expect(screen.queryByText("Materials they will supply")).not.toBeInTheDocument();
+  });
+});
 
 describe("chosen estimate", () => {
   it("keeps the persisted choice highlighted when comparison is revisited", () => {

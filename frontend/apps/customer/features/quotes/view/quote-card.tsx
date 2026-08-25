@@ -238,6 +238,38 @@ export function QuoteCard({
         </section>
       ) : null}
 
+      {/* Materials the vendor priced in. These amounts are already inside the
+          headline total, so leaving them out — which this card did until now —
+          meant the Customer was reading a number that included goods the app
+          never named. Shown beside the stages rather than folded into them,
+          because a material is not a milestone. */}
+      {card.materials.length > 0 ? (
+        <section className="mt-4">
+          <h4 className="text-sm font-semibold text-text">Materials they will supply</h4>
+          <ul className="mt-2 flex list-none flex-col gap-2 p-0">
+            {card.materials.map((material, materialIndex) => (
+              <li
+                key={`${card.proposalId}-material-${materialIndex}`}
+                className="flex items-start justify-between gap-3 rounded-card border border-line p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-text">{material.title}</p>
+                  {material.quantityLabel !== null ? (
+                    <p className="mt-0.5 text-sm text-text-secondary">
+                      {material.quantityLabel}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="shrink-0 font-medium text-text">{material.amountLabel}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-sm text-text-secondary">
+            Already counted in the total above.
+          </p>
+        </section>
+      ) : null}
+
       <LineSection title="What is included" lines={card.inclusions} />
       <LineSection
         title="What is not included"

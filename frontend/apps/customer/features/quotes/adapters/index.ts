@@ -6,6 +6,7 @@ import {
   readVendorIdentity,
   type CustomerProposal,
   type CustomerQuoteList,
+  type ProposalMaterialLine,
   type ProposalSelection,
   type ProposalStage,
 } from "@vsolve/query";
@@ -63,6 +64,43 @@ function toStageViews(stages: readonly ProposalStage[]): readonly QuoteStageView
   }));
 }
 
+/**
+ * One material line on an estimate.
+ *
+ * These were being dropped. `CustomerProposal.material_lines` has been published
+ * since the A5 estimate surface landed, the vendor sends it, and the vendor's own
+ * read-back renders it — but this adapter never mapped it and `QuoteCardView` had
+ * nowhere to put it. The amounts are inside `total_paise`, so a Customer was being
+ * charged for materials the app never showed them. That is the kind of gap that
+ * reads as overcharging rather than as a missing feature.
+ *
+ * `unit` is a free string on the wire with a blank default, so a line that carries
+ * a quantity and no unit renders the bare number rather than inventing "Nos".
+ */
+export interface QuoteMaterialView {
+  title: string;
+  /** e.g. "2 bags", or "2" where the vendor set no unit. Null when quantity is 1. */
+  quantityLabel: string | null;
+  amountLabel: string;
+}
+
+function toMaterialViews(
+  materials: readonly ProposalMaterialLine[],
+): readonly QuoteMaterialView[] {
+  return materials.map((material) => {
+    const unit = material.unit.trim();
+    return {
+      title: material.title.trim(),
+      // A quantity of one adds nothing a reader does not already assume, and
+      // "1 ×" beside every row is noise on the one screen that has to stay
+      // scannable.
+      quantityLabel:
+        material.quantity === 1 ? null : unit === "" ? `${material.quantity}` : `${material.quantity} ${unit}`,
+      amountLabel: formatMoney(material.amount_paise),
+    };
+  });
+}
+
 export interface QuoteCardView {
   proposalId: string;
   /** The vendor, as much as the fee bought. Contact is never here. */
@@ -93,6 +131,13 @@ export interface QuoteCardView {
 
   /** A5 only. Empty on a workforce quote. */
   stages: readonly QuoteStageView[];
+
+  /**
+   * Materials the vendor priced into this estimate. Empty on a workforce quote
+   * and on any estimate that quoted labour alone. Their amounts are already
+   * inside `totalLabel` — this exists so the Customer can see what they are.
+   */
+  materials: readonly QuoteMaterialView[];
 
   inclusions: readonly string[];
   exclusions: readonly string[];
@@ -165,6 +210,7 @@ export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
     workerCount: proposal.worker_count,
 
     stages: toStageViews(proposal.stages),
+    materials: toMaterialViews(proposal.material_lines),
 
     inclusions: readLines(proposal.inclusions),
     exclusions: readLines(proposal.exclusions),

@@ -68,6 +68,7 @@ export type VisitNoShowParty = Schemas["VisitNoShowPartyEnum"];
 export type CustomerProposal = Schemas["CustomerProposal"];
 export type CustomerQuoteList = Schemas["CustomerQuoteList"];
 export type ProposalStage = Schemas["ProposalStage"];
+export type ProposalMaterialLine = Schemas["ProposalMaterialLine"];
 export type ProposalStatus = Schemas["ProposalStatusEnum"];
 export type ProposalTaxBasis = Schemas["ProposalTaxBasisEnum"];
 export type ProposalUsability = Schemas["ProposalUsabilityEnum"];

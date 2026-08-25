@@ -187,6 +187,7 @@ export type {
   CustomerQuoteList,
   ProposalSelection,
   ProposalSelectionStatus,
+  ProposalMaterialLine,
   ProposalStage,
   ProposalStatus,
   ProposalTaxBasis,
