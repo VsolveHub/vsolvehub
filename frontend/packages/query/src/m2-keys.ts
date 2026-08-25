@@ -168,6 +168,8 @@ export const m2QueryKeys = {
    */
   proposals: {
     all: ["m2", "proposals"] as const,
+    preview: (invitationId: string, fingerprint: string) =>
+      [...m2QueryKeys.proposals.all, "preview", invitationId, fingerprint] as const,
     mine: (requirementId: string) =>
       [...m2QueryKeys.proposals.all, "mine", requirementId] as const,
     teasers: (requirementId: string) =>
@@ -250,6 +252,9 @@ export const m2QueryKeys = {
     all: ["m2", "visits"] as const,
     plan: (requirementId: string) =>
       [...m2QueryKeys.visits.all, "plan", requirementId] as const,
+    /** The Customer's signed candidate grid for one draft requirement. */
+    customerSlots: (requirementId: string) =>
+      [...m2QueryKeys.visits.all, "customer-slots", requirementId] as const,
     slots: (invitationId: string) =>
       [...m2QueryKeys.visits.all, "slots", invitationId] as const,
     visit: (siteVisitId: string) =>

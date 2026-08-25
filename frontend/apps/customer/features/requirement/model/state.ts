@@ -256,6 +256,8 @@ export type BlockReason =
    * someone submit.
    */
   | "SERVICE_DATE_BEFORE_START"
+  | "VISIT_PLAN_NOT_CHOSEN"
+  | "VISIT_SLOTS_NOT_CHOSEN"
   | "DUPLICATE_NOT_RESOLVED";
 
 /** True when `value` counts as an answer. Empty string, empty array and blank do not. */

@@ -51,6 +51,8 @@ import { getApiClient } from "@/lib/api/browser";
 
 export type Proposal = Schemas["Proposal"];
 export type ProposalCreateRequest = Schemas["ProposalCreateRequest"];
+export type ProposalPreviewRequest = Schemas["ProposalPreviewRequest"];
+export type ProposalFinancialSummary = Schemas["ProposalFinancialSummary"];
 
 /**
  * The key for one logical submission.
@@ -142,6 +144,34 @@ export function useMyProposals(requirementId: string, enabled = true) {
       error instanceof ApiRequestError && [401, 403, 404].includes(error.status)
         ? false
         : failureCount < 2,
+  });
+}
+
+/**
+ * Server-authoritative estimate arithmetic for the exact visible draft.
+ *
+ * Preview is a POST because the body is too rich for a query string, but it is
+ * still a read: TanStack Query deduplicates equal drafts and the caller debounces
+ * before enabling it. The full serialized body participates in the key so a
+ * previous total can never enable Send for newer inputs.
+ */
+export function useProposalFinancialPreview(input: {
+  invitationId: string;
+  fingerprint: string;
+  body: ProposalPreviewRequest | null;
+}) {
+  return useQuery<ProposalFinancialSummary>({
+    queryKey: m2QueryKeys.proposals.preview(input.invitationId, input.fingerprint),
+    queryFn: () =>
+      request(() =>
+        getApiClient().POST("/api/v1/proposals/preview/", {
+          body: input.body as ProposalPreviewRequest,
+        }),
+      ),
+    enabled: input.body !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 5 * 60 * 1000,
+    retry: false,
   });
 }
 

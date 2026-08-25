@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { Schemas } from "@vsolve/api-client";
 
 import {
   isWizardActionPending,
   isWorkspaceAdvancingForScreen,
+  persistCustomerVisitSlotsForSubmit,
   persistVisitPlanSelectionForSubmit,
   prepareRequirementForSubmit,
   toPlaceAndDateSaveInput,
@@ -70,6 +72,7 @@ describe("requirement flow saving state", () => {
         isPreparingSubmit: false,
         isSubmittingRequirement: false,
         isChoosingPlan: false,
+        isChoosingSlots: false,
       }),
     ).toBe(false);
   });
@@ -82,6 +85,7 @@ describe("requirement flow saving state", () => {
         isPreparingSubmit: true,
         isSubmittingRequirement: false,
         isChoosingPlan: false,
+        isChoosingSlots: false,
       }),
     ).toBe(true);
   });
@@ -120,6 +124,71 @@ describe("place and date persistence", () => {
 });
 
 describe("requirement submission preparation", () => {
+  it("refreshes signed visit tokens and saves them before submit", async () => {
+    const writes: string[] = [];
+    const slotGrid: Schemas["VisitSlotGrid"] = {
+      server_now: "2026-08-25T10:00:00Z",
+      visit_duration_minutes: 120,
+      availability_is_preliminary: true,
+      timezone: "Asia/Kolkata",
+      days: [
+        {
+          date: "2026-09-02",
+          is_today: false,
+          slots: [
+            {
+              id: "fresh-signed-token",
+              starts_at: "2026-09-02T03:30:00Z",
+              ends_at: "2026-09-02T05:30:00Z",
+              is_available: true,
+              unavailable_reason: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    await persistCustomerVisitSlotsForSubmit({
+      requirementId: "requirement-42",
+      planSize: 1,
+      selectedStarts: ["2026-09-02T03:30:00Z"],
+      refreshGrid: async () => {
+        writes.push("refresh-slots");
+        return slotGrid;
+      },
+      choose: async (input) => {
+        writes.push(`choose-slots:${input.slotIds.join(",")}`);
+      },
+    });
+    writes.push("submit");
+
+    expect(writes).toEqual([
+      "refresh-slots",
+      "choose-slots:fresh-signed-token",
+      "submit",
+    ]);
+  });
+
+  it("stops before matching when a selected visit disappeared on refresh", async () => {
+    const slotGrid: Schemas["VisitSlotGrid"] = {
+      server_now: "2026-08-25T10:00:00Z",
+      visit_duration_minutes: 120,
+      availability_is_preliminary: true,
+      timezone: "Asia/Kolkata",
+      days: [],
+    };
+
+    await expect(
+      persistCustomerVisitSlotsForSubmit({
+        requirementId: "requirement-42",
+        planSize: 1,
+        selectedStarts: ["2026-09-02T03:30:00Z"],
+        refreshGrid: async () => slotGrid,
+        choose: async () => undefined,
+      }),
+    ).rejects.toThrow("no longer available");
+  });
+
   it("persists the final visible partner count before opening matching", async () => {
     const writes: string[] = [];
 

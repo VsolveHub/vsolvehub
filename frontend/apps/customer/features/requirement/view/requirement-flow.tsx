@@ -13,12 +13,25 @@ import {
   defaultPlanSize,
 } from "@/features/project-request/view/parts/visit-plan-chooser";
 import { VisitsSendScreen } from "@/features/project-request/view/visits-send-screen";
+import { CustomerVisitSlotChooser } from "@/features/project-request/view/parts/customer-visit-slot-chooser";
+import {
+  customerVisitSelectionVersion,
+  readCustomerVisitSlotGrid,
+  tokensForCustomerVisitSelection,
+} from "@/features/project-request/model/customer-visit-slots";
 import { WhatScreen as MobileWhatScreen } from "@/features/project-request/view/what-screen";
 import { WhereWhenScreen as MobileWhereWhenScreen } from "@/features/project-request/view/where-when-screen";
 import { WizardShell } from "@/features/project-request/view/wizard-shell";
 
 import { toPlanTierViews } from "@/features/access/adapters";
-import { useChooseVisitPlan, useVisitPlan } from "@/features/access/queries";
+import {
+  useChooseCustomerVisitSlots,
+  useChooseVisitPlan,
+  useCustomerVisitSlotGrid,
+  useVisitPlan,
+  type ChooseCustomerVisitSlotsInput,
+  type CustomerVisitSlotGrid,
+} from "@/features/access/queries";
 import { VisitPlanChooser } from "@/features/access/view/visit-plan-chooser";
 import { guideToVisitPlanSelection } from "@/features/access/view/guide-to-visit-plan";
 import {
@@ -131,19 +144,22 @@ export function isWizardActionPending({
   isPreparingSubmit,
   isSubmittingRequirement,
   isChoosingPlan,
+  isChoosingSlots,
 }: {
   screen: Screen;
   isAdvancingCurrentScreen: boolean;
   isPreparingSubmit: boolean;
   isSubmittingRequirement: boolean;
   isChoosingPlan: boolean;
+  isChoosingSlots: boolean;
 }): boolean {
   if (screen === "visits_send") {
     return (
       isAdvancingCurrentScreen ||
       isPreparingSubmit ||
       isSubmittingRequirement ||
-      isChoosingPlan
+      isChoosingPlan ||
+      isChoosingSlots
     );
   }
   return isAdvancingCurrentScreen;
@@ -200,6 +216,10 @@ function FlowBody({
   const [addressSignal, setAddressSignal] = useState(0);
   const addresses = useAddresses();
   const [pendingPlanSize, setPendingPlanSize] = useState<number | null>(null);
+  const [visitSlotOverrides, setVisitSlotOverrides] = useState<{
+    requirementId: string | null;
+    startsByIndex: Readonly<Record<number, string>>;
+  }>({ requirementId: null, startsByIndex: {} });
   const [isPreparingSubmit, setIsPreparingSubmit] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -252,6 +272,11 @@ function FlowBody({
   const isA5 = state.verdict?.lifecycle === "A5_CUSTOM_PROJECT";
   const planQuery = useVisitPlan(state.requirementId, isA5);
   const choosePlan = useChooseVisitPlan();
+  const chooseVisitSlots = useChooseCustomerVisitSlots();
+  const visitSlotGridQuery = useCustomerVisitSlotGrid(
+    state.requirementId,
+    isA5 && state.screen === "visits_send",
+  );
   const planState = planQuery.data ?? null;
   const savedPlanSize = planState?.plan?.plan_size ?? null;
   const planTiers = toPlanTierViews(planState?.available_tiers ?? []);
@@ -259,6 +284,30 @@ function FlowBody({
     pendingPlanSize !== null && pendingPlanSize !== savedPlanSize
       ? pendingPlanSize
       : (savedPlanSize ?? defaultPlanSize(planTiers));
+  const customerVisitSlotGrid =
+    visitSlotGridQuery.data === undefined
+      ? null
+      : readCustomerVisitSlotGrid(visitSlotGridQuery.data);
+  const currentSlotOverrides =
+    visitSlotOverrides.requirementId === state.requirementId
+      ? visitSlotOverrides.startsByIndex
+      : {};
+  const selectedVisitStarts: readonly (string | null)[] =
+    chosenPlanSize === null
+      ? []
+      : Array.from({ length: chosenPlanSize }, (_, index) => {
+          const overridden = currentSlotOverrides[index];
+          if (overridden !== undefined) return overridden;
+          return (
+            planState?.plan?.shares.find((share) => share.position === index + 1)
+              ?.requested_start ?? null
+          );
+        });
+  const selectedVisitSlotTokens = tokensForCustomerVisitSelection(
+    customerVisitSlotGrid,
+    selectedVisitStarts,
+    chosenPlanSize,
+  );
 
   const submitted = submitRequirement.data;
   const writeError = createRequirement.error ?? saveRequirement.error ?? null;
@@ -427,13 +476,30 @@ function FlowBody({
   const chosenPlanPrice =
     planTiers.find((tier) => tier.planSize === chosenPlanSize)?.priceLabel ?? null;
   const needsVisitPlanSelection = isA5 && chosenPlanSize === null;
+  const needsVisitSlotSelection =
+    isA5 && chosenPlanSize !== null && selectedVisitSlotTokens === null;
 
-  const sectionBlocks = briefSectionBlocks(state, today, false);
+  const stateSectionBlocks = briefSectionBlocks(state, today, false);
+  const sectionBlocks = {
+    ...stateSectionBlocks,
+    visits_send:
+      stateSectionBlocks.visits_send ??
+      (needsVisitPlanSelection
+        ? ("VISIT_PLAN_NOT_CHOSEN" as const)
+        : needsVisitSlotSelection
+          ? ("VISIT_SLOTS_NOT_CHOSEN" as const)
+          : null),
+  };
   /** What is stopping the send, in the order the page reads. */
   const briefBlocked =
     sectionBlocks.what ?? sectionBlocks.where_when ?? sectionBlocks.visits_send ?? null;
+  const coreBriefBlocked =
+    stateSectionBlocks.what ??
+    stateSectionBlocks.where_when ??
+    stateSectionBlocks.visits_send ??
+    null;
   const canSendBrief = briefBlocked === null;
-  const canSubmit = canSendBrief && !needsVisitPlanSelection;
+  const canSubmit = canSendBrief;
 
   async function handleSubmit() {
     if (
@@ -441,12 +507,14 @@ function FlowBody({
       isWriting ||
       isPreparingSubmit ||
       choosePlan.isPending ||
+      chooseVisitSlots.isPending ||
       submitRequirement.isPending
     ) {
       return;
     }
 
     submitRequirement.reset();
+    chooseVisitSlots.reset();
     setIsPreparingSubmit(true);
     try {
       const prepared = await prepareRequirementForSubmit({
@@ -461,6 +529,16 @@ function FlowBody({
         return;
       }
 
+      const selectedStartsForSubmit = selectedVisitStarts.filter(
+        (startsAt): startsAt is string => startsAt !== null,
+      );
+      if (
+        prepared.isA5 &&
+        (chosenPlanSize === null || selectedStartsForSubmit.length !== chosenPlanSize)
+      ) {
+        return;
+      }
+
       await persistVisitPlanSelectionForSubmit({
         isA5: prepared.isA5,
         requirementId: prepared.requirementId,
@@ -469,6 +547,20 @@ function FlowBody({
         choose: (input) => choosePlan.mutateAsync(input),
       });
       setPendingPlanSize(null);
+
+      if (prepared.isA5 && chosenPlanSize !== null) {
+        await persistCustomerVisitSlotsForSubmit({
+          requirementId: prepared.requirementId,
+          planSize: chosenPlanSize,
+          selectedStarts: selectedStartsForSubmit,
+          refreshGrid: async () => {
+            const refreshed = await visitSlotGridQuery.refetch();
+            if (refreshed.isError) throw refreshed.error;
+            return refreshed.data ?? null;
+          },
+          choose: (input) => chooseVisitSlots.mutateAsync(input),
+        });
+      }
 
       await submitRequirement.mutateAsync({
         requirementId: prepared.requirementId,
@@ -482,30 +574,67 @@ function FlowBody({
   }
 
   const sendActionPending =
-    isPreparingSubmit || submitRequirement.isPending || choosePlan.isPending;
+    isPreparingSubmit ||
+    submitRequirement.isPending ||
+    choosePlan.isPending ||
+    chooseVisitSlots.isPending;
   const wizardActionPending = isWizardActionPending({
     screen: state.screen,
     isAdvancingCurrentScreen,
     isPreparingSubmit,
     isSubmittingRequirement: submitRequirement.isPending,
     isChoosingPlan: choosePlan.isPending,
+    isChoosingSlots: chooseVisitSlots.isPending,
   });
 
   const notices = (
     <FlowNotices
       writeError={writeError}
       choosePlanError={choosePlan.error}
+      chooseVisitSlotsError={chooseVisitSlots.error}
       submitError={submitFailureCopy(submitRequirement.error)}
     />
   );
 
   const sendLabel = needsVisitPlanSelection
     ? "Select number of estimates"
+    : needsVisitSlotSelection
+      ? "Choose visit times"
     : visitPlanSubmitLabel(chosenPlanSize);
+
+  const visitSlotChooser =
+    isA5 && state.requirementId !== null ? (
+      <CustomerVisitSlotChooser
+        planSize={chosenPlanSize}
+        grid={customerVisitSlotGrid}
+        selectedStarts={selectedVisitStarts}
+        onChange={(visitIndex, startsAt) => {
+          chooseVisitSlots.reset();
+          setVisitSlotOverrides((current) => ({
+            requirementId: state.requirementId,
+            startsByIndex: {
+              ...(current.requirementId === state.requirementId
+                ? current.startsByIndex
+                : {}),
+              [visitIndex]: startsAt,
+            },
+          }));
+        }}
+        isLoading={visitSlotGridQuery.isPending}
+        error={visitSlotGridQuery.error}
+        onRetry={() => void visitSlotGridQuery.refetch()}
+      />
+    ) : undefined;
 
   function handleSend() {
     if (needsVisitPlanSelection) {
       guideToVisitPlanSelection();
+      return;
+    }
+    if (needsVisitSlotSelection) {
+      const chooser = document.querySelector<HTMLElement>("[data-customer-visit-slots]");
+      chooser?.scrollIntoView({ behavior: "smooth", block: "center" });
+      chooser?.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
       return;
     }
     void handleSubmit();
@@ -531,7 +660,13 @@ function FlowBody({
           }
           handleSend();
         }}
-        canContinue={isFinal ? (needsVisitPlanSelection ? canSendBrief : canSubmit) : canContinue}
+        canContinue={
+          isFinal && (needsVisitPlanSelection || needsVisitSlotSelection)
+            ? coreBriefBlocked === null
+            : isFinal
+              ? canSubmit
+              : canContinue
+        }
         isSaving={wizardActionPending}
         continueLabel={isFinal ? sendLabel : "Continue"}
         reassurance={
@@ -592,6 +727,7 @@ function FlowBody({
                 />
               ) : undefined
             }
+            visitSlotChooser={visitSlotChooser}
           />
         )}
       </WizardShell>
@@ -667,6 +803,7 @@ function FlowBody({
                   />
                 ) : undefined
               }
+              visitSlotChooser={visitSlotChooser}
             />
           ),
         },
@@ -712,6 +849,39 @@ export async function persistVisitPlanSelectionForSubmit({
   await choose({ requirementId, planSize: selectedPlanSize });
 }
 
+interface PersistCustomerVisitSlotsInput {
+  readonly requirementId: string;
+  readonly planSize: number;
+  readonly selectedStarts: readonly string[];
+  readonly refreshGrid: () => Promise<CustomerVisitSlotGrid | null>;
+  readonly choose: (input: ChooseCustomerVisitSlotsInput) => Promise<unknown>;
+}
+
+/**
+ * Refresh expiring signed tokens, resolve the Customer's visible choices
+ * against that snapshot, and store them before matching is opened.
+ */
+export async function persistCustomerVisitSlotsForSubmit({
+  requirementId,
+  planSize,
+  selectedStarts,
+  refreshGrid,
+  choose,
+}: PersistCustomerVisitSlotsInput): Promise<void> {
+  const rawGrid = await refreshGrid();
+  if (rawGrid === null) throw new Error("Visit times could not be refreshed.");
+  const grid = readCustomerVisitSlotGrid(rawGrid);
+  const slotIds = tokensForCustomerVisitSelection(grid, selectedStarts, planSize);
+  if (slotIds === null) {
+    throw new Error("One or more selected visit times are no longer available.");
+  }
+  await choose({
+    requirementId,
+    slotIds,
+    selectionVersion: customerVisitSelectionVersion(grid, selectedStarts),
+  });
+}
+
 function visitPlanSubmitLabel(planSize: number | null): string {
   if (planSize === null) return "Send this request";
   return planSize === 1 ? "Send to 1 professional" : `Send to ${planSize} professionals`;
@@ -742,10 +912,12 @@ function submitFailureCopy(error: unknown): string | null {
 function FlowNotices({
   writeError,
   choosePlanError,
+  chooseVisitSlotsError,
   submitError,
 }: {
   writeError: unknown;
   choosePlanError?: unknown;
+  chooseVisitSlotsError?: unknown;
   submitError?: string | null;
 }) {
   return (
@@ -766,6 +938,14 @@ function FlowNotices({
         <ErrorState
           title="We could not save that choice"
           message={describeError(choosePlanError, "mutation").message}
+          severity="error"
+          inline
+        />
+      ) : null}
+      {chooseVisitSlotsError !== null && chooseVisitSlotsError !== undefined ? (
+        <ErrorState
+          title="We could not save those visit times"
+          message={describeError(chooseVisitSlotsError, "mutation").message}
           severity="error"
           inline
         />

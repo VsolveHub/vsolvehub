@@ -20,6 +20,8 @@ export const BLOCK_COPY: Record<BlockReason, string> = {
   SERVICE_DATE_IN_PAST: "That date has passed. Pick a date in the future.",
   SERVICE_DATE_BEFORE_START:
     "The date you need this by is before the work starts. Check both dates.",
+  VISIT_PLAN_NOT_CHOSEN: "Choose how many estimates you want.",
+  VISIT_SLOTS_NOT_CHOSEN: "Choose one visit time for every requested estimate.",
   DUPLICATE_NOT_RESOLVED:
     "You have a similar request open. Merge it or choose to continue with a separate one.",
 };

@@ -25,6 +25,7 @@ export interface VisitsSendScreenProps {
   flexibilityDays: number;
   serviceBy: string | null;
   visitPlanChooser?: ReactNode;
+  visitSlotChooser?: ReactNode;
 }
 
 const DAY_FORMATTER = new Intl.DateTimeFormat("en-IN", {
@@ -49,6 +50,7 @@ export function VisitsSendScreen({
   flexibilityDays,
   serviceBy,
   visitPlanChooser,
+  visitSlotChooser,
 }: VisitsSendScreenProps) {
   const answeredFacts: { label: string; value: string }[] = [];
   for (const q of questions) {
@@ -132,10 +134,8 @@ export function VisitsSendScreen({
       {/* 1/2/3 Estimate Selector */}
       {visitPlanChooser}
 
-      {/* Slot Selection Container (Isolated and ready for generated contract) */}
-      <div data-visit-slots-container className="hidden">
-        {/* Will mount candidate visit windows when signed-slot contract is published by Codex */}
-      </div>
+      {/* One Customer-owned time for every requested estimate. */}
+      {visitSlotChooser}
     </div>
   );
 }
