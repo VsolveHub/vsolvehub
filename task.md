@@ -140,13 +140,13 @@ Do not add replacement fields merely to fill the removed screens.
 
 **Objective:** Make the three-step brief the only Customer requirement path.
 
-- [ ] Stop requiring or processing requirement-level photos, files, voice notes, language, additional instructions, callback preferences and access restrictions for new requests.
-- [ ] Remove these values from matching decisions and Partner enquiry projections.
-- [ ] Keep old stored values readable only where needed for historical/audit compatibility; do not destructively erase existing customer data in this change.
-- [ ] Retire requirement-upload endpoints only after confirming they are not shared with stage evidence, disputes or Operations evidence.
-- [ ] Keep stage-evidence uploads and their malware/checksum/access controls unchanged.
-- [ ] Make old-client fields optional during rollout so a deployed client does not break while Antigravity moves to the new contract.
-- [ ] Add regression tests proving a requirement can be created, updated, reviewed and submitted with only service facts, site and dates.
+- [x] Stop requiring or processing requirement-level photos, files, voice notes, language, additional instructions, callback preferences and access restrictions for new requests.
+- [x] Remove these values from matching decisions and Partner enquiry projections.
+- [x] Keep old stored values readable only where needed for historical/audit compatibility; do not destructively erase existing customer data in this change.
+- [x] Retire requirement-upload endpoints only after confirming they are not shared with stage evidence, disputes or Operations evidence.
+- [x] Keep stage-evidence uploads and their malware/checksum/access controls unchanged.
+- [x] Make old-client fields optional during rollout so a deployed client does not break while Antigravity moves to the new contract.
+- [x] Add regression tests proving a requirement can be created, updated, reviewed and submitted with only service facts, site and dates.
 
 **Done when:** a new project request has no media/details dependency and still produces a complete matchable snapshot.
 
@@ -154,14 +154,14 @@ Do not add replacement fields merely to fill the removed screens.
 
 **Objective:** Move initial visit-time selection from the Partner to the Customer.
 
-- [ ] Publish candidate visit windows for the Customer using the existing availability engine, service-area rules, duration and turnaround buffer.
-- [ ] Accept signed slot tokens only; never accept a free-form date/time.
-- [ ] Require exactly the number of requested slots represented by the selected 1/2/3 estimate plan.
-- [ ] Reject duplicate or overlapping slots unless the product explicitly supports simultaneous visits.
-- [ ] Store each requested slot independently so partial matching is visible and recoverable.
-- [ ] Allow the Customer to replace an unmatched requested slot without changing already held or booked visits.
-- [ ] Remove the Partner candidate-slot picker contract after Antigravity no longer consumes it.
-- [ ] Preserve the existing reschedule flow for already booked visits.
+- [x] Publish candidate visit windows for the Customer using the existing availability engine, service-area rules, duration and turnaround buffer.
+- [x] Accept signed slot tokens only; never accept a free-form date/time.
+- [x] Require exactly the number of requested slots represented by the selected 1/2/3 estimate plan.
+- [x] Reject duplicate or overlapping slots unless the product explicitly supports simultaneous visits.
+- [x] Store each requested slot independently so partial matching is visible and recoverable.
+- [x] Allow the Customer to replace an unmatched requested slot without changing already held or booked visits.
+- [x] Remove the Partner candidate-slot picker contract after Antigravity no longer consumes it.
+- [x] Preserve the existing reschedule flow for already booked visits.
 
 **Server-owned slot states:**
 
@@ -179,15 +179,15 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 
 **Objective:** Notify only Partners who can attend the Customer’s selected slot.
 
-- [ ] Match by approved capability, service area, operational standing and availability for the entire visit plus turnaround.
-- [ ] Exclude Partners already holding another estimate slot for the same requirement.
-- [ ] Create a fixed-time offer containing service, approximate area, visit start/end, duration, visit earning and response deadline.
-- [ ] Notify matching available Partners through the existing notification/outbox infrastructure.
-- [ ] Make acceptance atomic: first valid acceptance wins; later accepts receive an explicit `slot_taken` conflict.
-- [ ] Decline or expiry must release only that Partner offer and continue matching while candidates remain.
-- [ ] When every eligible candidate is exhausted, write `NO_PROFESSIONAL_FOUND`; do not leave the Customer polling forever.
-- [ ] Do not expose the exact Customer address before payment confirms the visit.
-- [ ] Add concurrency, expiry, no-capacity, partial-plan and idempotency regression tests.
+- [x] Match by approved capability, service area, operational standing and availability for the entire visit plus turnaround.
+- [x] Exclude Partners already holding another estimate slot for the same requirement.
+- [x] Create a fixed-time offer containing service, approximate area, visit start/end, duration, visit earning and response deadline.
+- [x] Notify matching available Partners through the existing notification/outbox infrastructure.
+- [x] Make acceptance atomic: first valid acceptance wins; later accepts receive an explicit `slot_taken` conflict.
+- [x] Decline or expiry must release only that Partner offer and continue matching while candidates remain.
+- [x] When every eligible candidate is exhausted, write `NO_PROFESSIONAL_FOUND`; do not leave the Customer polling forever.
+- [x] Do not expose the exact Customer address before payment confirms the visit.
+- [x] Add concurrency, expiry, no-capacity, partial-plan and idempotency regression tests.
 
 **Done when:** every offer is for one immutable Customer-selected time and the exhausted state is explicit.
 
@@ -195,14 +195,14 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 
 **Objective:** Keep payment behind real supply.
 
-- [ ] First Partner acceptance opens the existing visit-plan checkout and creates a temporary hold.
-- [ ] A Customer with zero accepted slots cannot be charged.
-- [ ] Provider-verified payment turns all currently held slots into booked visits.
-- [ ] Later accepted slots on an already-paid plan become booked without another plan charge.
-- [ ] Expired unpaid holds return to matching without penalising the Partner.
-- [ ] Preserve per-slot automatic refund/replacement behavior for visits that never happen or never produce a usable estimate.
-- [ ] Keep all amounts in integer paise and all payment state changes idempotent and auditable.
-- [ ] Add tests for callback replay, hold expiry, partial fulfilment, refund shares and payment/matching races.
+- [x] First Partner acceptance opens the existing visit-plan checkout and creates a temporary hold.
+- [x] A Customer with zero accepted slots cannot be charged.
+- [x] Provider-verified payment turns all currently held slots into booked visits.
+- [x] Later accepted slots on an already-paid plan become booked without another plan charge.
+- [x] Expired unpaid holds return to matching without penalising the Partner.
+- [x] Preserve per-slot automatic refund/replacement behavior for visits that never happen or never produce a usable estimate.
+- [x] Keep all amounts in integer paise and all payment state changes idempotent and auditable.
+- [x] Add tests for callback replay, hold expiry, partial fulfilment, refund shares and payment/matching races.
 
 **Done when:** no Customer pays before at least one Partner commits and no held Partner is stranded by payment state.
 
@@ -210,19 +210,19 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 
 **Objective:** Give every submitted estimate one unambiguous pricing method.
 
-- [ ] Add a published estimate type enum: `ITEM_WISE` or `LABOUR_WISE`.
-- [ ] Add item-wise lines with category, title, unit, quantity, rate and server-calculated amount.
-- [ ] Add labour-wise lines with role/team, member count, day count, rate per day and server-calculated amount.
-- [ ] Enforce exactly one line family per estimate. Do not support `item subtotal + labour subtotal` in this version.
-- [ ] Publish only the selected mode's subtotal. Do not preserve the image's misleading `A + B` presentation when one side must always be zero.
-- [ ] Keep materials/consumables as separately identified material-advance lines where applicable.
-- [ ] Keep other charges as explicit named lines; no hidden transport, packing or miscellaneous fallback.
-- [ ] Server calculates line amounts, subtotal, authorized charges, tax, platform-fee treatment, Customer grand total and Partner receivable.
-- [ ] Do not add a separate Partner-profit/markup field or percentage; the Partner's sell rate already contains its margin.
-- [ ] The platform fee is policy-owned and cannot be edited by the Partner.
-- [ ] Preserve inclusions, exclusions, warranty, validity, start date, stages, revisions, supersession, withdrawal and visit-completion guard.
-- [ ] Preserve append-only estimate history.
-- [ ] Add shape, arithmetic, authorization, idempotency and revision regression tests.
+- [x] Add a published estimate type enum: `ITEM_WISE` or `LABOUR_WISE`.
+- [x] Add item-wise lines with category, title, unit, quantity, rate and server-calculated amount.
+- [x] Add labour-wise lines with role/team, member count, day count, rate per day and server-calculated amount.
+- [x] Enforce exactly one line family per estimate. Do not support `item subtotal + labour subtotal` in this version.
+- [x] Publish only the selected mode's subtotal. Do not preserve the image's misleading `A + B` presentation when one side must always be zero.
+- [x] Keep materials/consumables as separately identified material-advance lines where applicable.
+- [x] Keep other charges as explicit named lines; no hidden transport, packing or miscellaneous fallback.
+- [x] Server calculates line amounts, subtotal, authorized charges, tax, platform-fee treatment, Customer grand total and Partner receivable.
+- [x] Do not add a separate Partner-profit/markup field or percentage; the Partner's sell rate already contains its margin.
+- [x] The platform fee is policy-owned and cannot be edited by the Partner.
+- [x] Preserve inclusions, exclusions, warranty, validity, start date, stages, revisions, supersession, withdrawal and visit-completion guard.
+- [x] Preserve append-only estimate history.
+- [x] Add shape, arithmetic, authorization, idempotency and revision regression tests.
 
 **Done when:** the API can represent the seven reference categories without category-specific proposal tables or mixed estimate modes.
 
@@ -236,30 +236,30 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 - [ ] Decide whether each V Solve Hub charge is customer-paid, deducted from Partner proceeds, or not applicable. Never model one fee as both a customer surcharge and a Partner deduction without two explicitly named supplies.
 - [ ] Decide the commission basis: which amounts are included/excluded, whether tax and material advances participate, caps/floors, rounding and effective date.
 - [ ] Record statutory e-commerce collection/withholding obligations separately from commission and customer tax. Do not implement a guessed TCS/TDS rule.
-- [ ] Keep paid tax collection fail-closed while any required policy decision is missing; never fall back to 0% tax or a default fee.
+- [x] Keep paid tax collection fail-closed while any required policy decision is missing; never fall back to 0% tax or a default fee.
 
 ### Canonical tax inputs
 
-- [ ] Establish one verified Partner/business tax profile with legal name, registration status, GSTIN verification state and effective dates. Do not let a Partner type or change these values inside an estimate.
-- [ ] Audit the existing capability-level `gst_registered`/`gstin` fields and migrate or project them into the canonical profile without losing historical values.
-- [ ] Resolve tax from the service/line tax category, verified supplier status, transaction date and place-of-supply facts. Reuse `ServiceVariant.tax_category_code`; do not hardcode tax rates in React or proposal serializers.
-- [ ] Snapshot service address state, supplier state, tax category/SAC where approved, policy version, tax basis, taxable value, rate and CGST/SGST/IGST/cess components used for the calculation.
-- [ ] Support different tax treatment across service, material and authorized-charge lines. A single unchecked proposal-level `tax_paise` input is insufficient for mixed estimates.
+- [x] Establish one verified Partner/business tax profile with legal name, registration status, GSTIN verification state and effective dates. Do not let a Partner type or change these values inside an estimate.
+- [x] Audit the existing capability-level `gst_registered`/`gstin` fields and migrate or project them into the canonical profile without losing historical values.
+- [x] Resolve tax from the service/line tax category, verified supplier status, transaction date and place-of-supply facts. Reuse `ServiceVariant.tax_category_code`; do not hardcode tax rates in React or proposal serializers.
+- [x] Snapshot service address state, supplier state, tax category/SAC where approved, policy version, tax basis, taxable value, rate and CGST/SGST/IGST/cess components used for the calculation.
+- [x] Support different tax treatment across service, material and authorized-charge lines. A single unchecked proposal-level `tax_paise` input is insufficient for mixed estimates.
 - [ ] If business customers are supported, collect optional billing legal name/GSTIN/address once at checkout/account level and snapshot it onto the financial document. Do not add these fields to the frictionless requirement brief.
 
 ### Calculation and immutability
 
-- [ ] Replace `required_tax_basis()` choosing the first submitted quote's basis with an Operations-owned basis snapshotted before vendors quote, so every Partner is compared on the same server rule.
-- [ ] Remove `tax_basis`, `tax_paise` and `commission_treatment` from writable Partner/Operations-assisted proposal input. Publish them only as derived read fields.
+- [x] Replace `required_tax_basis()` choosing the first submitted quote's basis with an Operations-owned basis snapshotted before vendors quote, so every Partner is compared on the same server rule.
+- [x] Remove `tax_basis`, `tax_paise` and `commission_treatment` from writable Partner/Operations-assisted proposal input. Publish them only as derived read fields.
 - [ ] Use one pure money calculator for proposal submission, comparison, engagement opening, installment checkout, payout, refund and documents. Use integer paise/basis points only and one documented rounding/allocation rule.
-- [ ] Persist both components and totals: Partner line subtotal, authorized charges, taxable value, Partner-service tax, Partner quote total, V Solve Hub customer fee/tax if applicable, Customer grand total, commission, statutory withholding and Partner net receivable.
-- [ ] Snapshot the calculation and policy version on every submitted revision. Later policy or Partner tax-profile changes never rewrite an old proposal or funded installment.
+- [x] Persist both components and totals: Partner line subtotal, authorized charges, taxable value, Partner-service tax, Partner quote total, V Solve Hub customer fee/tax if applicable, Customer grand total, commission, statutory withholding and Partner net receivable.
+- [x] Snapshot the calculation and policy version on every submitted revision. Later policy or Partner tax-profile changes never rewrite an old proposal or funded installment.
 - [ ] Give every amendment its own calculation snapshot; refunds and credit notes reverse the original stored allocations rather than recalculating at today's rate.
-- [ ] Add database reconciliation constraints where row-local and transaction-locked reconciliation for cross-row totals.
+- [x] Add database reconciliation constraints where row-local and transaction-locked reconciliation for cross-row totals.
 
 ### Charges and documents
 
-- [ ] Replace generic `Miscellaneous` with controlled charge codes such as transport, loading/unloading, disposal, permit and equipment delivery plus an explicit custom label when allowed.
+- [x] Replace generic `Miscellaneous` with controlled charge codes such as transport, loading/unloading, disposal, permit and equipment delivery plus an explicit custom label when allowed.
 - [ ] Prevent blank labels, zero/negative amounts, duplicate charges and a charge already included in a quoted line. Tax treatment is resolved from the charge code, not entered as a percentage.
 - [ ] Render proposal PDFs as `Estimate`/`Quotation` with revision, validity and tax/fee breakdown; never assign an invoice number before a taxable financial event.
 - [ ] Generate the correct receipt, tax invoice/bill of supply and credit/debit note from the approved supplier-of-record model, including the required supplier/recipient/place-of-supply/tax-component fields.
@@ -272,18 +272,18 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 
 **Objective:** Let the Partner propose a simple payment schedule without creating a new payment rail.
 
-- [ ] Treat proposal stages as the installment schedule presented to the Customer.
-- [ ] Each installment contains: title, deliverable/payment purpose, fixed Partner-service amount in paise, position and optional expected completion date.
-- [ ] Require at least one installment for a managed project estimate.
-- [ ] Require installment amounts plus material advances to reconcile exactly with the server-calculated Partner quote total. A separately charged V Solve Hub fee is never allocated or edited by the Partner.
-- [ ] Accept fixed rupee amounts as authoritative. Percentages may be displayed by the frontend but are not stored as the source of truth.
-- [ ] Allocate taxable value and tax components deterministically across installments/material advances so the sum of installment checkouts matches the displayed payable total exactly, including paise remainders.
-- [ ] At each checkout, disclose the installment's Partner-service amount, tax and any separately applicable V Solve Hub charge before showing the final amount due.
-- [ ] Customer funds installments one at a time and in order through the existing stage-funding checkout.
-- [ ] Work on an installment cannot begin until its verified payment is funded.
-- [ ] Once the estimate is selected, the Partner cannot silently change installment amount/order; changes use the existing Customer-approved amendment flow.
-- [ ] Preserve stage evidence, Customer approval/correction/dispute, payout hold, refund, retention and warranty behavior.
-- [ ] Add tests proving installment/tax/fee allocations reconcile, rounding remainders are assigned once, refunds reverse the original allocation and later installments cannot be funded early.
+- [x] Treat proposal stages as the installment schedule presented to the Customer.
+- [x] Each installment contains: title, deliverable/payment purpose, fixed Partner-service amount in paise, position and optional expected completion date.
+- [x] Require at least one installment for a managed project estimate.
+- [x] Require installment amounts plus material advances to reconcile exactly with the server-calculated Partner quote total. A separately charged V Solve Hub fee is never allocated or edited by the Partner.
+- [x] Accept fixed rupee amounts as authoritative. Percentages may be displayed by the frontend but are not stored as the source of truth.
+- [x] Allocate taxable value and tax components deterministically across installments/material advances so the sum of installment checkouts matches the displayed payable total exactly, including paise remainders.
+- [x] At each checkout, disclose the installment's Partner-service amount, tax and any separately applicable V Solve Hub charge before showing the final amount due.
+- [x] Customer funds installments one at a time and in order through the existing stage-funding checkout.
+- [x] Work on an installment cannot begin until its verified payment is funded.
+- [x] Once the estimate is selected, the Partner cannot silently change installment amount/order; changes use the existing Customer-approved amendment flow.
+- [x] Preserve stage evidence, Customer approval/correction/dispute, payout hold, refund, retention and warranty behavior.
+- [x] Add tests proving installment/tax/fee allocations reconcile, rounding remainders are assigned once, refunds reverse the original allocation and later installments cannot be funded early.
 
 **Done when:** the Partner controls a clear payment schedule and the Customer never has to fund the whole project upfront.
 
@@ -291,13 +291,13 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 
 **Objective:** Give the frontend one stable generated contract.
 
-- [ ] Publish Customer slot-window, requested-slot, matching-status and replacement-slot operations.
-- [ ] Publish fixed-time Partner offer and accept/decline operations.
-- [ ] Publish estimate type, item lines, labour lines, material lines and installment/stage fields.
-- [ ] Publish the read-only financial calculation: tax policy snapshot/components, authorized charges, Partner quote total, separate V Solve Hub charge, Customer grand total, commission/withholding and Partner net receivable.
-- [ ] Remove Partner-writable `tax_basis`, `tax_paise` and `commission_treatment` from the proposal-create contract.
+- [x] Publish Customer slot-window, requested-slot, matching-status and replacement-slot operations.
+- [x] Publish fixed-time Partner offer and accept/decline operations.
+- [x] Publish estimate type, item lines, labour lines, material lines and installment/stage fields.
+- [x] Publish the read-only financial calculation: tax policy snapshot/components, authorized charges, Partner quote total, separate V Solve Hub charge, Customer grand total, commission/withholding and Partner net receivable.
+- [x] Remove Partner-writable `tax_basis`, `tax_paise` and `commission_treatment` from the proposal-create contract.
 - [x] Publish the compact all-services catalogue operation and backend-owned `icon_key` described in BE-8.
-- [ ] Publish explicit errors for `slot_taken`, `slot_expired`, `no_professional_found`, invalid estimate shape, unsupported charge, financial policy unavailable and installment mismatch.
+- [x] Publish explicit errors for `slot_taken`, `slot_expired`, `no_professional_found`, invalid estimate shape, unsupported charge, financial policy unavailable and installment mismatch.
 - [x] Regenerate and validate `contracts/openapi/v1.yaml`; do not hand-edit it.
 - [x] Record breaking/removal notes in `contracts/openapi/CHANGELOG.md`.
 - [x] Tell Antigravity the contract version and changed operations before frontend integration starts.
@@ -328,11 +328,11 @@ SEARCHING -> HELD -> BOOKED -> VISITED -> ESTIMATE_RECEIVED
 - [ ] Configure `PAYMENT_PROVIDER=razorpay`, test-mode `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, the existing API base URL and a separate high-entropy `PAYMENT_WEBHOOK_SECRET`.
 - [ ] Keep `PAYMENTS_ALLOW_SIMULATED_CAPTURE=false` while running Razorpay sandbox smoke payments so a fake success path cannot mask integration failure.
 - [ ] Configure the Razorpay dashboard webhook to the public HTTPS `/api/v1/payment-webhooks/razorpay/` endpoint and enable only events the adapter handles.
-- [ ] Keep the key secret and webhook secret server-only. The browser receives only the publishable test key id and provider order data from Django's checkout response.
-- [ ] Keep automated unit/component/Playwright suites at the provider boundary with deterministic fakes; do not make CI depend on Razorpay, internet availability or a reusable payment credential.
+- [x] Keep the key secret and webhook secret server-only. The browser receives only the publishable test key id and provider order data from Django's checkout response.
+- [x] Keep automated unit/component/Playwright suites at the provider boundary with deterministic fakes; do not make CI depend on Razorpay, internet availability or a reusable payment credential.
 - [ ] Run a separate staging sandbox smoke for visit-plan payment, first installment, duplicate/out-of-order callback, Checkout dismissal/retry, amount mismatch, refund and reconciliation.
-- [ ] Confirm provider amount/currency/order references match the immutable server attempt before capture changes any visit or stage state.
-- [ ] Keep Razorpay collections credentials separate from RazorpayX payout credentials and permissions.
+- [x] Confirm provider amount/currency/order references match the immutable server attempt before capture changes any visit or stage state.
+- [x] Keep Razorpay collections credentials separate from RazorpayX payout credentials and permissions.
 - [ ] Record exact sandbox smoke references without logging full payloads, secrets or customer payment data.
 
 **Done when:** real Razorpay test Checkout and signed webhooks drive the same idempotent server states already covered by deterministic tests, with no credential in source control.
@@ -415,11 +415,14 @@ cd backend
 
 **Objective:** Replace Partner time picking with one fast decision.
 
-- [ ] Offer card/detail shows service, approximate area, fixed date/time, duration, visit earning and response deadline.
-- [ ] Primary action is `Accept this visit`; secondary action is `Decline`.
+- [x] Offer card/detail shows service, approximate area, fixed date/time, duration, visit earning and response deadline.
+- [x] Primary action is `Accept this visit`; secondary action is `Decline`.
 - [ ] Remove “Choose a visit time”, visit-day tabs and the Partner slot picker from initial matching.
+  - **Deferred on purpose (Claude).** BE-3's replacement is unpublished, and BE-2 says to retire the
+    picker contract only after the frontend stops consuming it. Deleting the only working commitment
+    path with nothing behind it would break the live partner flow. Do this the day BE-3 lands.
 - [ ] Show `This visit was taken by another professional` for an acceptance race.
-- [ ] After acceptance, show Held while Customer payment is pending and explicitly say `Do not travel yet`.
+- [x] After acceptance, show Held while Customer payment is pending and explicitly say `Do not travel yet`.
 - [ ] After payment, show Booked and reveal the exact site address.
 - [ ] Preserve notifications, foreground live-offer behavior and polling fallback.
 
@@ -510,17 +513,20 @@ cd backend
 
 **Objective:** Make the complete service catalogue immediately scannable without turning discovery into search or an image gallery.
 
-- [ ] Show every published service grouped under its category, using the backend display order.
-- [ ] A service tile contains an icon and its service name only. Remove service-list photos, image placeholders, descriptions, price copy and decorative badges from this listing.
-- [ ] Use a compact responsive grid with touch-first spacing. Labels may wrap to two lines; preserve the full accessible name and a minimum 44×44 px target.
-- [ ] Make categories easy to jump between with an app-like category rail/chips or an equally compact index; all services remain reachable by scrolling without entering a query.
-- [ ] Keep search as an optional accelerator, not the default empty state or a prerequisite for discovery.
-- [ ] Consume the backend `icon_key` with an exhaustive mapping to the existing Lucide/icon system. Never guess from service-name keywords; use a visible generic fail-safe only for forward-compatible unknown keys and report the mismatch.
+- [x] Show every published service grouped under its category, using the backend display order.
+- [x] A service tile contains an icon and its service name only. Remove service-list photos, image placeholders, descriptions, price copy and decorative badges from this listing.
+- [x] Use a compact responsive grid with touch-first spacing. Labels may wrap to two lines; preserve the full accessible name and a minimum 44×44 px target.
+- [x] Make categories easy to jump between with an app-like category rail/chips or an equally compact index; all services remain reachable by scrolling without entering a query.
+- [x] Keep search as an optional accelerator, not the default empty state or a prerequisite for discovery.
+- [x] Consume the backend `icon_key` with an exhaustive mapping to the existing Lucide/icon system. Never guess from service-name keywords; use a visible generic fail-safe only for forward-compatible unknown keys and report the mismatch.
 - [ ] In the Operations service editor, expose the same controlled icon choices with a preview; do not ask an operator to type a library icon name. New services cannot be published without a supported choice.
-- [ ] Remove Unsplash/list-image constants and list-level image requests from the Customer catalogue/home service listing. Do not remove an unrelated marketing hero or a service-detail image merely because listings changed.
-- [ ] Avoid hydrating every static tile when a server-rendered grouped section is sufficient; do not regress focus order, deep links or back navigation.
-- [ ] Use the existing colors and fonts. Antigravity may add subtle 150–250 ms press, category-change and section-entry motion with `prefers-reduced-motion` support.
-- [ ] Add tests for full catalogue rendering, category order, optional search, keyboard/touch activation, unknown-icon fallback and absence of list-image requests.
+  - **Blocked: there is no Operations service editor (Claude).** `apps/admin` has no service route and no
+    catalogue feature — services are managed through Django admin and seeds. This item presupposes an editor
+    that was never built, so it needs its own scoped task before it can be done.
+- [x] Remove Unsplash/list-image constants and list-level image requests from the Customer catalogue/home service listing. Do not remove an unrelated marketing hero or a service-detail image merely because listings changed.
+- [x] Avoid hydrating every static tile when a server-rendered grouped section is sufficient; do not regress focus order, deep links or back navigation.
+- [x] Use the existing colors and fonts. Antigravity may add subtle 150–250 ms press, category-change and section-entry motion with `prefers-reduced-motion` support.
+- [x] Add tests for full catalogue rendering, category order, optional search, keyboard/touch activation, unknown-icon fallback and absence of list-image requests.
 
 **Done when:** a Customer can browse and open every service from a fast icon-and-name catalogue without searching or downloading service-card images.
 
@@ -626,6 +632,28 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
 - Published and validated OpenAPI **1.43.0**. Antigravity consumes `catalog_service_index` and maps `IconKeyEnum` exhaustively; it does not derive icons from service-name keywords and does not hand-edit generated client files.
 - Changed-surface regression command: **6 passed in 111.23s**. Static quality: Ruff format/lint, strict MyPy (380 source files), migration check, schema validation and contract-drift check all passed.
 - Full `backend\\scripts\\quality.cmd`: **972 passed, 173 failed, 1 error, 3 deselected in 2257.98s**; coverage stopped at 66%. The catalogue tests passed. The existing red baseline spans booking-window fixtures, unavailable storage/presence test providers, stale response expectations, a missing `world` fixture and unrelated workflow/money-format tests; do not report the full backend suite as green.
+
+**2026-08-25 — Codex customer-slot, estimate and installment backend.**
+
+- Customer-signed visit windows now store one immutable requested time per plan share. Fixed-time
+  offers broadcast only to Partners available for the complete visit and turnaround; first accept
+  wins atomically, later accepts receive `slot_taken`, and exhausted slots become
+  `NO_PROFESSIONAL_FOUND` without creating a payment attempt.
+- Unpaid hold expiry now releases the shared reservation and capacity hold and opens a new dispatch
+  wave. Requirement capture upload routes and the initial Partner slot-picker route were removed
+  from the published contract; historical attachments and stage evidence remain stored/readable.
+- Added Operations-activated commercial policies with approval references, canonical Partner tax
+  verification, Item-wise/Labour-wise estimates, controlled charges, mixed tax categories,
+  deterministic installment allocations and immutable financial snapshots.
+- Published OpenAPI **1.44.0**, including Customer visit-slot operations, fixed Partner offer fields,
+  estimate preview/submit shapes, Operations policy/tax-profile operations and named domain errors.
+- Final combined backend regression command: **82 passed in 53.22s**, covering Customer slots,
+  matching/proposals, estimate money, payment capture/refund behavior and schema. Static gates
+  passed for 383 source files. The full historical suite remains a separate red-baseline cleanup;
+  obsolete pre-revamp A5 fixtures still create project requests without Customer-selected slots.
+- External gates remain intentionally open: Finance/legal must approve the supplier/fee/commission/
+  withholding policy and document model; the disclosed Razorpay test secret must be rotated, the
+  replacement credentials/webhook configured in staging, and the real sandbox smoke recorded.
 
 ## Out of scope
 
