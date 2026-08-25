@@ -24,8 +24,9 @@ from apps.foundation.services import enqueue_outbox_event
 from apps.identity.models import User
 from apps.partners.capabilities import assert_rate_meets_wage_floor
 from apps.partners.exceptions import WageFloorUnsetError
-from apps.requirements import access, matching, pricing
+from apps.requirements import access, financials, matching, pricing
 from apps.requirements.exceptions import (
+    FinancialPolicyUnavailableError,
     ProposalNotSelectableError,
     ProposalShapeError,
     ProposalWindowClosedError,
@@ -269,28 +270,51 @@ def assert_rate_meets_derived_wage_floor(
     )
 
 
-def required_tax_basis(requirement: CustomerRequirement) -> str:
-    """One basis per requirement, taken from whoever quoted first.
+def required_tax_basis(_requirement: CustomerRequirement) -> str:
+    """The Operations-owned comparison basis, never the first Partner's preference."""
 
-    Comparing a tax-inclusive total against a tax-exclusive one is the trap the comparison view
-    cannot fix on the Customer's behalf, so it is prevented at submission.
-    """
-    existing = (
-        Proposal.objects.filter(requirement=requirement)
-        .exclude(status=Proposal.Status.WITHDRAWN)
-        .order_by("submitted_at")
-        .first()
+    try:
+        return financials.active_policy().tax_basis
+    except FinancialPolicyUnavailableError:
+        return ""
+
+
+def preview_proposal(
+    *,
+    invitation: VendorInvitation,
+    estimate_type: str,
+    item_lines: list[dict[str, Any]] | None = None,
+    labour_lines: list[dict[str, Any]] | None = None,
+    material_lines: list[dict[str, Any]] | None = None,
+    other_charges: list[dict[str, Any]] | None = None,
+    stages: list[dict[str, Any]] | None = None,
+    **_ignored: Any,
+) -> financials.CalculationResult:
+    """Return the authoritative A5 calculation without writing a proposal revision."""
+
+    if invitation.requirement.archetype != ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT:
+        raise ProposalShapeError("Only managed-project estimates use the estimate preview.")
+    if invitation.status not in (VendorInvitation.Status.ACCEPTED, VendorInvitation.Status.QUOTED):
+        raise RequirementTransitionError("Accept this enquiry before pricing it.")
+    return financials.calculate_estimate(
+        requirement=invitation.requirement,
+        partner=invitation.partner,
+        estimate_type=estimate_type,
+        item_lines=item_lines,
+        labour_lines=labour_lines,
+        material_lines=material_lines,
+        other_charges=other_charges,
+        stages=stages,
     )
-    return existing.tax_basis if existing is not None else ""
 
 
 @transaction.atomic
-def submit_proposal(
+def submit_proposal(  # noqa: PLR0912, PLR0915 - one transaction owns the append-only revision
     *,
     invitation_id: uuid.UUID,
-    total_paise: int,
-    tax_basis: str,
-    tax_paise: int = 0,
+    total_paise: int | None = None,
+    tax_basis: str | None = None,
+    tax_paise: int | None = None,
     rate_paise_per_worker_day: int | None = None,
     minimum_days: int | None = None,
     worker_count: int | None = None,
@@ -303,6 +327,10 @@ def submit_proposal(
     commission_treatment: str = "",
     site_visit_id: uuid.UUID | None = None,
     captured_by: User | None = None,
+    estimate_type: str | None = None,
+    item_lines: list[dict[str, Any]] | None = None,
+    labour_lines: list[dict[str, Any]] | None = None,
+    other_charges: list[dict[str, Any]] | None = None,
 ) -> Proposal:
     """Submit a first quote, or a revision that supersedes the vendor's previous one.
 
@@ -351,20 +379,44 @@ def submit_proposal(
         "total_paise": total_paise,
     }
     site_visit: SiteVisit | None = None
+    calculation: financials.CalculationResult | None = None
     if requirement.archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK:
         if material_lines:
             raise ProposalShapeError("A workforce quote does not have material lines.")
+        if item_lines or labour_lines or other_charges or estimate_type:
+            raise ProposalShapeError("A workforce quote uses the published daily-rate fields.")
+        if total_paise is None and all(
+            value is not None for value in (rate_paise_per_worker_day, minimum_days, worker_count)
+        ):
+            total_paise = (
+                int(rate_paise_per_worker_day or 0)
+                * int(minimum_days or 0)
+                * int(worker_count or 0)
+            )
+            payload["total_paise"] = total_paise
+        tax_basis = Proposal.TaxBasis.INCLUSIVE
+        tax_paise = 0
+        commission_treatment = ""
         _assert_a3_shape(payload)
     else:
-        _assert_a5_shape(payload)
         _assert_warranty_is_funded(requirement=requirement, warranty_terms=warranty_terms)
         site_visit = _assert_completed_visit(invitation=invitation, site_visit_id=site_visit_id)
-
-    required_basis = required_tax_basis(requirement)
-    if required_basis and tax_basis != required_basis:
-        raise ProposalShapeError(
-            f"Quotes for this request are compared {required_basis.lower()} of tax.",
+        calculation = financials.calculate_estimate(
+            requirement=requirement,
+            partner=invitation.partner,
+            estimate_type=estimate_type or "",
+            item_lines=item_lines,
+            labour_lines=labour_lines,
+            material_lines=material_lines,
+            other_charges=other_charges,
+            stages=stages,
         )
+        total_paise = calculation.customer_total_paise
+        tax_basis = calculation.tax_basis
+        tax_paise = calculation.partner_service_tax_paise
+        commission_treatment = "SERVER_POLICY"
+        stages = calculation.stages
+        material_lines = calculation.material_lines
 
     # A3 only. An A5 estimate is a price for an outcome, not a rate per worker per day, so there is
     # no statutory floor to measure it against.
@@ -403,13 +455,41 @@ def submit_proposal(
         supersedes=previous,
         revision=(previous.revision + 1) if previous is not None else 1,
         status=Proposal.Status.SUBMITTED,
-        usability=classify_usability(requirement=requirement, total_paise=total_paise),
+        usability=classify_usability(requirement=requirement, total_paise=int(total_paise or 0)),
         rate_paise_per_worker_day=rate_paise_per_worker_day,
         minimum_days=minimum_days,
         worker_count=worker_count,
-        total_paise=total_paise,
-        tax_paise=tax_paise,
-        tax_basis=tax_basis,
+        estimate_type=(
+            calculation.estimate_type if calculation else Proposal.EstimateType.LABOUR_WISE
+        ),
+        item_lines=calculation.item_lines if calculation else [],
+        labour_lines=calculation.labour_lines if calculation else [],
+        other_charges=calculation.other_charges if calculation else [],
+        commercial_policy_id=(
+            calculation.calculation_snapshot["policy"]["id"] if calculation else None
+        ),
+        calculation_snapshot=calculation.calculation_snapshot if calculation else {},
+        line_subtotal_paise=(
+            calculation.line_subtotal_paise if calculation else int(total_paise or 0)
+        ),
+        authorized_charges_paise=(calculation.authorized_charges_paise if calculation else 0),
+        taxable_value_paise=(
+            calculation.taxable_value_paise if calculation else int(total_paise or 0)
+        ),
+        partner_quote_total_paise=(
+            calculation.partner_quote_total_paise if calculation else int(total_paise or 0)
+        ),
+        platform_fee_paise=calculation.platform_fee_paise if calculation else 0,
+        platform_fee_tax_paise=calculation.platform_fee_tax_paise if calculation else 0,
+        customer_total_paise=(
+            calculation.customer_total_paise if calculation else int(total_paise or 0)
+        ),
+        commission_paise=calculation.commission_paise if calculation else 0,
+        withholding_paise=calculation.withholding_paise if calculation else 0,
+        partner_net_paise=calculation.partner_net_paise if calculation else int(total_paise or 0),
+        total_paise=int(total_paise or 0),
+        tax_paise=int(tax_paise or 0),
+        tax_basis=tax_basis or Proposal.TaxBasis.INCLUSIVE,
         commission_treatment=commission_treatment,
         inclusions=inclusions or [],
         exclusions=exclusions or [],
@@ -431,6 +511,11 @@ def submit_proposal(
         # `settle_share_for_estimate` re-checks usability and share state itself, so an
         # out-of-budget estimate or a share somebody already settled changes nothing.
         access.settle_share_for_estimate(proposal=proposal)
+        if site_visit.plan_share_id is not None:
+            VisitPlanShare.objects.filter(pk=site_visit.plan_share_id).update(
+                matching_status=VisitPlanShare.MatchingStatus.ESTIMATE_RECEIVED,
+                updated_at=timezone.now(),
+            )
 
     _promote_requirement_when_quoted(requirement)
     _announce_proposal(proposal)

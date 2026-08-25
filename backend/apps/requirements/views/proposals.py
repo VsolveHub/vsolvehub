@@ -27,7 +27,9 @@ from apps.requirements.models import Proposal
 from apps.requirements.selectors import invitation_for_partner, partner_proposals
 from apps.requirements.serializers import (
     ProposalCreateSerializer,
+    ProposalFinancialSummarySerializer,
     ProposalPageSerializer,
+    ProposalPreviewSerializer,
     ProposalSerializer,
 )
 from apps.requirements.views.base import (
@@ -168,6 +170,38 @@ class PartnerProposalCollectionView(ThrottledWriteMixin, APIView):
             command=command,
         )
         return Response(result.body, status=result.status_code)
+
+
+class PartnerProposalPreviewView(ThrottledWriteMixin, APIView):
+    """Debounced, server-authoritative financial preview for the Partner composer."""
+
+    permission_classes = (IsAuthenticated, IsPartnerUser)
+    throttle_scope = "m2_partner_response"
+
+    @extend_schema(
+        tags=["M2 - Proposals"],
+        operation_id="m2_proposal_price_preview",
+        request=ProposalPreviewSerializer,
+        responses={
+            200: ProposalFinancialSummarySerializer,
+            400: ApiErrorSerializer,
+            403: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+            409: ApiErrorSerializer,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ProposalPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
+        invitation_id = values.pop("invitation_id")
+        try:
+            profile = _partner_profile(request)
+            invitation = invitation_for_partner(partner=profile, invitation_id=invitation_id)
+            summary = proposals.preview_proposal(invitation=invitation, **values)
+        except (RequirementDomainError, PartnerDomainError) as exc:
+            _raise_api_error(exc)
+        return Response(ProposalFinancialSummarySerializer(summary.as_payload()).data)
 
 
 class PartnerProposalDetailView(APIView):

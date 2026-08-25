@@ -309,7 +309,7 @@ M1_CANCELLATION_BAND_VERIFIED_ARRIVAL = "verified-arrival"
 SPECTACULAR_SETTINGS = {
     "TITLE": "Vsolve Hub API",
     "DESCRIPTION": "Authoritative API for Vsolve Hub customer, partner and operations clients.",
-    "VERSION": "1.43.0",
+    "VERSION": "1.44.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1",
     "COMPONENT_SPLIT_REQUEST": True,
@@ -324,6 +324,11 @@ SPECTACULAR_SETTINGS = {
     # TypeScript client, where they mean nothing to a reader and change whenever an
     # unrelated model adds a choice.
     "ENUM_NAME_OVERRIDES": {
+        "CommercialAmountBasisEnum": "apps.requirements.models.CommercialPolicy.AmountBasis",
+        "CommercialPolicyTaxBasisEnum": "apps.requirements.models.CommercialPolicy.TaxBasis",
+        "CommercialSupplierOfRecordEnum": (
+            "apps.requirements.models.CommercialPolicy.SupplierOfRecord"
+        ),
         "PartnerApplicationStatusEnum": "apps.partners.models.PartnerApplication.Status",
         "PartnerDocumentKindEnum": "apps.partners.models.PartnerDocument.Kind",
         # Named when the Partner directory added a second serializer over `PartnerDocument`.

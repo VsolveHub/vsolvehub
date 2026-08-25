@@ -55,6 +55,7 @@ from .operations import (
     OperationsPartnerDocumentAccessView,
     OperationsPartnerDocumentReviewView,
     OperationsPartnerScheduleView,
+    OperationsPartnerTaxProfileVerificationView,
 )
 from .partner_application import (
     ApplicantServiceAreaListView,
@@ -84,6 +85,7 @@ __all__ = [
     "OperationsPartnerDocumentAccessView",
     "OperationsPartnerDocumentReviewView",
     "OperationsPartnerScheduleView",
+    "OperationsPartnerTaxProfileVerificationView",
     "PartnerApiException",
     "PartnerApplicationSubmitView",
     "PartnerApplicationView",

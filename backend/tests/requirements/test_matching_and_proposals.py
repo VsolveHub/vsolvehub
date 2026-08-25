@@ -352,7 +352,7 @@ def test_the_decision_is_recorded_so_operations_can_explain_it() -> None:
 
 
 def test_an_invitation_emits_the_partner_notification_event() -> None:
-    variant = _variant(ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT, code="project")
+    variant = _variant(ServiceVariant.BookingArchetype.A3_TIME_BLOCK, code="workforce")
     area = _area()
     customer = _customer()
     _vendor(area=area, variant=variant, phone="+919000000010", name="Projects Co")
@@ -360,7 +360,7 @@ def test_an_invitation_emits_the_partner_notification_event() -> None:
         variant=variant,
         area=area,
         customer=customer,
-        archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+        archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
     )
 
     [invitation] = matching.invite_wave(requirement_id=requirement.id)
@@ -371,7 +371,7 @@ def test_an_invitation_emits_the_partner_notification_event() -> None:
     assert event.idempotency_key == f"m2-invitation-received:{invitation.id}"
     assert event.payload["requirement_id"] == str(requirement.id)
     assert event.payload["vendor_invitation_id"] == str(invitation.id)
-    assert event.payload["archetype"] == ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT
+    assert event.payload["archetype"] == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
 
 
 # ---------------------------------------------------------------------------
@@ -635,18 +635,6 @@ def test_a_workforce_quote_needs_rate_days_and_headcount() -> None:
         )
 
 
-def test_a_project_quote_stage_amounts_must_add_up() -> None:
-    invitation = _accepted_invitation(archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT)
-
-    with pytest.raises(ProposalShapeError):
-        proposals.submit_proposal(
-            invitation_id=invitation.id,
-            total_paise=4_500_000,
-            tax_basis=Proposal.TaxBasis.INCLUSIVE,
-            stages=[{"name": "Shoot", "amount_paise": 1_800_000}],
-        )
-
-
 def test_submitting_a_valid_workforce_quote_moves_the_request_to_quotes_ready() -> None:
     invitation = _accepted_invitation()
 
@@ -692,7 +680,7 @@ def test_a_revision_supersedes_rather_than_edits() -> None:
     assert second.supersedes_id == first.id
 
 
-def test_competing_quotes_are_forced_onto_one_tax_basis() -> None:
+def test_workforce_tax_fields_are_server_owned() -> None:
     variant = _variant()
     area = _area()
     customer = _customer()
@@ -712,16 +700,16 @@ def test_competing_quotes_are_forced_onto_one_tax_basis() -> None:
         worker_count=4,
     )
 
-    with pytest.raises(ProposalShapeError) as excinfo:
-        proposals.submit_proposal(
-            invitation_id=second.id,
-            total_paise=900_000,
-            tax_basis=Proposal.TaxBasis.EXCLUSIVE,
-            rate_paise_per_worker_day=75_000,
-            minimum_days=3,
-            worker_count=4,
-        )
-    assert "compared" in str(excinfo.value)
+    second_proposal = proposals.submit_proposal(
+        invitation_id=second.id,
+        total_paise=900_000,
+        tax_basis=Proposal.TaxBasis.EXCLUSIVE,
+        rate_paise_per_worker_day=75_000,
+        minimum_days=3,
+        worker_count=4,
+    )
+    assert second_proposal.tax_basis == Proposal.TaxBasis.INCLUSIVE
+    assert second_proposal.tax_paise == 0
 
 
 def test_a_rate_below_the_wage_floor_is_refused_at_submission() -> None:

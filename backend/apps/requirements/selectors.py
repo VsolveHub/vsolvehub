@@ -217,6 +217,7 @@ def partner_invitations(partner: PartnerProfile) -> QuerySet[VendorInvitation]:
             "requirement__address",
             "requirement__service_area",
             "requirement__variant__service",
+            "requested_visit_share",
             "snapshot",
         )
         .prefetch_related(
@@ -238,6 +239,7 @@ def invitation_for_partner(
             "requirement__address",
             "requirement__service_area",
             "requirement__variant__service",
+            "requested_visit_share",
             "snapshot",
         )
         .prefetch_related(

@@ -1,5 +1,25 @@
 # API Contract Changelog
 
+## 1.44.0 - Customer-booked visits and server-priced estimates
+
+- Added Customer signed-slot discovery, exact 1/2/3 slot selection, per-slot matching status and
+  unmatched-slot replacement operations.
+- Partner offers now publish the immutable visit time, duration, earning and response deadline;
+  acceptance is first-wins and returns `slot_taken` after another professional commits.
+- Removed initial Partner visit-slot selection and requirement media-upload operations from the
+  published flow. Historical attachment records and project stage evidence remain intact.
+- Added `ITEM_WISE` and `LABOUR_WISE` estimate shapes, controlled named charges, material advances,
+  Partner-defined installments and the authoritative price-preview operation.
+- Proposal writes no longer accept tax basis, tax amount or commission treatment. Django publishes
+  the immutable policy/tax calculation, Partner quote, Customer total and Partner settlement values.
+- Paid estimate calculation fails closed with `m2_financial_policy_unavailable` until an approved,
+  effective Operations policy and canonical Partner tax profile exist.
+- Added Operations-only policy activation and Partner tax-profile verification operations. Policy
+  versions carry a Finance/legal approval reference and explicit supplier, fee, commission,
+  withholding and mixed service/material/charge tax-category decisions.
+- Engagement installments publish an immutable funding breakdown for Partner-service amount, tax,
+  separately customer-paid platform fee/tax and final amount due.
+
 > Entries for 1.19.0 and 1.20.0 were never written. This file therefore jumps 1.18.0 → 1.21.0.
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.

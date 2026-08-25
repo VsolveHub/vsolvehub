@@ -81,6 +81,12 @@ def original_terms_of(row: dict[str, Any]) -> dict[str, Any]:
         "scheduled_on": (scheduled.isoformat() if isinstance(scheduled, date) else scheduled),
         "starts_on": starts.isoformat() if isinstance(starts, date) else starts,
         "duration_days": row.get("duration_days") or None,
+        "partner_service_amount_paise": int(
+            row.get("partner_service_amount_paise") or row.get("amount_paise") or 0
+        ),
+        "tax_paise": int(row.get("tax_paise") or 0),
+        "platform_fee_paise": int(row.get("platform_fee_paise") or 0),
+        "platform_fee_tax_paise": int(row.get("platform_fee_tax_paise") or 0),
     }
 
 

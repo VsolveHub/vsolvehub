@@ -42,6 +42,7 @@ from .evidence import (
     StageEvidence,
     StageEvidenceUpload,
 )
+from .financial import CommercialPolicy
 from .matching import (
     CapacityHold,
     Proposal,
@@ -87,6 +88,7 @@ __all__ = [
     "BookingFee",
     "CapacityHold",
     "CashDemandReport",
+    "CommercialPolicy",
     "CustomerRequirement",
     "DaySettlement",
     "Engagement",

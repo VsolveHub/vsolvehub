@@ -8,6 +8,7 @@ submits. What the Customer is shown of that quote once they have paid for it liv
 """
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -16,7 +17,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.partners.photos import partner_photo_url
-from apps.requirements import proposals
+from apps.requirements import financials, proposals
 from apps.requirements.models import Proposal, RequirementQuestion, SiteVisit, VendorInvitation
 from apps.requirements.selectors import (
     QUESTION_ASKER_ROLES,
@@ -278,7 +279,26 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
     requirement_status = serializers.CharField(source="requirement.status", read_only=True)
     requested_start = serializers.DateTimeField(source="snapshot.requested_start", read_only=True)
     service_by = serializers.DateField(source="snapshot.service_by", read_only=True)
-    language = serializers.CharField(source="snapshot.language", read_only=True)
+    fixed_visit_start = serializers.DateTimeField(
+        source="requested_visit_share.requested_start",
+        read_only=True,
+        allow_null=True,
+    )
+    fixed_visit_duration_minutes = serializers.IntegerField(
+        source="requested_visit_share.duration_minutes",
+        read_only=True,
+        allow_null=True,
+    )
+    fixed_visit_earning_paise = serializers.IntegerField(
+        source="requested_visit_share.vendor_payout_paise",
+        read_only=True,
+        allow_null=True,
+    )
+    fixed_visit_status = serializers.CharField(
+        source="requested_visit_share.matching_status",
+        read_only=True,
+        allow_null=True,
+    )
     #: Guidance for a countdown only. The backend owns expiry and slot ownership; a client clock
     #: that has drifted must never be what decides an enquiry is still open.
     responds_by = serializers.DateTimeField(read_only=True)
@@ -301,7 +321,10 @@ class EnquirySummarySerializer(serializers.ModelSerializer[VendorInvitation]):
             "wave",
             "requested_start",
             "service_by",
-            "language",
+            "fixed_visit_start",
+            "fixed_visit_duration_minutes",
+            "fixed_visit_earning_paise",
+            "fixed_visit_status",
             "responds_by",
             "latest_proposal_status",
             "latest_proposal_rejection_reason",
@@ -396,10 +419,6 @@ _SITE_ADDRESS_DISCLOSED_STATUSES = (
 
 class EnquiryDetailSerializer(EnquirySummarySerializer):
     answers = serializers.JSONField(source="snapshot.answers", read_only=True)
-    additional_details = serializers.CharField(
-        source="snapshot.additional_details",
-        read_only=True,
-    )
     budget_min_paise = serializers.IntegerField(
         source="snapshot.budget_min_paise",
         read_only=True,
@@ -433,7 +452,6 @@ class EnquiryDetailSerializer(EnquirySummarySerializer):
         fields = (
             *EnquirySummarySerializer.Meta.fields,
             "answers",
-            "additional_details",
             "budget_min_paise",
             "budget_max_paise",
             "required_tax_basis",
@@ -503,7 +521,12 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
     deliverable = serializers.CharField(
         required=False, allow_blank=True, max_length=2000, default=""
     )
-    amount_paise = serializers.IntegerField(min_value=0)
+    amount_paise = serializers.IntegerField(min_value=1)
+    position = serializers.IntegerField(read_only=True)
+    tax_paise = serializers.IntegerField(read_only=True)
+    platform_fee_paise = serializers.IntegerField(read_only=True)
+    platform_fee_tax_paise = serializers.IntegerField(read_only=True)
+    total_due_paise = serializers.IntegerField(read_only=True)
     starts_on = serializers.DateField(required=False, allow_null=True, default=None)
     duration_days = serializers.IntegerField(
         required=False, allow_null=True, min_value=1, max_value=3650, default=None
@@ -539,6 +562,11 @@ class ProposalStageSerializer(serializers.Serializer[dict[str, Any]]):
             "title": str(stage.get("title") or stage.get("label") or ""),
             "deliverable": str(stage.get("deliverable") or ""),
             "amount_paise": int(stage.get("amount_paise") or 0),
+            "position": stage.get("position"),
+            "tax_paise": int(stage.get("tax_paise") or 0),
+            "platform_fee_paise": int(stage.get("platform_fee_paise") or 0),
+            "platform_fee_tax_paise": int(stage.get("platform_fee_tax_paise") or 0),
+            "total_due_paise": int(stage.get("total_due_paise") or 0),
             "starts_on": stage.get("starts_on"),
             "duration_days": stage.get("duration_days"),
             "ends_on": stage.get("ends_on"),
@@ -563,9 +591,25 @@ class ProposalMaterialLineSerializer(serializers.Serializer[dict[str, Any]]):
     """
 
     title = serializers.CharField(max_length=200)
-    quantity = serializers.IntegerField(min_value=1, required=False, default=1)
+    quantity = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        min_value=Decimal("0.001"),
+        required=False,
+        default=Decimal("1"),
+    )
     unit = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
-    amount_paise = serializers.IntegerField(min_value=0)
+    rate_paise = serializers.IntegerField(min_value=1, required=False)
+    amount_paise = serializers.IntegerField(min_value=1, required=False)
+    tax_paise = serializers.IntegerField(read_only=True)
+    platform_fee_paise = serializers.IntegerField(read_only=True)
+    platform_fee_tax_paise = serializers.IntegerField(read_only=True)
+    total_due_paise = serializers.IntegerField(read_only=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs.get("rate_paise") is None and attrs.get("amount_paise") is None:
+            raise serializers.ValidationError({"rate_paise": "Enter a material rate."})
+        return attrs
 
     def to_representation(self, instance: Any) -> dict[str, Any]:
         """Read a stored line defensively; the column is a `JSONField`, not a table.
@@ -577,10 +621,63 @@ class ProposalMaterialLineSerializer(serializers.Serializer[dict[str, Any]]):
         line = instance if isinstance(instance, dict) else {}
         return {
             "title": str(line.get("title") or ""),
-            "quantity": int(line.get("quantity") or 1),
+            "quantity": line.get("quantity") or "1",
             "unit": str(line.get("unit") or ""),
+            "rate_paise": int(line.get("rate_paise") or line.get("amount_paise") or 0),
             "amount_paise": int(line.get("amount_paise") or 0),
+            "tax_paise": int(line.get("tax_paise") or 0),
+            "platform_fee_paise": int(line.get("platform_fee_paise") or 0),
+            "platform_fee_tax_paise": int(line.get("platform_fee_tax_paise") or 0),
+            "total_due_paise": int(line.get("total_due_paise") or 0),
         }
+
+
+class ProposalItemLineSerializer(serializers.Serializer[dict[str, Any]]):
+    category = serializers.CharField(max_length=80)
+    title = serializers.CharField(max_length=200)
+    unit = serializers.ChoiceField(choices=sorted(financials.ALLOWED_UNITS))
+    quantity = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
+    rate_paise = serializers.IntegerField(min_value=1)
+    amount_paise = serializers.IntegerField(read_only=True)
+
+
+class ProposalLabourLineSerializer(serializers.Serializer[dict[str, Any]]):
+    role = serializers.CharField(max_length=120)
+    team = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+    member_count = serializers.IntegerField(min_value=1, max_value=10_000)
+    day_count = serializers.IntegerField(min_value=1, max_value=3_650)
+    rate_paise_per_day = serializers.IntegerField(min_value=1)
+    amount_paise = serializers.IntegerField(read_only=True)
+
+
+class ProposalOtherChargeSerializer(serializers.Serializer[dict[str, Any]]):
+    code = serializers.ChoiceField(choices=sorted(financials.ALLOWED_CHARGE_CODES))
+    label = serializers.CharField(max_length=120)  # type: ignore[assignment]
+    amount_paise = serializers.IntegerField(min_value=1)
+
+
+class ProposalFinancialSummarySerializer(serializers.Serializer[dict[str, Any]]):
+    estimate_type = serializers.ChoiceField(choices=Proposal.EstimateType.choices)
+    item_lines = ProposalItemLineSerializer(many=True)
+    labour_lines = ProposalLabourLineSerializer(many=True)
+    material_lines = ProposalMaterialLineSerializer(many=True)
+    other_charges = ProposalOtherChargeSerializer(many=True)
+    stages = ProposalStageSerializer(many=True)
+    line_subtotal_paise = serializers.IntegerField(min_value=0)
+    material_total_paise = serializers.IntegerField(min_value=0)
+    authorized_charges_paise = serializers.IntegerField(min_value=0)
+    taxable_value_paise = serializers.IntegerField(min_value=0)
+    partner_service_tax_paise = serializers.IntegerField(min_value=0)
+    partner_quote_total_paise = serializers.IntegerField(min_value=0)
+    platform_fee_paise = serializers.IntegerField(min_value=0)
+    platform_fee_tax_paise = serializers.IntegerField(min_value=0)
+    customer_total_paise = serializers.IntegerField(min_value=0)
+    commission_paise = serializers.IntegerField(min_value=0)
+    withholding_paise = serializers.IntegerField(min_value=0)
+    partner_net_paise = serializers.IntegerField(min_value=0)
+    tax_basis = serializers.ChoiceField(choices=Proposal.TaxBasis.choices)
+    policy_version = serializers.IntegerField(min_value=1)
+    calculation_snapshot = serializers.JSONField()
 
 
 class ProposalSerializer(serializers.ModelSerializer[Proposal]):
@@ -588,6 +685,9 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
 
     stages = ProposalStageSerializer(many=True, read_only=True)
     material_lines = ProposalMaterialLineSerializer(many=True, read_only=True)
+    item_lines = ProposalItemLineSerializer(many=True, read_only=True)
+    labour_lines = ProposalLabourLineSerializer(many=True, read_only=True)
+    other_charges = ProposalOtherChargeSerializer(many=True, read_only=True)
     revision_expires_at = serializers.SerializerMethodField()
 
     class Meta:
@@ -609,10 +709,25 @@ class ProposalSerializer(serializers.ModelSerializer[Proposal]):
             "rate_paise_per_worker_day",
             "minimum_days",
             "worker_count",
+            "estimate_type",
+            "item_lines",
+            "labour_lines",
+            "other_charges",
             "total_paise",
             "tax_paise",
             "tax_basis",
             "commission_treatment",
+            "calculation_snapshot",
+            "line_subtotal_paise",
+            "authorized_charges_paise",
+            "taxable_value_paise",
+            "partner_quote_total_paise",
+            "platform_fee_paise",
+            "platform_fee_tax_paise",
+            "customer_total_paise",
+            "commission_paise",
+            "withholding_paise",
+            "partner_net_paise",
             "inclusions",
             "exclusions",
             "stages",
@@ -647,10 +762,6 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     """
 
     invitation_id = serializers.UUIDField()
-    total_paise = serializers.IntegerField(min_value=1)
-    tax_basis = serializers.ChoiceField(choices=Proposal.TaxBasis.choices)
-    tax_paise = serializers.IntegerField(min_value=0, required=False, default=0)
-
     rate_paise_per_worker_day = serializers.IntegerField(
         min_value=1, required=False, allow_null=True
     )
@@ -661,20 +772,20 @@ class ProposalCreateSerializer(serializers.Serializer[dict[str, Any]]):
     #: A5 only. Refused on an A3 quote — a workforce quote is a rate per worker per day, and a
     #: vendor supplying their own materials on a labour hire is not a shape this platform brokers.
     material_lines = ProposalMaterialLineSerializer(many=True, required=False)
+    estimate_type = serializers.ChoiceField(choices=Proposal.EstimateType.choices, required=False)
+    item_lines = ProposalItemLineSerializer(many=True, required=False)
+    labour_lines = ProposalLabourLineSerializer(many=True, required=False)
+    other_charges = ProposalOtherChargeSerializer(many=True, required=False)
     inclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     exclusions = serializers.ListField(child=serializers.CharField(max_length=200), required=False)
     warranty_terms = serializers.CharField(required=False, allow_blank=True, max_length=4000)
     valid_until = serializers.DateTimeField(required=False, allow_null=True)
-    commission_treatment = serializers.CharField(required=False, allow_blank=True, max_length=24)
     #: **Required for an A5 estimate**, and the field that was missing: `submit_proposal` has always
     #: taken a `site_visit_id` and no serializer published one, so an on-site estimate could not be
     #: submitted over HTTP at all. The domain refuses a visit that is not `COMPLETED` and not this
     #: vendor's, so this is an identifier and never an assertion.
     site_visit_id = serializers.UUIDField(required=False, allow_null=True)
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        if attrs.get("tax_paise", 0) > attrs["total_paise"]:
-            raise serializers.ValidationError(
-                {"tax_paise": "Tax cannot be more than the quoted total."}
-            )
-        return attrs
+
+class ProposalPreviewSerializer(ProposalCreateSerializer):
+    invitation_id = serializers.UUIDField()

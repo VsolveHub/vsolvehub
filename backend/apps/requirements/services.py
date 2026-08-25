@@ -286,6 +286,14 @@ def _assert_visit_plan_chosen(requirement: CustomerRequirement) -> None:
     plan = VisitPlan.objects.filter(requirement=requirement).first()
     if plan is None or plan.status == VisitPlan.Status.VOID:
         raise VisitPlanRequiredError()
+    selected_slots = plan.shares.filter(
+        requested_start__isnull=False,
+        duration_minutes__isnull=False,
+    ).count()
+    if selected_slots != plan.plan_size:
+        raise VisitPlanRequiredError(
+            "Choose one visit time for every requested estimate before sending this request."
+        )
 
 
 @transaction.atomic
@@ -327,6 +335,7 @@ def _closing_date(requirement: CustomerRequirement) -> date | None:
     return timezone.localtime(requirement.requested_start).date()
 
 
+@transaction.atomic
 def submit_requirement(
     *,
     requirement: CustomerRequirement,

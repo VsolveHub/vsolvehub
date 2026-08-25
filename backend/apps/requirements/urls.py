@@ -11,6 +11,8 @@ from apps.requirements.views import (
     CancellationDecisionView,
     CaseAppealView,
     CaseEvidenceView,
+    CustomerRequirementVisitSlotReplaceView,
+    CustomerRequirementVisitSlotView,
     EngagementAmendmentCollectionView,
     EngagementAmendmentDecisionView,
     EngagementAmendmentDeclineView,
@@ -49,6 +51,7 @@ from apps.requirements.views import (
     OperationsAssistedClarificationView,
     OperationsAssistedProposalView,
     OperationsChargebackView,
+    OperationsCommercialPolicyActivateView,
     OperationsCrewVerificationQueueView,
     OperationsCrewVerificationView,
     OperationsDeadlineView,
@@ -68,25 +71,21 @@ from apps.requirements.views import (
     PartnerCrewOfferListView,
     PartnerDemandPreviewView,
     PartnerEnquiryAcceptView,
-    PartnerEnquiryAttachmentListView,
     PartnerEnquiryCollectionView,
     PartnerEnquiryDeclineView,
     PartnerEnquiryDetailView,
     PartnerEnquiryQuestionView,
     PartnerEnquirySiteVisitView,
-    PartnerEnquiryVisitSlotView,
     PartnerProjectCompletionView,
     PartnerProposalCollectionView,
     PartnerProposalDetailView,
+    PartnerProposalPreviewView,
     PartnerProposalWithdrawView,
     PartnerQuestionAnswerView,
     PartnerWorkspaceListView,
     ProjectCompletionCodeView,
     ProjectDelayClaimDecisionView,
     ProjectTransferDecisionView,
-    RequirementAttachmentCollectionView,
-    RequirementAttachmentDetailView,
-    RequirementAttachmentFinalizeView,
     RequirementBookingFeeCancelView,
     RequirementBookingFeeCheckoutView,
     RequirementCancellationView,
@@ -179,6 +178,16 @@ urlpatterns = [
         "requirements/<uuid:requirement_id>/visit-plan/checkout/",
         RequirementVisitPlanCheckoutView.as_view(),
         name="m2-requirement-visit-plan-checkout",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/visit-slots/",
+        CustomerRequirementVisitSlotView.as_view(),
+        name="m2-customer-visit-slots",
+    ),
+    path(
+        "requirements/<uuid:requirement_id>/visit-slots/<uuid:share_id>/replace/",
+        CustomerRequirementVisitSlotReplaceView.as_view(),
+        name="m2-customer-visit-slot-replace",
     ),
     path(
         "requirements/<uuid:requirement_id>/quotes/",
@@ -318,21 +327,6 @@ urlpatterns = [
         EngagementStageDisputeDecisionView.as_view(),
         name="m2-engagement-stage-dispute-decision",
     ),
-    path(
-        "requirements/<uuid:requirement_id>/attachments/uploads/",
-        RequirementAttachmentCollectionView.as_view(),
-        name="m2-requirement-attachment-upload",
-    ),
-    path(
-        "requirements/<uuid:requirement_id>/attachments/",
-        RequirementAttachmentFinalizeView.as_view(),
-        name="m2-requirement-attachment-finalize",
-    ),
-    path(
-        "requirements/<uuid:requirement_id>/attachments/<uuid:attachment_id>/",
-        RequirementAttachmentDetailView.as_view(),
-        name="m2-requirement-attachment-detail",
-    ),
     # Site visits: both parties, so neither prefix fits.
     path(
         "site-visits/<uuid:site_visit_id>/schedule/",
@@ -396,11 +390,6 @@ urlpatterns = [
         name="m2-partner-enquiry-question",
     ),
     path(
-        "partner/enquiries/<uuid:invitation_id>/attachments/",
-        PartnerEnquiryAttachmentListView.as_view(),
-        name="m2-partner-enquiry-attachments",
-    ),
-    path(
         "partner/enquiries/<uuid:invitation_id>/site-visits/",
         PartnerEnquirySiteVisitView.as_view(),
         name="m2-partner-enquiry-site-visit",
@@ -409,16 +398,16 @@ urlpatterns = [
     # `POST` redeems a signed slot id from it. Publishing the write alone would have left the
     # picker with nothing to draw — the browser must never compute availability.
     path(
-        "partner/enquiries/<uuid:invitation_id>/visit-slots/",
-        PartnerEnquiryVisitSlotView.as_view(),
-        name="m2-partner-enquiry-visit-slots",
-    ),
-    path(
         "partner/questions/<uuid:question_id>/answer/",
         PartnerQuestionAnswerView.as_view(),
         name="m2-partner-question-answer",
     ),
     path("proposals/", PartnerProposalCollectionView.as_view(), name="m2-proposal-create"),
+    path(
+        "proposals/preview/",
+        PartnerProposalPreviewView.as_view(),
+        name="m2-proposal-preview",
+    ),
     path(
         "proposals/<uuid:proposal_id>/",
         PartnerProposalDetailView.as_view(),
@@ -681,6 +670,11 @@ urlpatterns = [
         "operations/requests/<uuid:requirement_id>/timeline/",
         OperationsRequestTimelineView.as_view(),
         name="m2-operations-request-timeline",
+    ),
+    path(
+        "operations/commercial-policies/activate/",
+        OperationsCommercialPolicyActivateView.as_view(),
+        name="m2-operations-commercial-policy-activate",
     ),
     path(
         "operations/requests/<uuid:requirement_id>/rematch/",

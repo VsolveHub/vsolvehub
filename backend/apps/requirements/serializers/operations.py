@@ -11,8 +11,70 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.catalog.models import ServiceVariant
+from apps.requirements.models import CommercialPolicy
 
 from .enquiries import ProposalCreateSerializer
+
+
+class CommercialPolicySerializer(serializers.ModelSerializer[CommercialPolicy]):
+    class Meta:
+        model = CommercialPolicy
+        fields = (
+            "id",
+            "version",
+            "status",
+            "approval_reference",
+            "effective_from",
+            "effective_until",
+            "approved_at",
+            "supplier_of_record",
+            "material_supplier_of_record",
+            "visit_supplier_of_record",
+            "tax_basis",
+            "tax_rates_bps",
+            "material_tax_category",
+            "charge_tax_categories",
+            "platform_fee_treatment",
+            "platform_fee_bps",
+            "platform_fee_tax_bps",
+            "commission_bps",
+            "commission_basis",
+            "withholding_bps",
+            "withholding_basis",
+        )
+        read_only_fields = fields
+
+
+class CommercialPolicyActivateSerializer(serializers.Serializer[dict[str, Any]]):
+    version = serializers.IntegerField(min_value=1)
+    approval_reference = serializers.CharField(max_length=120)
+    effective_from = serializers.DateTimeField()
+    effective_until = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    supplier_of_record = serializers.ChoiceField(choices=CommercialPolicy.SupplierOfRecord.choices)
+    material_supplier_of_record = serializers.ChoiceField(
+        choices=CommercialPolicy.SupplierOfRecord.choices
+    )
+    visit_supplier_of_record = serializers.ChoiceField(
+        choices=CommercialPolicy.SupplierOfRecord.choices
+    )
+    tax_basis = serializers.ChoiceField(choices=CommercialPolicy.TaxBasis.choices)
+    tax_rates_bps = serializers.DictField(
+        child=serializers.IntegerField(min_value=0, max_value=10_000), allow_empty=False
+    )
+    material_tax_category = serializers.SlugField(max_length=100)
+    charge_tax_categories = serializers.DictField(
+        child=serializers.SlugField(max_length=100), required=False, default=dict
+    )
+    platform_fee_treatment = serializers.ChoiceField(
+        choices=CommercialPolicy.PlatformFeeTreatment.choices
+    )
+    platform_fee_bps = serializers.IntegerField(min_value=0, max_value=10_000)
+    platform_fee_tax_bps = serializers.IntegerField(min_value=0, max_value=10_000)
+    commission_bps = serializers.IntegerField(min_value=0, max_value=10_000)
+    commission_basis = serializers.ChoiceField(choices=CommercialPolicy.AmountBasis.choices)
+    withholding_bps = serializers.IntegerField(min_value=0, max_value=10_000)
+    withholding_basis = serializers.ChoiceField(choices=CommercialPolicy.AmountBasis.choices)
+
 
 # ---------------------------------------------------------------------------
 # Wave C6: cancellation, cases, and the Operations workspace (`M2-BE-701..719`)

@@ -87,6 +87,13 @@ class VendorInvitation(models.Model):
         on_delete=models.PROTECT,
         related_name="invitations",
     )
+    requested_visit_share = models.ForeignKey(
+        "requirements.VisitPlanShare",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="invitations",
+    )
     #: Which beneficial owner this invitation belongs to. Two accounts sharing a cluster cannot
     #: both hold a slot on one requirement.
     cluster_key = models.CharField(max_length=64, blank=True)
@@ -106,7 +113,13 @@ class VendorInvitation(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=("requirement", "partner"),
-                name="requirements_one_invitation_per_partner",
+                condition=models.Q(requested_visit_share__isnull=True),
+                name="requirements_one_quote_invitation_per_partner",
+            ),
+            models.UniqueConstraint(
+                fields=("requested_visit_share", "partner", "wave"),
+                condition=models.Q(requested_visit_share__isnull=False),
+                name="requirements_one_visit_offer_per_partner_wave",
             ),
             # Scoped to slots actually *held*. Inviting two accounts of one owner is wasteful;
             # letting both occupy a quote slot is the harm. Covering INVITED here would also make
@@ -217,6 +230,10 @@ class Proposal(models.Model):
         INCLUSIVE = "INCLUSIVE", "Tax included in the total"
         EXCLUSIVE = "EXCLUSIVE", "Tax added to the total"
 
+    class EstimateType(models.TextChoices):
+        ITEM_WISE = "ITEM_WISE", "Item-wise"
+        LABOUR_WISE = "LABOUR_WISE", "Labour-wise"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     requirement = models.ForeignKey(
         "requirements.CustomerRequirement",
@@ -277,6 +294,33 @@ class Proposal(models.Model):
     rate_paise_per_worker_day = models.PositiveBigIntegerField(null=True, blank=True)
     minimum_days = models.PositiveSmallIntegerField(null=True, blank=True)
     worker_count = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    estimate_type = models.CharField(
+        max_length=16,
+        choices=EstimateType.choices,
+        default=EstimateType.LABOUR_WISE,
+    )
+    item_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    labour_lines = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    other_charges = models.JSONField(default=list, blank=True, encoder=DjangoJSONEncoder)
+    commercial_policy = models.ForeignKey(
+        "requirements.CommercialPolicy",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="proposals",
+    )
+    calculation_snapshot = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
+    line_subtotal_paise = models.PositiveBigIntegerField(default=0)
+    authorized_charges_paise = models.PositiveBigIntegerField(default=0)
+    taxable_value_paise = models.PositiveBigIntegerField(default=0)
+    partner_quote_total_paise = models.PositiveBigIntegerField(default=0)
+    platform_fee_paise = models.PositiveBigIntegerField(default=0)
+    platform_fee_tax_paise = models.PositiveBigIntegerField(default=0)
+    customer_total_paise = models.PositiveBigIntegerField(default=0)
+    commission_paise = models.PositiveBigIntegerField(default=0)
+    withholding_paise = models.PositiveBigIntegerField(default=0)
+    partner_net_paise = models.PositiveBigIntegerField(default=0)
 
     total_paise = models.PositiveBigIntegerField()
     tax_paise = models.PositiveBigIntegerField(default=0)
@@ -355,6 +399,18 @@ class Proposal(models.Model):
             models.CheckConstraint(
                 condition=models.Q(tax_paise__lte=models.F("total_paise")),
                 name="requirements_proposal_tax_within_total",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(customer_total_paise=models.F("total_paise")),
+                name="requirements_proposal_customer_total_is_total",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    partner_quote_total_paise=models.F("partner_net_paise")
+                    + models.F("commission_paise")
+                    + models.F("withholding_paise")
+                ),
+                name="requirements_proposal_partner_settlement_reconciles",
             ),
             models.CheckConstraint(
                 condition=~models.Q(status="REJECTED") | ~models.Q(rejection_reason=""),

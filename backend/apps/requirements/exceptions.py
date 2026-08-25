@@ -147,6 +147,33 @@ class ProposalShapeError(RequirementDomainError):
         )
 
 
+class UnsupportedChargeError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_unsupported_charge",
+            message=message or "That charge is not supported.",
+            status_code=400,
+        )
+
+
+class InstallmentMismatchError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_installment_mismatch",
+            message=message or "The installments do not match the estimate amount.",
+            status_code=400,
+        )
+
+
+class FinancialPolicyUnavailableError(RequirementDomainError):
+    def __init__(self, message: str = "") -> None:
+        super().__init__(
+            code="m2_financial_policy_unavailable",
+            message=message or "This estimate cannot be priced until Finance approves a policy.",
+            status_code=409,
+        )
+
+
 class ProposalNotSelectableError(RequirementDomainError):
     def __init__(self, message: str) -> None:
         super().__init__(
@@ -256,10 +283,38 @@ class UnlockPaymentPendingError(RequirementDomainError):
 
 
 class VisitPlanRequiredError(RequirementDomainError):
-    def __init__(self) -> None:
+    def __init__(self, message: str = "") -> None:
         super().__init__(
             code="m2_visit_plan_required",
-            message="Choose how many professionals should visit before sending this request.",
+            message=message
+            or "Choose how many professionals should visit before sending this request.",
+            status_code=409,
+        )
+
+
+class VisitSlotTakenError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="slot_taken",
+            message="This visit was taken by another professional.",
+            status_code=409,
+        )
+
+
+class VisitSlotExpiredError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="slot_expired",
+            message="That visit time expired. Refresh and choose again.",
+            status_code=409,
+        )
+
+
+class NoProfessionalFoundError(RequirementDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="no_professional_found",
+            message="No professional is available for this slot. Nothing has been charged.",
             status_code=409,
         )
 

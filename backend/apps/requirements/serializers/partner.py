@@ -68,6 +68,25 @@ class VisitSlotConfirmSerializer(serializers.Serializer[dict[str, Any]]):
     slot_id = serializers.CharField(max_length=2000)
 
 
+class CustomerVisitSlotChoiceSerializer(serializers.Serializer[dict[str, Any]]):
+    """Exactly one signed grid token per estimate requested by the Customer."""
+
+    slot_ids = serializers.ListField(
+        child=serializers.CharField(max_length=2000),
+        min_length=1,
+        max_length=3,
+    )
+
+
+class CustomerVisitSlotReplaceSerializer(serializers.Serializer[dict[str, Any]]):
+    slot_id = serializers.CharField(max_length=2000)
+
+
+class CustomerRequestedVisitSlotsSerializer(serializers.Serializer[dict[str, Any]]):
+    slots = VisitPlanShareSerializer(many=True, read_only=True)
+    server_now = serializers.DateTimeField(read_only=True)
+
+
 class VisitSlotConfirmationSerializer(serializers.Serializer[dict[str, Any]]):
     visit = SiteVisitSerializer(read_only=True)
     share = VisitPlanShareSerializer(read_only=True)
