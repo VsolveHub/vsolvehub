@@ -671,6 +671,38 @@ Run the relevant Vitest and Playwright suites for every changed Customer/Partner
   withholding policy and document model; the disclosed Razorpay test secret must be rotated, the
   replacement credentials/webhook configured in staging, and the real sandbox smoke recorded.
 
+**2026-08-26 — Claude (owner-directed): category re-file + item/labour estimate wiring. Owner verification pending.**
+
+- **"Workforce and projects" is retired as a customer-facing category.** Every M2 service is
+  re-filed under a trade category the customer understands; placement is merchandising only —
+  archetypes, dispatch skills and the brief flow are untouched. Mapping:
+  `full-bathroom-renovation` → Plumber, `full-home-rewiring` → Electrician,
+  `modular-kitchen-fit-out` → Technician, `full-home-painting` → Home Services,
+  `construction-helpers` + `interior-fit-out-project` → new **Construction** category,
+  `event-catering` → new **Events** category. `seed_m2_demo` now files services this way
+  (`M2_CATEGORY_SEEDS`), and data migration `catalog.0015_refile_workforce_projects_services`
+  re-points existing rows and deactivates the legacy category (never deletes).
+- **Partner: the item-wise/labour-wise composer is mounted.** The estimate route now offers
+  "Quick tap estimate" (default, unchanged) or "Detailed line items", which mounts the previously
+  unmounted `CommercialEstimateComposer` via a new `CommercialEstimateFlow` wrapper carrying the
+  same guards as the tap flow (completed-visit refusal, closed-window dialog, idempotent
+  supersession) plus autosave clearing on success.
+- **Customer: the quote card now shows the full breakdown.** `item_lines`, `labour_lines` and
+  `other_charges` (on the wire since 1.44.0, previously dropped by the adapter) render inside
+  "Read the full scope", and the comparison table gains a "How it is priced" row derived from the
+  arrays, never the defaulted flag.
+- Hygiene: `/catalog/workforce-and-projects` fallback link now points at `/catalog`; site-header
+  gets its missing React import; `/cart`,`/checkout`,`/book` are owned by the Services nav target;
+  `site-nav.test.ts` updated to the 2-target reality; stale step-count docblocks corrected.
+- Gates: backend `quality-static` (ruff format/lint, strict mypy, migration check, schema +
+  contract-drift) **passed**. Frontend typecheck/lint per below. **No tests were executed** per
+  the verification convention — new/updated tests are written for the owner to run:
+  `comparison.test.ts`, `quote-card.test.tsx`, `site-nav.test.ts`.
+- Owner verification steps: run `python manage.py migrate` and re-run
+  `seed_m2_demo --i-understand-this-is-dev-only`; browse `/catalog` (no Workforce & Projects
+  section, projects under trades); submit a detailed item-wise and a labour-wise estimate as a
+  partner; read both on the customer quotes screen; run the frontend and backend test suites.
+
 ## Out of scope
 
 - Mixed Item-wise + Labour-wise estimates.

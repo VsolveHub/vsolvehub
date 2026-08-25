@@ -1,5 +1,8 @@
 "use client";
 
+// The namespace import is load-bearing: `PATHS`/`MOBILE_PATHS` name `React.ReactNode`,
+// and the test runner's JSX transform resolves elements through the `React` binding.
+import * as React from "react";
 import { useState, useEffect } from "react";
 import { useLogout, useAuthGuard, useOtpFlow } from "@vsolve/query";
 import { Button, Logo, Dialog, OtpForm, cn } from "@vsolve/ui";
@@ -258,8 +261,13 @@ export const NAV_TARGETS: readonly NavTarget[] = [
 
 /**
  * The paths each target owns, beyond its own href.
+ *
+ * `/catalog` owns the shopping flow: a visitor moving from the catalogue into
+ * the basket and on to checkout has not left "Services", and a nav that lights
+ * nothing there has stopped answering "where am I".
  */
 const OWNED: Record<string, readonly string[]> = {
+  "/catalog": ["/catalog", "/book", "/cart", "/checkout"],
   "/activity": ["/activity", "/bookings", "/requests", "/projects", "/engagements"],
 };
 

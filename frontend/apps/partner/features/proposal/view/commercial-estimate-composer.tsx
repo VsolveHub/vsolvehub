@@ -325,7 +325,6 @@ export function CommercialEstimateComposer({
           if (!open) setPendingMode(null);
         }}
         title="Change pricing method?"
-        description="The priced rows in the current method will be cleared. Materials and named charges stay."
         footer={
           <>
             <Button variant="ghost" onClick={() => setPendingMode(null)}>
@@ -341,7 +340,12 @@ export function CommercialEstimateComposer({
             </Button>
           </>
         }
-      />
+      >
+        <p className="text-sm leading-6 text-text-secondary">
+          The priced rows in the current method will be cleared. Materials and named charges
+          stay.
+        </p>
+      </Dialog>
     </div>
   );
 }

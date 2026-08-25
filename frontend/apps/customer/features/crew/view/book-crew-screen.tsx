@@ -724,7 +724,7 @@ function DesktopBookingHero({
       <div className="relative grid items-center gap-7 md:grid-cols-[1fr_300px]">
         <div>
           <Link
-            href="/catalog/workforce-and-projects"
+            href="/catalog"
             className="inline-flex min-h-11 items-center text-sm font-semibold text-white/75 transition-colors duration-base hover:text-white focus-visible:outline-white"
           >
             <svg viewBox="0 0 20 20" fill="none" className="mr-1 size-4" aria-hidden>

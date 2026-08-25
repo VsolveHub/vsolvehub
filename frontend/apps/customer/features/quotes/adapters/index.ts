@@ -6,7 +6,11 @@ import {
   readVendorIdentity,
   type CustomerProposal,
   type CustomerQuoteList,
+  type EstimateType,
+  type ProposalItemLine,
+  type ProposalLabourLine,
   type ProposalMaterialLine,
+  type ProposalOtherCharge,
   type ProposalSelection,
   type ProposalStage,
 } from "@vsolve/query";
@@ -112,6 +116,91 @@ function toMaterialViews(
   });
 }
 
+/* --------------------------------------------------------------------------
+   Priced lines — how the vendor built the number
+   -------------------------------------------------------------------------- */
+
+/**
+ * The vendor's own unit vocabulary, in the reader's words. The wire's `UnitEnum`
+ * is closed, so an unknown code cannot arrive — but the fallback renders the raw
+ * code rather than dropping the quantity, because a quantity with an odd unit
+ * still says more than no quantity at all.
+ */
+const UNIT_LABELS: Record<string, string> = {
+  each: "Nos",
+  job: "Job",
+  hour: "Hours",
+  day: "Days",
+  sq_ft: "Sq ft",
+  running_ft: "Running ft",
+  metre: "Metre",
+  kg: "Kg",
+  litre: "Litre",
+  set: "Set",
+};
+
+/** "1.000" → "1", "2.500" → "2.5" — same trim `toMaterialViews` performs. */
+function trimQuantity(quantity: string): string {
+  return quantity.replace(/\.0+$/u, "").replace(/(\.\d*[1-9])0+$/u, "$1");
+}
+
+export interface QuoteItemLineView {
+  category: string;
+  title: string;
+  /** "5 Sq ft × ₹80" — null for a single whole-job line, whose rate IS its amount. */
+  quantityLabel: string | null;
+  amountLabel: string;
+}
+
+function toItemLineViews(lines: readonly ProposalItemLine[]): readonly QuoteItemLineView[] {
+  return lines.map((line) => {
+    const quantity = trimQuantity(line.quantity);
+    const unit = UNIT_LABELS[line.unit] ?? line.unit;
+    return {
+      category: line.category.trim(),
+      title: line.title.trim(),
+      quantityLabel:
+        quantity === "1" && line.unit === "job"
+          ? null
+          : `${quantity} ${unit} × ${formatMoney(line.rate_paise)}`,
+      amountLabel: formatMoney(line.amount_paise),
+    };
+  });
+}
+
+export interface QuoteLabourLineView {
+  role: string;
+  team: string | null;
+  /** "2 people × 3 days × ₹900/day" — the arithmetic behind the amount, spelt out. */
+  crewLabel: string;
+  amountLabel: string;
+}
+
+function toLabourLineViews(lines: readonly ProposalLabourLine[]): readonly QuoteLabourLineView[] {
+  return lines.map((line) => ({
+    role: line.role.trim(),
+    team: line.team.trim() === "" ? null : line.team.trim(),
+    crewLabel: [
+      line.member_count === 1 ? "1 person" : `${line.member_count} people`,
+      line.day_count === 1 ? "1 day" : `${line.day_count} days`,
+      `${formatMoney(line.rate_paise_per_day)}/day`,
+    ].join(" × "),
+    amountLabel: formatMoney(line.amount_paise),
+  }));
+}
+
+export interface QuoteChargeView {
+  label: string;
+  amountLabel: string;
+}
+
+function toChargeViews(charges: readonly ProposalOtherCharge[]): readonly QuoteChargeView[] {
+  return charges.map((charge) => ({
+    label: charge.label.trim(),
+    amountLabel: formatMoney(charge.amount_paise),
+  }));
+}
+
 export interface QuoteCardView {
   proposalId: string;
   /** The vendor, as much as the fee bought. Contact is never here. */
@@ -139,6 +228,18 @@ export interface QuoteCardView {
   rateLabel: string | null;
   minimumDays: number | null;
   workerCount: number | null;
+
+  /**
+   * How the vendor priced the work. `ITEM_WISE` fills `itemLines`, `LABOUR_WISE`
+   * fills `labourLines` — the server refuses a mix, so at most one is non-empty.
+   * A3 quotes and older tap estimates carry neither; the default is `LABOUR_WISE`
+   * and means nothing on its own, so render from the arrays, never the flag.
+   */
+  estimateType: EstimateType;
+  itemLines: readonly QuoteItemLineView[];
+  labourLines: readonly QuoteLabourLineView[];
+  /** Named charges (transport, disposal…) — inside the total, like materials. */
+  otherCharges: readonly QuoteChargeView[];
 
   /** A5 only. Empty on a workforce quote. */
   stages: readonly QuoteStageView[];
@@ -209,6 +310,11 @@ export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
         : formatMoney(proposal.rate_paise_per_worker_day),
     minimumDays: proposal.minimum_days,
     workerCount: proposal.worker_count,
+
+    estimateType: proposal.estimate_type,
+    itemLines: toItemLineViews(proposal.item_lines),
+    labourLines: toLabourLineViews(proposal.labour_lines),
+    otherCharges: toChargeViews(proposal.other_charges),
 
     stages: toStageViews(proposal.stages),
     materials: toMaterialViews(proposal.material_lines),
@@ -392,6 +498,20 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
       equivalent: true,
       values: cards.map((card) =>
         card.stages.length === 0 ? null : `${card.stages.length} stages`,
+      ),
+    },
+    {
+      // From the arrays, not `estimateType`: the flag defaults to LABOUR_WISE on
+      // quotes that priced neither way (A3, older tap estimates), and claiming a
+      // pricing style nobody used would be the table inventing a difference.
+      label: "How it is priced",
+      equivalent: true,
+      values: cards.map((card) =>
+        card.itemLines.length > 0
+          ? `Item-wise (${card.itemLines.length} ${card.itemLines.length === 1 ? "item" : "items"})`
+          : card.labourLines.length > 0
+            ? `Labour-wise (${card.labourLines.length} ${card.labourLines.length === 1 ? "role" : "roles"})`
+            : null,
       ),
     },
     {

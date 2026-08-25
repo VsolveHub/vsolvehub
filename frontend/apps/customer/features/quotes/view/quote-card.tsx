@@ -211,6 +211,74 @@ export function QuoteCard({
           hint={card.exclusions.length > 0 ? "Includes exclusions" : undefined}
         >
           <div className="text-text">
+      {/* The priced lines behind the number — item-wise or labour-wise, never
+          both (the server refuses a mix). Rendered above the stages because a
+          stage says when money moves and a line says what it buys, and the
+          second question comes first when deciding between quotes. */}
+      {card.itemLines.length > 0 ? (
+        <section className="mt-4">
+          <h4 className="text-sm font-semibold text-text">How the price is built — item-wise</h4>
+          <ul className="mt-2 flex list-none flex-col gap-2 p-0">
+            {card.itemLines.map((line, lineIndex) => (
+              <li
+                key={`${card.proposalId}-item-${lineIndex}`}
+                className="flex items-start justify-between gap-3 rounded-card border border-line p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-text">{line.title}</p>
+                  {line.quantityLabel !== null ? (
+                    <p className="mt-0.5 text-sm text-text-secondary">{line.quantityLabel}</p>
+                  ) : null}
+                </div>
+                <p className="shrink-0 font-medium text-text">{line.amountLabel}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {card.labourLines.length > 0 ? (
+        <section className="mt-4">
+          <h4 className="text-sm font-semibold text-text">
+            How the price is built — labour-wise
+          </h4>
+          <ul className="mt-2 flex list-none flex-col gap-2 p-0">
+            {card.labourLines.map((line, lineIndex) => (
+              <li
+                key={`${card.proposalId}-labour-${lineIndex}`}
+                className="flex items-start justify-between gap-3 rounded-card border border-line p-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-text">
+                    {line.team === null ? line.role : `${line.role} — ${line.team}`}
+                  </p>
+                  <p className="mt-0.5 text-sm text-text-secondary">{line.crewLabel}</p>
+                </div>
+                <p className="shrink-0 font-medium text-text">{line.amountLabel}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {card.otherCharges.length > 0 ? (
+        <section className="mt-4">
+          <h4 className="text-sm font-semibold text-text">Named charges</h4>
+          <ul className="mt-2 flex list-none flex-col gap-2 p-0">
+            {card.otherCharges.map((charge, chargeIndex) => (
+              <li
+                key={`${card.proposalId}-charge-${chargeIndex}`}
+                className="flex items-start justify-between gap-3 rounded-card border border-line p-3"
+              >
+                <p className="min-w-0 font-medium text-text">{charge.label}</p>
+                <p className="shrink-0 font-medium text-text">{charge.amountLabel}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-sm text-text-secondary">Already counted in the total above.</p>
+        </section>
+      ) : null}
+
       {card.stages.length > 0 ? (
         <section className="mt-4">
           <h4 className="text-sm font-semibold text-text">How the work is staged</h4>

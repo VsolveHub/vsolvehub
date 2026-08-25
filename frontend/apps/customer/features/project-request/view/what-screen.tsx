@@ -12,7 +12,7 @@ import { ServicePicker, hasServiceDetail } from "./parts/service-picker";
 import { SqftCard } from "./parts/sqft-card";
 
 /**
- * Step 1 of 2 — What needs doing?
+ * Step 1 of 3 — What needs doing?
  *
  * A few taps and maybe a number. The Customer is never asked to pick an
  * archetype, never told how matching works, and — since the M2-revamp — never

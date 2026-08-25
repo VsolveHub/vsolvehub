@@ -116,7 +116,57 @@ POSTAL_CODE = "500032"
 #: until they map it, and the wage-floor guard fails closed while it is blank.
 STATE_CODE = "TG"
 
-CATEGORY_SLUG = "workforce-and-projects"
+#: Retired 2026-08-26. The umbrella meant nothing to a customer — "Full bathroom renovation"
+#: belongs beside the plumber, not inside a noun only this codebase understood. The category row
+#: is deactivated by `catalog.0015_refile_workforce_projects_services`; this constant survives
+#: only so the migration and this command agree on what to retire.
+LEGACY_CATEGORY_SLUG = "workforce-and-projects"
+
+#: slug -> (name, description, icon_key, display_order).
+#:
+#: The four trade rows are byte-for-byte copies of `seed_task_catalog.CATALOG`, because
+#: `Category.objects.update_or_create` merges on slug: two commands that disagree about what
+#: "plumber" is called would fight over the row, last writer winning. The two new rows are
+#: customer-comprehensible nouns replacing the retired umbrella.
+M2_CATEGORY_SEEDS: dict[str, tuple[str, str, str, int]] = {
+    "technician": (
+        "Technician",
+        "Reviewed one-person Technician task visits.",
+        "wrench",
+        1,
+    ),
+    "electrician": (
+        "Electrician",
+        "Wiring, fittings, fans and power faults, fixed in one visit.",
+        "zap",
+        2,
+    ),
+    "plumber": (
+        "Plumber",
+        "Taps, leaks, drains and fittings, fixed in one visit.",
+        "droplet",
+        3,
+    ),
+    "home-services": (
+        "Home Services",
+        "Cleaning, pest control and upkeep delivered at your address.",
+        "home",
+        6,
+    ),
+    "construction": (
+        "Construction",
+        "Site labour and construction projects, priced on site.",
+        "hard-hat",
+        8,
+    ),
+    "events": (
+        "Events",
+        "Catering and event services, priced per plate or per event.",
+        "party-popper",
+        9,
+    ),
+}
+
 A3_SERVICE_SLUG = "construction-helpers"
 A5_SERVICE_SLUG = "interior-fit-out-project"
 
@@ -327,14 +377,18 @@ A5_QUESTIONS: tuple[QuestionSeed, ...] = (
 #:
 #: The icon key is a member of the controlled `ServiceIconKey` vocabulary, never a guess — where
 #: no trade glyph exists (painting, catering) the honest generic beats a wrong pictogram, which is
-#: the FE-9 rule. Subcategories order after `construction-labour` (10) so the A3 crew service
-#: stays first in its category.
+#: the FE-9 rule. Subcategory display orders start above the trade subcategories seeded by
+#: `seed_task_catalog`, so a project section always lists after the priced task visits inside the
+#: same trade category.
 @dataclass(frozen=True)
 class ProjectSeed:
     slug: str
     name: str
     variant_name: str
     icon_key: str
+    #: A key of `M2_CATEGORY_SEEDS` — the trade category the customer browses, never a
+    #: booking-model noun. Placement is merchandising only; the archetype stays on the variant.
+    category_slug: str
     subcategory_slug: str
     subcategory_name: str
     subcategory_display_order: int
@@ -353,6 +407,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         name="Interior fit-out project",
         variant_name="Fit-out, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="construction",
         subcategory_slug="interior-fit-outs",
         subcategory_name="Interior fit-outs",
         subcategory_display_order=20,
@@ -363,6 +418,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         name="Full bathroom renovation",
         variant_name="Renovation, priced on site",
         icon_key=ServiceIconKey.PLUMBING,
+        category_slug="plumber",
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
@@ -403,6 +459,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         name="Full home painting",
         variant_name="Painting, priced on site",
         icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        category_slug="home-services",
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
@@ -451,6 +508,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         name="Modular kitchen fit-out",
         variant_name="Kitchen, priced on site",
         icon_key=ServiceIconKey.CARPENTRY,
+        category_slug="technician",
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
@@ -491,6 +549,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         name="Full home rewiring",
         variant_name="Rewiring, priced on site",
         icon_key=ServiceIconKey.ELECTRICAL,
+        category_slug="electrician",
         subcategory_slug="renovation-projects",
         subcategory_name="Renovation projects",
         subcategory_display_order=30,
@@ -523,6 +582,7 @@ A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
         name="Event catering",
         variant_name="Menu, priced per plate",
         icon_key=ServiceIconKey.SERVICE,
+        category_slug="events",
         subcategory_slug="event-services",
         subcategory_name="Event services",
         subcategory_display_order=40,
@@ -912,6 +972,7 @@ class Command(BaseCommand):
             archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
             questions=A3_QUESTIONS,
             icon_key=ServiceIconKey.WORKFORCE,
+            category_slug="construction",
             subcategory_slug="construction-labour",
             subcategory_name="Construction labour",
             subcategory_display_order=10,
@@ -928,6 +989,7 @@ class Command(BaseCommand):
                 archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
                 questions=project.questions,
                 icon_key=project.icon_key,
+                category_slug=project.category_slug,
                 subcategory_slug=project.subcategory_slug,
                 subcategory_name=project.subcategory_name,
                 subcategory_display_order=project.subcategory_display_order,
@@ -1070,17 +1132,29 @@ class Command(BaseCommand):
         archetype: str,
         questions: tuple[QuestionSeed, ...],
         icon_key: str,
+        category_slug: str,
         subcategory_slug: str,
         subcategory_name: str,
         subcategory_display_order: int,
     ) -> ServiceVariant:
+        # The trade category the customer actually browses. A slug outside the authored map is a
+        # typo, and a typo here would quietly invent a category — so it refuses instead.
+        if category_slug not in M2_CATEGORY_SEEDS:
+            raise CommandError(
+                f"Unknown category slug {category_slug!r} for service {service_slug!r}; "
+                "add it to M2_CATEGORY_SEEDS or fix the seed."
+            )
+        category_name, category_description, category_icon, category_order = M2_CATEGORY_SEEDS[
+            category_slug
+        ]
         category, _ = Category.objects.update_or_create(
-            slug=CATEGORY_SLUG,
+            slug=category_slug,
             defaults={
-                "name": "Workforce and projects",
-                "description": "Workforce hire and custom project work.",
+                "name": category_name,
+                "description": category_description,
+                "icon_key": category_icon,
                 "is_active": True,
-                "display_order": 90,
+                "display_order": category_order,
             },
         )
         subcategory, _ = Subcategory.objects.update_or_create(

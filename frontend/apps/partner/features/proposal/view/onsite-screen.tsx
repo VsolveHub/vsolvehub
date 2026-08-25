@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, ErrorState, Skeleton, SkeletonRegion, buttonStyles } from "@vsolve/ui";
+import { Card, ErrorState, Skeleton, SkeletonRegion, buttonStyles, cn } from "@vsolve/ui";
 import { describeError } from "@vsolve/query";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import { PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
 import { traceForInvitation, type Proposal } from "../model/proposal-state";
 import { useMyProposals } from "../queries";
+import { CommercialEstimateFlow } from "./commercial-estimate-flow";
 import { TapEstimateComposer } from "./tap-estimate-composer";
 
 /**
@@ -122,7 +123,7 @@ function OnsiteEstimate({
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-text">{enquiry.serviceName}</h1>
         <p className="text-sm leading-6 text-text-secondary">
-          Tap what the job needs and put a price on each one.
+          Put a price on what the job needs.
         </p>
       </header>
 
@@ -147,6 +148,17 @@ function OnsiteEstimate({
  * second estimate would replay the first one and the customer would never see
  * the new price — with nothing reporting an error. So the composer mounts once
  * the read has answered, and a failed read says so rather than defaulting.
+ *
+ * ## Two composers, one wire contract
+ *
+ * The tap composer is the default: preset stages and materials, no typing, for
+ * the vendor standing in the room. "Detailed line items" mounts
+ * `CommercialEstimateFlow` — item-wise or labour-wise priced rows, named
+ * charges and payment installments — for the vendor whose quote is genuinely a
+ * bill of quantities. Both submit to `POST /proposals/` and both are validated
+ * by the same server rules, so the choice here is a form choice, never a
+ * different commercial shape. Switching loses nothing: the tap draft lives in
+ * component state per mount, the commercial draft autosaves per invitation.
  */
 function OnsiteComposerWithRevision({
   enquiry,
@@ -157,6 +169,7 @@ function OnsiteComposerWithRevision({
   readonly enquiryHref: string;
   readonly onSubmitted: (proposal: Proposal) => void;
 }) {
+  const [composer, setComposer] = useState<"tap" | "detailed">("tap");
   const mine = useMyProposals(enquiry.requirementId);
 
   if (mine.isPending) {
@@ -185,15 +198,87 @@ function OnsiteComposerWithRevision({
     proposals: mine.data.results,
     invitationId: enquiry.id,
   });
+  const visit = planVisitOf(enquiry.siteVisits);
+  const supersedesRevision = trace.current?.revision ?? 0;
 
   return (
-    <TapEstimateComposer
-      enquiry={enquiry}
-      visit={planVisitOf(enquiry.siteVisits)}
-      enquiryHref={enquiryHref}
-      supersedesRevision={trace.current?.revision ?? 0}
-      onSubmitted={onSubmitted}
-    />
+    <div className="flex flex-col gap-4">
+      <ComposerChooser value={composer} onChange={setComposer} />
+      {composer === "tap" ? (
+        <TapEstimateComposer
+          enquiry={enquiry}
+          visit={visit}
+          enquiryHref={enquiryHref}
+          supersedesRevision={supersedesRevision}
+          onSubmitted={onSubmitted}
+        />
+      ) : (
+        <CommercialEstimateFlow
+          enquiry={enquiry}
+          visit={visit}
+          enquiryHref={enquiryHref}
+          supersedesRevision={supersedesRevision}
+          onSubmitted={onSubmitted}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Tap presets or detailed line items — a form choice, not a commercial one.
+ *
+ * A radio group rather than tabs: the two are alternatives that produce one
+ * estimate, and only one is ever on screen. Switching does not clear the other
+ * side's work (see the mount docblock), so no confirmation stands between the
+ * vendor and trying the other form.
+ */
+function ComposerChooser({
+  value,
+  onChange,
+}: {
+  readonly value: "tap" | "detailed";
+  readonly onChange: (next: "tap" | "detailed") => void;
+}) {
+  return (
+    <fieldset className="rounded-card border border-line bg-surface p-3">
+      <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
+        How do you want to write it?
+      </legend>
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        {(
+          [
+            ["tap", "Quick tap estimate", "Tap the work, price each part"],
+            ["detailed", "Detailed line items", "Item-wise or labour-wise, with named charges"],
+          ] as const
+        ).map(([key, label, description]) => {
+          const selected = value === key;
+          return (
+            <label
+              key={key}
+              className={cn(
+                "flex min-h-20 cursor-pointer flex-col rounded-card border p-3",
+                "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring",
+                selected
+                  ? "border-2 border-action-secondary bg-selected-surface"
+                  : "border-line bg-surface hover:bg-surface-hover",
+              )}
+            >
+              <input
+                type="radio"
+                name="estimate-composer"
+                value={key}
+                checked={selected}
+                onChange={() => onChange(key)}
+                className="sr-only"
+              />
+              <span className="text-sm font-bold text-text">{label}</span>
+              <span className="mt-1 text-xs leading-4 text-text-muted">{description}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
