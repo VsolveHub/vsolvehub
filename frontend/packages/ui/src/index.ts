@@ -22,6 +22,7 @@ export type { ChoiceChipOption, ChoiceChipsProps } from "./choice-chips";
 
 // Containers
 export { Card, StatCard } from "./card";
+export type { CardProps } from "./card";
 export { Dialog, Sheet } from "./dialog";
 // The two-column booking shape and the pieces that fill its rail. Used by the
 // crew form, the matching screen, the confirmation, the project brief and the

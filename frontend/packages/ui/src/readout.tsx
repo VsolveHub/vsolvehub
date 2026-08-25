@@ -20,7 +20,7 @@ import { cn } from "./cn";
  * doorway, the number they need is the thing they see.
  */
 
-type Tone = "neutral" | "active" | "warning" | "danger";
+type Tone = "neutral" | "active" | "success" | "warning" | "danger";
 
 const tones: Record<Tone, { plate: string; rule: string; value: string }> = {
   neutral: {
@@ -32,6 +32,16 @@ const tones: Record<Tone, { plate: string; rule: string; value: string }> = {
     plate: "bg-surface border-signal-200",
     rule: "bg-action",
     value: "text-text",
+  },
+  // A settled figure — an allocation that reconciles, a balance that is zero
+  // because it should be. Distinct from `active`, which says "this is the number
+  // that matters now"; success says "this one is finished". Without it the
+  // installment editor's "Still to allocate ₹0" reads the same as an outstanding
+  // balance, which is the one thing that plate exists to distinguish.
+  success: {
+    plate: "bg-success-surface border-success-line",
+    rule: "bg-success-text",
+    value: "text-success-text",
   },
   warning: {
     plate: "bg-warning-surface border-warning-line",
