@@ -1,39 +1,27 @@
 /**
- * The two-screen requirement sequence, and why it is exactly two.
+ * The three-screen requirement sequence:
+ * Step 1 of 3 — What needs doing?
+ * Step 2 of 3 — Where and when?
+ * Step 3 of 3 — Choose visits & send
  *
- * The M2-revamp fixed a tighter flow-weight budget than revision 2 did: *What*
- * and *Where/When*, nothing else. This list is the enforceable half of that
- * budget — a closed constant with a test on its length — so a third screen has
- * to be an argument somebody makes on purpose, not a file somebody adds.
+ * ## The three steps
  *
- * ## What happened to `details` and `review`
- *
- * `details` ("Show us the space") collected photos, voice notes and a free-text
- * paragraph. The redesign removed all three from requirement capture: the
- * category questions collect the facts matching needs, and a vendor prices on
- * the visit, not on a photo. `review` restated an address and a date the
- * Customer had chosen one screen earlier — the same act twice. The estimate
- * count moved onto *Where/When*, and the submit guard re-asserts every earlier
- * rule, so nothing the review screen enforced was lost with it.
- *
- * ## The second screen is the confirmation
- *
- * `M2-FE-206`'s rule survives in stronger form: there is no confirm screen
- * because there is nothing to confirm that is not already on the screen the
- * Customer is looking at when they press send.
+ * `what` collects category facts (choices, numbers, booleans) with zero typing.
+ * `where_when` collects site address and date information only.
+ * `visits_send` contains compact fact recaps, the 1/2/3 estimate chooser, visit
+ * slot selections, and the single Send action.
  */
 
-export const SCREENS = ["what", "where_when"] as const;
+export const SCREENS = ["what", "where_when", "visits_send"] as const;
 
 export type Screen = (typeof SCREENS)[number];
 
 /**
  * The flow-weight budget as a number the tests can read.
  *
- * Two, since the M2-revamp. Duplicated here rather than referenced because a
- * Markdown table cannot fail a build.
+ * Three steps.
  */
-export const SCREEN_BUDGET = 2;
+export const SCREEN_BUDGET = 3;
 
 export function screenIndex(screen: Screen): number {
   return SCREENS.indexOf(screen);
@@ -57,11 +45,9 @@ export function isFinalScreen(screen: Screen): boolean {
 
 /**
  * Customer-facing screen labels for the progress indicator.
- *
- * Plain nouns, not our vocabulary. "What you need" rather than "Scope", because
- * the Customer is describing a problem and has not agreed to learn a word for it.
  */
 export const SCREEN_LABELS: Record<Screen, string> = {
-  what: "What you need",
+  what: "What needs doing",
   where_when: "Where and when",
+  visits_send: "Choose visits & send",
 };

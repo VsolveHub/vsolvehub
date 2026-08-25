@@ -208,14 +208,6 @@ const FIT_OUT_OPTIONS: RequirementQuestionView["options"] = FIT_OUT_SERVICE_OPTI
 export function selectionOnlyQuestionSet(serviceSlug: string, set: QuestionSet): QuestionSet {
   if (serviceSlug !== "interior-fit-out-project") return set;
 
-  // A catalogue that publishes more than the style question is answering the
-  // brief properly — the space, the size, the budget — and collapsing it would
-  // throw those away and send a vendor the same one-line enquiry this narrowing
-  // was a workaround for. The collapse stays for a variant that still has only
-  // the one question, so an environment that has not been reseeded keeps
-  // working.
-  if (set.questions.length > 1) return set;
-
   const source =
     set.questions.find((question) => question.code === "fit_out_style") ??
     set.questions.find((question) => question.code === "deliverable");

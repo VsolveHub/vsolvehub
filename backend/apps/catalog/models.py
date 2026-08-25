@@ -6,6 +6,8 @@ from typing import Final
 from django.conf import settings
 from django.db import models
 
+from apps.catalog.icons import ServiceIconKey
+
 
 class Category(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -69,6 +71,11 @@ class Service(models.Model):
     )
     slug = models.SlugField(max_length=140, unique=True)
     name = models.CharField(max_length=160)
+    icon_key = models.CharField(
+        max_length=40,
+        choices=ServiceIconKey.choices,
+        default=ServiceIconKey.SERVICE,
+    )
     short_description = models.CharField(max_length=240)
     description = models.TextField(blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
@@ -78,6 +85,12 @@ class Service(models.Model):
 
     class Meta:
         ordering = ("display_order", "name")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(icon_key__in=ServiceIconKey.values),
+                name="catalog_service_icon_key_supported",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name

@@ -1,6 +1,5 @@
 "use client";
 
-import type { Schemas } from "@vsolve/api-client";
 import { isFreelyEditable } from "@vsolve/query";
 import { buttonStyles, formatMoney } from "@vsolve/ui";
 import Link from "next/link";
@@ -64,7 +63,7 @@ export interface RequestDetailScreenProps {
  * are what somebody checks when they want to confirm it is the right site.
  */
 function addressSummary(
-  addresses: readonly Schemas["Address"][],
+  addresses: readonly { id: string; line1: string; locality: string; city: string; postal_code: string }[],
   addressId: string | null,
 ): string | null {
   if (addressId === null) return null;

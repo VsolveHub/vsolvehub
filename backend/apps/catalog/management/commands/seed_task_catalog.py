@@ -68,6 +68,7 @@ from django.db import transaction
 from django.db.models import Count, F, Q
 
 from apps.carts.models import ServiceCompatibilityRule
+from apps.catalog.icons import SERVICE_ICON_BY_SUBCATEGORY
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
@@ -1096,6 +1097,7 @@ class Command(BaseCommand):
             defaults={
                 "subcategory": subcategory,
                 "name": task.name,
+                "icon_key": SERVICE_ICON_BY_SUBCATEGORY[trade.slug],
                 "short_description": description,
                 "description": description,
                 "status": Service.Status.ACTIVE,

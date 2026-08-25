@@ -2,6 +2,7 @@
 
 import { hasRole, useAuthGuard, useLogout, useSwitchRole } from "@vsolve/query";
 import { Button, Card, ErrorState, Logo, Spinner, cn } from "@vsolve/ui";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -16,35 +17,31 @@ import {
 } from "@/features/workspace/registry";
 import { usePartnerWorkspaceGrants } from "@/features/workspace/queries";
 
-/**
- * The signed-in Partner shell: one gate and one navigation for every screen
- * behind a session.
- *
- * ## Why one shell rather than a check per screen
- *
- * Offers, availability and onboarding each grew their own login form, their own
- * "checking…" state and their own error card. Three copies of a session decision
- * is three chances to word a lock-out differently, and it is why a Partner could
- * be sent to a login form on `/apply` while `/offers` showed an empty inbox for
- * the same expired cookie. Logging in is a whole-app concern, so it has one
- * implementation and one route.
- *
- * ## Why the role is a prop rather than a constant
- *
- * `IsPartnerUser` guards offers, availability and presence, but onboarding is
- * deliberately `IsAuthenticated` only: Django grants the `partner` role when an
- * application is *created*, so demanding it on `/apply` would lock out every
- * person who has not applied yet — the exact people that tree exists for. The
- * shell therefore asks for the role only where Django does.
- *
- * ## What this shell will not do
- *
- * It never decides authorization itself. `useAuthGuard` reports what Django's
- * session projection says, and Django refuses anything the projection got wrong.
- * This only picks which honest screen to show.
- */
-
 export const PARTNER_ROLE = "partner";
+
+export type PartnerChromeMode = "full" | "focused" | "onboarding";
+
+/**
+ * Route chrome policy for Partner application:
+ * - "full": persistent header + BottomTabBar on /home, /work/all, /money, /me, /me/*
+ * - "onboarding": onboarding shell on /apply/* (no top/bottom navbar)
+ * - "focused": compact Back button header, NO bottom tabs on detail/action routes
+ */
+export function getPartnerChromeMode(pathname: string): PartnerChromeMode {
+  if (pathname.startsWith("/apply")) {
+    return "onboarding";
+  }
+  if (
+    pathname === "/home" ||
+    pathname === "/work/all" ||
+    pathname === "/money" ||
+    pathname === "/me" ||
+    pathname.startsWith("/me/")
+  ) {
+    return "full";
+  }
+  return "focused";
+}
 
 function ShellMessage({ children }: { children: ReactNode }) {
   return (
@@ -54,18 +51,6 @@ function ShellMessage({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Signed in, holds the Partner grant, but Django has another role selected.
- *
- * Worth its own screen rather than a generic refusal: the person does have
- * access and one action fixes it. This is not a hypothetical — on login Django
- * selects the alphabetically first grant, so anyone who is both a Customer and a
- * Partner lands here every time, and treating it as a denial is how they
- * conclude their Partner account is broken.
- *
- * Exported because the home embeds the offer inbox directly and needs the same
- * recovery inline, without sending the Partner to a different route to find it.
- */
 export function SwitchToPartner({ inline = false }: { inline?: boolean } = {}) {
   const switchRole = useSwitchRole(getApiClient());
   const logout = useLogout(getApiClient());
@@ -130,13 +115,40 @@ function NoPartnerAccess({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+function FocusedHeader({ pathname }: { pathname: string }) {
+  const router = useRouter();
+
+  let title = "Details";
+  if (pathname.startsWith("/work/offers")) {
+    title = "Work Offer";
+  } else if (pathname.startsWith("/work/enquiries")) {
+    title = "Enquiry";
+  } else if (pathname.startsWith("/work/jobs")) {
+    title = "Job Details";
+  } else if (pathname.startsWith("/account") || pathname.startsWith("/me")) {
+    title = "Account";
+  }
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-line bg-surface">
+      <div className="flex h-14 items-center justify-between px-4">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-control text-text-secondary hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-base font-semibold text-text truncate px-2">{title}</h1>
+        <div className="h-11 w-11" aria-hidden="true" />
+      </div>
+    </header>
+  );
+}
+
 export interface PartnerShellProps {
   children: ReactNode;
-  /**
-   * Requires Django's *selected* role to be `partner`, matching
-   * `IsPartnerUser`. Left off for onboarding, which Django guards with
-   * `IsAuthenticated` alone.
-   */
   requirePartnerRole?: boolean;
 }
 
@@ -148,21 +160,6 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
       : {},
   );
 
-  /**
-   * Approved M2 lifecycle capabilities, as Django published them.
-   *
-   * Asked for only once the session is known to hold the Partner role. `/apply`
-   * mounts this shell for people who do not have it yet — that is the whole
-   * point of the onboarding branch — and asking there spends a guaranteed 403 on
-   * every page view.
-   *
-   * An empty answer and an unread one both render the M1 navigation, and the
-   * shell deliberately cannot tell "not applied", "under review" and "suspended"
-   * apart from each other. Distinguishing them needs the capability-status read
-   * in `contracts/proposals/0012-m2-capability-and-requirement-surface.md`;
-   * inferring it from an empty grant list would put a review banner in front of
-   * every existing Partner.
-   */
   const workspaceGrants = usePartnerWorkspaceGrants({
     enabled: guard.status === "authenticated" && hasRole(guard.user, PARTNER_ROLE),
   });
@@ -171,15 +168,8 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   const router = useRouter();
 
   const isUnauthenticated = guard.status === "unauthenticated";
+  const chromeMode = getPartnerChromeMode(pathname);
 
-  /**
-   * Sending someone to login is a navigation, not a screen.
-   *
-   * The previous per-screen login forms left the browser on `/offers` while
-   * showing a phone field, so signing in had nowhere to return to and the URL
-   * described a page nobody was looking at. Carrying the current path as `next`
-   * is what makes a deep link survive an expired cookie.
-   */
   useEffect(() => {
     if (!isUnauthenticated) return;
     router.replace(`/login?next=${encodeURIComponent(pathname)}`);
@@ -216,10 +206,6 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     );
   }
 
-  // Selecting the Partner role for them. This app is deployed on its own domain,
-  // so the domain is the role — and since Django re-grants `customer` on every
-  // login and picks the alphabetically first grant, every Partner sign-in would
-  // otherwise land on a picker asking a question the URL already answered.
   if (guard.isSelectingRole) {
     return (
       <main className="flex min-h-screen items-center justify-center gap-2 px-4 text-text-secondary">
@@ -230,9 +216,6 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
   }
 
   if (guard.status === "forbidden") {
-    // Normally handled above. Reaching here with the grant means the automatic
-    // switch was refused, so this is a real fallback; without the grant it is an
-    // invitation to apply, not a denial.
     return hasRole(guard.user, PARTNER_ROLE) ? (
       <SwitchToPartner />
     ) : (
@@ -240,114 +223,61 @@ export function PartnerShell({ children, requirePartnerRole = false }: PartnerSh
     );
   }
 
-  // Resolved after the guard, so a signed-out or forbidden visitor never has
-  // this asked for on their behalf. The tab bar itself no longer depends on
-  // this — it is the fixed `TAP_FIRST_NAV` below — but `NotificationBell`
-  // still needs to know which M2 workspace keys this Partner holds, to
-  // decide where an ENGAGEMENT notice may safely link. An unread grant list
-  // and an empty one are deliberately indistinguishable here: nothing
-  // downstream of `workspaces` authorizes anything.
   const workspaces = resolveWorkspaces(workspaceGrants.grants ?? []);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* ---- Top bar ---- */}
-      <header className="sticky top-0 z-30 border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <Link
-            href="/home"
-            className="flex items-center gap-2 rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-          >
-            <Logo className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-text-secondary">Partner</span>
-          </Link>
-          {/*
-            The bell sits beside Sign Out rather than in the tab bar. The tab
-            bar is a fixed three destinations (`TAP_FIRST_NAV`) with no
-            per-Partner variation to make room for it, and `notification-bell.tsx`
-            explains the deeper reason anyway: a notification is an
-            interruption, not a destination. Mounting it here rather than
-            earlier would poll an unread count for a session that is still
-            being checked, or one that turned out not to hold a Partner
-            account at all.
+    <div className="min-h-screen bg-background flex flex-col items-center">
+      <div className="w-full max-w-md min-h-screen bg-surface border-x border-line/50 shadow-sm flex flex-col relative">
+        {/* ---- Header ---- */}
+        {chromeMode === "full" ? (
+          <header className="sticky top-0 z-30 border-b border-line bg-surface">
+            <div className="flex items-center justify-between px-4 py-3">
+              <Link
+                href="/home"
+                className="flex items-center gap-2 rounded-control focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              >
+                <Logo className="h-7 w-auto" />
+                <span className="text-sm font-semibold text-text-secondary">Partner</span>
+              </Link>
+              <div className="flex items-center gap-1">
+                <NotificationBell workspaceKeys={workspaces.map((item) => item.key)} />
+                <Button
+                  variant="ghost"
+                  onClick={() => logout.mutate()}
+                  loading={logout.isPending}
+                  loadingLabel="Signing out"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          </header>
+        ) : chromeMode === "focused" ? (
+          <FocusedHeader pathname={pathname} />
+        ) : null}
 
-            `workspaceKeys` decides where an ENGAGEMENT notice may safely link. It
-            is passed down from the list already resolved here so the panel does
-            not re-ask for grants that are on screen.
-          */}
-          <div className="flex items-center gap-1">
-            <NotificationBell workspaceKeys={workspaces.map((item) => item.key)} />
-            <Button
-              variant="ghost"
-              onClick={() => logout.mutate()}
-              loading={logout.isPending}
-              loadingLabel="Signing out"
-            >
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+        {/* ---- Page content ---- */}
+        <ShellContent paddingBottom={chromeMode === "full" ? "pb-20" : "pb-6"}>
+          {children}
+        </ShellContent>
 
-      {/* ---- Page content ---- */}
-      <ShellContent>{children}</ShellContent>
+        {/* ---- Bottom tab bar ---- */}
+        {chromeMode === "full" ? <BottomTabBar items={TAP_FIRST_NAV} /> : null}
 
-      {/* ---- Bottom tab bar ---- */}
-      <BottomTabBar items={TAP_FIRST_NAV} />
-
-      {/*
-        A live crew offer, on whatever screen the lead is looking at.
-
-        Mounted in the shell rather than on `/offers` because an A3 offer expires
-        in about two minutes and the cascade pushes it — a lead reading their
-        earnings when one lands would otherwise never see it, and a wave would
-        widen for no reason. The sheet suppresses itself on `/work` and
-        `/work/offers/…`, the two screens that already render the offer.
-
-        Gated on the grant, not merely on the session. This shell also renders
-        for `/apply`, where `requirePartnerRole` is deliberately off because
-        Django grants `partner` when an application is *created* — so without
-        this check the crew-offer endpoint would answer `403` to every person who
-        has not applied yet. It shares one polled query with the offers page, so
-        mounting it here costs no extra requests.
-      */}
-      {hasRole(guard.user, PARTNER_ROLE) ? <LiveOfferSheet /> : null}
+        {/* Live offer sheet */}
+        {hasRole(guard.user, PARTNER_ROLE) ? <LiveOfferSheet /> : null}
+      </div>
     </div>
   );
 }
 
-/**
- * The bottom tab bar navigation.
- *
- * Fixed to the bottom of the viewport. Uses Lucide icons for visual clarity.
- * The active tab gets a navy pill background with white text and icon; inactive
- * tabs use muted text. All tabs are 44px minimum touch targets.
- *
- * Items are passed in rather than read from a module constant: which
- * destinations exist depends on what Django authorized, and a component that
- * decided that for itself would be deciding authorization from the client.
- */
 function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
   const pathname = usePathname();
 
-  /**
-   * Longest matching prefix, resolved once rather than per item.
-   *
-   * A workspace nests its own routes under its home — `/workforce` and
-   * `/workforce/crew` are both tabs — so a plain per-item prefix test lights up
-   * two tabs at once and emits two `aria-current="page"` elements in one nav,
-   * which is invalid and leaves a screen-reader user with no idea where they
-   * are.
-   */
   const current = items.reduce<{ href: string; owned: string } | null>((best, item) => {
-    // A tab may own more of the tree than it points at — `Work` links to
-    // `/work/all` and owns every `/work/…` route. See `WorkspaceNavItem`.
     const owned = item.activePrefix ?? item.href;
     const matches = pathname === owned || pathname.startsWith(`${owned}/`);
     if (!matches) return best;
-    // Compared prefix against prefix. Measuring the winner's `href` instead
-    // would rank the two on different strings, so a short href with a long
-    // prefix could lose to a longer href that matched less of the path.
     return best === null || owned.length > best.owned.length ? { href: item.href, owned } : best;
   }, null);
   const currentHref = current?.href ?? null;
@@ -355,85 +285,69 @@ function BottomTabBar({ items }: { items: readonly WorkspaceNavItem[] }) {
   return (
     <nav
       aria-label="Partner navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface"
+      className="fixed inset-x-0 bottom-0 z-40 bg-surface border-t border-line"
     >
-      <ul className="mx-auto flex max-w-2xl list-none justify-around p-0">
-        {items.map((item) => {
-          const isCurrent = item.href === currentHref;
-          const Icon = item.icon;
+      <div className="mx-auto max-w-md">
+        <ul className="flex list-none justify-around p-0">
+          {items.map((item) => {
+            const isCurrent = item.href === currentHref;
+            const Icon = item.icon;
 
-          return (
-            <li key={item.href} className="flex-1">
-              <Link
-                href={item.href}
-                aria-current={isCurrent ? "page" : undefined}
-                className={cn(
-                  "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.625rem] font-semibold",
-                  "transition-colors duration-fast ease-out",
-                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
-                  isCurrent
-                    ? "text-action-secondary"
-                    : "text-text-muted hover:text-text-secondary",
-                )}
-              >
-                <span
+            return (
+              <li key={item.href} className="flex-1">
+                <Link
+                  href={item.href}
+                  aria-current={isCurrent ? "page" : undefined}
                   className={cn(
-                    "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-fast",
-                    isCurrent ? "bg-selected-surface" : "",
+                    "flex min-h-[3.5rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.625rem] font-semibold",
+                    "transition-colors duration-fast ease-out",
+                    "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-action",
+                    isCurrent
+                      ? "text-action-secondary"
+                      : "text-text-muted hover:text-text-secondary",
                   )}
                 >
-                  <Icon
-                    size={20}
-                    strokeWidth={isCurrent ? 2.5 : 2}
-                    aria-hidden
-                  />
-                </span>
-                {item.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+                  <span
+                    className={cn(
+                      "flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-fast",
+                      isCurrent ? "bg-selected-surface" : "",
+                    )}
+                  >
+                    <Icon
+                      size={20}
+                      strokeWidth={isCurrent ? 2.5 : 2}
+                      aria-hidden
+                    />
+                  </span>
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </nav>
   );
 }
 
-/**
- * Holds the page and moves focus to it on every navigation.
- *
- * A client-side route change swaps the content but leaves focus wherever the
- * activated link was, so a screen-reader or keyboard user stays parked in the
- * navigation and hears nothing about the page they just opened. Focusing the
- * container — not a heading, which would announce the heading twice — puts them
- * at the top of the new content, and `outline-none` keeps a mouse user from
- * seeing a ring they did not ask for.
- *
- * Deliberately not a `<main>`: each page owns that landmark, and a second one
- * here would give every route two.
- */
-function ShellContent({ children }: { children: ReactNode }) {
+function ShellContent({
+  children,
+  paddingBottom = "pb-20",
+}: {
+  children: ReactNode;
+  paddingBottom?: string;
+}) {
   const pathname = usePathname();
   const contentRef = useRef<HTMLDivElement>(null);
-  /**
-   * The path this shell was mounted on.
-   *
-   * Compared against, rather than a "have I run before?" flag. Strict Mode
-   * double-invokes effects, so a flag flipped on the first pass is already false
-   * on the second and the focus fires on initial load after all — which drops
-   * the header and the whole navigation out of the tab order, because the first
-   * Tab then continues from inside this container. A value that only differs
-   * after a real navigation cannot be fooled by running twice.
-   */
   const mountedAt = useRef(pathname);
 
   useEffect(() => {
-    // Initial load is the browser's own navigation; focus belongs where it put it.
     if (pathname === mountedAt.current) return;
     contentRef.current?.focus();
   }, [pathname]);
 
   return (
-    <div ref={contentRef} tabIndex={-1} className="flex-1 pb-20 outline-none">
+    <div ref={contentRef} tabIndex={-1} className={cn("flex-1 outline-none", paddingBottom)}>
       {children}
     </div>
   );

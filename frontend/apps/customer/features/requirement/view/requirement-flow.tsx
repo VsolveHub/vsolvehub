@@ -12,6 +12,7 @@ import {
   VisitPlanChooser as MobileVisitPlanChooser,
   defaultPlanSize,
 } from "@/features/project-request/view/parts/visit-plan-chooser";
+import { VisitsSendScreen } from "@/features/project-request/view/visits-send-screen";
 import { WhatScreen as MobileWhatScreen } from "@/features/project-request/view/what-screen";
 import { WhereWhenScreen as MobileWhereWhenScreen } from "@/features/project-request/view/where-when-screen";
 import { WizardShell } from "@/features/project-request/view/wizard-shell";
@@ -51,42 +52,10 @@ import { WhatScreen } from "./what-screen";
 import { WhereWhenScreen } from "./where-when-screen";
 
 /**
- * The two screens, wired to the published contract.
- *
- * Everything under `features/requirement/` was built to take what a query would
- * give it. This is that query layer's one call site, and the shape of the file
- * is the evidence that the seam held: it holds no copy, no layout and no
- * validation rule — only *when* to write to the server and what to do with the
- * answer.
- *
- * ## When it writes
- *
- * Once per screen, on the way forward — not on every keystroke:
- *
- * | Leaving | Sends | Because |
- * |---|---|---|
- * | `what` | `POST /requirements/` or `PATCH {answers}` | The answers are what the lifecycle is inferred from, and the response *is* the verdict screen 1 renders. |
- * | `where_when` | `PATCH {address, dates, flexibility}`, then the visit plan, then `POST /submit/` | The last screen is the send since the M2-revamp removed review. |
- *
- * Autosaving on change was the alternative and it is worse here: every answer
- * would re-run the lifecycle inference, so the sentence under the heading would
- * rewrite itself while the Customer tapped, and the reducer's invalidation
- * cascade — change an answer, lose the verdict it produced — would flicker on
- * and off between taps.
- *
- * ## Why the write happens before the screen changes and not after
- *
- * A `PATCH` that fails must leave the Customer on the screen that owns the
- * field, with the failure next to it. Advancing first and reporting the error
- * on the following screen is how someone ends up reading "we could not save
- * your address" on a page with no address on it.
- *
- * ## Where review went
- *
- * Nowhere it was needed. The review screen restated an address and a date the
- * Customer chose one screen earlier; the submit guard (`where_when`'s, which
- * re-asserts screen 1's rule) is what actually protected the send, and it
- * still runs. The estimate-count chooser it hosted now lives on `where_when`.
+ * The three screens, wired to the published contract.
+ * Step 1 of 3 — What needs doing?
+ * Step 2 of 3 — Where and when?
+ * Step 3 of 3 — Choose visits & send
  */
 
 export interface RequirementFlowProps {
@@ -113,13 +82,6 @@ const SELECTED_SERVICE_PARAM = "selected_service";
 
 /**
  * Midnight local, as an ISO date-time.
- *
- * The Customer chose a day. `requested_start` is a `DateTimeField`, so a moment
- * has to be picked, and the start of their own day is the only one that does
- * not invent an intention — matching treats it as the middle of a ±3-day window
- * (`DUPLICATE_WINDOW_DAYS`, and the same window the wave uses), never as an
- * appointment. Built from the local date parts rather than `new Date(iso)` so a
- * browser east of UTC does not send the previous day.
  */
 function startOfLocalDay(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number);
@@ -176,7 +138,7 @@ export function isWizardActionPending({
   isSubmittingRequirement: boolean;
   isChoosingPlan: boolean;
 }): boolean {
-  if (screen === "where_when") {
+  if (screen === "visits_send") {
     return (
       isAdvancingCurrentScreen ||
       isPreparingSubmit ||
@@ -189,11 +151,6 @@ export function isWizardActionPending({
 
 /**
  * The saved draft, as much of it as the submit path needs.
- *
- * `isA5` rides along because the A5 plan requirement can only be decided
- * *after* the answers are saved — the lifecycle is the server's inference, and
- * on a first send from the desktop brief (or a catalog shortcut) nothing has
- * been saved before the CTA is pressed.
  */
 export interface PreparedDraft {
   requirementId: string;
@@ -238,25 +195,11 @@ function FlowBody({
     canContinue,
   } = useRequirement();
   const initialSelectionApplied = useRef(false);
-  // Above every early return, because hooks are. `useIsWideScreen` decides
-  // between the phone wizard and the desktop brief — see its own note on why
-  // that cannot be a CSS branch when both layouts hold the same form controls.
   const isWide = useIsWideScreen();
   const router = useRouter();
-  /** Incremented to ask the address dialog to open. See `AddressStage`. */
   const [addressSignal, setAddressSignal] = useState(0);
   const addresses = useAddresses();
-  /**
-   * The final tier the Customer wants to send.
-   *
-   * Earlier, every card tap immediately resized the server plan. A Customer
-   * comparing 1, 2 and 3 therefore wrote all three choices, and the last card
-   * they inspected silently became the invitation count. Keep it local
-   * instead; `handleSubmit` persists exactly this final value and awaits the
-   * server before opening matching.
-   */
   const [pendingPlanSize, setPendingPlanSize] = useState<number | null>(null);
-  /** True only for writes started by pressing the send CTA. */
   const [isPreparingSubmit, setIsPreparingSubmit] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -270,21 +213,6 @@ function FlowBody({
 
   const questionSet = selectionOnlyQuestionSet(service.slug, toQuestionSet(variant));
 
-  /**
-   * The chosen service, mirrored into the URL beside the step.
-   *
-   * `?selected_service=` was already an *inbound* parameter — the catalogue's
-   * picker built links with it — but nothing ever wrote it back, so a brief in
-   * progress could not be linked to or restored with its service intact.
-   *
-   * ## Why this parameter and not the rest of the answers
-   *
-   * A URL gets pasted into chat, logged by proxies and left in history. The
-   * service is a catalogue code — public, already in the link that reached this
-   * page, and the one answer that changes what the rest of the form asks. The
-   * address and the dates are the Customer's own circumstances, and they belong
-   * in the session entry that never leaves the browser.
-   */
   const serviceQuestion = questionSet.questions.find((question) => question.kind === "choice");
   const chosenService =
     serviceQuestion === undefined
@@ -298,8 +226,6 @@ function FlowBody({
     if (searchParams.get(SELECTED_SERVICE_PARAM) === chosenService) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set(SELECTED_SERVICE_PARAM, chosenService);
-    // `replace`, like the step: choosing a service is not a navigation, and a
-    // history entry per answer would make Back mean "undo one field".
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   }, [chosenService, pathname, router, searchParams]);
 
@@ -321,44 +247,14 @@ function FlowBody({
     router.replace(requestHref(requestToReopen.id));
   }, [requestToReopen, router, service.slug]);
 
-  /**
-   * The requirement's own record — the flow's resume read.
-   *
-   * Enabled from the moment a draft is discoverable, so a reload or a second
-   * device lands on the same server draft instead of creating a duplicate.
-   */
   const record = useRequirementRecord(resumableRequirementId);
 
-  /**
-   * The A5 visit plan — `M2-FE-216`.
-   *
-   * Read only once the server has said this requirement is A5, and only once a
-   * draft exists to hang a plan on. Both conditions are the server's: the
-   * archetype is inferred from the answers and the Customer never picks it, and
-   * `POST .../visit-plan/` needs a requirement id.
-   *
-   * On A3 nothing is mounted at all. The endpoint answers `400
-   * m2_lifecycle_not_supported` there, and a refusal on every workforce request
-   * would be noise that eventually hides a real one.
-   */
   const isA5 = state.verdict?.lifecycle === "A5_CUSTOM_PROJECT";
   const planQuery = useVisitPlan(state.requirementId, isA5);
   const choosePlan = useChooseVisitPlan();
   const planState = planQuery.data ?? null;
   const savedPlanSize = planState?.plan?.plan_size ?? null;
   const planTiers = toPlanTierViews(planState?.available_tiers ?? []);
-  /**
-   * What the chooser shows: this screen's choice, then the saved draft, then
-   * the tier most people want.
-   *
-   * The default is *derived*, never written: the review screen used to carry
-   * the chooser and the Customer dwelt there, but on `where_when` it shares
-   * the screen with the send button, and a null selection would turn the CTA
-   * into "Select number of estimates" for everyone. `defaultPlanSize` prefers
-   * two — comparing two estimates is the ordinary case — and the choice still
-   * costs nothing until a pro confirms. Submitting persists whatever is on
-   * screen, so the displayed default and the sent count cannot disagree.
-   */
   const chosenPlanSize =
     pendingPlanSize !== null && pendingPlanSize !== savedPlanSize
       ? pendingPlanSize
@@ -374,9 +270,6 @@ function FlowBody({
   });
 
   useEffect(() => {
-    // The draft has left the browser and lives on the server now. Leaving the
-    // persisted intent behind would restore a form for a request that has
-    // already gone out the next time this service is opened.
     if (submitted !== undefined) clearPersistedRequirement(service.slug);
   }, [submitted, service.slug]);
 
@@ -387,17 +280,10 @@ function FlowBody({
 
     if (initialSelection === null || initialSelection === undefined) return;
 
-    // The first choice question, whether or not it is the only one. This used to
-    // require the selection-only shape, which stopped being true the moment the
-    // catalogue published a fuller brief — so a link carrying a chosen service
-    // silently did nothing.
     const question = questionSet.questions.find((candidate) => candidate.kind === "choice");
     if (question === undefined) return;
     if (!(question.options ?? []).some((option) => option.value === initialSelection)) return;
 
-    // A reload restored the same server draft and answer. Its canonical record
-    // is being re-read below, so another POST/PATCH here would only create a
-    // background mutation (and used to turn the send CTA into a spinner).
     if (chosenService === initialSelection && state.requirementId !== null) {
       initialSelectionApplied.current = true;
       return;
@@ -405,9 +291,6 @@ function FlowBody({
 
     initialSelectionApplied.current = true;
     dispatch({ type: "ANSWER", questionCode: question.code, value: initialSelection });
-    // Catalog selection is navigation intent, not a database command. The
-    // first draft write happens only when the Customer explicitly continues or
-    // sends the completed brief.
     advance();
   }, [
     advance,
@@ -431,8 +314,6 @@ function FlowBody({
     }
 
     if (state.requirementId === null) {
-      // No browser entry named this draft, so the server's editable intent is
-      // the complete resume source: address, dates and answers as well as the id.
       const intent = toDraftIntent(draft);
       dispatch({
         type: "RESTORE_SERVER_DRAFT",
@@ -447,8 +328,6 @@ function FlowBody({
       return;
     }
 
-    // A browser entry may contain newer unsaved input, so only restore the
-    // server-owned verdict when it already points at this same draft.
     dispatch({
       type: "APPLY_VERDICT",
       verdict: toLifecycleVerdict(draft),
@@ -476,17 +355,6 @@ function FlowBody({
     );
   }
 
-  /**
-   * The verdict, **the requirement id**, and whether the draft is A5 — or null
-   * for a refusal to save.
-   *
-   * Returns them rather than a boolean because the writes that follow need the
-   * id and the submit path needs the lifecycle, and neither can be read from
-   * `state`: `dispatch` does not mutate the `state` this render closed over, so
-   * a caller that ran this and then looked at `state.requirementId` saw the
-   * value from *before* the draft was created — `null` on a first send — and
-   * bailed silently.
-   */
   async function saveAnswers(answers = state.answers): Promise<PreparedDraft | null> {
     try {
       let targetId = state.requirementId ?? existingDraftId(requestsQuery.data ?? [], service.slug);
@@ -499,9 +367,6 @@ function FlowBody({
           ? await createRequirement.mutateAsync({
               variantId: variant.id,
               answers,
-              // The server defaults this too. Sent explicitly because the
-              // generated request type requires it. The flow no longer captures
-              // a language — the voice note went with the details screen.
               language: "en-IN",
             })
           : await saveRequirement.mutateAsync({
@@ -519,20 +384,10 @@ function FlowBody({
         isA5: verdict?.lifecycle === "A5_CUSTOM_PROJECT",
       };
     } catch {
-      // Rendered from the mutation's own error below, next to the fields it is
-      // about. Swallowed here so a rejected promise does not reach the console
-      // as an unhandled rejection on a path that is already handled.
       return null;
     }
   }
 
-  /**
-   * `requirementId` is a parameter, not a read of `state`.
-   *
-   * The caller may have created the draft moments ago in the same event, and the
-   * `state` this closure captured still says `null`. Passing it in is what makes
-   * the write chain work on a first send.
-   */
   async function savePlaceAndDates(requirementId: string): Promise<boolean> {
     const input = toPlaceAndDateSaveInput({
       requirementId,
@@ -552,26 +407,31 @@ function FlowBody({
 
   async function handleAdvance() {
     if (!canContinue) return;
-    if (state.screen !== "what") return;
-    if ((await saveAnswers()) === null) return;
-    advance();
+    if (state.screen === "what") {
+      if ((await saveAnswers()) === null) return;
+      advance();
+    } else if (state.screen === "where_when") {
+      let targetId = state.requirementId;
+      if (targetId === null) {
+        const prepared = await saveAnswers();
+        if (prepared === null) return;
+        targetId = prepared.requirementId;
+      }
+      if (await savePlaceAndDates(targetId)) {
+        advance();
+      }
+    }
   }
 
   const addressLine = addressSummaryLine(addresses.data ?? [], state.addressId);
   const chosenPlanPrice =
     planTiers.find((tier) => tier.planSize === chosenPlanSize)?.priceLabel ?? null;
-  /**
-   * The A5 plan must be chosen before the send, and the control is on this
-   * screen — so the CTA is repurposed to point at it rather than met as a
-   * `409` after the tap, the one place a Customer would read a refusal for
-   * something in front of them. Before the first save the lifecycle is
-   * unknown; `handleSubmit` saves first and re-checks from the response.
-   */
   const needsVisitPlanSelection = isA5 && chosenPlanSize === null;
 
   const sectionBlocks = briefSectionBlocks(state, today, false);
   /** What is stopping the send, in the order the page reads. */
-  const briefBlocked = sectionBlocks.what ?? sectionBlocks.where_when ?? null;
+  const briefBlocked =
+    sectionBlocks.what ?? sectionBlocks.where_when ?? sectionBlocks.visits_send ?? null;
   const canSendBrief = briefBlocked === null;
   const canSubmit = canSendBrief && !needsVisitPlanSelection;
 
@@ -596,9 +456,6 @@ function FlowBody({
       });
       if (prepared === null) return;
 
-      // Now the lifecycle is the saved draft's, not a stale render's. A first
-      // send that turns out to be A5 stops here, with the chooser now mounted
-      // and pointed at, instead of collecting the server's 409.
       if (prepared.isA5 && chosenPlanSize === null) {
         guideToVisitPlanSelection();
         return;
@@ -615,13 +472,10 @@ function FlowBody({
 
       await submitRequirement.mutateAsync({
         requirementId: prepared.requirementId,
-        // A same-place/date match is reopened automatically before this point;
-        // this flow never silently forces a second live request through.
         allowDuplicate: false,
       });
     } catch {
-      // The mutation owns the visible refusal. Keeping it here prevents an
-      // expected API rejection from becoming an unhandled event promise.
+      // Swallowed mutation errors handled in notices
     } finally {
       setIsPreparingSubmit(false);
     }
@@ -657,23 +511,13 @@ function FlowBody({
     void handleSubmit();
   }
 
-  /**
-   * The phone flow: the same two screens, one at a time, in their own shell.
-   *
-   * Same reducer, same guards, same writes as the desktop brief. Going back
-   * preserves answers and a reload restores the draft, because both are the
-   * reducer's, not this branch's.
-   *
-   * The second screen's CTA is the send: leaving `what` saved the answers, so
-   * by the time somebody is choosing a date the draft, the lifecycle and the
-   * estimate-count chooser are all live on the screen with the button.
-   */
   if (!isWide) {
     const stepFor: Record<Screen, number> = {
       what: 1,
       where_when: 2,
+      visits_send: 3,
     };
-    const isFinal = state.screen === "where_when";
+    const isFinal = state.screen === "visits_send";
 
     return (
       <WizardShell
@@ -706,7 +550,7 @@ function FlowBody({
             answers={state.answers}
             onAnswer={(code, value) => dispatch({ type: "ANSWER", questionCode: code, value })}
           />
-        ) : (
+        ) : state.screen === "where_when" ? (
           <MobileWhereWhenScreen
             addressLine={addressLine}
             onOpenAddress={() => setAddressSignal((signal) => signal + 1)}
@@ -725,6 +569,16 @@ function FlowBody({
             onFlexibilityDays={(days) => dispatch({ type: "SET_FLEXIBILITY_DAYS", days })}
             serviceBy={state.serviceBy}
             onServiceBy={(isoDate) => dispatch({ type: "SET_SERVICE_BY", serviceBy: isoDate })}
+          />
+        ) : (
+          <VisitsSendScreen
+            serviceName={service.name}
+            questions={questionSet.questions}
+            answers={state.answers}
+            addressLine={addressLine}
+            requestedStart={state.requestedStart}
+            flexibilityDays={state.flexibilityDays}
+            serviceBy={state.serviceBy}
             visitPlanChooser={
               isA5 && state.requirementId !== null ? (
                 <MobileVisitPlanChooser
@@ -749,17 +603,9 @@ function FlowBody({
       notice={notices}
       heading={`Tell us about ${service.name.toLowerCase()}`}
       intro="Nobody prices work like this without seeing it, so this is a brief — not a checkout."
-      // The rail navigates the *reducer* — the same `state.screen` the phone
-      // wizard runs on and the same value mirrored into `?step=`. So a link
-      // into a section, a reload and a back button all land where they should,
-      // and the desktop and phone flows cannot drift into two ideas of where
-      // somebody is.
       activeIndex={screenIndex(state.screen)}
       onSelectSection={(index) => {
         const screen = SCREENS[index];
-        // `open` rather than `goTo`: the rail is navigation, and `goTo`
-        // refuses any section the Customer has not already been to — which
-        // made every forward click on this rail do nothing at all.
         if (screen !== undefined) open(screen);
       }}
       onSend={handleSend}
@@ -788,16 +634,26 @@ function FlowBody({
               addressPicker={<RequirementAddressPicker variantId={variant.id} />}
               minDate={today}
               hideHeading
+            />
+          ),
+        },
+        {
+          title: "Choose visits & send",
+          blocked: sectionBlocks.visits_send,
+          children: (
+            <VisitsSendScreen
+              serviceName={service.name}
+              questions={questionSet.questions}
+              answers={state.answers}
+              addressLine={addressLine}
+              requestedStart={state.requestedStart}
+              flexibilityDays={state.flexibilityDays}
+              serviceBy={state.serviceBy}
               visitPlanChooser={
                 isA5 && state.requirementId !== null ? (
                   <VisitPlanChooser
                     tiers={planTiers}
                     chosenPlanSize={chosenPlanSize}
-                    // Nothing can have committed to a slot on a requirement
-                    // that has not been submitted, so this is always false
-                    // here. Passed explicitly rather than omitted: the same
-                    // component renders on a live request, and a default would
-                    // decide the harder case.
                     locked={false}
                     isLoading={planQuery.isPending}
                     readError={planQuery.error}

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Vsolve Hub API
-  version: 1.42.0
+  version: 1.43.0
   description: Authoritative API for Vsolve Hub customer, partner and operations clients.
 paths:
   /api/v1/addresses/:
@@ -13650,6 +13650,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/services/:
+    get:
+      operationId: catalog_service_index
+      tags:
+      - Catalog
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceIndexItem'
+          description: ''
   /api/v1/services/{service_slug}/:
     get:
       operationId: services_retrieve
@@ -18951,6 +18967,98 @@ components:
             $ref: '#/components/schemas/DeliverableInputRequest'
       required:
       - items
+    IconKeyEnum:
+      enum:
+      - service
+      - electrical
+      - plumbing
+      - carpentry
+      - air-conditioning
+      - water-purifier
+      - internet-wifi
+      - gas-stove
+      - computer
+      - mobile
+      - security-camera
+      - locksmith
+      - home-automation
+      - fire-safety
+      - face-care
+      - beauty-treatment
+      - waxing
+      - threading
+      - hair-care
+      - nail-care
+      - makeup
+      - mehendi
+      - body-care
+      - skin-care
+      - home-cleaning
+      - sofa-carpet
+      - pest-control
+      - water-tank
+      - septic-tank
+      - laundry
+      - gardening
+      - swimming-pool
+      - chimney-exhaust
+      - home-organization
+      - home-inspection
+      - home-maintenance
+      - pet-grooming
+      - veterinary
+      - pet-walking
+      - pet-sitting
+      - pet-training
+      - pet-photography
+      - workforce
+      - custom-project
+      type: string
+      description: |-
+        * `service` - Generic service
+        * `electrical` - Electrical
+        * `plumbing` - Plumbing
+        * `carpentry` - Carpentry
+        * `air-conditioning` - Air conditioning
+        * `water-purifier` - Water purifier
+        * `internet-wifi` - Internet and Wi-Fi
+        * `gas-stove` - Gas stove
+        * `computer` - Computer
+        * `mobile` - Mobile
+        * `security-camera` - Security camera
+        * `locksmith` - Locksmith
+        * `home-automation` - Home automation
+        * `fire-safety` - Fire safety
+        * `face-care` - Face care
+        * `beauty-treatment` - Beauty treatment
+        * `waxing` - Waxing
+        * `threading` - Threading
+        * `hair-care` - Hair care
+        * `nail-care` - Nail care
+        * `makeup` - Makeup
+        * `mehendi` - Mehendi
+        * `body-care` - Body care
+        * `skin-care` - Advanced skin care
+        * `home-cleaning` - Home cleaning
+        * `sofa-carpet` - Sofa and carpet cleaning
+        * `pest-control` - Pest control
+        * `water-tank` - Water tank
+        * `septic-tank` - Septic tank
+        * `laundry` - Laundry
+        * `gardening` - Gardening
+        * `swimming-pool` - Swimming pool
+        * `chimney-exhaust` - Chimney and exhaust
+        * `home-organization` - Home organization
+        * `home-inspection` - Home inspection
+        * `home-maintenance` - Home maintenance
+        * `pet-grooming` - Pet grooming
+        * `veterinary` - Veterinary
+        * `pet-walking` - Pet walking
+        * `pet-sitting` - Pet sitting
+        * `pet-training` - Pet training
+        * `pet-photography` - Pet photography
+        * `workforce` - Workforce
+        * `custom-project` - Custom project
     IntendedRoleEnum:
       enum:
       - partner
@@ -26540,6 +26648,10 @@ components:
         name:
           type: string
           readOnly: true
+        icon_key:
+          allOf:
+          - $ref: '#/components/schemas/IconKeyEnum'
+          readOnly: true
         short_description:
           type: string
           readOnly: true
@@ -26573,6 +26685,7 @@ components:
       - bookable_variant_id
       - category_slug
       - cover
+      - icon_key
       - id
       - name
       - request_archetypes
@@ -26593,6 +26706,10 @@ components:
           pattern: ^[-a-zA-Z0-9_]+$
         name:
           type: string
+          readOnly: true
+        icon_key:
+          allOf:
+          - $ref: '#/components/schemas/IconKeyEnum'
           readOnly: true
         short_description:
           type: string
@@ -26649,6 +26766,7 @@ components:
       - bookable_variant_id
       - category_slug
       - cover
+      - icon_key
       - id
       - media
       - name
@@ -26660,6 +26778,68 @@ components:
       - starting_price
       - subcategory_slug
       - variants
+    ServiceIndexItem:
+      type: object
+      description: The complete icon catalogue's intentionally small row contract.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+        icon_key:
+          allOf:
+          - $ref: '#/components/schemas/IconKeyEnum'
+          readOnly: true
+        display_order:
+          type: integer
+          readOnly: true
+        category_id:
+          type: string
+          format: uuid
+          readOnly: true
+        category_slug:
+          type: string
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        category_display_order:
+          type: integer
+          readOnly: true
+        subcategory_id:
+          type: string
+          format: uuid
+          readOnly: true
+        subcategory_slug:
+          type: string
+          readOnly: true
+        subcategory_name:
+          type: string
+          readOnly: true
+        subcategory_display_order:
+          type: integer
+          readOnly: true
+      required:
+      - category_display_order
+      - category_id
+      - category_name
+      - category_slug
+      - display_order
+      - icon_key
+      - id
+      - name
+      - slug
+      - subcategory_display_order
+      - subcategory_id
+      - subcategory_name
+      - subcategory_slug
     ServiceMedia:
       type: object
       properties:

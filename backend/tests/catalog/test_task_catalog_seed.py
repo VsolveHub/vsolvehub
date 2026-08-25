@@ -9,6 +9,7 @@ import pytest
 from django.core.management import call_command
 from django.db.models import Count
 
+from apps.catalog.icons import SERVICE_ICON_BY_SUBCATEGORY, ServiceIconKey
 from apps.catalog.management.commands.seed_task_catalog import CATALOG
 from apps.catalog.models import A1VariantConfiguration, Category, Service, ServiceVariant
 from apps.partners.models import Skill
@@ -116,6 +117,18 @@ def test_all_four_categories_are_seeded_active() -> None:
 
     for slug in ("technician", "beautician", "home-services", "pet-services"):
         assert Category.objects.filter(slug=slug, is_active=True).exists(), slug
+
+
+def test_every_task_trade_has_an_explicit_supported_service_icon() -> None:
+    trade_slugs = {trade.slug for entry in CATALOG for trade in entry[5]}
+    assert set(SERVICE_ICON_BY_SUBCATEGORY) == trade_slugs
+
+    call_command("seed_task_catalog")
+
+    for service in Service.objects.filter(slug__in=_seeded_slugs()).select_related("subcategory"):
+        assert service.icon_key in ServiceIconKey.values, service.slug
+        assert service.icon_key == SERVICE_ICON_BY_SUBCATEGORY[service.subcategory.slug]
+        assert service.icon_key != ServiceIconKey.SERVICE, service.slug
 
 
 def test_recurring_and_survey_priced_work_is_not_sold_as_a_task_visit() -> None:

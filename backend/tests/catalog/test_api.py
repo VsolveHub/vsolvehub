@@ -2,9 +2,11 @@ from datetime import timedelta
 from http import HTTPStatus
 
 import pytest
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.catalog.icons import ServiceIconKey
 from apps.catalog.models import (
     Category,
     Service,
@@ -35,6 +37,7 @@ def _service(*, slug: str = "switch-socket-repair") -> tuple[Service, ServiceVar
         subcategory=subcategory,
         slug=slug,
         name="Switch / Socket Repair",
+        icon_key=ServiceIconKey.ELECTRICAL,
         short_description="Repair a faulty switch or socket.",
         description="A verified electrician repairs the selected electrical point.",
         status=Service.Status.ACTIVE,
@@ -91,11 +94,13 @@ def test_public_catalog_uses_current_effective_rate() -> None:
     assert categories.json()[0]["slug"] == "technician"
     assert categories.json()[0]["subcategories"][0]["slug"] == "electrician"
     assert services.status_code == HTTPStatus.OK
+    assert services.json()[0]["icon_key"] == ServiceIconKey.ELECTRICAL
     assert services.json()[0]["starting_price"] == {
         "amount_paise": CURRENT_RATE_PAISE,
         "currency": "INR",
     }
     assert detail.status_code == HTTPStatus.OK
+    assert detail.json()["icon_key"] == ServiceIconKey.ELECTRICAL
     variant_payload = detail.json()["variants"][0]
     assert variant_payload["starting_price"]["amount_paise"] == CURRENT_RATE_PAISE
     assert variant_payload["fulfilment_archetype"] == "A1_TASK_VISIT"
@@ -168,3 +173,103 @@ def test_inactive_catalog_records_are_not_exposed() -> None:
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == []
+
+
+def test_compact_service_index_is_ordered_cacheable_and_contains_no_images() -> None:
+    electrical_service, electrical_variant = _service()
+    electrical_service.subcategory.category.display_order = 2
+    electrical_service.subcategory.category.save(update_fields=("display_order",))
+    ServiceRate.objects.create(variant=electrical_variant, amount_paise=CURRENT_RATE_PAISE)
+
+    beauty = Category.objects.create(
+        slug="beauty",
+        name="Beauty",
+        icon_key="sparkles",
+        display_order=1,
+    )
+    face_care = Subcategory.objects.create(
+        category=beauty,
+        slug="face-care",
+        name="Face care",
+        display_order=1,
+    )
+
+    def priced_service(*, slug: str, name: str, status: str) -> Service:
+        service = Service.objects.create(
+            subcategory=face_care,
+            slug=slug,
+            name=name,
+            icon_key=ServiceIconKey.FACE_CARE,
+            short_description=name,
+            status=status,
+            display_order=1,
+        )
+        variant = ServiceVariant.objects.create(
+            service=service,
+            code="standard",
+            name="Standard",
+            pricing_strategy=ServiceVariant.PricingStrategy.FIXED,
+            booking_archetype=ServiceVariant.BookingArchetype.A1_TASK_VISIT,
+            required_skill_code="face-care",
+            tax_category_code="beauty-service",
+        )
+        ServiceRate.objects.create(variant=variant, amount_paise=CURRENT_RATE_PAISE)
+        return service
+
+    face_cleanup = priced_service(
+        slug="face-cleanup",
+        name="Face Cleanup",
+        status=Service.Status.ACTIVE,
+    )
+    priced_service(
+        slug="paused-facial",
+        name="Paused Facial",
+        status=Service.Status.PAUSED,
+    )
+
+    response = APIClient().get("/api/v1/services/")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response["Cache-Control"] == "public, max-age=300, stale-while-revalidate=600"
+    payload = response.json()
+    assert [item["slug"] for item in payload] == [face_cleanup.slug, electrical_service.slug]
+    assert set(payload[0]) == {
+        "id",
+        "slug",
+        "name",
+        "icon_key",
+        "display_order",
+        "category_id",
+        "category_slug",
+        "category_name",
+        "category_display_order",
+        "subcategory_id",
+        "subcategory_slug",
+        "subcategory_name",
+        "subcategory_display_order",
+    }
+    assert payload[0]["icon_key"] == ServiceIconKey.FACE_CARE
+    assert payload[0]["category_slug"] == beauty.slug
+    assert payload[0]["subcategory_slug"] == face_care.slug
+    assert "cover" not in payload[0]
+    assert "starting_price" not in payload[0]
+    assert "short_description" not in payload[0]
+
+
+def test_service_icon_key_is_rejected_outside_the_controlled_vocabulary() -> None:
+    category = Category.objects.create(slug="repairs", name="Repairs")
+    subcategory = Subcategory.objects.create(
+        category=category,
+        slug="general-repairs",
+        name="General repairs",
+    )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Service.objects.create(
+            subcategory=subcategory,
+            slug="guessed-icon-service",
+            name="Guessed icon service",
+            icon_key="name-derived-magic-wand",
+            short_description="Must fail before publication.",
+            status=Service.Status.ACTIVE,
+        )

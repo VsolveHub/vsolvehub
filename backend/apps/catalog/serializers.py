@@ -53,6 +53,44 @@ class CategorySerializer(serializers.ModelSerializer[Category]):
         read_only_fields = fields
 
 
+class ServiceIndexItemSerializer(serializers.ModelSerializer[Service]):
+    """The complete icon catalogue's intentionally small row contract."""
+
+    category_id = serializers.UUIDField(source="subcategory.category.id", read_only=True)
+    category_slug = serializers.CharField(source="subcategory.category.slug", read_only=True)
+    category_name = serializers.CharField(source="subcategory.category.name", read_only=True)
+    category_display_order = serializers.IntegerField(
+        source="subcategory.category.display_order",
+        read_only=True,
+    )
+    subcategory_id = serializers.UUIDField(source="subcategory.id", read_only=True)
+    subcategory_slug = serializers.CharField(source="subcategory.slug", read_only=True)
+    subcategory_name = serializers.CharField(source="subcategory.name", read_only=True)
+    subcategory_display_order = serializers.IntegerField(
+        source="subcategory.display_order",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Service
+        fields = (
+            "id",
+            "slug",
+            "name",
+            "icon_key",
+            "display_order",
+            "category_id",
+            "category_slug",
+            "category_name",
+            "category_display_order",
+            "subcategory_id",
+            "subcategory_slug",
+            "subcategory_name",
+            "subcategory_display_order",
+        )
+        read_only_fields = fields
+
+
 class A1TaskLineSerializer(serializers.Serializer[dict[str, object]]):
     code = serializers.SlugField(read_only=True)
     label = serializers.CharField(read_only=True)  # type: ignore[assignment]
@@ -140,6 +178,7 @@ class ServiceCardSerializer(serializers.ModelSerializer[Service]):
             "id",
             "slug",
             "name",
+            "icon_key",
             "short_description",
             "category_slug",
             "subcategory_slug",

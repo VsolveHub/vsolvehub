@@ -57,7 +57,7 @@ export interface WizardShellProps {
 export function WizardShell({
   title,
   step,
-  total = 2,
+  total = 3,
   onBack,
   onContinue,
   canContinue,

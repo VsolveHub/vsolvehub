@@ -49,6 +49,19 @@ actually built. The three concurrent M2 columns and their owned paths are define
 `Django_Next.js_Plan/M2/frontend-execution-plan.md` §3 and `backend-session.md`; those files are the
 live ownership rule for M2 work. To be revisited when M2 closes.
 
+### Customer-booked visit revamp — owner directive 25 August 2026
+
+For the milestone tracked in root `task.md`, the current ownership split supersedes the historical
+commercial-M2 session rule above:
+
+- **Codex** owns `backend/**`, `contracts/openapi/**`, backend tests and contract publication.
+- **Antigravity** owns `frontend/**`, frontend tests and UI integration.
+- **Claude** has no further implementation ownership. Its completed `M2-revamp` changes are
+  historical input to audit and integrate, not authorization for another Claude session.
+
+Codex may inspect the whole repository for integration context but implements the backend side.
+Antigravity consumes the generated OpenAPI client and must not hand-edit generated client files.
+
 ## Python environment
 
 - Use Python 3.13.
@@ -108,6 +121,33 @@ The owner runs and verifies all of them manually.
 Report work as **"built — owner verification pending"** and end the report with the test files you
 wrote and the exact commands to run them. Never state "tests pass", "N/N green" or "verified" for a
 run that did not happen.
+
+### Test execution exception — customer-booked visit revamp, 25 August 2026
+
+The owner explicitly authorized agents to execute tests for the milestone tracked in root
+`task.md`. This exception overrides the owner-run-only rule above for that milestone only:
+
+- Codex may run focused and full backend pytest suites and `backend\scripts\quality.cmd`.
+- Antigravity may run frontend Vitest and Playwright suites in addition to lint, typecheck and
+  build.
+- Report the exact commands and real results. Never claim a test passed unless that command ran.
+- Outside this milestone, the owner-run-only rule remains in force.
+
+### Razorpay sandbox directive — customer-booked visit revamp, 25 August 2026
+
+- Use Razorpay **test mode** for manual/staging payment integration and smoke checks in this
+  milestone. Automated suites continue to use deterministic provider fakes and must not call an
+  external payment network.
+- The credential values supplied in chat are treated as exposed and must be rotated before use.
+  Store only the replacement values in local/staging environment or secret management.
+- Never place Razorpay key secrets or webhook secrets in source, `task.md`, `AGENTS.md`, frontend
+  environment files, fixtures, command output or logs.
+- Configure a separate `PAYMENT_WEBHOOK_SECRET`; a Razorpay key id/secret pair alone is not enough
+  to verify provider callbacks.
+- Reuse the existing Django Razorpay adapter and the browser Checkout handoff. Do not add a
+  Razorpay SDK dependency unless the existing adapter demonstrably cannot support an approved
+  operation and an ADR approves the change.
+- Razorpay collections and RazorpayX payouts use separate credentials and permissions.
 
 ## Git and destructive operations
 

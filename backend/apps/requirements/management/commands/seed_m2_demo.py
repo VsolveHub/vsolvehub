@@ -57,6 +57,7 @@ from django.utils import timezone
 
 from apps.cases.models import OperationsCase
 from apps.cases.services import open_case
+from apps.catalog.icons import ServiceIconKey
 from apps.catalog.models import (
     Category,
     M2VariantConfiguration,
@@ -833,6 +834,11 @@ class Command(BaseCommand):
             defaults={
                 "subcategory": subcategory,
                 "name": service_name,
+                "icon_key": (
+                    ServiceIconKey.WORKFORCE
+                    if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
+                    else ServiceIconKey.CUSTOM_PROJECT
+                ),
                 "short_description": f"{service_name} (development fixture).",
                 "status": Service.Status.ACTIVE,
             },

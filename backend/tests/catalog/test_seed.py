@@ -3,6 +3,7 @@ from io import StringIO
 import pytest
 from django.core.management import call_command
 
+from apps.catalog.icons import ServiceIconKey, service_icon_for_subcategory
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
@@ -31,6 +32,11 @@ def test_technician_seed_is_complete_and_idempotent() -> None:
 
     assert Category.objects.filter(slug="technician", is_active=True).count() == 1
     assert Service.objects.filter(status=Service.Status.ACTIVE).count() == TECHNICIAN_SERVICE_COUNT
+    for service in Service.objects.filter(status=Service.Status.ACTIVE).select_related(
+        "subcategory"
+    ):
+        assert service.icon_key == service_icon_for_subcategory(service.subcategory.slug)
+        assert service.icon_key != ServiceIconKey.SERVICE
     assert ServiceVariant.objects.filter(is_active=True).count() == TECHNICIAN_SERVICE_COUNT
     assert ServiceRate.objects.filter(is_active=True).count() == TECHNICIAN_SERVICE_COUNT
     assert TaskRate.objects.filter(is_active=True).count() == TECHNICIAN_SERVICE_COUNT

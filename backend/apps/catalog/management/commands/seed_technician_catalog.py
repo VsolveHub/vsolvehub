@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from apps.carts.models import ServiceCompatibilityRule
+from apps.catalog.icons import service_icon_for_subcategory
 from apps.catalog.models import (
     A1VariantConfiguration,
     Category,
@@ -249,6 +250,7 @@ class Command(BaseCommand):
                     defaults={
                         "subcategory": subcategory,
                         "name": seed.name,
+                        "icon_key": service_icon_for_subcategory(subcategory_slug),
                         "short_description": seed.description,
                         "description": seed.description,
                         "status": Service.Status.ACTIVE,

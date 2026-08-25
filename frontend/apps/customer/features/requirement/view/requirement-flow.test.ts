@@ -65,7 +65,7 @@ describe("requirement flow saving state", () => {
   it("does not busy the send CTA for a background draft restore", () => {
     expect(
       isWizardActionPending({
-        screen: "where_when",
+        screen: "visits_send",
         isAdvancingCurrentScreen: false,
         isPreparingSubmit: false,
         isSubmittingRequirement: false,
@@ -77,7 +77,7 @@ describe("requirement flow saving state", () => {
   it("keeps the send CTA busy for the writes started by that button", () => {
     expect(
       isWizardActionPending({
-        screen: "where_when",
+        screen: "visits_send",
         isAdvancingCurrentScreen: false,
         isPreparingSubmit: true,
         isSubmittingRequirement: false,

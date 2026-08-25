@@ -95,7 +95,7 @@ def _requirement_variants() -> QuerySet[ServiceVariant]:
     )
 
 
-def _offerable_services() -> QuerySet[Service]:
+def _offerable_service_base() -> QuerySet[Service]:
     """Every service a Customer may be shown, under one rule for both lifecycles.
 
     **A service is offerable when it can be priced *or* when it can be asked about.** Until this
@@ -137,6 +137,15 @@ def _offerable_services() -> QuerySet[Service]:
             subcategory__category__is_active=True,
         )
         .select_related("subcategory", "subcategory__category")
+        .distinct()
+    )
+
+
+def _offerable_services() -> QuerySet[Service]:
+    """Offerable services hydrated for the existing rich card/detail serializers."""
+
+    return (
+        _offerable_service_base()
         .prefetch_related(
             Prefetch("variants", queryset=_public_variants(), to_attr="public_variants"),
             Prefetch(
@@ -146,7 +155,6 @@ def _offerable_services() -> QuerySet[Service]:
             ),
             Prefetch("media", queryset=ServiceMedia.objects.filter(is_active=True)),
         )
-        .distinct()
         .order_by("display_order", "name")
     )
 
@@ -163,6 +171,27 @@ def public_categories() -> QuerySet[Category]:
 def public_services_for_category(category_slug: str) -> QuerySet[Service]:
     """Every offerable service in one category — priced A1 work and askable M2 work alike."""
     return _offerable_services().filter(subcategory__category__slug=category_slug)
+
+
+def public_service_index() -> QuerySet[Service]:
+    """Every offerable service in deterministic catalog order, without card-only payload work.
+
+    This is the icon catalogue's one-request read. It deliberately skips variant rates, questions
+    and media: none are rendered in an icon-and-name tile, and prefetching them would turn a small
+    discovery response back into the rich category-card endpoint it replaces.
+    """
+
+    return _offerable_service_base().order_by(
+        "subcategory__category__display_order",
+        "subcategory__category__name",
+        "subcategory__category__slug",
+        "subcategory__display_order",
+        "subcategory__name",
+        "subcategory__slug",
+        "display_order",
+        "name",
+        "slug",
+    )
 
 
 def public_services_by_id(service_ids: Iterable[UUID]) -> QuerySet[Service]:

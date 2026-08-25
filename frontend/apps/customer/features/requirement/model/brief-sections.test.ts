@@ -23,9 +23,10 @@ describe("briefSectionBlocks", () => {
     // answer about that screen. Both sections have to report.
     const blocks = briefSectionBlocks(draft(), TODAY);
 
-    expect(Object.keys(blocks).sort()).toEqual(["what", "where_when"]);
+    expect(Object.keys(blocks).sort()).toEqual(["visits_send", "what", "where_when"]);
     expect(blocks.what).toBe("REQUIRED_ANSWER_MISSING");
     expect(blocks.where_when).toBe("ADDRESS_NOT_CHOSEN");
+    expect(blocks.visits_send).toBe("ADDRESS_NOT_CHOSEN");
   });
 
   it("clears a section as its own answers arrive", () => {
@@ -36,8 +37,9 @@ describe("briefSectionBlocks", () => {
     const blocks = briefSectionBlocks(state, TODAY);
 
     expect(blocks.what).toBeNull();
-    // Filling section 1 must not clear section 2.
+    // Filling section 1 must not clear section 2 or 3.
     expect(blocks.where_when).toBe("ADDRESS_NOT_CHOSEN");
+    expect(blocks.visits_send).toBe("ADDRESS_NOT_CHOSEN");
   });
 
   it("does not mutate the state it inspects", () => {

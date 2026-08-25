@@ -338,9 +338,22 @@ export function blockedReason(
     }
 
     case "where_when": {
-      // The last screen, so this is the submit guard as well as the step guard.
-      // Screen 1's rule is re-asserted rather than trusted, because the
-      // Customer can go back and change an answer between there and here.
+      if (state.addressId === null) return "ADDRESS_NOT_CHOSEN";
+      const dates = blockedDates(state, today);
+      if (dates !== null) return dates;
+      if (state.verdict !== null) {
+        const unanswered = state.verdict.missingRequiredAnswers.some(
+          (code) => !isAnswered(state.answers[code]),
+        );
+        if (unanswered) return "REQUIRED_ANSWER_MISSING";
+      }
+      if (hasUnresolvedDuplicate && !state.duplicateOverridden) return "DUPLICATE_NOT_RESOLVED";
+      return null;
+    }
+
+    case "visits_send": {
+      // Step 3 (Choose visits & send) is the submit screen.
+      // Re-asserts screen 1 and screen 2 rules.
       if (state.addressId === null) return "ADDRESS_NOT_CHOSEN";
       const dates = blockedDates(state, today);
       if (dates !== null) return dates;
@@ -367,23 +380,13 @@ export function canAdvance(
   return blockedReason(state, today, hasUnresolvedDuplicate) === null;
 }
 
-/** The two brief sections, in the order the page renders them. */
-export const BRIEF_SECTIONS = ["what", "where_when"] as const;
+/** The three brief sections, in the order the page renders them. */
+export const BRIEF_SECTIONS = ["what", "where_when", "visits_send"] as const;
 
 export type BriefSection = (typeof BRIEF_SECTIONS)[number];
 
 /**
  * What is still missing in each section of the one-page brief.
- *
- * The desktop brief shows both capture screens as sections of one page, so "can
- * I continue" stops being one question about the current screen and becomes one
- * question per section. Rather than write a second set of rules — which is how
- * the page and the wizard end up disagreeing about whether a brief is complete —
- * this asks `blockedReason` the same question once per section, by handing it a
- * state that claims to be on that screen.
- *
- * Safe because `blockedReason` is pure and reads `screen` only to choose a
- * branch. The synthetic value never reaches the reducer.
  */
 export function briefSectionBlocks(
   state: RequirementDraftState,
@@ -394,6 +397,11 @@ export function briefSectionBlocks(
     what: blockedReason({ ...state, screen: "what" }, today, hasUnresolvedDuplicate),
     where_when: blockedReason(
       { ...state, screen: "where_when" },
+      today,
+      hasUnresolvedDuplicate,
+    ),
+    visits_send: blockedReason(
+      { ...state, screen: "visits_send" },
       today,
       hasUnresolvedDuplicate,
     ),

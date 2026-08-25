@@ -1,5 +1,6 @@
 """Read-only public catalog API."""
 
+from django.utils.cache import patch_cache_control
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
@@ -9,12 +10,14 @@ from rest_framework.views import APIView
 from apps.catalog.selectors import (
     public_categories,
     public_service_by_slug,
+    public_service_index,
     public_services_for_category,
 )
 from apps.catalog.serializers import (
     CategorySerializer,
     ServiceCardSerializer,
     ServiceDetailSerializer,
+    ServiceIndexItemSerializer,
 )
 from common.errors.serializers import ApiErrorSerializer
 
@@ -36,6 +39,21 @@ class CategoryServiceListView(APIView):
     def get(self, _request: Request, category_slug: str) -> Response:
         services = public_services_for_category(category_slug)
         return Response(ServiceCardSerializer(services, many=True).data)
+
+
+class ServiceIndexView(APIView):
+    authentication_classes = ()
+    permission_classes = (AllowAny,)
+
+    @extend_schema(
+        operation_id="catalog_service_index",
+        tags=["Catalog"],
+        responses={200: ServiceIndexItemSerializer(many=True)},
+    )
+    def get(self, _request: Request) -> Response:
+        response = Response(ServiceIndexItemSerializer(public_service_index(), many=True).data)
+        patch_cache_control(response, public=True, max_age=300, stale_while_revalidate=600)
+        return response
 
 
 class ServiceDetailView(APIView):

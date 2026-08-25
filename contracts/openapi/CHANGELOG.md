@@ -4,6 +4,26 @@
 > The gap is recorded rather than backfilled, because inventing a description of a change nobody
 > documented is worse than an honest hole.
 
+## 1.43.0 - Icon-first service discovery
+
+Customer clients can now load the complete offerable service catalogue with one cacheable request:
+`GET /api/v1/services/` (`catalog_service_index`). Each compact `ServiceIndexItem` contains only
+service identity, category/subcategory identity and ordering, plus the backend-owned `icon_key`.
+It deliberately contains no cover image, description, pricing, question or policy payload.
+
+`icon_key` is also additive on the existing service-card and service-detail schemas. Its
+`IconKeyEnum` is a controlled semantic vocabulary; clients map those values to their own approved
+icon components and must not infer icons from service names. The database constraint and catalogue
+seeds ensure published values are supported, with `service` reserved as the explicit generic icon
+for a genuinely new service type.
+
+The index includes active services that are either currently priceable A1 tasks or active A3/A5
+requirement services, excludes unpublished/unofferable services, and preserves Operations-managed
+category, subcategory and service ordering with deterministic tie-breakers.
+
+**Breaking/removal notes:** none. Existing category listing, category service listing, service
+detail, media and pricing fields remain available on their existing operations.
+
 ## 1.42.0 - Accepted jobs retain their service scope
 
 The Partner booking projection now publishes `service_lines` and `requirements`, copied from the

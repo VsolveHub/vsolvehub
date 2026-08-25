@@ -62,12 +62,6 @@ export interface WhereWhenScreenProps {
   /** The hard deadline, or null when they have none. */
   serviceBy: string | null;
   onServiceBy: (isoDate: string | null) => void;
-
-  /**
-   * The estimate-count chooser, mounted by the container so this screen owns
-   * no plan data. Absent on A3 and before the draft exists server-side.
-   */
-  visitPlanChooser?: ReactNode;
 }
 
 const DAY = new Intl.DateTimeFormat("en-IN", {
@@ -94,7 +88,6 @@ export function WhereWhenScreen({
   onFlexibilityDays,
   serviceBy,
   onServiceBy,
-  visitPlanChooser,
 }: WhereWhenScreenProps) {
   const [startOpen, setStartOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
@@ -143,8 +136,6 @@ export function WhereWhenScreen({
           onRemove={() => onServiceBy(null)}
         />
       )}
-
-      {visitPlanChooser}
 
       <DateSheet
         open={startOpen}

@@ -48,14 +48,26 @@ describe("screen 1 — what", () => {
   });
 });
 
-describe("screen 2 — where and when, which is also the submit guard", () => {
+describe("screen 2 — where and when", () => {
   const base = { screen: "where_when" as const, addressId: "addr-1" };
 
   it("refuses without an address", () => {
     expect(blockedReason(draft({ screen: "where_when" }), TODAY)).toBe("ADDRESS_NOT_CHOSEN");
   });
 
-  it("refuses without a start date, which the submit command requires", () => {
+  it("refuses without a start date", () => {
+    expect(blockedReason(draft(base), TODAY)).toBe("START_DATE_NOT_CHOSEN");
+  });
+});
+
+describe("screen 3 — visits_send, which is the final submit guard", () => {
+  const base = { screen: "visits_send" as const, addressId: "addr-1" };
+
+  it("refuses without an address", () => {
+    expect(blockedReason(draft({ screen: "visits_send" }), TODAY)).toBe("ADDRESS_NOT_CHOSEN");
+  });
+
+  it("refuses without a start date", () => {
     expect(blockedReason(draft(base), TODAY)).toBe("START_DATE_NOT_CHOSEN");
   });
 
@@ -66,30 +78,24 @@ describe("screen 2 — where and when, which is also the submit guard", () => {
   });
 
   it("treats an absent deadline as the ordinary answer", () => {
-    // The server derives a closing date from the start day; the hard deadline
-    // survives only for the minority who genuinely have one.
     const state = draft({ ...base, requestedStart: "2026-08-20" });
 
     expect(blockedReason(state, TODAY)).toBeNull();
   });
 
   it("refuses a needed-by date before the work starts", () => {
-    // A typo the Customer can see and fix, between two controls on one screen.
     const state = draft({ ...base, requestedStart: "2026-08-20", serviceBy: "2026-08-18" });
 
     expect(blockedReason(state, TODAY)).toBe("SERVICE_DATE_BEFORE_START");
   });
 
   it("allows the two dates on the same day", () => {
-    // A one-day job is a real requirement, not an error.
     const state = draft({ ...base, requestedStart: "2026-08-20", serviceBy: "2026-08-20" });
 
     expect(blockedReason(state, TODAY)).toBeNull();
   });
 
   it("re-asserts screen 1's rule, because the answers can change after leaving it", () => {
-    // This is what replaced the review guard: the last screen re-checks the
-    // earlier one before anything can be sent.
     const state = draft({
       ...base,
       requestedStart: "2026-08-20",

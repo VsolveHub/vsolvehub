@@ -53,8 +53,11 @@ export type AttachmentUploadGrant = Schemas["AttachmentUploadGrant"];
  * sits under, where `[]` is an authorization answer and had to stay
  * distinguishable from silence.
  */
-export function readRequirementList(page: RequirementSummaryPage): readonly RequirementSummary[] {
-  return page.results;
+export function readRequirementList(
+  page: RequirementSummaryPage | readonly RequirementSummary[],
+): readonly RequirementSummary[] {
+  if (Array.isArray(page)) return page;
+  return "results" in page ? page.results : [];
 }
 
 /**
