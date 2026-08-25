@@ -530,6 +530,22 @@ cd backend
 
 **Done when:** a Customer can browse and open every service from a fast icon-and-name catalogue without searching or downloading service-card images.
 
+### Owner revision — 2026-08-25 (Claude, on direct owner instruction)
+
+The icon catalogue is now **the** services listing, not a side page. Owner verification pending.
+
+- `/catalog` renders the M2 "Catalogue" artboard: "All services" app bar with search behind an icon, category chip rail, one uppercase-heading section per trade, flat 3-column icon-tile grid. The merchandised bento cards, their Unsplash images and their placeholder price copy are deleted from this route.
+- Subcategories no longer print headings or require a drill-down; `CategoryGroup.services` pre-flattens each trade's run in backend display order. Category/service pages remain for deep links.
+- Tiles route on the server's `request_archetypes` via the existing `serviceHref` (guided/quote services open the brief directly; A3 opens the crew form). The tiny index contract is unchanged — hrefs come from the already-cached per-category `ServiceCard` fan-out (`icon-catalogue/service-links.ts`).
+- `/catalog/all` permanently redirects to `/catalog`.
+- Note for Codex/Operations: whether a specific service (e.g. `plumber-full-bathroom-plumbing`, seeded A1 at ₹999) is quote-based is catalog data — give it an A5 variant to flip it; the frontend follows the server either way.
+
+Second pass, same day:
+
+- `seed_m2_demo` now publishes **six A5 projects**, not one: interior fit-out (unchanged slug), full-bathroom-renovation (its questions are the artboard's "What needs doing?" screen verbatim), full-home-painting, modular-kitchen-fit-out, full-home-rewiring, event-catering — each with its own subcategory, controlled icon key, area activation, ACTIVE M2 configuration and vendor capabilities. All questions are choice/number/boolean; no `TEXT` on any A5 variant. Data-only change; no migration.
+- `/catalog/[category]` is a **variant rate card** now: every service in the trade with every variant under it — A1 rows print their starting price and open the service page, A3 rows print "Day rate" and open the crew form, A5 rows print "Priced on site" and open the brief (`features/catalog/variant-rows.ts` owns the mapping, with tests). The old hero band, trust pillars, `?trade=` chip filter and `WorkforceCatalog` component are deleted.
+- Variants come from the existing `ServiceDetail` read fanned out per service (`getCategoryServiceDetails`), same cache tags as the service pages — no contract change. If a category grows past ~40 services, a bulk variants endpoint would be the next step.
+
 ## FE-10 — Razorpay sandbox checkout behavior
 
 **Depends on:** BE-4, BE-7 and BE-9.

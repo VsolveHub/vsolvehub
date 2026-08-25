@@ -121,6 +121,32 @@ export const getCategory = cache(async (slug: string): Promise<Category | null> 
 });
 
 /**
+ * A category's services with their full variant lists, for the category page.
+ *
+ * The category listing shows every *variant* — the priced A1 tasks and the
+ * quote-based A3/A5 requirement variants — and only `ServiceDetail` carries
+ * both halves. There is no bulk endpoint for it, so this fans out one detail
+ * request per service, together rather than in sequence. Each request is the
+ * same Data Cache entry the service's own page warms (same tag, same policy),
+ * so a customer browsing category → service pays for the detail read once.
+ *
+ * `null` means the category itself does not exist (propagated from
+ * `getCategoryServices`) and the page must 404. A service that 404s *inside*
+ * the fan-out — deactivated between the two reads, mid-publish — is dropped
+ * rather than crashing the whole category: the row simply is not listed, which
+ * is also what the next revalidation would show.
+ */
+export const getCategoryServiceDetails = cache(
+  async (categorySlug: string): Promise<ServiceDetail[] | null> => {
+    const services = await getCategoryServices(categorySlug);
+    if (services === null) return null;
+
+    const details = await Promise.all(services.map((service) => getService(service.slug)));
+    return details.filter((detail): detail is ServiceDetail => detail !== null);
+  },
+);
+
+/**
  * Every published service, indexed by the category it belongs to.
  *
  * One request per category, issued together rather than in sequence — the

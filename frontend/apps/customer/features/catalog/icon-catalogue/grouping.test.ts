@@ -95,6 +95,33 @@ describe("folding the flat index into sections", () => {
     expect(grouped[0]?.serviceCount).toBe(3);
   });
 
+  it("flattens a category's services in subcategory order, so the one-level grid keeps the two-level order", () => {
+    const grouped = groupServiceIndex([
+      row({ slug: "tap-replacement", subcategory_display_order: 1 }),
+      row({
+        slug: "fan-repair",
+        subcategory_id: "sub-electrician",
+        subcategory_slug: "electrician",
+        subcategory_display_order: 0,
+      }),
+      row({
+        slug: "mcb-install",
+        subcategory_id: "sub-electrician",
+        subcategory_slug: "electrician",
+        subcategory_display_order: 0,
+        display_order: 1,
+      }),
+    ]);
+
+    // Electrician's run first (its subcategory sorts first), then Plumber's —
+    // the same order the nested shape renders, minus the headings.
+    expect(grouped[0]?.services.map((service) => service.slug)).toEqual([
+      "fan-repair",
+      "mcb-install",
+      "tap-replacement",
+    ]);
+  });
+
   it("returns nothing at all for an empty catalogue", () => {
     expect(groupServiceIndex([])).toEqual([]);
   });

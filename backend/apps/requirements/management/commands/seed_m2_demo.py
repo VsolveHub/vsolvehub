@@ -46,6 +46,7 @@ price loaded later has a later `effective_from` and wins on the same ordering
 `pricing._effective_price` already uses, with no need to delete anything first.
 """
 
+from dataclasses import dataclass
 from datetime import date, time, timedelta
 from typing import Any
 
@@ -161,6 +162,10 @@ QUESTION_HELP: dict[str, str] = {
     "worker_count": "A supervisor is included with every crew.",
     "duration_days": "Consecutive days, 8-hour shifts.",
     "floor_area_sqft": "A rough number is fine. Vendors measure on the visit.",
+    "fittings_count": "Taps, showers, WCs, basins.",
+    "counter_length_ft": "Along the counter walls. A rough number is fine.",
+    "point_count": "Switches, sockets and light points together.",
+    "guest_count": "Sets the quantity on every dish.",
 }
 
 #: `(code, prompt, kind, required, minimum)`. The A3 set answers `services.infer_archetype`'s
@@ -316,6 +321,240 @@ A5_QUESTIONS: tuple[QuestionSeed, ...] = (
         ),
     ),
 )
+
+
+#: One authored A5 project service: everything `_seed_variant` needs beyond the questions.
+#:
+#: The icon key is a member of the controlled `ServiceIconKey` vocabulary, never a guess — where
+#: no trade glyph exists (painting, catering) the honest generic beats a wrong pictogram, which is
+#: the FE-9 rule. Subcategories order after `construction-labour` (10) so the A3 crew service
+#: stays first in its category.
+@dataclass(frozen=True)
+class ProjectSeed:
+    slug: str
+    name: str
+    variant_name: str
+    icon_key: str
+    subcategory_slug: str
+    subcategory_name: str
+    subcategory_display_order: int
+    questions: tuple[QuestionSeed, ...]
+
+
+#: Every A5 project the demo catalogue publishes. The design walkthrough follows
+#: `full-bathroom-renovation`, whose three questions are the M2 artboard's "What needs doing?"
+#: screen verbatim — a choice rendered as icon tiles, a number on the keypad card, a Yes/No pair.
+#: **No `TEXT` questions here**: the Customer brief is facts-only (task.md, "The Customer never
+#: describes anything"), and a text question seeded on an A5 variant would put a keyboard back
+#: into a flow that removed every one.
+A5_PROJECT_SEEDS: tuple[ProjectSeed, ...] = (
+    ProjectSeed(
+        slug=A5_SERVICE_SLUG,
+        name="Interior fit-out project",
+        variant_name="Fit-out, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        subcategory_slug="interior-fit-outs",
+        subcategory_name="Interior fit-outs",
+        subcategory_display_order=20,
+        questions=A5_QUESTIONS,
+    ),
+    ProjectSeed(
+        slug="full-bathroom-renovation",
+        name="Full bathroom renovation",
+        variant_name="Renovation, priced on site",
+        icon_key=ServiceIconKey.PLUMBING,
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        questions=(
+            (
+                "rooms_scope",
+                "Which rooms are we working on?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("one-bathroom", "One bathroom", ""),
+                    ("two-bathrooms", "Two bathrooms", ""),
+                    ("bathrooms-kitchen", "Bathrooms + kitchen", ""),
+                    ("whole-flat", "Whole flat", ""),
+                ),
+            ),
+            (
+                "fittings_count",
+                "How many fittings need installing?",
+                ServiceQuestion.Kind.NUMBER,
+                True,
+                1,
+                None,
+            ),
+            (
+                "water_supply_working",
+                "Is the water supply working?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+    ),
+    ProjectSeed(
+        slug="full-home-painting",
+        name="Full home painting",
+        variant_name="Painting, priced on site",
+        icon_key=ServiceIconKey.CUSTOM_PROJECT,
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        questions=(
+            (
+                "paint_scope",
+                "What are we painting?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("interior-only", "Interior only", "Walls and ceilings inside the home."),
+                    ("exterior-only", "Exterior only", "Outside walls, grills and gates."),
+                    (
+                        "interior-exterior",
+                        "Interior + exterior",
+                        "The whole property, inside and out.",
+                    ),
+                ),
+            ),
+            (
+                "home_size",
+                "How big is the home?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("1bhk", "1 BHK", ""),
+                    ("2bhk", "2 BHK", ""),
+                    ("3bhk", "3 BHK", ""),
+                    ("villa-duplex", "Villa or duplex", ""),
+                ),
+            ),
+            (
+                "repaint_over_existing",
+                "Is this a repaint over existing paint?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+    ),
+    ProjectSeed(
+        slug="modular-kitchen-fit-out",
+        name="Modular kitchen fit-out",
+        variant_name="Kitchen, priced on site",
+        icon_key=ServiceIconKey.CARPENTRY,
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        questions=(
+            (
+                "kitchen_layout",
+                "What shape is the kitchen?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("l-shaped", "L-shaped", ""),
+                    ("u-shaped", "U-shaped", ""),
+                    ("parallel", "Parallel", ""),
+                    ("straight", "Straight", ""),
+                ),
+            ),
+            (
+                "counter_length_ft",
+                "Counter length in feet",
+                ServiceQuestion.Kind.NUMBER,
+                True,
+                1,
+                None,
+            ),
+            (
+                "appliances_included",
+                "Should built-in appliances be included?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+    ),
+    ProjectSeed(
+        slug="full-home-rewiring",
+        name="Full home rewiring",
+        variant_name="Rewiring, priced on site",
+        icon_key=ServiceIconKey.ELECTRICAL,
+        subcategory_slug="renovation-projects",
+        subcategory_name="Renovation projects",
+        subcategory_display_order=30,
+        questions=(
+            (
+                "property_type",
+                "What is being rewired?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("apartment", "Apartment", ""),
+                    ("independent-house", "Independent house", ""),
+                    ("commercial-space", "Shop or office", ""),
+                ),
+            ),
+            ("point_count", "How many points?", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "supply_live",
+                "Is the mains supply on at the site?",
+                ServiceQuestion.Kind.BOOLEAN,
+                True,
+                None,
+                None,
+            ),
+        ),
+    ),
+    ProjectSeed(
+        slug="event-catering",
+        name="Event catering",
+        variant_name="Menu, priced per plate",
+        icon_key=ServiceIconKey.SERVICE,
+        subcategory_slug="event-services",
+        subcategory_name="Event services",
+        subcategory_display_order=40,
+        questions=(
+            (
+                "meal_type",
+                "Which meal are we serving?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("breakfast", "Breakfast", ""),
+                    ("lunch", "Lunch", ""),
+                    ("dinner", "Dinner", ""),
+                ),
+            ),
+            ("guest_count", "Guests", ServiceQuestion.Kind.NUMBER, True, 1, None),
+            (
+                "menu_preference",
+                "What kind of menu?",
+                ServiceQuestion.Kind.SINGLE_CHOICE,
+                True,
+                None,
+                (
+                    ("veg", "Pure veg", ""),
+                    ("veg-nonveg", "Veg + non-veg", ""),
+                ),
+            ),
+        ),
+    ),
+)
+
 
 #: The vendor's own registration questions for the A3 capability (`M2-BE-106`), on the same
 #: versioned schema and the same validator.
@@ -672,15 +911,30 @@ class Command(BaseCommand):
             variant_name="Helpers by the day",
             archetype=ServiceVariant.BookingArchetype.A3_TIME_BLOCK,
             questions=A3_QUESTIONS,
+            icon_key=ServiceIconKey.WORKFORCE,
+            subcategory_slug="construction-labour",
+            subcategory_name="Construction labour",
+            subcategory_display_order=10,
         )
-        a5_variant = self._seed_variant(
-            service_slug=A5_SERVICE_SLUG,
-            service_name="Interior fit-out project",
-            variant_name="Fit-out, priced on site",
-            archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
-            questions=A5_QUESTIONS,
+        # Every A5 project in the catalogue, not just the fit-out. One variant, one area
+        # activation and one ACTIVE configuration each — a project seeded without any one of the
+        # three renders in the catalogue and then refuses at the brief, which reads as a broken
+        # flow rather than missing data.
+        a5_variants = tuple(
+            self._seed_variant(
+                service_slug=project.slug,
+                service_name=project.name,
+                variant_name=project.variant_name,
+                archetype=ServiceVariant.BookingArchetype.A5_CUSTOM_PROJECT,
+                questions=project.questions,
+                icon_key=project.icon_key,
+                subcategory_slug=project.subcategory_slug,
+                subcategory_name=project.subcategory_name,
+                subcategory_display_order=project.subcategory_display_order,
+            )
+            for project in A5_PROJECT_SEEDS
         )
-        for variant in (a3_variant, a5_variant):
+        for variant in (a3_variant, *a5_variants):
             ServiceAreaService.objects.update_or_create(
                 service_area=area,
                 variant=variant,
@@ -688,14 +942,15 @@ class Command(BaseCommand):
             )
 
         self._seed_a3_configuration(variant=a3_variant, skill=skill)
-        self._seed_a5_configuration(variant=a5_variant)
+        for a5_variant in a5_variants:
+            self._seed_a5_configuration(variant=a5_variant)
         wage_floor_written = self._seed_wage_floor(skill=skill)
         rate_card_published = self._seed_rate_card(area=area, skill=skill)
         prices_written, prices_skipped = self._seed_access_prices()
 
         vendors = self._seed_vendors(
             area=area,
-            variants=(a3_variant, a5_variant),
+            variants=(a3_variant, *a5_variants),
             skill=skill,
             count=max(1, int(options["vendors"])),
         )
@@ -814,6 +1069,10 @@ class Command(BaseCommand):
         variant_name: str,
         archetype: str,
         questions: tuple[QuestionSeed, ...],
+        icon_key: str,
+        subcategory_slug: str,
+        subcategory_name: str,
+        subcategory_display_order: int,
     ) -> ServiceVariant:
         category, _ = Category.objects.update_or_create(
             slug=CATEGORY_SLUG,
@@ -826,19 +1085,19 @@ class Command(BaseCommand):
         )
         subcategory, _ = Subcategory.objects.update_or_create(
             category=category,
-            slug="construction-labour",
-            defaults={"name": "Construction labour", "is_active": True},
+            slug=subcategory_slug,
+            defaults={
+                "name": subcategory_name,
+                "display_order": subcategory_display_order,
+                "is_active": True,
+            },
         )
         service, _ = Service.objects.update_or_create(
             slug=service_slug,
             defaults={
                 "subcategory": subcategory,
                 "name": service_name,
-                "icon_key": (
-                    ServiceIconKey.WORKFORCE
-                    if archetype == ServiceVariant.BookingArchetype.A3_TIME_BLOCK
-                    else ServiceIconKey.CUSTOM_PROJECT
-                ),
+                "icon_key": icon_key,
                 "short_description": f"{service_name} (development fixture).",
                 "status": Service.Status.ACTIVE,
             },
@@ -1556,7 +1815,9 @@ class Command(BaseCommand):
         tiers = ", ".join(
             f"{size}x INR {A5_TIER_PAISE[size] / 100:.0f}" for size in sorted(A5_TIER_PAISE)
         )
-        self.stdout.write(f"  A5 service : /{A5_SERVICE_SLUG}  (visit plans {tiers})")
+        self.stdout.write(f"  A5 tiers   : visit plans {tiers}, on every project below")
+        for project in A5_PROJECT_SEEDS:
+            self.stdout.write(f"  A5 service : /{project.slug}  ({project.subcategory_name})")
         self.stdout.write(f"  Area       : {SERVICE_AREA_SLUG} / PIN {POSTAL_CODE} / {STATE_CODE}")
         self.stdout.write(f"  Vendors    : {', '.join(vendors)}")
         self.stdout.write(

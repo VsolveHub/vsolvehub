@@ -45,6 +45,7 @@ function category(
         services,
       },
     ],
+    services,
   };
 }
 
@@ -102,6 +103,39 @@ describe("the whole catalogue on one page", () => {
     const beauty = screen.getByRole("region", { name: "Beauty" });
     // Not "1 services".
     expect(within(beauty).getByText("1 service")).toBeInTheDocument();
+  });
+
+  it("prints no subcategory headings — the section is the trade, the grid is flat", () => {
+    render(<ServiceGrid categories={[HOME, BEAUTY]} />);
+
+    // "Electrician" and "Hair Services" exist only as data on the rows; the
+    // artboard's catalogue has exactly one heading level per section.
+    expect(screen.queryByRole("heading", { level: 3 })).not.toBeInTheDocument();
+  });
+});
+
+describe("where a tile goes", () => {
+  it("sends a tile wherever the href map says — the brief for a quote-based service", () => {
+    const hrefs = new Map([
+      // What service-links.ts computes for a guided (quote-based) archetype.
+      ["fan-repair", "/requests/new/fan-repair"],
+    ]);
+
+    render(<ServiceGrid categories={[HOME]} hrefs={hrefs} />);
+
+    expect(screen.getByRole("link", { name: "Fan Repair" })).toHaveAttribute(
+      "href",
+      "/requests/new/fan-repair",
+    );
+  });
+
+  it("falls back to the service's own page for a slug the map does not know", () => {
+    render(<ServiceGrid categories={[HOME]} hrefs={new Map()} />);
+
+    expect(screen.getByRole("link", { name: "Fan Repair" })).toHaveAttribute(
+      "href",
+      "/catalog/home/fan-repair",
+    );
   });
 });
 

@@ -61,6 +61,16 @@ export interface CategoryGroup {
   serviceCount: number;
   /** Ordered by `display_order`, then name, then id. Never empty. */
   subcategories: SubcategoryGroup[];
+  /**
+   * The same services as one flat, ordered run: subcategory order first, then
+   * service order within it.
+   *
+   * The catalogue screen renders one grid per trade — a customer picking
+   * "Full Bathroom Plumbing" should not first have to learn which internal
+   * subcategory Operations filed it under. The subcategory still exists in the
+   * data (deep links and grouping depend on it); it just stops being a heading.
+   */
+  services: ServiceIndexItem[];
 }
 
 interface CategoryAccumulator {
@@ -118,16 +128,16 @@ export function groupServiceIndex(items: readonly ServiceIndexItem[]): CategoryG
         }))
         .sort(compareOrdered);
 
+      const services = subcategories.flatMap((subcategory) => subcategory.services);
+
       return {
         id: category.id,
         slug: category.slug,
         name: category.name,
         displayOrder: category.displayOrder,
-        serviceCount: subcategories.reduce(
-          (total, subcategory) => total + subcategory.services.length,
-          0,
-        ),
+        serviceCount: services.length,
         subcategories,
+        services,
       };
     })
     .sort(compareOrdered);
