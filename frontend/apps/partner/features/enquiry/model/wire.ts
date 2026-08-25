@@ -56,13 +56,22 @@ export interface EnquiryRow {
   readonly requestedStart: string | null;
   readonly serviceBy: string | null;
   readonly respondsBy: string | null;
-  readonly language: string;
   readonly createdAt: string;
 }
 
 export interface EnquiryRecord extends EnquiryRow {
   readonly answers: AnswerMap;
-  readonly additionalDetails: string;
+  /**
+   * The visit the customer already chose, published from contract 1.44.0.
+   *
+   * Null until they pick one. The partner never sets these — BE-2 moved the
+   * choice to the customer, and the slot-selection endpoints this app used to
+   * call were removed in the same release.
+   */
+  readonly fixedVisitStart: string | null;
+  readonly fixedVisitDurationMinutes: number | null;
+  readonly fixedVisitEarningPaise: number | null;
+  readonly fixedVisitStatus: string | null;
   readonly budgetMinPaise: number | null;
   readonly budgetMaxPaise: number | null;
   /**
@@ -112,7 +121,6 @@ export function readEnquiryRow(summary: Schemas["EnquirySummary"]): EnquiryRow {
     requestedStart: nullableInstant(summary.requested_start),
     serviceBy: nullableInstant(summary.service_by),
     respondsBy: nullableInstant(summary.responds_by),
-    language: summary.language,
     createdAt: summary.created_at,
   };
 }
@@ -121,7 +129,10 @@ export function readEnquiryRecord(detail: Schemas["EnquiryDetail"]): EnquiryReco
   return {
     ...readEnquiryRow(detail),
     answers: readAnswers(detail.answers),
-    additionalDetails: detail.additional_details,
+    fixedVisitStart: detail.fixed_visit_start,
+    fixedVisitDurationMinutes: detail.fixed_visit_duration_minutes,
+    fixedVisitEarningPaise: detail.fixed_visit_earning_paise,
+    fixedVisitStatus: detail.fixed_visit_status,
     budgetMinPaise: detail.budget_min_paise,
     budgetMaxPaise: detail.budget_max_paise,
     requiredTaxBasis: detail.required_tax_basis,

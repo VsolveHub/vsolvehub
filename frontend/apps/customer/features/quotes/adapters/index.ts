@@ -81,7 +81,8 @@ export interface QuoteMaterialView {
   title: string;
   /** e.g. "2 bags", or "2" where the vendor set no unit. Null when quantity is 1. */
   quantityLabel: string | null;
-  amountLabel: string;
+  /** Null when the vendor has listed the material but not yet priced it. */
+  amountLabel: string | null;
 }
 
 function toMaterialViews(
@@ -89,14 +90,24 @@ function toMaterialViews(
 ): readonly QuoteMaterialView[] {
   return materials.map((material) => {
     const unit = material.unit.trim();
+    // `quantity` is a decimal STRING at 1.44.0, not a number: a material can be
+    // 2.5 kg, and a float here would eventually render 2.5000000000000004.
+    // Trailing zeros are trimmed because the server sends "1.000" and nobody
+    // writes that on a shopping list.
+    const quantity = material.quantity.replace(/\.0+$/u, "").replace(/(\.\d*[1-9])0+$/u, "$1");
     return {
       title: material.title.trim(),
       // A quantity of one adds nothing a reader does not already assume, and
       // "1 ×" beside every row is noise on the one screen that has to stay
       // scannable.
       quantityLabel:
-        material.quantity === 1 ? null : unit === "" ? `${material.quantity}` : `${material.quantity} ${unit}`,
-      amountLabel: formatMoney(material.amount_paise),
+        quantity === "1" ? null : unit === "" ? quantity : `${quantity} ${unit}`,
+      // Optional at 1.44.0 — the server computes it from rate x quantity, and a
+      // line the vendor has not priced yet has none. `total_due_paise` is the
+      // tax-inclusive figure and is deliberately NOT used here: this row sits
+      // inside a total that is already tax-inclusive, and showing the grossed-up
+      // amount per line would double-count it to the reader.
+      amountLabel: material.amount_paise === undefined ? null : formatMoney(material.amount_paise),
     };
   });
 }
@@ -142,16 +153,6 @@ export interface QuoteCardView {
   inclusions: readonly string[];
   exclusions: readonly string[];
   warrantyTerms: string | null;
-  /**
-   * How platform commission is treated, stated rather than implied.
-   *
-   * An immutable field on every proposal and a free-text one on the wire —
-   * `Proposal.commission_treatment` is a `CharField` with no choices and no
-   * published vocabulary. Rendered verbatim where the vendor set it and named as
-   * unstated where they did not, because inventing a code here would be this
-   * client authoring the vocabulary Finance reports on.
-   */
-  commissionTreatment: string | null;
   validUntil: string | null;
   submittedAt: string;
 
@@ -215,8 +216,6 @@ export function toQuoteCard(proposal: CustomerProposal): QuoteCardView {
     inclusions: readLines(proposal.inclusions),
     exclusions: readLines(proposal.exclusions),
     warrantyTerms: proposal.warranty_terms.trim() === "" ? null : proposal.warranty_terms,
-    commissionTreatment:
-      proposal.commission_treatment.trim() === "" ? null : proposal.commission_treatment,
     validUntil: proposal.valid_until,
     submittedAt: proposal.submitted_at,
 
@@ -420,13 +419,11 @@ export function toComparisonRows(cards: readonly QuoteCardView[]): readonly Comp
       caveat: "Warranty terms are the vendor's own words, not a platform promise.",
       values: cards.map((card) => card.warrantyTerms),
     },
-    {
-      label: "Commission treatment",
-      equivalent: false,
-      caveat:
-        "Whether our commission sits inside the quoted price or on top of it. Stated by the vendor, and not something we normalise.",
-      values: cards.map((card) => card.commissionTreatment),
-    },
+    // "Commission treatment" was a row here until 1.44.0. It was vendor-authored
+    // free text, and BE-5A took it off the proposal entirely: commission is
+    // policy, decided by an approved Operations version, not something a vendor
+    // states differently from the vendor beside them. A comparison row whose
+    // whole point was that the two answers might differ has nothing left to say.
   ];
 
   return rows.filter((row) => row.values.some((value) => value !== null));

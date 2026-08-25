@@ -29,7 +29,6 @@ function estimate(): QuoteCardView {
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
-    commissionTreatment: null,
     validUntil: null,
     submittedAt: "2026-08-21T08:00:00Z",
     siteVisitId: "visit-1",

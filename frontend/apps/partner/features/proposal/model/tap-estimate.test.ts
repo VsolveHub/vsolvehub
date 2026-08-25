@@ -77,7 +77,9 @@ describe("what a tapped estimate becomes", () => {
       draft: toOnsiteDraft(priced()),
     });
 
-    expect(body.total_paise).toBe(2_700_000);
+    // `total_paise` came off this request at 1.44.0 — Django computes it from
+    // the lines. What the vendor sends is the work itself.
+    expect("total_paise" in body).toBe(false);
     expect(body.stages).toHaveLength(1);
     expect(body.material_lines).toHaveLength(1);
   });

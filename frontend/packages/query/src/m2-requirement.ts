@@ -39,7 +39,9 @@ export type RequirementTimelineEvent = Schemas["RequirementTimelineEvent"];
 export type ProbableDuplicate = Schemas["ProbableDuplicate"];
 export type RequirementAttachment = Schemas["RequirementAttachment"];
 export type RequirementAttachmentKind = Schemas["RequirementAttachmentKindEnum"];
-export type AttachmentUploadGrant = Schemas["AttachmentUploadGrant"];
+// `AttachmentUploadGrant` was retired at contract 1.44.0 with the requirement
+// media-upload operations. `RequirementAttachment` stays: historical records
+// remain readable, there is simply no longer a way to create one on this flow.
 
 /**
  * The `My requests` rows out of the page the server sent.

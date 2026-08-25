@@ -7,7 +7,7 @@ import { useState, type ReactNode } from "react";
 
 import { Pictogram } from "@/components/pictogram";
 import { VisitDayPanel } from "@/features/visit/view/visit-day-panel";
-import { VisitResponse } from "@/features/visit/view/visit-response";
+import { FixedTimeOffer } from "@/features/visit/view/fixed-time-offer";
 import { ProposalStatus } from "@/features/proposal/view/proposal-status";
 import { PROJECT_WORKSPACE } from "@/features/workspace/registry";
 
@@ -322,7 +322,7 @@ function ProjectVisitAction({ enquiry }: { readonly enquiry: EnquiryRecord }) {
   }
 
   if (enquiry.status === "INVITED" || enquiry.status === "ACCEPTED") {
-    return <VisitResponse enquiry={enquiry} />;
+    return <FixedTimeOffer enquiry={enquiry} />;
   }
 
   return <ClosedNotice enquiry={enquiry} />;

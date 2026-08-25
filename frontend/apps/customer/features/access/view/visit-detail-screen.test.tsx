@@ -29,6 +29,12 @@ const baseState: Schemas["VisitPlanState"] = {
         id: "share-1",
         position: 1,
         status: "COMMITTED",
+    // New at 1.44.0: a share now carries its own matching state and the slot
+    // the customer picked, so a partially matched plan can be rendered one
+    // slot at a time instead of collapsing to a single plan-level status.
+    matching_status: "BOOKED",
+    requested_start: "2026-08-24T04:30:00Z",
+    duration_minutes: 120,
         amount_paise: 4950,
         vendor_payout_paise: 4000,
         platform_share_paise: 950,
@@ -164,10 +170,23 @@ describe("customer visit arrival", () => {
           rate_paise_per_worker_day: null,
           minimum_days: null,
           worker_count: null,
+          // New at 1.44.0: the estimate shape and the server-calculated money
+          // the client is no longer allowed to derive for itself.
+          estimate_type: "ITEM_WISE",
+          item_lines: [],
+          labour_lines: [],
+          other_charges: [],
+          calculation_snapshot: null,
+          line_subtotal_paise: 0,
+          authorized_charges_paise: 0,
+          taxable_value_paise: 0,
+          partner_quote_total_paise: 0,
+          platform_fee_paise: 0,
+          platform_fee_tax_paise: 0,
+          customer_total_paise: 0,
           total_paise: 1_000_000,
           tax_paise: 0,
           tax_basis: "INCLUSIVE",
-          commission_treatment: "Included",
           inclusions: [],
           exclusions: [],
           stages: [],

@@ -288,7 +288,6 @@ export function QuoteCard({
 
       <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
         <Fact label="Valid until" value={card.validUntil} />
-        <Fact label="Commission" value={card.commissionTreatment} />
         <Fact
           label="From a site visit"
           value={card.visitCompletedAt === null ? null : card.visitCompletedAt}

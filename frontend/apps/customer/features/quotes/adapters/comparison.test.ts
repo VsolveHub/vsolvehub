@@ -40,7 +40,6 @@ function card(overrides: Partial<QuoteCardView> = {}): QuoteCardView {
     inclusions: [],
     exclusions: [],
     warrantyTerms: null,
-    commissionTreatment: null,
     validUntil: null,
     submittedAt: "2026-08-20T10:00:00.000Z",
     siteVisitId: "v1",

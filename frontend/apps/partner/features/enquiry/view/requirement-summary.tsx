@@ -71,16 +71,11 @@ export function RequirementSummary({ enquiry }: RequirementSummaryProps) {
         </p>
       ) : null}
 
-      {enquiry.additionalDetails.trim() !== "" ? (
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            In the customer&rsquo;s words
-          </h3>
-          <p className="mt-1 whitespace-pre-line text-sm leading-6 text-text">
-            {enquiry.additionalDetails}
-          </p>
-        </div>
-      ) : null}
+      {/* "In the customer's words" was here until contract 1.44.0. The brief no
+          longer collects free text at all — the capture step that produced it was
+          removed, and every remaining question returns a choice, a number or a
+          boolean. There is nothing to render, and a partner reading this screen
+          now gets the answers above instead of a paragraph. */}
 
       {budget ? (
         <FactList

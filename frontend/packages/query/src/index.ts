@@ -115,7 +115,6 @@ export {
 } from "./m2-requirement";
 export type {
   AttachmentScanStatus,
-  AttachmentUploadGrant,
   ProbableDuplicate,
   RequirementAttachment,
   RequirementAttachmentKind,
