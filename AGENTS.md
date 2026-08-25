@@ -62,6 +62,20 @@ commercial-M2 session rule above:
 Codex may inspect the whole repository for integration context but implements the backend side.
 Antigravity consumes the generated OpenAPI client and must not hand-edit generated client files.
 
+#### Frontend reassigned to Claude — owner directive, superseding the two lines above
+
+The owner moved `frontend/**` from Antigravity to Claude for the M2 screen build.
+Antigravity's in-flight work was committed first at `4de73ef` so none of it was lost —
+that commit is its work, unreviewed, not Claude's.
+
+- **Claude** owns `frontend/**`, `contracts/proposals/**`, frontend tests and UI integration.
+- **Codex** keeps `backend/**` and `contracts/openapi/**` unchanged.
+- Antigravity has no active frontend assignment under this directive.
+
+Both agents are working the same tree concurrently. Two practical rules learned the hard
+way here: never `git add -A` (it swept six of Codex's live backend edits into a frontend
+commit, which had to be split back out), and stage explicit paths only.
+
 ## Python environment
 
 - Use Python 3.13.
