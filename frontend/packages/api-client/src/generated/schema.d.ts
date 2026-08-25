@@ -1,8 +1,8 @@
 /**
  * DO NOT EDIT. Generated from the published Django OpenAPI contract.
  *
- * Source:   contracts/openapi/v1.yaml (version 1.42.0)
- * Checksum: 22ec85e3b9288069
+ * Source:   contracts/openapi/v1.yaml (version 1.43.0)
+ * Checksum: 963283ea24733b25
  *
  * Regenerate with: pnpm --filter @vsolve/api-client generate
  */
@@ -5024,6 +5024,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/services/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["catalog_service_index"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/services/{service_slug}/": {
         parameters: {
             query?: never;
@@ -7173,6 +7189,54 @@ export interface components {
             note: string;
             items: components["schemas"]["DeliverableInputRequest"][];
         };
+        /**
+         * @description * `service` - Generic service
+         *     * `electrical` - Electrical
+         *     * `plumbing` - Plumbing
+         *     * `carpentry` - Carpentry
+         *     * `air-conditioning` - Air conditioning
+         *     * `water-purifier` - Water purifier
+         *     * `internet-wifi` - Internet and Wi-Fi
+         *     * `gas-stove` - Gas stove
+         *     * `computer` - Computer
+         *     * `mobile` - Mobile
+         *     * `security-camera` - Security camera
+         *     * `locksmith` - Locksmith
+         *     * `home-automation` - Home automation
+         *     * `fire-safety` - Fire safety
+         *     * `face-care` - Face care
+         *     * `beauty-treatment` - Beauty treatment
+         *     * `waxing` - Waxing
+         *     * `threading` - Threading
+         *     * `hair-care` - Hair care
+         *     * `nail-care` - Nail care
+         *     * `makeup` - Makeup
+         *     * `mehendi` - Mehendi
+         *     * `body-care` - Body care
+         *     * `skin-care` - Advanced skin care
+         *     * `home-cleaning` - Home cleaning
+         *     * `sofa-carpet` - Sofa and carpet cleaning
+         *     * `pest-control` - Pest control
+         *     * `water-tank` - Water tank
+         *     * `septic-tank` - Septic tank
+         *     * `laundry` - Laundry
+         *     * `gardening` - Gardening
+         *     * `swimming-pool` - Swimming pool
+         *     * `chimney-exhaust` - Chimney and exhaust
+         *     * `home-organization` - Home organization
+         *     * `home-inspection` - Home inspection
+         *     * `home-maintenance` - Home maintenance
+         *     * `pet-grooming` - Pet grooming
+         *     * `veterinary` - Veterinary
+         *     * `pet-walking` - Pet walking
+         *     * `pet-sitting` - Pet sitting
+         *     * `pet-training` - Pet training
+         *     * `pet-photography` - Pet photography
+         *     * `workforce` - Workforce
+         *     * `custom-project` - Custom project
+         * @enum {string}
+         */
+        IconKeyEnum: "service" | "electrical" | "plumbing" | "carpentry" | "air-conditioning" | "water-purifier" | "internet-wifi" | "gas-stove" | "computer" | "mobile" | "security-camera" | "locksmith" | "home-automation" | "fire-safety" | "face-care" | "beauty-treatment" | "waxing" | "threading" | "hair-care" | "nail-care" | "makeup" | "mehendi" | "body-care" | "skin-care" | "home-cleaning" | "sofa-carpet" | "pest-control" | "water-tank" | "septic-tank" | "laundry" | "gardening" | "swimming-pool" | "chimney-exhaust" | "home-organization" | "home-inspection" | "home-maintenance" | "pet-grooming" | "veterinary" | "pet-walking" | "pet-sitting" | "pet-training" | "pet-photography" | "workforce" | "custom-project";
         /**
          * @description * `partner` - partner
          * @enum {string}
@@ -10293,6 +10357,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly name: string;
+            readonly icon_key: components["schemas"]["IconKeyEnum"];
             readonly short_description: string;
             readonly category_slug: string;
             readonly subcategory_slug: string;
@@ -10307,6 +10372,7 @@ export interface components {
             readonly id: string;
             readonly slug: string;
             readonly name: string;
+            readonly icon_key: components["schemas"]["IconKeyEnum"];
             readonly short_description: string;
             readonly category_slug: string;
             readonly subcategory_slug: string;
@@ -10320,6 +10386,25 @@ export interface components {
             readonly requirement_variants: components["schemas"]["RequirementVariant"][];
             readonly policies: components["schemas"]["ServicePolicy"][];
             readonly media: components["schemas"]["ServiceMedia"][];
+        };
+        /** @description The complete icon catalogue's intentionally small row contract. */
+        ServiceIndexItem: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly slug: string;
+            readonly name: string;
+            readonly icon_key: components["schemas"]["IconKeyEnum"];
+            readonly display_order: number;
+            /** Format: uuid */
+            readonly category_id: string;
+            readonly category_slug: string;
+            readonly category_name: string;
+            readonly category_display_order: number;
+            /** Format: uuid */
+            readonly subcategory_id: string;
+            readonly subcategory_slug: string;
+            readonly subcategory_name: string;
+            readonly subcategory_display_order: number;
         };
         ServiceMedia: {
             /** Format: uuid */
@@ -24109,6 +24194,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    catalog_service_index: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceIndexItem"][];
                 };
             };
         };

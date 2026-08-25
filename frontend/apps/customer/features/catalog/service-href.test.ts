@@ -14,6 +14,9 @@ function service(overrides: Partial<ServiceCard> = {}): ServiceCard {
     starting_price: null,
     request_archetypes: ["A3_TIME_BLOCK"],
     bookable_variant_id: null,
+    // Required since 1.43.0: the backend owns the icon vocabulary and refuses to
+    // publish a service without one.
+    icon_key: "electrical",
     cover: null,
     ...overrides,
   };

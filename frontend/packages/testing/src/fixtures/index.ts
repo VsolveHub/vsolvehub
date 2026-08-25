@@ -161,6 +161,10 @@ export function serviceCard(
     // service is the mirror image — `starting_price: null`, `bookable_variant_id: null` and an
     // archetype here — so a fixture that omitted this would only ever describe half the catalog.
     request_archetypes: [],
+    // Required since contract 1.43.0. The backend owns this vocabulary and the
+    // publication constraint rejects a service without one, so a fixture that
+    // omitted it described a service the API could never actually return.
+    icon_key: "electrical",
     cover: null,
     ...overrides,
   };
